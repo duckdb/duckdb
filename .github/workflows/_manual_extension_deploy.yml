@@ -51,7 +51,7 @@ jobs:
       BASE_EXCLUDE_ARCHS: ''
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -109,11 +109,11 @@ jobs:
       - build
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download extensions
         with:
           pattern: extensions-${{ inputs.duckdb_ref }}*
@@ -134,7 +134,7 @@ jobs:
           find /tmp/merged_repository -type f ! -name "${{ inputs.extension_name }}.duckdb_extension*" -delete
           tree /tmp/merged_repository
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: extension-repository-${{ inputs.duckdb_ref }}
@@ -148,11 +148,11 @@ jobs:
       - create-extension-repository
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp

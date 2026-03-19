@@ -59,6 +59,7 @@ static float GetSelectivityThresholdForType(SelectivityOptionalFilterType type) 
 	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
 	static constexpr float BF_THRESHOLD = 0.5f;
 	static constexpr float PHJ_THRESHOLD = 0.3f;
+	static constexpr float PRF_THRESHOLD = 0.5f;
 
 	switch (type) {
 	case SelectivityOptionalFilterType::MIN_MAX:
@@ -67,6 +68,8 @@ static float GetSelectivityThresholdForType(SelectivityOptionalFilterType type) 
 		return BF_THRESHOLD;
 	case SelectivityOptionalFilterType::PHJ:
 		return PHJ_THRESHOLD;
+	case SelectivityOptionalFilterType::PRF:
+		return PRF_THRESHOLD;
 	default:
 		throw NotImplementedException("GetSelectivityThresholdForType");
 	}
@@ -76,6 +79,7 @@ static idx_t GetCheckNForType(SelectivityOptionalFilterType type) {
 	static constexpr idx_t MIN_MAX_CHECK_N = 6;
 	static constexpr idx_t BF_CHECK_N = 6;
 	static constexpr idx_t PHJ_CHECK_N = 6;
+	static constexpr idx_t PRF_CHECK_N = 6;
 
 	switch (type) {
 	case SelectivityOptionalFilterType::MIN_MAX:
@@ -84,6 +88,8 @@ static idx_t GetCheckNForType(SelectivityOptionalFilterType type) {
 		return BF_CHECK_N;
 	case SelectivityOptionalFilterType::PHJ:
 		return PHJ_CHECK_N;
+	case SelectivityOptionalFilterType::PRF:
+		return PRF_CHECK_N;
 	default:
 		throw NotImplementedException("GetCheckNForType");
 	}

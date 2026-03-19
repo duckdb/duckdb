@@ -469,7 +469,8 @@ bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_refe
 		return true;
 	}
 	case TableFilterType::BLOOM_FILTER:
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {

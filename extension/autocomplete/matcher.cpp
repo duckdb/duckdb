@@ -1381,18 +1381,35 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	return CreateMatcher(parser, root_rule);
 }
 
-Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
-	MatcherFactory factory(allocator);
+shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (matcher) {
+			return matcher;
+		}
+	}
+	auto new_matcher = make_shared_ptr<PEGMatcher>();
+	MatcherFactory factory(new_matcher->allocator);
 #ifdef PEG_PARSER_SOURCE_FILE
 	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;
 	buffer << t.rdbuf();
-	auto string = buffer.str();
+	auto grammar_string = buffer.str();
 
-	return factory.CreateMatcher(string.c_str(), "Statement");
+	new_matcher->root = factory.CreateMatcher(grammar_string.c_str(), "Statement");
 #else
-	return factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
+	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
 #endif
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!matcher) {
+		matcher = std::move(new_matcher);
+	}
+	return matcher;
+}
+
+void PEGMatcherCache::Invalidate() {
+	std::unique_lock<std::mutex> lock(mutex);
+	matcher = nullptr;
 }
 
 } // namespace duckdb
