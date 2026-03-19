@@ -273,7 +273,7 @@ private:
 					}
 				} else {
 					for (const auto &proj_id : projection_ids) {
-						ProjectionIndex primary_index(column_ids[proj_id.index].GetPrimaryIndex());
+						ProjectionIndex primary_index(column_ids[proj_id].GetPrimaryIndex());
 						column_index_map.Insert(proj_id, primary_index);
 					}
 				}

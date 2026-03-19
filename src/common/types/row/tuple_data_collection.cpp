@@ -112,6 +112,19 @@ void TupleDataCollection::SetPartitionIndex(const idx_t index) {
 	allocator->SetPartitionIndex(index);
 }
 
+vector<pair<idx_t, idx_t>> TupleDataCollection::GetChunkRangesForPartition(const idx_t partition_idx) const {
+	idx_t chunk_idx_start = 0;
+	vector<pair<idx_t, idx_t>> chunk_ranges;
+	for (const auto &segment : segments) {
+		const idx_t segment_partition_idx = segment->allocator->GetPartitionIndex();
+		if (partition_idx == segment_partition_idx) {
+			chunk_ranges.emplace_back(chunk_idx_start, chunk_idx_start + segment->ChunkCount());
+		}
+		chunk_idx_start += segment->ChunkCount();
+	}
+	return chunk_ranges;
+}
+
 vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
 	D_ASSERT(segments.size() == 1);
 	const auto &segment = *segments[0];

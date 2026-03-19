@@ -77,7 +77,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 			child_columns.reserve(columns.size());
 			for (auto &child_column : columns) {
 				JoinFilterPushdownColumn new_col;
-				new_col.probe_column_index = child_bindings[child_column.probe_column_index.column_index.index];
+				new_col.probe_column_index = child_bindings[child_column.probe_column_index.column_index];
 				child_columns.push_back(new_col);
 			}
 			// then recurse into the child

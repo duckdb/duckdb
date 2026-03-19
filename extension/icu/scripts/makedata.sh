@@ -11,8 +11,8 @@ set -e
 mkdir -p build
 pushd build
 
-# download ICU 74-2
-code_version=74-2
+# download ICU 77-1
+code_version=77-1
 wget -nc ${icu/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 
@@ -22,8 +22,11 @@ wget -nc ${icu/version/$data_version}
 unzip -o ${zip_file/version/$data_version}
 
 # copy over the collation data
-find ${data_path/version/$data_version} -type f ! -iname "*.txt" -delete
-cp -r ${data_path/version/$data_version} ${source_path/version/$code_version}
+if $code_version != $data_version
+then
+    find ${data_path/version/$data_version} -type f ! -iname "*.txt" -delete
+    cp -r ${data_path/version/$data_version} ${source_path/version/$code_version}
+fi
 
 # download IANA and copy the latest Time Zone Data
 tz_version=2026a
