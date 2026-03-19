@@ -1024,7 +1024,7 @@ PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
 TypeList <- Parens(List(Type))
 
 CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
-CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt
+CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
 OrReplace <- 'OR' 'REPLACE'
 Temporary <- Persistent / TempPersistent / TemporaryPersistent
 Persistent <- 'PERSISTENT'
@@ -1591,6 +1591,27 @@ CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
 CommentValue <- 'NULL' / StringLiteral
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+
+TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+
+TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
+TriggerBefore <- 'BEFORE'
+TriggerAfter <- 'AFTER'
+TriggerInsteadOf <- 'INSTEAD' 'OF'
+
+TriggerEvent <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
+TriggerEventInsert <- 'INSERT'
+TriggerEventDelete <- 'DELETE'
+TriggerEventUpdate <- 'UPDATE'
+TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
+
+TriggerColumnList <- List(ColId)
+
+ForEachClause <- ForEachRow / ForEachStatement
+ForEachRow <- 'FOR' 'EACH' 'ROW'
+ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
+
 AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'

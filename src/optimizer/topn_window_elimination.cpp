@@ -223,7 +223,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	RemoveUnusedColumns unused_optimizer(optimizer);
 	unused_optimizer.VisitOperator(op);
-
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
 

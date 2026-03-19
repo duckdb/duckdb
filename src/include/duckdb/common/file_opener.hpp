@@ -36,7 +36,7 @@ public:
 	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) = 0;
 	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
 	virtual optional_ptr<DatabaseInstance> TryGetDatabase() = 0;
-	virtual shared_ptr<HTTPUtil> &GetHTTPUtil() = 0;
+	virtual HTTPUtil &GetHTTPUtil() = 0;
 
 	DUCKDB_API virtual Logger &GetLogger() const = 0;
 	DUCKDB_API static unique_ptr<CatalogTransaction> TryGetCatalogTransaction(optional_ptr<FileOpener> opener);
@@ -57,7 +57,7 @@ public:
 		if (info) {
 			lookup_result = TryGetCurrentSetting(opener, key, output, *info);
 		} else {
-			lookup_result = TryGetCurrentSetting(opener, key, output, *info);
+			lookup_result = TryGetCurrentSetting(opener, key, output);
 		}
 
 		if (lookup_result) {

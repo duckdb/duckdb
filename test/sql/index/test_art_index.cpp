@@ -6,7 +6,6 @@
 #include <iostream>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test ART index with rollbacks", "[art][.]") {
 	duckdb::unique_ptr<QueryResult> result;
@@ -99,22 +98,22 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	for (idx_t i = 0; i < 5; i++) {
 		a = Radix::EncodeFloat(generate_small_float());
 		b = Radix::EncodeFloat(generate_small_float());
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Radix::EncodeFloat(generate_float(-50, 50));
 		b = Radix::EncodeFloat(generate_float(-50, 50));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		b = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Radix::EncodeFloat(min_values[i]);
@@ -124,12 +123,13 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
 		result = con.Query(query);
 		if (!CHECK_COLUMN(result, 0, {answer})) {
-			cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
-			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
+			std::cout << "Wrong answer on floating point real-small!" << std::endl
+			          << "Queries to reproduce:" << std::endl;
+			std::cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
 			for (idx_t k = 0; k < n; k++) {
-				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
+				std::cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
-			cout << query << std::endl;
+			std::cout << query << std::endl;
 			REQUIRE(false);
 		}
 	}
@@ -171,22 +171,22 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	for (idx_t i = 0; i < 5; i++) {
 		a = Radix::EncodeDouble(generate_small_double());
 		b = Radix::EncodeDouble(generate_small_double());
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Radix::EncodeDouble(generate_double(-50, 50));
 		b = Radix::EncodeDouble(generate_double(-50, 50));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		b = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Radix::EncodeDouble(min_values[i]);
@@ -196,12 +196,12 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
 		result = con.Query(query);
 		if (!CHECK_COLUMN(result, 0, {answer})) {
-			cout << "Wrong answer on double!" << std::endl << "Queries to reproduce:" << std::endl;
-			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
+			std::cout << "Wrong answer on double!" << std::endl << "Queries to reproduce:" << std::endl;
+			std::cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
 			for (idx_t k = 0; k < n; k++) {
-				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
+				std::cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
-			cout << query << std::endl;
+			std::cout << query << std::endl;
 			REQUIRE(false);
 		}
 	}
@@ -243,22 +243,22 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	for (idx_t i = 0; i < 500; i++) {
 		a = Radix::EncodeFloat(generate_small_float());
 		b = Radix::EncodeFloat(generate_small_float());
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Radix::EncodeFloat(generate_float(-50, 50));
 		b = Radix::EncodeFloat(generate_float(-50, 50));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		b = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Radix::EncodeFloat(min_values[i]);
@@ -268,12 +268,13 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
 		result = con.Query(query);
 		if (!CHECK_COLUMN(result, 0, {answer})) {
-			cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
-			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
+			std::cout << "Wrong answer on floating point real-small!" << std::endl
+			          << "Queries to reproduce:" << std::endl;
+			std::cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
 			for (idx_t k = 0; k < n; k++) {
-				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
+				std::cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
-			cout << query << std::endl;
+			std::cout << query << std::endl;
 			REQUIRE(false);
 		}
 	}
@@ -315,22 +316,22 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	for (idx_t i = 0; i < 500; i++) {
 		a = Radix::EncodeDouble(generate_small_double());
 		b = Radix::EncodeDouble(generate_small_double());
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Radix::EncodeDouble(generate_double(-50, 50));
 		b = Radix::EncodeDouble(generate_double(-50, 50));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		b = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
-		min_values.push_back(min(a, b));
-		max_values.push_back(max(a, b));
+		min_values.push_back(std::min(a, b));
+		max_values.push_back(std::max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Radix::EncodeDouble(min_values[i]);
@@ -340,12 +341,13 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
 		result = con.Query(query);
 		if (!CHECK_COLUMN(result, 0, {answer})) {
-			cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
-			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
+			std::cout << "Wrong answer on floating point real-small!" << std::endl
+			          << "Queries to reproduce:" << std::endl;
+			std::cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
 			for (idx_t k = 0; k < n; k++) {
-				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
+				std::cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
-			cout << query << std::endl;
+			std::cout << query << std::endl;
 			REQUIRE(false);
 		}
 	}

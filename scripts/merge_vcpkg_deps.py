@@ -6,10 +6,6 @@ import sys
 # combined & deduplicated dependencies. Note that this script is very dumb and some manual merging may be required
 # to combine extensions from multiple builds in the case of colliding dependencies.
 
-# Also: note that due to the fact that the httpfs extension currently can not use the latest openssl version (3.1),
-# we need to pin the openssl version requiring us to also pin the vcpkg version here. When updating the vcpkg git hash
-# we probably want to change it here and in ('.github/actions/build_extensions/action.yml') at the same time
-
 dependencies_str = []
 dependencies_dict = []
 merged_overlay_ports = []

@@ -445,6 +445,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));
+		config.AddAllowedPath(database_path + string(".wal.checkpoint"));
+		config.AddAllowedPath(database_path + string(".wal.recovery"));
 		if (!config.options.temporary_directory.empty()) {
 			config.AddAllowedDirectory(config.options.temporary_directory);
 		}

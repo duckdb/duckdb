@@ -10,7 +10,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test comment in CPP API", "[api]") {
 	DuckDB db(nullptr);
@@ -88,7 +87,7 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
 	bool correct = true;
-	auto background_thread = thread(long_running_query, conn.get(), &correct);
+	auto background_thread = std::thread(long_running_query, conn.get(), &correct);
 	// wait a little bit
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	// destroy the database
@@ -171,9 +170,9 @@ TEST_CASE("Test parallel usage of single client", "[api][.]") {
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	bool correct[20];
-	thread threads[20];
+	std::thread threads[20];
 	for (size_t i = 0; i < 20; i++) {
-		threads[i] = thread(parallel_query, conn.get(), correct, i);
+		threads[i] = std::thread(parallel_query, conn.get(), correct, i);
 	}
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
@@ -200,9 +199,9 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	bool correct[20];
-	thread threads[20];
+	std::thread threads[20];
 	for (size_t i = 0; i < 20; i++) {
-		threads[i] = thread(parallel_query_with_new_connection, db.get(), correct, i);
+		threads[i] = std::thread(parallel_query_with_new_connection, db.get(), correct, i);
 	}
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
@@ -692,11 +691,22 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
 	DBConfig config;
 	config.SetOptionByName("enable_external_access", false);
-	auto path = TestCreatePath("external_access_test");
+	auto path = TestCreatePath("external_access_test.db");
 	DuckDB db(path, &config);
 	Connection con(db);
 
-	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
+	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db'"));
+}
+
+TEST_CASE("Test checkpointing initial database with enable_external_access set to false", "[api]") {
+	DBConfig config;
+	config.SetOptionByName("enable_external_access", false);
+	auto path = TestCreatePath("external_access_test.db");
+	DuckDB db(path, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 }
 
 TEST_CASE("Test insert returning in CPP API", "[api]") {
