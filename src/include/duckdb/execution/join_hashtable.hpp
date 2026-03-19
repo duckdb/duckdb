@@ -145,7 +145,7 @@ public:
 
 		//! Apply residual predicate filtering
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-		                             SelectionVector *no_match_sel);
+		                             SelectionVector *no_match_sel, idx_t no_match_offset = 0);
 
 	private:
 		unique_ptr<ExpressionExecutor> residual_executor;
@@ -195,9 +195,9 @@ public:
 	};
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
-	              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr = nullptr,
-	              const vector<idx_t> &output_in_probe = {});
+	              vector<LogicalType> build_types, JoinType type, idx_t initial_radix_bits,
+	              const vector<idx_t> &output_columns, unique_ptr<ResidualPredicateInfo> residual_p,
+	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -383,8 +383,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
-
 	struct ProbeSpillLocalAppendState {
 		ProbeSpillLocalAppendState() {
 		}
@@ -497,6 +495,8 @@ public:
 	void InitializePartitionMasks();
 	//! How many partitions are currently active
 	idx_t CurrentPartitionCount() const;
+	//! Get the current partitions validity mask
+	const ValidityMask &GetCurrentPartitions() const;
 	//! How many partitions are fully done
 	idx_t FinishedPartitionCount() const;
 	//! Partition this HT

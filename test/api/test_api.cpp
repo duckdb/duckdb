@@ -691,11 +691,22 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
 	DBConfig config;
 	config.SetOptionByName("enable_external_access", false);
-	auto path = TestCreatePath("external_access_test");
+	auto path = TestCreatePath("external_access_test.db");
 	DuckDB db(path, &config);
 	Connection con(db);
 
-	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
+	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db'"));
+}
+
+TEST_CASE("Test checkpointing initial database with enable_external_access set to false", "[api]") {
+	DBConfig config;
+	config.SetOptionByName("enable_external_access", false);
+	auto path = TestCreatePath("external_access_test.db");
+	DuckDB db(path, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 }
 
 TEST_CASE("Test insert returning in CPP API", "[api]") {

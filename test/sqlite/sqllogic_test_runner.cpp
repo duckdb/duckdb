@@ -451,7 +451,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noforcestorage") {
+	if (param == "noforcestorage" || param == "no_force_storage") {
 		if (TestConfiguration::TestForceStorage()) {
 			return RequireResult::MISSING;
 		}

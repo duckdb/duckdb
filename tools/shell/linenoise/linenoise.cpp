@@ -1401,7 +1401,8 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 bool Linenoise::Write(int fd, const char *data, idx_t size) {
 #if defined(_WIN32) || defined(WIN32)
 	// convert to character encoding in Windows shell
-	auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data);
+	string data_str = data ? string(data, size) : "";
+	auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data_str);
 	auto out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (!WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL)) {
 		return false;

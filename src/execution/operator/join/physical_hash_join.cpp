@@ -285,10 +285,10 @@ public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
 	    : context(context_p), op(op_p),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
-	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
-	      probe_side_requirement(0), scanned_data(false) {
-		hash_table = op.InitializeHashTable(context);
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
+	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
+	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
+		hash_table = op.InitializeHashTable(context, initial_radix_bits);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -331,6 +331,8 @@ public:
 	//! Temporary memory state for managing this operator's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 
+	//! Initial radix bits
+	const idx_t initial_radix_bits;
 	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
@@ -382,7 +384,7 @@ public:
 			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
 		}
 
-		hash_table = op.InitializeHashTable(context);
+		hash_table = op.InitializeHashTable(context, gstate.initial_radix_bits);
 		hash_table->GetSinkCollection().InitializeAppendState(append_state);
 
 		gstate.active_local_states++;
@@ -406,10 +408,12 @@ public:
 	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
-unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
-	                                       rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
-	                                       predicate ? predicate.get() : nullptr, lhs_output_in_probe);
+unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
+                                                                const idx_t initial_radix_bits) const {
+	auto result =
+	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type, initial_radix_bits,
+	                             rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
+	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -676,15 +680,24 @@ public:
 
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
-	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
-	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p,
+	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event, optional_idx partition_idx_p,
 	                     optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state_p = nullptr)
-	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
-	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p), prefix_range_state(prefix_range_state_p) {
+	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p), partition_idx(partition_idx_p),
+	      prefix_range_state(prefix_range_state_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, prefix_range_state);
+		const auto &data_collection = sink.hash_table->GetDataCollection();
+		if (!partition_idx.IsValid()) {
+			// Single-threaded finalize
+			sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state);
+		} else {
+			// Parallel finalize - each thread processes one partition
+			const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
+			for (auto &chunk_range : chunk_ranges) {
+				sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state);
+			}
+		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -694,9 +707,7 @@ public:
 
 private:
 	HashJoinGlobalSinkState &sink;
-	idx_t chunk_idx_from;
-	idx_t chunk_idx_to;
-	bool parallel;
+	optional_idx partition_idx;
 	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
 };
 
@@ -710,34 +721,27 @@ public:
 
 public:
 	void Schedule() override {
-		auto &context = pipeline->GetClientContext();
+		auto &ht = *sink.hash_table;
+		const auto build_prefix_range_filter = ht.ShouldBuildPrefixRangeFilter();
+		const bool finalize_single_threaded = FinalizeSingleThreaded(sink, false);
 
 		vector<shared_ptr<Task>> finalize_tasks;
-		auto &ht = *sink.hash_table;
-		const auto chunk_count = ht.GetDataCollection().ChunkCount();
-		const auto build_prefix_range_filter = ht.ShouldBuildPrefixRangeFilter();
-		const bool finalize_single_threaded = FinalizeSingleThreaded(sink, true);
-		const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
-		if (build_prefix_range_filter) {
-			prefix_range_states.clear();
-			const auto task_count =
-			    finalize_single_threaded ? 1 : (chunk_count + chunks_per_task - 1) / chunks_per_task;
-			prefix_range_states.reserve(task_count);
-		}
-
-		// if the keys are too skewed, we finalize single-threaded
 		if (finalize_single_threaded) {
 			// Single-threaded finalize
 			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
-			finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count,
-			                                                         false, sink.op, prefix_range_state));
+			finalize_tasks.push_back(
+			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), optional_idx(), prefix_range_state));
 		} else {
 			// Parallel finalize
-			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx += chunks_per_task) {
-				auto chunk_idx_to = MinValue<idx_t>(chunk_idx + chunks_per_task, chunk_count);
+			const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
+			const auto &current_partitions = ht.GetCurrentPartitions();
+			for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+				if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
+					continue; // Partition is not being built on
+				}
 				auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
-				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(
-				    shared_from_this(), context, sink, chunk_idx, chunk_idx_to, true, sink.op, prefix_range_state));
+				finalize_tasks.push_back(
+				    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), partition_idx, prefix_range_state));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
@@ -818,7 +822,7 @@ public:
 
 public:
 	void Schedule() override {
-		D_ASSERT(sink.hash_table->GetRadixBits() > JoinHashTable::INITIAL_RADIX_BITS);
+		D_ASSERT(sink.hash_table->GetRadixBits() > sink.initial_radix_bits);
 		auto block_size = sink.hash_table->buffer_manager.GetBlockSize();
 
 		idx_t total_size = 0;
@@ -834,7 +838,7 @@ public:
 
 		// Assume 8 blocks per partition per thread (4 input, 4 output)
 		auto partition_multiplier =
-		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - JoinHashTable::INITIAL_RADIX_BITS);
+		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - sink.initial_radix_bits);
 		auto thread_memory = 2 * blocks_per_vector * partition_multiplier * block_size;
 		auto repartition_threads = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / thread_memory, 1);
 

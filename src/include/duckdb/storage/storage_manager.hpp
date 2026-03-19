@@ -44,7 +44,6 @@ public:
 	virtual bool HasRowGroupData() {
 		return false;
 	}
-	virtual unordered_set<block_id_t> &GetBlockIdsInUse() = 0;
 };
 
 //! StorageManager is responsible for managing the physical storage of a persistent database.

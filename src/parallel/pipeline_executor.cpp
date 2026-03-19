@@ -112,14 +112,12 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 			return false;
 		}
 		case OperatorResultType::NEED_MORE_INPUT:
-			continue;
 		case OperatorResultType::FINISHED:
 			break;
 		default:
 			throw InternalException("Unexpected OperatorResultType (%s) in TryFlushCachingOperators",
 			                        EnumUtil::ToString(push_result));
 		}
-		break;
 	}
 	return true;
 }

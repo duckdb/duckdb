@@ -54,8 +54,6 @@ jobs:
       - name: Install Ninja
         run: brew install ninja file
 
-      - uses: ./.github/actions/ccache-action
-
       - name: Build
         shell: bash
         run: python3 scripts/ci/retry.py -- make

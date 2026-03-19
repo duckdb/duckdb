@@ -136,6 +136,9 @@ public:
 		return file.path;
 	}
 
+	virtual optional_idx TryGetCardinalityEstimate() const {
+		return optional_idx();
+	}
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
 
 public:

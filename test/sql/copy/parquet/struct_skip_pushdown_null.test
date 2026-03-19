@@ -1,0 +1,32 @@
+# name: test/sql/copy/parquet/struct_skip_pushdown_null.test
+# description: Optional struct remains non-null after parquet skip pushdown
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# Rows 59392-112639 are NULL, all others are non-null.
+statement ok
+COPY (
+	SELECT i AS id,
+		CASE
+			WHEN i >= 59392 AND i < 112640 THEN NULL
+			ELSE {a: 'hello', b: 42.0}
+		END::STRUCT(a VARCHAR, b DOUBLE) AS col
+	FROM range(122880) t(i)
+) TO '__TEST_DIR__/skip_null_struct.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 122880)
+
+# Predicate pushdown on id forces ApplyPendingSkips on col.
+query T
+SELECT col IS NULL FROM '__TEST_DIR__/skip_null_struct.parquet' WHERE id = 112640
+----
+false
+
+statement ok
+COPY (
+	SELECT col
+	FROM '__TEST_DIR__/skip_null_struct.parquet'
+	WHERE id = 112640
+) TO '__TEST_DIR__/skip_null_struct_out.parquet'

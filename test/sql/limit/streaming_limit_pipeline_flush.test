@@ -1,0 +1,30 @@
+# name: test/sql/limit/streaming_limit_pipeline_flush.test
+# description: Test that pipeline correctly flushes operators after STREAMING_LIMIT finishes
+# group: [limit]
+
+require tpch
+
+statement ok
+LOAD tpch;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+# The optimizer pushes down filters which reduces cardinality estimates, causing it to
+# place STREAMING_LIMIT on the right side. We disable it to keep it on the left side, to trigger the pipeline flush bug
+statement ok
+PRAGMA disable_optimizer;
+
+query I
+SELECT o.o_orderkey
+FROM (
+    SELECT l.o_orderkey
+    FROM orders l
+    LEFT JOIN lineitem li ON li.l_orderkey = l.o_orderkey
+    WHERE l.o_orderkey = 1
+    LIMIT 1
+) AS filtered
+JOIN orders o ON TRUE
+WHERE o.o_orderkey = 1;
+----
+1

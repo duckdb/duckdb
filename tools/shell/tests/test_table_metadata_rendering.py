@@ -111,3 +111,14 @@ def test_qualified_show_tables(shell):
 
     result = test.run()
     result.check_stdout("t1")
+
+def test_tables_rendering_large_database(shell):
+    test = (
+        ShellTest(shell)
+        .statement("attach ':memory:' as thisisanenormousdatabasenamethatmightoverflowthetablerenderingmechanism;")
+        .statement("create table thisisanenormousdatabasenamethatmightoverflowthetablerenderingmechanism.tbl(i int);")
+        .statement('.tables')
+    )
+
+    result = test.run()
+    result.check_stdout("thisisanenormousdatabasenamethatmightoverflowthetablerenderingmechanism")
