@@ -98,10 +98,11 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	}
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
-	// Mark INNER equality filters with equivalence group indices for redundancy detection.
-	MarkEdgeEquivalences();
-	// Create the query_graph hyper edges
+	// Create the query_graph hyper edges (also populates left_binding/right_binding on each FilterInfo).
 	CreateHyperGraphEdges();
+	// Mark INNER equality filters with equivalence group indices for redundancy detection.
+	// Must run AFTER CreateHyperGraphEdges so that left_binding/right_binding are populated.
+	MarkEdgeEquivalences();
 	return true;
 }
 
