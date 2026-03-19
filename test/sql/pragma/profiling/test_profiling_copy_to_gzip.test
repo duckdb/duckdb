@@ -37,8 +37,6 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_copy_gz.json';
 
-# FileHandle::Write incorrectly adds to OTAL_BYTES_READ instead of TOTAL_BYTES_WRITTEN.
-# A COPY TO should have bytes written > 0 and bytes read = 0.
 query II
 SELECT
     CASE WHEN total_bytes_written > 0 THEN 'true' ELSE 'false' END AS has_bytes_written,
