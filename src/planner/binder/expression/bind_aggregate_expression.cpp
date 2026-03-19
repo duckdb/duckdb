@@ -317,7 +317,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		// duplicate aggregate: simplify refer to this aggregate
 		aggr_index = entry->second;
 	}
-	auto &bound_aggr = *node.aggregates[aggr_index.index];
+	auto &bound_aggr = *node.aggregates[aggr_index];
 
 	// now create a column reference referring to the aggregate
 	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),

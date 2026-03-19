@@ -528,7 +528,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		const auto current_column_ref = column_references.begin()->first;
 		column_references.clear();
 		D_ASSERT(current_column_ref.table_index == projection.table_index);
-		VisitExpression(&projection.expressions[current_column_ref.column_index.index]);
+		VisitExpression(&projection.expressions[current_column_ref.column_index]);
 
 		child = *child.get().children[0];
 	}
@@ -612,7 +612,7 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 
 		auto column_id = binding.ToString();
 		if (window.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &window_child_type = window_child_types[binding.column_index.index];
+			auto &window_child_type = window_child_types[binding.column_index];
 			// The column index points to the correct column binding
 			aggregate_args.push_back(make_uniq<BoundColumnRefExpression>(column_id, window_child_type, binding));
 		} else {
@@ -655,7 +655,7 @@ vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const st
 		for (idx_t i = 0; i < new_bindings.size(); i++) {
 			auto &new_binding = new_bindings[i];
 			D_ASSERT(new_binding.table_index == projection.table_index);
-			VisitExpression(&projection.expressions[new_binding.column_index.index]);
+			VisitExpression(&projection.expressions[new_binding.column_index]);
 			new_binding = column_references.begin()->first;
 			column_references.clear();
 		}
@@ -797,10 +797,10 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 					return false;
 				}
 				const auto projection_idx = projections[i].column_index;
-				if (projection_idx.index >= projection.expressions.size()) {
+				if (projection_idx >= projection.expressions.size()) {
 					return false;
 				}
-				if (!extract_single_binding(&projection.expressions[projection_idx.index], projections[i])) {
+				if (!extract_single_binding(&projection.expressions[projection_idx], projections[i])) {
 					return false;
 				}
 			}
@@ -855,17 +855,15 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				if (projection.table_index != left_idx && projection.table_index != right_idx) {
 					return false;
 				}
-				if (projection.table_index == left_idx &&
-				    projection.column_index.index >= left_column_bindings.size()) {
+				if (projection.table_index == left_idx && projection.column_index >= left_column_bindings.size()) {
 					return false;
 				}
-				if (projection.table_index == right_idx &&
-				    projection.column_index.index >= right_column_bindings.size()) {
+				if (projection.table_index == right_idx && projection.column_index >= right_column_bindings.size()) {
 					return false;
 				}
 				auto &column_binding = projection.table_index == left_idx
-				                           ? left_column_bindings[projection.column_index.index]
-				                           : right_column_bindings[projection.column_index.index];
+				                           ? left_column_bindings[projection.column_index]
+				                           : right_column_bindings[projection.column_index];
 				if (replaceable_bindings.find(column_binding) == replaceable_bindings.end()) {
 					if (column_binding.table_index == left_idx) {
 						all_left_replaceable = false;
@@ -887,16 +885,16 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 					return false;
 				}
 				if (projection_idx.table_index == left_idx &&
-				    projection_idx.column_index.index >= left_column_bindings.size()) {
+				    projection_idx.column_index >= left_column_bindings.size()) {
 					return false;
 				}
 				if (projection_idx.table_index == right_idx &&
-				    projection_idx.column_index.index >= right_column_bindings.size()) {
+				    projection_idx.column_index >= right_column_bindings.size()) {
 					return false;
 				}
 				auto &column_binding = projection_idx.table_index == left_idx
-				                           ? left_column_bindings[projection_idx.column_index.index]
-				                           : right_column_bindings[projection_idx.column_index.index];
+				                           ? left_column_bindings[projection_idx.column_index]
+				                           : right_column_bindings[projection_idx.column_index];
 				if (column_binding.table_index == replace_table_idx) {
 					projections[i] = replaceable_bindings[column_binding];
 				}
@@ -1077,7 +1075,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		const ProjectionIndex rhs_rowid_idx(rhs_binding_offset + i);
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
-		auto left_expr = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx.index],
+		auto left_expr = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
 		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
 		auto right_expr = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});

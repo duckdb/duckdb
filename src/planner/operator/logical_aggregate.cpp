@@ -14,10 +14,10 @@ LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_
 
 const Expression &LogicalAggregate::GetExpression(ColumnBinding binding) const {
 	if (binding.table_index == group_index) {
-		return *groups[binding.column_index.index];
+		return *groups[binding.column_index];
 	}
 	if (binding.table_index == aggregate_index) {
-		return *expressions[binding.column_index.index];
+		return *expressions[binding.column_index];
 	}
 	if (binding.table_index == groupings_index) {
 		throw InternalException("Groupings function does not have an expression defined");

@@ -481,17 +481,6 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 }
 
-static ProjectionIndex GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
-	// Find the index in the column_ids that contains the column referenced by the filter
-	auto it = std::find_if(column_ids.begin(), column_ids.end(), [&filter_idx](const ColumnIndex &column_index) {
-		return column_index.GetPrimaryIndex() == filter_idx;
-	});
-	if (it == column_ids.end()) {
-		throw InternalException("Could not find column index for table filter");
-	}
-	return ProjectionIndex(static_cast<idx_t>(std::distance(column_ids.begin(), it)));
-}
-
 //! returns: found_path, depth of the found path
 std::pair<column_index_set::iterator, idx_t> FindShortestMatchingPath(column_index_set &all_paths,
                                                                       const ColumnIndex &full_path) {
@@ -695,7 +684,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op.Cast<LogicalProjection>();
 		for (auto proj_idx : ProjectionIndex::GetIndexes(proj.expressions.size())) {
-			auto &expr = *proj.expressions[proj_idx.index];
+			auto &expr = *proj.expressions[proj_idx];
 			auto record = column_references.find(ColumnBinding(proj.table_index, proj_idx));
 			if (record == column_references.end()) {
 				//! Not referenced, skip
@@ -765,12 +754,12 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	//! for each filter that was pushed down - convert them into an expression
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : get.table_filters) {
-		auto filter_idx = entry.ColumnIndex();
+		auto filter_idx = entry.GetIndex();
 		auto &filter = entry.Filter();
-		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter_idx);
-		auto column_type = get.GetColumnType(ColumnIndex(filter_idx));
+		auto &col_id = get.GetColumnIndex(filter_idx);
+		auto column_type = get.GetColumnType(col_id);
 
-		ColumnBinding filter_binding(get.table_index, index);
+		ColumnBinding filter_binding(get.table_index, filter_idx);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		//! Convert the filter to an expression, so we can visit it
 		auto filter_expr = filter.ToExpression(*column_ref);
@@ -791,7 +780,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	bool has_pushdown_extract = false;
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
-		auto &logical_column_id = old_column_ids[col_sel_idx.index];
+		auto &logical_column_id = old_column_ids[col_sel_idx];
 		auto &column_type = get.GetColumnType(logical_column_id);
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
@@ -843,6 +832,25 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		new_column_ids.emplace_back(any_column);
 	}
 	get.SetColumnIds(std::move(new_column_ids));
+
+	// remap table filters so they point towards the new set of ids
+	if (get.table_filters.HasFilters()) {
+		// Build a mapping from old ProjectionIndex -> new ProjectionIndex using original_ids
+		unordered_map<ProjectionIndex, ProjectionIndex> old_to_new_pos;
+		old_to_new_pos.reserve(original_ids.size());
+		for (idx_t new_pos = 0; new_pos < original_ids.size(); new_pos++) {
+			old_to_new_pos[original_ids[new_pos]] = ProjectionIndex(new_pos);
+		}
+		TableFilterSet remapped_filters;
+		for (auto &entry : get.table_filters) {
+			auto it = old_to_new_pos.find(entry.GetIndex());
+			if (it == old_to_new_pos.end()) {
+				throw InternalException("RemoveUnusedColumns: removed a filter column");
+			}
+			remapped_filters.PushFilter(it->second, entry.TakeFilter());
+		}
+		get.table_filters = std::move(remapped_filters);
+	}
 
 	if (has_pushdown_extract && !filter_expressions.empty()) {
 		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
