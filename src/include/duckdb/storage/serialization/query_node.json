@@ -191,5 +191,118 @@
         "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
     ]
+  },
+  {
+    "class": "InsertQueryNode",
+    "base": "QueryNode",
+    "enum": "INSERT_QUERY_NODE",
+    "members": [
+      {
+        "id": 200,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 204,
+        "name": "default_values",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 205,
+        "name": "column_order",
+        "type": "InsertColumnOrder",
+        "default": "InsertColumnOrder::INSERT_BY_POSITION"
+      },
+      {
+        "id": 206,
+        "name": "select_statement",
+        "type": "SelectStatement*"
+      },
+      {
+        "id": 207,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 208,
+        "name": "on_conflict_info",
+        "type": "OnConflictInfo*"
+      },
+      {
+        "id": 209,
+        "name": "table_ref",
+        "type": "TableRef*"
+      }
+    ]
+  },
+  {
+    "class": "UpdateQueryNode",
+    "base": "QueryNode",
+    "enum": "UPDATE_QUERY_NODE",
+    "members": [
+      {
+        "id": 200,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "from_table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 203,
+        "name": "set_info",
+        "type": "UpdateSetInfo*"
+      }
+    ]
+  },
+  {
+    "class": "DeleteQueryNode",
+    "base": "QueryNode",
+    "enum": "DELETE_QUERY_NODE",
+    "members": [
+      {
+        "id": 200,
+        "name": "condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 201,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "using_clauses",
+        "type": "vector<TableRef*>"
+      },
+      {
+        "id": 203,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
   }
 ]

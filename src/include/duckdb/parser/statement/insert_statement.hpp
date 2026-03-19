@@ -16,6 +16,8 @@
 namespace duckdb {
 class ExpressionListRef;
 class UpdateSetInfo;
+class Serializer;
+class Deserializer;
 
 enum class OnConflictAction : uint8_t {
 	THROW,
@@ -32,6 +34,9 @@ public:
 
 public:
 	unique_ptr<OnConflictInfo> Copy() const;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<OnConflictInfo> Deserialize(Deserializer &deserializer);
 
 public:
 	OnConflictAction action_type;

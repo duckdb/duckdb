@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
 class UpdateSetInfo {
 public:
 	UpdateSetInfo();
@@ -23,6 +26,9 @@ public:
 public:
 	unique_ptr<UpdateSetInfo> Copy() const;
 	string ToString() const;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<UpdateSetInfo> Deserialize(Deserializer &deserializer);
 
 public:
 	// The condition that needs to be met to perform the update
