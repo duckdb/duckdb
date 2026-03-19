@@ -9,7 +9,7 @@ ColumnBinding::ColumnBinding(TableIndex table, ProjectionIndex column) : table_i
 }
 
 string ColumnBinding::ToString() const {
-	return "#[" + to_string(table_index.index) + "." + to_string(column_index.index) + "]";
+	return "#[" + to_string(table_index.index) + "." + to_string(column_index) + "]";
 }
 
 bool ColumnBinding::operator==(const ColumnBinding &rhs) const {

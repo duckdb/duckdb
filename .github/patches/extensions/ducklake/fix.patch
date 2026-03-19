@@ -1044,8 +1044,21 @@ index 851c128d..4040a5c2 100644
  	auto catalog_type = entry->type;
  	table_entry_map.insert(make_pair(id, reference<CatalogEntry>(*entry)));
  	schema.AddEntry(catalog_type, std::move(entry));
+diff --git a/src/storage/ducklake_delete_filter.cpp b/src/storage/ducklake_delete_filter.cpp
+index 35b0518f..770ac8da 100644
+--- a/src/storage/ducklake_delete_filter.cpp
++++ b/src/storage/ducklake_delete_filter.cpp
+@@ -147,7 +147,7 @@ DeleteFileScanResult DuckLakeDeleteFilter::ScanDeleteFile(ClientContext &context
+ 	// Create snapshot filters if we have a snapshot column and filter range is specified
+ 	if (has_snapshot_id && (snapshot_filter_min.IsValid() || snapshot_filter_max.IsValid())) {
+ 		auto filters = make_uniq<TableFilterSet>();
+-		ColumnIndex snapshot_col_idx(2); // snapshot_id is column 2
++		ProjectionIndex snapshot_col_idx(2); // snapshot_id is column 2
+ 
+ 		if (snapshot_filter_min.IsValid()) {
+ 			auto min_constant = Value::BIGINT(NumericCast<int64_t>(snapshot_filter_min.GetIndex()));
 diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
-index 405a5acf..acb71114 100644
+index 405a5acf..f45dfc18 100644
 --- a/src/storage/ducklake_inlined_data_reader.cpp
 +++ b/src/storage/ducklake_inlined_data_reader.cpp
 @@ -258,17 +258,17 @@ AsyncResult DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableF
@@ -1060,7 +1073,7 @@ index 405a5acf..acb71114 100644
  					continue;
  				}
 -				auto column_id = entry.first;
-+				auto column_id = entry.ColumnIndex();
++				auto column_id = entry.GetIndex();
  				auto &vec = chunk.data[column_id];
  
  				UnifiedVectorFormat vdata;
@@ -1374,15 +1387,15 @@ index e812cef5..6140d444 100644
  		table_size.table_uuid = row.GetValue<string>(3);
  		if (!row.IsNull(4)) {
 diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
-index e3ddf53b..b2ca5648 100644
+index e3ddf53b..96e99928 100644
 --- a/src/storage/ducklake_multi_file_list.cpp
 +++ b/src/storage/ducklake_multi_file_list.cpp
-@@ -51,15 +51,15 @@ unique_ptr<MultiFileList>
+@@ -51,16 +51,16 @@ unique_ptr<MultiFileList>
  DuckLakeMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                               const vector<string> &names, const vector<LogicalType> &types,
                                               const vector<column_t> &column_ids, TableFilterSet &filters) const {
 -	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || filters.filters.empty()) {
-+	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || filters.HasFilters()) {
++	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || !filters.HasFilters()) {
  		// filter pushdown is only supported when scanning full tables
  		return nullptr;
  	}
@@ -1391,11 +1404,13 @@ index e3ddf53b..b2ca5648 100644
  
 -	for (auto &entry : filters.filters) {
 -		auto column_index_val = entry.first;
+-		idx_t column_idx = column_index_val;
 +	for (auto &entry : filters) {
-+		auto column_index_val = entry.ColumnIndex();
- 		idx_t column_idx = column_index_val;
++		auto column_index_val = entry.GetIndex();
++		auto column_idx = column_index_val;
  		auto column_id = column_ids[column_idx];
  
+ 		if (IsVirtualColumn(column_id)) {
 @@ -71,7 +71,7 @@ DuckLakeMultiFileList::DynamicFilterPushdown(ClientContext &context, const Multi
  		auto &root_id = read_info.table.GetFieldId(column_index);
  		auto field_index = root_id.GetFieldIndex().index;
@@ -1406,7 +1421,7 @@ index e3ddf53b..b2ca5648 100644
  		const auto &column_type = read_info.column_types[column_index.index];
  
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 2d6317f9..30bd0429 100644
+index 2d6317f9..c55547a3 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
 @@ -28,6 +28,7 @@
@@ -1417,6 +1432,24 @@ index 2d6317f9..30bd0429 100644
  
  namespace duckdb {
  
+@@ -48,7 +49,7 @@ static bool TryFindColumnByFieldId(const vector<MultiFileColumnDefinition> &loca
+ }
+ 
+ //! Add a snapshot filter to the reader's filter set
+-static void AddSnapshotFilter(BaseFileReader &reader, const ColumnIndex &col_idx, const LogicalType &col_type,
++static void AddSnapshotFilter(BaseFileReader &reader, ProjectionIndex col_idx, const LogicalType &col_type,
+                               idx_t snapshot_value, ExpressionType comparison_type) {
+ 	auto constant = Value::UBIGINT(snapshot_value).DefaultCastAs(col_type);
+ 	auto filter = make_uniq<ConstantFilter>(comparison_type, std::move(constant));
+@@ -317,7 +318,7 @@ ReaderInitializeType DuckLakeMultiFileReader::InitializeReader(MultiFileReaderDa
+ 		if (!reader.filters) {
+ 			reader.filters = make_uniq<TableFilterSet>();
+ 		}
+-		ColumnIndex snapshot_col_idx(snapshot_local_id.GetIndex());
++		ProjectionIndex snapshot_col_idx(snapshot_local_id.GetIndex());
+ 
+ 		// Add _ducklake_internal_snapshot_id <= snapshot_filter_max
+ 		if (file_entry.snapshot_filter_max.IsValid()) {
 diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
 index 020cc3be..7a7c0517 100644
 --- a/src/storage/ducklake_schema_entry.cpp

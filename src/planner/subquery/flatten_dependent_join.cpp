@@ -424,10 +424,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				JoinCondition cond(
 				    make_uniq<BoundColumnRefExpression>(
 				        correlated_columns[i].type,
-				        ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index.index + i))),
+				        ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index + i))),
 				    make_uniq<BoundColumnRefExpression>(
 				        correlated_columns[i].type,
-				        ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i))),
+				        ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i))),
 				    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 				join->conditions.push_back(std::move(cond));
 			}
@@ -491,13 +491,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto &col = correlated_columns[i];
 			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type,
-			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i)));
+			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i)));
 			plan->expressions.push_back(std::move(colref));
 		}
 
 		base_binding.table_index = proj.table_index;
 		base_binding.column_index = ProjectionIndex(plan->expressions.size() - correlated_columns.size());
-		this->delim_offset = base_binding.column_index.index;
+		this->delim_offset = base_binding.column_index;
 		this->data_offset = 0;
 		return plan;
 	}
@@ -522,7 +522,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto &col = correlated_columns[i];
 			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type,
-			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i)));
+			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i)));
 			auto new_group_index = ColumnBinding::PushExpression(aggr.groups, std::move(colref));
 			for (auto &set : aggr.grouping_sets) {
 				set.insert(new_group_index);
@@ -539,7 +539,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
 				auto colref = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type,
-				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i)));
+				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i)));
 				vector<unique_ptr<Expression>> aggr_children;
 				aggr_children.push_back(std::move(colref));
 				auto first_fun =
@@ -660,10 +660,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			JoinCondition cond(
 			    make_uniq<BoundColumnRefExpression>(
 			        correlated_columns[i].type,
-			        ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i))),
+			        ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i))),
 			    make_uniq<BoundColumnRefExpression>(
 			        correlated_columns[i].type,
-			        ColumnBinding(right_binding.table_index, ProjectionIndex(right_binding.column_index.index + i))),
+			        ColumnBinding(right_binding.table_index, ProjectionIndex(right_binding.column_index + i))),
 			    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 			join->conditions.push_back(std::move(cond));
 		}
@@ -745,15 +745,14 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 				// add the correlated columns to the join conditions
 				for (idx_t i = 0; i < correlated_columns.size(); i++) {
-					JoinCondition cond(make_uniq<BoundColumnRefExpression>(
-					                       correlated_columns[i].type,
-					                       ColumnBinding(left_binding.table_index,
-					                                     ProjectionIndex(left_binding.column_index.index + i))),
-					                   make_uniq<BoundColumnRefExpression>(
-					                       correlated_columns[i].type,
-					                       ColumnBinding(right_binding.table_index,
-					                                     ProjectionIndex(right_binding.column_index.index + i))),
-					                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+					JoinCondition cond(
+					    make_uniq<BoundColumnRefExpression>(
+					        correlated_columns[i].type,
+					        ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index + i))),
+					    make_uniq<BoundColumnRefExpression>(
+					        correlated_columns[i].type,
+					        ColumnBinding(right_binding.table_index, ProjectionIndex(right_binding.column_index + i))),
+					    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
 					auto &comparison_join = join.Cast<LogicalComparisonJoin>();
 					comparison_join.conditions.push_back(std::move(cond));
@@ -795,10 +794,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			auto left = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type,
-			    ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index.index + i)));
+			    ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index + i)));
 			auto right = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type,
-			    ColumnBinding(right_binding.table_index, ProjectionIndex(right_binding.column_index.index + i)));
+			    ColumnBinding(right_binding.table_index, ProjectionIndex(right_binding.column_index + i)));
 
 			if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 			    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
@@ -868,7 +867,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto &col = correlated_columns[i];
 			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type,
-			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i)));
+			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i)));
 			row_number->partitions.push_back(std::move(colref));
 		}
 		if (order_by) {
@@ -943,7 +942,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				w.partitions.push_back(make_uniq<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
-				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i))));
+				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i))));
 			}
 		}
 		return plan;
@@ -1012,7 +1011,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			distinct.distinct_targets.push_back(make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type,
-			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i))));
+			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i))));
 		}
 		return plan;
 	}
@@ -1030,7 +1029,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (auto &expr_list : expr_get.expressions) {
 				auto colref = make_uniq<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
-				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i)));
+				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i)));
 				expr_list.push_back(std::move(colref));
 			}
 			expr_get.expr_types.push_back(correlated_columns[i].type);
@@ -1102,7 +1101,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 					auto corr = correlated_columns[i];
 					auto colref = make_uniq<BoundColumnRefExpression>(
 					    correlated_columns[i].type,
-					    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index.index + i)));
+					    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i)));
 					rec_cte.key_targets.push_back(std::move(colref));
 				}
 				rec_cte.internal_types.push_back(correlated_columns[i].type);

@@ -48,11 +48,11 @@ struct ParquetReaderPrefetchConfig {
 };
 
 struct ParquetScanFilter {
-	ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter);
+	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
 
-	idx_t filter_idx;
+	ProjectionIndex filter_idx;
 	TableFilter &filter;
 	unique_ptr<TableFilterState> filter_state;
 };
@@ -134,6 +134,7 @@ struct ParquetUnionData : public BaseUnionData {
 	}
 	~ParquetUnionData() override;
 
+	optional_idx TryGetCardinalityEstimate() const override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
 
 	ParquetOptions options;
@@ -177,6 +178,8 @@ public:
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
+	idx_t GetFileSize() const;
+	idx_t GetDataSize() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
 	string static GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);

@@ -167,6 +167,12 @@ private:
 	idx_t size;
 };
 
+struct List {
+	uint32_t capacity;
+	uint32_t size;
+	List *next;
+};
+
 template <class K, class V, class K_COMPARATOR>
 class BinaryAggregateHeap {
 	using STORAGE_TYPE = pair<HeapEntry<K>, HeapEntry<V>>;

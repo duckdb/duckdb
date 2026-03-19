@@ -107,10 +107,10 @@ vector<idx_t> PhysicalJoin::FillProjectionMap(const PhysicalOperator &child,
 		}
 	} else {
 		for (auto &entry : projection_map) {
-			if (entry.index >= child_count) {
-				throw InternalException("Projection map entry %d out of range", entry.index);
+			if (entry >= child_count) {
+				throw InternalException("Projection map entry %d out of range", entry);
 			}
-			result.emplace_back(entry.index);
+			result.emplace_back(entry);
 		}
 	}
 	return result;

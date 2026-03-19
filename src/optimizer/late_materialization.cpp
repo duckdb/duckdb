@@ -186,7 +186,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			for (auto &entry : column_references) {
 				auto &column_binding = entry.first;
 				if (column_binding.table_index == proj.table_index) {
-					referenced_columns.insert(column_binding.column_index.index);
+					referenced_columns.insert(column_binding.column_index);
 				}
 			}
 			// clear the list of referenced expressions and visit those columns
