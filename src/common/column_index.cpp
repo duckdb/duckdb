@@ -124,13 +124,16 @@ string ColumnIndex::GetName(const string &column_name) const {
 	if (index_type != ColumnIndexType::PUSHDOWN_EXTRACT) {
 		return column_name;
 	}
-	auto current_name = column_name + ".";
-	if (has_index) {
-		current_name += StructType::GetChildName(type, index);
+	D_ASSERT(child_indexes.size() == 1);
+	auto &child = child_indexes[0];
+	string current_name = column_name + ".";
+	if (child.HasPrimaryIndex()) {
+		//! 'type' is the parent struct type at this level; child.GetPrimaryIndex() is the field's index within it
+		current_name += StructType::GetChildName(type, child.GetPrimaryIndex());
 	} else {
-		current_name += field;
+		current_name += child.GetFieldName();
 	}
-	return child_indexes[0].GetName(current_name);
+	return child.GetName(current_name);
 }
 
 } // namespace duckdb

@@ -329,7 +329,7 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 				}
 				filters_info += filter.ToString(entry->second.name);
 			} else {
-				auto column_name = column_id.GetName(names[filter_idx]);
+				auto column_name = column_id.GetName(names[col_id]);
 				filters_info += filter.ToString(column_name);
 			}
 		}
