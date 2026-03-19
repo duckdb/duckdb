@@ -238,6 +238,7 @@ public:
 private:
 	void Grow(ArenaAllocator &allocator) {
 		D_ASSERT(allocated_capacity < capacity);
+		const auto old_allocated_capacity = allocated_capacity;
 		if (allocated_capacity == 0) {
 			allocated_capacity = 1;
 		} else if (allocated_capacity > capacity / 2) {
@@ -246,17 +247,12 @@ private:
 			allocated_capacity *= 2;
 		}
 
+		const auto old_size = old_allocated_capacity * sizeof(STORAGE_TYPE);
 		const auto new_size = allocated_capacity * sizeof(STORAGE_TYPE);
-		auto new_ptr = allocator.AllocateAligned(new_size);
-		auto new_heap = reinterpret_cast<STORAGE_TYPE *>(new_ptr);
-
-		for (idx_t i = 0; i < size; i++) {
-			new (&new_heap[i]) STORAGE_TYPE(std::move(heap[i]));
-		}
-		for (idx_t i = size; i < allocated_capacity; i++) {
-			new (&new_heap[i]) STORAGE_TYPE();
-		}
-		heap = new_heap;
+		auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
+		                : allocator.AllocateAligned(new_size);
+		memset(ptr + old_size, 0, new_size - old_size);
+		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
 	}
 
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
