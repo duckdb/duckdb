@@ -135,13 +135,13 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                                const ActiveTransactionState transaction_context_state) {
-	ActiveTransactionState local_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+	ActiveTransactionState chained_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto query = statements[i]->query;
 		const ActiveTransactionState full_transaction_state =
 		    (transaction_context_state == ActiveTransactionState::OTHER_TRANSACTIONS ||
-		     local_transaction_state == ActiveTransactionState::OTHER_TRANSACTIONS)
+		     chained_transaction_state == ActiveTransactionState::OTHER_TRANSACTIONS)
 		        ? ActiveTransactionState::OTHER_TRANSACTIONS
 		        : ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 
@@ -162,12 +162,12 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 
 			if (transaction_stmt.info->type == TransactionType::BEGIN_TRANSACTION) {
 				new_statements.push_back(std::move(statements[i]));
-				local_transaction_state = ActiveTransactionState::OTHER_TRANSACTIONS;
+				chained_transaction_state = ActiveTransactionState::OTHER_TRANSACTIONS;
 				break;
 			}
 			if (transaction_stmt.info->type == TransactionType::COMMIT ||
 			    transaction_stmt.info->type == TransactionType::ROLLBACK) {
-				local_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+				chained_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 			}
 			new_statements.push_back(std::move(statements[i]));
 			break;
