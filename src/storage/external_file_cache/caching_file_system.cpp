@@ -246,20 +246,6 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 	executor.WorkOnTasks();
 
-	// After all tasks complete, check if the cache was invalidated by another thread.
-	// If so, reset the blocks involved to EMPTY so stale data doesn't record in the cache.
-	if (Validate()) {
-		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		if (!ExternalFileCache::IsValid(true, cached_file.version_tag, cached_file.last_modified, version_tag,
-		                                last_modified)) {
-			for (auto &block : blocks) {
-				annotated_lock_guard<annotated_mutex> block_guard(block->mtx);
-				block->state = CacheBlockState::EMPTY;
-				block->block_handle = nullptr;
-			}
-		}
-	}
-
 	// Build the handle group.
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 	mem_handles.reserve(num_blocks);
@@ -267,16 +253,24 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
 		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
-		idx_t block_valid_bytes = 0;
-		{
-			auto &block = *blocks[idx];
-			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
-			block_valid_bytes = block.nr_bytes;
-		}
-		const idx_t available_in_block = block_valid_bytes - offset_in_block;
-		const idx_t length = MinValue(available_in_block, remaining);
+		const idx_t length = MinValue(block_size - offset_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
+	}
+	if (remaining > 0) {
+		throw InvalidInputException("CachingFileHandle::Read: requested %llu bytes from offset %llu but only %llu bytes were read", nr_bytes, location,
+		                        GetFileSize() - location);
+	}
+
+	// After all tasks complete, check if the cache was invalidated by another thread.
+	if (Validate()) {
+		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
+		if (!ExternalFileCache::IsValid(true, cached_file.version_tag, cached_file.last_modified, version_tag,
+		                                last_modified)) {
+			for (auto &block : blocks) {
+				block->Reinit();
+			}
+		}
 	}
 
 	return FileBufferHandleGroup(std::move(mem_handles));
@@ -309,29 +303,29 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (file_handle || Validate()) {
-		return GetFileHandle().GetFileSize();
+	if (!Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
+		return cached_file.file_size;
 	}
-	annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
-	return cached_file.file_size;
+	return GetFileHandle().GetFileSize();
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	if (file_handle || Validate()) {
-		GetFileHandle();
-		return last_modified;
+	if (!Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
+		return cached_file.last_modified;
 	}
-	annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
-	return cached_file.last_modified;
+	GetFileHandle();
+	return last_modified;
 }
 
 string CachingFileHandle::GetVersionTag() {
-	if (file_handle || Validate()) {
-		GetFileHandle();
-		return version_tag;
+	if (!Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
+		return cached_file.version_tag;
 	}
-	annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
-	return cached_file.version_tag;
+	GetFileHandle();
+	return version_tag;
 }
 
 bool CachingFileHandle::Validate() const {
@@ -339,11 +333,11 @@ bool CachingFileHandle::Validate() const {
 }
 
 bool CachingFileHandle::CanSeek() {
-	if (file_handle || Validate()) {
-		return GetFileHandle().CanSeek();
+	if (!Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
+		return cached_file.can_seek;
 	}
-	annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
-	return cached_file.can_seek;
+	return GetFileHandle().CanSeek();
 }
 
 bool CachingFileHandle::IsRemoteFile() const {
@@ -351,11 +345,11 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (file_handle || Validate()) {
-		return GetFileHandle().OnDiskFile();
+	if (!Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
+		return cached_file.on_disk_file;
 	}
-	annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
-	return cached_file.on_disk_file;
+	return GetFileHandle().OnDiskFile();
 }
 
 idx_t CachingFileHandle::SeekPosition() {

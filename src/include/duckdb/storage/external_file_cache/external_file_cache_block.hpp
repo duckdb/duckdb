@@ -32,6 +32,9 @@ struct CacheBlock {
 	//! Checksum over the buffer contents, used for verifying data was not modified after caching
 	hash_t checksum DUCKDB_GUARDED_BY(mtx) = 0;
 #endif
+
+	//! Reset the block to its initial empty state.
+	void Reinit(); DUCKDB_EXCLUDES(mtx);
 };
 
 } // namespace duckdb

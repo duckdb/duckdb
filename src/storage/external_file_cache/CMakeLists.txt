@@ -4,6 +4,7 @@ add_library_unity(
   caching_file_system.cpp
   caching_file_system_wrapper.cpp
   external_file_cache.cpp
+  external_file_cache_block.cpp
   external_file_cache_util.cpp
   file_buffer_handle_group.cpp)
 set(ALL_OBJECT_FILES

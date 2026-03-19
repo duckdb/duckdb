@@ -122,50 +122,10 @@ public:
 	}
 };
 
-// A file system that blocks `Read` calls until a barrier is signaled, which allows controlled interleaving of
-// concurrent reads.
-class BarrierFileSystem : public LocalFileSystem {
-public:
-	mutable annotated_mutex mu;
-	bool block_reads DUCKDB_GUARDED_BY(mu) = false;
-	std::condition_variable cv;
-
-	string GetName() const override {
-		return "BarrierFileSystem";
-	}
-
-	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		{
-			annotated_unique_lock<annotated_mutex> lock(mu);
-			cv.wait(lock, [&]() DUCKDB_REQUIRES(mu) { return !block_reads; });
-		}
-		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
-	}
-
-	void BlockReads() {
-		const annotated_lock_guard<annotated_mutex> lock(mu);
-		block_reads = true;
-	}
-
-	void UnblockReads() {
-		const annotated_lock_guard<annotated_mutex> lock(mu);
-		block_reads = false;
-		cv.notify_all();
-	}
-
-	bool CanHandleFile(const string &path) override {
-		return StringUtil::StartsWith(path, TestDirectoryPath());
-	}
-
-	bool CanSeek() override {
-		return true;
-	}
-};
-
 // A file system that counts OpenFile calls to verify when the underlying file is (not) opened.
 class CountingFileSystem : public LocalFileSystem {
 public:
-	mutable mutex mu;
+	mutable annotated_mutex mu;
 	size_t open_count DUCKDB_GUARDED_BY(mu) = 0;
 
 	string GetName() const override {
@@ -174,13 +134,13 @@ public:
 
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
-		const lock_guard<mutex> lock(mu);
+		const annotated_lock_guard<annotated_mutex> lock(mu);
 		open_count++;
 		return LocalFileSystem::OpenFile(path, flags, opener);
 	}
 
 	size_t GetOpenCount() const {
-		const lock_guard<mutex> lock(mu);
+		const annotated_lock_guard<annotated_mutex> lock(mu);
 		return open_count;
 	}
 
@@ -513,6 +473,7 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 			string buffer(TEST_BUFFER_SIZE, '\0');
 			shared_handle->Read(QueryContext(), &buffer[0], chunk_size, read_location);
 			const bool ok = (buffer.substr(0, chunk_size) == test_content.substr(read_location, chunk_size));
+			// Cannot check inside of the thread because "REQUIRE" is not thread-safe.
 			{
 				const lock_guard<mutex> lock(results_mutex);
 				results[idx] = ok;
@@ -624,7 +585,8 @@ TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system]
 			auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
 			string buffer(TEST_BUFFER_SIZE, '\0');
 			handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
-			bool ok = (buffer.substr(0, test_content.size()) == test_content);
+			const bool ok = (buffer.substr(0, test_content.size()) == test_content);
+			// Cannot check inside of the thread because "REQUIRE" is not thread-safe.
 			{
 				const lock_guard<mutex> lock(results_mutex);
 				results[idx] = ok;
@@ -670,6 +632,7 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 				string buffer(TEST_BUFFER_SIZE, '\0');
 				handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
 			} catch (...) {
+				// Cannot check inside of the thread because "REQUIRE" is not thread-safe.
 				const lock_guard<mutex> lock(results_mutex);
 				got_error[idx] = true;
 			}
@@ -763,6 +726,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
 
 	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
 
 	// Full file read: should produce 2 handles
 	{
@@ -777,6 +741,18 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 		string result(FILE_SIZE, '\0');
 		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
 		REQUIRE(result == content);
+
+		// Both blocks should be cached
+		auto cached = cache.GetCachedFileInformation();
+		REQUIRE(cached.size() == 2);
+		std::sort(cached.begin(), cached.end(),
+		          [](const CachedFileInformation &a, const CachedFileInformation &b) { return a.location < b.location; });
+		REQUIRE(cached[0].location == 0);
+		REQUIRE(cached[0].nr_bytes == BLOCK_SIZE);
+		REQUIRE(cached[0].loaded);
+		REQUIRE(cached[1].location == BLOCK_SIZE);
+		REQUIRE(cached[1].nr_bytes == EXTRA);
+		REQUIRE(cached[1].loaded);
 	}
 
 	// Cross-boundary read: last 200 bytes of block 0 + first 50 bytes of block 1
@@ -796,7 +772,20 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 		REQUIRE(result == content.substr(read_offset, read_size));
 	}
 
-	// Single block read: should produce 1 handle
+	{
+		const idx_t read_offset = BLOCK_SIZE + 10;
+		const idx_t read_size = 50;
+		auto group = handle->Read(read_size, read_offset);
+		auto &handles = group.GetHandles();
+		REQUIRE(handles.size() == 1);
+		REQUIRE(handles[0].start_offset == 10);
+		REQUIRE(handles[0].length == 50);
+
+		string result(read_size, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), read_size);
+		REQUIRE(result == content.substr(read_offset, read_size));
+	}
+
 	{
 		auto group = handle->Read(100, 0);
 		auto &handles = group.GetHandles();
@@ -806,7 +795,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	}
 }
 
-TEST_CASE("Fully cached read skips GetFileHandle", "[file_system][caching]") {
+TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto counting_fs = make_uniq<CountingFileSystem>();
@@ -827,7 +816,7 @@ TEST_CASE("Fully cached read skips GetFileHandle", "[file_system][caching]") {
 		return info;
 	};
 
-	// First read: populates the cache (requires opening the file)
+	// First read: populates the cache
 	{
 		auto handle = cfs.OpenFile(make_file_info(), FileFlags::FILE_FLAGS_READ);
 		auto group = handle->Read(FILE_SIZE, 0);

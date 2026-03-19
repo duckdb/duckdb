@@ -42,10 +42,10 @@ public:
 public:
 	//! Get the underlying FileHandle
 	DUCKDB_API FileHandle &GetFileHandle();
-	//! Read nr_bytes from the file (or cache) at location.
-	//! Returns a FileBufferHandleGroup that keeps the data pinned in memory.
+	//! Read [nr_bytes] bytes at the requested [location].
+	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
-	//! Read (non-seeking) nr bytes from the file (or cache), sets nr_bytes to actually read bytes
+	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
