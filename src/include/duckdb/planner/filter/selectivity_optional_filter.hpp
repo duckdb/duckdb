@@ -47,7 +47,7 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ };
+enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
 
 class SelectivityOptionalFilter final : public OptionalFilter {
 public:
