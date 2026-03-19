@@ -449,6 +449,20 @@ void Binder::BindLogicalType(LogicalType &type) {
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	auto &schema = BindCreateSchema(create_trigger_info);
 
+	// Block trigger creation on databases with an older storage version
+	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog);
+	auto &attached = catalog.GetAttached();
+	if (attached.HasStorageManager()) {
+		auto &storage_manager = attached.GetStorageManager();
+		const auto since = SerializationCompatibility::FromString("v2.0.0").serialization_version;
+		if (!create_trigger_info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
+		    storage_manager.GetStorageVersion() < since) {
+			string msg = "CREATE TRIGGER is only supported for storage versions v2.0.0 and higher.\n";
+			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
+			throw BinderException(msg);
+		}
+	}
+
 	// Validate the table exists — use the table's own catalog/schema qualifiers only,
 	// not the trigger's schema (they are independent)
 	TableDescription table_description(create_trigger_info.base_table->catalog_name,
