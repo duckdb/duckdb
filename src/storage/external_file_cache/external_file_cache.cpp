@@ -66,11 +66,6 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	unique_lock<mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		idx_t file_size = 0;
-		{
-			annotated_lock_guard<annotated_mutex> meta_guard(file.second->meta_lock);
-			file_size = file.second->file_size;
-		}
 		const idx_t block_size = GetCacheBlockSize(file.first);
 		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
 		for (const auto &block_entry : file.second->blocks) {
@@ -82,9 +77,8 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 				continue;
 			}
 			const idx_t location = block_idx * block_size;
-			const idx_t nr_bytes = MinValue(block_size, file_size - location);
 			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
-			result.push_back({file.first, nr_bytes, location, loaded});
+			result.push_back({file.first, block.nr_bytes, location, loaded});
 		}
 	}
 	return result;

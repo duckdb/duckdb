@@ -42,6 +42,11 @@ public:
 	// Warning: this function requires exactly one handle for zero-copy access, otherwise it will throw an exception.
 	data_ptr_t Ptr() const;
 
+	// Validates that handles represent contiguous file content:
+	// only the first handle may have a non-zero start_offset,
+	// and only the last handle may end before the buffer boundary.
+	void Validate() const;
+
 private:
 	// The list of MemoryHandles, could be empty.
 	vector<MemoryHandle> handles;
