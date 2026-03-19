@@ -52,6 +52,11 @@ jobs:
         python3 -m pip install pytest
 
     - uses: ./.github/actions/ccache-action
+      if: matrix.config.arch != 'riscv64'
+
+    - name: Install ccache for riscv64
+      if: matrix.config.arch == 'riscv64'
+      run: sudo apt-get update && sudo apt-get install -y ccache
 
     - name: Build
       run: |
