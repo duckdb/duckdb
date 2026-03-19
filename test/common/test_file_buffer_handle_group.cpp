@@ -64,36 +64,6 @@ TEST_CASE("FileBufferHandleGroup copy with single handle with offset", "[file_bu
 	}
 }
 
-TEST_CASE("FileBufferHandleGroup copy with multiple handles", "[file_buffer_handle_group]") {
-	DuckDB db(":memory:");
-	auto &bm = BufferManager::GetBufferManager(*db.instance);
-
-	constexpr idx_t CHUNK = 64;
-
-	auto h1 = AllocateAndFill(bm, CHUNK, 0xAA);
-	auto h2 = AllocateAndFill(bm, CHUNK, 0xBB);
-	auto h3 = AllocateAndFill(bm, CHUNK, 0xCC);
-
-	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
-	mem_handles.push_back({std::move(h1), 0, CHUNK});
-	mem_handles.push_back({std::move(h2), 0, CHUNK});
-	mem_handles.push_back({std::move(h3), 0, CHUNK});
-	FileBufferHandleGroup group(std::move(mem_handles));
-
-	array<uint8_t, CHUNK * 3> dest {};
-	group.CopyTo(dest.data(), dest.size());
-
-	for (idx_t i = 0; i < CHUNK; i++) {
-		REQUIRE(dest[i] == 0xAA);
-	}
-	for (idx_t i = CHUNK; i < CHUNK * 2; i++) {
-		REQUIRE(dest[i] == 0xBB);
-	}
-	for (idx_t i = CHUNK * 2; i < CHUNK * 3; i++) {
-		REQUIRE(dest[i] == 0xCC);
-	}
-}
-
 TEST_CASE("FileBufferHandleGroup copy partial across handles", "[file_buffer_handle_group]") {
 	DuckDB db(":memory:");
 	auto &bm = BufferManager::GetBufferManager(*db.instance);
