@@ -1,9 +1,149 @@
-commit 361592f5fd0f637bc130aaf5457f20c2bf994bf3
+commit 0e8a85d1202da43a1448c3f8e68283efb9a5cb58
 Author: dentiny <dentinyhao@gmail.com>
-Date:   Mon Mar 16 02:10:34 2026 +0000
+Date:   Thu Mar 19 08:51:06 2026 +0000
 
-    Fix effects by cache filesystem
+    Adapt DuckDB core changes
 
+diff --git a/src/hffs.cpp b/src/hffs.cpp
+index eb16c4f..442e828 100644
+--- a/src/hffs.cpp
++++ b/src/hffs.cpp
+@@ -212,8 +212,8 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
+ 
+ 	FileOpenerInfo info;
+ 	info.file_path = path;
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 	auto &http_params = params->Cast<HTTPFSParams>();
+ 	SetParams(http_params, path, opener);
+ 	auto http_state = HTTPState::TryGetState(opener).get();
+@@ -287,8 +287,8 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
+ 	FileOpenerInfo info;
+ 	info.file_path = file.path;
+ 
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 	SetParams(params->Cast<HTTPFSParams>(), file.path, opener);
+ 
+ 	return duckdb::make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, std::move(params));
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index 16009fd..5dfec68 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -24,7 +24,7 @@
+ 
+ namespace duckdb {
+ 
+-shared_ptr<HTTPUtil> HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
++HTTPUtil &HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
+ 	if (opener) {
+ 		return opener->GetHTTPUtil();
+ 	}
+@@ -408,8 +408,8 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
+ 	FileOpenerInfo info;
+ 	info.file_path = file.path;
+ 
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 
+ 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+ 	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 446fee1..4333234 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -107,7 +107,8 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	auto callback_httpfs_client_implementation = [](ClientContext &context, SetScope scope, Value &parameter) {
+ 		auto &config = DBConfig::GetConfig(context);
+ 		string value = StringValue::Get(parameter);
+-		if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
++		auto &http_util = config.GetHTTPUtil();
++		if (http_util.GetName() == "WasmHTTPUtils") {
+ 			if (value == "wasm" || value == "default") {
+ 				return;
+ 			}
+@@ -116,14 +117,14 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 		}
+ #ifndef EMSCRIPTEN
+ 		if (value == "curl" || value == "default") {
+-			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil-Curl") {
+-				config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
++			if (http_util.GetName() != "HTTPFSUtil-Curl") {
++				config.SetHTTPUtil(make_shared_ptr<HTTPFSCurlUtil>());
+ 			}
+ 			return;
+ 		}
+ 		if (value == "httplib") {
+-			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil") {
+-				config.http_util = make_shared_ptr<HTTPFSUtil>();
++			if (http_util.GetName() != "HTTPFSUtil") {
++				config.SetHTTPUtil(make_shared_ptr<HTTPFSUtil>());
+ 			}
+ 			return;
+ 		}
+@@ -137,13 +138,14 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	                          "Automatically fetch AWS credentials from environment variables.", LogicalType::BOOLEAN,
+ 	                          Value::BOOLEAN(true));
+ 
+-	if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
++	auto &http_util = config.GetHTTPUtil();
++	if (http_util.GetName() == "WasmHTTPUtils") {
+ 		// Already handled, do not override
+ 	} else {
+ #ifndef EMSCRIPTEN
+-		config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
++		config.SetHTTPUtil(make_shared_ptr<HTTPFSCurlUtil>());
+ #else
+-		config.http_util = make_shared_ptr<HTTPFSUtil>();
++		config.SetHTTPUtil(make_shared_ptr<HTTPFSUtil>());
+ #endif
+ 	}
+ 
+diff --git a/src/include/httpfs_client.hpp b/src/include/httpfs_client.hpp
+index 879a6d6..3baab91 100644
+--- a/src/include/httpfs_client.hpp
++++ b/src/include/httpfs_client.hpp
+@@ -41,7 +41,7 @@ public:
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
+ 
+ 	static unordered_map<string, string> ParseGetParameters(const string &text);
+-	static shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener);
++	static HTTPUtil &GetHTTPUtil(optional_ptr<FileOpener> opener);
+ 
+ 	string GetName() const override;
+ };
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index 958df32..eb36003 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -697,8 +697,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
+ 	auto parsed_s3_url = S3UrlParse(file.path, auth_params);
+ 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
+ 
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 
+ 	return duckdb::make_uniq<S3FileHandle>(*this, file, flags, std::move(params), auth_params,
+ 	                                       S3ConfigParams::ReadFrom(opener));
+@@ -1062,8 +1062,8 @@ bool S3GlobResult::ExpandNextPath() const {
+ 	}
+ 
+ 	FileOpenerInfo info = {glob_pattern};
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto http_params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto http_params = http_util.InitializeParameters(opener, info);
+ 
+ 	vector<OpenFileInfo> s3_keys;
+ 	if (!current_common_prefix.empty()) {
 diff --git a/test/sql/json/table/internal_issue_6807.test_slow b/test/sql/json/table/internal_issue_6807.test_slow
 index a354a7f..e759862 100644
 --- a/test/sql/json/table/internal_issue_6807.test_slow
