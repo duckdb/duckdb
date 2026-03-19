@@ -1,0 +1,71 @@
+# name: test/optimizer/joins/fkpk_composite_key_ce.test
+# description: Cardinality estimation for composite FK/PK joins with transitive equality conditions
+# group: [joins]
+
+statement ok
+set disabled_optimizers='statistics_propagation';
+
+# --------------------------------------------------------------------------
+# Setup: mimic TPC-H Q9 structure (partsupp, supplier, lineitem).
+#
+# ps (partsupp): 200K rows, composite PK = (ps_suppkey, ps_partkey).
+#   ps_partkey = range (unique), ps_suppkey = range % 10000.
+#   Since range(200K) has ps_partkey unique, each (suppkey, partkey) pair
+#   appears exactly once — a true composite PK.
+#
+# su (supplier): 10K rows, PK = s_suppkey.
+#
+# li (lineitem): 600K rows, FK (l_suppkey, l_partkey) -> ps composite PK.
+#   For each li row i: l_suppkey = i%10000, l_partkey = i%200000.
+#   By construction: l_partkey%10000 == l_suppkey (always), so each li row
+#   matches exactly one ps row and one su row → join count = 600K.
+# --------------------------------------------------------------------------
+
+statement ok
+create table ps as select
+    range % 10000 ps_suppkey,
+    range         ps_partkey
+from range(200000);
+
+statement ok
+create table su as select range s_suppkey from range(10000);
+
+statement ok
+create table li as select
+    range % 10000  l_suppkey,
+    range % 200000 l_partkey
+from range(600000);
+
+# --------------------------------------------------------------------------
+# Q9-like 3-way join: ps_suppkey=l_suppkey AND s_suppkey=l_suppkey AND
+# ps_partkey=l_partkey. DuckDB derives the transitive condition
+# ps_suppkey=s_suppkey, enabling the plan {ps JOIN su} JOIN li.
+#
+# Before the fix: MarkEdgeEquivalences was called before CreateHyperGraphEdges,
+# so left_binding/right_binding were unset and all filters failed the validity
+# check. No equivalence index was ever assigned. The transitive edge
+# ps_suppkey=s_suppkey then landed in unused_edge_tdoms, doubling the
+# denominator and halving the estimate (~300K instead of ~600K).
+#
+# After the fix: equivalence indices are correctly assigned, the transitive
+# edge is recognised as redundant and skipped, and the FK/PK multi-key cap
+# keeps the estimate at ~|li| rows (~600K).
+# --------------------------------------------------------------------------
+
+# Estimate for the 3-way join should be approximately |li| rows (~600K).
+query II
+explain select count(*) from ps, su, li
+where su.s_suppkey = li.l_suppkey
+  and ps.ps_suppkey = li.l_suppkey
+  and ps.ps_partkey = li.l_partkey;
+----
+physical_plan	<REGEX>:.*~600.000 rows.*
+
+# Correctness: actual join count (1 ps row + 1 su row per li row = 600K)
+query I
+select count(*) from ps, su, li
+where su.s_suppkey = li.l_suppkey
+  and ps.ps_suppkey = li.l_suppkey
+  and ps.ps_partkey = li.l_partkey;
+----
+600000

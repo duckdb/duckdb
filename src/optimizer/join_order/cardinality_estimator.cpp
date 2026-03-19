@@ -359,16 +359,20 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		accumulated = new_accumulated;
 	};
 
-	// For multi-key INNER joins, we assume a composite FK/PK structure: the accumulated product
-	// of all equality-condition denominators between the same join pair is capped at
-	// min(|LHS|, |RHS|). This gives estimate = max(|LHS|, |RHS|) for correlated composite keys
-	// (e.g. TPC-H Q9: ps_suppkey=l_suppkey AND ps_partkey=l_partkey, where (suppkey,partkey)
-	// is the composite PK of partsupp). If the first edge alone is already more selective than
-	// the FK/PK floor — i.e. D > min(|LHS|,|RHS|) — the cap is never triggered and the more
-	// selective single-key estimate is used. If the product of multiple D values is still less
-	// than min(|LHS|,|RHS|), that smaller (more selective) product is used as-is.
-	// Key: the full relation set of the edge (union of left and right), which is unique per join pair.
-	reference_map_t<JoinRelationSet, double> inner_join_pair_accumulated;
+	// For multi-key INNER joins (>=2 equality conditions on the same join pair), we treat the
+	// composite key as a FK/PK relationship and enforce the FK/PK floor:
+	//   estimate = max(|LHS|, |RHS|)  <=>  denom = base * min(|LHS|, |RHS|)
+	// This is always correct for composite FK/PK (e.g. TPC-H Q9: ps_suppkey=l_suppkey AND
+	// ps_partkey=l_partkey). Using the product D₁×D₂ instead would be wrong in both directions:
+	// - If D₁×D₂ < cap: the product overestimates (gives more rows than FK/PK), because
+	//   the product assumes independent keys but composite PK keys are correlated.
+	// - If D₁ > cap: the first edge alone can push the denom above cap, giving an estimate
+	//   below the FK/PK floor.
+	// For a single equality condition, the standard D-based formula is used as-is.
+	// Key: the full relation set of the edge (union of left and right), unique per join pair.
+	// Value: the raw D contribution of the first equality edge for this pair, used to divide
+	// it back out when the second condition arrives and we replace it with cap.
+	reference_map_t<JoinRelationSet, double> inner_join_pair_first_d;
 
 	auto is_inner_equality = [](FilterInfoWithTotalDomains &edge) {
 		if (edge.filter_info->join_type != JoinType::INNER) {
@@ -378,36 +382,37 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		return ctype == ExpressionType::COMPARE_EQUAL || ctype == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	};
 
+	// Record the raw D of the first equality edge for a join pair.
 	auto record_inner_join_ratio = [&](FilterInfoWithTotalDomains &edge) {
 		if (!is_inner_equality(edge)) {
 			return;
 		}
 		double ratio = CalculateInnerJoinDenom(1.0, edge);
-		auto left_card = GetNumerator(*edge.filter_info->left_set);
-		auto right_card = GetNumerator(*edge.filter_info->right_set);
-		double cap = (left_card > 0 && right_card > 0) ? MinValue(left_card, right_card) : 0;
-		inner_join_pair_accumulated[edge.filter_info->set.get()] = cap > 0 ? MinValue(ratio, cap) : ratio;
+		inner_join_pair_first_d[edge.filter_info->set.get()] = ratio;
 	};
 
-	// Returns true if handled (i.e. the edge was for a known join pair in the accumulated map).
+	// Returns true if handled (i.e. the edge was for a known join pair in the first-D map).
+	// On the second equality condition for a pair, replaces the first-edge D contribution in
+	// target_denom with cap = min(|LHS|, |RHS|), enforcing the FK/PK floor.
+	// Subsequent conditions for the same pair are no-ops (first_d already == cap).
 	auto apply_inner_join_increment = [&](FilterInfoWithTotalDomains &edge, double &target_denom) -> bool {
 		if (!is_inner_equality(edge)) {
 			return false;
 		}
-		auto it = inner_join_pair_accumulated.find(edge.filter_info->set.get());
-		if (it == inner_join_pair_accumulated.end()) {
+		auto it = inner_join_pair_first_d.find(edge.filter_info->set.get());
+		if (it == inner_join_pair_first_d.end()) {
 			return false;
 		}
 		auto left_card = GetNumerator(*edge.filter_info->left_set);
 		auto right_card = GetNumerator(*edge.filter_info->right_set);
 		double cap = (left_card > 0 && right_card > 0) ? MinValue(left_card, right_card) : 0;
-		double ratio = CalculateInnerJoinDenom(1.0, edge);
-		auto &accumulated = it->second;
-		double new_accumulated = cap > 0 ? MinValue(accumulated * ratio, cap) : accumulated * ratio;
-		if (new_accumulated > accumulated && accumulated > 0) {
-			target_denom *= new_accumulated / accumulated;
+		auto &first_d = it->second;
+		if (cap > 0 && first_d != cap) {
+			// Replace the first-edge D contribution with cap (FK/PK floor).
+			// target_denom = base × first_d  →  new = base × cap
+			target_denom = target_denom / first_d * cap;
+			first_d = cap;
 		}
-		accumulated = new_accumulated;
 		return true;
 	};
 
