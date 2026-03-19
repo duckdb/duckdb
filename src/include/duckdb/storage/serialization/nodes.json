@@ -507,7 +507,7 @@
       {
         "id": 100,
         "name": "filters",
-        "type": "map<idx_t, TableFilter*>"
+        "type": "map<ProjectionIndex, TableFilter*>"
       }
     ],
     "pointer_type": "none"

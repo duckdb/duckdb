@@ -76,8 +76,9 @@ public:
 
 public:
 	void SetColumnIds(vector<ColumnIndex> &&column_ids);
-	void AddColumnId(column_t column_id);
+	ProjectionIndex AddColumnId(column_t column_id);
 	void ClearColumnIds();
+	ProjectionIndex TryGetProjectionIndex(idx_t col_idx) const;
 	const vector<ColumnIndex> &GetColumnIds() const;
 	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;

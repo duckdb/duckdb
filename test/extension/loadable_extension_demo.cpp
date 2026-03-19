@@ -729,26 +729,19 @@ public:
 		auto expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, func, std::move(children),
 		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
 
-		// Push the filter on the ROW_ID column
-		get.table_filters.PushFilter(ColumnIndex(COLUMN_IDENTIFIER_ROW_ID),
-		                             make_uniq<ExpressionFilter>(std::move(expr)));
-
 		// Ensure ROW_ID is in the scan's column list
-		bool has_rowid = false;
-		for (auto &col : get.GetColumnIds()) {
-			if (col.IsRowIdColumn()) {
-				has_rowid = true;
-				break;
-			}
-		}
-		if (!has_rowid) {
+		auto row_id_index = get.TryGetProjectionIndex(COLUMN_IDENTIFIER_ROW_ID);
+		if (!row_id_index.IsValid()) {
 			if (get.projection_ids.empty()) {
 				for (idx_t i = 0; i < get.GetColumnIds().size(); i++) {
 					get.projection_ids.emplace_back(i);
 				}
 			}
-			get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+			row_id_index = get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 		}
+
+		// Push the filter on the ROW_ID column
+		get.table_filters.PushFilter(row_id_index, make_uniq<ExpressionFilter>(std::move(expr)));
 	}
 };
 

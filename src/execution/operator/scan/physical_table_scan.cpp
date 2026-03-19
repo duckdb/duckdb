@@ -308,27 +308,27 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 	}
 }
 
-static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<TableFilterSet> &filter_set) {
+string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const {
 	string filters_info;
 	bool first_item = true;
-	for (auto &f : *filter_set) {
-		auto column_index = f.ColumnIndex();
+	for (auto &f : filter_set) {
+		auto filter_idx = f.GetIndex();
 		auto &filter = f.Filter();
-		if (column_index < scan->names.size()) {
+		if (filter_idx < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
 
-			const auto col_id = scan->column_ids[column_index].GetPrimaryIndex();
+			const auto col_id = column_ids[filter_idx].GetPrimaryIndex();
 			if (IsVirtualColumn(col_id)) {
-				auto entry = scan->virtual_columns.find(col_id);
-				if (entry == scan->virtual_columns.end()) {
+				auto entry = virtual_columns.find(col_id);
+				if (entry == virtual_columns.end()) {
 					throw InternalException("Virtual column not found");
 				}
 				filters_info += filter.ToString(entry->second.name);
 			} else {
-				filters_info += filter.ToString(scan->names[col_id]);
+				filters_info += filter.ToString(names[col_id]);
 			}
 		}
 	}
@@ -361,11 +361,11 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		result["Projections"] = projections;
 	}
 	if (function.filter_pushdown && table_filters) {
-		result["Filters"] = GetFilterInfo(this, table_filters);
+		result["Filters"] = GetFilterInfo(*table_filters);
 	}
 
 	if (function.filter_pushdown && dynamic_filters && dynamic_filters->HasFilters()) {
-		result["Dynamic Filters"] = GetFilterInfo(this, dynamic_filters->GetFinalTableFilters(*this, nullptr));
+		result["Dynamic Filters"] = GetFilterInfo(*dynamic_filters->GetFinalTableFilters(*this, nullptr));
 	}
 
 	if (extra_info.sample_options) {

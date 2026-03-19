@@ -196,14 +196,13 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 				if (bindings.size() != types.size()) {
 					throw InternalException(
 					    "Failed to bind column reference \"%s\" [%d.%d]: inequal num bindings/types (%llu != %llu)",
-					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index.index,
-					    bindings.size(), types.size());
+					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index, bindings.size(),
+					    types.size());
 				}
 				if (expr.return_type != types[i]) {
 					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
-					                        expr.GetAlias(), expr.binding.table_index.index,
-					                        expr.binding.column_index.index, expr.return_type.ToString(),
-					                        types[i].ToString());
+					                        expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index,
+					                        expr.return_type.ToString(), types[i].ToString());
 				}
 			}
 			if (verify_only) {
@@ -217,7 +216,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.GetAlias(),
-	                        expr.binding.table_index.index, expr.binding.column_index.index,
+	                        expr.binding.table_index.index, expr.binding.column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }

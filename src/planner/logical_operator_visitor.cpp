@@ -69,7 +69,7 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<Lo
 	vector<ProjectionIndex> new_projection_map;
 	new_projection_map.reserve(projection_map.size());
 	for (const auto proj_idx_before : projection_map) {
-		auto &desired_binding = child_bindings_before[proj_idx_before.index];
+		auto &desired_binding = child_bindings_before[proj_idx_before];
 		idx_t proj_idx_after;
 		for (proj_idx_after = 0; proj_idx_after < child_bindings_after.size(); proj_idx_after++) {
 			if (child_bindings_after[proj_idx_after] == desired_binding) {
