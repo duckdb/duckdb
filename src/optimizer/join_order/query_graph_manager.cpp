@@ -98,10 +98,11 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	}
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
-	// Mark INNER equality filters with equivalence group indices for redundancy detection.
-	MarkEdgeEquivalences();
-	// Create the query_graph hyper edges
+	// Create the query_graph hyper edges (also populates left_binding/right_binding on each FilterInfo).
 	CreateHyperGraphEdges();
+	// Mark INNER equality filters with equivalence group indices for redundancy detection.
+	// Must run AFTER CreateHyperGraphEdges so that left_binding/right_binding are populated.
+	MarkEdgeEquivalences();
 	return true;
 }
 
@@ -255,8 +256,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	}
 
 	// now we generate the actual joins
-	unordered_set<idx_t> applied_equivalence_groups;
-	auto join_tree = GenerateJoins(extracted_relations, total_relation, applied_equivalence_groups);
+	auto join_tree = GenerateJoins(extracted_relations, total_relation);
 
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters_and_bindings) {
@@ -301,8 +301,7 @@ static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, boo
 }
 
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
-                                                      JoinRelationSet &set,
-                                                      unordered_set<idx_t> &applied_equivalence_groups) {
+                                                      JoinRelationSet &set) {
 	optional_ptr<JoinRelationSet> left_node;
 	optional_ptr<JoinRelationSet> right_node;
 	optional_ptr<JoinRelationSet> result_relation;
@@ -315,8 +314,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	auto &node = dp_entry->second;
 	if (!dp_entry->second->is_leaf) {
 		// generate the left and right children
-		auto left = GenerateJoins(extracted_relations, node->left_set, applied_equivalence_groups);
-		auto right = GenerateJoins(extracted_relations, node->right_set, applied_equivalence_groups);
+		auto left = GenerateJoins(extracted_relations, node->left_set);
+		auto right = GenerateJoins(extracted_relations, node->right_set);
 		if (dp_entry->second->info->filters.empty()) {
 			// no filters, create a cross product
 			auto cardinality = left.op->estimated_cardinality * right.op->estimated_cardinality;
@@ -374,10 +373,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 						auto cond = MaybeInvertConditions(std::move(child), invert);
 						join->conditions.push_back(std::move(cond));
 					}
-				}
-				// Record the equivalence group so we can skip transitively redundant filters
-				if (f->edge_equivalence_index.IsValid()) {
-					applied_equivalence_groups.insert(f->edge_equivalence_index.GetIndex());
 				}
 			}
 			D_ASSERT(!join->conditions.empty());
@@ -446,18 +441,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				// so do not push the filter preemptively here
 				continue;
 			}
-			// Skip filters whose equivalence group was already applied as a primary join condition
-			if (info.edge_equivalence_index.IsValid() &&
-			    applied_equivalence_groups.count(info.edge_equivalence_index.GetIndex())) {
-				continue;
-			}
 			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
-				// Record this equivalence group as applied so later pushdowns don't add it again
-				if (info.edge_equivalence_index.IsValid()) {
-					applied_equivalence_groups.insert(info.edge_equivalence_index.GetIndex());
-				}
 				// if it is, we can push the filter
 				// we can push it either into a join or as a filter
 				// check if we are in a join or in a base table
