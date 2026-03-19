@@ -247,7 +247,7 @@ bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	if (test_name.find('/') == 0) {
 		// Full path specified, strip down to base path so the extension config lookup still works
 		auto pos = test_name.find("test/sql");
-		if (pos != string : npos) {
+		if (pos != string::npos) {
 			const string stripped_test_name = test_name.c_str() + pos;
 			return tests_to_be_skipped.count(stripped_test_name);
 		}
