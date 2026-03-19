@@ -840,11 +840,8 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// the child of the cast must resolve to a column ref
-	ColumnIndex col_index(0);
-	if (!TryGetBoundColumnIndex(column_ids, *cast_expr.child, col_index)) {
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
-	if (col_index.IsPushdownExtract()) {
+	ProjectionIndex proj_index;
+	if (!TryGetProjectionIndex(*cast_expr.child, proj_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
@@ -865,7 +862,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 		auto const_filter = make_uniq<ConstantFilter>(filter_type, std::move(filter_val));
 		auto opt_filter = make_uniq<OptionalFilter>();
 		opt_filter->child_filter = std::move(const_filter);
-		table_filters.PushFilter(col_index, std::move(opt_filter));
+		table_filters.PushFilter(proj_index, std::move(opt_filter));
 	};
 
 	// push relaxed filter(s) as OptionalFilter
