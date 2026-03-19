@@ -45,8 +45,8 @@ public:
 	FetchBlockTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
 	               BufferManager &buffer_manager_p, shared_ptr<CacheBlock> block_p, idx_t block_idx_p,
 	               idx_t block_size_p, BufferHandle &result_pin_p)
-	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p), buffer_manager(buffer_manager_p),
-	      block(std::move(block_p)), block_idx(block_idx_p), block_size(block_size_p),
+	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p),
+	      buffer_manager(buffer_manager_p), block(std::move(block_p)), block_idx(block_idx_p), block_size(block_size_p),
 	      result_pin(result_pin_p) {
 	}
 
@@ -240,8 +240,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	TaskExecutor executor(scheduler);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
-		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context, external_file_cache.GetBufferManager(),
-		                                                blocks[idx], first_block + idx, block_size, pins[idx]));
+		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context,
+		                                                external_file_cache.GetBufferManager(), blocks[idx],
+		                                                first_block + idx, block_size, pins[idx]));
 	}
 	executor.WorkOnTasks();
 
@@ -266,7 +267,12 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
 		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
-		const idx_t block_valid_bytes = blocks[idx]->nr_bytes;
+		idx_t block_valid_bytes = 0;
+		{
+			auto &block = *blocks[idx];
+			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+			block_valid_bytes = block.nr_bytes;
+		}
 		const idx_t available_in_block = block_valid_bytes - offset_in_block;
 		const idx_t length = MinValue(available_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});

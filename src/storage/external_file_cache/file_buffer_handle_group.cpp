@@ -5,23 +5,6 @@
 namespace duckdb {
 
 FileBufferHandleGroup::FileBufferHandleGroup(vector<MemoryHandle> handles_p) : handles(std::move(handles_p)) {
-#ifdef DEBUG
-	Validate();
-#endif
-}
-
-void FileBufferHandleGroup::Validate() const {
-	for (idx_t idx = 0; idx < handles.size(); idx++) {
-		auto &mh = handles[idx];
-		D_ASSERT(mh.length > 0);
-		D_ASSERT(mh.start_offset + mh.length <= mh.handle.GetFileBuffer().size);
-		if (idx != 0) {
-			D_ASSERT(mh.start_offset == 0);
-		}
-		if (idx != handles.size() - 1) {
-			D_ASSERT(mh.start_offset + mh.length == mh.handle.GetFileBuffer().size);
-		}
-	}
 }
 
 const vector<FileBufferHandleGroup::MemoryHandle> &FileBufferHandleGroup::GetHandles() const {
