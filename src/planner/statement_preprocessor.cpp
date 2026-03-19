@@ -67,10 +67,10 @@ PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLSta
 	if (body_statements.size() <= 1) {
 		return PreprocessingTransactionHandling::NONE;
 	}
-	if (full_transaction_state == IN_ACTIVE_TRANSACTION && can_wrap) {
+	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION && can_wrap) {
 		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
 	}
-	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION) {
+	if (full_transaction_state == IN_ACTIVE_TRANSACTION) {
 		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
 	}
 	return PreprocessingTransactionHandling::NONE;

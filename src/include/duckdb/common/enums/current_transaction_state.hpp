@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/active_transaction_state.hpp
+// duckdb/common/enums/current_transaction_state.hpp
 //
 //
 //===----------------------------------------------------------------------===//
