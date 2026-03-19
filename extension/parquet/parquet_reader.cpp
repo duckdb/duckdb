@@ -872,6 +872,16 @@ shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(Client
 ParquetUnionData::~ParquetUnionData() {
 }
 
+optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
+	if (reader) {
+		return reader->Cast<ParquetReader>().NumRows();
+	}
+	if (metadata) {
+		return metadata->metadata->num_rows;
+	}
+	return optional_idx();
+}
+
 unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &context, const string &name) {
 	if (reader) {
 		return reader->Cast<ParquetReader>().GetStatistics(context, name);
@@ -1202,6 +1212,18 @@ idx_t ParquetReader::NumRowGroups() const {
 	return GetFileMetadata()->row_groups.size();
 }
 
+idx_t ParquetReader::GetFileSize() const {
+	return file_handle->GetFileSize();
+}
+
+idx_t ParquetReader::GetDataSize() const {
+	idx_t data_size = 0;
+	for (auto &row_group : GetFileMetadata()->row_groups) {
+		data_size += row_group.total_compressed_size;
+	}
+	return data_size;
+}
+
 ParquetScanFilter::ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
 	filter_state = TableFilterState::Initialize(context, filter);
@@ -1375,16 +1397,33 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = filters != nullptr;
+				bool lazy_fetch = false;
+				if (filters) {
+					// check if any filter is non-optional
+					bool has_non_optional_filter = false;
+					for (auto &entry : *filters) {
+						if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+							has_non_optional_filter = true;
+						}
+					}
+					if (has_non_optional_filter) {
+						lazy_fetch = true;
+					}
+				}
 
 				// Prefetch column-wise
+				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 				for (idx_t i = 0; i < column_ids.size(); i++) {
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
-					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
-
-					bool has_filter = filters && filters->HasFilter(col_idx);
-					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
+					bool has_filter = false;
+					if (filters) {
+						auto filter = filters->TryGetFilterByColumnIndex(col_idx);
+						if (filter && filter->filter_type != TableFilterType::OPTIONAL_FILTER) {
+							has_filter = true;
+						}
+					}
+					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !has_filter);
 				}
 
 				trans.FinalizeRegistration();

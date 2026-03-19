@@ -44,6 +44,11 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 		throw BinderException("%s needs %d parameter%s, got %d", ExpressionTypeToString(window_type), param_count,
 		                      param_count == 1 ? "" : "s", child_types.size());
 	}
+	for (const auto &type : child_types) {
+		if (type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	switch (window_type) {
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_CUME_DIST:
