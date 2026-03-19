@@ -271,14 +271,7 @@ void Command::Execute(ExecuteContext &context) const {
 	}
 	if (context.running_loops.empty()) {
 		context.sql_query = base_sql_query;
-		try {
-			ExecuteInternal(context);
-		} catch (std::exception &ex) {
-			duckdb::ErrorData error(ex);
-			SQLLogicTestLogger logger(context, *this);
-			logger.PrintErrorHeader(error.Message());
-			FAIL();
-		}
+		ExecuteInternal(context);
 		return;
 	}
 	// perform the string replacement
