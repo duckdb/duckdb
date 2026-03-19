@@ -5,7 +5,6 @@ import pandas as pd
 import argparse
 from io import StringIO
 
-
 parser = argparse.ArgumentParser(description='Cancel all workflows related to a PR.')
 parser.add_argument(
     '--title',

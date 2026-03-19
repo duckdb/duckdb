@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/filter/map_filter.hpp
+// duckdb/planner/filter/list_extract_filter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,14 +13,16 @@
 
 namespace duckdb {
 
-class MapFilter : public TableFilter {
+class ListExtractFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::MAP_EXTRACT;
+	static constexpr const TableFilterType TYPE = TableFilterType::LIST_EXTRACT;
 
 public:
-	MapFilter(Value key, unique_ptr<TableFilter> child_filter);
+	ListExtractFilter(Value child_selector, unique_ptr<TableFilter> child_filter);
 
-	Value key;
+	//! The element selector (integer index for LIST, or key for MAP)
+	Value child_selector;
+	//! The child filter to apply to the extracted element
 	unique_ptr<TableFilter> child_filter;
 
 public:

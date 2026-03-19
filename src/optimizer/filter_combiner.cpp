@@ -17,7 +17,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/map_filter.hpp"
+#include "duckdb/planner/filter/list_extract_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
@@ -232,7 +232,12 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 		} else if (func.function.name == "map_extract_value") {
 			// MAP subscript: m['key'] is compiled to map_extract_value(m, 'key')
 			auto &key_value = func.children[1]->Cast<BoundConstantExpression>().value;
-			inner_filter = make_uniq<MapFilter>(key_value, std::move(inner_filter));
+			inner_filter = make_uniq<ListExtractFilter>(key_value, std::move(inner_filter));
+			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
+		} else if (func.function.name == "list_extract") {
+			// LIST subscript: list[index] is compiled to list_extract(list, index)
+			auto &index_value = func.children[1]->Cast<BoundConstantExpression>().value;
+			inner_filter = make_uniq<ListExtractFilter>(index_value, std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		}
 	}

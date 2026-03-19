@@ -9,11 +9,9 @@ from typing import Dict, List, Any
 import numpy as np
 
 TPCH_QUERIES = []
-res = duckdb.execute(
-    """
+res = duckdb.execute("""
     select query from tpch_queries()
-"""
-).fetchall()
+""").fetchall()
 for x in res:
     TPCH_QUERIES.append(x[0])
 
@@ -232,11 +230,9 @@ class ArrowDictionaryBenchmark:
         for _ in range(nruns):
             duration = 0.0
             start = time.time()
-            res = self.con.execute(
-                """
+            res = self.con.execute("""
                 select * from arrow_table
-            """
-            ).fetchall()
+            """).fetchall()
             end = time.time()
             duration = float(end - start)
             assert self.expected == res
