@@ -34,7 +34,7 @@ struct CacheBlock {
 #endif
 
 	//! Reset the block to its initial empty state.
-	void Reinit(); DUCKDB_EXCLUDES(mtx);
+	void Reinit() DUCKDB_EXCLUDES(mtx);
 };
 
 } // namespace duckdb

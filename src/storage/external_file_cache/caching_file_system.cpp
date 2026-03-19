@@ -258,8 +258,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		remaining -= length;
 	}
 	if (remaining > 0) {
-		throw InvalidInputException("CachingFileHandle::Read: requested %llu bytes from offset %llu but only %llu bytes were read", nr_bytes, location,
-		                        GetFileSize() - location);
+		throw InvalidInputException(
+		    "CachingFileHandle::Read: requested %llu bytes from offset %llu but only %llu bytes were read", nr_bytes,
+		    location, GetFileSize() - location);
 	}
 
 	// After all tasks complete, check if the cache was invalidated by another thread.

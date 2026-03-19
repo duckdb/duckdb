@@ -745,8 +745,9 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 		// Both blocks should be cached
 		auto cached = cache.GetCachedFileInformation();
 		REQUIRE(cached.size() == 2);
-		std::sort(cached.begin(), cached.end(),
-		          [](const CachedFileInformation &a, const CachedFileInformation &b) { return a.location < b.location; });
+		std::sort(cached.begin(), cached.end(), [](const CachedFileInformation &a, const CachedFileInformation &b) {
+			return a.location < b.location;
+		});
 		REQUIRE(cached[0].location == 0);
 		REQUIRE(cached[0].nr_bytes == BLOCK_SIZE);
 		REQUIRE(cached[0].loaded);
