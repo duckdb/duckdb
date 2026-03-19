@@ -6,5 +6,6 @@ if (FALSE AND NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             SUBMODULES vortex
             APPLY_PATCHES
             LOAD_TESTS
+            DONT_LINK
     )
 endif()
