@@ -83,7 +83,7 @@ public:
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as included in a checkpoint
-	void MarkBlockACheckpointed(block_id_t block_id) override;
+	void MarkBlockAsCheckpointed(block_id_t block_id) override;
 	//! Mark a block as used (no longer re-writeable)
 	void MarkBlockAsUsed(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)

@@ -203,3 +203,16 @@ index 15350c54..4ab34c16 100644
  		get.AddColumnId(physical_index.index);
  		update.columns.push_back(physical_index);
  	}
+diff --git a/src/aws.cpp b/src/aws.cpp
+index 608c67af..9c6744a7 100644
+--- a/src/aws.cpp
++++ b/src/aws.cpp
+@@ -50,7 +50,7 @@ static void InitAWSAPI() {
+ static void LogAWSHTTPRequest(ClientContext &context, std::shared_ptr<Aws::Http::HttpRequest> &req,
+                               HTTPResponse &response, Aws::Http::HttpMethod &method) {
+ 	D_ASSERT(context.db);
+-	auto http_util = HTTPUtil::Get(*context.db);
++	auto &http_util = HTTPUtil::Get(*context.db);
+ 	auto aws_headers = req->GetHeaders();
+ 	auto http_headers = HTTPHeaders();
+ 	for (auto &header : aws_headers) {

@@ -317,7 +317,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
-		                             empty_ref);
+		                             empty_ref, nullptr);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;

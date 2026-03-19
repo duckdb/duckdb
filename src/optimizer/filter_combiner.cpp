@@ -21,7 +21,9 @@
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -664,6 +666,224 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+static bool IsGreaterThan(ExpressionType type) {
+	return type == ExpressionType::COMPARE_GREATERTHAN || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+}
+
+static bool IsLessThan(ExpressionType type) {
+	return type == ExpressionType::COMPARE_LESSTHAN || type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+}
+
+//! Returns the relaxation margin in native units of the source type for a temporal cast.
+//! Returns -1 if the cast pair is not supported for relaxed pushdown.
+//! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
+static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
+	if (source == target) {
+		return 0;
+	}
+	switch (source) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// native unit: microseconds
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return 2LL * Interval::MICROS_PER_HOUR;
+		case LogicalTypeId::DATE:
+			return Interval::MICROS_PER_DAY;
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_NS:
+		// native unit: nanoseconds
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC * 1000LL;
+		case LogicalTypeId::DATE:
+			return Interval::MICROS_PER_DAY * 1000LL;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_MS:
+		// native unit: milliseconds
+		switch (target) {
+		case LogicalTypeId::DATE:
+			return Interval::MICROS_PER_DAY / Interval::MICROS_PER_MSEC;
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC / Interval::MICROS_PER_MSEC;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::TIMESTAMP_SEC:
+		// native unit: seconds
+		switch (target) {
+		case LogicalTypeId::DATE:
+			return Interval::MICROS_PER_DAY / Interval::MICROS_PER_SEC;
+		default:
+			return -1;
+		}
+	case LogicalTypeId::DATE:
+		// native unit: days
+		switch (target) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_NS:
+			return 0;
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return 1;
+		default:
+			return -1;
+		}
+	default:
+		return -1;
+	}
+}
+
+//! Create a temporal Value from a raw int64 (or int32 for DATE) value.
+static Value MakeTemporalValue(LogicalTypeId type_id, int64_t result) {
+	switch (type_id) {
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(timestamp_t(result));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_tz_t(result));
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(timestamp_ms_t(result));
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(timestamp_sec_t(result));
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(timestamp_ns_t(result));
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t(static_cast<int32_t>(std::max<int64_t>(
+		    std::min<int64_t>(result, NumericLimits<int32_t>::Maximum()), NumericLimits<int32_t>::Minimum()))));
+	default:
+		throw InternalException("MakeTemporalValue: unsupported type");
+	}
+}
+
+//! Adjust a temporal Value by margin (positive = widen upper bound, negative = widen lower bound).
+//! The margin is in native units of the value's type. Returns false on overflow (filter not useful).
+static bool AdjustTemporalValue(Value &val, int64_t margin) {
+	if (margin == 0) {
+		return true;
+	}
+	int64_t raw;
+	switch (val.type().id()) {
+	case LogicalTypeId::TIMESTAMP:
+		raw = val.GetValueUnsafe<timestamp_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		raw = val.GetValueUnsafe<timestamp_tz_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		raw = val.GetValueUnsafe<timestamp_ms_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		raw = val.GetValueUnsafe<timestamp_sec_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		raw = val.GetValueUnsafe<timestamp_ns_t>().value;
+		break;
+	case LogicalTypeId::DATE:
+		raw = val.GetValueUnsafe<date_t>().days;
+		break;
+	default:
+		return false;
+	}
+	int64_t result;
+	if (!TryAddOperator::Operation(raw, margin, result)) {
+		return false;
+	}
+	val = MakeTemporalValue(val.type().id(), result);
+	return true;
+}
+
+FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSet &table_filters,
+                                                                   const vector<ColumnIndex> &column_ids,
+                                                                   Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &comp = expr.Cast<BoundComparisonExpression>();
+	if (!SupportedFilterComparison(comp.GetExpressionType())) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (comp.GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	// identify which side is CAST(col) and which is the scalar constant
+	bool invert = false;
+	if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CAST && comp.right->IsFoldable()) {
+		// cast on left, constant on right
+	} else if (comp.right->GetExpressionClass() == ExpressionClass::BOUND_CAST && comp.left->IsFoldable()) {
+		invert = true;
+	} else {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &cast_side = invert ? *comp.right : *comp.left;
+	auto &const_side = invert ? *comp.left : *comp.right;
+	auto &cast_expr = cast_side.Cast<BoundCastExpression>();
+	auto source_type = cast_expr.source_type();
+	auto &target_type = cast_expr.return_type;
+	int64_t margin = GetTemporalCastMargin(source_type.id(), target_type.id());
+	if (margin < 0) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	// the child of the cast must resolve to a column ref
+	ColumnIndex col_index(0);
+	if (!TryGetBoundColumnIndex(column_ids, *cast_expr.child, col_index)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (col_index.IsPushdownExtract()) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	// evaluate the constant side
+	Value constant_value, casted_value;
+	string error_msg;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (constant_value.IsNull()) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (!constant_value.TryCastAs(context, source_type, casted_value, &error_msg)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
+		auto const_filter = make_uniq<ConstantFilter>(filter_type, std::move(filter_val));
+		auto opt_filter = make_uniq<OptionalFilter>();
+		opt_filter->child_filter = std::move(const_filter);
+		table_filters.PushFilter(col_index, std::move(opt_filter));
+	};
+
+	// push relaxed filter(s) as OptionalFilter
+	auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+	if (IsGreaterThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
+		Value lower = casted_value;
+		if (!AdjustTemporalValue(lower, -margin)) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+		push_optional(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(lower));
+	}
+	if (IsLessThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
+		Value upper = casted_value;
+		if (!AdjustTemporalValue(upper, margin)) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+		push_optional(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(upper));
+	}
+	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
 	auto pushdown_result = TryPushdownPrefixFilter(table_filters, column_ids, expr);
@@ -682,7 +902,26 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
 	}
-	return FilterPushdownResult::NO_PUSHDOWN;
+	return TryPushdownTemporalCastFilter(table_filters, column_ids, expr);
+}
+
+void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+                                              vector<FilterPushdownResult> &pushdown_results, column_t expr_id,
+                                              vector<ExpressionValueInformation> &info_list) {
+	auto filter_exp = equivalence_map.find(expr_id);
+	if (filter_exp == equivalence_map.end() || filter_exp->second.size() != 1) {
+		return;
+	}
+	auto &node_expr = filter_exp->second[0].get();
+	for (auto &info : info_list) {
+		auto constant = make_uniq<BoundConstantExpression>(info.constant);
+		auto comparison =
+		    make_uniq<BoundComparisonExpression>(info.comparison_type, node_expr.Copy(), std::move(constant));
+		auto result = TryPushdownTemporalCastFilter(table_filters, column_ids, *comparison);
+		if (result != FilterPushdownResult::NO_PUSHDOWN) {
+			pushdown_results.push_back(result);
+		}
+	}
 }
 
 TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
@@ -692,7 +931,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 	for (auto &constant_value : constant_values) {
 		auto expr_id = constant_value.first;
 		auto &const_list = constant_value.second;
-		TryPushdownConstantFilter(table_filters, column_ids, expr_id, const_list);
+		auto result = TryPushdownConstantFilter(table_filters, column_ids, expr_id, const_list);
+		if (result == FilterPushdownResult::NO_PUSHDOWN) {
+			TryPushdownRelaxedFilter(table_filters, column_ids, pushdown_results, expr_id, const_list);
+		}
 	}
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
@@ -706,14 +948,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 		}
 	}
 	return table_filters;
-}
-
-static bool IsGreaterThan(ExpressionType type) {
-	return type == ExpressionType::COMPARE_GREATERTHAN || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-}
-
-static bool IsLessThan(ExpressionType type) {
-	return type == ExpressionType::COMPARE_LESSTHAN || type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 }
 
 FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
