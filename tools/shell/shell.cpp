@@ -3259,7 +3259,7 @@ int RunShell(int argc, const char **argv) {
 	return rc;
 }
 
-#if !(defined(_WIN32) || defined(WIN32))
+#if !((defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER))
 int main(int argc, const char **argv) {
 #else
 int wmain(int argc, wchar_t **wargv) {
