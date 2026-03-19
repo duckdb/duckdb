@@ -120,8 +120,7 @@ private:
 	//! All filters in the same transitive equality closure receive the same index.
 	void MarkEdgeEquivalences();
 
-	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set,
-	                                   unordered_set<idx_t> &applied_equivalence_groups);
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 };
 
 } // namespace duckdb
