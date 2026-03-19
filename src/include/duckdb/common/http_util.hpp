@@ -232,7 +232,11 @@ public:
 
 class HTTPUtil {
 public:
+	HTTPUtil();
 	virtual ~HTTPUtil() = default;
+	// disable copy constructors
+	HTTPUtil(const HTTPUtil &other) = delete;
+	HTTPUtil &operator=(const HTTPUtil &) = delete;
 
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "writer/parquet_write_stats.hpp"
+#include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -106,6 +107,38 @@ struct ParquetTimestampSOperator : public ParquetCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
+	}
+};
+
+struct ParquetTimestampInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		timestamp_t ts(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochSecondsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampMSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochMsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampNSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochNanoSecondsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
 	}
 };
 

@@ -857,4 +857,14 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
 }
 
+void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
+	lock_guard<mutex> guard(http_util_lock);
+	old_http_utils.push_back(http_util);
+	http_util.atomic_store(new_http_util);
+}
+
+HTTPUtil &DBConfig::GetHTTPUtil() const {
+	return *http_util.atomic_load();
+}
+
 } // namespace duckdb

@@ -1,0 +1,33 @@
+# name: test/sql/join/asof/test_asof_limit.test
+# description: Test As-Of join usage with LIMIT clauses
+# group: [asof]
+
+# Don't die when limit stops calling us
+statement ok
+WITH trades AS (
+    SELECT
+        'AAPL' AS symbol,
+        TIMESTAMP '2024-01-01 10:00:00' + idx * INTERVAL 10 SECONDS AS trade_time,
+        100 AS quantity
+    FROM range(64) AS trade_rows(idx)   -- hangs; change to 63 to succeed
+),
+quotes AS (
+    SELECT
+        'AAPL' AS symbol,
+        TIMESTAMP '2024-01-01 09:59:50' + idx * INTERVAL 10 SECONDS AS quote_time,
+        150.0 AS price
+    FROM range(64) AS quote_rows(idx)
+)
+SELECT
+    t.symbol,
+    t.trade_time,
+    t.quantity,
+    q.quote_time,
+    q.price,
+    t.quantity * q.price AS notional
+FROM trades AS t
+ASOF LEFT JOIN quotes AS q
+    ON t.symbol = q.symbol
+   AND t.trade_time >= q.quote_time
+LIMIT 5;
+

@@ -1001,6 +1001,32 @@ bool PersistentCollectionData::HasUpdates() const {
 	return false;
 }
 
+static void TraverseBlocksRecursive(const PersistentColumnData &col_data, vector<block_id_t> &result) {
+	for (auto &pointer : col_data.pointers) {
+		auto block_id = pointer.block_pointer.block_id;
+		if (block_id != INVALID_BLOCK) {
+			result.push_back(block_id);
+		}
+		if (pointer.segment_state) {
+			for (auto &block : pointer.segment_state->blocks) {
+				result.push_back(block);
+			}
+		}
+	}
+	for (auto &child_column : col_data.child_columns) {
+		TraverseBlocksRecursive(child_column, result);
+	}
+}
+vector<block_id_t> PersistentCollectionData::GetBlockIds() const {
+	vector<block_id_t> result;
+	for (auto &group : row_group_data) {
+		for (auto &col_data : group.column_data) {
+			TraverseBlocksRecursive(col_data, result);
+		}
+	}
+	return result;
+}
+
 void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(100, "type", type, ExtraPersistentColumnDataType::INVALID);
 	switch (GetType()) {

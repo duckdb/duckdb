@@ -633,6 +633,24 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 		throw ParserException("Expected a single SELECT node");
 	}
 	auto &select_node = select.node->Cast<SelectNode>();
+	if (!select_node.modifiers.empty()) {
+		throw ParserException("Cannot have any modifiers in the expression list");
+	}
+	if (select_node.where_clause) {
+		throw ParserException("Cannot have a WHERE clause in the expression list");
+	}
+	if (!select_node.groups.group_expressions.empty()) {
+		throw ParserException("Cannot have a GROUP BY clause in the expression list");
+	}
+	if (select_node.having) {
+		throw ParserException("Cannot have a HAVING clause in the expression list");
+	}
+	if (select_node.qualify) {
+		throw ParserException("Cannot have a QUALIFY clause in the expression list");
+	}
+	if (select_node.sample) {
+		throw ParserException("Cannot have a SAMPLE clause in the expression list");
+	}
 	return std::move(select_node.select_list);
 }
 
