@@ -269,6 +269,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			                      window.function_name);
 		}
 
+		for (const auto &type : types) {
+			if (type.id() == LogicalTypeId::UNKNOWN) {
+				throw ParameterNotResolvedException();
+			}
+		}
+
 		sql_type = bound_function.return_type;
 		if (sql_type.id() == LogicalTypeId::ANY) {
 			sql_type = types[0];

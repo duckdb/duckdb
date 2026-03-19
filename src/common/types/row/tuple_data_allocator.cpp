@@ -115,6 +115,10 @@ void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
 	partition_index = index;
 }
 
+idx_t TupleDataAllocator::GetPartitionIndex() const {
+	return partition_index.GetIndex();
+}
+
 bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                        TupleDataChunkState &chunk_state, const idx_t append_offset,
                                        const idx_t append_count) {

@@ -260,22 +260,16 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		if (transformer.in_window_definition) {
 			throw ParserException("window functions are not allowed in window definitions");
 		}
+		//	We map first/last OVER() to first_value/last_value.
+		//	Not sure the semantics match, but we are stuck with it.
+		if (lowercase_name == "first" || lowercase_name == "last") {
+			lowercase_name += "_value";
+		}
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
 		}
 
-		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && distinct) {
-			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
-		}
-
-		if (!order_modifier->orders.empty() && !IsOrderableWindowFunction(win_fun_type)) {
-			throw ParserException("ORDER BY is not supported for the window function \"%s\"", lowercase_name.c_str());
-		}
-
-		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && filter_expr) {
-			throw ParserException("FILTER is not implemented for non-aggregate window functions!");
-		}
 		if (export_opt.HasResult()) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
@@ -289,35 +283,8 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		expr->schema = qualified_function.schema;
 		expr->function_name = lowercase_name;
 		expr->type = win_fun_type;
-		if (expr->type == ExpressionType::WINDOW_AGGREGATE) {
-			expr->children = std::move(function_children);
-		} else {
-			if (!function_children.empty()) {
-				expr->children.push_back(std::move(function_children[0]));
-			}
-			if (expr->type == ExpressionType::WINDOW_LEAD || expr->type == ExpressionType::WINDOW_LAG) {
-				if (function_children.size() > 1) {
-					expr->offset_expr = std::move(function_children[1]);
-				}
-				if (function_children.size() > 2) {
-					expr->default_expr = std::move(function_children[2]);
-				}
-				if (function_children.size() > 3) {
-					throw ParserException("Incorrect number of parameters for function %s", qualified_function.name);
-				}
-			} else if (expr->type == ExpressionType::WINDOW_NTH_VALUE) {
-				if (function_children.size() > 1) {
-					expr->children.push_back(std::move(function_children[1]));
-				}
-				if (function_children.size() > 2) {
-					throw ParserException("Incorrect number of parameters for function %s", qualified_function.name);
-				}
-			} else {
-				if (function_children.size() > 1) {
-					throw ParserException("Incorrect number of parameters for function %s", qualified_function.name);
-				}
-			}
-		}
+
+		expr->children = std::move(function_children);
 		expr->ignore_nulls = ignore_nulls;
 		expr->filter_expr = std::move(filter_expr);
 		expr->arg_orders = std::move(order_modifier->orders);

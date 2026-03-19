@@ -153,12 +153,15 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 				break;
 			}
 			// Row groups do not overlap
-			auto &current_stats = it->second.stats;
-			if (!current_stats->CanHaveNull()) {
-				// This row group has exactly row_group.count valid values. We can exclude those
-				pruned_row_group_count++;
-				new_row_offset -= last_unresolved_entry->second.count;
+			auto &pruned_stats = last_unresolved_entry->second.stats;
+			if (pruned_stats->CanHaveNull()) {
+				// Offset pruning can only remove a contiguous prefix of row groups. Once the first unresolved
+				// row group might still contribute NULLs to the ordered prefix, we cannot prune past it.
+				return {new_row_offset, pruned_row_group_count};
 			}
+			// This row group has exactly row_group.count valid values. We can exclude those.
+			pruned_row_group_count++;
+			new_row_offset -= last_unresolved_entry->second.count;
 
 			++last_unresolved_entry;
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
