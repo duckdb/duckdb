@@ -338,7 +338,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 54>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 53>(input.child_stats);
 		}
 	};
 
@@ -427,7 +427,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000000000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999999>(input.child_stats);
 		}
 	};
 
@@ -439,7 +439,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999>(input.child_stats);
 		}
 	};
 
@@ -451,7 +451,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999>(input.child_stats);
 		}
 	};
 
@@ -463,7 +463,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
 		}
 	};
 
@@ -475,7 +475,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
 		}
 	};
 
