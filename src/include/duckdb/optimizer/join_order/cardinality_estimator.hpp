@@ -55,6 +55,11 @@ public:
 		return static_cast<double>(has_distinct_count_hll ? distinct_count_hll : distinct_count_no_hll);
 	}
 
+	//! Extract the comparison type (EQUAL, LESSTHAN, etc.) from a join filter expression.
+	ExpressionType GetComparisonType();
+	//! Whether this is an INNER equality filter
+	bool IsInnerEquality();
+
 	optional_ptr<FilterInfo> filter_info;
 	//!	the estimated distinct count the joined columns determined using HLL
 	idx_t distinct_count_hll;
@@ -128,12 +133,16 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(optional_ptr<FilterInfo> filter_info, vector<idx_t> matching_equivalent_sets);
 
+	//! Denom calculation
 	double CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
 	                             FilterInfoWithTotalDomains &filter);
 	double CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter);
 	double CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter);
 	double CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                                  FilterInfoWithTotalDomains &filter);
+	bool ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,
+	                        reference_map_t<JoinRelationSet, double> &inner_join_pair_first_d);
+
 	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
 	                                          FilterInfoWithTotalDomains &filter);
 

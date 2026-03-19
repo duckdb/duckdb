@@ -13,6 +13,24 @@
 
 namespace duckdb {
 
+ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
+	ExpressionType comparison_type = ExpressionType::INVALID;
+	ExpressionIterator::EnumerateExpression(filter_info->filter, [&](Expression &expr) {
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			comparison_type = expr.GetExpressionType();
+		}
+	});
+	return comparison_type;
+}
+
+bool FilterInfoWithTotalDomains::IsInnerEquality() {
+	if (filter_info->join_type != JoinType::INNER) {
+		return false;
+	}
+	const auto ctype = GetComparisonType();
+	return ctype == ExpressionType::COMPARE_EQUAL || ctype == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+}
+
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
@@ -225,17 +243,6 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 	}
 }
 
-// Extract the comparison type (EQUAL, LESSTHAN, etc.) from a join filter expression.
-static ExpressionType GetComparisonType(FilterInfoWithTotalDomains &filter) {
-	ExpressionType comparison_type = ExpressionType::INVALID;
-	ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
-		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-			comparison_type = expr.GetExpressionType();
-		}
-	});
-	return comparison_type;
-}
-
 // Apply the denominator multiplier for a given comparison type and effective distinct count.
 static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_type, double effective_d) {
 	switch (comparison_type) {
@@ -257,7 +264,7 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 
 double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
 	auto effective_d = filter.GetDistinctCount();
-	auto comparison_type = GetComparisonType(filter);
+	auto comparison_type = filter.GetComparisonType();
 	if (comparison_type == ExpressionType::INVALID) {
 		return base_denom * effective_d;
 	}
@@ -271,7 +278,7 @@ double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInf
 	auto right_card = GetNumerator(*filter.filter_info->right_set);
 	auto raw_d = filter.GetDistinctCount();
 	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-	auto comparison_type = GetComparisonType(filter);
+	auto comparison_type = filter.GetComparisonType();
 	if (comparison_type == ExpressionType::INVALID) {
 		return base_denom * effective_d;
 	}
@@ -306,6 +313,41 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	}
 }
 
+bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,
+                                              reference_map_t<JoinRelationSet, double> &join_pair_accumulated) {
+	if (edge.IsInnerEquality()) {
+		const auto it = join_pair_accumulated.find(edge.filter_info->set.get());
+		if (it == join_pair_accumulated.end()) {
+			return false;
+		}
+		auto left_card = GetNumerator(*edge.filter_info->left_set);
+		auto right_card = GetNumerator(*edge.filter_info->right_set);
+		double cap = (left_card > 0 && right_card > 0) ? MinValue(left_card, right_card) : 0;
+		auto &first_d = it->second;
+		if (cap > 0 && first_d != cap) {
+			// Replace the first-edge D contribution with cap (FK/PK floor).
+			// target_denom = base × first_d  →  new = base × cap
+			target_denom = target_denom / first_d * cap;
+			first_d = cap;
+		}
+		return true;
+	}
+
+	if (edge.filter_info->join_type == JoinType::LEFT) {
+		double ratio = CalculateLeftJoinDenom(1.0, edge);
+		double right_card = GetNumerator(*edge.filter_info->right_set);
+		auto &accumulated = join_pair_accumulated[*edge.filter_info->right_set];
+		double new_accumulated = right_card > 0 ? MinValue(accumulated * ratio, right_card) : accumulated * ratio;
+		if (new_accumulated > accumulated && accumulated > 0) {
+			target_denom *= new_accumulated / accumulated;
+		}
+		accumulated = new_accumulated;
+		return true;
+	}
+
+	return false;
+}
+
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	vector<Subgraph2Denominator> subgraphs;
 
@@ -320,132 +362,52 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// relations_to_tdoms has already been sorted by largest to smallest total domain
 	// then we look through the filters for the relations_to_tdoms,
 	// and we start to choose the filters that join relations in the set.
-
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
 
-	// Track which INNER equality equivalence groups have been used to build the subgraph
+	// Track which INNER equality equivalence groups have been used to build the subgraph,
+	// so we don't apply them more than once in cardinality estimation
 	unordered_set<idx_t> applied_equivalence_groups;
 
+	// For multi-key INNER joins (>=2 equality conditions on the same join pair), we treat the
+	// composite key as a FK/PK relationship and enforce the FK/PK floor.
 	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON k1=k1 AND k2=k2), independent
 	// conditions on the same RHS should each contribute to the denominator — but their product
-	// must not exceed |RHS|. If it did, the estimate would drop below |LHS|, which is wrong
-	// because a LEFT join always preserves every LHS row.
-	// We track the accumulated denominator contribution per RHS and cap at |RHS|.
-	reference_map_t<JoinRelationSet, double> left_join_rhs_accumulated;
-
-	// Record the ratio a LEFT join edge contributes on its own (base_denom = 1).
-	auto record_left_join_ratio = [&](FilterInfoWithTotalDomains &edge) {
-		if (edge.filter_info->join_type != JoinType::LEFT) {
-			return;
-		}
-		double ratio = CalculateLeftJoinDenom(1.0, edge);
-		double right_card = GetNumerator(*edge.filter_info->right_set);
-		left_join_rhs_accumulated[*edge.filter_info->right_set] = right_card > 0 ? MinValue(ratio, right_card) : ratio;
-	};
-
-	// Apply the incremental denominator for a LEFT join condition after the first one.
-	// We cap the running product per RHS at |RHS| to ensure estimate >= |LHS|.
-	auto apply_left_join_increment = [&](FilterInfoWithTotalDomains &edge, double &target_denom) {
-		if (edge.filter_info->join_type != JoinType::LEFT) {
-			return;
-		}
-		double ratio = CalculateLeftJoinDenom(1.0, edge);
-		double right_card = GetNumerator(*edge.filter_info->right_set);
-		auto &accumulated = left_join_rhs_accumulated[*edge.filter_info->right_set];
-		double new_accumulated = right_card > 0 ? MinValue(accumulated * ratio, right_card) : accumulated * ratio;
-		if (new_accumulated > accumulated && accumulated > 0) {
-			target_denom *= new_accumulated / accumulated;
-		}
-		accumulated = new_accumulated;
-	};
-
-	// For multi-key INNER joins (>=2 equality conditions on the same join pair), we treat the
-	// composite key as a FK/PK relationship and enforce the FK/PK floor:
-	//   estimate = max(|LHS|, |RHS|)  <=>  denom = base * min(|LHS|, |RHS|)
-	// This is always correct for composite FK/PK (e.g. TPC-H Q9: ps_suppkey=l_suppkey AND
-	// ps_partkey=l_partkey). Using the product D₁×D₂ instead would be wrong in both directions:
-	// - If D₁×D₂ < cap: the product overestimates (gives more rows than FK/PK), because
-	//   the product assumes independent keys but composite PK keys are correlated.
-	// - If D₁ > cap: the first edge alone can push the denom above cap, giving an estimate
-	//   below the FK/PK floor.
-	// For a single equality condition, the standard D-based formula is used as-is.
-	// Key: the full relation set of the edge (union of left and right), unique per join pair.
-	// Value: the raw D contribution of the first equality edge for this pair, used to divide
-	// it back out when the second condition arrives and we replace it with cap.
-	reference_map_t<JoinRelationSet, double> inner_join_pair_first_d;
-
-	auto is_inner_equality = [](FilterInfoWithTotalDomains &edge) {
-		if (edge.filter_info->join_type != JoinType::INNER) {
-			return false;
-		}
-		auto ctype = GetComparisonType(edge);
-		return ctype == ExpressionType::COMPARE_EQUAL || ctype == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	};
-
-	// Record the raw D of the first equality edge for a join pair.
-	auto record_inner_join_ratio = [&](FilterInfoWithTotalDomains &edge) {
-		if (!is_inner_equality(edge)) {
-			return;
-		}
-		double ratio = CalculateInnerJoinDenom(1.0, edge);
-		inner_join_pair_first_d[edge.filter_info->set.get()] = ratio;
-	};
-
-	// Returns true if handled (i.e. the edge was for a known join pair in the first-D map).
-	// On the second equality condition for a pair, replaces the first-edge D contribution in
-	// target_denom with cap = min(|LHS|, |RHS|), enforcing the FK/PK floor.
-	// Subsequent conditions for the same pair are no-ops (first_d already == cap).
-	auto apply_inner_join_increment = [&](FilterInfoWithTotalDomains &edge, double &target_denom) -> bool {
-		if (!is_inner_equality(edge)) {
-			return false;
-		}
-		auto it = inner_join_pair_first_d.find(edge.filter_info->set.get());
-		if (it == inner_join_pair_first_d.end()) {
-			return false;
-		}
-		auto left_card = GetNumerator(*edge.filter_info->left_set);
-		auto right_card = GetNumerator(*edge.filter_info->right_set);
-		double cap = (left_card > 0 && right_card > 0) ? MinValue(left_card, right_card) : 0;
-		auto &first_d = it->second;
-		if (cap > 0 && first_d != cap) {
-			// Replace the first-edge D contribution with cap (FK/PK floor).
-			// target_denom = base × first_d  →  new = base × cap
-			target_denom = target_denom / first_d * cap;
-			first_d = cap;
-		}
-		return true;
-	};
+	// must not exceed |RHS|.
+	// For a single equality condition, the standard denominator-based formula is used as-is.
+	reference_map_t<JoinRelationSet, double> join_pair_accumulated;
 
 	unordered_set<idx_t> unused_edge_tdoms;
-	// Record edge_equivalence_index whenever an edge is actively used to build the subgraph.
-	auto record_equivalence_group = [&](const FilterInfoWithTotalDomains &edge) {
-		if (edge.filter_info->edge_equivalence_index.IsValid()) {
-			applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
-		}
-	};
 	auto edges = GetEdges(relation_set_stats, set);
 	for (auto &edge : edges) {
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
-			// The subgraph already connects all desired relations.
-			// For LEFT joins, allow additional conditions to contribute incrementally,
-			// but cap the accumulated product per RHS at |RHS| so the estimate stays >= |LHS|.
-			// For INNER equality joins, apply the FK/PK multi-key cap (accumulated product of
-			// equality condition denominators, capped at min(|LHS|, |RHS|)).
-			// Other INNER join conditions get a mild penalty via denom_multiplier — unless the
-			// edge is transitively implied by equality conditions already in the subgraph.
-			if (edge.filter_info->join_type == JoinType::LEFT) {
-				apply_left_join_increment(edge, subgraphs.at(0).denom);
-			} else if (apply_inner_join_increment(edge, subgraphs.at(0).denom)) {
-				// FK/PK multi-key increment applied, skip unused_edge_tdoms penalty.
-			} else if (edge.filter_info->edge_equivalence_index.IsValid() &&
-			           applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
-				// Transitively implied by equality conditions already used to build the subgraph,
+			// The subgraph already connects all desired relations
+			if (ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_accumulated)) {
+				// increment applied, skip unused_edge_tdoms penalty.
+				continue;
+			}
+			if (edge.filter_info->edge_equivalence_index.IsValid() &&
+			    applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
+				// Transitively implied by equality conditions already used to build the subgraph, skip this denom
 				// skip the penalty entirely.
 				continue;
 			} else if (edge.has_distinct_count_hll) {
 				unused_edge_tdoms.insert(edge.distinct_count_hll);
 			}
 			continue;
+		}
+
+		if (edge.IsInnerEquality()) {
+			// Record the raw D of the first equality edge for a join pair.
+			join_pair_accumulated[edge.filter_info->set.get()] = CalculateInnerJoinDenom(1.0, edge);
+		} else if (edge.filter_info->join_type == JoinType::LEFT) {
+			// Record the ratio a LEFT join edge contributes on its own (base_denom = 1).
+			const auto ratio = CalculateLeftJoinDenom(1.0, edge);
+			const auto right_card = GetNumerator(*edge.filter_info->right_set);
+			join_pair_accumulated[*edge.filter_info->right_set] = right_card > 0 ? MinValue(ratio, right_card) : ratio;
+		}
+		if (edge.filter_info->edge_equivalence_index.IsValid()) {
+			// Record edge_equivalence_index whenever an edge is actively used to build the subgraph.
+			applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
 		}
 
 		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
@@ -461,9 +423,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
 			left_subgraph.relations = &edge.filter_info->set.get();
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
-			record_left_join_ratio(edge);
-			record_inner_join_ratio(edge);
-			record_equivalence_group(edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
 			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
@@ -479,19 +438,12 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_set)) {
 				// Edge connects the same subgraph to itself — no new relation is added.
 				// Apply the incremental denominator contribution for LEFT or INNER multi-key joins.
-				if (edge.filter_info->join_type == JoinType::LEFT) {
-					apply_left_join_increment(edge, left_subgraph->denom);
-				} else {
-					apply_inner_join_increment(edge, left_subgraph->denom);
-				}
+				ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_accumulated);
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
 			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
-			record_left_join_ratio(edge);
-			record_inner_join_ratio(edge);
-			record_equivalence_group(edge);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
@@ -502,9 +454,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-			record_left_join_ratio(edge);
-			record_inner_join_ratio(edge);
-			record_equivalence_group(edge);
 			subgraph_to_delete->relations = nullptr;
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
