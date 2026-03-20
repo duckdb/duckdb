@@ -60,13 +60,11 @@ void NodePointer::FreeTree(ART &art, NodePointer &tree) {
 	if (!tree.HasMetadata()) {
 		return;
 	}
-
 	// All nodes should be pushed onto the stack.
 	auto filter = [](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		return child;
 	};
-
 	// We freed the subtree pointed to by the current node. Free the node.
 	auto post_handler = [&](NodePointer current) {
 		D_ASSERT(current.HasMetadata());
@@ -88,12 +86,10 @@ void NodePointer::FreeTree(ART &art, NodePointer &tree) {
 			FreeNode(art, current);
 			break;
 		default:
-			throw InternalException("invalid node type for FreeTree: %d", static_cast<int>(type));
+			throw InternalException("invalid node type for FreeTree: %d", type);
 		}
 	};
-
 	ARTScanPostorder(art, tree, filter, post_handler);
-	//
 	tree.Clear();
 }
 
@@ -439,7 +435,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		case NType::NODE_256_LEAF:
 			return child;
 		default:
-			throw InternalException("invalid node type for TransformToDeprecated: %d", static_cast<int>(type));
+			throw InternalException("invalid node type for TransformToDeprecated: %d", type);
 		}
 	};
 
@@ -513,7 +509,7 @@ void NodePointer::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &nod
 			node_counts[GetAllocatorIdx(type)]++;
 			return child;
 		default:
-			throw InternalException("invalid node type for VerifyAllocations: %d", static_cast<int>(type));
+			throw InternalException("invalid node type for VerifyAllocations: %d", type);
 		}
 	};
 

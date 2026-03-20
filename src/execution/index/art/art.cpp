@@ -1288,7 +1288,7 @@ void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_b
 			// Original pointer is pushed onto the stack.
 			return original;
 		default:
-			throw InternalException("invalid node type for InitializeMerge: %d", static_cast<int>(type));
+			throw InternalException("invalid node type for InitializeMerge: %d", type);
 		}
 	};
 

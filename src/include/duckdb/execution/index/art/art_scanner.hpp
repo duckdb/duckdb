@@ -88,7 +88,7 @@ void ARTScanPreorder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &
 			ScanChildren<Node256>(art, current, preorder_handler, stack);
 			break;
 		default:
-			throw InternalException("invalid node type for ARTScanPreOrder: %d", static_cast<int>(current.GetType()));
+			throw InternalException("invalid node type for ARTScanPreOrder: %d", current.GetType());
 		}
 	}
 }
@@ -173,7 +173,7 @@ void ARTScanPostorder(ART &art, NodePointer &root, FILTER &&filter, POST_HANDLER
 			ScanChildren<Node256>(art, current, filter, stack);
 			break;
 		default:
-			throw InternalException("invalid node type for ARTScanPostOrder: %d", static_cast<int>(current.GetType()));
+			throw InternalException("invalid node type for ARTScanPostOrder: %d", current.GetType());
 		}
 	}
 }
