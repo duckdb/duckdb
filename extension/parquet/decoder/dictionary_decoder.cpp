@@ -173,6 +173,7 @@ bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, Tabl
 	case TableFilterType::DYNAMIC_FILTER:
 	case TableFilterType::OPTIONAL_FILTER:
 	case TableFilterType::STRUCT_EXTRACT:
+	case TableFilterType::LIST_EXTRACT:
 	default:
 		return false;
 	}

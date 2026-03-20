@@ -850,6 +850,66 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 		auto &child_constant = struct_fields[field_index];
 		return EvaluateFilterAgainstConstant(*child_filter, child_constant);
 	}
+	case TableFilterType::LIST_EXTRACT: {
+		auto &list_filter = filter.Cast<ListExtractFilter>();
+		auto &child_filter = list_filter.child_filter;
+
+		auto type_id = constant.type().id();
+		if (type_id == LogicalTypeId::MAP) {
+			// MAP is represented as LIST<STRUCT<key, value>>
+			// Get the list child which contains all the key-value pairs
+			auto &map_list = MapValue::GetChildren(constant);
+			// map_list is a vector containing one LIST value
+			// That LIST contains STRUCT<key, value> elements
+			if (map_list.empty()) {
+				// Empty map - cannot match any key
+				return false;
+			}
+			auto &list_value = map_list[0];
+			auto &kv_pairs = ListValue::GetChildren(list_value);
+
+			// Find the struct with matching key
+			for (auto &kv_struct : kv_pairs) {
+				auto &struct_children = StructValue::GetChildren(kv_struct);
+				D_ASSERT(struct_children.size() == 2);
+				auto &key = struct_children[0];
+				if (key == list_filter.child_selector) {
+					// Found matching key, evaluate filter against the value
+					auto &value = struct_children[1];
+					return EvaluateFilterAgainstConstant(*child_filter, value);
+				}
+			}
+			// Key not found in map - return false (filter doesn't match)
+			return false;
+		} else if (type_id == LogicalTypeId::LIST) {
+			// LIST: extract element at specified index
+			auto &list_children = ListValue::GetChildren(constant);
+
+			// child_selector should be an integer index (1-based in SQL, 1-based here)
+			if (list_filter.child_selector.type().id() != LogicalTypeId::BIGINT &&
+			    list_filter.child_selector.type().id() != LogicalTypeId::INTEGER) {
+				throw InternalException("LIST_EXTRACT requires integer index for LIST columns");
+			}
+
+			auto index = BigIntValue::Get(list_filter.child_selector);
+			// Convert to 0-based index
+			if (index <= 0) {
+				// Negative or zero index - out of range
+				return false;
+			}
+			idx_t array_index = NumericCast<idx_t>(index - 1);
+
+			if (array_index >= list_children.size()) {
+				// Index out of range
+				return false;
+			}
+
+			auto &element = list_children[array_index];
+			return EvaluateFilterAgainstConstant(*child_filter, element);
+		} else {
+			throw InternalException("LIST_EXTRACT applied to non-LIST/MAP column");
+		}
+	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = filter.Cast<OptionalFilter>();
 		if (optional_filter.child_filter) {
@@ -989,6 +1049,27 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		}
 		auto child_name = struct_type[struct_mapping.index].first;
 		return make_uniq<StructFilter>(struct_mapping.index, std::move(child_name), std::move(new_child_filter));
+	}
+	case TableFilterType::LIST_EXTRACT: {
+		auto &list_filter = global_filter.Cast<ListExtractFilter>();
+		auto &child_filter = list_filter.child_filter;
+
+		// For LIST/MAP, the selector (index/key) is part of the data, not the schema
+		// So we just need to cast the child filter to the element type
+		LogicalType child_type;
+		if (target_type.id() == LogicalTypeId::MAP) {
+			child_type = MapType::ValueType(target_type);
+		} else if (target_type.id() == LogicalTypeId::LIST) {
+			child_type = ListType::GetChildType(target_type);
+		} else {
+			throw InternalException("LIST_EXTRACT filter applied to non-LIST/MAP type");
+		}
+
+		auto new_child_filter = TryCastTableFilter(*child_filter, mapping, child_type);
+		if (!new_child_filter) {
+			return nullptr;
+		}
+		return make_uniq<ListExtractFilter>(list_filter.child_selector, std::move(new_child_filter));
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = global_filter.Cast<OptionalFilter>();

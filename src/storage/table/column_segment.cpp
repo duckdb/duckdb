@@ -6,6 +6,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/list_extract_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -570,6 +571,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
 		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
 		return prefix_range_filter.Filter(vector, sel, approved_tuple_count);
+	}
+	case TableFilterType::LIST_EXTRACT: {
+		// LIST_EXTRACT row-level filtering is not yet implemented
+		// This filter type is primarily used for row group skipping via CheckStatistics
+		// which is fully supported. For row-level filtering in native storage,
+		// the filter should be converted to EXPRESSION_FILTER instead.
+		throw InternalException("LIST_EXTRACT row-level filtering not yet implemented");
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

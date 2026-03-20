@@ -4,6 +4,7 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -80,10 +81,38 @@ unique_ptr<TableFilter> ListExtractFilter::Copy() const {
 }
 
 unique_ptr<Expression> ListExtractFilter::ToExpression(const Expression &column) const {
-	// ToExpression is used to convert the filter back into an expression for some optimization passes
-	// For LIST/MAP filters, this is complex because we need to reconstruct the list_extract or map_extract_value call
-	// For now, we return nullptr which indicates this filter cannot be converted back to an expression
-	// This is acceptable as the filter will still work for its primary purpose (row group skipping)
+	auto type_id = column.return_type.id();
+
+	if (type_id == LogicalTypeId::MAP) {
+		// MAP case: use map_extract_value function
+		auto &value_type = MapType::ValueType(column.return_type);
+		vector<unique_ptr<Expression>> arguments;
+		arguments.push_back(column.Copy());
+		arguments.push_back(make_uniq<BoundConstantExpression>(child_selector));
+
+		// Create map_extract_value function inline
+		auto key_type = MapType::KeyType(column.return_type);
+		ScalarFunction map_extract_func("map_extract_value", {column.return_type, key_type}, value_type, nullptr);
+
+		auto child = make_uniq<BoundFunctionExpression>(value_type, std::move(map_extract_func),
+		                                                std::move(arguments), nullptr);
+		return child_filter->ToExpression(*child);
+	} else if (type_id == LogicalTypeId::LIST) {
+		// LIST case: use list_extract function
+		auto &child_type = ListType::GetChildType(column.return_type);
+		vector<unique_ptr<Expression>> arguments;
+		arguments.push_back(column.Copy());
+		arguments.push_back(make_uniq<BoundConstantExpression>(child_selector));
+
+		// Create list_extract function inline
+		ScalarFunction list_extract_func("list_extract", {column.return_type, LogicalType::BIGINT}, child_type,
+		                                 nullptr);
+
+		auto child = make_uniq<BoundFunctionExpression>(child_type, std::move(list_extract_func),
+		                                                std::move(arguments), nullptr);
+		return child_filter->ToExpression(*child);
+	}
+
 	return nullptr;
 }
 

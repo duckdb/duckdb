@@ -2,6 +2,7 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/list_extract_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -27,6 +28,10 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		return Initialize(context, *struct_filter.child_filter);
+	}
+	case TableFilterType::LIST_EXTRACT: {
+		auto &list_filter = filter.Cast<ListExtractFilter>();
+		return Initialize(context, *list_filter.child_filter);
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conj_filter = filter.Cast<ConjunctionOrFilter>();
