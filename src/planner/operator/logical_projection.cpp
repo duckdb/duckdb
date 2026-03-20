@@ -35,7 +35,7 @@ const Expression &LogicalProjection::GetExpression(ColumnBinding binding) const 
 	if (binding.table_index != table_index) {
 		throw InternalException("LogicalProjection::GetExpression - table index mismatch");
 	}
-	return *expressions[binding.column_index.index];
+	return *expressions[binding.column_index];
 }
 
 const Expression &LogicalProjection::GetExpression(ProjectionIndex proj_index) const {

@@ -37,14 +37,26 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	string filters_info;
 	bool first_item = true;
 	for (auto &kv : table_filters) {
-		auto column_index = kv.ColumnIndex();
+		auto filter_idx = kv.GetIndex();
 		auto &filter = kv.Filter();
-		if (column_index < names.size()) {
+		auto &col_id_entry = column_ids[filter_idx];
+		const auto col_id = col_id_entry.GetPrimaryIndex();
+		if (col_id_entry.IsVirtualColumn()) {
+			auto entry = virtual_columns.find(col_id);
+			if (entry != virtual_columns.end()) {
+				if (!first_item) {
+					filters_info += "\n";
+				}
+				first_item = false;
+				filters_info += filter.ToString(entry->second.name);
+			}
+		} else if (col_id < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
+			auto column_name = col_id_entry.GetName(names[col_id]);
 			first_item = false;
-			filters_info += filter.ToString(names[column_index]);
+			filters_info += filter.ToString(column_name);
 		}
 	}
 	result["Filters"] = filters_info;
@@ -76,8 +88,10 @@ void LogicalGet::SetColumnIds(vector<ColumnIndex> &&column_ids) {
 	this->column_ids = std::move(column_ids);
 }
 
-void LogicalGet::AddColumnId(column_t column_id) {
+ProjectionIndex LogicalGet::AddColumnId(column_t column_id) {
+	ProjectionIndex result(column_ids.size());
 	column_ids.emplace_back(column_id);
+	return result;
 }
 
 void LogicalGet::ClearColumnIds() {
@@ -92,11 +106,20 @@ vector<ColumnIndex> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
 }
 
+ProjectionIndex LogicalGet::TryGetProjectionIndex(idx_t col_idx) const {
+	for (idx_t c = 0; c < column_ids.size(); c++) {
+		if (column_ids[c].GetPrimaryIndex() == col_idx) {
+			return ProjectionIndex(c);
+		}
+	}
+	return ProjectionIndex();
+}
+
 const ColumnIndex &LogicalGet::GetColumnIndex(ColumnBinding binding) const {
 	if (binding.table_index != table_index) {
 		throw InternalException("LogicalGet::GetColumnIndex - table index does not match LogicalGet table index");
 	}
-	return column_ids[binding.column_index.index];
+	return column_ids[binding.column_index];
 }
 
 const ColumnIndex &LogicalGet::GetColumnIndex(ProjectionIndex proj_index) const {
@@ -182,7 +205,7 @@ void LogicalGet::ResolveTypes() {
 		}
 	} else {
 		for (auto &proj_index : projection_ids) {
-			auto &index = column_ids[proj_index.index];
+			auto &index = column_ids[proj_index];
 			types.push_back(GetColumnType(index));
 		}
 	}

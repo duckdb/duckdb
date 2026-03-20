@@ -255,13 +255,13 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
                                              const vector<LogicalType> &sql_types, TableIndex table_index,
                                              ProjectionIndex index) {
-	if (index.index >= sql_types.size()) {
+	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
-	auto result = make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index.index],
-	                                                  ColumnBinding(table_index, index));
-	if (result->GetAlias().empty() && index.index < names.size()) {
-		result->SetAlias(names[index.index]);
+	auto result =
+	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
+	if (result->GetAlias().empty() && index < names.size()) {
+		result->SetAlias(names[index]);
 	}
 	return std::move(result);
 }
@@ -317,7 +317,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.return_type = sql_types[bound_colref.binding.column_index.index];
+	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
