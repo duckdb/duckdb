@@ -86,6 +86,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		properties.requires_valid_transaction = false;
 		break;
 	}
+	case CatalogType::TRIGGER_ENTRY:
+		throw NotImplementedException("DROP TRIGGER is not yet supported");
 	default:
 		throw BinderException("Unknown catalog type for drop statement: '%s'", CatalogTypeToString(stmt.info->type));
 	}
