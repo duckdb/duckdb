@@ -177,50 +177,6 @@ string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
-static bool IsExcludableWindowFunction(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-	case ExpressionType::WINDOW_AGGREGATE:
-		return true;
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_NTILE:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_FILL:
-		return false;
-	default:
-		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
-	}
-}
-
-static bool IsOrderableWindowFunction(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_NTILE:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_FILL:
-	case ExpressionType::WINDOW_AGGREGATE:
-		return true;
-	case ExpressionType::WINDOW_RANK_DENSE:
-		return false;
-	default:
-		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
-	}
-}
-
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
                                                    optional_ptr<ParseResult> parse_result) {
@@ -266,17 +222,11 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			lowercase_name += "_value";
 		}
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
-		if (win_fun_type == ExpressionType::INVALID) {
-			throw InternalException("Unknown/unsupported window function");
-		}
 
 		if (export_opt.HasResult()) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && has_ignore_nulls_result) {
-			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
-		}
 		transformer.in_window_definition = true;
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		expr->catalog = qualified_function.catalog;
@@ -285,16 +235,11 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		expr->type = win_fun_type;
 
 		expr->children = std::move(function_children);
+		expr->has_ignore_nulls = has_ignore_nulls_result;
 		expr->ignore_nulls = ignore_nulls;
 		expr->filter_expr = std::move(filter_expr);
 		expr->arg_orders = std::move(order_modifier->orders);
 		expr->distinct = distinct;
-
-		if (expr->exclude_clause != WindowExcludeMode::NO_OTHER && !expr->arg_orders.empty() &&
-		    !IsExcludableWindowFunction(expr->type)) {
-			throw ParserException("EXCLUDE is not supported for the window function \"%s\"",
-			                      expr->function_name.c_str());
-		}
 		transformer.in_window_definition = false;
 		return std::move(expr);
 	}
@@ -1973,8 +1918,6 @@ PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &tr
 	copied_window->start_expr = std::move(window_frame_contents->start_expr);
 	copied_window->end_expr = std::move(window_frame_contents->end_expr);
 
-	copied_window->offset_expr = std::move(window_frame_contents->offset_expr);
-	copied_window->default_expr = std::move(window_frame_contents->default_expr);
 	if (!copied_window->orders.empty() && !window_frame_contents->orders.empty()) {
 		throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 	}

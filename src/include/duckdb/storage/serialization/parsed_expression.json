@@ -444,12 +444,14 @@
       {
         "id": 210,
         "name": "offset_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "status": "read_only"
       },
       {
         "id": 211,
         "name": "default_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "status": "read_only"
       },
       {
         "id": 212,
@@ -476,9 +478,14 @@
         "id": 216,
         "name": "arg_orders",
         "type": "vector<OrderByNode>"
+      },
+      {
+        "id": 217,
+        "name": "has_ignore_nulls",
+        "type": "bool"
       }
     ],
-    "constructor": ["type"]
+    "constructor": ["type", "children", "offset_expr", "default_expr"]
   },
   {
     "class": "TypeExpression",

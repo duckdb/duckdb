@@ -135,9 +135,6 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	     window.end == WindowBoundary::EXPR_PRECEDING_RANGE || window.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 	if (is_range && window.orders.size() != 1) {
 		throw BinderException(error_context, "RANGE frames must have only one ORDER BY expression");
-	} else if (window.GetExpressionType() == ExpressionType::WINDOW_FILL &&
-	           (window.arg_orders.size() > 1 || (window.arg_orders.empty() && window.orders.size() != 1))) {
-		throw BinderException(error_context, "FILL functions must have only one ORDER BY expression");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
@@ -170,8 +167,6 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.filter_expr, depth, error);
 	BindChild(window.start_expr, depth, error);
 	BindChild(window.end_expr, depth, error);
-	BindChild(window.offset_expr, depth, error);
-	BindChild(window.default_expr, depth, error);
 
 	for (auto &order : window.arg_orders) {
 		BindChild(order.expression, depth, error);
@@ -215,6 +210,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 
+		if (window.has_ignore_nulls) {
+			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for windowed aggregates");
+		}
+
 		// bind the aggregate
 		ErrorData error_aggr;
 		FunctionBinder function_binder(context);
@@ -226,15 +225,6 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
-
-		if (!bound_function.CanAggregate() && bound_function.CanWindow() && !window.arg_orders.empty()) {
-			// ORDER BY in non-aggregate window functions not supported
-			// (The WindowCustomAggregator does not support it for now)
-			ErrorData err(BinderException("Function '%s' cannot be used as a window with ORDER BY arguments",
-			                              bound_function.name));
-			err.AddQueryLocation(window);
-			err.Throw();
-		}
 
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
@@ -281,6 +271,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			bound_function.arguments[0] = types[0];
 		}
 
+		bool can_exclude = false;
+
 		switch (bound_function.window_enum) {
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG:
@@ -300,8 +292,16 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		case ExpressionType::WINDOW_NTH_VALUE:
 			// nth_value(<expr>, index)
 			children[1] = BoundCastExpression::AddCastToType(context, std::move(children[1]), LogicalType::BIGINT);
+			can_exclude = true;
+			break;
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_LAST_VALUE:
+			can_exclude = true;
 			break;
 		case ExpressionType::WINDOW_FILL: {
+			if (window.arg_orders.size() > 1 || (window.arg_orders.empty() && window.orders.size() != 1)) {
+				throw BinderException(error_context, "FILL functions must have only one ORDER BY expression");
+			}
 			//	Check FILL arguments support subtraction
 			if (!IsFillType(children[0]->return_type)) {
 				throw BinderException(error_context, "FILL argument must support subtraction");
@@ -324,6 +324,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 		default:
 			break;
+		}
+
+		if (window.exclude_clause != WindowExcludeMode::NO_OTHER && !window.arg_orders.empty() && !can_exclude) {
+			throw ParserException("EXCLUDE is not supported for the window function \"%s\"", bound_function.name);
 		}
 	}
 	auto result = make_uniq<BoundWindowExpression>(window.GetExpressionType(), sql_type, std::move(aggregate),

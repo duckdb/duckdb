@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -201,9 +200,8 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(207, "end", end);
 	serializer.WritePropertyWithDefault(208, "start_expr", start_expr, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(209, "end_expr", end_expr, unique_ptr<Expression>());
-	// offset and default are now just children
-	serializer.WritePropertyWithDefault(210, "offset_expr", null_expr, unique_ptr<Expression>());
-	serializer.WritePropertyWithDefault(211, "default_expr", null_expr, unique_ptr<Expression>());
+	/* [Deleted] (unique_ptr<Expression>) "offset_expr" */
+	/* [Deleted] (unique_ptr<Expression>) "default_expr" */
 	serializer.WriteProperty(212, "exclude_clause", exclude_clause);
 	serializer.WriteProperty(213, "distinct", distinct);
 	serializer.WriteProperty(214, "arg_orders", arg_orders);

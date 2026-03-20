@@ -2,7 +2,6 @@
 
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
@@ -140,12 +139,6 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		if (window_expr.end_expr) {
 			callback(window_expr.end_expr);
-		}
-		if (window_expr.offset_expr) {
-			callback(window_expr.offset_expr);
-		}
-		if (window_expr.default_expr) {
-			callback(window_expr.default_expr);
 		}
 		for (auto &order : window_expr.arg_orders) {
 			callback(order.expression);

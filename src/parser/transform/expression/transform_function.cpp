@@ -47,28 +47,6 @@ static inline WindowBoundary TransformFrameOption(const int frameOptions, const 
 	}
 }
 
-static bool IsExcludableWindowFunction(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-	case ExpressionType::WINDOW_AGGREGATE:
-		return true;
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_NTILE:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_FILL:
-		return false;
-	default:
-		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
-	}
-}
-
 void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_spec, WindowExpression &expr) {
 	// finally: specifics of bounds
 	expr.start_expr = TransformExpression(window_spec.startOffset);
@@ -122,11 +100,6 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 		expr.exclude_clause = WindowExcludeMode::TIES;
 	} else {
 		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
-	}
-
-	if (expr.exclude_clause != WindowExcludeMode::NO_OTHER && !expr.arg_orders.empty() &&
-	    !IsExcludableWindowFunction(expr.type)) {
-		throw ParserException("EXCLUDE is not supported for the window function \"%s\"", expr.function_name.c_str());
 	}
 }
 
@@ -196,20 +169,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
-		if (win_fun_type == ExpressionType::INVALID) {
-			throw InternalException("Unknown/unsupported window function");
-		}
 
 		if (root.export_state) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE &&
-		    root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS) {
-			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
-		}
-
 		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
+		expr->has_ignore_nulls = (root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS);
 		expr->ignore_nulls = (root.agg_ignore_nulls == duckdb_libpgquery::PG_IGNORE_NULLS);
 		expr->distinct = root.agg_distinct;
 

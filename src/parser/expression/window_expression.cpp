@@ -4,7 +4,15 @@
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::WINDOW) {
+WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
+                                   unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
+    : ParsedExpression(type, ExpressionClass::WINDOW), children(std::move(children)) {
+	if (offset_expr) {
+		children.emplace_back(std::move(offset_expr));
+	}
+	if (default_expr) {
+		children.emplace_back(std::move(default_expr));
+	}
 }
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
@@ -68,7 +76,10 @@ string WindowExpression::ToString() const {
 
 bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &b) {
 	// check if the child expressions are equivalent
-	if (a.ignore_nulls != b.ignore_nulls) {
+	if (a.has_ignore_nulls != b.has_ignore_nulls) {
+		return false;
+	}
+	if (a.has_ignore_nulls && a.ignore_nulls != b.ignore_nulls) {
 		return false;
 	}
 	if (a.distinct != b.distinct) {
@@ -84,9 +95,7 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 		return false;
 	}
 	// check if the framing expressions are equivalent
-	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
-	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
-	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
+	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr)) {
 		return false;
 	}
 
@@ -186,8 +195,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
-	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
-	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
+	new_window->has_ignore_nulls = has_ignore_nulls;
 	new_window->ignore_nulls = ignore_nulls;
 	new_window->distinct = distinct;
 

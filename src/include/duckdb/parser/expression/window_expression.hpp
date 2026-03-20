@@ -33,8 +33,7 @@ enum class WindowExcludeMode : uint8_t { NO_OTHER = 0, CURRENT_ROW = 1, GROUP = 
 
 const char *ToString(WindowBoundary value);
 
-//! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
-//! they inherit from them.
+//! The WindowExpression represents a window function in the query.
 class WindowExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
@@ -56,6 +55,8 @@ public:
 	vector<OrderByNode> orders;
 	//! Expression representing a filter, only used for aggregates
 	unique_ptr<ParsedExpression> filter_expr;
+	//! True if we parsed IGNORE/RESPECT NULLS
+	bool has_ignore_nulls = false;
 	//! True to ignore NULL values
 	bool ignore_nulls = false;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
@@ -68,9 +69,6 @@ public:
 
 	unique_ptr<ParsedExpression> start_expr;
 	unique_ptr<ParsedExpression> end_expr;
-	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<ParsedExpression> offset_expr;
-	unique_ptr<ParsedExpression> default_expr;
 
 	//! The set of argument ordering clauses
 	//! These are distinct from the frame ordering clauses e.g., the "x" in
@@ -279,7 +277,8 @@ public:
 	}
 
 private:
-	explicit WindowExpression(ExpressionType type);
+	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
+	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);
 };
 
 } // namespace duckdb
