@@ -203,6 +203,7 @@ enum class ExpressionClass : uint8_t {
 	BOUND_UNNEST = 40,
 	BOUND_LAMBDA = 41,
 	BOUND_LAMBDA_REF = 42,
+	BOUND_WINDOW_FUNCTION = 43,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//

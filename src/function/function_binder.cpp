@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_window_function.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -714,6 +715,28 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                           std::move(bind_info), aggr_type);
+}
+
+unique_ptr<BoundWindowFunction> FunctionBinder::BindWindowFunction(WindowFunction bound_function,
+                                                                   vector<unique_ptr<Expression>> children,
+                                                                   vector<OrderByNode> &orders,
+                                                                   vector<OrderByNode> &arg_orders,
+                                                                   AggregateType aggr_type) {
+	ResolveTemplateTypes(bound_function, children);
+
+	unique_ptr<FunctionData> bind_info;
+	if (bound_function.HasBindCallback()) {
+		bind_info = bound_function.GetBindCallback()(context, bound_function, children, orders, arg_orders);
+		// we may have lost some arguments in the bind
+		children.resize(MinValue(bound_function.arguments.size(), children.size()));
+	}
+
+	CheckTemplateTypesResolved(bound_function);
+
+	// check if we need to add casts to the children
+	CastToFunctionArguments(bound_function, children);
+
+	return make_uniq<BoundWindowFunction>(std::move(bound_function), std::move(children), std::move(bind_info));
 }
 
 } // namespace duckdb

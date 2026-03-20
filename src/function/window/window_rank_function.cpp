@@ -199,6 +199,7 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 WindowFunction DenseRankFun::GetFunction() {
 	WindowFunction fun("dense_rank", {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE);
+	fun.can_order_by = false;
 	return fun;
 }
 
