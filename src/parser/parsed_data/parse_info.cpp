@@ -27,6 +27,8 @@ string ParseInfo::TypeToString(CatalogType type) {
 		return "MACRO TABLE";
 	case CatalogType::SECRET_ENTRY:
 		return "SECRET";
+	case CatalogType::TRIGGER_ENTRY:
+		return "TRIGGER";
 	default:
 		throw InternalException("ParseInfo::TypeToString for CatalogType with type: %s not implemented",
 		                        EnumUtil::ToString(type));

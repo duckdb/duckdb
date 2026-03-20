@@ -259,3 +259,15 @@ index b196db7..de2623e 100644
  
  	mutable vector<NestedNotNullConstraint> not_null_constraints;
  	mutable bool has_null_constraints_in_arrays = false;
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index de50268..c2bae88 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -368,7 +368,6 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	physical_copy_ref.file_extension = "parquet";
+ 	physical_copy_ref.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+ 	physical_copy_ref.per_thread_output = false;
+-	physical_copy_ref.rotate = false;
+ 	physical_copy_ref.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+ 	physical_copy_ref.write_partition_columns = true;
+ 	physical_copy_ref.children.push_back(*plan);

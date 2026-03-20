@@ -10,7 +10,7 @@ statement ok
 set threads=2;
 
 # before we combined data from threads into multiple row groups,
-# this would create 4 row groups, now it should create 3
+# this would create 4 row groups, now it should create 2
 statement ok
 copy (with cte as (from range(2049) union all from range(2049)) from cte) to '__TEST_DIR__/parquet_combine.parquet' (row_group_size 2048);
 

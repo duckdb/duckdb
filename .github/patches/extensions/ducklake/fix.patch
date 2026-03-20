@@ -31,7 +31,7 @@ index d8b57c80..a980cd79 100644
  namespace duckdb {
  
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
-index 6c2ba53b..d3e76567 100644
+index 6c2ba53b..7b5456ad 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
 +++ b/src/functions/ducklake_compaction_functions.cpp
 @@ -34,7 +34,7 @@ namespace duckdb {
@@ -59,7 +59,23 @@ index 6c2ba53b..d3e76567 100644
      : context(context), catalog(catalog), transaction(transaction), binder(binder), table_id(table_id),
        delete_threshold(delete_threshold_p), type(CompactionType::REWRITE_DELETES) {
  }
-@@ -591,16 +591,16 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
+@@ -560,10 +560,13 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
+ 	copy->file_extension = std::move(copy_options.file_extension);
+ 	copy->overwrite_mode = copy_options.overwrite_mode;
+ 	copy->per_thread_output = copy_options.per_thread_output;
+-	copy->file_size_bytes = copy_options.file_size_bytes;
+-	copy->rotate = copy_options.rotate;
+ 	copy->return_type = copy_options.return_type;
+ 
++	copy->batch_size = copy_options.batch_size;
++	copy->batch_size_bytes = copy_options.batch_size_bytes;
++	copy->batches_per_file = copy_options.batches_per_file;
++	copy->file_size_bytes = copy_options.file_size_bytes;
++
+ 	copy->partition_output = copy_options.partition_output;
+ 	copy->write_partition_columns = copy_options.write_partition_columns;
+ 	copy->write_empty_file = false;
+@@ -591,16 +594,16 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
  //===--------------------------------------------------------------------===//
  // Function
  //===--------------------------------------------------------------------===//
@@ -81,7 +97,7 @@ index 6c2ba53b..d3e76567 100644
  		return_types.emplace_back(LogicalType::VARCHAR);
  		return_types.emplace_back(LogicalType::VARCHAR);
  		return_types.emplace_back(LogicalType::BIGINT);
-@@ -667,7 +667,7 @@ double GetDeleteThreshold(optional_ptr<DuckLakeSchemaEntry> schema_entry, const
+@@ -667,7 +670,7 @@ double GetDeleteThreshold(optional_ptr<DuckLakeSchemaEntry> schema_entry, const
  	return delete_threshold;
  }
  
@@ -90,7 +106,7 @@ index 6c2ba53b..d3e76567 100644
                                             CompactionType type) {
  	auto &catalog = DuckLakeBaseMetadataFunction::GetCatalog(context, input.inputs[0]);
  	auto &ducklake_catalog = catalog.Cast<DuckLakeCatalog>();
-@@ -765,7 +765,7 @@ unique_ptr<LogicalOperator> BindCompaction(ClientContext &context, TableFunction
+@@ -765,7 +768,7 @@ unique_ptr<LogicalOperator> BindCompaction(ClientContext &context, TableFunction
  }
  
  static unique_ptr<LogicalOperator> MergeAdjacentFilesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -99,7 +115,7 @@ index 6c2ba53b..d3e76567 100644
  	return_names.push_back("schema_name");
  	return_names.push_back("table_name");
  	return_names.push_back("files_processed");
-@@ -791,7 +791,7 @@ TableFunctionSet DuckLakeMergeAdjacentFilesFunction::GetFunctions() {
+@@ -791,7 +794,7 @@ TableFunctionSet DuckLakeMergeAdjacentFilesFunction::GetFunctions() {
  }
  
  static unique_ptr<LogicalOperator> RewriteFilesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -109,7 +125,7 @@ index 6c2ba53b..d3e76567 100644
  	return_names.push_back("table_name");
  	return_names.push_back("files_processed");
 diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
-index 703ac1b4..5cefd678 100644
+index 703ac1b4..290183e2 100644
 --- a/src/functions/ducklake_flush_inlined_data.cpp
 +++ b/src/functions/ducklake_flush_inlined_data.cpp
 @@ -210,13 +210,13 @@ string DuckLakeFlushData::GetName() const {
@@ -165,7 +181,22 @@ index 703ac1b4..5cefd678 100644
                                           const DuckLakeInlinedTableInfo &inlined_table_p)
      : context(context), catalog(catalog), transaction(transaction), binder(binder), table_id(table_id),
        inlined_table(inlined_table_p) {
-@@ -567,7 +567,7 @@ LEFT JOIN (
+@@ -368,9 +368,13 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
+ 	copy->overwrite_mode = copy_options.overwrite_mode;
+ 	copy->per_thread_output = copy_options.per_thread_output;
+ 	copy->file_size_bytes = copy_options.file_size_bytes;
+-	copy->rotate = copy_options.rotate;
+ 	copy->return_type = copy_options.return_type;
+ 
++	copy->batch_size = copy_options.batch_size;
++	copy->batch_size_bytes = copy_options.batch_size_bytes;
++	copy->batches_per_file = copy_options.batches_per_file;
++	copy->file_size_bytes = copy_options.file_size_bytes;
++
+ 	copy->partition_output = copy_options.partition_output;
+ 	copy->write_partition_columns = copy_options.write_partition_columns;
+ 	copy->write_empty_file = copy_options.write_empty_file;
+@@ -567,7 +571,7 @@ LEFT JOIN (
  // Function
  //===--------------------------------------------------------------------===//
  static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context, TableFunctionBindInput &input,
@@ -174,7 +205,7 @@ index 703ac1b4..5cefd678 100644
  	input.binder->SetAlwaysRequireRebind();
  	// gather a list of files to compact
  	auto &catalog = DuckLakeBaseMetadataFunction::GetCatalog(context, input.inputs[0]);
-@@ -646,9 +646,9 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+@@ -646,9 +650,9 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
  		// nothing to write - generate empty result
  		vector<ColumnBinding> bindings;
  		vector<LogicalType> return_types;
@@ -187,7 +218,7 @@ index 703ac1b4..5cefd678 100644
  		return_types.emplace_back(LogicalType::VARCHAR);
  		return_types.emplace_back(LogicalType::VARCHAR);
  		return_types.emplace_back(LogicalType::BIGINT);
-@@ -704,8 +704,8 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+@@ -704,8 +708,8 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
  	    );
  
  	// Create LogicalAggregate with GROUP BY schema_name, table_name and SUM(rows_flushed)
@@ -397,10 +428,22 @@ index f9c8dd54..a21d6652 100644
  };
  
 diff --git a/src/include/storage/ducklake_insert.hpp b/src/include/storage/ducklake_insert.hpp
-index c591763c..b6940eb1 100644
+index c591763c..9fac9d22 100644
 --- a/src/include/storage/ducklake_insert.hpp
 +++ b/src/include/storage/ducklake_insert.hpp
-@@ -150,9 +150,9 @@ struct DuckLakeCopyInput {
+@@ -122,8 +122,10 @@ struct DuckLakeCopyOptions {
+ 	string file_extension;
+ 	CopyOverwriteMode overwrite_mode;
+ 	bool per_thread_output;
++	optional_idx batch_size;
++	optional_idx batch_size_bytes;
++	optional_idx batches_per_file;
+ 	optional_idx file_size_bytes;
+-	bool rotate;
+ 	CopyFunctionReturnType return_type;
+ 	bool hive_file_pattern;
+ 
+@@ -150,9 +152,9 @@ struct DuckLakeCopyInput {
  	const string data_path;
  	string encryption_key;
  	SchemaIndex schema_id;
@@ -1103,7 +1146,7 @@ index 405a5acf..f45dfc18 100644
  
  				approved_tuple_count = ColumnSegment::FilterSelection(sel, vec, vdata, filter, *filter_state,
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
-index 2dcbe2f3..6411000e 100644
+index 2dcbe2f3..ed0a6ffd 100644
 --- a/src/storage/ducklake_insert.cpp
 +++ b/src/storage/ducklake_insert.cpp
 @@ -371,7 +371,7 @@ static unique_ptr<Expression> CreateColumnReference(DuckLakeCopyInput &copy_inpu
@@ -1115,7 +1158,69 @@ index 2dcbe2f3..6411000e 100644
  		return make_uniq<BoundColumnRefExpression>(type, column_binding);
  	}
  	// physical plan generation: generate a reference directly
-@@ -790,7 +790,7 @@ PhysicalOperator &DuckLakeCatalog::PlanCreateTableAs(ClientContext &context, Phy
+@@ -517,14 +517,6 @@ DuckLakeCopyOptions DuckLakeInsert::GetCopyOptions(ClientContext &context, DuckL
+ 	if (catalog.TryGetConfigOption("parquet_compression_level", parquet_compression_level, schema_id, table_id)) {
+ 		info->options["compression_level"].emplace_back(parquet_compression_level);
+ 	}
+-	string row_group_size;
+-	if (catalog.TryGetConfigOption("parquet_row_group_size", row_group_size, schema_id, table_id)) {
+-		info->options["row_group_size"].emplace_back(row_group_size);
+-	}
+-	string row_group_size_bytes;
+-	if (catalog.TryGetConfigOption("parquet_row_group_size_bytes", row_group_size_bytes, schema_id, table_id)) {
+-		info->options["row_group_size_bytes"].emplace_back(row_group_size_bytes + " bytes");
+-	}
+ 	string per_thread_output_str;
+ 	bool per_thread_output = false;
+ 	if (catalog.TryGetConfigOption("per_thread_output", per_thread_output_str, schema_id, table_id)) {
+@@ -576,19 +568,28 @@ DuckLakeCopyOptions DuckLakeInsert::GetCopyOptions(ClientContext &context, DuckL
+ 	DuckLakeCopyOptions result(std::move(info), copy_fun.function);
+ 	result.bind_data = std::move(function_data);
+ 
++	string row_group_size;
++	if (catalog.TryGetConfigOption("parquet_row_group_size", row_group_size, schema_id, table_id)) {
++		auto val = Value(row_group_size).DefaultCastAs(LogicalType::UBIGINT);
++		result.batch_size = val.GetValue<idx_t>();
++	}
++	string row_group_size_bytes;
++	if (catalog.TryGetConfigOption("parquet_row_group_size_bytes", row_group_size_bytes, schema_id, table_id)) {
++		auto val = Value(row_group_size_bytes).DefaultCastAs(LogicalType::UBIGINT);
++		result.batch_size_bytes = val.GetValue<idx_t>();
++	}
++
+ 	result.use_tmp_file = false;
+ 	if (copy_input.partition_data) {
+ 		result.filename_pattern.SetFilenamePattern("ducklake-{uuidv7}");
+ 		result.partition_output = true;
+ 		result.write_empty_file = true;
+-		result.rotate = false;
+ 	} else {
+ 		result.filename_pattern.SetFilenamePattern("ducklake-{uuidv7}");
+ 		result.partition_output = false;
+ 		result.write_empty_file = false;
+ 		// file_size_bytes is currently only supported for unpartitioned writes
+ 		result.file_size_bytes = target_file_size;
+-		result.rotate = true;
+ 	}
+ 	result.file_path = copy_input.data_path;
+ 	StripTrailingSeparator(fs, result.file_path);
+@@ -700,10 +701,13 @@ PhysicalOperator &DuckLakeInsert::PlanCopyForInsert(ClientContext &context, Phys
+ 	physical_copy.file_extension = std::move(copy_options.file_extension);
+ 	physical_copy.overwrite_mode = copy_options.overwrite_mode;
+ 	physical_copy.per_thread_output = copy_options.per_thread_output;
+-	physical_copy.file_size_bytes = copy_options.file_size_bytes;
+-	physical_copy.rotate = copy_options.rotate;
+ 	physical_copy.return_type = copy_options.return_type;
+ 
++	physical_copy.batch_size = copy_options.batch_size;
++	physical_copy.batch_size_bytes = copy_options.batch_size_bytes;
++	physical_copy.batches_per_file = copy_options.batches_per_file;
++	physical_copy.file_size_bytes = copy_options.file_size_bytes;
++
+ 	physical_copy.partition_output = copy_options.partition_output;
+ 	physical_copy.write_partition_columns = copy_options.write_partition_columns;
+ 	physical_copy.write_empty_file = copy_options.write_empty_file;
+@@ -790,7 +794,7 @@ PhysicalOperator &DuckLakeCatalog::PlanCreateTableAs(ClientContext &context, Phy
  	// FIXME: if table already exists and we are doing CREATE IF NOT EXISTS - skip
  	reference<PhysicalOperator> root = plan;
  	optional_ptr<DuckLakeInlineData> inline_data;

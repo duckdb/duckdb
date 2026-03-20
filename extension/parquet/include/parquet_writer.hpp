@@ -102,9 +102,6 @@ public:
 	}
 
 public:
-	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason);
-
-public:
 	unique_ptr<ParquetWriter> writer;
 	optional_ptr<const PhysicalOperator> op;
 	mutex lock;

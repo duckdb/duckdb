@@ -320,6 +320,25 @@ index d2d8f9df..6522c068 100644
  
  namespace duckdb {
  
+diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
+index 31356682..b64f0b5b 100644
+--- a/src/storage/iceberg_insert.cpp
++++ b/src/storage/iceberg_insert.cpp
+@@ -418,14 +418,12 @@ PhysicalOperator &IcebergInsert::PlanCopyForInsert(ClientContext &context, Physi
+ 		physical_copy_ref.partition_output = true;
+ 		physical_copy_ref.partition_columns = partition_columns;
+ 		physical_copy_ref.write_empty_file = true;
+-		physical_copy_ref.rotate = false;
+ 	} else {
+ 		physical_copy_ref.filename_pattern.SetFilenamePattern("{uuidv7}");
+ 		physical_copy_ref.file_path = copy_input.data_path;
+ 		physical_copy_ref.partition_output = false;
+ 		physical_copy_ref.write_empty_file = false;
+ 		physical_copy_ref.file_size_bytes = IcebergCatalog::DEFAULT_TARGET_FILE_SIZE;
+-		physical_copy_ref.rotate = true;
+ 	}
+ 
+ 	physical_copy_ref.file_extension = "parquet";
 diff --git a/src/storage/iceberg_update.cpp b/src/storage/iceberg_update.cpp
 index 15350c54..4ab34c16 100644
 --- a/src/storage/iceberg_update.cpp
