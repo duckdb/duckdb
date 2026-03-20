@@ -1137,7 +1137,10 @@ DropEntries <-
 	DropSequence /
 	DropCollation /
 	DropType /
-	DropSecret
+	DropSecret /
+	DropTrigger
+
+DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
