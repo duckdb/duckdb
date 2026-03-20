@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"

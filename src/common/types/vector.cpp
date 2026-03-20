@@ -10,6 +10,7 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 #include "duckdb/common/assert.hpp"

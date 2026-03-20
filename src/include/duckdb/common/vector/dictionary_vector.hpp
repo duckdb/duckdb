@@ -12,6 +12,49 @@
 
 namespace duckdb {
 
+//! The DictionaryBuffer holds a selection vector
+class DictionaryBuffer : public VectorBuffer {
+public:
+	explicit DictionaryBuffer(const SelectionVector &sel)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
+	}
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
+	}
+	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
+	}
+
+public:
+	const SelectionVector &GetSelVector() const {
+		return sel_vector;
+	}
+	SelectionVector &GetSelVector() {
+		return sel_vector;
+	}
+	void SetSelVector(const SelectionVector &vector) {
+		this->sel_vector.Initialize(vector);
+	}
+	void SetDictionarySize(idx_t dict_size) {
+		dictionary_size = dict_size;
+	}
+	optional_idx GetDictionarySize() const {
+		return dictionary_size;
+	}
+	void SetDictionaryId(string id) {
+		dictionary_id = std::move(id);
+	}
+	const string &GetDictionaryId() const {
+		return dictionary_id;
+	}
+
+private:
+	SelectionVector sel_vector;
+	optional_idx dictionary_size;
+	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent
+	string dictionary_id;
+};
+
 struct DictionaryVector {
 	static void VerifyDictionary(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY

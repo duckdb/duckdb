@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"

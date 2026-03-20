@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 
 #include "duckdb/common/exception.hpp"

@@ -14,6 +14,41 @@
 
 namespace duckdb {
 
+class VectorListBuffer : public VectorBuffer {
+public:
+	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	~VectorListBuffer() override;
+
+public:
+	Vector &GetChild() {
+		return *child;
+	}
+	void Reserve(idx_t to_reserve);
+
+	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
+	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
+
+	void PushBack(const Value &insert);
+
+	idx_t GetSize() {
+		return size;
+	}
+
+	idx_t GetCapacity() {
+		return capacity;
+	}
+
+	void SetCapacity(idx_t new_capacity);
+	void SetSize(idx_t new_size);
+
+private:
+	//! child vectors used for nested data
+	unique_ptr<Vector> child;
+	idx_t capacity = 0;
+	idx_t size = 0;
+};
+
 struct ListVector {
 	static inline const list_entry_t *GetData(const Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {

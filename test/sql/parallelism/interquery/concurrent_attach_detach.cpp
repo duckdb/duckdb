@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "catch.hpp"
 
 #include "duckdb/common/atomic.hpp"

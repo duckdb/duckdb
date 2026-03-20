@@ -12,11 +12,12 @@ index 608c67af..9c6744a7 100644
  	auto http_headers = HTTPHeaders();
  	for (auto &header : aws_headers) {
 diff --git a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
-index 0212aa3f..50d6a85e 100644
+index 0212aa3f..78bf6d9d 100644
 --- a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 +++ b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
-@@ -1,3 +1,4 @@
+@@ -1,3 +1,5 @@
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
  #include "iceberg_avro_multi_file_reader.hpp"
  #include "iceberg_avro_multi_file_list.hpp"
  #include "duckdb/common/exception.hpp"
@@ -273,22 +274,24 @@ index 62b71d18..1d8a5e1f 100644
  	mutable mutex entry_lock;
  	mutable vector<IcebergManifestEntry> manifest_entries;
 diff --git a/src/manifest_list_reader.cpp b/src/manifest_list_reader.cpp
-index 68d290a8..42c03c58 100644
+index 68d290a8..b670dc45 100644
 --- a/src/manifest_list_reader.cpp
 +++ b/src/manifest_list_reader.cpp
-@@ -1,3 +1,5 @@
+@@ -1,3 +1,6 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
  #include "manifest_reader.hpp"
  #include "include/metadata/iceberg_manifest_list.hpp"
  
 diff --git a/src/manifest_reader.cpp b/src/manifest_reader.cpp
-index dba21c67..bd9b662e 100644
+index dba21c67..a7ad6cef 100644
 --- a/src/manifest_reader.cpp
 +++ b/src/manifest_reader.cpp
-@@ -1,3 +1,5 @@
+@@ -1,3 +1,6 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
  #include "manifest_reader.hpp"
  
  namespace duckdb {

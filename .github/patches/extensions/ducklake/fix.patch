@@ -11,17 +11,18 @@ index f03ad464..e6fc959d 100644
  namespace duckdb {
  
 diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
-index d8b57c80..c3806f48 100644
+index d8b57c80..a980cd79 100644
 --- a/src/functions/ducklake_add_data_files.cpp
 +++ b/src/functions/ducklake_add_data_files.cpp
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,7 @@
 +#include "duckdb/common/vector/flat_vector.hpp"
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
  #include "functions/ducklake_table_functions.hpp"
  #include "storage/ducklake_transaction.hpp"
  #include "common/ducklake_util.hpp"
-@@ -9,6 +12,7 @@
+@@ -9,6 +13,7 @@
  #include "duckdb/common/vector_operations/vector_operations.hpp"
  #include "duckdb/common/types/vector.hpp"
  #include "storage/ducklake_geo_stats.hpp"
@@ -1065,12 +1066,13 @@ index 35b0518f..770ac8da 100644
  		if (snapshot_filter_min.IsValid()) {
  			auto min_constant = Value::BIGINT(NumericCast<int64_t>(snapshot_filter_min.GetIndex()));
 diff --git a/src/storage/ducklake_inline_data.cpp b/src/storage/ducklake_inline_data.cpp
-index 4fd2ecfb..28e13b09 100644
+index 4fd2ecfb..fd87462d 100644
 --- a/src/storage/ducklake_inline_data.cpp
 +++ b/src/storage/ducklake_inline_data.cpp
-@@ -1,3 +1,5 @@
+@@ -1,3 +1,6 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
  #include "storage/ducklake_inline_data.hpp"
  #include "storage/ducklake_stats.hpp"
  

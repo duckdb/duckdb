@@ -8,9 +8,37 @@
 
 #pragma once
 
-#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 
 namespace duckdb {
+
+class VectorFSSTStringBuffer : public VectorStringBuffer {
+public:
+	VectorFSSTStringBuffer();
+
+public:
+	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
+		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
+		decompress_buffer.resize(string_block_limit + 1);
+	}
+	void *GetDecoder() {
+		return duckdb_fsst_decoder.get();
+	}
+	vector<unsigned char> &GetDecompressBuffer() {
+		return decompress_buffer;
+	}
+	void SetCount(idx_t count) {
+		total_string_count = count;
+	}
+	idx_t GetCount() {
+		return total_string_count;
+	}
+
+private:
+	buffer_ptr<void> duckdb_fsst_decoder;
+	idx_t total_string_count = 0;
+	vector<unsigned char> decompress_buffer;
+};
 
 struct FSSTVector {
 	static inline const ValidityMask &Validity(const Vector &vector) {

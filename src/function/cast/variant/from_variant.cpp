@@ -6,6 +6,7 @@
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"

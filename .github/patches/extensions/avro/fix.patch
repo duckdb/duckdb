@@ -1,11 +1,12 @@
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
-index 5317c43..b1ef246 100644
+index 5317c43..197f899 100644
 --- a/src/avro_reader.cpp
 +++ b/src/avro_reader.cpp
-@@ -1,3 +1,8 @@
+@@ -1,3 +1,9 @@
 +#include "duckdb/common/vector/flat_vector.hpp"
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
 +#include "duckdb/common/vector/string_vector.hpp"
 +#include "duckdb/common/vector/union_vector.hpp"
  #include "avro_reader.hpp"

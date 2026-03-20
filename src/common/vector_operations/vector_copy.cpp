@@ -13,6 +13,7 @@
 #include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"

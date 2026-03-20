@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"

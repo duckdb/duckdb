@@ -9,6 +9,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"

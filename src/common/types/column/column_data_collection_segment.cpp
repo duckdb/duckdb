@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"

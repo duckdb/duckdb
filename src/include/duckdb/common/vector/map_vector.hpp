@@ -26,9 +26,4 @@ struct MapVector {
 	DUCKDB_API static void MapConversionVerify(Vector &vector, idx_t count);
 };
 
-struct StructVector {
-	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
-	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
-};
-
 } // namespace duckdb

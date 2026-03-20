@@ -3,6 +3,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
