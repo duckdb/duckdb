@@ -213,7 +213,6 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
                                                                shared_ptr<AttachedDatabase> attached_db) {
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
-
 	shared_ptr<AttachedDatabase> detached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
