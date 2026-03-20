@@ -39,4 +39,4 @@ struct ShreddedVector {
 	DUCKDB_API static bool IsFullyShredded(Vector &vec);
 };
 
-}
+} // namespace duckdb

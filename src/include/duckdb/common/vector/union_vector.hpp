@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -66,4 +67,4 @@ struct UnionVector {
 	                   const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 };
 
-}
+} // namespace duckdb

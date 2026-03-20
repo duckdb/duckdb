@@ -65,4 +65,4 @@ struct DictionaryVector {
 	static const Vector &GetCachedHashes(Vector &input);
 };
 
-}
+} // namespace duckdb

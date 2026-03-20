@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/function/cast/default_casts.hpp"

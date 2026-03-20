@@ -56,4 +56,4 @@ struct FSSTVector {
 	DUCKDB_API static idx_t GetCount(Vector &vector);
 };
 
-}
+} // namespace duckdb

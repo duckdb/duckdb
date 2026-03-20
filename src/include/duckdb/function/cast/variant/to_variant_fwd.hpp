@@ -3,6 +3,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/owning_string_map.hpp"

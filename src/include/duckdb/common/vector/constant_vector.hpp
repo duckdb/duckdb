@@ -70,4 +70,4 @@ struct ConstantVector {
 	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 };
 
-}
+} // namespace duckdb

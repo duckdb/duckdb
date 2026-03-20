@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"

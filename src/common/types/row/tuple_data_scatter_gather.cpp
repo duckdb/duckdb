@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/type_visitor.hpp"

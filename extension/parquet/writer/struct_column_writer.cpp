@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "writer/struct_column_writer.hpp"
 
 namespace duckdb {

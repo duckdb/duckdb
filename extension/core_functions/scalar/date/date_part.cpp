@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"

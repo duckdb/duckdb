@@ -40,4 +40,4 @@ struct StringVector {
 	DUCKDB_API static void AddHeapReference(Vector &vector, Vector &other);
 };
 
-}
+} // namespace duckdb

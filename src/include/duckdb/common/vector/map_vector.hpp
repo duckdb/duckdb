@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -30,4 +31,4 @@ struct StructVector {
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
 };
 
-}
+} // namespace duckdb

@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "parquet_metadata.hpp"
 
 #include "parquet_statistics.hpp"

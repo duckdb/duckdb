@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"

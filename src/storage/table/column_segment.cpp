@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 #include "duckdb/common/limits.hpp"

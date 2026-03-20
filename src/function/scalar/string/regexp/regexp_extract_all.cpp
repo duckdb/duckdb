@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/execution/expression_executor.hpp"

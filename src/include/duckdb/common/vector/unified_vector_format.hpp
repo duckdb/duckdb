@@ -106,4 +106,4 @@ struct ConsecutiveChildListInfo {
 	list_entry_t child_list_info;
 };
 
-}
+} // namespace duckdb

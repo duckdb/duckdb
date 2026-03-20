@@ -245,16 +245,3 @@ public:
 };
 
 } // namespace duckdb
-
-#include "duckdb/common/vector/array_vector.hpp"
-#include "duckdb/common/vector/constant_vector.hpp"
-#include "duckdb/common/vector/dictionary_vector.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/fsst_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/vector/shredded_vector.hpp"
-#include "duckdb/common/vector/union_vector.hpp"
-#include "duckdb/common/vector/sequence_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"

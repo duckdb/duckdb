@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -59,4 +61,4 @@ private:
 	static T &GetEntryInternal(T &vector);
 };
 
-}
+} // namespace duckdb

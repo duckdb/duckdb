@@ -26,4 +26,4 @@ struct SequenceVector {
 	}
 };
 
-}
+} // namespace duckdb

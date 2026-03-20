@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"

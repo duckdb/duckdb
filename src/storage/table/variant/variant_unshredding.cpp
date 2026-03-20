@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"

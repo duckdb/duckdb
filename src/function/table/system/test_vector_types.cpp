@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"

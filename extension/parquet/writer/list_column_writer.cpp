@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "writer/list_column_writer.hpp"
 
 namespace duckdb {

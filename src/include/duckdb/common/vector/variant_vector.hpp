@@ -39,4 +39,4 @@ struct VariantVector {
 	DUCKDB_API static Vector &GetData(const Vector &vec);
 };
 
-}
+} // namespace duckdb

@@ -25,4 +25,4 @@ private:
 	static T &GetEntryInternal(T &vector);
 };
 
-}
+} // namespace duckdb
