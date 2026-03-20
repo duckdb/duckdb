@@ -1,0 +1,190 @@
+# name: test/sql/function/autocomplete/sql_format.test
+# description: Test duckdb_format_sql pretty-printer
+# group: [autocomplete]
+
+require autocomplete
+
+# ── Basic SELECT with WHERE / GROUP BY / ORDER BY / LIMIT ─────────────────────
+# Default config inlines short clauses (inline_threshold=60).
+query I
+SELECT duckdb_format_sql('select a,b,c from t where x=1 and y=2 group by a,b order by a desc limit 10') = $$SELECT a, b, c
+FROM t
+WHERE x = 1 AND y = 2
+GROUP BY a, b
+ORDER BY a DESC
+LIMIT 10$$
+----
+true
+
+# ── Keyword uppercasing – bare SELECT ────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select 1') = $$SELECT 1$$
+----
+true
+
+# ── Multiple statements separated by semicolon ───────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t; select b from u') = $$SELECT a
+FROM t;
+SELECT b
+FROM u$$
+----
+true
+
+# ── INNER JOIN and qualified column names (schema.table.col) ─────────────────
+query I
+SELECT duckdb_format_sql('select a from t1 inner join t2 on t1.id = t2.id where t1.active = true') = $$SELECT a
+FROM t1
+INNER JOIN t2 ON t1.id = t2.id
+WHERE t1.active = TRUE$$
+----
+true
+
+# ── LEFT JOIN ────────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t1 left join t2 on t1.id = t2.id') = $$SELECT a
+FROM t1
+LEFT JOIN t2 ON t1.id = t2.id$$
+----
+true
+
+# ── CTE (WITH … AS) and HAVING ────────────────────────────────────────────────
+# CTE body is structured (contains SELECT/FROM/WHERE) so it is never inlined.
+query I
+SELECT duckdb_format_sql('WITH cte AS (SELECT id FROM users WHERE active = 1) SELECT id FROM cte GROUP BY id HAVING count(*) > 5') = $$WITH
+    cte AS (
+    SELECT id
+    FROM users
+    WHERE active = 1
+)
+SELECT id
+FROM cte
+GROUP BY id
+HAVING count(*) > 5$$
+----
+true
+
+# ── Subquery inside WHERE IN ──────────────────────────────────────────────────
+# Outer WHERE is not inlined (content contains a nested SELECT).
+query I
+SELECT duckdb_format_sql('select id from orders where customer_id in (select id from customers where active = 1) and amount > 100') = $$SELECT id
+FROM orders
+WHERE
+    customer_id IN (
+    SELECT id
+    FROM customers
+    WHERE active = 1
+)
+    AND amount > 100$$
+----
+true
+
+# ── UNION ALL ─────────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t1 union all select a from t2') = $$SELECT a
+FROM t1
+UNION ALL
+SELECT a
+FROM t2$$
+----
+true
+
+# ── CASE expression (stays inline) ───────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select case when x > 0 then ''pos'' else ''neg'' end as sign from t') = $$SELECT CASE WHEN x > 0 THEN 'pos' ELSE 'neg' END AS sign
+FROM t$$
+----
+true
+
+# ── INSERT INTO ───────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('INSERT INTO t (a, b) VALUES (1, 2)') = $$INSERT INTO t(a, b)
+VALUES (1, 2)$$
+----
+true
+
+# ── UPDATE … SET … WHERE ──────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('update t set a = 1, b = 2 where id = 3') = $$UPDATE t
+SET a = 1, b = 2
+WHERE id = 3$$
+----
+true
+
+# ── DELETE FROM … WHERE ───────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('delete from t where id = 1') = $$DELETE FROM t
+WHERE id = 1$$
+----
+true
+
+# ── AND / OR: short WHERE clause is inlined by default ───────────────────────
+query I
+SELECT duckdb_format_sql('select 1 from t where a = 1 and b = 2 or c = 3') = $$SELECT 1
+FROM t
+WHERE a = 1 AND b = 2 OR c = 3$$
+----
+true
+
+# ── AND / OR: long WHERE stays multiline with AND/OR on own lines ─────────────
+query I
+SELECT duckdb_format_sql('select 1 from t where some_long_column_name = 1 and another_long_column = 2 or yet_another_column = 3') = $$SELECT 1
+FROM t
+WHERE
+    some_long_column_name = 1
+    AND another_long_column = 2
+    OR yet_another_column = 3$$
+----
+true
+
+# ── FormatterConfig: inline_threshold = 0 (always multiline) ─────────────────
+query I
+SELECT duckdb_format_sql('select a from t where x = 1', MAP {'inline_threshold': '0'}) = $$SELECT
+    a
+FROM
+    t
+WHERE
+    x = 1$$
+----
+true
+
+# ── FormatterConfig: custom indent_size = 2 ──────────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t where x = 1', MAP {'inline_threshold': '0', 'indent_size': '2'}) = $$SELECT
+  a
+FROM
+  t
+WHERE
+  x = 1$$
+----
+true
+
+# ── FormatterConfig: small inline_threshold keeps long clauses multiline ──────
+# 'FROM long_table_name' = 18 chars > threshold 10 → stays multiline.
+query I
+SELECT duckdb_format_sql('select a, b, c from long_table_name', MAP {'inline_threshold': '10'}) = $$SELECT
+    a,
+    b,
+    c
+FROM
+    long_table_name$$
+----
+true
+
+# ── FormatterConfig: unknown key raises an error ──────────────────────────────
+statement error
+SELECT duckdb_format_sql('select 1', MAP {'bad_key': 'x'})
+----
+duckdb_format_sql: unknown config key 'bad_key'
+
+# ── Empty string returns empty string ────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('')
+----
+(empty)
+
+# ── NULL input propagates NULL ────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql(NULL)
+----
+NULL
