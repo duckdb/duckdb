@@ -8,17 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/bitset.hpp"
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/vector_type.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/type_util.hpp"
-#include "duckdb/common/vector/unified_vector_format.hpp"
 
 namespace duckdb {
 
