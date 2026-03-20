@@ -191,5 +191,54 @@
         "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
     ]
+  },
+  {
+    "class": "InsertQueryNode",
+    "base": "QueryNode",
+    "enum": "INSERT_QUERY_NODE",
+    "members": [
+      {
+        "id": 200,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "default_values",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 203,
+        "name": "column_order",
+        "type": "InsertColumnOrder",
+        "default": "InsertColumnOrder::INSERT_BY_POSITION"
+      },
+      {
+        "id": 204,
+        "name": "select_statement",
+        "type": "SelectStatement*"
+      },
+      {
+        "id": 205,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 206,
+        "name": "on_conflict_info",
+        "type": "OnConflictInfo*"
+      },
+      {
+        "id": 207,
+        "name": "table_ref",
+        "type": "TableRef*"
+      }
+    ]
   }
 ]

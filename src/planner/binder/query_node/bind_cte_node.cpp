@@ -37,6 +37,9 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	case QueryNodeType::STATEMENT_NODE:
 		result = current_binder.get().BindNode(node.Cast<StatementNode>());
 		break;
+	case QueryNodeType::INSERT_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<InsertQueryNode>());
+		break;
 	default:
 		throw InternalException("Unsupported query node type");
 	}

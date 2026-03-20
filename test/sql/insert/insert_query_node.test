@@ -1,0 +1,120 @@
+# name: test/sql/insert/insert_query_node.test
+# description: Test InsertQueryNode — INSERT as a QueryNode (verification, ON CONFLICT, RETURNING, schema-qualified)
+# group: [insert]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER);
+
+# Basic insert
+statement ok
+INSERT INTO t VALUES (1, 10);
+
+query II
+SELECT id, v FROM t ORDER BY id;
+----
+1	10
+
+# INSERT with column list
+statement ok
+INSERT INTO t(id, v) VALUES (2, 20);
+
+query II
+SELECT id, v FROM t ORDER BY id;
+----
+1	10
+2	20
+
+# INSERT ... SELECT
+statement ok
+INSERT INTO t SELECT 3, 30;
+
+query II
+SELECT id, v FROM t ORDER BY id;
+----
+1	10
+2	20
+3	30
+
+# INSERT with RETURNING
+query I
+INSERT INTO t VALUES (4, 40) RETURNING id;
+----
+4
+
+# ON CONFLICT DO NOTHING
+statement ok
+INSERT INTO t VALUES (1, 99) ON CONFLICT DO NOTHING;
+
+query II
+SELECT id, v FROM t WHERE id = 1;
+----
+1	10
+
+# ON CONFLICT DO UPDATE SET
+statement ok
+INSERT INTO t VALUES (2, 99) ON CONFLICT (id) DO UPDATE SET v = excluded.v;
+
+query II
+SELECT id, v FROM t WHERE id = 2;
+----
+2	99
+
+# ON CONFLICT DO UPDATE with WHERE condition on excluded
+statement ok
+INSERT INTO t VALUES (3, 999) ON CONFLICT (id) DO UPDATE SET v = excluded.v WHERE excluded.v > 100;
+
+query II
+SELECT id, v FROM t WHERE id = 3;
+----
+3	999
+
+# ON CONFLICT DO UPDATE with WHERE condition that prevents update
+statement ok
+INSERT INTO t VALUES (4, 1) ON CONFLICT (id) DO UPDATE SET v = excluded.v WHERE excluded.v > 100;
+
+query II
+SELECT id, v FROM t WHERE id = 4;
+----
+4	40
+
+# INSERT DEFAULT VALUES
+statement ok
+CREATE TABLE t2 (id INTEGER DEFAULT 42, v INTEGER DEFAULT 7);
+
+statement ok
+INSERT INTO t2 DEFAULT VALUES;
+
+query II
+SELECT id, v FROM t2;
+----
+42	7
+
+# Schema-qualified insert
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TABLE s1.tbl (x INTEGER);
+
+statement ok
+INSERT INTO s1.tbl VALUES (1);
+
+query I
+SELECT x FROM s1.tbl;
+----
+1
+
+# INSERT BY NAME
+statement ok
+CREATE TABLE t3 (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t3 BY NAME SELECT 2 AS b, 1 AS a;
+
+query II
+SELECT a, b FROM t3;
+----
+1	2

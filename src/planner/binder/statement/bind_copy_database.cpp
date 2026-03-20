@@ -57,9 +57,11 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		auto &table = table_ref.get().Cast<TableCatalogEntry>();
 		// generate the insert statement
 		InsertStatement insert_stmt;
-		insert_stmt.catalog = target_database_name;
-		insert_stmt.schema = table.ParentSchema().name;
-		insert_stmt.table = table.name;
+		auto target_ref = make_uniq<BaseTableRef>();
+		target_ref->catalog_name = target_database_name;
+		target_ref->schema_name = table.ParentSchema().name;
+		target_ref->table_name = table.name;
+		insert_stmt.node->table = std::move(target_ref);
 
 		auto from_tbl = make_uniq<BaseTableRef>();
 		from_tbl->catalog_name = source_catalog.GetName();
@@ -77,7 +79,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		auto select_stmt = make_uniq<SelectStatement>();
 		select_stmt->node = std::move(select_node);
 
-		insert_stmt.select_statement = std::move(select_stmt);
+		insert_stmt.node->select_statement = std::move(select_stmt);
 		auto bound_insert = Bind(insert_stmt);
 		auto insert_plan = std::move(bound_insert.plan);
 		insert_nodes.push_back(std::move(insert_plan));

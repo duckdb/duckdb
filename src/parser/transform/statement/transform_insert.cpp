@@ -1,4 +1,6 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -44,28 +46,33 @@ InsertColumnOrder Transformer::TransformColumnOrder(duckdb_libpgquery::PGInsertC
 
 unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt) {
 	auto result = make_uniq<InsertStatement>();
+	auto &node = *result->node;
+
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node.cte_map);
 	}
 
 	// first check if there are any columns specified
 	if (stmt.cols) {
-		result->columns = TransformInsertColumns(*stmt.cols);
+		node.columns = TransformInsertColumns(*stmt.cols);
 	}
 
 	// Grab and transform the returning columns from the parser.
 	if (stmt.returningList) {
-		TransformExpressionList(*stmt.returningList, result->returning_list);
+		TransformExpressionList(*stmt.returningList, node.returning_list);
 	}
 	if (stmt.selectStmt) {
-		result->select_statement = TransformSelectStmt(*stmt.selectStmt, false);
+		node.select_statement = TransformSelectStmt(*stmt.selectStmt, false);
 	} else {
-		result->default_values = true;
+		node.default_values = true;
 	}
 
 	auto qname = TransformQualifiedName(*stmt.relation);
-	result->table = qname.name;
-	result->schema = qname.schema;
+	auto table_ref = make_uniq<BaseTableRef>();
+	table_ref->table_name = qname.name;
+	table_ref->schema_name = qname.schema;
+	table_ref->catalog_name = qname.catalog;
+	node.table = std::move(table_ref);
 
 	if (stmt.onConflictClause) {
 		if (stmt.onConflictAlias != duckdb_libpgquery::PG_ONCONFLICT_ALIAS_NONE) {
@@ -73,16 +80,15 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
 			                      "the first if you want to have more granual control");
 		}
-		result->on_conflict_info = TransformOnConflictClause(stmt.onConflictClause, result->schema);
-		result->table_ref = TransformRangeVar(*stmt.relation);
+		node.on_conflict_info = TransformOnConflictClause(stmt.onConflictClause, qname.schema);
+		node.table_ref = TransformRangeVar(*stmt.relation);
 	}
 	if (stmt.onConflictAlias != duckdb_libpgquery::PG_ONCONFLICT_ALIAS_NONE) {
 		D_ASSERT(!stmt.onConflictClause);
-		result->on_conflict_info = DummyOnConflictClause(stmt.onConflictAlias, result->schema);
-		result->table_ref = TransformRangeVar(*stmt.relation);
+		node.on_conflict_info = DummyOnConflictClause(stmt.onConflictAlias, qname.schema);
+		node.table_ref = TransformRangeVar(*stmt.relation);
 	}
-	result->column_order = TransformColumnOrder(stmt.insert_column_order);
-	result->catalog = qname.catalog;
+	node.column_order = TransformColumnOrder(stmt.insert_column_order);
 	return result;
 }
 

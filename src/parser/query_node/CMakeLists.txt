@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   recursive_cte_node.cpp
   cte_node.cpp
+  insert_query_node.cpp
   select_node.cpp
   set_operation_node.cpp
   statement_node.cpp)

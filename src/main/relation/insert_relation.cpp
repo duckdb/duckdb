@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -24,10 +25,12 @@ BoundStatement InsertRelation::Bind(Binder &binder) {
 	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
-	stmt.catalog = catalog_name;
-	stmt.schema = schema_name;
-	stmt.table = table_name;
-	stmt.select_statement = std::move(select);
+	auto table_ref = make_uniq<BaseTableRef>();
+	table_ref->catalog_name = catalog_name;
+	table_ref->schema_name = schema_name;
+	table_ref->table_name = table_name;
+	stmt.node->table = std::move(table_ref);
+	stmt.node->select_statement = std::move(select);
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 

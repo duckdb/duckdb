@@ -82,8 +82,16 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
-	case StatementType::INSERT_STATEMENT:
-		return BindWithCTE(statement.Cast<InsertStatement>());
+	case StatementType::INSERT_STATEMENT: {
+		auto &insert = statement.Cast<InsertStatement>();
+		auto &cte_map = insert.node->cte_map;
+		if (cte_map.map.empty()) {
+			return Bind(insert);
+		}
+		auto stmt_node = make_uniq<StatementNode>(insert);
+		stmt_node->cte_map = cte_map.Copy();
+		return Bind(*stmt_node);
+	}
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:

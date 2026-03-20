@@ -445,7 +445,7 @@ unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &c
 CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::INSERT_STATEMENT:
-		return statement.Cast<InsertStatement>().cte_map;
+		return statement.Cast<InsertStatement>().node->cte_map;
 	case StatementType::DELETE_STATEMENT:
 		return statement.Cast<DeleteStatement>().cte_map;
 	case StatementType::UPDATE_STATEMENT:

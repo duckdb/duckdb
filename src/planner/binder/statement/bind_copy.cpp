@@ -371,10 +371,12 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	// COPY FROM a file
 	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;
-	insert.table = stmt.info->table;
-	insert.schema = stmt.info->schema;
-	insert.catalog = stmt.info->catalog;
-	insert.columns = stmt.info->select_list;
+	auto table_ref = make_uniq<BaseTableRef>();
+	table_ref->table_name = stmt.info->table;
+	table_ref->schema_name = stmt.info->schema;
+	table_ref->catalog_name = stmt.info->catalog;
+	insert.node->table = std::move(table_ref);
+	insert.node->columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);

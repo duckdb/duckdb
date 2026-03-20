@@ -24,6 +24,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	case QueryNodeType::CTE_NODE:
 		result = CTENode::Deserialize(deserializer);
 		break;
+	case QueryNodeType::INSERT_QUERY_NODE:
+		result = InsertQueryNode::Deserialize(deserializer);
+		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = RecursiveCTENode::Deserialize(deserializer);
 		break;
@@ -60,6 +63,31 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "child", result->child);
 	deserializer.ReadPropertyWithDefault<vector<string>>(203, "aliases", result->aliases);
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(204, "materialized", result->materialized, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	return std::move(result);
+}
+
+void InsertQueryNode::Serialize(Serializer &serializer) const {
+	QueryNode::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "table", table);
+	serializer.WritePropertyWithDefault<vector<string>>(201, "columns", columns);
+	serializer.WritePropertyWithDefault<bool>(202, "default_values", default_values, false);
+	serializer.WritePropertyWithDefault<InsertColumnOrder>(203, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(204, "select_statement", select_statement);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
+	serializer.WritePropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", on_conflict_info);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
+}
+
+unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "table", result->table);
+	deserializer.ReadPropertyWithDefault<vector<string>>(201, "columns", result->columns);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(202, "default_values", result->default_values, false);
+	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(203, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(204, "select_statement", result->select_statement);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", result->returning_list);
+	deserializer.ReadPropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", result->on_conflict_info);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	return std::move(result);
 }
 

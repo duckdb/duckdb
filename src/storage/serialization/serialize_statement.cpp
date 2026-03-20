@@ -6,8 +6,26 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 
 namespace duckdb {
+
+void OnConflictInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<OnConflictAction>(100, "action_type", action_type);
+	serializer.WritePropertyWithDefault<vector<string>>(101, "indexed_columns", indexed_columns);
+	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "set_info", set_info);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(103, "condition", condition);
+}
+
+unique_ptr<OnConflictInfo> OnConflictInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<OnConflictInfo>(new OnConflictInfo());
+	deserializer.ReadProperty<OnConflictAction>(100, "action_type", result->action_type);
+	deserializer.ReadPropertyWithDefault<vector<string>>(101, "indexed_columns", result->indexed_columns);
+	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "set_info", result->set_info);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(103, "condition", result->condition);
+	return result;
+}
 
 void SelectStatement::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);
@@ -18,6 +36,20 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deseriali
 	auto result = duckdb::unique_ptr<SelectStatement>(new SelectStatement());
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node", result->node);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
+	return result;
+}
+
+void UpdateSetInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(100, "condition", condition);
+	serializer.WritePropertyWithDefault<vector<string>>(101, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "expressions", expressions);
+}
+
+unique_ptr<UpdateSetInfo> UpdateSetInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<UpdateSetInfo>(new UpdateSetInfo());
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(100, "condition", result->condition);
+	deserializer.ReadPropertyWithDefault<vector<string>>(101, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "expressions", result->expressions);
 	return result;
 }
 

@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
@@ -302,6 +303,33 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		auto &setop_node = node.Cast<SetOperationNode>();
 		for (auto &child : setop_node.children) {
 			EnumerateQueryNodeChildren(*child, expr_callback, ref_callback);
+		}
+		break;
+	}
+	case QueryNodeType::INSERT_QUERY_NODE: {
+		auto &ins_node = node.Cast<InsertQueryNode>();
+		if (ins_node.select_statement) {
+			EnumerateQueryNodeChildren(*ins_node.select_statement->node, expr_callback, ref_callback);
+		}
+		for (auto &expr : ins_node.returning_list) {
+			expr_callback(expr);
+		}
+		if (ins_node.on_conflict_info) {
+			auto &oci = *ins_node.on_conflict_info;
+			if (oci.condition) {
+				expr_callback(oci.condition);
+			}
+			if (oci.set_info) {
+				for (auto &expr : oci.set_info->expressions) {
+					expr_callback(expr);
+				}
+				if (oci.set_info->condition) {
+					expr_callback(oci.set_info->condition);
+				}
+			}
+		}
+		if (ins_node.table_ref) {
+			EnumerateTableRefChildren(*ins_node.table_ref, expr_callback, ref_callback);
 		}
 		break;
 	}
