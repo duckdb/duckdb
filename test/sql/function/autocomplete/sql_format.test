@@ -206,6 +206,27 @@ SELECT duckdb_format_sql('select 1', MAP {'bad_key': 'x'})
 ----
 duckdb_format_sql: unknown config key 'bad_key'
 
+# ── Unicode / grapheme-cluster handling ──────────────────────────────────────
+# inline_threshold is measured in terminal render columns, not bytes.
+# The duck emoji 🦆 is 4 bytes but only 2 render columns.
+# The pirate flag 🏴‍☠️ is a ZWJ sequence: 13 bytes, 2 render columns.
+# Both fit easily within the default threshold.
+query I
+SELECT duckdb_format_sql('select ''🦆'', ''🏴‍☠️'' from t') = $$SELECT '🦆', '🏴‍☠️'
+FROM t$$
+----
+true
+
+# With a threshold of 15 render columns:
+#   SELECT '🏴‍☠️'  →  7 + 1 + 2 + 1 = 11 render cols  ≤ 15  → inline
+#   byte count of the same string = 7 + 1 + 13 + 1 = 22  >  15
+# A byte-counting threshold would fail to inline this; render-width inlines it.
+query I
+SELECT duckdb_format_sql('select ''🏴‍☠️'' from t', MAP {'inline_threshold': '15'}) = $$SELECT '🏴‍☠️'
+FROM t$$
+----
+true
+
 # ── Empty string returns empty string ────────────────────────────────────────
 query I
 SELECT duckdb_format_sql('')

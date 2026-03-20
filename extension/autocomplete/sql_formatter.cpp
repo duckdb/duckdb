@@ -11,6 +11,7 @@
 #include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "matcher.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <unordered_set>
 
@@ -508,7 +509,7 @@ static string MergeShortClauses(const string &formatted, const FormatterConfig &
 					flat += TrimLeft(lines[k]);
 				}
 				string merged = string(clause_ind, ' ') + trimmed + ' ' + flat;
-				if (merged.size() <= config.inline_threshold) {
+				if (Utf8Proc::RenderWidth(merged) <= config.inline_threshold) {
 					out.push_back(std::move(merged));
 					i = content_end;
 					continue;
@@ -623,7 +624,7 @@ static string CollapseFirstCondition(const string &formatted, const FormatterCon
 		// Check that the first predicate fits on the WHERE line.
 		const string first_content = TrimLeft(lines[i + 1]);
 		const string merged_first = string(clause_ind, ' ') + trimmed + ' ' + first_content;
-		if (merged_first.size() > config.inline_threshold) {
+		if (Utf8Proc::RenderWidth(merged_first) > config.inline_threshold) {
 			out.push_back(line);
 			i++;
 			continue;
