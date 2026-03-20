@@ -1,3 +1,12 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index 239d546..56265b5 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/index/rtree/rtree_index.hpp"
+ 
+ #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
 index 263d413..63d35f1 100644
 --- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
@@ -11,6 +20,15 @@ index 263d413..63d35f1 100644
  
  	// Visit the operator's expressions
  	LogicalOperatorVisitor::EnumerateExpressions(*this,
+diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+index bc4134a..87abe50 100644
+--- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/index/rtree/rtree_index_create_physical.hpp"
+ #include "spatial/index/rtree/rtree_index.hpp"
+ #include "spatial/index/rtree/rtree_node.hpp"
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 index 3b37ca8..fa54ae8 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
@@ -135,6 +153,15 @@ index 3b37ca8..fa54ae8 100644
  		}
  		new_filter->children.push_back(std::move(get_ptr));
  		new_filter->ResolveOperatorTypes();
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index a0e5397..2f45551 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/spatial_types.hpp"
+ #include "spatial/index/rtree/rtree_index.hpp"
+ #include "spatial/index/rtree/rtree_module.hpp"
 diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
 index d111f0b..84f49f4 100644
 --- a/src/spatial/modules/geos/geos_module.cpp
@@ -148,10 +175,12 @@ index d111f0b..84f49f4 100644
  #include "spatial/geometry/sgl.hpp"
  
 diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
-index 8dd850a..1323a04 100644
+index 8dd850a..dabdaf0 100644
 --- a/src/spatial/modules/main/spatial_functions_table.cpp
 +++ b/src/spatial/modules/main/spatial_functions_table.cpp
-@@ -2,6 +2,7 @@
+@@ -1,7 +1,9 @@
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/geometry/bbox.hpp"
  #include "spatial/modules/main/spatial_functions.hpp"
  #include "spatial/spatial_types.hpp"
  #include "spatial/util/function_builder.hpp"
@@ -171,6 +200,25 @@ index 6039454..0ec562b 100644
  #include "spatial/geometry/geometry_serialization.hpp"
  #include "spatial/geometry/sgl.hpp"
  #include "spatial/spatial_types.hpp"
+diff --git a/src/spatial/modules/osm/osm_module.cpp b/src/spatial/modules/osm/osm_module.cpp
+index 26e4bc3..bc8bb83 100644
+--- a/src/spatial/modules/osm/osm_module.cpp
++++ b/src/spatial/modules/osm/osm_module.cpp
+@@ -1,3 +1,5 @@
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/modules/osm/osm_module.hpp"
+ 
+ #include "duckdb/function/replacement_scan.hpp"
+diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
+index 57b34d0..6b40de3 100644
+--- a/src/spatial/modules/shapefile/shapefile_module.cpp
++++ b/src/spatial/modules/shapefile/shapefile_module.cpp
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/modules/shapefile/shapefile_module.hpp"
+ #include "spatial/geometry/geometry_serialization.hpp"
+ #include "spatial/geometry/sgl.hpp"
 diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
 index 0e5c07c..48596c5 100644
 --- a/src/spatial/operators/spatial_join_logical.cpp
@@ -289,10 +337,15 @@ index e46d5ad..f660a78 100644
  	spatial_join->has_estimated_cardinality = any_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = any_join.estimated_cardinality;
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index 5738f83..4b88fdd 100644
+index 5738f83..b5b4a26 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
-@@ -426,14 +426,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "spatial/operators/spatial_join_physical.hpp"
+ #include "spatial/operators/spatial_join_logical.hpp"
+ #include "spatial/geometry/sgl.hpp"
+@@ -426,14 +427,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
  
  	// Probe-side
  	const auto &probe_side_input_types = children[0].get().types;
@@ -308,7 +361,7 @@ index 5738f83..4b88fdd 100644
  	for (const auto &probe_col_idx : probe_side_output_columns) {
  		const auto type = probe_side_input_types[probe_col_idx];
  		probe_side_output_types.push_back(type);
-@@ -452,14 +445,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+@@ -452,14 +446,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
  	build_side_key_types.push_back(build_side_key->return_type);
  
  	const auto &build_side_input_types = children[1].get().types;
