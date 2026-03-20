@@ -1204,7 +1204,6 @@ public:
 			// wrap all JSON objects in an array
 			out.Print("[");
 		}
-		out.Print("{");
 	}
 
 	bool RequiresQuotes(const duckdb::LogicalType &type) {
@@ -1228,8 +1227,9 @@ public:
 				// wrap all JSON objects in an array
 				out.Print(",");
 			}
-			out.Print("\n{");
+			out.Print("\n");
 		}
+		out.Print("{");
 		auto &data = row.data;
 		auto &is_null = row.is_null;
 		auto &types = result.types;
