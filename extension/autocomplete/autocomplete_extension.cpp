@@ -990,12 +990,13 @@ struct FormatSQLBindData : public FunctionData {
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<FormatSQLBindData>();
 		return config.indent_size == other.config.indent_size &&
-		       config.inline_threshold == other.config.inline_threshold;
+		       config.inline_threshold == other.config.inline_threshold &&
+		       config.keyword_case == other.config.keyword_case;
 	}
 };
 
 //! Parse the MAP(VARCHAR, VARCHAR) config argument and populate FormatterConfig.
-//! Recognised keys: "indent_size", "inline_threshold".
+//! Recognised keys: "indent_size", "inline_threshold", "keyword_case".
 static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
 	FormatterConfig config;
 	if (arguments.size() < 2) {
@@ -1017,6 +1018,18 @@ static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<uniqu
 			config.indent_size = std::stoull(val_str);
 		} else if (key == "inline_threshold") {
 			config.inline_threshold = std::stoull(val_str);
+		} else if (key == "keyword_case") {
+			const string kc = StringUtil::Lower(val_str);
+			if (kc == "upper") {
+				config.keyword_case = KeywordCase::UPPER;
+			} else if (kc == "lower") {
+				config.keyword_case = KeywordCase::LOWER;
+			} else if (kc == "preserve") {
+				config.keyword_case = KeywordCase::PRESERVE;
+			} else {
+				throw InvalidInputException(
+				    "duckdb_format_sql: keyword_case must be 'upper', 'lower', or 'preserve'; got '%s'", val_str);
+			}
 		} else {
 			throw InvalidInputException("duckdb_format_sql: unknown config key '%s'", key);
 		}

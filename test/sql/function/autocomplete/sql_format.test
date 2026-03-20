@@ -53,10 +53,10 @@ true
 query I
 SELECT duckdb_format_sql('WITH cte AS (SELECT id FROM users WHERE active = 1) SELECT id FROM cte GROUP BY id HAVING count(*) > 5') = $$WITH
     cte AS (
-    SELECT id
-    FROM users
-    WHERE active = 1
-)
+        SELECT id
+        FROM users
+        WHERE active = 1
+    )
 SELECT id
 FROM cte
 GROUP BY id
@@ -71,10 +71,10 @@ SELECT duckdb_format_sql('select id from orders where customer_id in (select id 
 FROM orders
 WHERE
     customer_id IN (
-    SELECT id
-    FROM customers
-    WHERE active = 1
-)
+        SELECT id
+        FROM customers
+        WHERE active = 1
+    )
     AND amount > 100$$
 ----
 true
@@ -126,14 +126,13 @@ WHERE a = 1 AND b = 2 OR c = 3$$
 ----
 true
 
-# ── AND / OR: long WHERE stays multiline with AND/OR on own lines ─────────────
+# ── AND / OR: long WHERE — first predicate on WHERE line, conjunctions at +2 ──
 query I
 SELECT duckdb_format_sql('select 1 from t where some_long_column_name = 1 and another_long_column = 2 or yet_another_column = 3') = $$SELECT 1
 FROM t
-WHERE
-    some_long_column_name = 1
-    AND another_long_column = 2
-    OR yet_another_column = 3$$
+WHERE some_long_column_name = 1
+  AND another_long_column = 2
+  OR yet_another_column = 3$$
 ----
 true
 
@@ -170,6 +169,36 @@ FROM
     long_table_name$$
 ----
 true
+
+# ── keyword_case = lower ──────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM t WHERE x = 1', MAP {'keyword_case': 'lower'}) = $$select a
+from t
+where x = 1$$
+----
+true
+
+# ── keyword_case = preserve ───────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('Select A From T Where X = 1', MAP {'keyword_case': 'preserve'}) = $$Select A
+From T
+Where X = 1$$
+----
+true
+
+# ── keyword_case = upper (explicit, same as default) ─────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t where x = 1', MAP {'keyword_case': 'upper'}) = $$SELECT a
+FROM t
+WHERE x = 1$$
+----
+true
+
+# ── keyword_case: invalid value raises an error ───────────────────────────────
+statement error
+SELECT duckdb_format_sql('select 1', MAP {'keyword_case': 'mixed'})
+----
+duckdb_format_sql: keyword_case must be 'upper', 'lower', or 'preserve'
 
 # ── FormatterConfig: unknown key raises an error ──────────────────────────────
 statement error
