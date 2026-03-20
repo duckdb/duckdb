@@ -30,5 +30,4 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	return Bind(stmt);
 }
 
-
 } // namespace duckdb

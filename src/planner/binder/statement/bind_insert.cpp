@@ -72,7 +72,8 @@ void Binder::ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry 
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
-		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.node->columns.empty(), table.name);
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.node->columns.empty(),
+		                               table.name);
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -571,7 +572,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		return result;
 	}
 	// Exclude the generated columns from this amount
-	idx_t expected_columns = stmt.node->columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.node->columns.size();
+	idx_t expected_columns =
+	    stmt.node->columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.node->columns.size();
 	ExpandDefaultInValuesList(stmt, table, values_list, named_column_map);
 
 	// parse select statement and add to logical plan
@@ -583,7 +585,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			MoveCorrelatedExpressions(*select_binder);
 		}
 		// inserting from a select - check if the column count matches
-		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.node->columns.empty(), table.name);
+		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.node->columns.empty(),
+		                               table.name);
 
 		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 	} else {
@@ -597,8 +600,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		insert->table_index = insert_table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
-		return BindReturning(std::move(stmt.node->returning_list), table, stmt.node->table_ref ? stmt.node->table_ref->alias : string(),
-		                     insert_table_index, std::move(index_as_logicaloperator));
+		return BindReturning(std::move(stmt.node->returning_list), table,
+		                     stmt.node->table_ref ? stmt.node->table_ref->alias : string(), insert_table_index,
+		                     std::move(index_as_logicaloperator));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());
