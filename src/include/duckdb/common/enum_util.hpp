@@ -458,6 +458,8 @@ enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionInvalidationPolicy : uint8_t;
+
 enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
@@ -1141,6 +1143,9 @@ const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
+
+template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
@@ -1847,6 +1852,9 @@ ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);
 
 template<>
 TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);

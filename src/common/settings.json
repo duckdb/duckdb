@@ -208,6 +208,17 @@
         ]
     },
     {
+        "name": "current_transaction_invalidation_policy",
+        "description": "Which types of exceptions invalidate the database for the current transaction",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "default_value": "STANDARD_POLICY",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
