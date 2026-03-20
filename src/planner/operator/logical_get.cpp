@@ -39,12 +39,24 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	for (auto &kv : table_filters) {
 		auto filter_idx = kv.GetIndex();
 		auto &filter = kv.Filter();
-		if (filter_idx < names.size()) {
+		auto &col_id_entry = column_ids[filter_idx];
+		const auto col_id = col_id_entry.GetPrimaryIndex();
+		if (col_id_entry.IsVirtualColumn()) {
+			auto entry = virtual_columns.find(col_id);
+			if (entry != virtual_columns.end()) {
+				if (!first_item) {
+					filters_info += "\n";
+				}
+				first_item = false;
+				filters_info += filter.ToString(entry->second.name);
+			}
+		} else if (col_id < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
+			auto column_name = col_id_entry.GetName(names[col_id]);
 			first_item = false;
-			filters_info += filter.ToString(names[filter_idx]);
+			filters_info += filter.ToString(column_name);
 		}
 	}
 	result["Filters"] = filters_info;
