@@ -24,6 +24,8 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"max_test_threads", "Max threads to be used by the test runner itself (for e.g. concurrent loop)",
+     LogicalType::BIGINT, nullptr},
     {"base_config", "Config file to load and base initial settings on", LogicalType::VARCHAR,
      TestConfiguration::LoadBaseConfig},
     {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
@@ -451,6 +453,10 @@ string TestConfiguration::GetInitialDBPath() {
 
 optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
+}
+
+optional_idx TestConfiguration::GetMaxTestThreads() {
+	return GetOptionOrDefault<optional_idx, idx_t>("max_test_threads", optional_idx());
 }
 
 optional_idx TestConfiguration::GetBlockAllocSize() {
