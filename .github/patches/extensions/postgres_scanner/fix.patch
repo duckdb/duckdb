@@ -1,3 +1,16 @@
+diff --git a/src/include/postgres_binary_writer.hpp b/src/include/postgres_binary_writer.hpp
+index fef2faf..0fa8bfa 100644
+--- a/src/include/postgres_binary_writer.hpp
++++ b/src/include/postgres_binary_writer.hpp
+@@ -11,6 +11,8 @@
+ #include "duckdb.hpp"
+ #include "duckdb/common/types/interval.hpp"
+ #include "duckdb/common/serializer/memory_stream.hpp"
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
+ #include "postgres_conversion.hpp"
+ 
+ namespace duckdb {
 diff --git a/src/include/postgres_filter_pushdown.hpp b/src/include/postgres_filter_pushdown.hpp
 index d3dc0b6..471bc4c 100644
 --- a/src/include/postgres_filter_pushdown.hpp
