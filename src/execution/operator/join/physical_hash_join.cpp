@@ -1004,7 +1004,12 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 		return false;
 	}
 
-	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
+	const auto &key_type = ht->conditions[0].GetLHS().return_type;
+	if (key_type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(key_type).empty()) {
+		return false;
+	}
+
+	return PrefixRangeTableFilter::SupportedType(key_type);
 }
 
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,

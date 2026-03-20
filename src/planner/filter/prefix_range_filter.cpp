@@ -15,6 +15,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 
@@ -211,6 +212,207 @@ bool ComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t 
 	}
 }
 
+bool ComputeStringPrefixSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result) {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+	return false;
+#else
+	auto lb_value = lower_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
+	auto ub_value = upper_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
+	result = Uhugeint::Convert(static_cast<uint64_t>(ub_value - lb_value));
+	return true;
+#endif
+}
+
+class StringPrefixRangeFilter : public PrefixRangeFilter {
+private:
+	struct StringBuildState : public PrefixRangeFilter::BuildState {
+		explicit StringBuildState(AllocatedData data_p, uint64_t *bitmap_p, idx_t word_count_p)
+		    : data(std::move(data_p)), bitmap(bitmap_p), word_count(word_count_p) {
+		}
+
+		AllocatedData data;
+		uint64_t *bitmap;
+		idx_t word_count;
+	};
+
+public:
+	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
+		D_ASSERT(min_val <= max_val);
+		D_ASSERT(number_of_rows > 0);
+		min = min_val.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
+		span = max_val.GetValueUnsafe<string_t>().GetPrefixIntegerComparable() - min;
+		shift = 0;
+
+		if (span >= CAP_BITS) {
+			const auto q = static_cast<uint64_t>((span) >> MAX_PREFIX_LENGTH);
+			shift = (q <= 1) ? 0 : (64 - CountZeros<uint64_t>::Leading(q - 1));
+		}
+
+		const idx_t buckets = (span >> shift) + 1;
+		word_count = buckets == 0 ? 1 : (buckets + 63) >> WORD_SHIFT;
+
+		buf_ = AllocateBitmap(context, word_count, bitmap);
+		initialized = false;
+	}
+
+	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
+		D_ASSERT(bitmap);
+		uint64_t *state_bitmap;
+		auto state_data = AllocateBitmap(context, word_count, state_bitmap);
+
+		return make_uniq<StringBuildState>(std::move(state_data), state_bitmap, word_count);
+	}
+
+	void InsertKeys(Vector &keys, idx_t count, BuildState &state_p) const override {
+		auto &state = static_cast<StringBuildState &>(state_p);
+		UnifiedVectorFormat vector_data;
+		keys.ToUnifiedFormat(count, vector_data);
+		const auto key_data = UnifiedVectorFormat::GetData<const string_t>(vector_data);
+		const auto &validity_mask = vector_data.validity;
+
+		if (validity_mask.AllValid()) {
+			for (idx_t i = 0; i < count; i++) {
+				const idx_t data_idx = vector_data.sel->get_index(i);
+				const auto key = key_data[data_idx].GetPrefixIntegerComparable();
+				const auto idx = (key - min) >> shift;
+				state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				const auto data_idx = vector_data.sel->get_index(i);
+				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
+					continue;
+				}
+				const auto key = key_data[data_idx].GetPrefixIntegerComparable();
+				const auto idx = (key - min) >> shift;
+				state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
+			}
+		}
+	}
+
+	void MergeBuildState(BuildState &state_p) override {
+		auto &state = static_cast<StringBuildState &>(state_p);
+		for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
+			bitmap[word_idx] |= state.bitmap[word_idx];
+		}
+		initialized = true;
+	}
+
+	idx_t LookupOne(const string_t &k) const {
+		const auto key = k.GetPrefixIntegerComparable();
+		const auto y = key - min;
+		const auto bit_idx = y >> shift;
+		const uint8_t in_range = y <= span;
+		const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
+		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
+		return bit & in_range;
+	}
+
+	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
+		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return LookupOneValue(keys.GetValue(0)) ? count : 0;
+		}
+
+		UnifiedVectorFormat vector_data;
+		keys.ToUnifiedFormat(count, vector_data);
+		const auto data = UnifiedVectorFormat::GetData<const string_t>(vector_data);
+		const auto &validity_mask = vector_data.validity;
+
+		idx_t found_count = 0;
+		if (validity_mask.AllValid()) {
+			for (idx_t i = 0; i < count; i++) {
+				result_sel.set_index(found_count, i);
+				const auto data_idx = vector_data.sel->get_index(i);
+				found_count += LookupOne(data[data_idx]);
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				const auto data_idx = vector_data.sel->get_index(i);
+				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
+					continue;
+				}
+				result_sel.set_index(found_count, i);
+				found_count += LookupOne(data[data_idx]);
+			}
+		}
+
+		return found_count;
+	}
+
+	bool LookupOneValue(const Value &key) const override {
+		if (key.IsNull()) {
+			return false;
+		}
+		return LookupOne(key.GetValueUnsafe<string_t>());
+	}
+
+	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
+		const auto lb = lower_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
+		const auto ub = upper_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
+
+		const auto max = min + span;
+		if (ub < min || lb > max) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+
+		const auto adjusted_lb = MaxValue<uint32_t>(lb, min);
+		const auto adjusted_ub = MinValue<uint32_t>(ub, max);
+
+		const auto lb_bit_idx = (adjusted_lb - min) >> shift;
+		const auto lb_word_idx = lb_bit_idx >> WORD_SHIFT;
+
+		const auto ub_bit_idx = (adjusted_ub - min) >> shift;
+		const auto ub_word_idx = ub_bit_idx >> WORD_SHIFT;
+
+		const auto lb_bit_off = lb_bit_idx & WORD_MASK;
+		const auto ub_bit_off = ub_bit_idx & WORD_MASK;
+
+		if (lb_word_idx == ub_word_idx) {
+			const auto range_mask = ((~0ULL << lb_bit_off) & (~0ULL >> (WORD_MASK - ub_bit_off)));
+			if (bitmap[lb_word_idx] & range_mask) {
+				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+
+		const auto lb_word_mask = (~0ULL << lb_bit_off);
+		if (bitmap[lb_word_idx] & lb_word_mask) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+
+		for (idx_t i = static_cast<idx_t>(lb_word_idx) + 1; i < static_cast<idx_t>(ub_word_idx); i++) {
+			if (bitmap[i]) {
+				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+		}
+
+		const auto ub_word_mask = ~0ULL >> (WORD_MASK - ub_bit_off);
+		if (bitmap[ub_word_idx] & ub_word_mask) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	bool IsInitialized() const override {
+		return initialized;
+	}
+
+private:
+	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
+	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
+	static constexpr idx_t WORD_SHIFT = 6;
+	static constexpr idx_t WORD_MASK = 63;
+
+	bool initialized = false;
+	uint32_t min;
+	uint32_t span;
+	idx_t shift;
+	idx_t word_count;
+	AllocatedData buf_;
+	uint64_t *bitmap;
+};
+
 } // namespace
 
 unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const LogicalType &key_type) {
@@ -231,6 +433,12 @@ unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const L
 		return make_uniq<NumericPrefixRangeFilter<int32_t>>();
 	case PhysicalType::INT64:
 		return make_uniq<NumericPrefixRangeFilter<int64_t>>();
+	case PhysicalType::VARCHAR:
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		throw NotImplementedException("Prefix range filter is not implemented for type %s", key_type.ToString());
+#else
+		return make_uniq<StringPrefixRangeFilter>();
+#endif
 	case PhysicalType::INT128:
 	case PhysicalType::UINT128:
 	default:
@@ -239,9 +447,6 @@ unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const L
 }
 
 bool PrefixRangeFilter::TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result) {
-	if (!TypeIsIntegral(lower_bound.type().InternalType())) {
-		return false;
-	}
 	if (lower_bound.type().InternalType() != upper_bound.type().InternalType()) {
 		return false;
 	}
@@ -263,6 +468,8 @@ bool PrefixRangeFilter::TryComputeSpan(const Value &lower_bound, const Value &up
 		return ComputeSpan<int32_t>(lower_bound, upper_bound, result);
 	case PhysicalType::INT64:
 		return ComputeSpan<int64_t>(lower_bound, upper_bound, result);
+	case PhysicalType::VARCHAR:
+		return ComputeStringPrefixSpan(lower_bound, upper_bound, result);
 	case PhysicalType::INT128:
 	case PhysicalType::UINT128:
 	default:
@@ -281,6 +488,12 @@ bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 		return true;
+	case PhysicalType::VARCHAR:
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		return false;
+#else
+		return true;
+#endif
 	case PhysicalType::INT128:
 	case PhysicalType::UINT128:
 	default:
@@ -346,13 +559,40 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 	if (!filter || !filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	D_ASSERT(stats.GetStatsType() == StatisticsType::NUMERIC_STATS);
-	if (!NumericStats::HasMinMax(stats)) {
+
+	switch (stats.GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
+		if (!NumericStats::HasMinMax(stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		break;
+	case StatisticsType::STRING_STATS:
+		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		break;
+	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	auto min = NumericStats::Min(stats);
-	auto max = NumericStats::Max(stats);
+	Value min;
+	Value max;
+	if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
+		// FIXME: This path should eventually use the raw StringStats min/max bytes directly.
+		// Materializing std::string bounds is conservative for embedded NUL bytes, so it may reduce pruning quality,
+		// but the HasMaxStringLength/CanHaveNoNull guard above ensures the stats are initialized and avoids the unknown
+		// sentinel values that are unsafe to materialize as VARCHAR.
+		if (key_type.id() == LogicalTypeId::BLOB) {
+			min = Value::BLOB_RAW(StringStats::Min(stats));
+			max = Value::BLOB_RAW(StringStats::Max(stats));
+		} else {
+			min = Value(StringStats::Min(stats));
+			max = Value(StringStats::Max(stats));
+		}
+	} else {
+		min = NumericStats::Min(stats);
+		max = NumericStats::Max(stats);
+	}
 	if (min > max) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

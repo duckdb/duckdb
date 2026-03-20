@@ -74,6 +74,33 @@ JOIN build_timestamp b
 analyzed_plan	<REGEX>:.*IN PRF\(k\).*
 
 statement ok
+CREATE OR REPLACE TABLE probe_varchar AS
+SELECT lpad((i // 3)::VARCHAR, 8, '0') AS k, (i % 7)::INTEGER AS g
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build_varchar AS
+SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 7)::INTEGER AS g
+FROM range(0, 30000) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_varchar p
+JOIN build_varchar b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+statement ok
+SELECT count(*)
+FROM probe_varchar p
+JOIN build_varchar b
+  ON p.k = b.k
+ AND p.g >= b.g;
+
+statement ok
 CREATE OR REPLACE TABLE probe_hugeint AS
 SELECT i::HUGEINT AS k, (i % 7)::INTEGER AS g
 FROM range(0, 100000) t(i);
@@ -184,6 +211,142 @@ statement ok
 SET disabled_optimizers = '';
 
 endloop
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string (
+	id INTEGER,
+	k VARCHAR,
+	g INTEGER
+);
+
+statement ok
+INSERT INTO prf_probe_string VALUES
+	(1, 'ab', 1),
+	(2, 'abc', 2),
+	(3, 'abcd0', 3),
+	(4, 'abcd1', 4),
+	(5, 'abcd9', 8),
+	(6, 'abce0', 5),
+	(7, '', 5),
+	(8, NULL, 1),
+	(9, 'zzzz', NULL),
+	(10, 'zzzzzz', 4);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string (
+	k VARCHAR,
+	g INTEGER,
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO prf_build_string VALUES
+	('ab', 0, 100),
+	('abc', 2, 101),
+	('abcd0', 4, 102),
+	('abcd1', 3, 103),
+	('abce0', 6, 104),
+	('', 6, 105),
+	('zzzzzz', 4, 106),
+	(NULL, 0, 107),
+	('abcd2', 1, 108);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string p
+JOIN prf_build_string b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query IIII
+SELECT p.id, p.k, p.g, b.payload
+FROM prf_probe_string p
+JOIN prf_build_string b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	ab	1	100
+2	abc	2	101
+4	abcd1	4	103
+10	zzzzzz	4	106
+
+statement ok
+SET disabled_optimizers = 'join_filter_pushdown';
+
+query IIII
+SELECT p.id, p.k, p.g, b.payload
+FROM prf_probe_string p
+JOIN prf_build_string b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	ab	1	100
+2	abc	2	101
+4	abcd1	4	103
+10	zzzzzz	4	106
+
+statement ok
+SET disabled_optimizers = '';
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string_nul (
+	id INTEGER,
+	k VARCHAR,
+	g INTEGER
+);
+
+statement ok
+INSERT INTO prf_probe_string_nul VALUES
+	(1, 'ab' || chr(0) || 'd', 2),
+	(2, 'ab' || chr(0) || 'x', 3),
+	(3, 'ab', 4),
+	(4, 'zzzz', 5);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_nul (
+	k VARCHAR,
+	g INTEGER,
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO prf_build_string_nul VALUES
+	('ab' || chr(0) || 'd', 1, 200),
+	('ab' || chr(0) || 'x', 4, 201),
+	('ab', 2, 202);
+
+query IIII
+SELECT p.id, hex(p.k), p.g, b.payload
+FROM prf_probe_string_nul p
+JOIN prf_build_string_nul b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	61620064	2	200
+3	6162	4	202
+
+statement ok
+SET disabled_optimizers = 'join_filter_pushdown';
+
+query IIII
+SELECT p.id, hex(p.k), p.g, b.payload
+FROM prf_probe_string_nul p
+JOIN prf_build_string_nul b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	61620064	2	200
+3	6162	4	202
+
+statement ok
+SET disabled_optimizers = '';
 
 statement ok
 CREATE OR REPLACE TABLE prf_probe_span (
