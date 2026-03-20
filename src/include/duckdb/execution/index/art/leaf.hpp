@@ -57,7 +57,7 @@ public:
 	//! Never pushes more than max_count row IDs.
 	static bool DeprecatedGetRowIds(ART &art, const NodePointer &node, set<row_t> &row_ids, const idx_t max_count);
 	//! Vacuums the linked list of leaves.
-	static void DeprecatedVacuum(ART &art, const unordered_set<uint8_t> &indexes, NodePointer node);
+	static void DeprecatedVacuum(ART &art, NodePointer node);
 
 	//! Traverses and verifies the linked list of leaves.
 	static void DeprecatedVerify(ART &art, const NodePointer &node);

@@ -1220,7 +1220,9 @@ void ART::Vacuum(IndexLock &state) {
 			return ScanNodeResult::SKIP;
 		}
 		if (current.GetType() == NType::LEAF) {
-			Leaf::DeprecatedVacuum(art, indexes, current);
+			if (indexes.find(NodePointer::GetAllocatorIdx(NType::LEAF)) != indexes.end()) {
+				Leaf::DeprecatedVacuum(art, current);
+			}
 			return ScanNodeResult::SKIP;
 		}
 		return ScanNodeResult::SCAN_CHILDREN;
@@ -1251,7 +1253,8 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(other_tree.HasMetadata());
 
-	auto filter = [](NodePointer) -> ScanNodeResult {
+	auto filter = [](NodePointer node) -> ScanNodeResult {
+		D_ASSERT(node.HasMetadata());
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
