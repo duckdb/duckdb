@@ -345,7 +345,11 @@ true
 # ── CREATE OR REPLACE MACRO (body too long to inline) ────────────────────────
 query I
 SELECT duckdb_format_sql('CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END') = $$CREATE OR REPLACE MACRO
-    clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END$$
+    clamp(x, lo, hi) AS CASE
+        WHEN x < lo THEN lo
+        WHEN x > hi THEN hi
+        ELSE x
+    END$$
 ----
 true
 

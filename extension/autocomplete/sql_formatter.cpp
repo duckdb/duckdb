@@ -999,6 +999,281 @@ static string ExpandTableDefinition(const string &formatted, const FormatterConf
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 5: expand long CASE expressions to one WHEN/ELSE per line
+// ─────────────────────────────────────────────────────────────────────────────
+
+//! Returns true if s[pos..pos+klen) matches keyword (case-insensitive) and
+//! both preceding and following characters are non-identifier characters.
+//! keyword must be an uppercase ASCII string.
+static bool MatchKeywordAt(const string &s, idx_t pos, const char *keyword) {
+	const idx_t klen = strlen(keyword);
+	if (pos + klen > s.size()) {
+		return false;
+	}
+	for (idx_t k = 0; k < klen; k++) {
+		if (toupper((unsigned char)s[pos + k]) != (unsigned char)keyword[k]) {
+			return false;
+		}
+	}
+	// Check word boundary after keyword
+	if (pos + klen < s.size()) {
+		const char c = s[pos + klen];
+		if (isalnum((unsigned char)c) || c == '_') {
+			return false;
+		}
+	}
+	// Check word boundary before keyword
+	if (pos > 0) {
+		const char c = s[pos - 1];
+		if (isalnum((unsigned char)c) || c == '_') {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! Find the first occurrence of keyword in s starting at from_pos,
+//! skipping string literals.  Does NOT skip paren-enclosed content
+//! so that CASE inside function calls (e.g. sum(CASE…)) is found.
+static idx_t FindKeywordAny(const string &s, idx_t from_pos, const char *keyword) {
+	bool in_str = false;
+	char str_char = '\0';
+	for (idx_t k = from_pos; k < s.size(); k++) {
+		const char c = s[k];
+		if (in_str) {
+			if (c == str_char) {
+				in_str = false;
+			}
+			continue;
+		}
+		if (c == '\'' || c == '"' || c == '`') {
+			in_str = true;
+			str_char = c;
+			continue;
+		}
+		if (MatchKeywordAt(s, k, keyword)) {
+			return k;
+		}
+	}
+	return string::npos;
+}
+
+//! Find the END keyword that closes the CASE at case_pos, tracking nested
+//! CASE…END pairs.  Returns string::npos if no matching END is found.
+static idx_t FindCaseEnd(const string &s, idx_t case_pos) {
+	int32_t depth = 0;
+	bool in_str = false;
+	char str_char = '\0';
+	idx_t k = case_pos;
+	while (k < s.size()) {
+		const char c = s[k];
+		if (in_str) {
+			if (c == str_char) {
+				in_str = false;
+			}
+			k++;
+			continue;
+		}
+		if (c == '\'' || c == '"' || c == '`') {
+			in_str = true;
+			str_char = c;
+			k++;
+			continue;
+		}
+		if (MatchKeywordAt(s, k, "CASE")) {
+			depth++;
+			k += 4;
+			continue;
+		}
+		if (MatchKeywordAt(s, k, "END")) {
+			depth--;
+			if (depth == 0) {
+				return k;
+			}
+			k += 3;
+			continue;
+		}
+		k++;
+	}
+	return string::npos;
+}
+
+//! Split the text between CASE and END (exclusive, after removing leading/
+//! trailing whitespace) into branches at top-level WHEN/ELSE keywords.
+//! "Top-level" means paren_depth == 0 and case_depth == 0.
+static vector<string> SplitCaseBranches(const string &content) {
+	vector<string> branches;
+	int32_t paren_depth = 0;
+	int32_t case_depth = 0;
+	bool in_str = false;
+	char str_char = '\0';
+
+	// Skip leading whitespace so the first branch starts at the WHEN/ELSE keyword.
+	idx_t start = 0;
+	while (start < content.size() && content[start] == ' ') {
+		start++;
+	}
+	idx_t k = start;
+
+	while (k < content.size()) {
+		const char c = content[k];
+		if (in_str) {
+			if (c == str_char) {
+				in_str = false;
+			}
+			k++;
+			continue;
+		}
+		if (c == '\'' || c == '"' || c == '`') {
+			in_str = true;
+			str_char = c;
+			k++;
+			continue;
+		}
+		if (c == '(') {
+			paren_depth++;
+			k++;
+			continue;
+		}
+		if (c == ')') {
+			paren_depth--;
+			k++;
+			continue;
+		}
+		if (paren_depth == 0) {
+			if (MatchKeywordAt(content, k, "CASE")) {
+				case_depth++;
+				k += 4;
+				continue;
+			}
+			if (MatchKeywordAt(content, k, "END")) {
+				case_depth--;
+				k += 3;
+				continue;
+			}
+			if (case_depth == 0 &&
+			    (MatchKeywordAt(content, k, "WHEN") || MatchKeywordAt(content, k, "ELSE"))) {
+				// Save the branch that ended here (trim trailing spaces).
+				if (k > start) {
+					idx_t e = k;
+					while (e > start && content[e - 1] == ' ') {
+						e--;
+					}
+					if (e > start) {
+						branches.push_back(content.substr(start, e - start));
+					}
+				}
+				start = k;
+			}
+		}
+		k++;
+	}
+	// Push the last branch.
+	{
+		idx_t e = content.size();
+		while (e > start && content[e - 1] == ' ') {
+			e--;
+		}
+		if (e > start) {
+			branches.push_back(content.substr(start, e - start));
+		}
+	}
+	return branches;
+}
+
+//! Phase 5: for each output line that exceeds inline_threshold and contains a
+//! CASE…END expression, expand the CASE block so each WHEN/ELSE branch is on
+//! its own indented line.  Iterates until no further expansion is needed.
+static string ExpandCaseExpressions(const string &formatted, const FormatterConfig &config) {
+	if (config.inline_threshold == 0) {
+		return formatted;
+	}
+
+	vector<string> lines;
+	{
+		idx_t start = 0;
+		for (idx_t k = 0; k <= formatted.size(); k++) {
+			if (k == formatted.size() || formatted[k] == '\n') {
+				lines.push_back(formatted.substr(start, k - start));
+				start = k + 1;
+			}
+		}
+	}
+
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		vector<string> out;
+		out.reserve(lines.size());
+
+		for (idx_t i = 0; i < lines.size(); i++) {
+			const string &line = lines[i];
+
+			// Only expand lines that exceed the threshold.
+			if (Utf8Proc::RenderWidth(line) <= config.inline_threshold) {
+				out.push_back(line);
+				continue;
+			}
+
+			const idx_t line_indent = LeadingSpaces(line);
+
+			// Find the first CASE keyword on this line.
+			const idx_t case_pos = FindKeywordAny(line, 0, "CASE");
+			if (case_pos == string::npos) {
+				out.push_back(line);
+				continue;
+			}
+
+			// Find the matching END.
+			const idx_t end_pos = FindCaseEnd(line, case_pos);
+			if (end_pos == string::npos) {
+				out.push_back(line);
+				continue;
+			}
+
+			// Split the content between CASE and END into branches.
+			const string between = line.substr(case_pos + 4, end_pos - case_pos - 4);
+			const vector<string> branches = SplitCaseBranches(between);
+
+			if (branches.size() < 2) {
+				out.push_back(line);
+				continue;
+			}
+
+			// Emit the expanded form.
+			changed = true;
+			const string branch_indent(line_indent + config.indent_size, ' ');
+			const string end_indent(line_indent, ' ');
+
+			// Prefix + CASE keyword (preserve original casing of "CASE").
+			out.push_back(line.substr(0, case_pos + 4));
+
+			// Each WHEN/ELSE branch on its own indented line.
+			for (const string &branch : branches) {
+				out.push_back(branch_indent + branch);
+			}
+
+			// END keyword (preserve original casing) + suffix.
+			const string end_kw = line.substr(end_pos, 3);
+			const string suffix = line.substr(end_pos + 3);
+			out.push_back(end_indent + end_kw + suffix);
+		}
+
+		lines = std::move(out);
+	}
+
+	string result;
+	result.reserve(formatted.size() * 2);
+	for (idx_t k = 0; k < lines.size(); k++) {
+		if (k > 0) {
+			result += '\n';
+		}
+		result += lines[k];
+	}
+	return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1014,7 +1289,8 @@ string FormatSQL(const string &sql, const FormatterConfig &config) {
 	string multiline = FormatMultiline(tokens, config);
 	string merged = MergeShortClauses(multiline, config);
 	string collapsed = CollapseFirstCondition(merged, config);
-	return ExpandTableDefinition(collapsed, config);
+	string expanded = ExpandTableDefinition(collapsed, config);
+	return ExpandCaseExpressions(expanded, config);
 }
 
 } // namespace duckdb
