@@ -37,8 +37,8 @@ private:
 
 	// Token lookahead helpers
 	static string PeekKeyword(const vector<MatcherToken> &tokens, idx_t i, idx_t offset);
-	static idx_t DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i,
-	                                   string &compound_text, string &original_text);
+	static idx_t DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i, string &compound_text,
+	                                  string &original_text);
 
 	// Line helpers (shared by Phases 2-5)
 	static idx_t LeadingSpaces(const string &line);
@@ -72,7 +72,6 @@ private:
 	string ExpandCaseExpressions(const string &formatted) const;
 };
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor and top-level Format
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,17 +103,15 @@ string SQLFormatter::Format(const string &sql) {
 //! starts a new line in the formatted output.
 bool SQLFormatter::IsClauseKeyword(const string &kw) {
 	static const std::unordered_set<string> clause_keywords = {
-	    "SELECT",  "FROM",      "WHERE",   "HAVING",  "LIMIT",   "OFFSET", "JOIN",
-	    "UNION",   "INTERSECT", "EXCEPT",  "WITH",    "INSERT",  "UPDATE", "DELETE",
-	    "SET",     "RETURNING", "VALUES",  "CREATE",  "DROP",    "ALTER",  "TRUNCATE",
-	    "QUALIFY", "PIVOT",     "UNPIVOT", "REFRESH", "INSTALL", "LOAD",   "ATTACH",
-	    "DETACH",  "CHECKPOINT"};
+	    "SELECT",    "FROM",    "WHERE", "HAVING", "LIMIT",    "OFFSET",    "JOIN",  "UNION",
+	    "INTERSECT", "EXCEPT",  "WITH",  "INSERT", "UPDATE",   "DELETE",    "SET",   "RETURNING",
+	    "VALUES",    "CREATE",  "DROP",  "ALTER",  "TRUNCATE", "QUALIFY",   "PIVOT", "UNPIVOT",
+	    "REFRESH",   "INSTALL", "LOAD",  "ATTACH", "DETACH",   "CHECKPOINT"};
 	return clause_keywords.count(kw) > 0;
 }
 
 bool SQLFormatter::IsJoinModifier(const string &kw) {
-	return kw == "INNER" || kw == "LEFT" || kw == "RIGHT" || kw == "FULL" || kw == "CROSS" ||
-	       kw == "NATURAL";
+	return kw == "INNER" || kw == "LEFT" || kw == "RIGHT" || kw == "FULL" || kw == "CROSS" || kw == "NATURAL";
 }
 
 //! Complete set of clause keyword *strings* as they appear in the formatted
@@ -122,31 +119,20 @@ bool SQLFormatter::IsJoinModifier(const string &kw) {
 bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 	static const std::unordered_set<string> all_clause_strings = {
 	    // Single-word clause starters
-	    "SELECT",    "FROM",        "WHERE",     "HAVING",     "LIMIT",      "OFFSET",
-	    "JOIN",      "UNION",       "INTERSECT", "EXCEPT",     "WITH",       "INSERT",
-	    "UPDATE",    "DELETE",      "SET",       "RETURNING",  "VALUES",     "CREATE",
-	    "DROP",      "ALTER",       "TRUNCATE",  "QUALIFY",    "PIVOT",      "UNPIVOT",
-	    "REFRESH",   "INSTALL",     "LOAD",      "ATTACH",     "DETACH",     "CHECKPOINT",
+	    "SELECT", "FROM", "WHERE", "HAVING", "LIMIT", "OFFSET", "JOIN", "UNION", "INTERSECT", "EXCEPT", "WITH",
+	    "INSERT", "UPDATE", "DELETE", "SET", "RETURNING", "VALUES", "CREATE", "DROP", "ALTER", "TRUNCATE", "QUALIFY",
+	    "PIVOT", "UNPIVOT", "REFRESH", "INSTALL", "LOAD", "ATTACH", "DETACH", "CHECKPOINT",
 	    // Compound clause keywords
-	    "GROUP BY",         "ORDER BY",              "UNION ALL",         "UNION DISTINCT",
-	    "INTERSECT ALL",    "INTERSECT DISTINCT",    "EXCEPT ALL",        "EXCEPT DISTINCT",
-	    "INNER JOIN",       "CROSS JOIN",            "NATURAL JOIN",
-	    "LEFT JOIN",        "LEFT OUTER JOIN",
-	    "RIGHT JOIN",       "RIGHT OUTER JOIN",
-	    "FULL JOIN",        "FULL OUTER JOIN",
-	    "INSERT INTO",      "DELETE FROM",           "ON CONFLICT",
+	    "GROUP BY", "ORDER BY", "UNION ALL", "UNION DISTINCT", "INTERSECT ALL", "INTERSECT DISTINCT", "EXCEPT ALL",
+	    "EXCEPT DISTINCT", "INNER JOIN", "CROSS JOIN", "NATURAL JOIN", "LEFT JOIN", "LEFT OUTER JOIN", "RIGHT JOIN",
+	    "RIGHT OUTER JOIN", "FULL JOIN", "FULL OUTER JOIN", "INSERT INTO", "DELETE FROM", "ON CONFLICT",
 	    // DDL compound keywords
-	    "CREATE TABLE",    "CREATE VIEW",    "CREATE INDEX",    "CREATE UNIQUE INDEX",
-	    "CREATE SCHEMA",   "CREATE SEQUENCE","CREATE MACRO",    "CREATE FUNCTION",
-	    "CREATE TYPE",
-	    "CREATE TEMP TABLE",      "CREATE TEMP VIEW",
-	    "CREATE TEMPORARY TABLE", "CREATE TEMPORARY VIEW",
-	    "CREATE OR REPLACE TABLE",    "CREATE OR REPLACE VIEW",
-	    "CREATE OR REPLACE INDEX",    "CREATE OR REPLACE MACRO",
-	    "CREATE OR REPLACE FUNCTION", "CREATE OR REPLACE TYPE",
-	    "CREATE OR REPLACE TEMP TABLE",      "CREATE OR REPLACE TEMP VIEW",
-	    "CREATE OR REPLACE TEMPORARY TABLE", "CREATE OR REPLACE TEMPORARY VIEW",
-	    "ALTER TABLE"};
+	    "CREATE TABLE", "CREATE VIEW", "CREATE INDEX", "CREATE UNIQUE INDEX", "CREATE SCHEMA", "CREATE SEQUENCE",
+	    "CREATE MACRO", "CREATE FUNCTION", "CREATE TYPE", "CREATE TEMP TABLE", "CREATE TEMP VIEW",
+	    "CREATE TEMPORARY TABLE", "CREATE TEMPORARY VIEW", "CREATE OR REPLACE TABLE", "CREATE OR REPLACE VIEW",
+	    "CREATE OR REPLACE INDEX", "CREATE OR REPLACE MACRO", "CREATE OR REPLACE FUNCTION", "CREATE OR REPLACE TYPE",
+	    "CREATE OR REPLACE TEMP TABLE", "CREATE OR REPLACE TEMP VIEW", "CREATE OR REPLACE TEMPORARY TABLE",
+	    "CREATE OR REPLACE TEMPORARY VIEW", "ALTER TABLE"};
 	return all_clause_strings.count(StringUtil::Upper(trimmed)) > 0;
 }
 
@@ -155,27 +141,25 @@ bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 //! original casing is preserved.
 bool SQLFormatter::ShouldUppercase(const string &kw) {
 	static const std::unordered_set<string> uppercase_set = {
-	    "SELECT", "DISTINCT", "FROM", "WHERE", "HAVING", "LIMIT", "OFFSET", "GROUP", "BY", "ORDER",
-	    "UNION", "INTERSECT", "EXCEPT", "ALL", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER",
-	    "CROSS", "NATURAL", "ON", "USING", "WITH", "RECURSIVE",
-	    "INSERT", "INTO", "UPDATE", "DELETE", "MERGE", "MATCHED", "SET", "VALUES", "RETURNING",
-	    "OVERRIDING",
-	    "CREATE", "DROP", "ALTER", "TRUNCATE", "TABLE", "VIEW", "INDEX", "SCHEMA", "DATABASE",
-	    "SEQUENCE", "MATERIALIZED", "TEMP", "TEMPORARY", "IF", "NOT", "EXISTS", "OR", "REPLACE",
-	    "UNIQUE", "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "DEFAULT", "CONSTRAINT", "CHECK",
-	    "GENERATED", "ALWAYS", "IDENTITY", "STORED", "VIRTUAL", "COLUMN", "ADD", "RENAME", "COPY",
-	    "AND", "OR", "NOT", "IS", "NULL", "TRUE", "FALSE", "IN", "LIKE", "ILIKE", "GLOB", "BETWEEN",
-	    "SIMILAR", "SOME", "ANY", "EXISTS", "OVERLAPS",
-	    "CASE", "WHEN", "THEN", "ELSE", "END",
-	    "AS", "ASC", "DESC", "NULLS", "FIRST", "LAST",
-	    "OVER", "PARTITION", "ROWS", "RANGE", "GROUPS", "UNBOUNDED", "PRECEDING", "FOLLOWING",
-	    "CURRENT", "ROW", "EXCLUDE", "TIES", "OTHERS",
-	    "CAST", "TRY_CAST",
-	    "QUALIFY", "PIVOT", "UNPIVOT", "IN",
-	    "BEGIN", "COMMIT", "ROLLBACK", "TRANSACTION", "SAVEPOINT", "RELEASE",
-	    "EXPLAIN", "ANALYZE", "DESCRIBE", "SHOW", "PRAGMA", "ATTACH", "DETACH", "CHECKPOINT",
-	    "VACUUM", "LOAD", "INSTALL", "FORCE", "POSITIONAL", "ASOF", "LATERAL", "TABLESAMPLE",
-	    "REPEATABLE", "USING", "SYSTEM", "BERNOULLI", "RESERVOIR"};
+	    "SELECT",     "DISTINCT",    "FROM",       "WHERE",       "HAVING",     "LIMIT",    "OFFSET",       "GROUP",
+	    "BY",         "ORDER",       "UNION",      "INTERSECT",   "EXCEPT",     "ALL",      "JOIN",         "INNER",
+	    "LEFT",       "RIGHT",       "FULL",       "OUTER",       "CROSS",      "NATURAL",  "ON",           "USING",
+	    "WITH",       "RECURSIVE",   "INSERT",     "INTO",        "UPDATE",     "DELETE",   "MERGE",        "MATCHED",
+	    "SET",        "VALUES",      "RETURNING",  "OVERRIDING",  "CREATE",     "DROP",     "ALTER",        "TRUNCATE",
+	    "TABLE",      "VIEW",        "INDEX",      "SCHEMA",      "DATABASE",   "SEQUENCE", "MATERIALIZED", "TEMP",
+	    "TEMPORARY",  "IF",          "NOT",        "EXISTS",      "OR",         "REPLACE",  "UNIQUE",       "PRIMARY",
+	    "KEY",        "FOREIGN",     "REFERENCES", "DEFAULT",     "CONSTRAINT", "CHECK",    "GENERATED",    "ALWAYS",
+	    "IDENTITY",   "STORED",      "VIRTUAL",    "COLUMN",      "ADD",        "RENAME",   "COPY",         "AND",
+	    "OR",         "NOT",         "IS",         "NULL",        "TRUE",       "FALSE",    "IN",           "LIKE",
+	    "ILIKE",      "GLOB",        "BETWEEN",    "SIMILAR",     "SOME",       "ANY",      "EXISTS",       "OVERLAPS",
+	    "CASE",       "WHEN",        "THEN",       "ELSE",        "END",        "AS",       "ASC",          "DESC",
+	    "NULLS",      "FIRST",       "LAST",       "OVER",        "PARTITION",  "ROWS",     "RANGE",        "GROUPS",
+	    "UNBOUNDED",  "PRECEDING",   "FOLLOWING",  "CURRENT",     "ROW",        "EXCLUDE",  "TIES",         "OTHERS",
+	    "CAST",       "TRY_CAST",    "QUALIFY",    "PIVOT",       "UNPIVOT",    "IN",       "BEGIN",        "COMMIT",
+	    "ROLLBACK",   "TRANSACTION", "SAVEPOINT",  "RELEASE",     "EXPLAIN",    "ANALYZE",  "DESCRIBE",     "SHOW",
+	    "PRAGMA",     "ATTACH",      "DETACH",     "CHECKPOINT",  "VACUUM",     "LOAD",     "INSTALL",      "FORCE",
+	    "POSITIONAL", "ASOF",        "LATERAL",    "TABLESAMPLE", "REPEATABLE", "USING",    "SYSTEM",       "BERNOULLI",
+	    "RESERVOIR"};
 	return uppercase_set.count(kw) > 0;
 }
 
@@ -196,8 +180,8 @@ string SQLFormatter::PeekKeyword(const vector<MatcherToken> &tokens, idx_t i, id
 //! Returns static_cast<idx_t>(-1) if tokens[i] is NOT a clause keyword.
 //! Fills compound_text with the uppercased keyword string (e.g. "GROUP BY").
 //! Fills original_text with the original token text joined by spaces (e.g. "group by").
-idx_t SQLFormatter::DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i,
-                                          string &compound_text, string &original_text) {
+idx_t SQLFormatter::DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i, string &compound_text,
+                                         string &original_text) {
 	// clang-format off
 	//! Fixed multi-word clause keyword patterns.
 	static const vector<vector<const char *>> kFixedCompounds = {
@@ -389,15 +373,16 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 		at_line_start = true;
 	};
 	auto write_space = [&]() {
-		if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' &&
-		    result.back() != '.') {
+		if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' && result.back() != '.') {
 			result += ' ';
 		}
 	};
 	auto clause_indent = [&]() -> int32_t {
 		return paren_stack.empty() ? 0 : paren_stack.back().inner_clause_indent;
 	};
-	auto content_indent = [&]() -> int32_t { return clause_indent() + indent_size; };
+	auto content_indent = [&]() -> int32_t {
+		return clause_indent() + indent_size;
+	};
 
 	auto emit_clause = [&](const string &kw_text, const string &upper_last_word) {
 		if (!result.empty()) {
@@ -443,15 +428,13 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			// OVER, FILTER, USING ...) but NOT for function-like keywords or type
 			// names where no space is conventional (COALESCE, CAST, DECIMAL, ...).
 			static const std::unordered_set<string> no_space_before_paren = {
-			    "COALESCE", "NULLIF", "CAST", "TRY_CAST", "EXTRACT", "OVERLAY",
-			    "POSITION", "SUBSTRING", "TRIM", "GROUPING", "GROUPING_ID", "TREAT",
-			    "XMLATTRIBUTES", "XMLCONCAT", "XMLELEMENT", "XMLFOREST",
-			    "XMLNAMESPACES", "XMLPARSE", "XMLPI", "XMLROOT", "XMLSERIALIZE",
-			    "XMLTABLE", "XMLEXISTS",
-			    "BIGINT", "BIT", "BOOLEAN", "CHAR", "CHARACTER", "DEC", "DECIMAL",
-			    "FLOAT", "INT", "INTEGER", "INTERVAL", "MAP", "NATIONAL", "NCHAR",
-			    "NUMERIC", "PRECISION", "REAL", "SMALLINT", "STRUCT", "TIME",
-			    "TIMESTAMP", "VARCHAR",
+			    "COALESCE",   "NULLIF",    "CAST",          "TRY_CAST",    "EXTRACT", "OVERLAY",       "POSITION",
+			    "SUBSTRING",  "TRIM",      "GROUPING",      "GROUPING_ID", "TREAT",   "XMLATTRIBUTES", "XMLCONCAT",
+			    "XMLELEMENT", "XMLFOREST", "XMLNAMESPACES", "XMLPARSE",    "XMLPI",   "XMLROOT",       "XMLSERIALIZE",
+			    "XMLTABLE",   "XMLEXISTS", "BIGINT",        "BIT",         "BOOLEAN", "CHAR",          "CHARACTER",
+			    "DEC",        "DECIMAL",   "FLOAT",         "INT",         "INTEGER", "INTERVAL",      "MAP",
+			    "NATIONAL",   "NCHAR",     "NUMERIC",       "PRECISION",   "REAL",    "SMALLINT",      "STRUCT",
+			    "TIME",       "TIMESTAMP", "VARCHAR",
 			};
 			if (prev_was_keyword && !no_space_before_paren.count(prev_keyword) && !at_line_start) {
 				write_space();
@@ -499,8 +482,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			continue;
 		}
 
-		if (tok.text == "." &&
-		    (tok.type == TokenType::OPERATOR || tok.type == TokenType::NUMBER_LITERAL)) {
+		if (tok.text == "." && (tok.type == TokenType::OPERATOR || tok.type == TokenType::NUMBER_LITERAL)) {
 			after_clause = false;
 			prev_was_keyword = false;
 			if (!result.empty() && result.back() == ' ') {
@@ -519,8 +501,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 
 			if (extra != static_cast<idx_t>(-1)) {
 				auto sp = compound_text.rfind(' ');
-				const string last_word =
-				    (sp == string::npos) ? compound_text : compound_text.substr(sp + 1);
+				const string last_word = (sp == string::npos) ? compound_text : compound_text.substr(sp + 1);
 				emit_clause(ApplyCase(compound_text, original_text, /*is_structural=*/true), last_word);
 				i += 1 + extra;
 				continue;
@@ -662,8 +643,7 @@ bool SQLFormatter::IsConditionClauseLine(const string &trimmed) {
 //! True when trimmed content starts with an AND/OR conjunction keyword (any case).
 bool SQLFormatter::StartsWithConjunction(const string &trimmed) {
 	const string upper = StringUtil::Upper(trimmed);
-	return (upper.size() >= 4 && upper.substr(0, 4) == "AND ") ||
-	       (upper.size() >= 3 && upper.substr(0, 3) == "OR ");
+	return (upper.size() >= 4 && upper.substr(0, 4) == "AND ") || (upper.size() >= 3 && upper.substr(0, 3) == "OR ");
 }
 
 //! Phase 3: for WHERE/HAVING clauses left multi-line by Phase 2, lift the first
@@ -846,8 +826,7 @@ idx_t SQLFormatter::MatchCreateTablePrefix(const string &upper_trimmed) {
 		const idx_t len = strlen(prefixes[p]);
 		if (upper_trimmed.size() >= len) {
 			const char next = (upper_trimmed.size() == len) ? '\0' : upper_trimmed[len];
-			if ((next == '\0' || next == ' ' || next == '(') &&
-			    upper_trimmed.compare(0, len, prefixes[p]) == 0) {
+			if ((next == '\0' || next == ' ' || next == '(') && upper_trimmed.compare(0, len, prefixes[p]) == 0) {
 				return len;
 			}
 		}
@@ -1104,8 +1083,7 @@ vector<string> SQLFormatter::SplitCaseBranches(const string &content) {
 				k += 3;
 				continue;
 			}
-			if (case_depth == 0 &&
-			    (MatchKeywordAt(content, k, "WHEN") || MatchKeywordAt(content, k, "ELSE"))) {
+			if (case_depth == 0 && (MatchKeywordAt(content, k, "WHEN") || MatchKeywordAt(content, k, "ELSE"))) {
 				if (k > start) {
 					idx_t e = k;
 					while (e > start && content[e - 1] == ' ') {
