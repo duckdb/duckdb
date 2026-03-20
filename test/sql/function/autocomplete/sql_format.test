@@ -219,8 +219,8 @@ query I
 SELECT duckdb_format_sql('CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL(10,2) DEFAULT 0, status VARCHAR(20))') = $$CREATE TABLE orders(
     id INTEGER PRIMARY KEY,
     customer_id INTEGER NOT NULL REFERENCES customers(id),
-    amount DECIMAL (10, 2) DEFAULT 0,
-    status VARCHAR (20)
+    amount DECIMAL(10, 2) DEFAULT 0,
+    status VARCHAR(20)
 )$$
 ----
 true
@@ -240,7 +240,7 @@ true
 query I
 SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))') = $$CREATE TABLE t(
     id INTEGER,
-    name VARCHAR (100) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL UNIQUE,
     created_at TIMESTAMP DEFAULT current_timestamp,
     PRIMARY KEY (id)
 )$$
@@ -366,7 +366,7 @@ true
 
 # ── ALTER TABLE ADD COLUMN — fits inline ──────────────────────────────────────
 query I
-SELECT duckdb_format_sql('ALTER TABLE t ADD COLUMN email VARCHAR(100) NOT NULL') = $$ALTER TABLE t ADD COLUMN email VARCHAR (100) NOT NULL$$
+SELECT duckdb_format_sql('ALTER TABLE t ADD COLUMN email VARCHAR(100) NOT NULL') = $$ALTER TABLE t ADD COLUMN email VARCHAR(100) NOT NULL$$
 ----
 true
 

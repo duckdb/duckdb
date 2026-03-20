@@ -272,6 +272,11 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 	bool at_line_start = true;
 	bool after_clause = false;
 	bool prev_was_keyword = false;
+	// Uppercase text of the most recent keyword token — used to decide whether
+	// to insert a space before '('.  Only operator/conditional keywords like IN,
+	// EXISTS, NOT, SOME, ANY, ALL need a space; function-like or type keywords
+	// (COALESCE, DECIMAL, VARCHAR, CAST, …) should not get one.
+	string prev_keyword;
 
 	// Per-paren level state: tracks indentation and whether clauses were emitted inside.
 	struct ParenInfo {
@@ -323,7 +328,7 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 		}
 	};
 
-	auto emit_clause = [&](const string &kw_text) {
+	auto emit_clause = [&](const string &kw_text, const string &upper_last_word) {
 		if (!result.empty()) {
 			write_newline();
 			write_indent(clause_indent());
@@ -332,6 +337,7 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 		at_line_start = false;
 		after_clause = true;
 		prev_was_keyword = true;
+		prev_keyword = upper_last_word;
 		if (!paren_stack.empty()) {
 			paren_stack.back().has_clauses = true;
 		}
@@ -365,7 +371,23 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 
 		// Opening paren
 		if (tok.type == TokenType::OPERATOR && tok.text == "(") {
-			if (prev_was_keyword && !at_line_start) {
+			// Insert a space before '(' for most keywords (e.g. AS, IN, EXISTS,
+			// OVER, FILTER, USING ...) but NOT for function-like keywords or type
+			// names where no space is conventional (COALESCE, CAST, DECIMAL, ...).
+			static const std::unordered_set<string> no_space_before_paren = {
+			    // Function-like keywords
+			    "COALESCE", "NULLIF", "CAST", "TRY_CAST", "EXTRACT", "OVERLAY",
+			    "POSITION", "SUBSTRING", "TRIM", "GROUPING", "GROUPING_ID", "TREAT",
+			    "XMLATTRIBUTES", "XMLCONCAT", "XMLELEMENT", "XMLFOREST",
+			    "XMLNAMESPACES", "XMLPARSE", "XMLPI", "XMLROOT", "XMLSERIALIZE",
+			    "XMLTABLE", "XMLEXISTS",
+			    // Type names
+			    "BIGINT", "BIT", "BOOLEAN", "CHAR", "CHARACTER", "DEC", "DECIMAL",
+			    "FLOAT", "INT", "INTEGER", "INTERVAL", "MAP", "NATIONAL", "NCHAR",
+			    "NUMERIC", "PRECISION", "REAL", "SMALLINT", "STRUCT", "TIME",
+			    "TIMESTAMP", "VARCHAR",
+			};
+			if (prev_was_keyword && !no_space_before_paren.count(prev_keyword) && !at_line_start) {
 				write_space();
 			}
 			after_clause = false;
@@ -435,7 +457,11 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 			idx_t extra = DetectCompoundClause(tokens, i, compound_text, original_text);
 
 			if (extra != static_cast<idx_t>(-1)) {
-				emit_clause(apply_case(compound_text, original_text, /*is_structural=*/true));
+				// Pass the last word of compound_text so the '(' handler knows
+				// whether a space is needed (e.g. "IN" yes, "TABLE" no).
+				auto sp = compound_text.rfind(' ');
+				const string last_word = (sp == string::npos) ? compound_text : compound_text.substr(sp + 1);
+				emit_clause(apply_case(compound_text, original_text, /*is_structural=*/true), last_word);
 				i += 1 + extra;
 				continue;
 			}
@@ -450,6 +476,7 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 				at_line_start = false;
 				after_clause = false;
 				prev_was_keyword = true;
+				prev_keyword = upper;
 				i++;
 				continue;
 			}
@@ -465,6 +492,7 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 			result += apply_case(upper, tok.text);
 			at_line_start = false;
 			prev_was_keyword = true;
+			prev_keyword = upper;
 			i++;
 			continue;
 		}
@@ -480,6 +508,7 @@ static string FormatMultiline(const vector<MatcherToken> &tokens, const Formatte
 		result += tok.text;
 		at_line_start = false;
 		prev_was_keyword = false;
+		prev_keyword.clear();
 		i++;
 	}
 
