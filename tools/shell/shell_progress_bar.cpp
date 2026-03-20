@@ -1,5 +1,6 @@
 #include "shell_progress_bar.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "shell_state.hpp"
 
 namespace duckdb_shell {
@@ -122,6 +123,19 @@ protected:
 		}
 		if (component.literal == "eta") {
 			return duckdb::TerminalProgressBarDisplay::FormatETA(status_bar.estimated_remaining_seconds);
+		}
+		// bytes_read/bytes_written must be read from the main connection's profiler,
+		// not the progress bar's separate connection
+		if (component.literal == "bytes_read") {
+			auto &context = *state.conn->context;
+			auto &client_data = duckdb::ClientData::Get(context);
+			auto profiler = client_data.profiler;
+			return duckdb::StringUtil::BytesToHumanReadableString(profiler->GetBytesRead(), 1000);
+		} else if (component.literal == "bytes_written") {
+			auto &context = *state.conn->context;
+			auto &client_data = duckdb::ClientData::Get(context);
+			auto profiler = client_data.profiler;
+			return duckdb::StringUtil::BytesToHumanReadableString(profiler->GetBytesWritten(), 1000);
 		}
 		return Prompt::HandleSetting(state, component);
 	}

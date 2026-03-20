@@ -62,7 +62,7 @@ void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
 		auto &unnest_node = node_pair.second;
 
 		if (unnest_node.index == column_binding.table_index) {
-			if (column_binding.column_index.index < unnest_node.expressions.size()) {
+			if (column_binding.column_index < unnest_node.expressions.size()) {
 				throw BinderException("UNNEST in lambda expressions is not supported");
 			}
 		}

@@ -12,24 +12,14 @@
 namespace duckdb {
 
 static const DefaultMacro JSON_MACROS[] = {
-    {DEFAULT_SCHEMA,
-     "json_group_array",
-     {"x", nullptr},
-     {{nullptr, nullptr}},
-     "CAST('[' || string_agg(CASE WHEN x IS NULL THEN 'null'::JSON ELSE to_json(x) END, ',') || ']' AS JSON)"},
-    {DEFAULT_SCHEMA,
-     "json_group_object",
-     {"n", "v", nullptr},
-     {{nullptr, nullptr}},
-     "CAST('{' || string_agg(to_json(n::VARCHAR) || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE to_json(v) END, "
-     "',') || '}' AS JSON)"},
-    {DEFAULT_SCHEMA,
-     "json_group_structure",
-     {"x", nullptr},
-     {{nullptr, nullptr}},
-     "json_structure(json_group_array(x))->0"},
-    {DEFAULT_SCHEMA, "json", {"x", nullptr}, {{nullptr, nullptr}}, "json_extract(x, '$')"},
-    {nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}};
+    {DEFAULT_SCHEMA, "json_group_array",
+     "(x) AS CAST('[' || string_agg(CASE WHEN x IS NULL THEN 'null'::JSON ELSE to_json(x) END, ',') || ']' AS JSON)"},
+    {DEFAULT_SCHEMA, "json_group_object",
+     "(n, v) AS CAST('{' || string_agg(to_json(n::VARCHAR) || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE "
+     "to_json(v) END, ',') || '}' AS JSON)"},
+    {DEFAULT_SCHEMA, "json_group_structure", "(x) AS json_structure(json_group_array(x))->0"},
+    {DEFAULT_SCHEMA, "json", "(x) AS json_extract(x, '$')"},
+    {nullptr, nullptr, nullptr}};
 
 static void LoadInternal(ExtensionLoader &loader) {
 	// JSON type

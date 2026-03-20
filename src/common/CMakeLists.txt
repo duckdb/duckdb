@@ -34,6 +34,7 @@ add_library_unity(
   bind_helpers.cpp
   box_renderer.cpp
   cgroups.cpp
+  column_index.cpp
   csv_writer.cpp
   complex_json.cpp
   compressed_file_system.cpp
