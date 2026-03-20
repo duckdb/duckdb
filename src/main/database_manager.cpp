@@ -188,10 +188,11 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
+
 	if (default_database.empty()) {
 		default_database = attached_db->GetName();
-		;
 	}
+
 	//! Initialize the database.
 	if (options.is_main_database) {
 		attached_db->SetInitialDatabase();
