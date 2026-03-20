@@ -177,7 +177,7 @@ def find_license(original_file):
     file = original_file
     license = ""
     while True:
-        file, end = os.path.split(file)
+        (file, end) = os.path.split(file)
         if file == "":
             break
         potential_license = os.path.join(file, "LICENSE")
@@ -212,7 +212,7 @@ def write_file(current_file, ignore_excluded=False):
             + "\n\n// LICENSE_CHANGE_END\n"
         )
 
-    statements, includes = get_includes(current_file, text)
+    (statements, includes) = get_includes(current_file, text)
     # find the linenr of the final #include statement we parsed
     if len(statements) > 0:
         index = text.find(statements[-1])
@@ -424,7 +424,7 @@ def gather_file(current_file, source_files, header_files):
     with open_utf8(current_file, 'r') as f:
         text = f.read()
 
-    statements, includes = get_includes(current_file, text)
+    (statements, includes) = get_includes(current_file, text)
     # find the linenr of the final #include statement we parsed
     if len(statements) > 0:
         index = text.find(statements[-1])
@@ -539,11 +539,13 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
         with open_utf8(temp_partition_name, 'w+') as f:
             write_license(f)
             f.write('#include "%s"\n#include "%s"' % (header_file_name, internal_header_file_name))
-            f.write('''
+            f.write(
+                '''
 #ifndef DUCKDB_AMALGAMATION
 #error header mismatch
 #endif
-''')
+'''
+            )
             for sfile in partition:
                 f.write(sfile)
         current_partition += 1

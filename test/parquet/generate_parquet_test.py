@@ -12,7 +12,8 @@ except:
 
 
 def generate_header(f):
-    f.write('''# name: test/parquet/test_parquet_reader.test
+    f.write(
+        '''# name: test/parquet/test_parquet_reader.test
 # description: Test Parquet Reader with files on data/parquet-testing
 # group: [parquet]
 
@@ -21,7 +22,8 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-''')
+'''
+    )
 
 
 def get_files():

@@ -144,7 +144,8 @@ def _generate_custom_optimizer_functions(
 
     first_optimizer = optimizers[0][0]
 
-    cpp_f.write(f"""
+    cpp_f.write(
+        f"""
 MetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {{
 	if (type == OptimizerType::INVALID) {{
 		throw InternalException("Invalid OptimizerType: INVALID");
@@ -171,7 +172,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {{
 	return static_cast<OptimizerType>(result);
 }}
 
-""")
+"""
+    )
 
 
 def _generate_get_metric_by_group_function(

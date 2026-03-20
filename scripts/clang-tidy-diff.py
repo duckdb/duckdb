@@ -332,7 +332,7 @@ def main():
         if args.export_fixes is not None:
             # Get a temporary file. We immediately close the handle so clang-tidy can
             # overwrite it.
-            handle, tmp_name = tempfile.mkstemp(suffix=".yaml", dir=export_fixes_dir)
+            (handle, tmp_name) = tempfile.mkstemp(suffix=".yaml", dir=export_fixes_dir)
             os.close(handle)
             command.append("-export-fixes=" + tmp_name)
         command.extend(common_clang_tidy_args)

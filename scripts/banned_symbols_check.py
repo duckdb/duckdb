@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import argparse
 
+
 banned_symbols = [
     "std::basic_ofstream",
     "std::basic_ifstream",

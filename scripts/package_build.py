@@ -296,7 +296,11 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
         db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
         return ExtensionLoadResult::LOADED_EXTENSION;
     }
-        """.replace('${EXT_NAME}', ext).replace('${EXT_NAME_CAMELCASE}', ext_name_camelcase)
+        """.replace(
+            '${EXT_NAME}', ext
+        ).replace(
+            '${EXT_NAME_CAMELCASE}', ext_name_camelcase
+        )
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (

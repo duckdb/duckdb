@@ -24,13 +24,15 @@ class IndentedFileWriter:
         self.file.write(text)
 
     def write_header(self, file):
-        self.file.write(f'''//===----------------------------------------------------------------------===//
+        self.file.write(
+            f'''//===----------------------------------------------------------------------===//
 //
 //                         DuckDB
 //
 // {file}
 //
-{write_warning()}//===----------------------------------------------------------------------===//''')
+{write_warning()}//===----------------------------------------------------------------------===//'''
+        )
 
     def close(self):
         """Delegate close to the underlying file object."""
