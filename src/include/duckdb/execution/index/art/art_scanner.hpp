@@ -21,8 +21,9 @@ namespace duckdb {
 
 enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 
-//! Pins the parent node and calls pre_handler on all the children (which can perform in-place updates within
-//! the parent while it is pinned).
+//! Pins the parent node and calls preorder_handler on all the children, which can perform in-place updates within
+//! the parent while it is pinned, as well as defines the return NodePointer value that should be pushed onto the
+//! stack for further traversal.
 template <class NODE_TYPE, class PRE_HANDLER>
 static void ScanChildren(ART &art, NodePointer node, PRE_HANDLER &&pre_handler, vector<NodePointer> &stack) {
 	NodeHandle handle(art, node);
@@ -38,13 +39,14 @@ static void ScanChildren(ART &art, NodePointer node, PRE_HANDLER &&pre_handler, 
 //! Pre-order scanner: each child is processed by pre_handler before being pushed onto the stack.
 //! When a node is popped, the filter decides whether to scan its children or skip it.
 //! If the children need to be scanned, the parent is pinned in ScanChildren and any updates are performed in place
-//! within the pinned parent node.
+//! within the pinned parent node using preorder_handler (which also defines what NodePointer to push onto the stack
+//! for further traversal).
 template <class FILTER, class PRE_HANDLER>
-void ARTScanPreOrder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &&pre_handler) {
+void ARTScanPreorder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &&preorder_handler) {
 	vector<NodePointer> stack;
 
 	// root node is always pinned, handle it first.
-	auto push_node = pre_handler(root);
+	auto push_node = preorder_handler(root);
 	if (push_node.HasMetadata()) {
 		stack.push_back(push_node);
 	}
@@ -67,23 +69,23 @@ void ARTScanPreOrder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
 			auto &child = *reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			push_node = pre_handler(child);
+			push_node = preorder_handler(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(push_node);
 			}
 			break;
 		}
 		case NType::NODE_4:
-			ScanChildren<Node4>(art, current, pre_handler, stack);
+			ScanChildren<Node4>(art, current, preorder_handler, stack);
 			break;
 		case NType::NODE_16:
-			ScanChildren<Node16>(art, current, pre_handler, stack);
+			ScanChildren<Node16>(art, current, preorder_handler, stack);
 			break;
 		case NType::NODE_48:
-			ScanChildren<Node48>(art, current, pre_handler, stack);
+			ScanChildren<Node48>(art, current, preorder_handler, stack);
 			break;
 		case NType::NODE_256:
-			ScanChildren<Node256>(art, current, pre_handler, stack);
+			ScanChildren<Node256>(art, current, preorder_handler, stack);
 			break;
 		default:
 			throw InternalException("invalid node type for ARTScanPreOrder: %d", static_cast<int>(current.GetType()));
@@ -96,15 +98,15 @@ void ARTScanPreOrder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &
 //===--------------------------------------------------------------------===//
 
 struct ScanEntry {
-	ScanEntry(NodePointer node_p, bool children_scanned_p) : node(node_p), children_scanned(children_scanned_p) {
+	ScanEntry(NodePointer node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
 	}
 
 	NodePointer node;
-	bool children_scanned;
+	bool children_visited;
 };
 
-//! Pins the parent node and iterates over all the children, decides which children to push onto the stack based
-//! on the filter function.
+//! Pins the parent node and iterates over all the children. The filter receives each child by reference
+//! and returns the NodePointer value that should be pushed onto the stack for further traversal.
 template <class NODE_TYPE, class FILTER>
 static void ScanChildren(ART &art, NodePointer node, FILTER &&filter, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
@@ -117,11 +119,14 @@ static void ScanChildren(ART &art, NodePointer node, FILTER &&filter, vector<Sca
 	});
 }
 
-//! Post-order scanner: the root is pushed directly onto the stack. Each node is visited twice: on the first visit,
-//! the filter decides which children to push. On the second visit (after all descendants are processed),
-//! post_handler fires on the node.
+//! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
+//! On the first visit (children_visited = false), the node is marked as visited and the filter decides which
+//! children to push onto the stack. The filter receives each child by reference and returns the NodePointer
+//! to push for further traversal.
+//! On the second visit (children_visited = true, after all descendants have been processed),
+//! post_handler fires on the node and then we pop it from the stack.
 template <class FILTER, class POST_HANDLER>
-void ARTScanPostOrder(ART &art, NodePointer &root, FILTER &&filter, POST_HANDLER &&post_handler) {
+void ARTScanPostorder(ART &art, NodePointer &root, FILTER &&filter, POST_HANDLER &&postorder_handler) {
 	vector<ScanEntry> stack;
 
 	D_ASSERT(root.HasMetadata());
@@ -130,13 +135,13 @@ void ARTScanPostOrder(ART &art, NodePointer &root, FILTER &&filter, POST_HANDLER
 	while (!stack.empty()) {
 		auto &entry = stack.back();
 
-		if (entry.children_scanned) {
-			post_handler(entry.node);
+		if (entry.children_visited) {
+			postorder_handler(entry.node);
 			stack.pop_back();
 			continue;
 		}
 
-		entry.children_scanned = true;
+		entry.children_visited = true;
 		auto current = entry.node;
 
 		switch (current.GetType()) {

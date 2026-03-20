@@ -1215,19 +1215,23 @@ void ART::Vacuum(IndexLock &state) {
 	auto &art = *this;
 
 	auto filter = [&](NodePointer current) -> ScanNodeResult {
+		D_ASSERT(current.HasMetadata());
+		if (current.GetType() == NType::LEAF_INLINED) {
+			return ScanNodeResult::SKIP;
+		}
 		if (current.GetType() == NType::LEAF) {
 			Leaf::DeprecatedVacuum(art, indexes, current);
 			return ScanNodeResult::SKIP;
 		}
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
-
-	auto pre_handler = [&](NodePointer &child) -> NodePointer {
+	auto preorder_handler = [&](NodePointer &child) -> NodePointer {
+		// Vacuums the pointer if needed and updates in place within the parent.
 		VacuumPointerIfNeeded(art, indexes, child);
+		// We want to return the new pointer to be pushed onto the stack to do a vacuum traversel on the subtree.
 		return child;
 	};
-
-	ARTScanPreOrder(art, tree, filter, pre_handler);
+	ARTScanPreorder(art, tree, filter, preorder_handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1285,7 +1289,7 @@ void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_b
 		}
 	};
 
-	ARTScanPreOrder(*this, other_tree, filter, pre_handler);
+	ARTScanPreorder(*this, other_tree, filter, pre_handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {

@@ -56,17 +56,20 @@ void NodePointer::FreeNode(ART &art, NodePointer &node) {
 	node.Clear();
 }
 
-void NodePointer::FreeTree(ART &art, NodePointer &node) {
-	if (!node.HasMetadata()) {
+void NodePointer::FreeTree(ART &art, NodePointer &tree) {
+	if (!tree.HasMetadata()) {
 		return;
 	}
 
+	// All nodes should be pushed onto the stack.
 	auto filter = [](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		return child;
 	};
 
+	// We freed the subtree pointed to by the current node. Free the node.
 	auto post_handler = [&](NodePointer current) {
+		D_ASSERT(current.HasMetadata());
 		auto type = current.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
@@ -89,8 +92,9 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		}
 	};
 
-	ARTScanPostOrder(art, node, filter, post_handler);
-	node.Clear();
+	ARTScanPostorder(art, tree, filter, post_handler);
+	//
+	tree.Clear();
 }
 
 //===--------------------------------------------------------------------===//
@@ -439,7 +443,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		}
 	};
 
-	ARTScanPreOrder(art, node, filter, pre_handler);
+	ARTScanPreorder(art, node, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -514,7 +518,7 @@ void NodePointer::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &nod
 	};
 
 	NodePointer root = *this;
-	ARTScanPreOrder(art, root, filter, pre_handler);
+	ARTScanPreorder(art, root, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//
