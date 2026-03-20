@@ -10,8 +10,8 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members, Vector &target,
-                                  const idx_t count, Vector &result) {
+static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members, Vector &target, const idx_t count,
+                                  Vector &result) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 

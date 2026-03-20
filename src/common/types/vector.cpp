@@ -117,7 +117,8 @@ void Vector::Reference(const Value &value) {
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second) : StructValue::GetChildren(value)[i]);
+			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
+			                                          : StructValue::GetChildren(value)[i]);
 		}
 		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
 		if (value.IsNull()) {

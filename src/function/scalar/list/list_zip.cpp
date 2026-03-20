@@ -118,7 +118,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
 		if (args.data[child_idx].GetType() != LogicalType::SQLNULL) {
 			struct_entries[child_idx].Slice(ListVector::GetEntry(args.data[child_idx]), selections[child_idx],
-			                                 result_size);
+			                                result_size);
 		}
 		struct_entries[child_idx].Flatten(result_size);
 		FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);

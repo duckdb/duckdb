@@ -252,8 +252,8 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 }
 
 static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::RE2 &re,
-                                        vector<duckdb_re2::StringPiece> &group_spans,
-                                        vector<Vector> &child_entries, Vector &result, idx_t row) {
+                                        vector<duckdb_re2::StringPiece> &group_spans, vector<Vector> &child_entries,
+                                        Vector &result, idx_t row) {
 	const idx_t group_count = child_entries.size();
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	idx_t current_list_size = ListVector::GetListSize(result);
