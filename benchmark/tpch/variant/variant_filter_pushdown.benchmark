@@ -1,22 +1,22 @@
-# name: benchmark/tpch/variant/tpch_q1_variant.benchmark
+# name: benchmark/tpch/variant/variant_filter_pushdown.benchmark
 # description: Run Q01 over lineitem stored in variants
 # group: [variant]
 
 name Q01 variants
-group tpch
+group variant
 subgroup sf1
 storage persistent v1.5.0
 
 require tpch
 
-cache tpch_variant_sf1.duckdb
+cache tpch_variant_sf1_ordered.duckdb
 
 load
 CALL dbgen(sf=1, suffix='_normalized');
 SET variant_minimum_shredding_size = 0;
 create table lineitem_variant as select
 	struct_pack(*COLUMNS(lineitem_normalized.*))::VARIANT lineitem
-from lineitem_normalized;
+from lineitem_normalized ORDER BY l_shipdate;
 checkpoint;
 CREATE VIEW lineitem AS SELECT
 	lineitem.l_orderkey::DECIMAL(15,2) l_orderkey,
@@ -38,6 +38,8 @@ CREATE VIEW lineitem AS SELECT
 FROM
 	lineitem_variant
 
-run extension/tpch/dbgen/queries/q01.sql
+run
+SELECT COUNT(*) FROM lineitem WHERE l_shipdate='1993-01-01'
 
-result extension/tpch/dbgen/answers/sf1/q01.csv
+result I
+2431

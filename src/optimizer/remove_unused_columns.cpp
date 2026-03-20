@@ -27,6 +27,7 @@
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include <utility>
 
@@ -860,8 +861,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		filter->expressions = std::move(filter_expressions);
 		filter->children.push_back(std::move(op_ref));
 		get.table_filters.ClearFilters();
-		// push the final result in the operator
-		op_ref = std::move(filter);
+
+		// try to push filters back into the table scan
+		FilterPushdown pushdown(optimizer);
+		op_ref = pushdown.Rewrite(std::move(filter));
 		return;
 	}
 
