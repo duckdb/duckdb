@@ -206,6 +206,168 @@ SELECT duckdb_format_sql('select 1', MAP {'bad_key': 'x'})
 ----
 duckdb_format_sql: unknown config key 'bad_key'
 
+# ══ CREATE TABLE / DDL ════════════════════════════════════════════════════════
+
+# ── Short CREATE TABLE — fits inline ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER PRIMARY KEY)') = $$CREATE TABLE t(id INTEGER PRIMARY KEY)$$
+----
+true
+
+# ── Long CREATE TABLE — column list stays on one line after table name ────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL(10,2) DEFAULT 0, status VARCHAR(20))') = $$CREATE TABLE
+    orders(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL (10, 2) DEFAULT 0, status VARCHAR (20))$$
+----
+true
+
+# ── CREATE TABLE with table-level PRIMARY KEY and FOREIGN KEY constraints ─────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t (a INTEGER, b INTEGER, PRIMARY KEY (a, b), FOREIGN KEY (b) REFERENCES other(id))') = $$CREATE TABLE
+    t(a INTEGER, b INTEGER, PRIMARY KEY (a, b), FOREIGN KEY (b) REFERENCES other(id))$$
+----
+true
+
+# ── CREATE TABLE with UNIQUE, DEFAULT, and inline PRIMARY KEY ─────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))') = $$CREATE TABLE
+    t(id INTEGER, name VARCHAR (100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))$$
+----
+true
+
+# ── CREATE TABLE IF NOT EXISTS — fits inline ──────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE IF NOT EXISTS t (id INTEGER)') = $$CREATE TABLE IF NOT EXISTS t(id INTEGER)$$
+----
+true
+
+# ── CREATE TEMP TABLE — fits inline ───────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TEMP TABLE t (id INTEGER, name VARCHAR)') = $$CREATE TEMP TABLE t(id INTEGER, name VARCHAR)$$
+----
+true
+
+# ── CREATE OR REPLACE TABLE — fits inline ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE TABLE t (id INTEGER)') = $$CREATE OR REPLACE TABLE t(id INTEGER)$$
+----
+true
+
+# ── CREATE VIEW with SELECT body ──────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE VIEW active_users AS SELECT id, name FROM users WHERE active = true') = $$CREATE VIEW active_users AS
+SELECT id, name
+FROM users
+WHERE active = TRUE$$
+----
+true
+
+# ── CREATE VIEW with schema-qualified name — name fits inline ─────────────────
+query I
+SELECT duckdb_format_sql('CREATE VIEW long_schema_name.long_view_name AS SELECT id, name FROM users WHERE active = true') = $$CREATE VIEW long_schema_name.long_view_name AS
+SELECT id, name
+FROM users
+WHERE active = TRUE$$
+----
+true
+
+# ── CREATE VIEW where full header exceeds threshold — view name on next line ──
+query I
+SELECT duckdb_format_sql('CREATE VIEW a_very_long_schema_name.a_very_long_view_name_here AS SELECT id FROM t') = $$CREATE VIEW
+    a_very_long_schema_name.a_very_long_view_name_here AS
+SELECT id
+FROM t$$
+----
+true
+
+# ── CREATE OR REPLACE VIEW ────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE VIEW analytics.monthly_summary AS SELECT region, sum(amount) AS total FROM orders GROUP BY region') = $$CREATE OR REPLACE VIEW analytics.monthly_summary AS
+SELECT region, sum(amount) AS total
+FROM orders
+GROUP BY region$$
+----
+true
+
+# ── CREATE TEMP VIEW ──────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TEMP VIEW v AS SELECT id FROM t') = $$CREATE TEMP VIEW v AS
+SELECT id
+FROM t$$
+----
+true
+
+# ── CREATE INDEX ──────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE INDEX idx_name ON orders (customer_id)') = $$CREATE INDEX idx_name ON orders(customer_id)$$
+----
+true
+
+# ── CREATE UNIQUE INDEX ───────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE UNIQUE INDEX idx_email ON users (email)') = $$CREATE UNIQUE INDEX idx_email ON users(email)$$
+----
+true
+
+# ── CREATE SCHEMA ─────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE SCHEMA analytics') = $$CREATE SCHEMA analytics$$
+----
+true
+
+# ── CREATE SEQUENCE ───────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE SEQUENCE seq_id START 1 INCREMENT 1') = $$CREATE SEQUENCE seq_id START 1 INCREMENT 1$$
+----
+true
+
+# ── CREATE MACRO (scalar) ─────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE MACRO increment(x) AS x + 1') = $$CREATE MACRO increment (x) AS x + 1$$
+----
+true
+
+# ── CREATE OR REPLACE MACRO (body too long to inline) ────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END') = $$CREATE OR REPLACE MACRO
+    clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END$$
+----
+true
+
+# ── CREATE MACRO AS TABLE (table macro) ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE MACRO range_rows(lo, hi) AS TABLE SELECT * FROM t WHERE id BETWEEN lo AND hi') = $$CREATE MACRO range_rows(lo, hi) AS TABLE
+SELECT *
+FROM t
+WHERE id BETWEEN lo AND hi$$
+----
+true
+
+# ── CREATE TYPE … ENUM ───────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TYPE mood AS ENUM (''happy'', ''sad'', ''neutral'')') = $$CREATE TYPE mood AS ENUM ('happy', 'sad', 'neutral')$$
+----
+true
+
+# ── ALTER TABLE ADD COLUMN — fits inline ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('ALTER TABLE t ADD COLUMN email VARCHAR(100) NOT NULL') = $$ALTER TABLE t ADD COLUMN email VARCHAR (100) NOT NULL$$
+----
+true
+
+# ── ALTER TABLE ADD CONSTRAINT PRIMARY KEY ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('ALTER TABLE orders ADD CONSTRAINT pk PRIMARY KEY (id)') = $$ALTER TABLE orders ADD CONSTRAINT pk PRIMARY KEY (id)$$
+----
+true
+
+# ── ALTER TABLE DROP COLUMN — DROP is its own clause keyword ─────────────────
+query I
+SELECT duckdb_format_sql('ALTER TABLE t DROP COLUMN old_col') = $$ALTER TABLE t
+DROP COLUMN old_col$$
+----
+true
+
 # ── Unicode / grapheme-cluster handling ──────────────────────────────────────
 # inline_threshold is measured in terminal render columns, not bytes.
 # The duck emoji 🦆 is 4 bytes but only 2 render columns.

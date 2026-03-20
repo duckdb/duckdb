@@ -54,7 +54,19 @@ static bool IsClauseKeywordLine(const string &trimmed) {
 	    "LEFT JOIN",      "LEFT OUTER JOIN",
 	    "RIGHT JOIN",     "RIGHT OUTER JOIN",
 	    "FULL JOIN",      "FULL OUTER JOIN",
-	    "INSERT INTO",    "DELETE FROM",     "ON CONFLICT"};
+	    "INSERT INTO",    "DELETE FROM",     "ON CONFLICT",
+	    // DDL compound keywords — CREATE <object> and its modifier variants
+	    "CREATE TABLE",    "CREATE VIEW",    "CREATE INDEX",    "CREATE UNIQUE INDEX",
+	    "CREATE SCHEMA",   "CREATE SEQUENCE","CREATE MACRO",    "CREATE FUNCTION",
+	    "CREATE TYPE",
+	    "CREATE TEMP TABLE",      "CREATE TEMP VIEW",
+	    "CREATE TEMPORARY TABLE", "CREATE TEMPORARY VIEW",
+	    "CREATE OR REPLACE TABLE",    "CREATE OR REPLACE VIEW",
+	    "CREATE OR REPLACE INDEX",    "CREATE OR REPLACE MACRO",
+	    "CREATE OR REPLACE FUNCTION", "CREATE OR REPLACE TYPE",
+	    "CREATE OR REPLACE TEMP TABLE",      "CREATE OR REPLACE TEMP VIEW",
+	    "CREATE OR REPLACE TEMPORARY TABLE", "CREATE OR REPLACE TEMPORARY VIEW",
+	    "ALTER TABLE"};
 	// Compare case-insensitively by using the already-uppercased trimmed line.
 	return all_clause_strings.count(StringUtil::Upper(trimmed)) > 0;
 }
@@ -154,6 +166,72 @@ static idx_t DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i, s
 			original_text = orig0 + " " + tokens[i + 1].text + " " + tokens[i + 2].text;
 			return 2;
 		}
+	}
+	if (kw == "CREATE") {
+		const string p1 = PeekKeyword(tokens, i, 1);
+		const string p2 = PeekKeyword(tokens, i, 2);
+		const string p3 = PeekKeyword(tokens, i, 3);
+		const string p4 = PeekKeyword(tokens, i, 4);
+
+		// Helper: join original token texts starting at tokens[i].
+		auto orig_join = [&](idx_t count) -> string {
+			string s = orig0;
+			for (idx_t k = 1; k <= count; k++) {
+				s += ' ';
+				s += tokens[i + k].text;
+			}
+			return s;
+		};
+
+		// Object types that get their own compound keyword when paired with CREATE.
+		// Checked against p1, or against p2/p3 when TEMP/TEMPORARY or OR REPLACE prefix.
+		static const std::unordered_set<string> create_objects = {
+		    "TABLE", "VIEW", "INDEX", "SCHEMA", "SEQUENCE", "MACRO", "FUNCTION", "TYPE"};
+
+		// CREATE UNIQUE INDEX (special: UNIQUE precedes INDEX)
+		if (p1 == "UNIQUE" && p2 == "INDEX") {
+			compound_text = "CREATE UNIQUE INDEX";
+			original_text = orig_join(2);
+			return 2;
+		}
+
+		// CREATE OR REPLACE [TEMP|TEMPORARY] <object>
+		if (p1 == "OR" && p2 == "REPLACE") {
+			if (create_objects.count(p3)) {
+				compound_text = "CREATE OR REPLACE " + p3;
+				original_text = orig_join(3);
+				return 3;
+			}
+			if ((p3 == "TEMP" || p3 == "TEMPORARY") && create_objects.count(p4)) {
+				compound_text = "CREATE OR REPLACE " + p3 + " " + p4;
+				original_text = orig_join(4);
+				return 4;
+			}
+		}
+
+		// CREATE [TEMP|TEMPORARY] <object>
+		if ((p1 == "TEMP" || p1 == "TEMPORARY") && create_objects.count(p2)) {
+			compound_text = "CREATE " + p1 + " " + p2;
+			original_text = orig_join(2);
+			return 2;
+		}
+
+		// CREATE <object>
+		if (create_objects.count(p1)) {
+			compound_text = "CREATE " + p1;
+			original_text = orig_join(1);
+			return 1;
+		}
+
+		// Generic CREATE (CREATE DATABASE, CREATE EXTENSION, etc.)
+		compound_text = "CREATE";
+		original_text = orig0;
+		return 0;
+	}
+	if (kw == "ALTER" && PeekKeyword(tokens, i, 1) == "TABLE") {
+		compound_text = "ALTER TABLE";
+		original_text = orig0 + " " + tokens[i + 1].text;
+		return 1;
 	}
 	if (kw == "INSERT" && PeekKeyword(tokens, i, 1) == "INTO") {
 		compound_text = "INSERT INTO";
