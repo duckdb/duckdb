@@ -198,123 +198,100 @@ string SQLFormatter::PeekKeyword(const vector<MatcherToken> &tokens, idx_t i, id
 //! Fills original_text with the original token text joined by spaces (e.g. "group by").
 idx_t SQLFormatter::DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i,
                                           string &compound_text, string &original_text) {
+	// clang-format off
+	//! Fixed multi-word clause keyword patterns.
+	static const vector<vector<const char *>> kFixedCompounds = {
+	    // Two-word clauses
+	    {"GROUP",     "BY"      },
+	    {"ORDER",     "BY"      },
+	    {"ALTER",     "TABLE"   },
+	    {"INSERT",    "INTO"    },
+	    {"DELETE",    "FROM"    },
+	    {"ON",        "CONFLICT"},
+	    // Set operations with qualifier
+	    {"UNION",     "ALL"     }, {"UNION",     "DISTINCT"},
+	    {"INTERSECT", "ALL"     }, {"INTERSECT", "DISTINCT"},
+	    {"EXCEPT",    "ALL"     }, {"EXCEPT",    "DISTINCT"},
+	    // JOIN variants
+	    {"INNER",   "JOIN"             },
+	    {"CROSS",   "JOIN"             },
+	    {"NATURAL", "JOIN"             },
+	    {"LEFT",    "JOIN"             }, {"LEFT",  "OUTER", "JOIN"},
+	    {"RIGHT",   "JOIN"             }, {"RIGHT", "OUTER", "JOIN"},
+	    {"FULL",    "JOIN"             }, {"FULL",  "OUTER", "JOIN"},
+	    // Special CREATE form
+	    {"CREATE",  "UNIQUE", "INDEX"  },
+	};
+	// CREATE [OR REPLACE] [TEMP | TEMPORARY] <object> — generated from prefixes × objects.
+	static const vector<vector<const char *>> kCreatePrefixes = {
+	    {"CREATE"},
+	    {"CREATE", "TEMP"},
+	    {"CREATE", "TEMPORARY"},
+	    {"CREATE", "OR", "REPLACE"},
+	    {"CREATE", "OR", "REPLACE", "TEMP"},
+	    {"CREATE", "OR", "REPLACE", "TEMPORARY"},
+	};
+	static const vector<const char *> kCreateObjects = {
+	    "TABLE", "VIEW", "INDEX", "SCHEMA", "SEQUENCE", "MACRO", "FUNCTION", "TYPE",
+	};
+	// clang-format on
+	static const vector<vector<const char *>> kCompoundKeywords = [&]() {
+		auto result = kFixedCompounds;
+		for (const auto &prefix : kCreatePrefixes) {
+			for (const char *obj : kCreateObjects) {
+				auto entry = prefix;
+				entry.push_back(obj);
+				result.push_back(std::move(entry));
+			}
+		}
+		return result;
+	}();
+
 	const string kw = StringUtil::Upper(tokens[i].text);
-	const string &orig0 = tokens[i].text;
 
-	if ((kw == "GROUP" || kw == "ORDER") && PeekKeyword(tokens, i, 1) == "BY") {
-		compound_text = kw + " BY";
-		original_text = orig0 + " " + tokens[i + 1].text;
-		return 1;
-	}
-	if (kw == "UNION" || kw == "INTERSECT" || kw == "EXCEPT") {
-		const string next = PeekKeyword(tokens, i, 1);
-		if (next == "ALL" || next == "DISTINCT") {
-			compound_text = kw + " " + next;
-			original_text = orig0 + " " + tokens[i + 1].text;
-			return 1;
-		}
-		compound_text = kw;
-		original_text = orig0;
-		return 0;
-	}
-	if (kw == "INNER" || kw == "CROSS" || kw == "NATURAL") {
-		if (PeekKeyword(tokens, i, 1) == "JOIN") {
-			compound_text = kw + " JOIN";
-			original_text = orig0 + " " + tokens[i + 1].text;
-			return 1;
-		}
-	}
-	if (kw == "LEFT" || kw == "RIGHT" || kw == "FULL") {
-		if (PeekKeyword(tokens, i, 1) == "JOIN") {
-			compound_text = kw + " JOIN";
-			original_text = orig0 + " " + tokens[i + 1].text;
-			return 1;
-		}
-		if (PeekKeyword(tokens, i, 1) == "OUTER" && PeekKeyword(tokens, i, 2) == "JOIN") {
-			compound_text = kw + " OUTER JOIN";
-			original_text = orig0 + " " + tokens[i + 1].text + " " + tokens[i + 2].text;
-			return 2;
-		}
-	}
-	if (kw == "CREATE") {
-		const string p1 = PeekKeyword(tokens, i, 1);
-		const string p2 = PeekKeyword(tokens, i, 2);
-		const string p3 = PeekKeyword(tokens, i, 3);
-		const string p4 = PeekKeyword(tokens, i, 4);
+	// Find the longest compound keyword pattern whose first word matches kw.
+	idx_t best_extra = static_cast<idx_t>(-1);
+	const vector<const char *> *best_match = nullptr;
 
-		auto orig_join = [&](idx_t count) -> string {
-			string s = orig0;
-			for (idx_t k = 1; k <= count; k++) {
-				s += ' ';
-				s += tokens[i + k].text;
-			}
-			return s;
-		};
-
-		static const std::unordered_set<string> create_objects = {
-		    "TABLE", "VIEW", "INDEX", "SCHEMA", "SEQUENCE", "MACRO", "FUNCTION", "TYPE"};
-
-		if (p1 == "UNIQUE" && p2 == "INDEX") {
-			compound_text = "CREATE UNIQUE INDEX";
-			original_text = orig_join(2);
-			return 2;
+	for (const auto &entry : kCompoundKeywords) {
+		if (kw != entry[0]) {
+			continue;
 		}
-		if (p1 == "OR" && p2 == "REPLACE") {
-			if (create_objects.count(p3)) {
-				compound_text = "CREATE OR REPLACE " + p3;
-				original_text = orig_join(3);
-				return 3;
-			}
-			if ((p3 == "TEMP" || p3 == "TEMPORARY") && create_objects.count(p4)) {
-				compound_text = "CREATE OR REPLACE " + p3 + " " + p4;
-				original_text = orig_join(4);
-				return 4;
+		bool matched = true;
+		for (idx_t k = 1; k < entry.size(); k++) {
+			if (PeekKeyword(tokens, i, k) != entry[k]) {
+				matched = false;
+				break;
 			}
 		}
-		if ((p1 == "TEMP" || p1 == "TEMPORARY") && create_objects.count(p2)) {
-			compound_text = "CREATE " + p1 + " " + p2;
-			original_text = orig_join(2);
-			return 2;
+		if (matched) {
+			idx_t extra = static_cast<idx_t>(entry.size()) - 1;
+			if (best_match == nullptr || extra > best_extra) {
+				best_extra = extra;
+				best_match = &entry;
+			}
 		}
-		if (create_objects.count(p1)) {
-			compound_text = "CREATE " + p1;
-			original_text = orig_join(1);
-			return 1;
+	}
+
+	if (best_match != nullptr) {
+		compound_text = kw;
+		original_text = tokens[i].text;
+		for (idx_t k = 1; k <= best_extra; k++) {
+			compound_text += ' ';
+			compound_text += (*best_match)[k];
+			original_text += ' ';
+			original_text += tokens[i + k].text;
 		}
-		compound_text = "CREATE";
-		original_text = orig0;
-		return 0;
+		return best_extra;
 	}
-	if (kw == "ALTER" && PeekKeyword(tokens, i, 1) == "TABLE") {
-		compound_text = "ALTER TABLE";
-		original_text = orig0 + " " + tokens[i + 1].text;
-		return 1;
-	}
-	if (kw == "INSERT" && PeekKeyword(tokens, i, 1) == "INTO") {
-		compound_text = "INSERT INTO";
-		original_text = orig0 + " " + tokens[i + 1].text;
-		return 1;
-	}
-	if (kw == "DELETE" && PeekKeyword(tokens, i, 1) == "FROM") {
-		compound_text = "DELETE FROM";
-		original_text = orig0 + " " + tokens[i + 1].text;
-		return 1;
-	}
-	if (kw == "ON" && PeekKeyword(tokens, i, 1) == "CONFLICT") {
-		compound_text = "ON CONFLICT";
-		original_text = orig0 + " " + tokens[i + 1].text;
-		return 1;
-	}
-	if (IsClauseKeyword(kw)) {
+
+	// Single-word clause keyword or join modifier.
+	if (IsClauseKeyword(kw) || IsJoinModifier(kw)) {
 		compound_text = kw;
-		original_text = orig0;
+		original_text = tokens[i].text;
 		return 0;
 	}
-	if (IsJoinModifier(kw)) {
-		compound_text = kw;
-		original_text = orig0;
-		return 0;
-	}
+
 	return static_cast<idx_t>(-1);
 }
 
