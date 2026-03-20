@@ -151,13 +151,16 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
 		}
-	}
 
-	for (auto &dc : return_stats.column_distinct_count) {
-		const auto abs_diff =
-		    AbsValue(static_cast<double>(dc.distinct_count) - static_cast<double>(base_table_cardinality));
-		if (abs_diff / static_cast<double>(base_table_cardinality) < 0.1) {
-			dc.distinct_count = MinValue(dc.distinct_count, cardinality_after_filters);
+		if (has_equality_filter && base_table_cardinality > 50000) {
+			for (auto &dc : return_stats.column_distinct_count) {
+				const auto abs_diff =
+				    AbsValue(static_cast<double>(dc.distinct_count) - static_cast<double>(base_table_cardinality));
+				if (abs_diff / static_cast<double>(base_table_cardinality) < 0.5) {
+					// Geometric mean
+					dc.distinct_count = LossyNumericCast<idx_t>(sqrt(dc.distinct_count * cardinality_after_filters));
+				}
+			}
 		}
 	}
 
