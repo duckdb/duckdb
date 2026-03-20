@@ -117,9 +117,7 @@ void Vector::Reference(const Value &value) {
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto vector =
-			    make_uniq<Vector>(value.IsNull() ? Value(child_types[i].second) : StructValue::GetChildren(value)[i]);
-			child_vectors.push_back(std::move(vector));
+			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second) : StructValue::GetChildren(value)[i]);
 		}
 		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
 		if (value.IsNull()) {
@@ -212,7 +210,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto &other_entries = StructVector::GetEntries(other);
 		D_ASSERT(entries.size() == other_entries.size());
 		for (idx_t i = 0; i < entries.size(); i++) {
-			entries[i]->Slice(*other_entries[i], offset, end);
+			entries[i].Slice(other_entries[i], offset, end);
 		}
 		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
@@ -391,7 +389,7 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 		auto &vector_struct_buffer = auxiliary->Cast<VectorStructBuffer>();
 		auto &children = vector_struct_buffer.GetChildren();
 		for (auto &child : children) {
-			child->FindResizeInfos(resize_infos, multiplier);
+			child.FindResizeInfos(resize_infos, multiplier);
 		}
 		break;
 	}
@@ -534,7 +532,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		if (val.IsNull()) {
 			for (size_t i = 0; i < children.size(); i++) {
 				auto &vec_child = children[i];
-				vec_child->SetValue(index, Value());
+				vec_child.SetValue(index, Value());
 			}
 		} else {
 			auto &val_children = StructValue::GetChildren(val);
@@ -542,7 +540,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			for (size_t i = 0; i < children.size(); i++) {
 				auto &vec_child = children[i];
 				auto &struct_child = val_children[i];
-				vec_child->SetValue(index, struct_child);
+				vec_child.SetValue(index, struct_child);
 			}
 		}
 		break;
@@ -629,8 +627,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
 			shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
 			Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
-			StructVector::GetEntries(new_shredded)[0]->Reference(sliced_unshredded);
-			StructVector::GetEntries(new_shredded)[1]->Reference(sliced_shredded);
+			StructVector::GetEntries(new_shredded)[0].Reference(sliced_unshredded);
+			StructVector::GetEntries(new_shredded)[1].Reference(sliced_shredded);
 
 			copy.Shred(new_shredded);
 			copy.Flatten(1);
@@ -819,7 +817,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		duckdb::vector<Value> children;
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
-			children.push_back(struct_child->GetValue(index_p));
+			children.push_back(struct_child.GetValue(index_p));
 		}
 
 		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
@@ -977,7 +975,7 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 		} else {
 			auto &children = StructVector::GetEntries(*this);
 			for (auto &child : children) {
-				total_size += child->GetAllocationSize(cardinality);
+				total_size += child.GetAllocationSize(cardinality);
 			}
 		}
 		return total_size;
@@ -1152,10 +1150,9 @@ void Vector::FlattenConstant(idx_t count) {
 
 		auto &child_entries = StructVector::GetEntries(*this);
 		for (auto &child : child_entries) {
-			D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-			auto vector = make_uniq<Vector>(*child);
-			vector->Flatten(count);
-			new_children.push_back(std::move(vector));
+			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			new_children.emplace_back(child);
+			new_children.back().Flatten(count);
 		}
 		auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
 		break;
@@ -1173,7 +1170,7 @@ void Vector::Flatten(idx_t count) {
 		case PhysicalType::STRUCT: {
 			auto &entries = StructVector::GetEntries(*this);
 			for (auto &entry : entries) {
-				entry->Flatten(count);
+				entry.Flatten(count);
 			}
 			break;
 		}
@@ -1345,7 +1342,7 @@ void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifi
 			data.children.emplace_back();
 		}
 		for (idx_t i = 0; i < children.size(); i++) {
-			Vector::RecursiveToUnifiedFormat(*children[i], count, data.children[i]);
+			Vector::RecursiveToUnifiedFormat(children[i], count, data.children[i]);
 		}
 	}
 }
@@ -1529,7 +1526,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			// Serialize entries as a list
 			serializer.WriteList(103, "children", entries.size(), [&](Serializer::List &list, idx_t i) {
 				list.WriteObject(
-				    [&](Serializer &object) { entries[i]->Serialize(object, count, compressed_serialization); });
+				    [&](Serializer &object) { entries[i].Serialize(object, count, compressed_serialization); });
 			});
 			break;
 		}
@@ -1700,7 +1697,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			auto &entries = StructVector::GetEntries(*this);
 			// Deserialize entries as a list
 			deserializer.ReadList(103, "children", [&](Deserializer::List &list, idx_t i) {
-				list.ReadObject([&](Deserializer &obj) { entries[i]->Deserialize(obj, count); });
+				list.ReadObject([&](Deserializer &obj) { entries[i].Deserialize(obj, count); });
 			});
 			break;
 		}
@@ -1750,7 +1747,7 @@ void Vector::SetVectorType(VectorType vector_type_p) {
 	if (vector_type == VectorType::CONSTANT_VECTOR && physical_type == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {
-			entry->SetVectorType(vector_type);
+			entry.SetVectorType(vector_type);
 		}
 	}
 }
@@ -1971,12 +1968,12 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		auto &children = StructVector::GetEntries(*vector);
 		D_ASSERT(child_types.size() == children.size());
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-			D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-			Vector::Verify(*children[child_idx], sel_p, count);
+			D_ASSERT(children[child_idx].GetType() == child_types[child_idx].second);
+			Vector::Verify(children[child_idx], sel_p, count);
 			if (vtype == VectorType::CONSTANT_VECTOR) {
-				D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				D_ASSERT(children[child_idx].GetVectorType() == VectorType::CONSTANT_VECTOR);
 				if (ConstantVector::IsNull(*vector)) {
-					D_ASSERT(ConstantVector::IsNull(*children[child_idx]));
+					D_ASSERT(ConstantVector::IsNull(children[child_idx]));
 				}
 			}
 			if (vtype != VectorType::FLAT_VECTOR) {
@@ -1985,19 +1982,19 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			optional_ptr<ValidityMask> child_validity;
 			SelectionVector owned_child_sel;
 			const SelectionVector *child_sel = &owned_child_sel;
-			if (children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {
+			if (children[child_idx].GetVectorType() == VectorType::FLAT_VECTOR) {
 				child_sel = FlatVector::IncrementalSelectionVector();
-				child_validity = &FlatVector::Validity(*children[child_idx]);
-			} else if (children[child_idx]->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-				auto &child = DictionaryVector::Child(*children[child_idx]);
+				child_validity = &FlatVector::Validity(children[child_idx]);
+			} else if (children[child_idx].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+				auto &child = DictionaryVector::Child(children[child_idx]);
 				if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
 					continue;
 				}
 				child_validity = &FlatVector::Validity(child);
-				child_sel = &DictionaryVector::SelVector(*children[child_idx]);
-			} else if (children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				child_sel = &DictionaryVector::SelVector(children[child_idx]);
+			} else if (children[child_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				child_sel = ConstantVector::ZeroSelectionVector(count, owned_child_sel);
-				child_validity = &ConstantVector::Validity(*children[child_idx]);
+				child_validity = &ConstantVector::Validity(children[child_idx]);
 			} else {
 				continue;
 			}
@@ -2123,7 +2120,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		auto &entries = StructVector::GetEntries(vector);
 		// recurse into child elements
 		for (auto &entry : entries) {
-			Vector::DebugShuffleNestedVector(*entry, count);
+			Vector::DebugShuffleNestedVector(entry, count);
 		}
 		break;
 	}
@@ -2214,7 +2211,7 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	if (internal_type == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(vector);
 		for (auto &entry : entries) {
-			FlatVector::SetNull(*entry, idx, is_null);
+			FlatVector::SetNull(entry, idx, is_null);
 		}
 		return;
 	}
@@ -2243,8 +2240,8 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 			// set all child entries to null as well
 			auto &entries = StructVector::GetEntries(vector);
 			for (auto &entry : entries) {
-				entry->SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(*entry, is_null);
+				entry.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(entry, is_null);
 			}
 		} else if (internal_type == PhysicalType::ARRAY) {
 			auto &child = ArrayVector::GetEntry(vector);
@@ -2351,7 +2348,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
+			ConstantVector::Reference(target_entries[i], source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		vector.validity.Set(0, true);
@@ -2563,12 +2560,12 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 Vector &MapVector::GetKeys(Vector &vector) {
 	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
-	return *entries[0];
+	return entries[0];
 }
 Vector &MapVector::GetValues(Vector &vector) {
 	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
-	return *entries[1];
+	return entries[1];
 }
 
 const Vector &MapVector::GetKeys(const Vector &vector) {
@@ -2648,7 +2645,7 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 //===--------------------------------------------------------------------===//
 // StructVector
 //===--------------------------------------------------------------------===//
-vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
+vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
 	         vector.GetType().id() == LogicalTypeId::VARIANT ||
 	         vector.GetType().id() == LogicalTypeId::AGGREGATE_STATE);
@@ -2664,7 +2661,7 @@ vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	return vector.auxiliary->Cast<VectorStructBuffer>().GetChildren();
 }
 
-const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+const vector<Vector> &StructVector::GetEntries(const Vector &vector) {
 	return GetEntries((Vector &)vector);
 }
 
@@ -2873,23 +2870,23 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 const Vector &UnionVector::GetMember(const Vector &vector, idx_t member_index) {
 	D_ASSERT(member_index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
-	return *entries[member_index + 1]; // skip the "tag" entry
+	return entries[member_index + 1]; // skip the "tag" entry
 }
 
 Vector &UnionVector::GetMember(Vector &vector, idx_t member_index) {
 	D_ASSERT(member_index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
-	return *entries[member_index + 1]; // skip the "tag" entry
+	return entries[member_index + 1]; // skip the "tag" entry
 }
 
 const Vector &UnionVector::GetTags(const Vector &vector) {
 	// the tag vector is always the first struct child.
-	return *StructVector::GetEntries(vector)[0];
+	return StructVector::GetEntries(vector)[0];
 }
 
 Vector &UnionVector::GetTags(Vector &vector) {
 	// the tag vector is always the first struct child.
-	return *StructVector::GetEntries(vector)[0];
+	return StructVector::GetEntries(vector)[0];
 }
 
 void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &member_vector, idx_t count,
@@ -2951,7 +2948,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 
 bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &result) {
 	// the tag vector is always the first struct child.
-	auto &tag_vector = *StructVector::GetEntries(vector)[0];
+	auto &tag_vector = StructVector::GetEntries(vector)[0];
 	if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(tag_vector);
 		auto &dict_sel = DictionaryVector::SelVector(tag_vector);
@@ -3012,7 +3009,7 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 	auto &entries = StructVector::GetEntries(vector_p);
 	duckdb::vector<UnifiedVectorFormat> child_vdata(entries.size());
 	for (idx_t entry_idx = 0; entry_idx < entries.size(); entry_idx++) {
-		auto &child = *entries[entry_idx];
+		auto &child = entries[entry_idx];
 		child.ToUnifiedFormat(count, child_vdata[entry_idx]);
 	}
 
@@ -3094,67 +3091,67 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 // VariantVector
 //===--------------------------------------------------------------------===//
 Vector &VariantVector::GetKeys(Vector &vec) {
-	return *StructVector::GetEntries(vec)[0];
+	return StructVector::GetEntries(vec)[0];
 }
 Vector &VariantVector::GetKeys(const Vector &vec) {
-	return *StructVector::GetEntries(vec)[0];
+	return StructVector::GetEntries(const_cast<Vector &>(vec))[0];
 }
 
 Vector &VariantVector::GetChildren(Vector &vec) {
-	return *StructVector::GetEntries(vec)[1];
+	return StructVector::GetEntries(vec)[1];
 }
 Vector &VariantVector::GetChildren(const Vector &vec) {
-	return *StructVector::GetEntries(vec)[1];
+	return StructVector::GetEntries(const_cast<Vector &>(vec))[1];
 }
 
 Vector &VariantVector::GetChildrenKeysIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
-	return *StructVector::GetEntries(children)[0];
+	return StructVector::GetEntries(children)[0];
 }
 Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
-	return *StructVector::GetEntries(children)[0];
+	return StructVector::GetEntries(children)[0];
 }
 
 Vector &VariantVector::GetChildrenValuesIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
-	return *StructVector::GetEntries(children)[1];
+	return StructVector::GetEntries(children)[1];
 }
 Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
-	return *StructVector::GetEntries(children)[1];
+	return StructVector::GetEntries(children)[1];
 }
 
 Vector &VariantVector::GetValues(Vector &vec) {
-	return *StructVector::GetEntries(vec)[2];
+	return StructVector::GetEntries(vec)[2];
 }
 Vector &VariantVector::GetValues(const Vector &vec) {
-	return *StructVector::GetEntries(vec)[2];
+	return StructVector::GetEntries(const_cast<Vector &>(vec))[2];
 }
 
 Vector &VariantVector::GetValuesTypeId(Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
-	return *StructVector::GetEntries(values)[0];
+	return StructVector::GetEntries(values)[0];
 }
 Vector &VariantVector::GetValuesTypeId(const Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
-	return *StructVector::GetEntries(values)[0];
+	return StructVector::GetEntries(values)[0];
 }
 
 Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
-	return *StructVector::GetEntries(values)[1];
+	return StructVector::GetEntries(values)[1];
 }
 Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
-	return *StructVector::GetEntries(values)[1];
+	return StructVector::GetEntries(values)[1];
 }
 
 Vector &VariantVector::GetData(Vector &vec) {
-	return *StructVector::GetEntries(vec)[3];
+	return StructVector::GetEntries(vec)[3];
 }
 Vector &VariantVector::GetData(const Vector &vec) {
-	return *StructVector::GetEntries(vec)[3];
+	return StructVector::GetEntries(const_cast<Vector &>(vec))[3];
 }
 
 const UnifiedVectorFormat &UnifiedVariantVector::GetKeys(const RecursiveUnifiedVectorFormat &vec) {
@@ -3197,22 +3194,22 @@ const UnifiedVectorFormat &UnifiedVariantVector::GetData(const RecursiveUnifiedV
 
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
+	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
 }
 
 Vector &ShreddedVector::GetUnshreddedVector(Vector &vec) {
 	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
+	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
 }
 
 const Vector &ShreddedVector::GetShreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
+	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
 }
 
 Vector &ShreddedVector::GetShreddedVector(Vector &vec) {
 	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
+	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
 }
 
 void ShreddedVector::Unshred(Vector &vec, idx_t count) {

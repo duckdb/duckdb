@@ -63,7 +63,7 @@ struct StructTypeState {
 		input.ToUnifiedFormat(count, main_data);
 
 		for (idx_t i = 0; i < CHILD_COUNT; i++) {
-			entries[i]->ToUnifiedFormat(count, child_data[i]);
+			entries[i].ToUnifiedFormat(count, child_data[i]);
 		}
 	}
 };
@@ -88,7 +88,7 @@ struct StructTypeUnary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
+		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
 		a_data[i] = value.a_val;
 	}
 };
@@ -119,8 +119,8 @@ struct StructTypeBinary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
+		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
+		auto b_data = FlatVector::GetData<B_TYPE>(entries[1]);
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
 	}
@@ -158,9 +158,9 @@ struct StructTypeTernary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
-		auto c_data = FlatVector::GetData<C_TYPE>(*entries[2]);
+		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
+		auto b_data = FlatVector::GetData<B_TYPE>(entries[1]);
+		auto c_data = FlatVector::GetData<C_TYPE>(entries[2]);
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
 		c_data[i] = value.c_val;
@@ -205,10 +205,10 @@ struct StructTypeQuaternary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
-		auto c_data = FlatVector::GetData<C_TYPE>(*entries[2]);
-		auto d_data = FlatVector::GetData<D_TYPE>(*entries[3]);
+		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
+		auto b_data = FlatVector::GetData<B_TYPE>(entries[1]);
+		auto c_data = FlatVector::GetData<C_TYPE>(entries[2]);
+		auto d_data = FlatVector::GetData<D_TYPE>(entries[3]);
 
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;

@@ -10,7 +10,7 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector>> &members, Vector &target,
+static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members, Vector &target,
                                   const idx_t count, Vector &result) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
@@ -27,10 +27,10 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 	vector<const T *> member_datas;
 	vector<UnifiedVectorFormat> member_vectors;
 	idx_t total_matches = 0;
-	for (const auto &member : members) {
-		if (member->GetType().InternalType() == target_type.InternalType()) {
+	for (auto &member : members) {
+		if (member.GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
-			member->ToUnifiedFormat(count, member_format);
+			member.ToUnifiedFormat(count, member_format);
 			member_datas.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
 			total_matches++;
@@ -111,19 +111,18 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-static void StructNestedOp(Vector &input_vector, vector<unique_ptr<Vector>> &members, Vector &target, const idx_t count,
+static void StructNestedOp(Vector &input_vector, vector<Vector> &members, Vector &target, const idx_t count,
                            Vector &result) {
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 
 	// Set up sort keys for nested types.
 	const auto members_size = members.size();
-	vector<unique_ptr<Vector>> member_sort_key_vectors;
+	vector<Vector> member_sort_key_vectors;
 	for (idx_t i = 0; i < members_size; i++) {
 		Vector member_sort_key_vec(LogicalType::BLOB, count);
-		CreateSortKeyHelpers::CreateSortKeyWithValidity(*members[i], member_sort_key_vec, order_modifiers, count);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(members[i], member_sort_key_vec, order_modifiers, count);
 
-		auto member_sort_key_ptr = make_uniq<Vector>(member_sort_key_vec);
-		member_sort_key_vectors.push_back(std::move(member_sort_key_ptr));
+		member_sort_key_vectors.push_back(std::move(member_sort_key_vec));
 	}
 
 	Vector target_sort_key_vec(LogicalType::BLOB, count);
@@ -134,7 +133,7 @@ static void StructNestedOp(Vector &input_vector, vector<unique_ptr<Vector>> &mem
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-static void StructSearchOp(Vector &input_vector, vector<unique_ptr<Vector>> &members, Vector &target, const idx_t count,
+static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector &target, const idx_t count,
                            Vector &result) {
 	const auto &target_type = target.GetType().InternalType();
 	switch (target_type) {

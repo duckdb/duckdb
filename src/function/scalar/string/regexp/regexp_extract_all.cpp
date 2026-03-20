@@ -253,7 +253,7 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 
 static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::RE2 &re,
                                         vector<duckdb_re2::StringPiece> &group_spans,
-                                        vector<unique_ptr<Vector>> &child_entries, Vector &result, idx_t row) {
+                                        vector<Vector> &child_entries, Vector &result, idx_t row) {
 	const idx_t group_count = child_entries.size();
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	idx_t current_list_size = ListVector::GetListSize(result);
@@ -268,7 +268,7 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 		}
 		// Write each selected group
 		for (idx_t g = 0; g < group_count; g++) {
-			auto &child_vec = *child_entries[g];
+			auto &child_vec = child_entries[g];
 			child_vec.SetVectorType(VectorType::FLAT_VECTOR);
 			auto cdata = FlatVector::GetData<string_t>(child_vec);
 			auto &span = group_spans[g + 1];
@@ -312,8 +312,8 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	// Reference original string buffer for zero-copy substring assignment
 	for (auto &child : child_entries) {
-		child->SetAuxiliary(strings.GetAuxiliary());
-		child->SetVectorType(VectorType::FLAT_VECTOR);
+		child.SetAuxiliary(strings.GetAuxiliary());
+		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
 	UnifiedVectorFormat strings_data;

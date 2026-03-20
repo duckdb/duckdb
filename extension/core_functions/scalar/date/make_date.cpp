@@ -57,9 +57,9 @@ void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &res
 
 	auto &children = StructVector::GetEntries(vec);
 	D_ASSERT(children.size() == 3);
-	auto &yyyy = *children[0];
-	auto &mm = *children[1];
-	auto &dd = *children[2];
+	auto &yyyy = children[0];
+	auto &mm = children[1];
+	auto &dd = children[2];
 
 	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result, input.size(), FromDateCast<T>);
 }

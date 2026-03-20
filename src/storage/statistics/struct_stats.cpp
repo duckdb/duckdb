@@ -133,7 +133,7 @@ child_list_t<Value> StructStats::ToStruct(const BaseStatistics &stats) {
 void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		stats.child_stats[i].Verify(*child_entries[i], sel, count, true);
+		stats.child_stats[i].Verify(child_entries[i], sel, count, true);
 	}
 }
 

@@ -144,7 +144,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	D_ASSERT(rhs_struct_layout.ColumnCount() == lhs_struct_vectors.size());
 
 	for (idx_t struct_col_idx = 0; struct_col_idx < rhs_struct_layout.ColumnCount(); struct_col_idx++) {
-		auto &lhs_struct_vector = *lhs_struct_vectors[struct_col_idx];
+		auto &lhs_struct_vector = lhs_struct_vectors[struct_col_idx];
 		auto &lhs_struct_format = lhs_format.children[struct_col_idx];
 		const auto &child_function = child_functions[struct_col_idx];
 		match_count = child_function.function(lhs_struct_vector, lhs_struct_format, sel, match_count, rhs_struct_layout,

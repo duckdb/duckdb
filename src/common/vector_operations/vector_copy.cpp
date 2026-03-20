@@ -186,7 +186,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		auto &target_children = StructVector::GetEntries(target);
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
-			VectorOperations::Copy(*source_children[i], *target_children[i], sel_p, source_count, source_offset,
+			VectorOperations::Copy(source_children[i], target_children[i], sel_p, source_count, source_offset,
 			                       target_offset, copy_count);
 		}
 		break;
