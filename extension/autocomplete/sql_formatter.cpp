@@ -737,6 +737,239 @@ static string CollapseFirstCondition(const string &formatted, const FormatterCon
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 4: expand CREATE TABLE column list to one column per line
+// ─────────────────────────────────────────────────────────────────────────────
+
+//! Split s at top-level commas (depth-0, outside parens and string literals).
+static vector<string> SplitTopLevelCommas(const string &s) {
+	vector<string> parts;
+	int32_t depth = 0;
+	bool in_str = false;
+	char str_char = '\0';
+	idx_t start = 0;
+	for (idx_t k = 0; k < s.size(); k++) {
+		const char c = s[k];
+		if (in_str) {
+			if (c == str_char) {
+				in_str = false;
+			}
+		} else if (c == '\'' || c == '"' || c == '`') {
+			in_str = true;
+			str_char = c;
+		} else if (c == '(') {
+			depth++;
+		} else if (c == ')') {
+			depth--;
+		} else if (c == ',' && depth == 0) {
+			string part = s.substr(start, k - start);
+			idx_t ts = 0;
+			while (ts < part.size() && part[ts] == ' ') {
+				ts++;
+			}
+			idx_t te = part.size();
+			while (te > ts && part[te - 1] == ' ') {
+				te--;
+			}
+			if (ts < te) {
+				parts.push_back(part.substr(ts, te - ts));
+			}
+			start = k + 1;
+		}
+	}
+	// last part
+	{
+		string part = s.substr(start);
+		idx_t ts = 0;
+		while (ts < part.size() && part[ts] == ' ') {
+			ts++;
+		}
+		idx_t te = part.size();
+		while (te > ts && part[te - 1] == ' ') {
+			te--;
+		}
+		if (ts < te) {
+			parts.push_back(part.substr(ts, te - ts));
+		}
+	}
+	return parts;
+}
+
+//! Find the closing ')' that matches the '(' at open_pos in s.
+//! Returns string::npos if not found.
+static idx_t FindMatchingClose(const string &s, idx_t open_pos) {
+	int32_t depth = 0;
+	bool in_str = false;
+	char str_char = '\0';
+	for (idx_t k = open_pos; k < s.size(); k++) {
+		const char c = s[k];
+		if (in_str) {
+			if (c == str_char) {
+				in_str = false;
+			}
+		} else if (c == '\'' || c == '"' || c == '`') {
+			in_str = true;
+			str_char = c;
+		} else if (c == '(') {
+			depth++;
+		} else if (c == ')') {
+			depth--;
+			if (depth == 0) {
+				return k;
+			}
+		}
+	}
+	return string::npos;
+}
+
+//! Returns the length of a CREATE [OR REPLACE] [TEMP|TEMPORARY] TABLE prefix
+//! in upper_trimmed, or 0 if none matches.
+static idx_t MatchCreateTablePrefix(const string &upper_trimmed) {
+	static const char *const prefixes[] = {
+	    "CREATE OR REPLACE TEMPORARY TABLE",
+	    "CREATE OR REPLACE TEMP TABLE",
+	    "CREATE OR REPLACE TABLE",
+	    "CREATE TEMPORARY TABLE",
+	    "CREATE TEMP TABLE",
+	    "CREATE TABLE",
+	    nullptr,
+	};
+	for (idx_t p = 0; prefixes[p]; p++) {
+		const idx_t len = strlen(prefixes[p]);
+		if (upper_trimmed.size() >= len) {
+			const char next = (upper_trimmed.size() == len) ? '\0' : upper_trimmed[len];
+			if ((next == '\0' || next == ' ' || next == '(') &&
+			    upper_trimmed.compare(0, len, prefixes[p]) == 0) {
+				return len;
+			}
+		}
+	}
+	return 0;
+}
+
+//! Phase 4: expand CREATE TABLE column list so each column gets its own line.
+//! Handles both the inlined form (CREATE TABLE t(a, b)) and the two-line form
+//! (CREATE TABLE / <indent>tablename(a, b)) produced by earlier phases.
+static string ExpandTableDefinition(const string &formatted, const FormatterConfig &config) {
+	vector<string> lines;
+	{
+		idx_t start = 0;
+		for (idx_t k = 0; k <= formatted.size(); k++) {
+			if (k == formatted.size() || formatted[k] == '\n') {
+				lines.push_back(formatted.substr(start, k - start));
+				start = k + 1;
+			}
+		}
+	}
+
+	vector<string> out;
+	out.reserve(lines.size() + 16);
+
+	for (idx_t i = 0; i < lines.size();) {
+		const string &line = lines[i];
+		const idx_t indent = LeadingSpaces(line);
+		const string trimmed = TrimLeft(line);
+		const string upper_trimmed = StringUtil::Upper(trimmed);
+		const idx_t prefix_len = MatchCreateTablePrefix(upper_trimmed);
+
+		if (prefix_len == 0) {
+			out.push_back(line);
+			i++;
+			continue;
+		}
+
+		// Look for the '(' that opens the column list.  It may be on the
+		// current line (when Phase 2 inlined the clause) or the next line
+		// (when the content was kept on a separate indented line).
+		idx_t paren_pos = string::npos;
+		for (idx_t k = indent + prefix_len; k < line.size(); k++) {
+			if (line[k] == '(') {
+				paren_pos = k;
+				break;
+			}
+		}
+
+		string prefix_part; // everything up to (but not including) '('
+		string col_list;    // content between outermost '(' and ')'
+		string suffix;      // anything after the closing ')'
+		bool consumed_next = false;
+
+		if (paren_pos != string::npos) {
+			// Case B: CREATE TABLE … tablename(cols) all on one line.
+			const idx_t close_pos = FindMatchingClose(line, paren_pos);
+			if (close_pos == string::npos) {
+				out.push_back(line);
+				i++;
+				continue;
+			}
+			prefix_part = line.substr(0, paren_pos);
+			col_list = line.substr(paren_pos + 1, close_pos - paren_pos - 1);
+			suffix = line.substr(close_pos + 1);
+		} else if (i + 1 < lines.size()) {
+			// Case A: keyword on line i, "tablename(cols)" on line i+1.
+			const string &next_line = lines[i + 1];
+			idx_t next_paren = string::npos;
+			for (idx_t k = 0; k < next_line.size(); k++) {
+				if (next_line[k] == '(') {
+					next_paren = k;
+					break;
+				}
+			}
+			if (next_paren == string::npos) {
+				out.push_back(line);
+				i++;
+				continue;
+			}
+			const idx_t close_pos = FindMatchingClose(next_line, next_paren);
+			if (close_pos == string::npos) {
+				out.push_back(line);
+				i++;
+				continue;
+			}
+			// Merge keyword line and table-spec from next line onto one prefix.
+			const string table_spec = TrimLeft(next_line.substr(0, next_paren));
+			prefix_part = string(indent, ' ') + trimmed + ' ' + table_spec;
+			col_list = next_line.substr(next_paren + 1, close_pos - next_paren - 1);
+			suffix = next_line.substr(close_pos + 1);
+			consumed_next = true;
+		} else {
+			out.push_back(line);
+			i++;
+			continue;
+		}
+
+		// Split column list and emit one column per line (only when multi-column).
+		const vector<string> cols = SplitTopLevelCommas(col_list);
+		if (cols.size() <= 1) {
+			// Single column (or empty): keep the definition on one line.
+			out.push_back(prefix_part + "(" + col_list + ")" + suffix);
+		} else {
+			const string col_indent = string(indent + config.indent_size, ' ');
+			out.push_back(prefix_part + "(");
+			for (idx_t c = 0; c < cols.size(); c++) {
+				string col_line = col_indent + cols[c];
+				if (c + 1 < cols.size()) {
+					col_line += ',';
+				}
+				out.push_back(std::move(col_line));
+			}
+			out.push_back(string(indent, ' ') + ")" + suffix);
+		}
+
+		i += consumed_next ? 2 : 1;
+	}
+
+	string result;
+	result.reserve(formatted.size() + out.size() * 4);
+	for (idx_t k = 0; k < out.size(); k++) {
+		if (k > 0) {
+			result += '\n';
+		}
+		result += out[k];
+	}
+	return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -751,7 +984,8 @@ string FormatSQL(const string &sql, const FormatterConfig &config) {
 
 	string multiline = FormatMultiline(tokens, config);
 	string merged = MergeShortClauses(multiline, config);
-	return CollapseFirstCondition(merged, config);
+	string collapsed = CollapseFirstCondition(merged, config);
+	return ExpandTableDefinition(collapsed, config);
 }
 
 } // namespace duckdb

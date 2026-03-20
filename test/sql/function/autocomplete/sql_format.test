@@ -208,46 +208,61 @@ duckdb_format_sql: unknown config key 'bad_key'
 
 # ══ CREATE TABLE / DDL ════════════════════════════════════════════════════════
 
-# ── Short CREATE TABLE — fits inline ─────────────────────────────────────────
+# ── Short CREATE TABLE — single column stays inline ──────────────────────────
 query I
 SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER PRIMARY KEY)') = $$CREATE TABLE t(id INTEGER PRIMARY KEY)$$
 ----
 true
 
-# ── Long CREATE TABLE — column list stays on one line after table name ────────
+# ── Long CREATE TABLE — one column per line ───────────────────────────────────
 query I
-SELECT duckdb_format_sql('CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL(10,2) DEFAULT 0, status VARCHAR(20))') = $$CREATE TABLE
-    orders(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL (10, 2) DEFAULT 0, status VARCHAR (20))$$
+SELECT duckdb_format_sql('CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL(10,2) DEFAULT 0, status VARCHAR(20))') = $$CREATE TABLE orders(
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    amount DECIMAL (10, 2) DEFAULT 0,
+    status VARCHAR (20)
+)$$
 ----
 true
 
 # ── CREATE TABLE with table-level PRIMARY KEY and FOREIGN KEY constraints ─────
 query I
-SELECT duckdb_format_sql('CREATE TABLE t (a INTEGER, b INTEGER, PRIMARY KEY (a, b), FOREIGN KEY (b) REFERENCES other(id))') = $$CREATE TABLE
-    t(a INTEGER, b INTEGER, PRIMARY KEY (a, b), FOREIGN KEY (b) REFERENCES other(id))$$
+SELECT duckdb_format_sql('CREATE TABLE t (a INTEGER, b INTEGER, PRIMARY KEY (a, b), FOREIGN KEY (b) REFERENCES other(id))') = $$CREATE TABLE t(
+    a INTEGER,
+    b INTEGER,
+    PRIMARY KEY (a, b),
+    FOREIGN KEY (b) REFERENCES other(id)
+)$$
 ----
 true
 
 # ── CREATE TABLE with UNIQUE, DEFAULT, and inline PRIMARY KEY ─────────────────
 query I
-SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))') = $$CREATE TABLE
-    t(id INTEGER, name VARCHAR (100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))$$
+SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))') = $$CREATE TABLE t(
+    id INTEGER,
+    name VARCHAR (100) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT current_timestamp,
+    PRIMARY KEY (id)
+)$$
 ----
 true
 
-# ── CREATE TABLE IF NOT EXISTS — fits inline ──────────────────────────────────
+# ── CREATE TABLE IF NOT EXISTS — single column stays inline ───────────────────
 query I
 SELECT duckdb_format_sql('CREATE TABLE IF NOT EXISTS t (id INTEGER)') = $$CREATE TABLE IF NOT EXISTS t(id INTEGER)$$
 ----
 true
 
-# ── CREATE TEMP TABLE — fits inline ───────────────────────────────────────────
+# ── CREATE TEMP TABLE ─────────────────────────────────────────────────────────
 query I
-SELECT duckdb_format_sql('CREATE TEMP TABLE t (id INTEGER, name VARCHAR)') = $$CREATE TEMP TABLE t(id INTEGER, name VARCHAR)$$
+SELECT duckdb_format_sql('CREATE TEMP TABLE t (id INTEGER, name VARCHAR)') = $$CREATE TEMP TABLE t(
+    id INTEGER,
+    name VARCHAR
+)$$
 ----
 true
 
-# ── CREATE OR REPLACE TABLE — fits inline ────────────────────────────────────
+# ── CREATE OR REPLACE TABLE — single column stays inline ─────────────────────
 query I
 SELECT duckdb_format_sql('CREATE OR REPLACE TABLE t (id INTEGER)') = $$CREATE OR REPLACE TABLE t(id INTEGER)$$
 ----
