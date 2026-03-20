@@ -33,6 +33,12 @@
         "test/sql/logging/physical_operator_logging.test_slow",
         "test/logging/warnings_as_errors.test"
       ]
+    },
+    {
+      "reason": "Parquet metadata cache doesn't survive restarts",
+      "paths": [
+        "test/sql/copy/parquet/parquet_glob_cache.test"
+      ]
     }
   ]
 }
