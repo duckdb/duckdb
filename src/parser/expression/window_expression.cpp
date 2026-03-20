@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
+WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children_p,
                                    unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
-    : ParsedExpression(type, ExpressionClass::WINDOW), children(std::move(children)) {
+    : ParsedExpression(type, ExpressionClass::WINDOW), children(std::move(children_p)) {
 	if (offset_expr) {
 		children.emplace_back(std::move(offset_expr));
 	}
