@@ -188,7 +188,10 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
-
+	if (default_database.empty()) {
+		default_database = attached_db->GetName();
+		;
+	}
 	//! Initialize the database.
 	if (options.is_main_database) {
 		attached_db->SetInitialDatabase();
@@ -209,9 +212,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
                                                                shared_ptr<AttachedDatabase> attached_db) {
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
-	if (default_database.empty()) {
-		default_database = name;
-	}
+
 	shared_ptr<AttachedDatabase> detached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
