@@ -152,6 +152,62 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult FormatFile(ShellState &state, const vector<string> &args) {
+	state.readStdin = false;
+	const string &filename = args[1];
+
+	// Read the file into a string.
+	FILE *f = fopen(filename.c_str(), "rb");
+	if (!f) {
+		state.PrintF(PrintOutput::STDERR, "%s: cannot open '%s': %s\n", state.program_name, filename.c_str(),
+		             strerror(errno));
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	string sql;
+	{
+		char buf[4096];
+		size_t n;
+		while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+			sql.append(buf, n);
+		}
+	}
+	fclose(f);
+
+	// Format through the duckdb_format_sql SQL function using a prepared statement
+	// so the file content is passed as a parameter (no escaping needed).
+	auto prepared = state.conn->Prepare("SELECT duckdb_format_sql($1)");
+	if (prepared->HasError()) {
+		state.PrintF(PrintOutput::STDERR, "%s: %s\n", state.program_name, prepared->GetError().c_str());
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	vector<duckdb::Value> params = {duckdb::Value(sql)};
+	auto result = prepared->Execute(params, /*allow_stream_result=*/false);
+	if (result->HasError()) {
+		state.PrintF(PrintOutput::STDERR, "%s: %s\n", state.program_name, result->GetError().c_str());
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	auto &mat = result->Cast<duckdb::MaterializedQueryResult>();
+	if (mat.RowCount() == 0 || mat.GetValue(0, 0).IsNull()) {
+		return MetadataResult::EXIT;
+	}
+	const string formatted = mat.GetValue(0, 0).ToString() + "\n";
+
+	// Write the formatted SQL back to the same file.
+	FILE *out = fopen(filename.c_str(), "wb");
+	if (!out) {
+		state.PrintF(PrintOutput::STDERR, "%s: cannot write '%s': %s\n", state.program_name, filename.c_str(),
+		             strerror(errno));
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	fwrite(formatted.c_str(), 1, formatted.size(), out);
+	fclose(out);
+	return MetadataResult::EXIT;
+}
+
 static const CommandLineOption command_line_options[] = {
     {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
     {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error"},
@@ -163,6 +219,7 @@ static const CommandLineOption command_line_options[] = {
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
+    {"format-file", 1, "FILENAME", EnableBatch, FormatFile, "format SQL in file, writing result back to the file"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
     {"h", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
