@@ -462,6 +462,7 @@ public:
 		if (!MatchIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = GetTokenType();
 		return MatchResultType::SUCCESS;
 	}
 
@@ -487,6 +488,31 @@ public:
 			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset));
+	}
+
+	TokenType GetTokenType() const {
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+			return TokenType::CATALOG_NAME;
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+			return TokenType::SCHEMA_NAME;
+		case SuggestionState::SUGGEST_TABLE_NAME:
+			return TokenType::TABLE_NAME;
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			return TokenType::TYPE_NAME;
+		case SuggestionState::SUGGEST_COLUMN_NAME:
+			return TokenType::COLUMN_NAME;
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+			return TokenType::SCALAR_FUNCTION;
+		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			return TokenType::TABLE_FUNCTION;
+		case SuggestionState::SUGGEST_PRAGMA_NAME:
+			return TokenType::PRAGMA_FUNCTION;
+		case SuggestionState::SUGGEST_SETTING_NAME:
+			return TokenType::SETTING_NAME;
+		default:
+			return TokenType::IDENTIFIER;
+		}
 	}
 
 	bool SupportsStringLiteral() const {
@@ -602,6 +628,7 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = GetTokenType();
 		return MatchResultType::SUCCESS;
 	}
 
@@ -656,6 +683,7 @@ public:
 		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = TokenType::STRING_LITERAL;
 		return MatchResultType::SUCCESS;
 	}
 
@@ -728,6 +756,7 @@ public:
 		if (!MatchNumberLiteral(state)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = TokenType::NUMBER_LITERAL;
 		return MatchResultType::SUCCESS;
 	}
 
