@@ -3094,22 +3094,23 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 Vector &VariantVector::GetKeys(Vector &vec) {
 	return StructVector::GetEntries(vec)[0];
 }
-Vector &VariantVector::GetKeys(const Vector &vec) {
-	return StructVector::GetEntries(const_cast<Vector &>(vec))[0];
+const Vector &VariantVector::GetKeys(const Vector &vec) {
+	return StructVector::GetEntries(vec)[0];
 }
 
 Vector &VariantVector::GetChildren(Vector &vec) {
 	return StructVector::GetEntries(vec)[1];
 }
-Vector &VariantVector::GetChildren(const Vector &vec) {
-	return StructVector::GetEntries(const_cast<Vector &>(vec))[1];
+const Vector &VariantVector::GetChildren(const Vector &vec) {
+	return StructVector::GetEntries(vec)[1];
 }
 
 Vector &VariantVector::GetChildrenKeysIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return StructVector::GetEntries(children)[0];
 }
-Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
+
+const Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return StructVector::GetEntries(children)[0];
 }
@@ -3118,7 +3119,7 @@ Vector &VariantVector::GetChildrenValuesIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return StructVector::GetEntries(children)[1];
 }
-Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
+const Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return StructVector::GetEntries(children)[1];
 }
@@ -3126,15 +3127,15 @@ Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
 Vector &VariantVector::GetValues(Vector &vec) {
 	return StructVector::GetEntries(vec)[2];
 }
-Vector &VariantVector::GetValues(const Vector &vec) {
-	return StructVector::GetEntries(const_cast<Vector &>(vec))[2];
+const Vector &VariantVector::GetValues(const Vector &vec) {
+	return StructVector::GetEntries(vec)[2];
 }
 
 Vector &VariantVector::GetValuesTypeId(Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
 	return StructVector::GetEntries(values)[0];
 }
-Vector &VariantVector::GetValuesTypeId(const Vector &vec) {
+const Vector &VariantVector::GetValuesTypeId(const Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
 	return StructVector::GetEntries(values)[0];
 }
@@ -3143,7 +3144,7 @@ Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
 	return StructVector::GetEntries(values)[1];
 }
-Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
+const Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
 	return StructVector::GetEntries(values)[1];
 }
@@ -3151,8 +3152,8 @@ Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
 Vector &VariantVector::GetData(Vector &vec) {
 	return StructVector::GetEntries(vec)[3];
 }
-Vector &VariantVector::GetData(const Vector &vec) {
-	return StructVector::GetEntries(const_cast<Vector &>(vec))[3];
+const Vector &VariantVector::GetData(const Vector &vec) {
+	return StructVector::GetEntries(vec)[3];
 }
 
 const UnifiedVectorFormat &UnifiedVariantVector::GetKeys(const RecursiveUnifiedVectorFormat &vec) {
