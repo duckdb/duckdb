@@ -1,5 +1,5 @@
 # name: test/sql/json/scalar/test_json_deep_merge.test
-# description: Test JSON deep merge (null-preserving merge)
+# description: Test JSON deep merge (coalescing merge: null in patch = absent, skip)
 # group: [scalar]
 
 require json
@@ -7,7 +7,7 @@ require json
 statement ok
 pragma enable_verification
 
-# Basic merge
+# Basic merge (non-null patch value overwrites)
 query T
 SELECT json_deep_merge('{"a": 1}', '{"a": 2}')
 ----
@@ -29,35 +29,41 @@ SELECT json_deep_merge('{"a": {"b": 1}}', '{"a": {"b": 2}}')
 ----
 {"a":{"b":2}}
 
-# KEY DIFFERENCE from json_merge_patch: null is PRESERVED
+# KEY DIFFERENCE from json_merge_patch: null in patch = skip, keep original
 query T
 SELECT json_deep_merge('{"a":1,"b":2}', '{"b":null}')
 ----
-{"a":1,"b":null}
+{"a":1,"b":2}
 
-# Nested null preservation
+# Nested null skipping: original value preserved
 query T
 SELECT json_deep_merge('{"a":{"x":1,"y":2}}', '{"a":{"y":null,"z":3}}')
 ----
-{"a":{"x":1,"y":null,"z":3}}
+{"a":{"x":1,"y":2,"z":3}}
 
-# Null in base, real value in patch
+# Null in base, real value in patch: patch wins
 query T
 SELECT json_deep_merge('{"a":null}', '{"a":1}')
 ----
 {"a":1}
 
-# Both null
+# Both null: base null kept (patch null = skip)
 query T
 SELECT json_deep_merge('{"a":null}', '{"a":null}')
 ----
 {"a":null}
 
-# Deep nested null preservation
+# Deep nested null skipping
 query T
 SELECT json_deep_merge('{"a":{"b":{"c":1}}}', '{"a":{"b":{"c":null}}}')
 ----
-{"a":{"b":{"c":null}}}
+{"a":{"b":{"c":1}}}
+
+# Null in patch for key not in base: skipped entirely
+query T
+SELECT json_deep_merge('{"a":1}', '{"b":null}')
+----
+{"a":1}
 
 # Non-object: patch replaces base (same as merge_patch)
 query T
@@ -86,6 +92,22 @@ SELECT json_deep_merge('"hello"', '"world"')
 ----
 "world"
 
+# Null non-object patch: keep original
+query T
+SELECT json_deep_merge('"hello"', 'null')
+----
+"hello"
+
+query T
+SELECT json_deep_merge('42', 'null')
+----
+42
+
+query T
+SELECT json_deep_merge('[1,2]', 'null')
+----
+[1,2]
+
 # Array replacement (not merged, same as merge_patch)
 query T
 SELECT json_deep_merge('{"a":[1,2]}', '{"a":[3,4]}')
@@ -98,7 +120,7 @@ SELECT json_deep_merge('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }')
 ----
 {"b":2,"a":3,"c":4}
 
-# NULL input handling (same as merge_patch)
+# NULL input handling (same as merge_patch -- SQL NULL, not JSON null)
 query T
 SELECT json_deep_merge(NULL, '{"a":1}')
 ----
@@ -120,13 +142,13 @@ SELECT json_deep_merge('{"a":1}', '{"b":2}', '{"c":3}')
 ----
 {"a":1,"b":2,"c":3}
 
-# Varargs with null preservation
+# Varargs with null in patch: original preserved
 query T
 SELECT json_deep_merge('{"a":1}', '{"a":null}', '{"b":2}')
 ----
-{"a":null,"b":2}
+{"a":1,"b":2}
 
-# Varargs: null then overwrite
+# Varargs: null then overwrite with real value
 query T
 SELECT json_deep_merge('{"a":1}', '{"a":null}', '{"a":2}')
 ----
@@ -138,7 +160,7 @@ SELECT json_deep_merge('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 
 ----
 {"b":2,"c":4,"a":5,"d":6}
 
-# Varargs NULL handling
+# Varargs NULL handling (SQL NULL)
 query T
 SELECT json_deep_merge(NULL, '{"b":2}', '{"c":3}')
 ----
@@ -154,11 +176,11 @@ SELECT json_deep_merge('{"a":1}', '{"b":2}', NULL)
 ----
 NULL
 
-# Nested recursive merge with mixed null/non-null
+# Nested recursive merge with null skipping
 query T
 SELECT json_deep_merge('{"a":{"x":1,"y":2},"b":3}', '{"a":{"y":null,"z":4},"c":5}')
 ----
-{"b":3,"a":{"x":1,"y":null,"z":4},"c":5}
+{"b":3,"a":{"x":1,"y":2,"z":4},"c":5}
 
 # Empty objects
 query T
@@ -182,11 +204,11 @@ SELECT json_deep_merge('{"a":{"b":{"c":{"d":1}}}}', '{"a":{"b":{"c":{"e":2}}}}')
 ----
 {"a":{"b":{"c":{"d":1,"e":2}}}}
 
-# Null at different nesting levels
+# Null at different nesting levels: originals preserved
 query T
 SELECT json_deep_merge('{"a":{"b":1},"c":{"d":2}}', '{"a":null,"c":{"d":null}}')
 ----
-{"a":null,"c":{"d":null}}
+{"a":{"b":1},"c":{"d":2}}
 
 # Table-based test
 statement ok
@@ -201,26 +223,22 @@ INSERT INTO merge_data VALUES
 query IT
 SELECT id, json_deep_merge(base, patch) FROM merge_data ORDER BY id
 ----
-1	{"a":1,"b":null}
-2	{"x":{"y":null,"z":2}}
+1	{"a":1,"b":2}
+2	{"x":{"y":1,"z":2}}
 3	{"a":1}
 
 # Confirm difference from json_merge_patch
+# merge_patch: null = delete key
+# deep_merge:  null = skip, keep original
 query TT
 SELECT json_merge_patch('{"a":1,"b":2}', '{"b":null}'), json_deep_merge('{"a":1,"b":2}', '{"b":null}')
 ----
-{"a":1}	{"a":1,"b":null}
+{"a":1}	{"a":1,"b":2}
 
 query TT
 SELECT json_merge_patch('{"a":{"x":1}}', '{"a":{"x":null}}'), json_deep_merge('{"a":{"x":1}}', '{"a":{"x":null}}')
 ----
-{"a":{}}	{"a":{"x":null}}
-
-# Null value added to base where key didn't exist
-query T
-SELECT json_deep_merge('{"a":1}', '{"b":null}')
-----
-{"a":1,"b":null}
+{"a":{}}	{"a":{"x":1}}
 
 # Object replaces non-object in base
 query T
@@ -234,16 +252,27 @@ SELECT json_deep_merge('{"a":{"b":2}}', '{"a":1}')
 ----
 {"a":1}
 
-# Nested null preservation with new keys
+# Nested null skipping with new real keys
 query T
 SELECT json_deep_merge('{"a":{"x":1}}', '{"a":{"x":null,"y":2},"b":null}')
 ----
-{"a":{"x":null,"y":2},"b":null}
+{"a":{"x":1,"y":2}}
 
 # Constant vector test (verifies AllConstant path)
 query T
 SELECT json_deep_merge('{"a":1}', '{"b":null}') FROM range(3)
 ----
-{"a":1,"b":null}
-{"a":1,"b":null}
-{"a":1,"b":null}
+{"a":1}
+{"a":1}
+{"a":1}
+
+# Reconciliation use case: partial data fragments merged correctly
+# Fragment 1 knows column name but not parent
+# Fragment 2 knows parent but not column name
+query T
+SELECT json_deep_merge(
+    '{"columnName":"user_id","parentColumn":null}',
+    '{"columnName":null,"parentColumn":"accounts.id"}'
+)
+----
+{"columnName":"user_id","parentColumn":"accounts.id"}

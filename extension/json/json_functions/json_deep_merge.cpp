@@ -3,10 +3,15 @@
 
 namespace duckdb {
 
-//! Like yyjson_mut_merge_patch, but null values in patch overwrite rather than delete
+//! Coalescing deep merge: null in patch means "absent/unknown", keeps the original value.
+//! Non-null patch values overwrite. Nested objects are merged recursively.
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
-	// If patch is not an object, it replaces orig entirely
+	// If patch is not an object, it replaces orig entirely (unless null)
 	if (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) {
+		// Null in patch means "no data" -- keep original if available
+		if (unsafe_yyjson_is_null(patch) && orig) {
+			return yyjson_mut_val_mut_copy(doc, orig);
+		}
 		return yyjson_mut_val_mut_copy(doc, patch);
 	}
 
@@ -28,13 +33,13 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 		return nullptr;
 	}
 
-	// Copy all keys from orig that are NOT in patch
+	// Copy all keys from orig that are NOT in patch (or where patch value is null)
 	if (orig != &local_orig) {
 		idx_t idx, max;
 		yyjson_mut_val *key, *orig_val;
 		yyjson_mut_obj_foreach(orig, idx, max, key, orig_val) {
 			auto patch_val = yyjson_mut_obj_getn(patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-			if (!patch_val) {
+			if (!patch_val || unsafe_yyjson_is_null(patch_val)) {
 				auto mut_key = yyjson_mut_val_mut_copy(doc, key);
 				auto mut_val = yyjson_mut_val_mut_copy(doc, orig_val);
 				if (!yyjson_mut_obj_add(builder, mut_key, mut_val)) {
@@ -44,11 +49,14 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 		}
 	}
 
-	// Merge items from patch -- null values are preserved (unlike merge_patch which deletes them)
+	// Merge non-null items from patch -- null values are skipped (original preserved above)
 	{
 		idx_t idx, max;
 		yyjson_mut_val *key, *patch_val;
 		yyjson_mut_obj_foreach(patch, idx, max, key, patch_val) {
+			if (unsafe_yyjson_is_null(patch_val)) {
+				continue;
+			}
 			auto mut_key = yyjson_mut_val_mut_copy(doc, key);
 			auto orig_val = yyjson_mut_obj_getn(orig, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 			auto merged_val = DeepMerge(doc, orig_val, patch_val);
