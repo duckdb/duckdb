@@ -693,14 +693,6 @@ void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
 	sink.scan_pin_properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
 }
 
-idx_t RadixPartitionedHashTable::GetLocalGroupCount(LocalSinkState &lstate) {
-	auto &local_state = lstate.Cast<RadixHTLocalSinkState>();
-	if (!local_state.ht) {
-		return 0;
-	}
-	return local_state.ht->GetMaterializedCount();
-}
-
 enum class RadixHTSourceTaskType : uint8_t { NO_TASK, FINALIZE, SCAN };
 
 class RadixHTLocalSourceState;

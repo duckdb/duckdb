@@ -41,6 +41,8 @@ public:
 	vector<unique_ptr<BaseStatistics>> group_stats;
 	//! Whether the inputs to all expression are non-NULL
 	TupleDataValidityType distinct_validity;
+	//! Optional soft limit for early termination (GROUP BY without aggregates)
+	optional_idx limit;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

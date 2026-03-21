@@ -60,7 +60,6 @@ public:
 	const TupleDataLayout &GetLayout() const;
 	idx_t MaxThreads(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
-	static idx_t GetLocalGroupCount(LocalSinkState &lstate);
 
 private:
 	void SetGroupingValues();

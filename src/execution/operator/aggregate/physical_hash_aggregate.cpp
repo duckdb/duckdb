@@ -216,8 +216,6 @@ public:
 	vector<LogicalType> payload_types;
 	//! Whether or not the aggregate is finished
 	bool finished = false;
-	//! Whether enough distinct groups have been found
-	atomic<bool> distinct_limit_reached {false};
 };
 
 class HashAggregateLocalSinkState : public LocalSinkState {
@@ -407,22 +405,6 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;
 		table.Sink(context, chunk, sink_input, aggregate_input_chunk, non_distinct_filter);
-	}
-
-	// Check if we can early-terminate for distinct limit
-	if (distinct_limit.IsValid()) {
-		if (global_state.distinct_limit_reached.load(std::memory_order_relaxed)) {
-			return SinkResultType::FINISHED;
-		}
-		idx_t limit_val = distinct_limit.GetIndex();
-		for (idx_t i = 0; i < groupings.size(); i++) {
-			auto &grouping_local_state = local_state.grouping_states[i];
-			idx_t local_count = RadixPartitionedHashTable::GetLocalGroupCount(*grouping_local_state.table_state);
-			if (local_count >= limit_val) {
-				global_state.distinct_limit_reached.store(true, std::memory_order_relaxed);
-				return SinkResultType::FINISHED;
-			}
-		}
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;

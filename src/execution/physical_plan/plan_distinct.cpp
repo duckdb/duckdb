@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_limited_distinct.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -84,13 +85,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 
 	child = ExtractAggregateExpressions(child, aggregates, groups, nullptr);
 
+	if (op.limit.IsValid()) {
+		idx_t limit_val = op.limit.GetIndex();
+		auto &limited = Make<PhysicalLimitedDistinct>(aggregate_types, std::move(groups), std::move(aggregates),
+		                                             limit_val, child.get().estimated_cardinality);
+		limited.children.push_back(child);
+		if (!requires_projection) {
+			return limited;
+		}
+		auto &proj = Make<PhysicalProjection>(types, std::move(projections), limited.estimated_cardinality);
+		proj.children.push_back(limited);
+		return proj;
+	}
+
 	// we add a physical hash aggregation in the plan to select the distinct groups
 	auto &group_by = Make<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
 	                                             child.get().estimated_cardinality);
 	group_by.children.push_back(child);
-	if (op.limit.IsValid()) {
-		group_by.Cast<PhysicalHashAggregate>().distinct_limit = op.limit;
-	}
 	if (!requires_projection) {
 		return group_by;
 	}

@@ -84,9 +84,6 @@ public:
 	//! A recreation of the input chunk, with nulls for everything that isnt a group
 	vector<LogicalType> input_group_types;
 
-	//! Stop sinking when enough distinct groups are found
-	optional_idx distinct_limit;
-
 	//! Filters given to Sink and friends
 	unsafe_vector<idx_t> non_distinct_filter;
 	unsafe_vector<idx_t> distinct_filter;

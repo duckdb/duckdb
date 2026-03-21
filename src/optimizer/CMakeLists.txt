@@ -37,7 +37,6 @@ add_library_unity(
   row_group_pruner.cpp
   statistics_propagator.cpp
   limit_pushdown.cpp
-  limited_distinct_aggregation.cpp
   topn_optimizer.cpp
   topn_window_elimination.cpp
   unnest_rewriter.cpp

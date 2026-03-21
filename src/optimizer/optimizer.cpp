@@ -21,7 +21,6 @@
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
-#include "duckdb/optimizer/limited_distinct_aggregation.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -267,11 +266,8 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = limit_pushdown.Optimize(std::move(plan));
 	});
 
-	// pushes LIMIT into DISTINCT for early termination
-	RunOptimizer(OptimizerType::LIMITED_DISTINCT_AGGREGATION, [&]() {
-		LimitedDistinctAggregation limited_distinct_aggregation;
-		plan = limited_distinct_aggregation.Optimize(std::move(plan));
-	});
+	// Limit hints for DISTINCT/GROUP BY are now pushed during physical planning
+	RunOptimizer(OptimizerType::LIMITED_DISTINCT_AGGREGATION, [&]() {});
 
 	RunOptimizer(OptimizerType::ROW_GROUP_PRUNER, [&]() {
 		RowGroupPruner row_group_pruner(context);

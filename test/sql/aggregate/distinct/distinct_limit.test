@@ -1,15 +1,20 @@
 # name: test/sql/aggregate/distinct/distinct_limit.test
-# description: Test DISTINCT with LIMIT early termination
+# description: Test DISTINCT with LIMIT early termination using PhysicalLimitedDistinct
 # group: [distinct]
 
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA threads=4
+
+# basic DISTINCT with LIMIT
 query I
 SELECT COUNT(*) FROM (SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 10)
 ----
 10
 
+# DISTINCT with LIMIT and OFFSET
 query I
 SELECT COUNT(*) FROM (SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 5 OFFSET 3)
 ----
@@ -21,12 +26,13 @@ SELECT COUNT(*) FROM (SELECT DISTINCT i % 10 FROM range(1000000) t(i) LIMIT 100)
 ----
 10
 
+# limit 0
 query I
 SELECT COUNT(*) FROM (SELECT DISTINCT i FROM range(1000000) t(i) LIMIT 0)
 ----
 0
 
-# multiple columns
+# multi-column DISTINCT with LIMIT
 statement ok
 CREATE TABLE t1 AS SELECT i, i % 10 AS j FROM range(100000) t(i)
 
@@ -34,3 +40,73 @@ query I
 SELECT COUNT(*) FROM (SELECT DISTINCT i, j FROM t1 LIMIT 15)
 ----
 15
+
+# GROUP BY without aggregates uses PhysicalLimitedDistinct
+query I
+SELECT COUNT(*) FROM (SELECT i % 100 FROM range(1000000) t(i) GROUP BY 1 LIMIT 10)
+----
+10
+
+# GROUP BY with aggregate functions should NOT use PhysicalLimitedDistinct
+query I
+SELECT COUNT(*) FROM (SELECT i % 100, COUNT(*) FROM range(1000000) t(i) GROUP BY 1 LIMIT 10)
+----
+10
+
+# DISTINCT with ORDER BY uses TOP_N, not PhysicalLimitedDistinct
+query I
+SELECT DISTINCT i % 10 AS v FROM range(1000000) t(i) ORDER BY v LIMIT 5
+----
+0
+1
+2
+3
+4
+
+# empty table
+statement ok
+CREATE TABLE empty_table (i INTEGER)
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT i FROM empty_table LIMIT 10)
+----
+0
+
+# DISTINCT ON with LIMIT
+statement ok
+CREATE TABLE t2 AS SELECT i, i % 5 AS grp, i * 10 AS val FROM range(1000) t(i)
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT ON (grp) grp, val FROM t2 LIMIT 3)
+----
+3
+
+# EXPLAIN: DISTINCT + LIMIT shows LIMITED_DISTINCT
+query II
+EXPLAIN SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 10
+----
+physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
+
+# EXPLAIN: threshold-sized DISTINCT + LIMIT shows LIMITED_DISTINCT
+query II
+EXPLAIN SELECT DISTINCT i FROM range(100000) t(i) LIMIT 100000
+----
+physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
+
+# EXPLAIN: GROUP BY (no aggs) + LIMIT shows LIMITED_DISTINCT
+query II
+EXPLAIN SELECT i % 100 FROM range(1000000) t(i) GROUP BY 1 LIMIT 10
+----
+physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
+
+# EXPLAIN: GROUP BY with aggregates uses HASH_GROUP_BY
+query II
+EXPLAIN SELECT i % 100, COUNT(*) FROM range(1000000) t(i) GROUP BY 1 LIMIT 10
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*
+
+# EXPLAIN: DISTINCT + ORDER BY uses TOP_N
+query II
+EXPLAIN SELECT DISTINCT i % 100 AS v FROM range(1000000) t(i) ORDER BY v LIMIT 10
+----
+physical_plan	<REGEX>:.*TOP_N.*

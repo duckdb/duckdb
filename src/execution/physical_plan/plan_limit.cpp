@@ -3,6 +3,8 @@
 #include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
@@ -46,8 +48,50 @@ bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, Boun
 #endif
 }
 
+static bool TryPushLimitIntoChild(LogicalLimit &op) {
+	if (op.limit_val.Type() != LimitNodeType::CONSTANT_VALUE) {
+		return false;
+	}
+	if (op.offset_val.Type() != LimitNodeType::CONSTANT_VALUE && op.offset_val.Type() != LimitNodeType::UNSET) {
+		return false;
+	}
+
+	idx_t limit_value = op.limit_val.GetConstantValue();
+	idx_t offset_value = 0;
+	if (op.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		offset_value = op.offset_val.GetConstantValue();
+	}
+	idx_t total = limit_value + offset_value;
+
+	// Unpartitioned hash tables become expensive to Combine at large sizes
+	static constexpr idx_t LIMITED_DISTINCT_THRESHOLD = 100000;
+	if (total > LIMITED_DISTINCT_THRESHOLD) {
+		return false;
+	}
+
+	auto &child = *op.children[0];
+	if (child.type == LogicalOperatorType::LOGICAL_DISTINCT) {
+		child.Cast<LogicalDistinct>().limit = total;
+		return true;
+	}
+	if (child.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		auto &aggregate = child.Cast<LogicalAggregate>();
+		if (aggregate.expressions.empty() && !aggregate.groups.empty()) {
+			aggregate.limit = total;
+			return true;
+		}
+	}
+	return false;
+}
+
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	D_ASSERT(op.children.size() == 1);
+
+	// Try to push limit hint into DISTINCT or GROUP BY for early termination
+	// The hint tells the child to stop collecting groups once it has enough.
+	// We still create a physical LIMIT node on top to enforce the actual limit/offset.
+	TryPushLimitIntoChild(op);
+
 	auto &plan = CreatePlan(*op.children[0]);
 
 	switch (op.limit_val.Type()) {

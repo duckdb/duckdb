@@ -142,3 +142,12 @@ statement error
 select course, count(*) from students group by rollup (grouping_sets (course)) order by 1, 2;
 ----
 Catalog Error: Scalar Function with name grouping_sets does not exist
+
+# LIMIT pushdown must not replace ROLLUP with LIMITED_DISTINCT
+statement ok
+create table rollup_limit_t as select i % 3 as a from range(6) t(i);
+
+query I
+select count(*) from (select grouping(a), a from rollup_limit_t group by rollup (a) limit 10)
+----
+4
