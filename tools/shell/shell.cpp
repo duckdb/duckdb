@@ -2944,6 +2944,34 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 /*
 ** Linenoise completion callback
 */
+static char *linenoise_format(const char *zLine) {
+	auto &state = ShellState::Get();
+	if (!state.conn) {
+		return nullptr;
+	}
+	if (zLine[0] == '.' || zLine[0] == '#' || zLine[0] == '\3') {
+		return nullptr;
+	}
+	try {
+		auto prepared = state.conn->Prepare("SELECT duckdb_format_sql($1)");
+		if (prepared->HasError()) {
+			return nullptr;
+		}
+		vector<duckdb::Value> params = {duckdb::Value(string(zLine))};
+		auto result = prepared->Execute(params, /*allow_stream_result=*/false);
+		if (result->HasError()) {
+			return nullptr;
+		}
+		auto row = result->begin();
+		if (row == result->end() || (*row).IsNull(0)) {
+			return nullptr;
+		}
+		return strdup((*row).GetValue<string>(0).c_str());
+	} catch (std::exception &) {
+		return nullptr;
+	}
+}
+
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	auto &state = ShellState::Get();
 	try {
@@ -3245,6 +3273,7 @@ int RunShell(int argc, const char **argv) {
 #ifdef HAVE_LINENOISE
 			if (data.rl_version == ReadLineVersion::LINENOISE) {
 				linenoiseSetCompletionCallback(linenoise_completion);
+				linenoiseSetFormatCallback(linenoise_format);
 			}
 #endif
 			data.in = 0;

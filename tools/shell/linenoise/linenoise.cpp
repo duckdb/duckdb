@@ -34,6 +34,7 @@
 namespace duckdb {
 
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseFormatCallback *formatCallback = NULL;
 
 int linenoiseHistoryAdd(const char *line);
 
@@ -42,6 +43,40 @@ int linenoiseHistoryAdd(const char *line);
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
+}
+
+/* Register a callback function to be called to format the input before returning it to the shell. */
+void Linenoise::SetFormatCallback(linenoiseFormatCallback *fn) {
+	formatCallback = fn;
+}
+
+void Linenoise::Format() {
+	if (!formatCallback) {
+		return;
+	}
+	buf[len] = '\0';
+	char *formatted = formatCallback(buf);
+	if (!formatted) {
+		return;
+	}
+	// The formatter returns \n line endings, but linenoise multiline mode uses \r\n
+	// internally. Convert \n -> \r\n so RefreshLine() renders correctly.
+	// The \r\n -> \n rewrite in Edit() will convert them back before returning.
+	string converted;
+	for (const char *p = formatted; *p; p++) {
+		if (*p == '\n' && (p == formatted || *(p - 1) != '\r')) {
+			converted += '\r';
+		}
+		converted += *p;
+	}
+	free(formatted);
+	if (converted.size() >= buflen) {
+		return;
+	}
+	memcpy(buf, converted.c_str(), converted.size() + 1);
+	len = converted.size();
+	pos = len;
+	RefreshLine();
 }
 
 CompletionType Linenoise::GetCompletionType(const char *type) {
@@ -1530,6 +1565,7 @@ int Linenoise::Edit() {
 			// final refresh before returning control to the shell
 			continuation_markers = false;
 			History::RemoveLastEntry();
+			Format();
 			if (Terminal::IsMultiline()) {
 				if (pos == len) {
 					// already at the end - only refresh
