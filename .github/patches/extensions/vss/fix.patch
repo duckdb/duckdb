@@ -1,8 +1,13 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 1af2a74..9d78cb8 100644
+index 1af2a74..abe9e04 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
-@@ -613,7 +613,7 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/array_vector.hpp"
+ #include "hnsw/hnsw_index.hpp"
+ 
+ #include "duckdb/common/allocator.hpp"
+@@ -613,7 +614,7 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
  //------------------------------------------------------------------------------
  // Can rewrite index expression?
  //------------------------------------------------------------------------------
@@ -11,7 +16,7 @@ index 1af2a74..9d78cb8 100644
                                             const vector<ColumnIndex> &table_columns, bool &success, bool &found) {
  
  	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-@@ -626,7 +626,7 @@ static void TryBindIndexExpressionInternal(Expression &expr, idx_t table_idx, co
+@@ -626,7 +627,7 @@ static void TryBindIndexExpressionInternal(Expression &expr, idx_t table_idx, co
  		const auto referenced_column = index_columns[ref.binding.column_index];
  		for (idx_t i = 0; i < table_columns.size(); i++) {
  			if (table_columns[i].GetPrimaryIndex() == referenced_column) {
@@ -20,7 +25,7 @@ index 1af2a74..9d78cb8 100644
  				return;
  			}
  		}
-@@ -657,9 +657,9 @@ bool HNSWIndex::TryBindIndexExpression(LogicalGet &get, unique_ptr<Expression> &
+@@ -657,9 +658,9 @@ bool HNSWIndex::TryBindIndexExpression(LogicalGet &get, unique_ptr<Expression> &
  	return false;
  }
  
@@ -32,11 +37,25 @@ index 1af2a74..9d78cb8 100644
  }
  
  unique_ptr<ExpressionMatcher> HNSWIndex::MakeFunctionMatcher() const {
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index 488bde7..ef33ebe 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/array_vector.hpp"
+ #include "hnsw/hnsw_index_physical_create.hpp"
+ 
+ #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 783db2a..509197a 100644
+index 783db2a..9a2e945 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
 +++ b/src/hnsw/hnsw_optimize_join.cpp
-@@ -17,6 +17,8 @@
+@@ -1,3 +1,4 @@
++#include "duckdb/common/vector/array_vector.hpp"
+ #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+ #include "duckdb/optimizer/column_binding_replacer.hpp"
+ #include "duckdb/optimizer/optimizer.hpp"
+@@ -17,6 +18,8 @@
  #include "duckdb/storage/table/scan_state.hpp"
  #include "duckdb/storage/table/data_table_info.hpp"
  #include "duckdb/transaction/duck_transaction.hpp"
@@ -45,7 +64,7 @@ index 783db2a..509197a 100644
  #include "hnsw/hnsw.hpp"
  #include "hnsw/hnsw_index.hpp"
  
-@@ -51,7 +53,7 @@ public:
+@@ -51,7 +54,7 @@ public:
  	idx_t limit;
  
  	vector<column_t> inner_column_ids;
@@ -54,7 +73,7 @@ index 783db2a..509197a 100644
  
  	idx_t outer_vector_column;
  	idx_t inner_vector_column;
-@@ -183,7 +185,7 @@ InsertionOrderPreservingMap<string> PhysicalHNSWIndexJoin::ParamsToString() cons
+@@ -183,7 +186,7 @@ InsertionOrderPreservingMap<string> PhysicalHNSWIndexJoin::ParamsToString() cons
  
  class LogicalHNSWIndexJoin final : public LogicalExtensionOperator {
  public:
@@ -63,7 +82,7 @@ index 783db2a..509197a 100644
  	                              const idx_t limit_p)
  	    : table_index(table_index_p), table(table_p), hnsw_index(hnsw_index_p), limit(limit_p) {
  	}
-@@ -198,14 +200,14 @@ public:
+@@ -198,14 +201,14 @@ public:
  	idx_t EstimateCardinality(ClientContext &context) override;
  
  public:
@@ -80,7 +99,7 @@ index 783db2a..509197a 100644
  	vector<LogicalType> inner_returned_types;
  
  	idx_t outer_vector_column;
-@@ -253,7 +255,7 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetLeftBindings() {
+@@ -253,7 +256,7 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetLeftBindings() {
  	vector<ColumnBinding> result;
  	if (inner_projection_ids.empty()) {
  		for (idx_t col_idx = 0; col_idx < inner_column_ids.size(); col_idx++) {
@@ -89,7 +108,7 @@ index 783db2a..509197a 100644
  		}
  	} else {
  		for (auto proj_id : inner_projection_ids) {
-@@ -262,7 +264,7 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetLeftBindings() {
+@@ -262,7 +265,7 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetLeftBindings() {
  	}
  
  	// Always add the row number last
@@ -98,7 +117,7 @@ index 783db2a..509197a 100644
  
  	return result;
  }
-@@ -465,7 +467,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -465,7 +468,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  	if (filter_ref_expr.binding.table_index != window.window_index) {
  		return false;
  	}
@@ -107,7 +126,7 @@ index 783db2a..509197a 100644
  		return false;
  	}
  
-@@ -494,7 +496,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -494,7 +497,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  	if (distance_ref_expr.binding.column_index >= inner_proj.expressions.size()) {
  		return false;
  	}
@@ -116,7 +135,7 @@ index 783db2a..509197a 100644
  
  	//------------------------------------------------------------------------------
  	// Match the index
-@@ -598,7 +600,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -598,7 +601,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  	auto delim_bindings = delim_join.GetColumnBindings();
  	auto delim_types = delim_join.types;
  
@@ -125,7 +144,7 @@ index 783db2a..509197a 100644
  	for (idx_t i = 0; i < delim_bindings.size(); i++) {
  		auto &old_binding = delim_bindings[i];
  
-@@ -616,7 +618,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -616,7 +619,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  
  	// Also add the window expression to the projection last. We will replace this with a reference to the index join
  	// in the next inlining step
@@ -134,7 +153,7 @@ index 783db2a..509197a 100644
  	projection_expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, window_binding));
  	replacer.replacement_bindings.emplace_back(window_binding,
  	                                           ColumnBinding(projection_table_index, new_binding_idx++));
-@@ -641,8 +643,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -641,8 +644,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  			auto &outer_proj = outer_proj_ptr->get()->Cast<LogicalProjection>();
  			if (ref.binding.table_index == outer_proj.table_index) {
  				// assert that this can only be bound column ref
@@ -145,7 +164,7 @@ index 783db2a..509197a 100644
  
  				ref.binding = outer_ref.binding;
  			}
-@@ -650,15 +652,15 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -650,15 +653,15 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  
  		// If this references the inner proj, replace it with the actual expression
  		if (ref.binding.table_index == inner_proj.table_index) {

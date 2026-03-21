@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
 
 namespace duckdb {

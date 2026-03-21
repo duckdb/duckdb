@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"

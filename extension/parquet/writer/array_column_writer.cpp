@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "writer/array_column_writer.hpp"
 
 namespace duckdb {

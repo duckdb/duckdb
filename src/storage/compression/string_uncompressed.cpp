@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
