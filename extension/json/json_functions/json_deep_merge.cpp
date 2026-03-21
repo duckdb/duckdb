@@ -43,7 +43,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 		}
 	}
 
-	// Merge items from patch — INCLUDING null values (unlike merge_patch)
+	// Merge items from patch -- null values are preserved (unlike merge_patch which deletes them)
 	{
 		idx_t idx, max;
 		yyjson_mut_val *key, *patch_val;
