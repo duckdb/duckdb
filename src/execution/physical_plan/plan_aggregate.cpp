@@ -299,12 +299,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	// If we have a limit hint and no aggregate expressions, use PhysicalLimitedDistinct
 	// for plain GROUP BY only. GROUPING SETS / ROLLUP / CUBE need the regular aggregate path.
-	if (op.limit.IsValid() && op.expressions.empty() && op.grouping_sets.size() <= 1 &&
-	    op.grouping_functions.empty()) {
+	if (op.limit.IsValid() && op.expressions.empty() && op.grouping_sets.size() <= 1 && op.grouping_functions.empty()) {
 		idx_t limit_val = op.limit.GetIndex();
 		vector<unique_ptr<Expression>> empty_aggregates;
 		auto &limited = Make<PhysicalLimitedDistinct>(op.types, std::move(op.groups), std::move(empty_aggregates),
-		                                             limit_val, op.estimated_cardinality);
+		                                              limit_val, op.estimated_cardinality);
 		limited.children.push_back(plan);
 		return limited;
 	}

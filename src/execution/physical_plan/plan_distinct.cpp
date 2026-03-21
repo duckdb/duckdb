@@ -88,7 +88,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 	if (op.limit.IsValid()) {
 		idx_t limit_val = op.limit.GetIndex();
 		auto &limited = Make<PhysicalLimitedDistinct>(aggregate_types, std::move(groups), std::move(aggregates),
-		                                             limit_val, child.get().estimated_cardinality);
+		                                              limit_val, child.get().estimated_cardinality);
 		limited.children.push_back(child);
 		if (!requires_projection) {
 			return limited;

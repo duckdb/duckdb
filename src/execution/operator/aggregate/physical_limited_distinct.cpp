@@ -196,8 +196,7 @@ SourceResultType PhysicalLimitedDistinct::GetDataInternal(ExecutionContext &cont
 		gstate_source.group_chunk.Reset();
 		gstate_source.payload_chunk.Reset();
 
-		if (!gstate_sink.ht->Scan(gstate_source.scan_state, gstate_source.group_chunk,
-		                          gstate_source.payload_chunk)) {
+		if (!gstate_sink.ht->Scan(gstate_source.scan_state, gstate_source.group_chunk, gstate_source.payload_chunk)) {
 			return SourceResultType::FINISHED;
 		}
 		// Aggregate hash table scan returns "has more" when advancing between partitions, even if the current
