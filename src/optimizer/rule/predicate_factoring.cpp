@@ -32,8 +32,7 @@ static void ExtractDisjunctedPredicates(Expression &expression, vector<reference
 }
 
 static bool ColumnBindingIsvalid(const ColumnBinding &column_binding) {
-	return column_binding.table_index != DConstants::INVALID_INDEX &&
-	       column_binding.column_index != DConstants::INVALID_INDEX;
+	return column_binding.table_index.IsValid() && column_binding.column_index.IsValid();
 }
 
 static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column_binding) {
@@ -41,8 +40,7 @@ static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column
 		return false;
 	}
 
-	column_binding.table_index = DConstants::INVALID_INDEX;
-	column_binding.column_index = DConstants::INVALID_INDEX;
+	column_binding = ColumnBinding();
 
 	bool found_multiple = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
