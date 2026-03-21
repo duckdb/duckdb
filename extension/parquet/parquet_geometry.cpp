@@ -113,7 +113,7 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 					// Parse the CRS
 					const auto crs_val = yyjson_obj_get(column_val, "crs");
-					if (crs_val) {
+					if (crs_val && !yyjson_is_null(crs_val)) {
 						// Parse the CRS
 						if (!yyjson_is_obj(crs_val)) {
 							throw InvalidInputException("Geoparquet column '%s' has invalid CRS", column_name);
@@ -126,8 +126,10 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 						// Free the temporary CRS JSON string
 						free(crs_json);
+					} else if (crs_val && yyjson_is_null(crs_val)) {
+						// If CRS is null, do nothing
 					} else {
-						// Otherwise, default to OGC:CRS84
+						// Otherwise, if no CRS, default to OGC:CRS84
 						auto crs = CoordinateReferenceSystem::TryConvert(context, "OGC:CRS84",
 						                                                 CoordinateReferenceSystemType::PROJJSON);
 						if (crs) {
@@ -363,7 +365,7 @@ optional_ptr<const GeoParquetColumnMetadata> GeoParquetFileMetadata::GetColumnMe
 	return &it->second;
 }
 
-unique_ptr<ColumnReader> GeometryColumnReader::Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
                                                       ClientContext &context) {
 	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
 	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);

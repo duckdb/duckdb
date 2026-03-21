@@ -28,7 +28,7 @@ namespace duckdb {
 
 namespace {
 
-TableIndex GetGroupIdx(const unique_ptr<LogicalOperator> &op) {
+idx_t GetGroupIdx(const unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 		return op->Cast<LogicalAggregate>().group_index;
 	}
@@ -38,7 +38,7 @@ TableIndex GetGroupIdx(const unique_ptr<LogicalOperator> &op) {
 	return op->GetTableIndex()[0];
 }
 
-TableIndex GetAggregateIdx(const unique_ptr<LogicalOperator> &op) {
+idx_t GetAggregateIdx(const unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 		return op->Cast<LogicalAggregate>().aggregate_index;
 	}
@@ -94,7 +94,7 @@ ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		const auto &projection = op->Cast<LogicalProjection>();
-		return {projection.table_index, ProjectionIndex(projection.types.size() - 1)};
+		return {projection.table_index, projection.types.size() - 1};
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		D_ASSERT(!op->Cast<LogicalComparisonJoin>().right_projection_map.empty());
@@ -117,18 +117,20 @@ idx_t TraverseAndFindAggregateOffset(const unique_ptr<LogicalOperator> &op) {
 	return aggregate.groups.size();
 }
 
-string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, ProjectionIndex column_id) {
+string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column_id) {
 	reference<LogicalOperator> current_op = *op;
 
 	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
-		auto &proj = op.get()->Cast<LogicalProjection>();
-		auto &colref = proj.GetExpression(column_id).Cast<BoundColumnRefExpression>();
+		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
+		D_ASSERT(op.get()->expressions.size() >= column_id &&
+		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
+		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
 		column_id = colref.binding.column_index;
 		current_op = *op.get()->children[0];
 	}
 
 	const auto &logical_get = current_op.get().Cast<LogicalGet>();
-	const auto column_index = logical_get.GetColumnIndex(column_id);
+	const auto column_index = logical_get.GetColumnIds()[column_id];
 	return logical_get.GetColumnName(column_index);
 }
 
@@ -188,7 +190,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child.get().Cast<LogicalWindow>();
-	auto window_idx = window.window_index;
+	const idx_t window_idx = window.window_index;
 
 	// Map the input column offsets of the group columns to the output offset if there are projections on the group
 	// We use an ordered map here because we need to iterate over them in order later
@@ -222,7 +224,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	replacer.stop_operator = op.get();
 
 	RemoveUnusedColumns unused_optimizer(optimizer);
-	unused_optimizer.VisitOperator(op);
+	unused_optimizer.VisitOperator(*op);
+
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
 
@@ -413,7 +416,7 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
                                                 const TopNWindowEliminationParameters &params,
                                                 const map<idx_t, idx_t> &group_idxs) const {
 	const auto aggregate_type = GetAggregateType(op);
-	const auto aggregate_table_idx = GetAggregateIdx(op);
+	const idx_t aggregate_table_idx = GetAggregateIdx(op);
 	const auto op_column_bindings = op->GetColumnBindings();
 
 	vector<unique_ptr<Expression>> proj_exprs;
@@ -430,7 +433,7 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	}
 
 	auto aggregate_column_ref =
-	    make_uniq<BoundColumnRefExpression>(aggregate_type, ColumnBinding(aggregate_table_idx, ProjectionIndex(0)));
+	    make_uniq<BoundColumnRefExpression>(aggregate_type, ColumnBinding(aggregate_table_idx, 0));
 
 	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		AddStructExtractExprs(proj_exprs, aggregate_type, aggregate_column_ref);
@@ -612,9 +615,9 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 
 		auto column_id = binding.ToString();
 		if (window.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &window_child_type = window_child_types[binding.column_index];
 			// The column index points to the correct column binding
-			aggregate_args.push_back(make_uniq<BoundColumnRefExpression>(column_id, window_child_type, binding));
+			aggregate_args.push_back(
+			    make_uniq<BoundColumnRefExpression>(column_id, window_child_types[binding.column_index], binding));
 		} else {
 			// The child operator could have multiple or no table indexes. Therefore, we must find the right type first
 			const auto child_column_idx =
@@ -665,31 +668,36 @@ vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const st
 	return new_bindings;
 }
 
-void TopNWindowElimination::UpdateTopmostBindings(const TableIndex window_idx, const unique_ptr<LogicalOperator> &op,
+void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const unique_ptr<LogicalOperator> &op,
                                                   const map<idx_t, idx_t> &group_idxs,
                                                   const vector<ColumnBinding> &topmost_bindings,
                                                   vector<ColumnBinding> &new_bindings,
                                                   ColumnBindingReplacer &replacer) {
-	// The top-most operator's column order is [group][aggregate args][row number]. Now, set the new resulting bindings.
+	// The top-most operator's column order is:
+	// [projected groups][aggregate args/value][row number]
+	// Now set the new bindings according to this order and remember replacements in replacer
 	D_ASSERT(topmost_bindings.size() == new_bindings.size());
 	replacer.replacement_bindings.reserve(new_bindings.size());
 	set<idx_t> row_id_binding_idxs;
 
-	const auto group_table_idx = GetGroupIdx(op);
-	const auto aggregate_table_idx = GetAggregateIdx(op);
+	const idx_t group_table_idx = GetGroupIdx(op);
+	const idx_t aggregate_table_idx = GetAggregateIdx(op);
 
 	// Project the group columns
+	const auto compact_group_columns = group_table_idx == aggregate_table_idx;
 	idx_t current_column_idx = 0;
 	for (auto group_idx : group_idxs) {
-		const idx_t group_referencing_idx = group_idx.first;
+		const auto group_referencing_idx = group_idx.first;
+		const auto column_idx = compact_group_columns ? current_column_idx : group_idx.second;
 		new_bindings[group_referencing_idx].table_index = group_table_idx;
-		new_bindings[group_referencing_idx].column_index = ProjectionIndex(group_idx.second);
+		new_bindings[group_referencing_idx].column_index = column_idx;
+
 		replacer.replacement_bindings.emplace_back(topmost_bindings[group_referencing_idx],
 		                                           new_bindings[group_referencing_idx]);
 		current_column_idx++;
 	}
 
-	if (group_table_idx != aggregate_table_idx) {
+	if (!compact_group_columns) {
 		// If the topmost operator is an aggregate, the table indexes are different, and we start back from 0
 		current_column_idx = 0;
 	}
@@ -708,7 +716,7 @@ void TopNWindowElimination::UpdateTopmostBindings(const TableIndex window_idx, c
 			row_id_binding_idxs.insert(i);
 			continue;
 		}
-		binding.column_index = ProjectionIndex(current_column_idx++);
+		binding.column_index = current_column_idx++;
 		binding.table_index = aggregate_table_idx;
 		replacer.replacement_bindings.emplace_back(topmost_bindings[i], binding);
 	}
@@ -755,7 +763,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 }
 
 bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
-                                                      vector<ProjectionIndex> &lhs_projections,
+                                                      vector<idx_t> &lhs_projections,
                                                       vector<reference<LogicalOperator>> &stack) {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
@@ -796,7 +804,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				if (projection.table_index != projections[i].table_index) {
 					return false;
 				}
-				const auto projection_idx = projections[i].column_index;
+				const idx_t projection_idx = projections[i].column_index;
 				if (projection_idx >= projection.expressions.size()) {
 					return false;
 				}
@@ -822,15 +830,15 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			// However, we allow replacing references to join columns as they are equal to the other side by condition.
 			column_binding_map_t<ColumnBinding> replaceable_bindings;
 			for (auto &condition : join.conditions) {
-				if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+				if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
 					return false;
 				}
 				ColumnBinding left_binding;
-				if (!extract_single_binding(&condition.LeftReference(), left_binding)) {
+				if (!extract_single_binding(&condition.left, left_binding)) {
 					return false;
 				}
 				ColumnBinding right_binding;
-				if (!extract_single_binding(&condition.RightReference(), right_binding)) {
+				if (!extract_single_binding(&condition.right, right_binding)) {
 					return false;
 				}
 
@@ -878,7 +886,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				return false;
 			}
 
-			auto replace_table_idx = all_right_replaceable ? right_idx : left_idx;
+			idx_t replace_table_idx = all_right_replaceable ? right_idx : left_idx;
 			for (idx_t i = 0; i < projections.size(); i++) {
 				const auto projection_idx = projections[i];
 				if (projection_idx.table_index != left_idx && projection_idx.table_index != right_idx) {
@@ -933,7 +941,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	}
 	// Check if we need the projection map
 	for (idx_t i = 0; i < projections.size(); i++) {
-		if (projections[i].column_index != ProjectionIndex(i)) {
+		if (projections[i].column_index != i) {
 			for (auto &proj : projections) {
 				lhs_projections.push_back(proj.column_index);
 			}
@@ -945,7 +953,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 
 unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window,
                                                                                  vector<unique_ptr<Expression>> &args) {
-	vector<ProjectionIndex> lhs_projections;
+	vector<idx_t> lhs_projections;
 	vector<reference<LogicalOperator>> stack;
 	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack);
 	if (!use_late_materialization) {
@@ -970,7 +978,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 	    LateMaterializationHelper::GetOrInsertRowIds(rhs_get, rhs_rowid_column_idxs, rhs_rowid_columns);
 
 	// Add rowid column to the operators on the right-hand side
-	auto last_table_idx = rhs_get.table_index;
+	idx_t last_table_idx = rhs_get.table_index;
 
 	// Add rowid projections to the query tree on the right-hand side
 	for (auto stack_it = std::next(stack.rbegin()); stack_it != stack.rend(); ++stack_it) {
@@ -980,9 +988,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			for (idx_t i = 0; i < rhs_rowid_columns.size(); i++) {
 				auto &rowid_column = rhs_rowid_columns[i];
-				auto row_id_ref = make_uniq<BoundColumnRefExpression>(
-				    rowid_column.name, rowid_column.type, ColumnBinding {last_table_idx, rhs_rowid_idxs[i]});
-				rhs_rowid_idxs[i] = ColumnBinding::PushExpression(op.expressions, std::move(row_id_ref));
+				op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+				    rowid_column.name, rowid_column.type, ColumnBinding {last_table_idx, rhs_rowid_idxs[i]}));
+				rhs_rowid_idxs[i] = op.expressions.size() - 1;
 			}
 			last_table_idx = op.GetTableIndex()[0];
 			break;
@@ -1026,8 +1034,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 	return lhs;
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs,
-                                                                vector<ProjectionIndex> &projections) const {
+unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs, vector<idx_t> &projections) const {
 	auto lhs_get = LateMaterializationHelper::CreateLHSGet(rhs, optimizer.binder);
 	const auto lhs_rowid_column_idxs = lhs_get->function.get_row_id_columns(context, lhs_get->bind_data.get());
 	vector<TableColumn> lhs_rowid_columns;
@@ -1046,10 +1053,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs,
 
 		vector<unique_ptr<Expression>> projs;
 		projs.reserve(projections.size());
-		for (auto proj_idx : projections) {
-			const auto &column_type = lhs_get->GetColumnType(lhs_get->GetColumnIndex(proj_idx));
+		const auto &column_ids = lhs_get->GetColumnIds();
+		for (auto column_idx : projections) {
+			D_ASSERT(column_idx < column_ids.size());
+			const auto &column_type = lhs_get->GetColumnType(column_ids[column_idx]);
 			projs.push_back(
-			    make_uniq<BoundColumnRefExpression>(column_type, ColumnBinding(lhs_get->table_index, proj_idx)));
+			    make_uniq<BoundColumnRefExpression>(column_type, ColumnBinding {lhs_get->table_index, column_idx}));
 		}
 		auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(projs));
 		projection->children.push_back(std::move(lhs_get));
@@ -1071,22 +1080,23 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
 	for (idx_t i = 0; i < rowid_column_count; i++) {
-		const ProjectionIndex lhs_rowid_idx(lhs->types.size() - (rowid_column_count - i));
-		const ProjectionIndex rhs_rowid_idx(rhs_binding_offset + i);
+		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
+		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
-		auto left_expr = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
+		JoinCondition condition;
+		condition.comparison = ExpressionType::COMPARE_EQUAL;
+		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
 		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-		auto right_expr = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
-		JoinCondition condition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}
 
 	if (params.include_row_number) {
 		// Add row_number to join result
 		join->join_type = JoinType::INNER;
-		join->right_projection_map.emplace_back(rhs->types.size() - 1);
+		join->right_projection_map.push_back(rhs->types.size() - 1);
 	}
 
 	join->children.push_back(std::move(lhs));

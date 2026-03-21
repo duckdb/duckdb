@@ -9,7 +9,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
 //===--------------------------------------------------------------------===//
-VariantColumnReader::VariantColumnReader(ClientContext &context, ParquetReader &reader,
+VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
                                          vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
