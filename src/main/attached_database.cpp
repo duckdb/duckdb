@@ -12,6 +12,8 @@
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
 
@@ -229,6 +231,13 @@ bool AttachedDatabase::HasStorageManager() const {
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
+	if (!storage) {
+		throw InternalException("Internal system catalog does not have storage");
+	}
+	return *storage;
+}
+
+const StorageManager &AttachedDatabase::GetStorageManager() const {
 	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");
 	}

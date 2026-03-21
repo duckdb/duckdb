@@ -153,12 +153,15 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 				break;
 			}
 			// Row groups do not overlap
-			auto &current_stats = it->second.stats;
-			if (!current_stats->CanHaveNull()) {
-				// This row group has exactly row_group.count valid values. We can exclude those
-				pruned_row_group_count++;
-				new_row_offset -= last_unresolved_entry->second.count;
+			auto &pruned_stats = last_unresolved_entry->second.stats;
+			if (pruned_stats->CanHaveNull()) {
+				// Offset pruning can only remove a contiguous prefix of row groups. Once the first unresolved
+				// row group might still contribute NULLs to the ordered prefix, we cannot prune past it.
+				return {new_row_offset, pruned_row_group_count};
 			}
+			// This row group has exactly row_group.count valid values. We can exclude those.
+			pruned_row_group_count++;
+			new_row_offset -= last_unresolved_entry->second.count;
 
 			++last_unresolved_entry;
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
@@ -203,13 +206,17 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 	}
 	if (column_type == OrderByColumnType::STRING) {
+		if (!stats.CanHaveNoNull()) {
+			// No non-null values exist in this row group - stats are meaningless for ordering
+			return Value();
+		}
 		switch (order_by) {
 		case OrderByStatistics::MIN:
 			return StringStats::Min(stats);
 		case OrderByStatistics::MAX:
 			return StringStats::Max(stats);
 		default:
-			throw InternalException("Unsupported OrderByStatistics for numeric");
+			throw InternalException("Unsupported OrderByStatistics for string");
 		}
 	}
 	throw InternalException("Unsupported OrderByColumnType");
@@ -218,6 +225,7 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatistics order_by,
                                                              const OrderByColumnType column_type,
                                                              const OrderType order_type,
+                                                             const OrderByNullType null_order,
                                                              const StorageIndex &storage_index, const idx_t row_offset,
                                                              vector<PartitionStatistics> &stats) {
 	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
@@ -230,6 +238,13 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
 		Value comparison_value = RetrieveStat(*column_stats, order_by, column_type);
 		if (comparison_value.IsNull()) {
+			if (null_order == OrderByNullType::NULLS_LAST) {
+				// With NULLS_LAST, null-stats row groups are scanned after all non-null row groups.
+				// They fall outside the offset range being pruned here, so skip them.
+				continue;
+			}
+			// With NULLS_FIRST, null-stats row groups come first and would need to be counted
+			// toward the offset before non-null groups. This case is not yet supported.
 			return {row_offset, 0};
 		}
 		auto entry = RowGroupOffsetEntry {partition_stats.count, std::move(column_stats)};
@@ -273,15 +288,27 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 	}
 
 	if (row_group_map.empty()) {
-		return nullptr;
+		// All row groups have unknown/null stats - scan them all without reordering
+		for (auto &remaining_row_group : remaining_row_groups) {
+			ordered_row_groups.push_back(remaining_row_group);
+		}
+		if (ordered_row_groups.empty()) {
+			return nullptr;
+		}
+		return ordered_row_groups[0].get();
 	}
 
 	D_ASSERT(row_group_map.size() > options.row_group_offset);
 	SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
 	                  options.column_type, ordered_row_groups);
-	// push any remaining row groups
-	for (auto &remaining_row_group : remaining_row_groups) {
-		ordered_row_groups.push_back(remaining_row_group);
+	// Push null-stats row groups in the correct position based on null ordering
+	if (options.null_order == OrderByNullType::NULLS_FIRST) {
+		ordered_row_groups.insert(ordered_row_groups.begin(), remaining_row_groups.begin(), remaining_row_groups.end());
+	} else {
+		// NULLS_LAST: append null-stats row groups after sorted row groups
+		for (auto &remaining_row_group : remaining_row_groups) {
+			ordered_row_groups.push_back(remaining_row_group);
+		}
 	}
 
 	return ordered_row_groups[0].get();

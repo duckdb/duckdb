@@ -31,7 +31,7 @@ on:
       - '!.github/workflows/BundleStaticLibs.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: bundlestaticlibs-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
@@ -58,12 +58,12 @@ jobs:
       DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -74,7 +74,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Bundle static library
         shell: bash
@@ -92,53 +92,71 @@ jobs:
           zip -r -j static-libs-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libs/
           ./scripts/upload-assets-to-staging.sh github_release static-libs-osx-${{ matrix.architecture }}.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-static-libs-osx-${{ matrix.architecture }}
           path: |
             static-libs-osx-${{ matrix.architecture }}.zip
 
-
   bundle-mingw-static-lib:
     name: Windows MingW static libs
     runs-on: windows-latest
     env:
+      GEN: ninja
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: 'devel'
-          update-rtools: true
-          rtools-version: '42' # linker bug in 43 ^^
+      - name: Dependencies
+        shell: bash
+        run: |
+          choco install \
+            ccache \
+            make \
+            ninja \
+            zip \
+            --no-progress
+          choco install \
+            mingw --version 14.2.0 \
+            --no-progress
 
-      # TODO: this action is deprecated, can we rework this to avoid using it?
-      - uses: ./.github/actions/build_extensions
-        with:
-          duckdb_arch: windows_amd64_mingw
-          vcpkg_target_triplet: x64-mingw-static
-          treat_warn_as_error: 0
-          override_cc: gcc
-          override_cxx: g++
-          vcpkg_build: 1
-          no_static_linking: 0
-          run_tests: 0
-          run_autoload_tests: 0
-          build_in_tree_extensions: 0
-          build_out_of_tree_extensions: 0
-          bundle_static_lib_mode: 1
+      - uses: ./.github/actions/ccache-action
+
+      - name: Build Environment
+        shell: bash
+        run: |
+          # bash from Git
+          echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
+          # make, ninja and ccache from Chocolatey
+          echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
+          # g++ from Chocolatey
+          echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
+
+      - name: Build Environment Check
+        shell: cmd
+        run: |
+          where bash
+          bash --version
+          where make
+          make --version
+          where ninja
+          ninja --version
+          where ccache
+          ccache --version
+          where g++
+          g++ --version
+          echo %PATH%
 
       - name: Bundle static library
-        shell: bash
+        shell: cmd
         run: |
           make gather-libs
 
@@ -152,7 +170,7 @@ jobs:
           zip -r -j static-libs-windows-mingw.zip src/include/duckdb.h build/release/libs/
           ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-static-libs-windows-mingw
           path: |
@@ -168,7 +186,7 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -213,7 +231,7 @@ jobs:
           python3 scripts/amalgamation.py
           zip -r -j static-libs-linux-${{ matrix.config.arch }}.zip src/include/duckdb.h build/release/libs/
           ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-${{ matrix.config.arch }}.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-static-libs-linux-${{ matrix.config.arch }}
           path: |

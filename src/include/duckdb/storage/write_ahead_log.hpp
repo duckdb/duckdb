@@ -55,6 +55,7 @@ public:
 	                                        const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
+	StorageManager &GetStorageManager();
 
 	const string &GetPath() const {
 		return wal_path;
@@ -112,12 +113,12 @@ public:
 	//! -> 0 (first subcolumn of INT)
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
-	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
+	//! Truncate the WAL to a previous size, and clear anything currently set in the writer.
+	//! Used during RevertCommit.
 	void Truncate(idx_t size);
 	void Flush();
-	//! Increment the WAL entry count (for autocheckpoint threshold)
+	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
-
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:

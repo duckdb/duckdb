@@ -183,7 +183,8 @@ static string GetAlias(const TableFunctionRef &ref) {
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
-                                                 vector<string> input_table_names) {
+                                                 vector<string> input_table_names,
+                                                 optional_ptr<unique_ptr<LogicalOperator>> input_plan) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto bind_index = GenerateTableIndex();
@@ -196,7 +197,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	optional_idx ordinality_column_id;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get(), this, table_function, ref);
+		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
 		if (table_function.bind_operator) {
 			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
@@ -350,7 +351,7 @@ BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> 
 	ref.alias = function.name;
 	D_ASSERT(!ref.alias.empty());
 	return BindTableFunctionInternal(function, ref, std::move(parameters), std::move(named_parameters),
-	                                 std::move(input_table_types), std::move(input_table_names));
+	                                 std::move(input_table_types), std::move(input_table_names), nullptr);
 }
 
 BoundStatement Binder::Bind(TableFunctionRef &ref) {
@@ -386,9 +387,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			error.Throw();
 		}
 
-		idx_t bind_index = query.plan->GetRootIndex();
+		auto bind_index = query.plan->GetRootIndex();
 		// string alias;
-		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias);
 
 		// remember ref here is TableFunctionRef and NOT base class
 		bind_context.AddSubquery(bind_index, alias, ref, query);
@@ -460,10 +461,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	BoundStatement get;
 	try {
 		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-		                                std::move(input_table_types), std::move(input_table_names));
+		                                std::move(input_table_types), std::move(input_table_names), &subquery.plan);
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
-		error.AddQueryLocation(ref);
+		// if the error does not already contain a query location, add one
+		if (error.ExtraInfo().count("position") == 0) {
+			error.AddQueryLocation(ref);
+		}
 		error.Throw();
 	}
 

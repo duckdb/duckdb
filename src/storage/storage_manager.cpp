@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -261,7 +262,6 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
 		ResetWALEntriesCount();
-
 		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 		return;
 	}
@@ -623,6 +623,7 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
+	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
 }

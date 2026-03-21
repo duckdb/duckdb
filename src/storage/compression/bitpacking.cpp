@@ -362,7 +362,7 @@ public:
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -616,6 +616,10 @@ public:
 		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
 		bitpacking_metadata_ptr =
 		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
+		if (bitpacking_metadata_ptr >= handle.Ptr() + current_segment.GetBlockSize()) {
+			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
+			                        segment.block->BlockId());
+		}
 
 		// load the first group
 		LoadNextGroup();

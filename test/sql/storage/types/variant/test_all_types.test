@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/test_all_types.test
 # group: [variant]
 
-load __TEST_DIR__/variant_test_all_types.db
+load __TEST_DIR__/variant_test_all_types.db readwrite v1.5.0
 
 foreach col <all_types_columns>
 

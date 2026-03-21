@@ -3,7 +3,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	CAPITester tester;

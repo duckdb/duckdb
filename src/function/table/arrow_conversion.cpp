@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -1396,9 +1402,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 	const bool has_nulls = CanContainNull(array, parent_mask);
 	if (array_state.CacheOutdated(array.dictionary)) {
 		//! We need to set the dictionary data for this column
-		auto base_vector = make_uniq<Vector>(vector.GetType(), NumericCast<idx_t>(array.dictionary->length));
-		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, chunk_offset,
-		                                         NumericCast<idx_t>(array.dictionary->length), 0, 0, has_nulls);
+		//! Allocate one extra entry beyond dictionary length for the NULL sentinel.
+		//! SetMaskedSelectionVectorLoop points NULL indices at last_element_pos (= dictionary->length),
+		//! so the buffer must be large enough and that entry must be marked invalid.
+		auto dict_length = NumericCast<idx_t>(array.dictionary->length);
+		auto base_vector = make_uniq<Vector>(vector.GetType(), dict_length + 1);
+		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, chunk_offset, dict_length, 0, 0,
+		                                         has_nulls);
+		FlatVector::Validity(*base_vector).SetInvalid(dict_length);
 		auto &dictionary_type = arrow_type.GetDictionary();
 		auto arrow_physical_type = dictionary_type.GetPhysicalType();
 		;

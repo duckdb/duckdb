@@ -28,8 +28,30 @@ set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
+# Copy compile_commands.json into <repo-root>/.cache/clangd/ after every successful build.
+# .cache/ is intentionally outside build/ so it survives `make clean` (which does rm -rf build).
+# The build-type name is derived from the last component of CMAKE_BINARY_DIR, so build dirs must
+# be two levels below the repo root (e.g. build/debug, .cache/clangd/debug) for the repo-root
+# derivation (CMAKE_BINARY_DIR/../..) to be correct. This works in both standalone duckdb builds
+# and extension builds where duckdb/ is a submodule.
+if(CMAKE_EXPORT_COMPILE_COMMANDS AND UNIX)
+  get_filename_component(_clangd_build_name "${CMAKE_BINARY_DIR}" NAME)
+  get_filename_component(_repo_root "${CMAKE_BINARY_DIR}/../.." ABSOLUTE)
+  set(_clangd_cache_dir "${_repo_root}/.cache/clangd")
+  add_custom_target(clangd_cache ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_clangd_cache_dir}/${_clangd_build_name}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${_clangd_cache_dir}/${_clangd_build_name}/compile_commands.json"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${_clangd_cache_dir}/compile_commands.json"
+    COMMENT "Updating .cache/clangd (${_clangd_build_name})"
+    VERBATIM
+  )
+endif()
 
+set(CMAKE_CXX_STANDARD "17" CACHE STRING "C++ standard to enforce")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -56,6 +78,18 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
                 "${COMPILER_LAUNCHER}"
                 CACHE STRING "" FORCE)
     endif()
+endif()
+
+if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(DUCKDB_LINKER "mold")
+endif()
+
+if (DUCKDB_LINKER)
+  set(DUCKDB_LINKER_FLAG "-fuse-ld=${DUCKDB_LINKER}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
 endif()
 
 
@@ -86,7 +120,7 @@ set(DUCKDB_EXPORT_SET "DuckDBExports")
 if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
-  elseif(WIN32 AND MVSC)
+  elseif(WIN32 AND MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
   endif()
 endif()
@@ -115,6 +149,12 @@ if(${FORCE_COLORED_OUTPUT})
   elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
     add_compile_options(-fcolor-diagnostics)
   endif()
+endif()
+
+# Enable Clang thread-safety annotations when using Clang compiler
+# TODO(hjiang): enable error for thread annotation warnings, because of certain extensions.
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety")
 endif()
 
 if (DUCKDB_EXPLICIT_PLATFORM)
@@ -662,6 +702,25 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE
       "${DEFAULT_BUILD_TYPE}"
       CACHE STRING "Choose the type of build." FORCE)
+endif()
+
+set(DUCKDB_RELEASE_LINK_JOBS
+    4
+    CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
+set(DUCKDB_DEBUG_LINK_JOBS
+    2
+    CACHE STRING "Maximum number of concurrent linker jobs for non-Release builds")
+
+# Throttle linker concurrency (mainly effective for Ninja) to avoid OOM in debug-like builds.
+set_property(GLOBAL PROPERTY JOB_POOLS
+             release_link_jobs=${DUCKDB_RELEASE_LINK_JOBS}
+             debug_link_jobs=${DUCKDB_DEBUG_LINK_JOBS})
+if(NOT DEFINED CMAKE_JOB_POOL_LINK)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_JOB_POOL_LINK release_link_jobs)
+  else()
+    set(CMAKE_JOB_POOL_LINK debug_link_jobs)
+  endif()
 endif()
 
 if(OS_NAME STREQUAL "windows")

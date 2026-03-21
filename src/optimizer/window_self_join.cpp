@@ -40,7 +40,7 @@ public:
 	explicit WindowSelfJoinTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
-	unordered_map<idx_t, idx_t> table_map;
+	unordered_map<TableIndex, TableIndex> table_map;
 	Optimizer &optimizer;
 
 	void VisitOperator(LogicalOperator &op) override {
@@ -262,8 +262,8 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 		for (size_t i = 0; i < partitions.size(); ++i) {
 			auto left_expr = partitions[i]->Copy();
-			auto right_expr =
-			    make_uniq<BoundColumnRefExpression>(partitions[i]->return_type, ColumnBinding(group_index, i));
+			auto right_expr = make_uniq<BoundColumnRefExpression>(partitions[i]->return_type,
+			                                                      ColumnBinding(group_index, ProjectionIndex(i)));
 			join->conditions.push_back(
 			    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_NOT_DISTINCT_FROM));
 		}
@@ -276,8 +276,8 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Old window column: (window.window_index, x)
 		// New constant column: (aggregate_index, x)
 		for (idx_t column_index = 0; column_index < window.expressions.size(); ++column_index) {
-			ColumnBinding old_binding(window.window_index, column_index);
-			ColumnBinding new_binding(aggregate_index, column_index);
+			ColumnBinding old_binding(window.window_index, ProjectionIndex(column_index));
+			ColumnBinding new_binding(aggregate_index, ProjectionIndex(column_index));
 			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
 		}
 

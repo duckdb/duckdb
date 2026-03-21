@@ -1977,9 +1977,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
+		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 	}
 	// 3. Test ADBC_OBJECT_DEPTH_TABLES
@@ -2020,11 +2020,11 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->GetValue(0, 2).ToString() == "test_table_depth"));
 		string expected_result_1 = R"({
                 'db_schema_name': information_schema,
-                'db_schema_tables': NULL
+                'db_schema_tables': []
             })";
 		string expected_result_2 = R"({
                 'db_schema_name': main,
-                'db_schema_tables': NULL
+                'db_schema_tables': []
             })";
 		string expected_result_3 = R"({
                 'db_schema_name': main,
@@ -2072,9 +2072,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
+		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// table_name
@@ -2098,7 +2098,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->ColumnCount() == 1));
 		REQUIRE((res->RowCount() == 1));
-		string expected = "[{'db_schema_name': main, 'db_schema_tables': NULL}]";
+		string expected = "[{'db_schema_name': main, 'db_schema_tables': []}]";
 		REQUIRE((res->GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
@@ -2221,12 +2221,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		string expected_1 = R"(
             {
                 'db_schema_name': information_schema,
-                'db_schema_tables': NULL
+                'db_schema_tables': []
             })";
 		string expected_2 = R"(
             {
                 'db_schema_name': main,
-                'db_schema_tables': NULL
+                'db_schema_tables': []
             })";
 		string expected_3 = R"(
             {
@@ -2258,7 +2258,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': []
                     },
                     {
                         'table_name': my_view,
@@ -2286,7 +2286,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': []
                     }
                 ]
             })";
@@ -2320,9 +2320,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
+		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// table_name
@@ -2346,7 +2346,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->ColumnCount() == 1));
 		REQUIRE((res->RowCount() == 1));
-		REQUIRE((res->GetValue(0, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]"));
+		REQUIRE((res->GetValue(0, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]"));
 		db.Query("Drop table result;");
 
 		// column_name
@@ -2356,9 +2356,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query(select_catalog_db_schemas);
 		auto expected_value = "[{'db_schema_name': main, "
 		                      "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		                      "'table_columns': NULL, 'table_constraints': NULL}, "
+		                      "'table_columns': [], 'table_constraints': []}, "
 		                      "{'table_name': my_view, 'table_type': VIEW, "
-		                      "'table_columns': NULL, 'table_constraints': NULL}]}]";
+		                      "'table_columns': [], 'table_constraints': []}]}]";
 		REQUIRE((res->GetValue(0, 0).ToString() == expected_value));
 		db.Query("Drop table result;");
 
@@ -2426,7 +2426,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': []
                     }
                 ]
             })";
@@ -2475,7 +2475,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': []
                     }
                 ]
             })";
@@ -2522,12 +2522,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		string expected_1 = R"(
             {
                 'db_schema_name': information_schema,
-                'db_schema_tables': NULL
+                'db_schema_tables': []
             })";
 		string expected_2 = R"(
             {
                 'db_schema_name': main,
-                'db_schema_tables': NULL
+                'db_schema_tables': []
             })";
 		string expected_3 = R"(
             {
@@ -2636,7 +2636,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': []
                     }
                 ]
             })";
@@ -2669,9 +2669,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "NULL"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
+		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// table_name
@@ -2694,7 +2694,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		db.CreateTable("result", arrow_stream);
 		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->RowCount() == 1));
-		string expected = "[{'db_schema_name': main, 'db_schema_tables': NULL}]";
+		string expected = "[{'db_schema_name': main, 'db_schema_tables': []}]";
 		REQUIRE((res->GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
@@ -2712,14 +2712,14 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 					"{"
 						"'table_name': my_table, "
 						"'table_type': BASE TABLE, "
-						"'table_columns': NULL, "
-						"'table_constraints': NULL"
+						"'table_columns': [], "
+						"'table_constraints': []"
 					"}, "
 					"{"
 						"'table_name': my_view, "
 						"'table_type': VIEW, "
-						"'table_columns': NULL, "
-						"'table_constraints': NULL"
+						"'table_columns': [], "
+						"'table_constraints': []"
 					"}"
 				"]"
 			"}"
@@ -2889,7 +2889,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': []
                     }
                 ]
             }])";
@@ -3063,6 +3063,49 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("SELECT * FROM test_table");
 		REQUIRE(res->RowCount() == 1);
 		arrow_stream.release(&arrow_stream);
+	}
+}
+
+TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// ADBC spec: list-typed fields must be empty lists (not NULL) when the depth
+	// includes that level but filters exclude all entries.
+
+	ADBCTestDatabase db("test_empty_list");
+	db.CreateTable("my_table", db.QueryArrow("SELECT 42 as value"));
+
+	AdbcError adbc_error = {};
+	InitializeADBCError(&adbc_error);
+	ArrowArrayStream arrow_stream;
+
+	// catalog_db_schemas must be [] (not NULL) when schema filter excludes all schemas
+	for (auto depth : {ADBC_OBJECT_DEPTH_DB_SCHEMAS, ADBC_OBJECT_DEPTH_TABLES, ADBC_OBJECT_DEPTH_COLUMNS}) {
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, "nonexistent_schema", nullptr,
+		                                         nullptr, nullptr, &arrow_stream, &adbc_error)));
+		db.CreateTable("result", arrow_stream);
+		auto res = db.Query("SELECT catalog_db_schemas FROM result ORDER BY catalog_name");
+		REQUIRE(res->RowCount() > 0);
+		for (idx_t i = 0; i < res->RowCount(); i++) {
+			REQUIRE(res->GetValue(0, i).ToString() == "[]");
+		}
+		db.Query("Drop table result;");
+	}
+
+	// db_schema_tables must be [] (not NULL) when table name filter excludes all tables
+	for (auto depth : {ADBC_OBJECT_DEPTH_TABLES, ADBC_OBJECT_DEPTH_COLUMNS}) {
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, depth, "test_empty_list", nullptr,
+		                                         "nonexistent_table", nullptr, nullptr, &arrow_stream, &adbc_error)));
+		db.CreateTable("result", arrow_stream);
+		auto res = db.Query(R"(
+			SELECT list_transform(catalog_db_schemas, s -> s.db_schema_tables) AS tables
+			FROM result WHERE catalog_name = 'test_empty_list'
+		)");
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString().find("NULL") == string::npos);
+		db.Query("Drop table result;");
 	}
 }
 

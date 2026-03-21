@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
 
 all: release
 opt: release
@@ -23,6 +23,21 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
+SMOKE_UNITTEST ?= build/relassert/test/unittest
+UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
+UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
+
+# Allow setting extra unit test parameters using `make smoke T=...`.
+T ?=
+
+CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+ifeq ($(CI),1)
+ifndef CMAKE_BUILD_PARALLEL_LEVEL
+CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
+endif
+export CMAKE_BUILD_PARALLEL_LEVEL
+endif
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -97,11 +112,8 @@ endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
 endif
-ifeq (${EXTENSION_STATIC_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
-endif
-ifeq (${EXTENSION_STATIC_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
+ifneq (${EXTENSION_STATIC_BUILD}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
@@ -271,8 +283,8 @@ endif
 ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_UNIVERSAL=1
 endif
-ifneq ("${CUSTOM_LINKER}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
+ifneq ("${DUCKDB_LINKER}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_LINKER=${DUCKDB_LINKER}
 endif
 ifdef SKIP_PLATFORM_UTIL
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
@@ -355,17 +367,19 @@ release: ${EXTENSION_CONFIG_STEP}
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-	emmake make -j8 -Cbuild/wasm_mvp
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_mvp
 
-wasm_eh: ${EXTENSION_CONFIG_STEP}
+wasm_eh: WASM_EH_CMAKE_VARS=-DBUILD_EXTENSIONS_ONLY=1
+wasm_ci: WASM_EH_CMAKE_VARS=
+wasm_eh wasm_ci: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-	emmake make -j8 -Cbuild/wasm_eh
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 $(WASM_EH_CMAKE_VARS) -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DDUCKDB_NO_THREADS=1 -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_eh
 
 wasm_threads: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_threads && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -pthread" -DDUCKDB_EXPLICIT_PLATFORM="wasm_threads" ${COMMON_CMAKE_VARS} -DUSE_WASM_THREADS=1 -DCMAKE_C_FLAGS="-pthread" ${TOOLCHAIN_FLAGS} && \
-	emmake make -j8 -Cbuild/wasm_threads
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
@@ -391,20 +405,40 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
-	build/debug/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest $(T)
+
+unittest_reldebug:
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
-	build/release/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
 
-unittestci:
-	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+unittest_release_tag:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/test/unittest $(T)
+
+unittest_relassert:
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
+
+smoke:
+	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+
+runnertests:
+	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
-	build/debug/test/unittest "[arrow]"
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest "[arrow]"
 
+allunit:
+	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
+ifndef CI
+allunit: release
+endif
 
-allunit: release # uses release build because otherwise allunit takes forever
-	build/release/test/unittest "*"
+unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
+unittest_threadsan: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -424,6 +458,43 @@ relassert: ${EXTENSION_CONFIG_STEP}
 	cd build/relassert && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
+
+.PHONY: relassert-artifact
+
+relassert-artifact:
+	bash scripts/prepare_build_artifact.sh relassert
+
+.PHONY: release-artifact
+
+release-artifact:
+	bash scripts/prepare_build_artifact.sh release
+
+define ensure_apt_commands
+	missing=0; \
+	for cmd in $(1); do \
+		command -v $$cmd >/dev/null 2>&1 || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq $(2); \
+	fi
+endef
+
+.PHONY: toolsci format_tools
+
+toolsci:
+	$(call ensure_apt_commands,ninja mold ccache pkg-config,ninja-build mold ccache pkg-config)
+	pkg-config --exists libcurl || { \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq libcurl4-openssl-dev; \
+	}
+	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	gcc --version
+	g++ --version
+
+format_tools:
+	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
+	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
 benchmark:
 	mkdir -p ./build/release && \
@@ -491,7 +562,7 @@ third_party/sqllogictest:
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	./build/release/test/unittest "[sqlitelogic]"
+	$(PYTHON) scripts/ci/run_tests.py ./build/release/test/unittest "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
@@ -508,8 +579,9 @@ bloaty: reldebug bloaty/bloaty
 	./bloaty/bloaty  build/reldebug/duckdb -d symbols -n 20 --debug-file=build/reldebug/duckdb.dSYM/Contents/Resources/DWARF/duckdb
 	# ./bloaty/bloaty  build/reldebug/extension/parquet/parquet.duckdb_extension -d symbols -n 20 # to execute on extension
 
+# Generate compile commands without actually building
 clangd:
-	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B build/clangd .
+	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
 
 coverage-check:
 	./scripts/coverage_check.sh
@@ -567,3 +639,17 @@ gather-libs: release
 	cp third_party/*/libduckdb_*.a libs/. && \
 	cp extension/libduckdb_generated_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.
+
+#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+vcpkg/scripts/buildsystems/vcpkg.cmake:
+	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	cd vcpkg && ./bootstrap-vcpkg.sh
+
+setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake
+	@echo 'Consider exporting VCPKG_TOOLCHAIN_PATH=$(PWD)/vcpkg/scripts/buildsystems/vcpkg.cmake'
+
+cleanup-vcpkg:
+	rm -rf vcpkg
+
+test-utils:
+	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'

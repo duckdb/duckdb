@@ -7,80 +7,56 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # ungrouped aggr
 
-query IIII nosort res0
-SELECT min(d), max(d) FROM dummy;
+query I nosort res0
+SELECT skewness(d) FROM dummy;
 ----
 
-query IIII nosort res0
-SELECT finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy;
+query I nosort res0
+SELECT finalize(skewness(d) EXPORT_STATE) FROM dummy;
 ----
 
 # grouped aggr
-query IIIII nosort res1
-SELECT g, min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+query II nosort res1
+SELECT g, skewness(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIII nosort res1
-SELECT g, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy GROUP BY g ORDER BY g;
+query II nosort res1
+SELECT g, finalize(skewness(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, skewness(d) EXPORT_STATE skewness_state FROM dummy GROUP BY g ORDER BY g;
 
-query IIIII nosort res1
-SELECT g, finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+query II nosort res1
+SELECT g, finalize(skewness_state) FROM state ORDER BY g;
 ----
 
 # empty groups
-query IIII nosort res4
-SELECT min(d), max(d) FROM dummy WHERE FALSE;
+query I nosort res4
+SELECT skewness(d) FROM dummy WHERE FALSE;
 ----
 
-query IIII nosort res4
-SELECT finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+query I nosort res4
+SELECT finalize(skewness(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
-query IIII nosort res5
-SELECT min(d), max(d) FROM (SELECT NULL::integer d);
+query I nosort res5
+SELECT skewness(d) FROM (SELECT NULL::integer d);
 ----
 
-query IIII nosort res5
-SELECT finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+query I nosort res5
+SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
-query IIII nosort res6
-SELECT min(d), max(d) FROM (SELECT NULL::integer d, g FROM dummy);
+query I nosort res6
+SELECT skewness(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
-query IIII nosort res6
-SELECT finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
-----
-
-# more aggregates
-
-# we skip these for now as argmin/argmax now has a custom binder (so that it can work with extension types like JSON)
-# otherwise we get "Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders"
-mode skip
-
-query II nosort res7
-select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
-----
-
-query II nosort res7
-select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
-----
-
-mode unskip
-
-query III nosort res8
-SELECT g, bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
-----
-
-query III nosort res8
-SELECT g, FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+query I nosort res6
+SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 # you're holding it wrong:
@@ -98,7 +74,7 @@ SELECT string_agg(d) EXPORT_STATE from dummy;
 ----
 
 statement error
-SELECT FINALIZE(COMBINE(MIN(d) EXPORT_STATE)) FROM dummy;
+SELECT FINALIZE(COMBINE(skewness(d) EXPORT_STATE)) FROM dummy;
 ----
 
 statement error
@@ -118,20 +94,20 @@ SELECT finalize(42);
 ----
 
 statement error
-SELECT finalize(min(d)) from dummy;
+SELECT finalize(skewness(d)) from dummy;
 ----
 
 statement error
-SELECT finalize(min(d)) from dummy group by g;
+SELECT finalize(skewness(d)) from dummy group by g;
 ----
 
 # can't finalize twice
 statement error
-SELECT finalize(finalize(min(d) EXPORT_STATE)) from dummy;
+SELECT finalize(finalize(skewness(d) EXPORT_STATE)) from dummy;
 ----
 
 statement error
-select min(42) EXPORT_STATE over ();
+select skewness(42) EXPORT_STATE over ();
 ----
 
 
@@ -144,67 +120,46 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, skewness(d) EXPORT_STATE skewness_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, skewness(d) EXPORT_STATE skewness_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
-query IIIII nosort res10
-SELECT g, min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+query II nosort res10
+SELECT g, skewness(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIII nosort res10
-SELECT g, finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+query II nosort res10
+SELECT g, finalize(skewness_state) FROM state ORDER BY g;
 ----
 
-query IIIII nosort res10
-SELECT g, finalize(min_state), finalize(max_state) FROM state_view ORDER BY g;
+query II nosort res10
+SELECT g, finalize(skewness_state) FROM state_view ORDER BY g;
 ----
 
 # BLOB casting back and forth
 statement ok
-SELECT (min(42) EXPORT_STATE)::BLOB;
+SELECT (skewness(42) EXPORT_STATE)::BLOB;
 
 query I
-SELECT FINALIZE(COMBINE(min(42) EXPORT_STATE, (min(20) EXPORT_STATE)::BLOB));
+SELECT FINALIZE(COMBINE(skewness(42) EXPORT_STATE, (skewness(20) EXPORT_STATE)::BLOB));
 ----
-20
+NULL
 
 statement error
-SELECT (min(42) EXPORT_STATE)::INTEGER;
-----
-
-statement error
-SELECT COMBINE(min(42) EXPORT_STATE, 42);
+SELECT (skewness(42) EXPORT_STATE)::INTEGER;
 ----
 
 statement error
-SELECT COMBINE(min(42) EXPORT_STATE, 'ASDF'::BLOB);
+SELECT COMBINE(skewness(42) EXPORT_STATE, 42);
 ----
 
 statement error
-SELECT COMBINE((min(42) EXPORT_STATE)::BLOB, min(42) EXPORT_STATE);
+SELECT COMBINE(skewness(42) EXPORT_STATE, 'ASDF'::BLOB);
 ----
 
-# simulate round tripping
-require parquet
-
-# TODO - we should support the new aggregate state in parquet files
-statement ok
-COPY (SELECT g, (min(d) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/state.parquet' (FORMAT PARQUET);
-
-query II
-SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, min(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/state.parquet' USING(g) ORDER BY g;
+statement error
+SELECT COMBINE((skewness(42) EXPORT_STATE)::BLOB, skewness(42) EXPORT_STATE);
 ----
-0	0
-1	1
-2	2
-3	3
-4	4
-5	5
-6	6
-7	7
-8	8
-9	9

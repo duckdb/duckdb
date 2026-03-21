@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -145,6 +148,10 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
+	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(result)) {
+		// struct is constant NULL - don't scan more
+		return scan_count;
+	}
 	auto struct_children = GetStructChildren(state);
 	for (auto &child : struct_children) {
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);

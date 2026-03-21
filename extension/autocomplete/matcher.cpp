@@ -65,10 +65,11 @@ public:
 			return nullptr;
 		}
 		auto &token_text = state.tokens[state.token_index].text;
+		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text));
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text, start_offset));
 		result->name = name;
 		return result;
 	}
@@ -117,9 +118,19 @@ public:
 
 	MatchResultType Match(MatchState &state) const override {
 		MatchState list_state(state);
+		// when suppress_suggestions is set, we discard any suggestions added by child matchers
+		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
 			if (list_state.token_index >= list_state.tokens.size()) {
+				if (suppress_suggestions) {
+					// this rule should not contribute autocomplete suggestions
+					// discard any suggestions added by earlier children
+					list_state.suggestions.erase(list_state.suggestions.begin() +
+					                                 NumericCast<int64_t>(saved_suggestion_size),
+					                             list_state.suggestions.end());
+					return MatchResultType::FAIL;
+				}
 				// we exhausted the tokens - push suggestions for the child matcher
 				for (; child_idx < matchers.size(); child_idx++) {
 					auto suggestion_type = matchers[child_idx].get().AddSuggestion(list_state);
@@ -138,12 +149,21 @@ public:
 			}
 			auto match_result = child_matcher.Match(list_state);
 			if (match_result != MatchResultType::SUCCESS) {
-				// we did not succeed in matching a child - skip
+				if (suppress_suggestions) {
+					list_state.suggestions.erase(list_state.suggestions.begin() +
+					                                 NumericCast<int64_t>(saved_suggestion_size),
+					                             list_state.suggestions.end());
+				}
 				return match_result;
 			}
 		}
 		// we matched all child matchers - propagate token index upward
 		state.token_index = list_state.token_index;
+		if (suppress_suggestions) {
+			// discard suggestions from child matchers that were added during matching
+			state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
+			                        state.suggestions.end());
+		}
 		return MatchResultType::SUCCESS;
 	}
 
@@ -151,6 +171,10 @@ public:
 		MatchState list_state(state);
 		vector<optional_ptr<ParseResult>> results;
 
+		optional_idx start_offset;
+		if (list_state.token_index < list_state.tokens.size()) {
+			start_offset = optional_idx(list_state.tokens[list_state.token_index].offset);
+		}
 		for (const auto &child_matcher : matchers) {
 			auto child_result = child_matcher.get().MatchParseResult(list_state);
 			if (!child_result) {
@@ -160,10 +184,13 @@ public:
 		}
 		state.token_index = list_state.token_index;
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
-		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name));
+		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name, start_offset));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		if (suppress_suggestions) {
+			return SuggestionType::OPTIONAL;
+		}
 		for (auto &matcher : matchers) {
 			auto suggestion_result = matcher.get().AddSuggestion(state);
 			if (suggestion_result == SuggestionType::MANDATORY) {
@@ -188,6 +215,8 @@ public:
 
 public:
 	vector<reference<Matcher>> matchers;
+	//! If true, this matcher will not contribute autocomplete suggestions (used for rules like ExpressionStatement)
+	bool suppress_suggestions = false;
 };
 
 class OptionalMatcher : public Matcher {
@@ -212,6 +241,10 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
 		MatchState child_state(state);
+		optional_idx start_offset;
+		if (child_state.token_index < child_state.tokens.size()) {
+			start_offset = optional_idx(child_state.tokens[child_state.token_index].offset);
+		}
 		auto child_match = matcher.MatchParseResult(child_state);
 		if (child_match == nullptr) {
 			// did not succeed in matching - go back up (simply return a nullptr)
@@ -219,7 +252,7 @@ public:
 		}
 		// propagate the child state upwards
 		state.token_index = child_state.token_index;
-		return state.allocator.Allocate(make_uniq<OptionalParseResult>(child_match));
+		return state.allocator.Allocate(make_uniq<OptionalParseResult>(child_match, start_offset));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -259,13 +292,17 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		optional_idx start_offset;
+		if (state.token_index < state.tokens.size()) {
+			start_offset = optional_idx(state.tokens[state.token_index].offset);
+		}
 		for (idx_t i = 0; i < matchers.size(); i++) {
 			MatchState choice_state(state);
 			auto child_result = matchers[i].get().MatchParseResult(choice_state);
 			if (child_result != nullptr) {
 				// we matched this child - propagate upwards
 				state.token_index = choice_state.token_index;
-				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i));
+				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i, start_offset));
 				return result;
 			}
 		}
@@ -337,6 +374,11 @@ public:
 		MatchState repeat_state(state);
 		vector<optional_ptr<ParseResult>> results;
 
+		optional_idx start_offset;
+		if (repeat_state.token_index < state.tokens.size()) {
+			start_offset = optional_idx(repeat_state.tokens[repeat_state.token_index].offset);
+		}
+
 		// First, we MUST match the element at least once.
 		auto first_result = element.MatchParseResult(repeat_state);
 		if (!first_result) {
@@ -365,7 +407,7 @@ public:
 		}
 
 		// Return all collected results in a RepeatParseResult.
-		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results)));
+		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results), start_offset));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -420,6 +462,7 @@ public:
 		if (!MatchIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = GetTokenType();
 		return MatchResultType::SUCCESS;
 	}
 
@@ -428,6 +471,7 @@ public:
 			return nullptr;
 		}
 		const auto &token_text = state.tokens[state.token_index].text;
+		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
@@ -436,12 +480,39 @@ public:
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
+		} else if (!state.preserve_identifier_case) {
+			result_text = StringUtil::Lower(result_text);
 		}
 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset));
+	}
+
+	TokenType GetTokenType() const {
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+			return TokenType::CATALOG_NAME;
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+			return TokenType::SCHEMA_NAME;
+		case SuggestionState::SUGGEST_TABLE_NAME:
+			return TokenType::TABLE_NAME;
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			return TokenType::TYPE_NAME;
+		case SuggestionState::SUGGEST_COLUMN_NAME:
+			return TokenType::COLUMN_NAME;
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+			return TokenType::SCALAR_FUNCTION;
+		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			return TokenType::TABLE_FUNCTION;
+		case SuggestionState::SUGGEST_PRAGMA_NAME:
+			return TokenType::PRAGMA_FUNCTION;
+		case SuggestionState::SUGGEST_SETTING_NAME:
+			return TokenType::SETTING_NAME;
+		default:
+			return TokenType::IDENTIFIER;
+		}
 	}
 
 	bool SupportsStringLiteral() const {
@@ -557,11 +628,16 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = GetTokenType();
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
+		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
@@ -569,8 +645,10 @@ public:
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
+		} else if (!state.preserve_identifier_case) {
+			result_text = StringUtil::Lower(result_text);
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset));
 	}
 
 private:
@@ -605,6 +683,7 @@ public:
 		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = TokenType::STRING_LITERAL;
 		return MatchResultType::SUCCESS;
 	}
 
@@ -614,6 +693,7 @@ public:
 		}
 
 		auto &token = state.tokens[state.token_index];
+		auto start_offset = optional_idx(token.offset);
 		auto string_info = GetSpecialStringInfo(token.text);
 
 		if (!MatchStringLiteral(state, string_info)) {
@@ -629,7 +709,8 @@ public:
 		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
 		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
-		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
+		auto result = state.allocator.Allocate(
+		    make_uniq<StringLiteralParseResult>(stripped_string, string_info.type, start_offset));
 		result->name = name;
 		return result;
 	}
@@ -675,6 +756,7 @@ public:
 		if (!MatchNumberLiteral(state)) {
 			return MatchResultType::FAIL;
 		}
+		state.tokens[state.token_index - 1].type = TokenType::NUMBER_LITERAL;
 		return MatchResultType::SUCCESS;
 	}
 
@@ -683,10 +765,11 @@ public:
 			return nullptr;
 		}
 		auto &token_text = state.tokens[state.token_index].text;
+		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
 		if (!MatchNumberLiteral(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text));
+		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text, start_offset));
 		result->name = name;
 		return result;
 	}
@@ -746,10 +829,11 @@ public:
 			return nullptr;
 		}
 		auto &token_text = state.tokens[state.token_index].text;
+		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
 		if (!MatchOperator(state)) {
 			return nullptr;
 		}
-		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -810,11 +894,11 @@ public:
 			return nullptr;
 		}
 		auto &token_text = state.tokens[state.token_index].text;
+		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
 		if (!MatchArithmeticOperator(state)) {
 			return nullptr;
 		}
-		Printer::Print("Found arithmetic operator!!!");
-		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -900,6 +984,7 @@ private:
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
+	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
 
@@ -907,6 +992,7 @@ private:
 	MatcherAllocator &allocator;
 	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
+	string_set_t no_suggestion_rules;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -1262,6 +1348,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
 	matcher.SetName(rule_name.GetString());
+	if (no_suggestion_rules.count(rule_name.GetString())) {
+		matcher.Cast<ListMatcher>().suppress_suggestions = true;
+	}
 	return matcher;
 }
 
@@ -1272,6 +1361,10 @@ void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char e
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
+}
+
+void MatcherFactory::SuppressSuggestions(const char *name) {
+	no_suggestion_rules.insert(name);
 }
 
 Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
@@ -1310,22 +1403,42 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
 
+	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
+	SuppressSuggestions("ExpressionStatement");
+
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);
 }
 
-Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
-	MatcherFactory factory(allocator);
+shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (matcher) {
+			return matcher;
+		}
+	}
+	auto new_matcher = make_shared_ptr<PEGMatcher>();
+	MatcherFactory factory(new_matcher->allocator);
 #ifdef PEG_PARSER_SOURCE_FILE
 	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;
 	buffer << t.rdbuf();
-	auto string = buffer.str();
+	auto grammar_string = buffer.str();
 
-	return factory.CreateMatcher(string.c_str(), "Statement");
+	new_matcher->root = factory.CreateMatcher(grammar_string.c_str(), "Statement");
 #else
-	return factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
+	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
 #endif
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!matcher) {
+		matcher = std::move(new_matcher);
+	}
+	return matcher;
+}
+
+void PEGMatcherCache::Invalidate() {
+	std::unique_lock<std::mutex> lock(mutex);
+	matcher = nullptr;
 }
 
 } // namespace duckdb

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {

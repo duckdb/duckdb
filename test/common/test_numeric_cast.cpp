@@ -3,7 +3,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Numeric cast checks", "[numeric_cast]") {
 #ifdef DUCKDB_CRASH_ON_ASSERT

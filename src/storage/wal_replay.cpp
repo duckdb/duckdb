@@ -32,6 +32,8 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 
 namespace duckdb {
 
@@ -767,7 +769,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	// Create a binder to bind the parsed expressions.
 	vector<ColumnIndex> column_indexes;
-	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_indexes, table);
+	binder->bind_context.AddBaseTable(TableIndex(0), string(), column_names, column_types, column_indexes, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// Bind the parsed expressions to create unbound expressions.
@@ -1037,23 +1039,6 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	storage.LocalWALAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
-static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {
-	for (auto &pointer : col_data.pointers) {
-		auto block_id = pointer.block_pointer.block_id;
-		if (block_id != INVALID_BLOCK) {
-			manager.MarkBlockAsUsed(block_id);
-		}
-		if (pointer.segment_state) {
-			for (auto &block : pointer.segment_state->blocks) {
-				manager.MarkBlockAsUsed(block);
-			}
-		}
-	}
-	for (auto &child_column : col_data.child_columns) {
-		MarkBlocksAsUsed(manager, child_column);
-	}
-}
-
 void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
 	PersistentCollectionData data;
@@ -1067,10 +1052,8 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		// label blocks in data as used - they will be used after the WAL replay is finished
 		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
 		// by previous deserialization steps
-		for (auto &group : data.row_group_data) {
-			for (auto &col_data : group.column_data) {
-				MarkBlocksAsUsed(block_manager, col_data);
-			}
+		for (auto &block_id : data.GetBlockIds()) {
+			block_manager.MarkBlockAsUsed(block_id);
 		}
 		return;
 	}

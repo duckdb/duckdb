@@ -160,14 +160,24 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 }
 
 void GroupedAggregateHashTable::Destroy() {
-	if (!partitioned_data || partitioned_data->Count() == 0 || !layout_ptr->HasDestructor()) {
+	if (!layout_ptr->HasDestructor()) {
 		return;
 	}
 
-	// There are aggregates with destructors: Call the destructor for each of the aggregates
-	// Currently does not happen because aggregate destructors are called while scanning in RadixPartitionedHashTable
-	// LCOV_EXCL_START
-	for (auto &data_collection : partitioned_data->GetPartitions()) {
+	// There are aggregates with destructors
+	if (unpartitioned_data) {
+		DestroyAggregateData(*unpartitioned_data, state.unpartitioned_append_state);
+	}
+	if (partitioned_data) {
+		DestroyAggregateData(*partitioned_data, state.partitioned_append_state);
+	}
+}
+
+void GroupedAggregateHashTable::DestroyAggregateData(PartitionedTupleData &data,
+                                                     PartitionedTupleDataAppendState &append_state) {
+	// Call the destructor for each of the aggregates
+	data.FlushAppendState(append_state);
+	for (auto &data_collection : data.GetPartitions()) {
 		if (data_collection->Count() == 0) {
 			continue;
 		}
@@ -178,7 +188,6 @@ void GroupedAggregateHashTable::Destroy() {
 		} while (iterator.Next());
 		data_collection->Reset();
 	}
-	// LCOV_EXCL_STOP
 }
 
 shared_ptr<TupleDataLayout> GroupedAggregateHashTable::GetLayoutPtr() {

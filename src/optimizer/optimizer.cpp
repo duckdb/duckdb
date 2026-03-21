@@ -32,7 +32,7 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/optimizer/sum_rewriter.hpp"
+#include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
@@ -40,6 +40,7 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -68,6 +69,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
+	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -139,10 +141,10 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
-	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
-	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
-		SumRewriterOptimizer optimizer(*this);
-		optimizer.Optimize(plan);
+	// Rewrites AVG(x) -> SUM(x)/COUNT(x) and SUM(x+C) -> SUM(x) + C*COUNT(x)
+	RunOptimizer(OptimizerType::AGGREGATE_FUNCTION_REWRITER, [&]() {
+		AggregateFunctionRewriter aggregate_function_rewriter(*this);
+		aggregate_function_rewriter.Optimize(plan);
 	});
 
 	// perform filter pullup
@@ -154,7 +156,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
-		unordered_set<idx_t> top_bindings;
+		unordered_set<TableIndex> top_bindings;
 		filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
@@ -201,8 +203,14 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Pull up projection from joins
 	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
-		ProjectionPullup projection_pullup(*plan);
+		ProjectionPullup projection_pullup(*this, *plan);
 		projection_pullup.Optimize(plan);
+	});
+
+	// Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
+	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
+		OuterJoinSimplification outer_join_simplification;
+		outer_join_simplification.VisitOperator(*plan);
 	});
 
 	// then we perform the join ordering optimization
@@ -225,8 +233,8 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes unused columns
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
-		RemoveUnusedColumns unused(binder, context, true);
-		unused.VisitOperator(*plan);
+		RemoveUnusedColumns unused(*this);
+		unused.VisitOperator(plan);
 	});
 
 	// Remove duplicate groups from aggregates

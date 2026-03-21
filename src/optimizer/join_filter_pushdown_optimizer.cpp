@@ -19,7 +19,7 @@ namespace duckdb {
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
-bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &filter) {
+bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter) {
 	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// not a simple column ref - bail-out
 		return false;
@@ -114,7 +114,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				// index does not belong to this projection - bail-out
 				return;
 			}
-			auto &expr = *proj.expressions[filter.probe_column_index.column_index];
+			auto &expr = proj.GetExpression(filter.probe_column_index);
 			if (!PushdownJoinFilterExpression(expr, filter)) {
 				// cannot push through this expression - bail-out
 				return;
@@ -131,7 +131,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				// index does not refer to a group - bail-out
 				return;
 			}
-			auto &expr = *aggr.groups[filter.probe_column_index.column_index];
+			auto &expr = aggr.GetExpression(filter.probe_column_index);
 			if (!PushdownJoinFilterExpression(expr, filter)) {
 				// cannot push through this expression - bail-out
 				return;
@@ -150,7 +150,7 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op->Cast<LogicalGet>();
-		return !get.table_filters.filters.empty();
+		return get.table_filters.HasFilters();
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		return true;
@@ -176,7 +176,6 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	case JoinType::OUTER:
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
-	case JoinType::RIGHT_SEMI:
 		// cannot generate join filters for these join types
 		// mark/single - cannot change cardinality of probe side
 		// left/outer always need to include every row from probe side
@@ -278,13 +277,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 	}
 	if (!pushdown_info->probe_info.empty()) {
-		const auto &rhs_child = join.children[1];
-		if (rhs_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-			pushdown_info->build_side_has_filter = IsFiltering(join.children[0]);
-		} else {
-			pushdown_info->build_side_has_filter = IsFiltering(join.children[1]);
-		}
+		const idx_t child_idx = join.children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET ? 0 : 1;
+		pushdown_info->build_side_has_filter = IsFiltering(join.children[child_idx]);
 	}
+
 	// set up the filter pushdown in the join itself
 	join.filter_pushdown = std::move(pushdown_info);
 }

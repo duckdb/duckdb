@@ -8,7 +8,6 @@
 #include <cstring>
 
 using namespace duckdb;
-using namespace std;
 
 struct OptionValuePair {
 	OptionValuePair() {
@@ -181,7 +180,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "custom_user_agent",
+	    "configure_profiling",
+	    "configure_metrics",
 	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",
@@ -210,7 +210,7 @@ void RequireValueEqual(const string &option_name, const Value &left, const Value
 	}
 	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
 	                                option_name, left.ToString(), right.ToString());
-	cerr << error << endl;
+	std::cerr << error << std::endl;
 	REQUIRE(false);
 }
 
@@ -277,7 +277,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			auto error = StringUtil::Format(
 			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", option.name,
 			    option.value.ToString(), options);
-			cerr << error << endl;
+			std::cerr << error << std::endl;
 			REQUIRE(false);
 		}
 		auto original_value = GetValueForSetting(con, option.name, option.type);

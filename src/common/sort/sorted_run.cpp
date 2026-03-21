@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 
 #include "duckdb/common/types/row/tuple_data_collection.hpp"

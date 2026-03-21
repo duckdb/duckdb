@@ -1,7 +1,7 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", "[capi]") {
 	duckdb_database db;

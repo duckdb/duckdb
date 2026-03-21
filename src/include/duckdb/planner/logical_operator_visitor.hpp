@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 #include <functional>
 
@@ -22,6 +23,7 @@ public:
 	virtual ~LogicalOperatorVisitor() {
 	}
 
+	virtual void VisitOperator(unique_ptr<LogicalOperator> &op);
 	virtual void VisitOperator(LogicalOperator &op);
 	virtual void VisitExpression(unique_ptr<Expression> *expression);
 
@@ -37,7 +39,8 @@ protected:
 	void VisitOperatorExpressions(LogicalOperator &op);
 	//! Alternatives for VisitOperatorChildren for operators that have a projection map
 	void VisitOperatorWithProjectionMapChildren(LogicalOperator &op);
-	void VisitChildOfOperatorWithProjectionMap(LogicalOperator &child, vector<idx_t> &projection_map);
+	void VisitChildOfOperatorWithProjectionMap(unique_ptr<LogicalOperator> &child,
+	                                           vector<ProjectionIndex> &projection_map);
 
 	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all
 	// expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.

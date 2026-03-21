@@ -36,6 +36,7 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
+#include "duckdb/common/serialization_compatibility.hpp"
 
 namespace duckdb {
 
@@ -64,29 +65,6 @@ struct DatabaseCacheEntry;
 struct DBConfig;
 struct SettingLookupResult;
 
-class SerializationCompatibility {
-public:
-	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
-	static SerializationCompatibility FromIndex(idx_t serialization_version);
-	static SerializationCompatibility FromString(const string &input);
-	static SerializationCompatibility Default();
-	static SerializationCompatibility Latest();
-
-public:
-	bool Compare(idx_t property_version) const;
-
-public:
-	//! The user provided version
-	string duckdb_version;
-	//! The max version that should be serialized
-	idx_t serialization_version;
-	//! Whether this was set by a manual SET/PRAGMA or default
-	bool manually_set;
-
-protected:
-	SerializationCompatibility() = default;
-};
-
 //! NOTE: DBConfigOptions is mostly deprecated.
 //! If you want to add a setting that can be set by the user, add it as a generic setting to `settings.json`.
 //! See e.g. "http_proxy" (HTTPProxySetting) as an example
@@ -97,7 +75,7 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	//! Checkpoint when WAL reaches this size (default: 16MB)
+	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
@@ -201,8 +179,6 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Encryption Util for OpenSSL and MbedTLS
 	shared_ptr<EncryptionUtil> encryption_util;
-	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	//! Reference to the database file path manager
@@ -253,13 +229,14 @@ public:
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Returns the list of possible compression functions for the physical type.
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
+	DUCKDB_API vector<reference<const CompressionFunction>>
+	GetCompressionFunctions(const PhysicalType physical_type) const;
 	//! Returns the compression function matching the compression and physical type.
 	//! Throws an error if the function does not exist.
-	DUCKDB_API reference<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                 const PhysicalType physical_type);
-	DUCKDB_API optional_ptr<CompressionFunction> TryGetCompressionFunction(CompressionType type,
-	                                                                       const PhysicalType physical_type);
+	DUCKDB_API reference<const CompressionFunction> GetCompressionFunction(CompressionType type,
+	                                                                       const PhysicalType physical_type) const;
+	DUCKDB_API optional_ptr<const CompressionFunction>
+	TryGetCompressionFunction(CompressionType type, const PhysicalType physical_type) const;
 	//! Sets the disabled compression methods
 	DUCKDB_API void SetDisabledCompressionMethods(const vector<CompressionType> &disabled_compression_methods);
 	//! Returns a list of disabled compression methods
@@ -307,6 +284,8 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
+	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
+	HTTPUtil &GetHTTPUtil() const;
 
 private:
 	mutable mutex config_lock;
@@ -318,6 +297,10 @@ private:
 	unique_ptr<IndexTypeSet> index_types;
 	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
+	//! HTTP Request utility functions
+	shared_ptr<HTTPUtil> http_util;
+	vector<shared_ptr<HTTPUtil>> old_http_utils;
+	mutex http_util_lock;
 };
 
 } // namespace duckdb

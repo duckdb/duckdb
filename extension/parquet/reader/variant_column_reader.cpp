@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "reader/variant/variant_shredded_conversion.hpp"

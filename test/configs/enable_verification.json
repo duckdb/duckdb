@@ -91,6 +91,7 @@
         "test/sql/copy/csv/rejects/test_multiple_errors_same_line.test",
         "test/sql/copy/csv/test_non_unicode_header.test",
         "test/sql/logging/file_system_logging.test",
+        "test/sql/logging/http_log_timing.test",
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_buffer_size.test",
         "test/sql/logging/logging_csv.test",
@@ -114,6 +115,7 @@
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/join/asof/test_asof_limit.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
@@ -123,7 +125,8 @@
         "test/sql/types/geo/geometry_shred_limit.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
         "test/sql/window/test_window_constant_allocator.test",
-        "test/parquet/variant/variant_stats_propagation.test"
+        "test/parquet/variant/variant_stats_propagation.test",
+        "test/sql/types/geo/geometry_compatability.test"
       ]
     },
     {

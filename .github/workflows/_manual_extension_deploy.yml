@@ -51,7 +51,7 @@ jobs:
       BASE_EXCLUDE_ARCHS: ''
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -80,16 +80,26 @@ jobs:
     needs:
       - load-extension-configs
       - vars
-    uses: ./.github/workflows/_extension_distribution.yml
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      artifact_prefix: extensions
+      override_repository: duckdb/extension-template
+      override_ref: main
+      upload_all_extensions: true
+      extension_name: extensions
+      reduced_ci_mode: auto
+      set_caller_as_duckdb: true
+      duckdb_version: ${{ inputs.duckdb_ref }}
+      override_ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
       exclude_archs: ${{ needs.load-extension-configs.outputs.extension_exclude_archs }}
-      extension_config: ${{ needs.load-extension-configs.outputs.extension_config }}
-      override_tag: ${{ inputs.override_git_describe }}
-      override_duckdb_version: ${{ inputs.duckdb_ref }}
+      opt_in_archs: ''
+      extra_toolchains: 'rust'
+      use_merged_vcpkg_manifest: '1'
+      duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
-      extra_toolchains: 'rust'
+      extensions_test_selection: 'complete'
+      extra_extension_config: ${{ needs.load-extension-configs.outputs.extension_config }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
@@ -99,11 +109,11 @@ jobs:
       - build
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download extensions
         with:
           pattern: extensions-${{ inputs.duckdb_ref }}*
@@ -124,7 +134,7 @@ jobs:
           find /tmp/merged_repository -type f ! -name "${{ inputs.extension_name }}.duckdb_extension*" -delete
           tree /tmp/merged_repository
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: extension-repository-${{ inputs.duckdb_ref }}
@@ -138,11 +148,11 @@ jobs:
       - create-extension-repository
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp

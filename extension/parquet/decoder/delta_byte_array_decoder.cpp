@@ -34,11 +34,8 @@ void DeltaByteArrayDecoder::InitializePage() {
 	auto prefix_data = reinterpret_cast<uint32_t *>(prefix_buffer.ptr);
 	auto suffix_data = reinterpret_cast<uint32_t *>(suffix_buffer.ptr);
 
-	// Allocate the plain data buffer
-	if (!plain_data) {
-		plain_data = make_shared_ptr<ResizeableBuffer>();
-	}
-	plain_data->reset();
+	// Allocate the plain data buffer per page
+	plain_data = make_shared_ptr<ResizeableBuffer>();
 
 	if (prefix_count == 0) {
 		plain_data->resize(allocator, 0);
@@ -61,8 +58,12 @@ void DeltaByteArrayDecoder::InitializePage() {
 			throw std::runtime_error(
 			    "DELTA_BYTE_ARRAY on FIXED_LEN_BYTE_ARRAY: decoded length does not match type length");
 		}
-		total_size += len + (is_fixed_len ? 0 : sizeof(uint32_t));
+		total_size += len;
 		max_len = MaxValue(max_len, len);
+	}
+
+	if (!is_fixed_len) {
+		total_size += prefix_count * sizeof(uint32_t);
 	}
 
 	plain_data->resize(allocator, total_size);
