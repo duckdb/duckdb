@@ -239,3 +239,11 @@ query T
 SELECT json_deep_merge('{"a":{"x":1}}', '{"a":{"x":null,"y":2},"b":null}')
 ----
 {"a":{"x":null,"y":2},"b":null}
+
+# Constant vector test (verifies AllConstant path)
+query T
+SELECT json_deep_merge('{"a":1}', '{"b":null}') FROM range(3)
+----
+{"a":1,"b":null}
+{"a":1,"b":null}
+{"a":1,"b":null}

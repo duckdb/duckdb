@@ -3,6 +3,7 @@
 
 namespace duckdb {
 
+//! Like yyjson_mut_merge_patch, but null values in patch overwrite rather than delete
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
 	// If patch is not an object, it replaces orig entirely
 	if (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) {

@@ -3,6 +3,7 @@
 
 namespace duckdb {
 
+//! Recursively sort all object keys alphabetically (byte-order) in a mutable JSON value
 static void SortKeys(yyjson_mut_val *val) {
 	if (!val) {
 		return;
@@ -64,6 +65,7 @@ static void SortKeys(yyjson_mut_val *val) {
 	}
 }
 
+//! Serialize JSON with all object keys sorted, enabling deterministic hashing
 static void SerializeSortedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();

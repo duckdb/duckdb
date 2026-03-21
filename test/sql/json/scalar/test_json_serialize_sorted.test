@@ -219,3 +219,23 @@ query T
 SELECT json_serialize_sorted('{"b":-1,"a":-2}')
 ----
 {"a":-2,"b":-1}
+
+# Constant vector test (verifies AllConstant path)
+query T
+SELECT json_serialize_sorted('{"z":1,"a":2}') FROM range(3)
+----
+{"a":2,"z":1}
+{"a":2,"z":1}
+{"a":2,"z":1}
+
+# JSON null value inside object (not SQL NULL)
+query T
+SELECT json_serialize_sorted('{"b":null,"a":1}')
+----
+{"a":1,"b":null}
+
+# Nested JSON null values
+query T
+SELECT json_serialize_sorted('{"b":{"z":null,"a":1},"a":null}')
+----
+{"a":null,"b":{"a":1,"z":null}}
