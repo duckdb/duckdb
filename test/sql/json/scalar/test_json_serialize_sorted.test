@@ -239,3 +239,21 @@ query T
 SELECT json_serialize_sorted('{"b":{"z":null,"a":1},"a":null}')
 ----
 {"a":null,"b":{"a":1,"z":null}}
+
+# Empty string key sorts first
+query T
+SELECT json_serialize_sorted('{"a":2,"":1}')
+----
+{"":1,"a":2}
+
+# Same-prefix keys: sorted by length tiebreaker (a < ab < abc)
+query T
+SELECT json_serialize_sorted('{"abc":3,"ab":2,"a":1}')
+----
+{"a":1,"ab":2,"abc":3}
+
+# Object nested inside array inside object (triple nesting)
+query T
+SELECT json_serialize_sorted('{"b":{"c":[{"z":1,"a":2}]},"a":1}')
+----
+{"a":1,"b":{"c":[{"a":2,"z":1}]}}
