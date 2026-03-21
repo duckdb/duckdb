@@ -21,7 +21,6 @@ namespace duckdb {
 class PrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
-
 	static constexpr uint8_t DEPRECATED_COUNT = 15;
 
 public:
@@ -39,7 +38,10 @@ public:
 	//! Create a new deprecated prefix node and return a handle to it.
 	static PrefixHandle NewDeprecated(FixedSizeAllocator &allocator, Node &node);
 
-	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
+	//! Transform prefix chain to deprecated format.
+	//! nullptr denotes an early out optimization (the prefix has not been loaded from storage, hence we do not need
+	//! to transform it. Otherwise, we get a pointer to the child node at the end of the prefix chain.
+	static optional_ptr<Node> TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 private:
 	PrefixHandle TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte);

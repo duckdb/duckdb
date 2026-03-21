@@ -23,8 +23,6 @@ public:
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                    idx_t scan_count) override;
 	void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
@@ -32,8 +30,6 @@ public:
 	            SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) override;
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	            SelectionVector &sel, idx_t count) override;
-	void SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t count,
-	                     bool allow_updates) override;
 
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
@@ -58,7 +54,8 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                             const BaseStatistics &old_stats) override;
 
 	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
 	                    Vector &scan_vector) const override;

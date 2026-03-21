@@ -1,0 +1,65 @@
+# name: test/parquet/variant/variant_comparison.test
+# group: [variant]
+
+require parquet
+
+statement ok
+create table tbl(col VARIANT);
+
+statement ok
+insert into tbl select * from (VALUES
+	('test'::VARIANT),
+	('99'::VARIANT),
+	('1'::VARIANT),
+	('101'::VARIANT),
+	(-123::VARIANT),
+	((-100.5::decimal(5,1))::VARIANT),
+	((100.5::decimal(5,1))::VARIANT)
+) t(col)
+
+statement error
+select col from tbl where col > 100
+----
+Invalid Input Error: Can't compare values of type VARCHAR (test) and type INTEGER (100) - an explicit cast is required
+
+query I
+select col from tbl where variant_typeof(col) != 'VARCHAR' and col > 0
+----
+100.5
+
+query I
+select col from tbl where variant_typeof(col) != 'VARCHAR' and col == -123
+----
+-123
+
+statement ok
+delete from tbl;
+
+statement ok
+insert into tbl select * from (VALUES
+	({'a': 21, 'b': 42}::VARIANT),
+	([1::VARIANT, 2, {'this is a long string': 'test'}])
+)
+
+statement error
+select col, col > 100 from tbl
+----
+Invalid Input Error: Can't compare values of type STRUCT(a INTEGER, b INTEGER) ({'a': 21, 'b': 42}) and type INTEGER (100) - an explicit cast is required
+
+query I
+select col.a > 100 from tbl
+----
+false
+NULL
+
+query I
+select col[1] > 100 from tbl
+----
+NULL
+false
+
+query I
+select col[1] > 0 from tbl
+----
+NULL
+true

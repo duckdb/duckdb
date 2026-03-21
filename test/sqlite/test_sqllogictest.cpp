@@ -13,7 +13,6 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
 // code below traverses the test directory and makes individual test cases out
 // of each script
@@ -34,7 +33,15 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false>
+static void register_sqllogic_test_case(void (*test_fun)(), const string &path, const string &tags) {
+	auto normalized_path = StringUtil::Replace(path, "\\", "/");
+	if (TestConfiguration::Get().ShouldSkipTest(normalized_path)) {
+		return;
+	}
+	REGISTER_TEST_CASE(test_fun, normalized_path, tags);
+}
+
+template <bool AUTO_SWITCH_TEST_DIR = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
@@ -60,7 +67,6 @@ static void testRunner() {
 	}
 	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
-	runner.enable_verification = VERIFICATION;
 
 	string prev_directory;
 
@@ -157,43 +163,6 @@ static string ParseGroupFromPath(string file) {
 namespace duckdb {
 
 void RegisterSqllogictests() {
-	vector<string> enable_verification_excludes = {
-	    // too slow for verification
-	    "test/select5.test",
-	    "test/index",
-	    // optimization masks int32 overflow
-	    "test/random/aggregates/slt_good_102.test",
-	    "test/random/aggregates/slt_good_11.test",
-	    "test/random/aggregates/slt_good_115.test",
-	    "test/random/aggregates/slt_good_116.test",
-	    "test/random/aggregates/slt_good_118.test",
-	    "test/random/aggregates/slt_good_119.test",
-	    "test/random/aggregates/slt_good_122.test",
-	    "test/random/aggregates/slt_good_17.test",
-	    "test/random/aggregates/slt_good_20.test",
-	    "test/random/aggregates/slt_good_23.test",
-	    "test/random/aggregates/slt_good_25.test",
-	    "test/random/aggregates/slt_good_3.test",
-	    "test/random/aggregates/slt_good_30.test",
-	    "test/random/aggregates/slt_good_31.test",
-	    "test/random/aggregates/slt_good_38.test",
-	    "test/random/aggregates/slt_good_39.test",
-	    "test/random/aggregates/slt_good_4.test",
-	    "test/random/aggregates/slt_good_43.test",
-	    "test/random/aggregates/slt_good_46.test",
-	    "test/random/aggregates/slt_good_51.test",
-	    "test/random/aggregates/slt_good_56.test",
-	    "test/random/aggregates/slt_good_66.test",
-	    "test/random/aggregates/slt_good_7.test",
-	    "test/random/aggregates/slt_good_72.test",
-	    "test/random/aggregates/slt_good_82.test",
-	    "test/random/aggregates/slt_good_84.test",
-	    "test/random/aggregates/slt_good_85.test",
-	    "test/random/aggregates/slt_good_91.test",
-	    "test/random/expr/slt_good_15.test",
-	    "test/random/expr/slt_good_66.test",
-	    "test/random/expr/slt_good_91.test",
-	};
 	vector<string> excludes = {
 	    // tested separately
 	    "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
@@ -241,32 +210,21 @@ void RegisterSqllogictests() {
 					return;
 				}
 			}
-			bool enable_verification = true;
-			for (auto &excl : enable_verification_excludes) {
-				if (path.find(excl) != string::npos) {
-					enable_verification = false;
-					break;
-				}
-			}
-			if (enable_verification) {
-				REGISTER_TEST_CASE(testRunner<true>, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-			} else {
-				REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-			}
+			register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
 		}
 	});
 	listFiles(*fs, "test", [&](const string &path) {
 		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 			// parse the name / group from the test
-			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
 		}
 	});
 
 	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-				auto fun = testRunner<false, true>;
-				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+				auto fun = testRunner<true>;
+				register_sqllogic_test_case(fun, path, ParseGroupFromPath(path));
 			}
 		});
 	}

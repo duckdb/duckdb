@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -5,6 +7,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 
 namespace duckdb {
 
@@ -116,17 +119,14 @@ void StructStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	});
 }
 
-string StructStats::ToString(const BaseStatistics &stats) {
-	string result;
-	result += " {";
+child_list_t<Value> StructStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
+	child_list_t<Value> child_info;
 	auto &child_types = StructType::GetChildTypes(stats.GetType());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		if (i > 0) {
-			result += ", ";
-		}
-		result += child_types[i].first + ": " + stats.child_stats[i].ToString();
+		child_info.emplace_back(child_types[i].first, stats.child_stats[i].ToStruct());
 	}
-	result += "}";
+	result.emplace_back("child_stats", Value::STRUCT(std::move(child_info)));
 	return result;
 }
 

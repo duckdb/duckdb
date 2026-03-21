@@ -18,6 +18,8 @@
 *   Internal function for sorting arrays.
 */
 
+#include <cstddef>
+
 #include "unicode/utypes.h"
 #include "cmemory.h"
 #include "uarrsort.h"
@@ -35,7 +37,7 @@ enum {
 };
 
 static constexpr int32_t sizeInMaxAlignTs(int32_t sizeInBytes) {
-    return (sizeInBytes + sizeof(max_align_t) - 1) / sizeof(max_align_t);
+    return (sizeInBytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
 }
 
 /* UComparator convenience implementations ---------------------------------- */
@@ -73,7 +75,7 @@ U_CAPI int32_t U_EXPORT2
 uprv_stableBinarySearch(char *array, int32_t limit, void *item, int32_t itemSize,
                         UComparator *cmp, const void *context) {
     int32_t start=0;
-    UBool found=FALSE;
+    UBool found=false;
 
     /* Binary search until we get down to a tiny sub-array. */
     while((limit-start)>=MIN_QSORT) {
@@ -88,10 +90,10 @@ uprv_stableBinarySearch(char *array, int32_t limit, void *item, int32_t itemSize
              * However, if there are many equal items, then it should be
              * faster to continue with the binary search.
              * It seems likely that we either have all unique items
-             * (where found will never become TRUE in the insertion sort)
+             * (where found will never become true in the insertion sort)
              * or potentially many duplicates.
              */
-            found=TRUE;
+            found=true;
             start=i+1;
         } else if(diff<0) {
             limit=i;
@@ -104,7 +106,7 @@ uprv_stableBinarySearch(char *array, int32_t limit, void *item, int32_t itemSize
     while(start<limit) {
         int32_t diff=cmp(context, item, array+start*itemSize);
         if(diff==0) {
-            found=TRUE;
+            found=true;
         } else if(diff<0) {
             break;
         }
@@ -139,7 +141,7 @@ static void
 insertionSort(char *array, int32_t length, int32_t itemSize,
               UComparator *cmp, const void *context, UErrorCode *pErrorCode) {
 
-    icu::MaybeStackArray<max_align_t, sizeInMaxAlignTs(STACK_ITEM_SIZE)> v;
+    icu::MaybeStackArray<std::max_align_t, sizeInMaxAlignTs(STACK_ITEM_SIZE)> v;
     if (sizeInMaxAlignTs(itemSize) > v.getCapacity() &&
             v.resize(sizeInMaxAlignTs(itemSize)) == nullptr) {
         *pErrorCode = U_MEMORY_ALLOCATION_ERROR;
@@ -233,7 +235,7 @@ static void
 quickSort(char *array, int32_t length, int32_t itemSize,
             UComparator *cmp, const void *context, UErrorCode *pErrorCode) {
     /* allocate two intermediate item variables (x and w) */
-    icu::MaybeStackArray<max_align_t, sizeInMaxAlignTs(STACK_ITEM_SIZE) * 2> xw;
+    icu::MaybeStackArray<std::max_align_t, sizeInMaxAlignTs(STACK_ITEM_SIZE) * 2> xw;
     if(sizeInMaxAlignTs(itemSize)*2 > xw.getCapacity() &&
             xw.resize(sizeInMaxAlignTs(itemSize) * 2) == nullptr) {
         *pErrorCode=U_MEMORY_ALLOCATION_ERROR;
@@ -254,10 +256,10 @@ U_CAPI void U_EXPORT2
 uprv_sortArray(void *array, int32_t length, int32_t itemSize,
                UComparator *cmp, const void *context,
                UBool sortStable, UErrorCode *pErrorCode) {
-    if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
+    if(pErrorCode==nullptr || U_FAILURE(*pErrorCode)) {
         return;
     }
-    if((length>0 && array==NULL) || length<0 || itemSize<=0 || cmp==NULL) {
+    if((length>0 && array==nullptr) || length<0 || itemSize<=0 || cmp==nullptr) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }

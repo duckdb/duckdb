@@ -3,13 +3,15 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
-BoundOnConflictInfo::BoundOnConflictInfo() : action_type(OnConflictAction::THROW), update_is_del_and_insert(false) {
+BoundOnConflictInfo::BoundOnConflictInfo()
+    : action_type(OnConflictAction::THROW), excluded_table_index(0), update_is_del_and_insert(false) {
 }
 
-LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
+LogicalInsert::LogicalInsert(TableCatalogEntry &table, TableIndex table_index)
     : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index),
       return_chunk(false) {
 }
@@ -26,15 +28,15 @@ idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
-vector<idx_t> LogicalInsert::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalInsert::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 vector<ColumnBinding> LogicalInsert::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size());
 	}
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 void LogicalInsert::ResolveTypes() {
@@ -48,7 +50,7 @@ void LogicalInsert::ResolveTypes() {
 string LogicalInsert::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

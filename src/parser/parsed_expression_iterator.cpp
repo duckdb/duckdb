@@ -84,6 +84,13 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		break;
 	}
+	case ExpressionClass::TYPE: {
+		auto &type_expr = expr.Cast<TypeExpression>();
+		for (auto &child : type_expr.GetChildren()) {
+			callback(child);
+		}
+		break;
+	}
 	case ExpressionClass::LAMBDA: {
 		auto &lambda_expr = expr.Cast<LambdaExpression>();
 		callback(lambda_expr.lhs);

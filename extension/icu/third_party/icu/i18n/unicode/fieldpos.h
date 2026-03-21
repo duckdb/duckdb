@@ -161,23 +161,23 @@ public:
     /** 
      * Equality operator.
      * @param that    the object to be compared with.
-     * @return        TRUE if the two field positions are equal, FALSE otherwise.
+     * @return        true if the two field positions are equal, false otherwise.
      * @stable ICU 2.0
      */
-    bool              operator==(const FieldPosition& that) const;
+    bool               operator==(const FieldPosition& that) const;
 
     /** 
      * Equality operator.
      * @param that    the object to be compared with.
-     * @return        TRUE if the two field positions are not equal, FALSE otherwise.
+     * @return        true if the two field positions are not equal, false otherwise.
      * @stable ICU 2.0
      */
-    bool              operator!=(const FieldPosition& that) const;
+    bool               operator!=(const FieldPosition& that) const;
 
     /**
      * Clone this object.
      * Clones can be used concurrently in multiple threads.
-     * If an error occurs, then NULL is returned.
+     * If an error occurs, then nullptr is returned.
      * The caller must delete the clone.
      *
      * @return a clone of this object
@@ -192,14 +192,14 @@ public:
      * @return    the field identifier.
      * @stable ICU 2.0
      */
-    int32_t getField(void) const { return fField; }
+    int32_t getField() const { return fField; }
 
     /**
      * Retrieve the index of the first character in the requested field.
      * @return    the index of the first character in the requested field.
      * @stable ICU 2.0
      */
-    int32_t getBeginIndex(void) const { return fBeginIndex; }
+    int32_t getBeginIndex() const { return fBeginIndex; }
 
     /**
      * Retrieve the index of the character following the last character in the
@@ -208,8 +208,8 @@ public:
      *            requested field.
      * @stable ICU 2.0
      */
-    int32_t getEndIndex(void) const { return fEndIndex; }
- 
+    int32_t getEndIndex() const { return fEndIndex; }
+
     /**
      * Set the field.
      * @param f    the new value of the field.
@@ -236,7 +236,7 @@ public:
      *
      * @stable ICU 2.2
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for this class.

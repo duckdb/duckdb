@@ -1,0 +1,147 @@
+# name: test/sql/function/tokenize/simple_tokenize.test
+# description: Test sql_tokenize
+# group: [tokenize]
+
+require no_extension_autoloading "FIXME: autocomplete is not included in auto loading tests"
+
+require autocomplete
+
+query III
+select start, token_type, word from sql_tokenize($$select a$$);
+----
+0	KEYWORD	select
+7	COLUMN_NAME	a
+
+query III
+select start, token_type, word from sql_tokenize($$select a;$$);
+----
+0	KEYWORD	select
+7	COLUMN_NAME	a
+8	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$select 'a' - 1;$$);
+----
+0	KEYWORD	select
+7	STRING_LITERAL	'a'
+11	OPERATOR	-
+13	NUMBER_LITERAL	1
+14	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($TEST_TOKENIZER$select $$dollar$$;$TEST_TOKENIZER$);
+----
+0	KEYWORD	select
+7	STRING_LITERAL	'dollar'
+17	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$select $tag$val$ue$tag$;$$);
+----
+0	KEYWORD	select
+7	STRING_LITERAL	'val$ue'
+23	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$select "column name" from "Table";$$);
+----
+0	KEYWORD	select
+7	COLUMN_NAME	"column name"
+21	KEYWORD	from
+26	TABLE_NAME	"Table"
+33	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$select (a + b) * 2, c;$$);
+----
+0	KEYWORD	select
+7	OPERATOR	(
+8	COLUMN_NAME	a
+10	OPERATOR	+
+12	COLUMN_NAME	b
+13	OPERATOR	)
+15	OPERATOR	*
+17	NUMBER_LITERAL	2
+18	OPERATOR	,
+20	COLUMN_NAME	c
+21	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$select 1; -- this is a comment$$);
+----
+0	KEYWORD	select
+7	NUMBER_LITERAL	1
+8	TERMINATOR	;
+10	COMMENT	-- this is a comment
+
+query III
+select start, token_type, word from sql_tokenize($$select * fro$$);
+----
+0	KEYWORD	select
+7	OPERATOR	*
+9	IDENTIFIER	fro
+
+query III
+select start, token_type, word from sql_tokenize($$crea tab$$);
+----
+0	COLUMN_NAME	crea
+5	IDENTIFIER	tab
+
+query III
+select start, token_type, word from sql_tokenize($$select 1.5, 1e2$$);
+----
+0	KEYWORD	select
+7	NUMBER_LITERAL	1.5
+10	OPERATOR	,
+12	NUMBER_LITERAL	1e2
+
+query III
+select start, token_type, word from sql_tokenize($$select 'O''Neil', "My ""Table""";$$);
+----
+0	KEYWORD	select
+7	STRING_LITERAL	'O''Neil'
+16	OPERATOR	,
+18	COLUMN_NAME	"My ""Table"""
+32	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$from ''hello world';$$);
+----
+0	KEYWORD	from
+5	TABLE_NAME	''
+7	IDENTIFIER	hello
+13	IDENTIFIER	world
+18	STRING_LITERAL	';
+
+# test keywords that can be used as other tokens
+query III
+select start, token_type, word from sql_tokenize($$select json::json from json$$);
+----
+0	KEYWORD	select
+7	COLUMN_NAME	json
+11	OPERATOR	::
+13	TYPE_NAME	json
+18	KEYWORD	from
+23	TABLE_NAME	json
+
+# also for partial queries
+query III
+select start, token_type, word from sql_tokenize($$select json::json from$$);
+----
+0	KEYWORD	select
+7	COLUMN_NAME	json
+11	OPERATOR	::
+13	TYPE_NAME	json
+18	KEYWORD	from
+
+query III 
+select start, token_type, word from sql_tokenize('from ''hello world''');
+----
+0	KEYWORD	from
+5	TABLE_NAME	'hello world'
+
+query III 
+select start, token_type, word from sql_tokenize('from ''hello world');
+----
+0	KEYWORD	from
+5	STRING_LITERAL	'hello world

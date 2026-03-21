@@ -116,6 +116,16 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	return true;
 }
 
+void ExecuteFunctionState::ResetDictionaryStates() {
+	// Clear the cached dictionary information
+	current_input_dictionary_id.clear();
+	output_dictionary.reset();
+
+	for (const auto &child_state : child_states) {
+		child_state->ResetDictionaryStates();
+	}
+}
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
@@ -179,7 +189,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		}
 	}
 	arguments.SetCardinality(count);
-	arguments.Verify();
+	arguments.Verify(context ? context->db : nullptr);
 
 	D_ASSERT(expr.function.HasFunctionCallback());
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();

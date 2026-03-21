@@ -8,3 +8,8 @@ statement error
 CREATE INDEX i3 ON t1 USING random_index_method (foo) WITH (my_option = 2, is_cool);
 ----
 <REGEX>:.*Binder Error.*Unknown index type.*
+
+statement error
+CREATE INDEX i3 ON t1 USING random_index_method (foo) WITH (my_option = getenv('some_env_variable'), is_cool);
+----
+<REGEX>:.*Invalid Input Error.*Create index option must be a constant value.*

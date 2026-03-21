@@ -11,9 +11,9 @@ select '"test"'::JSON::VARIANT;
 test
 
 query I
-select ['"test"' for _ in range(10)]::JSON::VARIANT;
+select ['"test"'::JSON for _ in range(10)]::JSON::VARIANT;
 ----
-["test", "test", "test", "test", "test", "test", "test", "test", "test", "test"]
+[test, test, test, test, test, test, test, test, test, test]
 
 query I
 select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob", "this is a long string", 123]]}'::JSON::VARIANT;

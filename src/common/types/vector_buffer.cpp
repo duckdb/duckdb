@@ -1,3 +1,11 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/fsst_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -149,6 +157,13 @@ ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
 }
 
 ManagedVectorBuffer::~ManagedVectorBuffer() {
+}
+
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
+    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(shredded_data_p)) {
+}
+
+ShreddedVectorBuffer::~ShreddedVectorBuffer() {
 }
 
 } // namespace duckdb

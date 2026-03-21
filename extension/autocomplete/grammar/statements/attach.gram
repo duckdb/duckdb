@@ -3,4 +3,4 @@ AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath Attac
 Database <- 'DATABASE'
 DatabasePath <- StringLiteral
 AttachAlias <- 'AS' ColId
-AttachOptions <- Parens(GenericCopyOptionList)
+AttachOptions <- GenericCopyOptionList

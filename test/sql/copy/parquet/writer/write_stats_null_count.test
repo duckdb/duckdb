@@ -63,14 +63,14 @@ SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
 ----
 1
 
-# list null count not supported (i.e. we don't write the null count in this case)
+# list null count
 statement ok
 COPY (SELECT [42, NULL, 43] i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
 
 query I
 SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
 ----
-NULL
+1
 
 statement ok
 COPY (SELECT {'a': NULL, 'b': 42} i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);

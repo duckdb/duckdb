@@ -91,13 +91,15 @@
         "test/sql/copy/csv/rejects/test_multiple_errors_same_line.test",
         "test/sql/copy/csv/test_non_unicode_header.test",
         "test/sql/logging/file_system_logging.test",
+        "test/sql/logging/http_log_timing.test",
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_buffer_size.test",
         "test/sql/logging/logging_csv.test",
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
         "test/sql/pragma/test_query_log.test",
-        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
+        "test/sql/cte/warn_deprecated_union_in_using_key.test"
       ]
     },
     {
@@ -113,10 +115,18 @@
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/join/asof/test_asof_limit.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
-        "test/sql/window/test_window_constant_allocator.test"
+        "test/sql/types/geo/geometry_shred.test",
+        "test/sql/types/geo/geometry_shred_types.test",
+        "test/sql/types/geo/geometry_shred_empty.test",
+        "test/sql/types/geo/geometry_shred_limit.test",
+        "test/sql/types/geo/geometry_shred_checkpoint.test",
+        "test/sql/window/test_window_constant_allocator.test",
+        "test/parquet/variant/variant_stats_propagation.test",
+        "test/sql/types/geo/geometry_compatability.test"
       ]
     },
     {
@@ -125,6 +135,7 @@
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/optimizer/statistics/statistics_numeric.test",
         "test/parquet/parquet_stats_function.test",
+        "test/sql/copy/parquet/shredded_variant_stats.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
         "test/sql/function/generic/test_stats.test",
         "test/sql/pg_catalog/pg_prepared_statements.test",
@@ -133,8 +144,8 @@
         "test/sql/types/list/list_stats.test",
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/types/struct/struct_stats.test",
-        "test/sql/storage/types/variant/variant_shredding.test",
-        "test/sql/storage/types/variant/variant_stats_merging.test",
+        "test/sql/storage/types/variant/variant_shredding.test_slow",
+        "test/sql/storage/types/variant/variant_stats_merging.test_slow",
         "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/vacuum/test_analyze.test"
       ]
@@ -205,7 +216,7 @@
       "reason": "FIXME: Misc. unexpected failures (including internal exception).",
       "paths": [
         "test/fuzzer/duckfuzz/null_arguments.test",
-        "test/sql/aggregate/aggregates/test_state_export.test",
+        "test/sql/aggregate/aggregates/test_state_export_opaque.test",
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/create/create_table_compression.test",

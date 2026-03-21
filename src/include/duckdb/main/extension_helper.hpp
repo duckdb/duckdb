@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <string>
 
@@ -113,6 +114,10 @@ public:
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
 
+	//! Autoload an extension, only if available locally
+	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
+	                                                     const string &extension_name) noexcept;
+
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
 	//! Update a specific extension
@@ -126,8 +131,15 @@ public:
 	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
 	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
+	// Check signature of an Extension stored as FileHandle
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+	                                          const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+	                                          const bool allow_community_extensions);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
@@ -207,9 +219,8 @@ public:
 	//! Lookup a name in an extension entry and try to autoload it
 	template <idx_t N>
 	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
-		auto &dbconfig = DBConfig::GetConfig(db);
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-		if (dbconfig.options.autoload_known_extensions) {
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
 			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 				ExtensionHelper::AutoLoadExtension(db, extension_name);

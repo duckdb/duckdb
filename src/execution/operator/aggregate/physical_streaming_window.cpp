@@ -185,16 +185,16 @@ public:
 			// Special case when we have buffered enough values for the output
 			if (count < buffered) {
 				//	Shift down incomplete buffers
-				// 	Copy prev[buffered-count, buffered] => temp[0, count]
+				//	Copy prev[count, buffered] => temp[0, buffered-count]
 				source_count = buffered - count;
 				FlatVector::Validity(temp).Reset();
-				VectorOperations::Copy(prev, temp, buffered, source_count, 0);
+				VectorOperations::Copy(prev, temp, buffered, count, 0);
 
-				// 	Copy temp[0, count] => prev[0, count]
+				// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
 				FlatVector::Validity(prev).Reset();
-				VectorOperations::Copy(temp, prev, count, 0, 0);
-				// 	Copy curr[0, buffered-count] => prev[count, buffered]
-				VectorOperations::Copy(curr, prev, source_count, 0, count);
+				VectorOperations::Copy(temp, prev, source_count, 0, 0);
+				// 	Copy curr[0, count] => prev[buffered-count, buffered]
+				VectorOperations::Copy(curr, prev, count, 0, source_count);
 			} else {
 				//	Copy input values beyond what we have buffered
 				source_count = count - buffered;

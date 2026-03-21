@@ -47,23 +47,24 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
-ScanFilter::ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+                       TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
 
 void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
                                 const vector<StorageIndex> &column_ids) {
-	D_ASSERT(!filters.filters.empty());
+	D_ASSERT(filters.HasFilters());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
-	filter_list.reserve(filters.filters.size());
-	for (auto &entry : filters.filters) {
-		filter_list.emplace_back(context, entry.first, column_ids, *entry.second);
+	filter_list.reserve(filters.FilterCount());
+	for (auto &entry : filters) {
+		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());
 	}
 	column_has_filter.reserve(column_ids.size());
-	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
+	for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+		bool has_filter = table_filters->HasFilter(col_idx);
 		column_has_filter.push_back(has_filter);
 	}
 	base_column_has_filter = column_has_filter;
@@ -219,55 +220,44 @@ optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRootSegment() const 
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
 	while (row_group) {
-		row_group->GetNode().Scan(transaction, *this, result);
+		row_group->GetNode().Scan(TransactionData(transaction), *this, result);
 		if (result.size() > 0) {
 			return true;
-		} else if (max_row <= row_group->GetRowStart() + row_group->GetNode().count) {
+		}
+		if (max_row <= row_group->GetRowStart() + row_group->GetNode().count) {
 			row_group = nullptr;
 			return false;
-		} else {
-			do {
-				row_group = GetNextRowGroup(*row_group).get();
-				if (row_group) {
-					if (row_group->GetRowStart() >= max_row) {
-						row_group = nullptr;
-						break;
-					}
-					bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
-					if (scan_row_group) {
-						// scan this row group
-						break;
-					}
-				}
-			} while (row_group);
 		}
-	}
-	return false;
-}
-
-bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type) {
-	while (row_group) {
-		row_group->GetNode().ScanCommitted(*this, result, type);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			row_group = GetNextRowGroup(l, *row_group).get();
+		do {
+			row_group = GetNextRowGroup(*row_group).get();
 			if (row_group) {
-				row_group->GetNode().InitializeScan(*this, *row_group);
+				if (row_group->GetRowStart() >= max_row) {
+					row_group = nullptr;
+					break;
+				}
+				bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
+				if (scan_row_group) {
+					// scan this row group
+					break;
+				}
 			}
-		}
+		} while (row_group);
 	}
 	return false;
 }
 
-bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
+bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l) {
 	while (row_group) {
-		row_group->GetNode().ScanCommitted(*this, result, type);
+		row_group->GetNode().Scan(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		}
-
-		row_group = GetNextRowGroup(*row_group).get();
+		// move to the next row group
+		if (l) {
+			row_group = GetNextRowGroup(*l, *row_group).get();
+		} else {
+			row_group = GetNextRowGroup(*row_group).get();
+		}
 		if (row_group) {
 			row_group->GetNode().InitializeScan(*this, *row_group);
 		}

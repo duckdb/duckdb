@@ -8,10 +8,10 @@ CREATE TABLE a (a1 int, a2 int, PRIMARY KEY (a1, a2));
 statement ok
 CREATE TABLE b (a1 int, a2 int, FOREIGN KEY (a1, a2) REFERENCES a);
 
-query III
-SELECT table_name, column_name, ordinal_position FROM information_schema.key_column_usage ORDER BY table_name, ordinal_position;
+query IIII
+SELECT table_name, column_name, ordinal_position, position_in_unique_constraint FROM information_schema.key_column_usage ORDER BY all;
 ----
-a	a1	1
-a	a2	2
-b	a1	1
-b	a2	2
+a	a1	1	NULL
+a	a2	2	NULL
+b	a1	1	1
+b	a2	2	2

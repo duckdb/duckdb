@@ -2,8 +2,10 @@
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -11,13 +13,12 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -30,12 +31,12 @@ RowGroupSegmentTree::RowGroupSegmentTree(RowGroupCollection &collection, idx_t b
 RowGroupSegmentTree::~RowGroupSegmentTree() {
 }
 
-void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
+void RowGroupSegmentTree::Initialize(PersistentTableData &data, optional_ptr<vector<MetaBlockPointer>> read_pointers) {
 	D_ASSERT(data.row_group_count > 0);
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
+	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer, read_pointers);
 	root_pointer = data.block_pointer;
 }
 
@@ -74,6 +75,11 @@ idx_t RowGroupCollection::GetTotalRows() const {
 	return total_rows.load();
 }
 
+idx_t RowGroupCollection::GetRowGroupCount() const {
+	auto row_groups = GetRowGroups();
+	return row_groups->GetSegmentCount();
+}
+
 const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 	return types;
 }
@@ -107,13 +113,16 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(owned_row_groups->GetBaseRowId() == 0);
 	auto l = owned_row_groups->Lock();
 	this->total_rows = data.total_rows;
-	owned_row_groups->Initialize(data);
-	stats.Initialize(types, data);
 	metadata_pointer = data.base_table_pointer;
+	metadata_pointers = data.read_metadata_pointers;
+	owned_row_groups->Initialize(data, metadata_pointers);
+	stats.Initialize(types, data);
 }
 
-void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer) {
+void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer,
+                                            const vector<MetaBlockPointer> &existing_pointers) {
 	metadata_pointer = pointer;
+	metadata_pointers = existing_pointers;
 }
 
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
@@ -224,7 +233,7 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 	}
 }
 
-bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
+bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
                                                   idx_t vector_index, idx_t max_row) {
 	state.max_row = max_row;
@@ -304,39 +313,86 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	return false;
 }
 
-bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<StorageIndex> &column_ids,
-                              const std::function<bool(DataChunk &chunk)> &fun) {
-	vector<LogicalType> scan_types;
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		scan_types.push_back(types[column_ids[i].GetPrimaryIndex()]);
-	}
-	DataChunk chunk;
-	chunk.Initialize(GetAllocator(), scan_types);
-
-	// initialize the scan
-	TableScanState state;
-	state.Initialize(column_ids, nullptr);
-	InitializeScan(QueryContext(), state.local_state, column_ids, nullptr);
-
-	while (true) {
-		chunk.Reset();
-		state.local_state.Scan(transaction, chunk);
-		if (chunk.size() == 0) {
-			return true;
-		}
-		if (!fun(chunk)) {
-			return false;
-		}
-	}
+//===--------------------------------------------------------------------===//
+// Iterator
+//===--------------------------------------------------------------------===//
+RowGroupIterationHelper::RowGroupIterationHelper(RowGroupCollection &collection, DuckTransaction &transaction,
+                                                 vector<StorageIndex> column_ids_p)
+    : collection(collection), transaction(transaction), column_ids(std::move(column_ids_p)) {
 }
 
-bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
+RowGroupIterationHelper::RowGroupIterator RowGroupIterationHelper::begin() { // NOLINT: match stl API
+	return RowGroupIterator(collection, &transaction, column_ids);
+}
+RowGroupIterationHelper::RowGroupIterator RowGroupIterationHelper::end() { // NOLINT: match stl API
+	return RowGroupIterator(nullptr, nullptr, column_ids);
+}
+
+RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(optional_ptr<RowGroupCollection> collection,
+                                                            optional_ptr<DuckTransaction> transaction,
+                                                            const vector<StorageIndex> &column_ids)
+    : collection(collection), transaction(transaction) {
+	if (collection) {
+		vector<LogicalType> scan_types;
+		auto &types = collection->GetTypes();
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			scan_types.push_back(types[column_ids[i].GetPrimaryIndex()]);
+		}
+		chunk = make_uniq<DataChunk>();
+		chunk->Initialize(collection->GetAllocator(), scan_types);
+
+		// initialize the scan
+		state = make_uniq<TableScanState>();
+		state->Initialize(column_ids, nullptr);
+		collection->InitializeScan(QueryContext(), state->local_state, column_ids, nullptr);
+		// scan the first chunk
+		this->operator++();
+	}
+}
+RowGroupIterationHelper::RowGroupIterator::~RowGroupIterator() {
+}
+
+RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(RowGroupIterator &&other) noexcept {
+	std::swap(collection, other.collection);
+	std::swap(transaction, other.transaction);
+	std::swap(chunk, other.chunk);
+	std::swap(state, other.state);
+}
+
+RowGroupIterationHelper::RowGroupIterator &RowGroupIterationHelper::RowGroupIterator::operator++() {
+	// scan the next chunk
+	chunk->Reset();
+	state->local_state.Scan(*transaction, *chunk);
+	if (chunk->size() == 0) {
+		// done
+		collection = nullptr;
+		transaction = nullptr;
+		chunk.reset();
+		state.reset();
+	}
+	return *this;
+}
+
+bool RowGroupIterationHelper::RowGroupIterator::operator!=(const RowGroupIterator &other) const {
+	return collection != other.collection || transaction != other.transaction;
+}
+
+DataChunk &RowGroupIterationHelper::RowGroupIterator::operator*() const {
+	return *chunk;
+}
+
+RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction) {
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.emplace_back(i);
 	}
-	return Scan(transaction, column_ids, fun);
+	return Chunks(transaction, column_ids);
+}
+
+RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction,
+                                                   const vector<StorageIndex> &column_ids) {
+	return RowGroupIterationHelper(*this, transaction, column_ids);
 }
 
 //===--------------------------------------------------------------------===//
@@ -556,6 +612,10 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 		// we have no segments to revert
 		return;
 	}
+	auto last_segment = row_groups->GetLastSegment(l);
+	if (last_segment->GetRowEnd() <= new_end_idx) {
+		return;
+	}
 	auto reverted_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto rlock = reverted_row_groups->Lock();
 	for (auto &entry : row_groups->SegmentNodes(l)) {
@@ -624,6 +684,12 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		for (auto &entry : segments) {
 			auto &row_group = entry->GetNode();
 			if (!row_group.IsPersistent()) {
+				if (optimistically_written_count > 0) {
+#ifdef DEBUG
+					throw InternalException("Partially optimistically written data at position %d (row start %d)",
+					                        entry->GetIndex(), entry->GetRowStart());
+#endif
+				}
 				break;
 			}
 			optimistically_written_count += row_group.count;
@@ -632,6 +698,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 			row_group_data = make_uniq<PersistentCollectionData>();
 		}
 	}
+	bool is_persistent = segments.back()->GetNode().IsPersistent();
 	for (auto &entry : segments) {
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
@@ -651,6 +718,9 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
+	if (is_persistent) {
+		SetAppendRequiresNewRowGroup();
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -858,11 +928,11 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
                                            optional_idx active_checkpoint) {
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
-	indexes.Scan([&](Index &index) {
+
+	for (auto &index : indexes.Indexes()) {
 		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
-		return false;
-	});
+	}
 
 	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
@@ -909,7 +979,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	DataChunk remaining_result_chunk;
 	unique_ptr<Vector> remaining_row_ids;
 
-	indexes.ScanEntries([&](IndexEntry &entry) {
+	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
 		if (index.IsBound()) {
 			lock_guard<mutex> guard(entry.lock);
@@ -960,7 +1030,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			if (targets.remove_target) {
 				targets.remove_target->Delete(result_chunk, row_identifiers);
 			}
-			return false;
+			continue;
 		}
 		// Buffering takes only the indexed columns in ordering of the column_ids mapping.
 		DataChunk index_column_chunk;
@@ -972,8 +1042,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		index_column_chunk.SetCardinality(result_chunk.size());
 		auto &unbound_index = index.Cast<UnboundIndex>();
 		unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
-		return false;
-	});
+	}
 }
 
 void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
@@ -1155,8 +1224,7 @@ public:
 			while (true) {
 				scan_chunk.Reset();
 
-				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
-				                                TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS);
+				current_row_group.Scan(scan_state.table_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;
 				}
@@ -1392,7 +1460,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
-		auto max_vacuum_tasks = DBConfig::GetSetting<MaxVacuumTasksSetting>(writer.GetDatabase());
+		auto max_vacuum_tasks = Settings::Get<MaxVacuumTasksSetting>(writer.GetDatabase());
 		for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 			auto vacuum_tasks =
 			    ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx, total_vacuum_tasks < max_vacuum_tasks);
@@ -1430,7 +1498,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
+	if (Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
@@ -1463,8 +1531,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
 				row_group.CheckpointDeletes(*row_group_writer);
 			}
-			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
-
+			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load());
 			// copy over existing stats into the global stats
 			CopyStats(global_stats);
 			return;
@@ -1480,6 +1547,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	idx_t new_total_rows = 0;
 	bool skipped_row_groups = false;
+	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
 		if (!entry) {
@@ -1510,7 +1578,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			new_row_group = entry->ReferenceNode();
 		}
 		RowGroupPointer pointer_copy;
-		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
+		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
 
 		// check if we should write this row group to the persistent storage
@@ -1523,10 +1591,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			auto pointer =
 			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
-
 			if (debug_verify_blocks) {
 				pointer_copy = pointer;
 			}
+			// for any columns that are not yet loaded add them to the list of columns with incomplete stats
+			auto unloaded_columns = row_group_writer->GetUnloadedColumns();
+			for (auto &column_idx : unloaded_columns) {
+				columns_with_incomplete_stats.insert(column_idx);
+			}
+
 			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		} else {
 			debug_verify_blocks = false;
@@ -1645,6 +1718,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("Reloading deletes blocks just written does not yield same blocks: " +
 				                        oss.str());
 			}
+		}
+	}
+	if (!columns_with_incomplete_stats.empty()) {
+		// for any columns that have incomplete stats we need to merge in the previous global stats to ensure the stats
+		// are correct
+		auto lock = global_stats.GetLock();
+		for (auto &column_idx : columns_with_incomplete_stats) {
+			auto stats_lock = stats.GetLock();
+			auto &column_stats = stats.GetStats(*stats_lock, column_idx);
+			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics());
 		}
 	}
 	l.Release();
@@ -1863,7 +1946,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
@@ -1871,7 +1954,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
+		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
 		if (scan_chunk.size() == 0) {
 			break;
 		}

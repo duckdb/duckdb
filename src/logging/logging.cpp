@@ -20,17 +20,6 @@ bool LogConfig::IsConsistent() const {
 	return false;
 }
 
-LogConfig LogConfig::Create(bool enabled, LogLevel level) {
-	return LogConfig(enabled, level, LogMode::LEVEL_ONLY, nullptr, nullptr);
-}
-LogConfig LogConfig::CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_log_types) {
-	return LogConfig(enabled, level, LogMode::ENABLE_SELECTED, enabled_log_types, nullptr);
-}
-
-LogConfig LogConfig::CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_log_types) {
-	return LogConfig(enabled, level, LogMode::DISABLE_SELECTED, nullptr, disabled_log_types);
-}
-
 LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p,
                      optional_ptr<unordered_set<string>> enabled_log_types_p,
                      optional_ptr<unordered_set<string>> disabled_log_types_p)

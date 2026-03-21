@@ -28,7 +28,7 @@ TEST_CASE("Test storage extension lookup full-name", "[api]") {
 	// Register a storage extension under its CANONICAL name "sqlite_scanner"
 	// This mimics how the real sqlite_scanner extension registers itself
 	// There is a hard-coded alias "sqlite" for "sqlite_scanner"
-	config.storage_extensions["sqlite_scanner"] = make_uniq<DummyStorageExtension>();
+	StorageExtension::Register(config, "sqlite_scanner", make_shared_ptr<DummyStorageExtension>());
 
 	DuckDB db(nullptr, &config);
 	Connection con(db);
@@ -49,7 +49,7 @@ TEST_CASE("Test storage extension lookup alias", "[api]") {
 	// Register a storage extension under its CANONICAL name "sqlite_scanner"
 	// This mimics how the real sqlite_scanner extension registers itself
 	// there is a hard-coded alias "sqlite" for "sqlite_scanner"
-	config.storage_extensions["sqlite_scanner"] = make_uniq<DummyStorageExtension>();
+	StorageExtension::Register(config, "sqlite_scanner", make_shared_ptr<DummyStorageExtension>());
 
 	DuckDB db(nullptr, &config);
 	Connection con(db);

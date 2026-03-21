@@ -3,6 +3,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 
 namespace duckdb {
 

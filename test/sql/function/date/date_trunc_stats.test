@@ -16,3 +16,34 @@ statement error
 SELECT datetrunc('milliseconds', DATE '-2005205-7-28');
 ----
 <REGEX>:.*Conversion Error.*not in timestamp range.*
+
+# Statistics propagation for date_trunc function
+
+statement ok
+CREATE TABLE events as FROM (VALUES
+	(TIMESTAMP '1992-09-20 20:38:40', 'Event A'),
+	(TIMESTAMP '1992-09-20 21:45:15', 'Event B'),
+	(TIMESTAMP '1992-09-20 22:15:30', 'Event C')) t(event_time, event_name);
+
+statement ok
+CREATE TABLE users as FROM (VALUES
+	(1, TIMESTAMP '1992-09-20 20:00:00'),
+	(2, TIMESTAMP '1992-09-20 22:05:00')) t(user_id, created_at);
+
+query II
+SELECT
+	u.user_id,
+	date_trunc('minute', e.event_time) AS truncated_minute
+FROM
+	users u
+LEFT JOIN
+	events e
+ON
+	u.user_id = 1
+ORDER BY
+	e.event_time ASC;
+----
+1	1992-09-20 20:38:00
+1	1992-09-20 21:45:00
+1	1992-09-20 22:15:00
+2	NULL

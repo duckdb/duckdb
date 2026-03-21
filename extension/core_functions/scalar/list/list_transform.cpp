@@ -2,6 +2,7 @@
 
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,8 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 }
 
 static LogicalType ListTransformBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                           const idx_t parameter_idx) {
+                                           const idx_t parameter_idx,
+                                           optional_ptr<BindLambdaContext> bind_lambda_context) {
 	return LambdaFunctions::BindBinaryChildren(function_child_types, parameter_idx);
 }
 

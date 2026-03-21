@@ -1,0 +1,53 @@
+# name: test/sql/parallelism/interquery/test_concurrent_sequence.test_slow
+# description: Test concurrent usage of sequences
+# group: [interquery]
+
+statement ok
+CREATE TABLE sequence_values(v BIGINT);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE SEQUENCE comparison_seq
+
+loop seq_idx 0 2
+
+concurrentloop threadid 0 10
+
+statement ok
+CREATE TEMPORARY TABLE temp_tbl(v BIGINT);
+
+loop x 0 100
+
+statement ok
+INSERT INTO temp_tbl SELECT nextval('seq')
+
+endloop
+
+statement ok
+INSERT INTO sequence_values FROM temp_tbl;
+
+endloop
+
+# the sequential and threaded data should be the same
+query I
+SELECT * FROM sequence_values EXCEPT ALL SELECT nextval('comparison_seq') FROM range(1000)
+
+statement ok
+DROP SEQUENCE seq;
+
+statement ok
+DROP SEQUENCE comparison_seq
+
+statement ok
+DELETE FROM sequence_values
+
+# now do the same with a cyclical sequence
+statement ok
+CREATE SEQUENCE seq MAXVALUE 10 CYCLE;
+
+statement ok
+CREATE SEQUENCE comparison_seq MAXVALUE 10 CYCLE;
+
+endloop

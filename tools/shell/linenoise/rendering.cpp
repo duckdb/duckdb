@@ -11,8 +11,8 @@
 #endif
 
 namespace duckdb {
-static const char *continuationPrompt = "> ";
-static const char *continuationSelectedPrompt = "> ";
+static const char *continuationPrompt = "  ";
+static const char *continuationSelectedPrompt = "  ";
 static const char *scrollUpPrompt = "^ ";
 static const char *scrollDownPrompt = "v ";
 static bool enableCompletionRendering = false;

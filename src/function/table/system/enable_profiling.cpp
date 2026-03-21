@@ -52,7 +52,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		CustomProfilingSettingsSetting::SetLocal(context, bind_data.metrics);
+		ConfigureProfilingSetting::SetLocal(context, bind_data.metrics);
 	}
 }
 
@@ -63,8 +63,6 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 	}
 
 	auto bind_data = make_uniq<EnableProfilingBindData>();
-
-	auto config = ClientConfig::GetConfig(context);
 
 	bool metrics_set = false;
 
@@ -78,7 +76,7 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			bind_data->coverage = StringUtil::Lower(named_param.second.ToString());
 			break;
 		case ProfilingParameterNames::SAVE_LOCATION:
-			bind_data->save_location = StringUtil::Lower(named_param.second.ToString());
+			bind_data->save_location = named_param.second.ToString();
 			break;
 		case ProfilingParameterNames::MODE:
 			bind_data->mode = StringUtil::Lower(named_param.second.ToString());

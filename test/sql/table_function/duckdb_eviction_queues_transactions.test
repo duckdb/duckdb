@@ -1,0 +1,53 @@
+# name: test/sql/table_function/duckdb_eviction_queues_transactions.test
+# description: Test eviction queue behavior during transactions
+# group: [table_function]
+
+load __TEST_DIR__/eviction_queues_txn.db
+
+statement ok
+CREATE MACRO fudge() AS (20);
+
+statement ok
+CREATE MACRO eviction_invariants_ok() AS (
+  SELECT COUNT(*) = 0 FROM duckdb_eviction_queues()
+  WHERE dead_nodes < 0
+    OR dead_nodes > approximate_size + fudge()
+    OR dead_nodes > total_insertions
+    OR total_insertions < approximate_size - fudge()
+);
+
+statement ok
+CREATE TABLE t(i BIGINT, s VARCHAR);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t SELECT range AS i, range::VARCHAR AS s FROM range(200000);
+
+query I
+SELECT eviction_invariants_ok();
+----
+1
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT eviction_invariants_ok();
+----
+1
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t SELECT range AS i, range::VARCHAR AS s FROM range(200000);
+
+statement ok
+COMMIT;
+
+query I
+SELECT eviction_invariants_ok();
+----
+1

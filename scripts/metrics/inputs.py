@@ -25,12 +25,13 @@ def _to_pascal_case(s: str) -> str:
     return ''.join(word.capitalize() for word in s.split('_'))
 
 
-def retrieve_optimizers(optimizer_file: Path) -> list[str]:
+def retrieve_optimizers(optimizer_file: Path) -> list[tuple[str, int]]:
     if not optimizer_file.exists():
         raise FileNotFoundError(f"optimizer_type.hpp not found at {optimizer_file}.")
-    enum_pattern = r"\s*([A-Z_]+)\s*=\s*\d+,?|\s*([A-Z_]+),?"
+    enum_with_value = re.compile(r"\s*([A-Z_]+)\s*=\s*(\d+)\s*,?")
+    enum_without_value = re.compile(r"\s*([A-Z_]+)\s*,?")
     inside_enum = False
-    result: list[str] = []
+    result: list[tuple[str, int]] = []
     with optimizer_file.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -42,13 +43,23 @@ def retrieve_optimizers(optimizer_file: Path) -> list[str]:
                 break
 
             if inside_enum:
-                m = re.match(enum_pattern, line)
-                if not m:
+                m = enum_with_value.match(line)
+                if m:
+                    name = m[1]
+                    value = int(m[2])
+                    if name == "INVALID":
+                        continue
+                    result.append((name, value))
                     continue
-                name = m[1] if m[1] else m[2]
-                if name == "INVALID":
-                    continue
-                result.append(name)
+                m = enum_without_value.match(line)
+                if m:
+                    name = m[1]
+                    if name == "INVALID":
+                        continue
+                    raise ValueError(
+                        f"OptimizerType entry '{name}' has no explicit value. "
+                        f"All OptimizerType entries must have explicit values for backwards compatibility."
+                    )
 
     return result
 

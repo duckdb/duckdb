@@ -76,9 +76,9 @@ private:
             // (Rather than buffer.getCapacity().)
             if(length < INITIAL_CAPACITY || ensureAppendCapacity(1, errorCode)) {
                 ++length;
-                return TRUE;
+                return true;
             } else {
-                return FALSE;
+                return false;
             }
         }
 
@@ -92,8 +92,8 @@ private:
         int32_t length;
 
     private:
-        CEBuffer(const CEBuffer &);
-        void operator=(const CEBuffer &);
+        CEBuffer(const CEBuffer &) = delete;
+        void operator=(const CEBuffer &) = delete;
 
         MaybeStackArray<int64_t, INITIAL_CAPACITY> buffer;
     };
@@ -103,7 +103,7 @@ public:
             : trie(d->trie),
               data(d),
               cesIndex(0),
-              skipped(NULL),
+              skipped(nullptr),
               numCpFwd(-1),
               isNumeric(numeric) {}
 
@@ -142,7 +142,7 @@ public:
             // Normal CE from the main data.
             // Forced-inline of ceFromSimpleCE32(ce32).
             return ceBuffer.set(cesIndex++,
-                    ((int64_t)(ce32 & 0xffff0000) << 32) | ((ce32 & 0xff00) << 16) | (t << 8));
+                    (static_cast<int64_t>(ce32 & 0xffff0000) << 32) | ((ce32 & 0xff00) << 16) | (t << 8));
         }
         const CollationData *d;
         // The compiler should be able to optimize the previous and the following
@@ -157,7 +157,7 @@ public:
             if(t < Collation::SPECIAL_CE32_LOW_BYTE) {
                 // Normal CE from the base data.
                 return ceBuffer.set(cesIndex++,
-                        ((int64_t)(ce32 & 0xffff0000) << 32) | ((ce32 & 0xff00) << 16) | (t << 8));
+                        (static_cast<int64_t>(ce32 & 0xffff0000) << 32) | ((ce32 & 0xff00) << 16) | (t << 8));
             }
         } else {
             d = data;
@@ -165,7 +165,7 @@ public:
         if(t == Collation::LONG_PRIMARY_CE32_LOW_BYTE) {
             // Forced-inline of ceFromLongPrimaryCE32(ce32).
             return ceBuffer.set(cesIndex++,
-                    ((int64_t)(ce32 - t) << 32) | Collation::COMMON_SEC_AND_TER_CE);
+                    (static_cast<int64_t>(ce32 - t) << 32) | Collation::COMMON_SEC_AND_TER_CE);
         }
         return nextCEFromCE32(d, c, ce32, errorCode);
     }
@@ -242,7 +242,7 @@ protected:
      * if a trail surrogate follows the lead surrogate.
      * Otherwise returns any other code unit and does not advance.
      */
-    virtual UChar handleGetTrailSurrogate();
+    virtual char16_t handleGetTrailSurrogate();
 
     /**
      * Called when handleNextCE32() returns with c==0, to see whether it is a NUL terminator.
@@ -251,9 +251,9 @@ protected:
     virtual UBool foundNULTerminator();
 
     /**
-     * @return FALSE if surrogate code points U+D800..U+DFFF
+     * @return false if surrogate code points U+D800..U+DFFF
      *         map to their own implicit primary weights (for UTF-16),
-     *         or TRUE if they map to CE(U+FFFD) (for UTF-8)
+     *         or true if they map to CE(U+FFFD) (for UTF-8)
      */
     virtual UBool forbidSurrogateCodePoints() const;
 
@@ -290,7 +290,7 @@ private:
 
     uint32_t nextCE32FromContraction(
             const CollationData *d, uint32_t contractionCE32,
-            const UChar *p, uint32_t ce32, UChar32 c,
+            const char16_t *p, uint32_t ce32, UChar32 c,
             UErrorCode &errorCode);
 
     uint32_t nextCE32FromDiscontiguousContraction(

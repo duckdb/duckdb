@@ -9,13 +9,13 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {

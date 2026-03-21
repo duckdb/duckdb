@@ -58,3 +58,9 @@ statement error
 select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
 ----
 Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone has been disabled
+
+statement error
+select cast('2020-01-01T13:00:00+00'::timestamptz as date)
+----
+Casting from TIMESTAMP WITH TIME ZONE to DATE without an explicit time zone has been disabled
+

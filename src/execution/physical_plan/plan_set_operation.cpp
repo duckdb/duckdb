@@ -1,4 +1,5 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
+
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
@@ -6,11 +7,13 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
 namespace duckdb {
 
-static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(const vector<LogicalType> &types) {
+static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
+                                                                        const vector<LogicalType> &types) {
 	vector<unique_ptr<Expression>> res;
 	auto expr =
 	    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
@@ -18,19 +21,18 @@ static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(const ve
 	expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {
 		expr->partitions.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+		ExpressionBinder::PushCollation(client, expr->partitions.back(), types[i]);
 	}
 	res.push_back(std::move(expr));
 	return res;
 }
 
 static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i) {
-	JoinCondition cond;
-	cond.left = make_uniq<BoundReferenceExpression>(type, i);
-	cond.right = make_uniq<BoundReferenceExpression>(type, i);
-	cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-
-	ExpressionBinder::PushCollation(context, cond.left, type);
-	ExpressionBinder::PushCollation(context, cond.right, type);
+	auto left = make_uniq<BoundReferenceExpression>(type, i);
+	auto right = make_uniq<BoundReferenceExpression>(type, i);
+	JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	ExpressionBinder::PushCollation(context, cond.LeftReference(), type);
+	ExpressionBinder::PushCollation(context, cond.RightReference(), type);
 
 	return cond;
 }
@@ -71,13 +73,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 			vector<LogicalType> window_types = types;
 			window_types.push_back(LogicalType::BIGINT);
 
-			auto select_list = CreatePartitionedRowNumExpression(types);
+			auto select_list = CreatePartitionedRowNumExpression(context, types);
 			auto &left_window =
 			    Make<PhysicalWindow>(window_types, std::move(select_list), left.get().estimated_cardinality);
 			left_window.children.push_back(left);
 			left = left_window;
 
-			select_list = CreatePartitionedRowNumExpression(types);
+			select_list = CreatePartitionedRowNumExpression(context, types);
 			auto &right_window =
 			    Make<PhysicalWindow>(window_types, std::move(select_list), right.get().estimated_cardinality);
 			right_window.children.push_back(right);

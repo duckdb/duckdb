@@ -1,147 +1,158 @@
+diff --git a/src/hffs.cpp b/src/hffs.cpp
+index eb16c4f..442e828 100644
+--- a/src/hffs.cpp
++++ b/src/hffs.cpp
+@@ -212,8 +212,8 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
+ 
+ 	FileOpenerInfo info;
+ 	info.file_path = path;
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 	auto &http_params = params->Cast<HTTPFSParams>();
+ 	SetParams(http_params, path, opener);
+ 	auto http_state = HTTPState::TryGetState(opener).get();
+@@ -287,8 +287,8 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
+ 	FileOpenerInfo info;
+ 	info.file_path = file.path;
+ 
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 	SetParams(params->Cast<HTTPFSParams>(), file.path, opener);
+ 
+ 	return duckdb::make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, std::move(params));
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index a11af95..672a4c7 100644
+index 16009fd..5dfec68 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
-@@ -535,7 +535,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
- 	// attempt to download the full file and retry.
+@@ -24,7 +24,7 @@
  
- 	if (handle.logger) {
--		DUCKDB_LOG_WARN(handle.logger,
-+		DUCKDB_LOG_WARNING(handle.logger,
- 		                "Falling back to full file download for file '%s': the server does not support HTTP range "
- 		                "requests. Performance and memory usage are potentially degraded.",
- 		                handle.path);
+ namespace duckdb {
+ 
+-shared_ptr<HTTPUtil> HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
++HTTPUtil &HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
+ 	if (opener) {
+ 		return opener->GetHTTPUtil();
+ 	}
+@@ -408,8 +408,8 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
+ 	FileOpenerInfo info;
+ 	info.file_path = file.path;
+ 
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 
+ 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+ 	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 446fee1..4333234 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -107,7 +107,8 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	auto callback_httpfs_client_implementation = [](ClientContext &context, SetScope scope, Value &parameter) {
+ 		auto &config = DBConfig::GetConfig(context);
+ 		string value = StringValue::Get(parameter);
+-		if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
++		auto &http_util = config.GetHTTPUtil();
++		if (http_util.GetName() == "WasmHTTPUtils") {
+ 			if (value == "wasm" || value == "default") {
+ 				return;
+ 			}
+@@ -116,14 +117,14 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 		}
+ #ifndef EMSCRIPTEN
+ 		if (value == "curl" || value == "default") {
+-			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil-Curl") {
+-				config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
++			if (http_util.GetName() != "HTTPFSUtil-Curl") {
++				config.SetHTTPUtil(make_shared_ptr<HTTPFSCurlUtil>());
+ 			}
+ 			return;
+ 		}
+ 		if (value == "httplib") {
+-			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil") {
+-				config.http_util = make_shared_ptr<HTTPFSUtil>();
++			if (http_util.GetName() != "HTTPFSUtil") {
++				config.SetHTTPUtil(make_shared_ptr<HTTPFSUtil>());
+ 			}
+ 			return;
+ 		}
+@@ -137,13 +138,14 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	                          "Automatically fetch AWS credentials from environment variables.", LogicalType::BOOLEAN,
+ 	                          Value::BOOLEAN(true));
+ 
+-	if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
++	auto &http_util = config.GetHTTPUtil();
++	if (http_util.GetName() == "WasmHTTPUtils") {
+ 		// Already handled, do not override
+ 	} else {
+ #ifndef EMSCRIPTEN
+-		config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
++		config.SetHTTPUtil(make_shared_ptr<HTTPFSCurlUtil>());
+ #else
+-		config.http_util = make_shared_ptr<HTTPFSUtil>();
++		config.SetHTTPUtil(make_shared_ptr<HTTPFSUtil>());
+ #endif
+ 	}
+ 
+diff --git a/src/include/httpfs_client.hpp b/src/include/httpfs_client.hpp
+index 879a6d6..3baab91 100644
+--- a/src/include/httpfs_client.hpp
++++ b/src/include/httpfs_client.hpp
+@@ -41,7 +41,7 @@ public:
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
+ 
+ 	static unordered_map<string, string> ParseGetParameters(const string &text);
+-	static shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener);
++	static HTTPUtil &GetHTTPUtil(optional_ptr<FileOpener> opener);
+ 
+ 	string GetName() const override;
+ };
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index b4d6c74..480f9d7 100644
+index 958df32..eb36003 100644
 --- a/src/s3fs.cpp
 +++ b/src/s3fs.cpp
-@@ -895,7 +895,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
- 						correct_region = new_region->second;
- 					}
- 					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params, correct_region);
--					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
-+					throw Exception(extra_info, error.Type(), error.RawMessage() + extra_text);
- 				}
- 				if (entry->second == "403") {
- 					// 403: FORBIDDEN
-@@ -905,7 +905,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
- 					} else {
- 						extra_text = S3FileSystem::GetS3AuthError(auth_params);
- 					}
--					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
-+					throw Exception(extra_info, error.Type(), error.RawMessage() + extra_text);
- 				}
- 			}
- 			throw;
-@@ -941,13 +941,13 @@ bool S3FileSystem::CanHandleFile(const string &fpath) {
- void S3FileSystem::RemoveFile(const string &path, optional_ptr<FileOpener> opener) {
- 	auto handle = OpenFile(path, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
- 	if (!handle) {
--		throw IOException("Could not remove file \"%s\": %s", {{"errno", "404"}}, path, "No such file or directory");
-+		throw IOException({{"errno", "404"}}, "Could not remove file \"%s\": %s", path, "No such file or directory");
+@@ -697,8 +697,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
+ 	auto parsed_s3_url = S3UrlParse(file.path, auth_params);
+ 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
+ 
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util.InitializeParameters(opener, info);
+ 
+ 	return duckdb::make_uniq<S3FileHandle>(*this, file, flags, std::move(params), auth_params,
+ 	                                       S3ConfigParams::ReadFrom(opener));
+@@ -1062,8 +1062,8 @@ bool S3GlobResult::ExpandNextPath() const {
  	}
  
- 	auto &s3fh = handle->Cast<S3FileHandle>();
- 	auto res = DeleteRequest(*handle, s3fh.path, {});
- 	if (res->status != HTTPStatusCode::OK_200 && res->status != HTTPStatusCode::NoContent_204) {
--		throw IOException("Could not remove file \"%s\": %s", {{"errno", to_string(static_cast<int>(res->status))}},
-+		throw IOException({{"errno", to_string(static_cast<int>(res->status))}}, "Could not remove file \"%s\": %s",
- 		                  path, res->GetError());
- 	}
- }
-diff --git a/test/sql/copy/encryption/different_aes_engines.test b/test/sql/copy/encryption/different_aes_engines.test
-index 5d1e525..5c09a38 100644
---- a/test/sql/copy/encryption/different_aes_engines.test
-+++ b/test/sql/copy/encryption/different_aes_engines.test
-@@ -20,8 +20,7 @@ restart
- require httpfs
+ 	FileOpenerInfo info = {glob_pattern};
+-	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
+-	auto http_params = http_util->InitializeParameters(opener, info);
++	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto http_params = http_util.InitializeParameters(opener, info);
  
+ 	vector<OpenFileInfo> s3_keys;
+ 	if (!current_common_prefix.empty()) {
+diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
+index 6aa2ed0..54babde 100644
+--- a/test/sql/logging/file_system_logging.test
++++ b/test/sql/logging/file_system_logging.test
+@@ -43,7 +43,6 @@ require httpfs
  statement ok
--ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf');
--
-+ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
  
- query II
- FROM enc.test
-@@ -30,7 +29,6 @@ FROM enc.test
- 13	22
- 12	21
- 
--
- restart
- 
- endloop
-@@ -41,7 +39,7 @@ foreach cipher GCM CTR
- require httpfs
- 
- statement ok
--ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
-+ATTACH '__TEST_DIR__/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
- 
- statement ok
- CREATE TABLE enc.test (a INTEGER, b INTEGER);
-@@ -55,7 +53,7 @@ DETACH enc
- restart
- 
- statement ok
--ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf');
-+ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
- 
- query II
- FROM enc.test
-diff --git a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
-index 5b09f29..13c989b 100644
---- a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
-+++ b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
-@@ -2,29 +2,29 @@
- # description: Encrypted large joins in persistent databases have a leftover temporary directory.
- # group: [temp_files]
- 
--foreach cipher GCM CTR
--
--
- require httpfs
- 
- require tpch
- 
--load __TEST_DIR__/leftover_temp_files.db
--
- statement ok
--ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc_${cipher} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
-+ATTACH ':memory:' AS mem
-+
-+foreach cipher GCM CTR
- 
- statement ok
- SET temp_file_encryption=true;
- 
- statement ok
--USE enc_${cipher};
-+SET memory_limit='1GB';
- 
- statement ok
--SET threads=8
-+ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
- 
- statement ok
--SET memory_limit='1GB';
-+USE enc;
-+
-+statement ok
-+SET threads=8
- 
- statement ok
- CALL dbgen(sf=1);
-@@ -63,6 +63,10 @@ CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOI
- statement ok
- DROP TABLE ans;
- 
--restart
-+statement ok
-+USE mem
-+
-+statement ok
-+DETACH enc
- 
- endloop
-\ No newline at end of file
+-# FIXME: investigate why we call READ twice?
+ query IIII
+ SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
+ FROM duckdb_logs
+@@ -52,5 +51,4 @@ ORDER BY timestamp
+ ----
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
+-CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"CLOSE"}

@@ -60,17 +60,10 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
                                idx_t target_count) {
 	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_type = GetVectorScanType(state, target_count, result);
-	auto mode = ScanVectorMode::REGULAR_SCAN;
-	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
-	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
-	return scan_count;
-}
-
-idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                        idx_t target_count) {
-	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
-	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
-	validity->ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
+	auto scan_count =
+	    ScanVector(transaction, vector_index, state, result, target_count, scan_type, state.update_scan_type);
+	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type,
+	                     state.update_scan_type);
 	return scan_count;
 }
 
@@ -157,11 +150,9 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	ColumnScanState standard_state(nullptr);
 	ColumnScanState validity_state(nullptr);
 	Vector base_vector(type);
-	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
-	auto validity_fetch = validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
-	if (standard_fetch != validity_fetch) {
-		throw InternalException("Unaligned fetch in validity and main column data for update");
-	}
+
+	FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
+	validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
@@ -267,7 +258,8 @@ StandardColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBloc
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup &row_group,
-                                                                 ColumnCheckpointInfo &checkpoint_info) {
+                                                                 ColumnCheckpointInfo &checkpoint_info,
+                                                                 const BaseStatistics &stats) {
 	// we need to checkpoint the main column data first
 	// that is because the checkpointing of the main column data ALSO scans the validity data
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column

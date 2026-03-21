@@ -18,6 +18,7 @@ add_library_unity(
   positional_reference_expression.cpp
   star_expression.cpp
   subquery_expression.cpp
+  type_expression.cpp
   window_expression.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_expression>

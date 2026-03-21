@@ -54,6 +54,9 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	if (PhysicalLimit::HandleOffset(input, current_offset, offset.GetIndex(), limit.GetIndex())) {
 		chunk.Reference(input);
 	}
+	if (current_offset >= limit.GetIndex() + offset.GetIndex()) {
+		return chunk.size() == 0 ? OperatorResultType::FINISHED : OperatorResultType::HAVE_MORE_OUTPUT;
+	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
@@ -63,6 +66,22 @@ OrderPreservationType PhysicalStreamingLimit::OperatorOrder() const {
 
 bool PhysicalStreamingLimit::ParallelOperator() const {
 	return parallel;
+}
+
+InsertionOrderPreservingMap<string> PhysicalStreamingLimit::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	if (limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		result["Limit"] = to_string(limit_val.GetConstantValue());
+	} else if (limit_val.Type() == LimitNodeType::CONSTANT_PERCENTAGE) {
+		result["Limit"] = to_string(limit_val.GetConstantPercentage()) + "%";
+	}
+	if (offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		auto offset = offset_val.GetConstantValue();
+		if (offset > 0) {
+			result["Offset"] = to_string(offset);
+		}
+	}
+	return result;
 }
 
 } // namespace duckdb

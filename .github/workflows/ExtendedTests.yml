@@ -20,10 +20,49 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
+  linux-configs-all:
+    name: Run all tests with different configurations
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [force_storage, force_storage_restart, latest_storage, block_verification, wal_verification, prefetch_all_parquet_files, no_local_filesystem, block_size_16kB, latest_storage_block_size_16kB, block_allocator_100mib, variant_vector, compressed_in_memory, prefetch_all_storage]
+    env:
+      BASE_BRANCH: ${{ github.base_ref || 'main' }}
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: Install
+      shell: bash
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Build
+      id: build
+      shell: bash
+      env:
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete"
+        GEN: ninja
+      run: make reldebug
+
+    - name: Run Tests
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/${{ matrix.config }}.json ./build/reldebug/test/unittest "*"
+
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)
      runs-on: macos-latest
@@ -35,11 +74,11 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
@@ -47,19 +86,15 @@ jobs:
        shell: bash
        run: brew install ninja llvm && pip install requests
 
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+     - uses: ./.github/actions/ccache-action
 
      - name: Build
        shell: bash
        run: |
-         LTO=full make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         python3 scripts/ci/retry.py -- bash -lc 'LTO=full make'
+         python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
-         make
+         python3 ../scripts/ci/retry.py -- make
          cd ..
 
      - name: Set up benchmarks
@@ -115,11 +150,11 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
@@ -127,19 +162,15 @@ jobs:
        shell: bash
        run: brew install ninja llvm && pip install requests
 
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+     - uses: ./.github/actions/ccache-action
 
      - name: Build
        shell: bash
        run: |
-         CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         python3 scripts/ci/retry.py -- bash -lc "CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make"
+         python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
-         make
+         python3 ../scripts/ci/retry.py -- make
          cd ..
 
      - name: Set up benchmarks
@@ -195,23 +226,22 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            fetch-depth: 0
 
-       - uses: actions/setup-python@v5
+       - uses: actions/setup-python@v6
          with:
            python-version: '3.12'
 
        - name: Install
          shell: bash
-         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm && pip install requests
+         run: |
+           python3 scripts/ci/retry.py -- make toolsci
+           python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm
+           python3 scripts/ci/retry.py -- pip install requests
 
-       - name: Setup Ccache
-         uses: hendrikmuhs/ccache-action@main
-         with:
-           key: ${{ github.job }}
-           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+       - uses: ./.github/actions/ccache-action
 
        - name: Build
          shell: bash
@@ -221,10 +251,10 @@ jobs:
            # chmod +x llvm.sh
            # sudo ./llvm.sh 17
            #####
-           CMAKE_LLVM_PATH='/usr/lib/llvm-14' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           python3 scripts/ci/retry.py -- bash -lc "CMAKE_LLVM_PATH='/usr/lib/llvm-14' make"
+           python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
-           make
+           python3 ../scripts/ci/retry.py -- make
            cd ..
 
        - name: Set up benchmarks
@@ -280,31 +310,29 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            fetch-depth: 0
 
-       - uses: actions/setup-python@v5
+       - uses: actions/setup-python@v6
          with:
            python-version: '3.12'
 
        - name: Install
          shell: bash
-         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+         run: |
+           python3 scripts/ci/retry.py -- make toolsci
+           python3 scripts/ci/retry.py -- pip install requests
 
-       - name: Setup Ccache
-         uses: hendrikmuhs/ccache-action@main
-         with:
-           key: ${{ github.job }}
-           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+       - uses: ./.github/actions/ccache-action
 
        - name: Build
          shell: bash
          run: |
-           LTO='full' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           python3 scripts/ci/retry.py -- bash -lc "LTO='full' make"
+           python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
-           make
+           python3 ../scripts/ci/retry.py -- make
            cd ..
 
        - name: Set up benchmarks

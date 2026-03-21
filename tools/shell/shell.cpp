@@ -343,17 +343,13 @@ void ShellState::Print(PrintOutput output, const char *str, idx_t len) {
 	}
 
 #if defined(_WIN32) || defined(WIN32)
-	if ((stdout_is_console && (out == stdout || out == stderr) || pager_is_active) && !win_utf8_mode) {
-		if (pager_is_active) {
-			auto mbcs_text = ShellState::Win32Utf8ToMbcs(str, true);
-			fputs(mbcs_text.c_str(), output == PrintOutput::STDOUT ? out : stderr);
-		} else {
-			// convert from utf8 to utf16
-			auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
-			auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-			// use WriteConsoleW to write the unicode codepoints to the console
-			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
-		}
+	if ((stdout_is_console && (out == stdout || out == stderr)) && !pager_is_active) {
+		// convert from utf8 to utf16
+		string data_str = str ? string(str, len) : "";
+		auto unicode_text = ShellState::Win32Utf8ToUnicode(data_str);
+		auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+		// use WriteConsoleW to write the unicode codepoints to the console
+		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 		return;
 	}
 #endif
@@ -399,7 +395,7 @@ void ShellState::Print(const char *str) {
 /* Indicate out-of-memory and exit. */
 static void shell_out_of_memory(void) {
 	fprintf(stderr, "Error: out of memory\n");
-	exit(1);
+	ShellState::Exit(1);
 }
 
 ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
@@ -410,7 +406,7 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
 	strcpy(continuePrompt, "  ");
-	strcpy(continuePromptSelected, "‣ ");
+	strcpy(continuePromptSelected, "  ");
 	strcpy(scrollUpPrompt, "⇡ ");
 	strcpy(scrollDownPrompt, "⇣ ");
 }
@@ -430,6 +426,19 @@ bool ShellState::IsSpace(char c) {
 
 bool ShellState::IsDigit(char c) {
 	return isdigit(c);
+}
+
+PagerState::~PagerState() {
+#if defined(_WIN32) || defined(WIN32)
+	if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
+		SetConsoleCP(win_console_cp_before_pager);
+	}
+#endif
+	if (state) {
+		state->ResetOutput();
+		ShellState::FinishPagerDisplay();
+		state = nullptr;
+	}
 }
 
 /*
@@ -516,16 +525,6 @@ static char *local_getline(char *zLine, FILE *in) {
 	idx_t nLine = zLine == 0 ? 0 : 100;
 	idx_t n = 0;
 
-#if defined(_WIN32) || defined(WIN32)
-	auto &state = ShellState::Get();
-	int is_stdin = state.stdin_is_interactive && in == stdin;
-	int is_utf8 = 0;
-	if (is_stdin && state.win_utf8_mode) {
-		if (SetConsoleCP(CP_UTF8)) {
-			is_utf8 = 1;
-		}
-	}
-#endif
 	while (1) {
 		if (n + 100 > nLine) {
 			nLine = nLine * 2 + 100;
@@ -552,21 +551,6 @@ static char *local_getline(char *zLine, FILE *in) {
 			break;
 		}
 	}
-#if defined(_WIN32) || defined(WIN32)
-	/* For interactive input on Windows systems, translate the
-	** multi-byte characterset characters into UTF-8. */
-	if (is_stdin && !is_utf8) {
-		auto zTrans = ShellState::Win32MbcsToUtf8(zLine, 0);
-		idx_t nTrans = zTrans.size() + 1;
-		if (nTrans > nLine) {
-			zLine = (char *)realloc(zLine, nTrans);
-			if (zLine == 0) {
-				shell_out_of_memory();
-			}
-		}
-		memcpy(zLine, zTrans.data(), nTrans);
-	}
-#endif /* defined(_WIN32) || defined(WIN32) */
 	return zLine;
 }
 
@@ -786,6 +770,19 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
+void ShellState::Exit(int exit_code) {
+	if (exit_code == 0) {
+		// clean-up shell state if this is a successful exit
+		auto shell_state = GetReference();
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	}
+	// then exit
+	exit(exit_code);
+}
+
 extern "C" {
 
 /*
@@ -796,7 +793,7 @@ static void InterruptHandler(int NotUsed) {
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
 	if (state.seenInterrupt > 2) {
-		exit(1);
+		ShellState::Exit(1);
 	}
 	if (state.conn) {
 		state.conn->Interrupt();
@@ -927,9 +924,16 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
+ShellState *&ShellState::GetReference() {
+	// NOTE: this is a raw pointer to avoid the ShellState from being automatically destroyed if the CLI exits
+	// Destroying a DuckDB database during exit-time destruction can lead to odd behavior due to
+	// the static-destructor order not being defined, in particular when interacting with extensions that have statics
+	static ShellState *reference = new ShellState();
+	return reference;
+}
+
 ShellState &ShellState::Get() {
-	static ShellState state;
-	return state;
+	return *GetReference();
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
@@ -1157,19 +1161,34 @@ unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
 	return make_uniq<ShellProgressBarDisplay>();
 }
 
+static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
+	auto *db_instance = db.instance.get();
+	auto &log_manager = db_instance->GetLogManager();
+	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
+	log_manager.SetLogStorage(*db_instance, "shell_log_storage");
+	log_manager.SetEnableLogging(db_instance);
+	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
+}
+
 void ShellState::OpenDB(ShellOpenFlags flags) {
+	// log storage to stdout
+	auto std_out_log_storage = duckdb::make_shared_ptr<ShellLogStorage>(*this);
+	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
+
 	if (!db) {
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
+			RegisterShellLogger(*db, storage_ptr);
 			conn = make_uniq<duckdb::Connection>(*db);
 		} catch (std::exception &ex) {
 			duckdb::ErrorData error(ex);
 			PrintDatabaseError(error.Message());
 			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
 				db = make_uniq<duckdb::DuckDB>(":memory:", &config);
+				RegisterShellLogger(*db, storage_ptr);
 				conn = make_uniq<duckdb::Connection>(*db);
 			} else {
-				exit(1);
+				ShellState::Exit(1);
 			}
 		}
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
@@ -1180,23 +1199,13 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::ShellExtension>();
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
+			ExecuteQuery("SET lock_configuration=true");
 		}
 		if (stdout_is_console) {
 			ExecuteQuery("PRAGMA enable_progress_bar");
 			ExecuteQuery("PRAGMA enable_print_progress_bar");
 		}
 	}
-
-	// Register log storage to stdout
-	auto std_out_log_storage = duckdb::make_shared_ptr<ShellLogStorage>(*this);
-	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
-
-	auto *db_instance = db->instance.get();
-	auto &log_manager = db_instance->GetLogManager();
-	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
-	log_manager.SetLogStorage(*db_instance, "shell_log_storage");
-	log_manager.SetEnableLogging(db_instance);
-	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
 }
 
 /*
@@ -1352,8 +1361,8 @@ string ShellState::GetSystemPager() {
 }
 
 bool ShellState::ShouldUsePager() {
-	if (out != stdout || !stdout_is_console || !outfile.empty()) {
-		// if we have an outfile specified we don't set up the pager
+	if (out != stdout || !stdout_is_console || !outfile.empty() || !stdin_is_interactive) {
+		// if we have an outfile specified, or we are in non-interactive/batch mode, don't use the pager
 		return false;
 	}
 	// setup a pager for output
@@ -1407,9 +1416,13 @@ void ShellState::FinishPagerDisplay() {
 }
 
 unique_ptr<PagerState> ShellState::SetupPager() {
+	uint32_t win_console_cp_before_pager = 0;
 #if defined(_WIN32) || defined(WIN32)
-	if (win_utf8_mode) {
-		SetConsoleCP(CP_UTF8);
+	if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
+		win_console_cp_before_pager = GetConsoleCP();
+		if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
+			SetConsoleCP(CP_UTF8);
+		}
 	}
 #endif
 	StartPagerDisplay();
@@ -1423,7 +1436,7 @@ unique_ptr<PagerState> ShellState::SetupPager() {
 	pager_is_active = true;
 	out = pager_out;
 	outfile = "|" + pager_command;
-	return make_uniq<PagerState>(*this);
+	return make_uniq<PagerState>(*this, win_console_cp_before_pager);
 }
 /*
 ** Change the output file back to stdout.
@@ -1454,7 +1467,7 @@ void ShellState::ResetOutput() {
 				PrintF(PrintOutput::STDERR, "Failed: [%s]\n", zCmd.c_str());
 			} else {
 				/* Give the start/open/xdg-open command some time to get
-				** going before we continue, and potential delete the
+				** going before we continue, and potentially delete the
 				** zTempFile data file out from under it */
 				Sleep(2000);
 			}
@@ -1502,7 +1515,8 @@ static bool optionMatch(const string &str, const string &zOpt) {
 int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
-	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
+	string str(zFilename);
+	auto z = ShellState::Win32Utf8ToUnicode(str);
 	rc = _wunlink(z.c_str());
 #else
 	rc = unlink(zFilename);
@@ -1555,7 +1569,7 @@ void ShellState::NewTempFile(const char *zSuffix) {
 	}
 	if (zTempFile.empty()) {
 		PrintF(PrintOutput::STDERR, "out of memory\n");
-		exit(1);
+		ShellState::Exit(1);
 	}
 }
 
@@ -1564,6 +1578,7 @@ MetadataResult ShellState::EnableSafeMode(ShellState &state, const vector<string
 	if (state.db) {
 		// db has been opened - disable external access
 		state.ExecuteQuery("SET enable_external_access=false");
+		state.ExecuteQuery("SET lock_configuration=true");
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -1673,7 +1688,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 			// verbose - ignore
 		} else if (strcmp(z, "-ascii") == 0) {
 			PrintF(PrintOutput::STDERR, "-ascii mode is no longer supported for .import");
-			exit(1);
+			ShellState::Exit(1);
 		} else if (strcmp(z, "-csv") == 0) {
 			function = "read_csv";
 		} else if (strcmp(z, "-parquet") == 0) {
@@ -2329,7 +2344,7 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 SuccessState ShellState::ChangeDirectory(const string &path) {
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
-	auto z = ShellState::Win32Utf8ToUnicode(path.c_str());
+	auto z = ShellState::Win32Utf8ToUnicode(path);
 	rc = !SetCurrentDirectoryW(z.c_str());
 #else
 	rc = chdir(path.c_str());
@@ -2729,9 +2744,17 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	return 0;
 }
 
+bool ShellState::GetBailOnError(InputMode mode) {
+	if (bail != BailOnError::AUTOMATIC) {
+		return bail == BailOnError::BAIL_ON_ERROR;
+	}
+	// by default bail on error in file and duckdb_rc modes
+	return mode == InputMode::FILE || mode == InputMode::DUCKDB_RC;
+}
+
 /*
 ** Read input from *in and process it.  If *in==0 then input
-** is interactive - the user is typing it it.  Otherwise, input
+** is interactive - the user is typing it in.  Otherwise, input
 ** is coming from a file or device.  A prompt is issued and history
 ** is saved only if input is interactive.  An interrupt signal will
 ** cause this routine to exit immediately, unless input is interactive.
@@ -2749,7 +2772,7 @@ int ShellState::ProcessInput(InputMode mode) {
 	idx_t errCnt = 0;      /* Number of errors seen */
 	idx_t numCtrlC = 0;
 	lineno = 0;
-	while (errCnt == 0 || !bail_on_error || (!in && stdin_is_interactive)) {
+	while (errCnt == 0 || !GetBailOnError(mode) || (!in && stdin_is_interactive)) {
 		fflush(out);
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
@@ -2867,7 +2890,8 @@ static string GetHomeDirectory() {
 }
 
 string ShellState::GetDefaultDuckDBRC() {
-	return GetHomeDirectory() + "/.duckdbrc";
+	duckdb::LocalFileSystem lfs;
+	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
 }
 
 /*
@@ -2877,22 +2901,19 @@ string ShellState::GetDefaultDuckDBRC() {
 ** Returns true if successful, false otherwise.
 */
 
-bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
+bool ShellState::ProcessFile(const string &file, InputMode input_mode, bool default_duckdb_rc) {
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 	int rc = 0;
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
-		InputMode input_mode = InputMode::FILE;
-		if (stdin_is_interactive && is_duckdb_rc) {
-			input_mode = InputMode::DUCKDB_RC;
-			duckdb_rc_path = file;
-		}
 		rc = ProcessInput(input_mode);
 		fclose(in);
-	} else if (!is_duckdb_rc) {
-		PrintF(PrintOutput::STDERR, "Failed to read file \"%s\"\n", file.c_str());
+	} else if (input_mode != InputMode::DUCKDB_RC || !default_duckdb_rc) {
+		// we always error in regular file reading mode
+		// when reading the init file we only error if the file is explicitly specified by the user
+		PrintDatabaseError("IO Error: Failed to open file \"" + file + "\"");
 		rc = 1;
 	}
 	in = inSaved;
@@ -2902,6 +2923,7 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 
 bool ShellState::ProcessDuckDBRC(const char *file) {
 	string path;
+	bool is_default = false;
 	if (!file) {
 		// use default .duckdbrc path
 		path = ShellState::GetDefaultDuckDBRC();
@@ -2912,8 +2934,10 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 			return true;
 		}
 		file = path.c_str();
+		is_default = true;
 	}
-	return ProcessFile(file, true);
+	duckdb_rc_path = file;
+	return ProcessFile(file, InputMode::DUCKDB_RC, is_default);
 }
 
 #ifdef HAVE_LINENOISE
@@ -3013,12 +3037,6 @@ void ShellState::Initialize() {
 #endif
 #endif
 
-struct ShellStateDestroyer {
-	~ShellStateDestroyer() {
-		ShellState::Get().Destroy();
-	}
-};
-
 void ShellState::DetectDarkLightMode() {
 #ifdef HAVE_LINENOISE
 	ShellHighlight highlight(*this);
@@ -3044,15 +3062,9 @@ void ShellState::DetectDarkLightMode() {
 #endif
 }
 
-#if SQLITE_SHELL_IS_UTF8
-int main(int argc, const char **argv) {
-#else
-int wmain(int argc, wchar_t **wargv) {
-	const char **argv;
-#endif
+int RunShell(int argc, const char **argv) {
 	int rc = 0;
 	vector<string> extra_commands;
-	ShellStateDestroyer destroyer;
 
 	auto &data = ShellState::Get();
 	data.out = stdout;
@@ -3067,14 +3079,6 @@ int wmain(int argc, wchar_t **wargv) {
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
-#if !SQLITE_SHELL_IS_UTF8
-	vector<string> utf8_args;
-	utf8_args.resize(argc);
-	for (i = 0; i < argc; i++) {
-		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		argv[i] = utf8_args[i].c_str();
-	}
-#endif
 
 	assert(argc >= 1 && argv && argv[0]);
 	data.program_name = argv[0];
@@ -3100,7 +3104,7 @@ int wmain(int argc, wchar_t **wargv) {
 			if (data.zDbFilename.empty()) {
 				data.zDbFilename = z;
 			} else {
-				/* Excesss arguments are interpreted as SQL (or dot-commands) and
+				/* Excess arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				data.readStdin = false;
 				data.stdin_is_interactive = false;
@@ -3157,11 +3161,19 @@ int wmain(int argc, wchar_t **wargv) {
 	data.OpenDB();
 
 	/* Process the initialization file if there is one.  If no -init option
-	** is given on the command line, look for a file named ~/.sqliterc and
+	** is given on the command line, look for a file named ~/.duckdbrc and
 	** try to process it.
 	*/
-	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && data.bail_on_error) {
-		return 1;
+	if (data.run_init && !data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str())) {
+		// failed to process init file - check if we should bail
+		bool bail_on_init_fail = data.bail != BailOnError::DONT_BAIL_ON_ERROR;
+		if (bail_on_init_fail) {
+			if (!data.duckdb_rc_path.empty()) {
+				data.PrintDatabaseError("Encountered errors while executing init file \"" + data.duckdb_rc_path +
+				                        "\". Exiting.");
+			}
+			return 1;
+		}
 	}
 
 	data.DetectDarkLightMode();
@@ -3253,5 +3265,41 @@ int wmain(int argc, wchar_t **wargv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
+	return rc;
+}
+
+#if SQLITE_SHELL_IS_UTF8
+int main(int argc, const char **argv) {
+#else
+int wmain(int argc, wchar_t **wargv) {
+	const char **argv;
+	vector<string> utf8_args;
+	utf8_args.resize(argc);
+	for (i = 0; i < argc; i++) {
+		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
+		argv[i] = utf8_args[i].c_str();
+	}
+#endif
+
+	auto &shell_state = ShellState::GetReference();
+	int rc = 0;
+	try {
+		rc = RunShell(argc, argv);
+	} catch (std::exception &ex) {
+		rc = 1;
+		ErrorData error(ex);
+		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
+	}
+	try {
+		// destroy shell state prior to program clean-up
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	} catch (std::exception &ex) {
+		rc = 1;
+		ErrorData error(ex);
+		fprintf(stderr, "Error during clean-up due to error: %s", error.Message().c_str());
+	}
 	return rc;
 }

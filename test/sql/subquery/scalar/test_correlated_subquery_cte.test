@@ -22,6 +22,85 @@ NULL	NULL
 2	44
 3	45
 
+# correlated CTE used through derived-table boundary inside scalar subquery
+query I
+SELECT (
+    WITH nt AS (SELECT length(s) AS n)
+    SELECT (
+        FROM (FROM nt)
+        WHERE 'a' = s[n]
+    )
+) AS ends_in_a
+FROM unnest(['a', 'ab']) _(s);
+----
+1
+NULL
+
+# derived table boundary should preserve correlation
+query I
+SELECT (
+    WITH nt AS (SELECT length(s) AS n)
+    SELECT (
+        SELECT 1
+        FROM (SELECT n FROM nt) t
+        WHERE 'a' = s[n]
+    )
+) AS ends_in_a
+FROM unnest(['a', 'ab']) _(s);
+----
+1
+NULL
+
+# correlated semantics across multiple outer rows (returns n when match)
+query I
+SELECT (
+  WITH nt AS (SELECT length(s) AS n)
+  SELECT (
+    FROM (FROM nt)
+    WHERE 'a' = s[n]
+  )
+) AS ends_in_a
+FROM unnest(['a','ab','ba']) _(s);
+----
+1
+NULL
+2
+
+# same correlated scalar subquery used twice
+query II
+SELECT
+  (
+    WITH nt AS (SELECT length(s) AS n)
+    SELECT (FROM (FROM nt) WHERE 'a' = s[n])
+  ) AS a1,
+  (
+    WITH nt AS (SELECT length(s) AS n)
+    SELECT (FROM (FROM nt) WHERE 'a' = s[n])
+  ) AS a2
+FROM unnest(['a','ab']) _(s);
+----
+1	1
+NULL	NULL
+
+# Nested LATERAL with lateral_depth > 0
+query III
+SELECT *
+FROM generate_series(1,2) AS t1(a),
+LATERAL (
+    SELECT *
+    FROM generate_series(1,2) AS t2(b),
+    LATERAL (
+        WITH cte AS (SELECT a + b AS x)
+        SELECT (FROM (FROM cte) WHERE x = a + b)
+    )
+)
+ORDER BY a, b;
+----
+1	1	2
+1	2	3
+2	1	3
+2	2	4
+
 # ORDER BY correlated subquery
 query I
 SELECT i FROM integers i1 ORDER BY (WITH i2 AS (SELECT 100-i1.i as j) SELECT j FROM i2);
@@ -164,4 +243,3 @@ NULL	NULL
 1	42
 2	42
 3	42
-

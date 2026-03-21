@@ -16,8 +16,8 @@
 #include "number_currencysymbols.h"
 
 U_NAMESPACE_BEGIN
-namespace numparse {
-namespace impl {
+
+namespace numparse::impl {
 
 // Forward-declaration of implementation classes for friending
 class AffixPatternMatcherBuilder;
@@ -28,7 +28,7 @@ using ::icu::number::impl::TokenConsumer;
 using ::icu::number::impl::CurrencySymbols;
 
 
-class CodePointMatcher : public NumberParseMatcher, public UMemory {
+class U_I18N_API CodePointMatcher : public NumberParseMatcher, public UMemory {
   public:
     CodePointMatcher() = default;  // WARNING: Leaves the object in an unusable state
 
@@ -44,8 +44,7 @@ class CodePointMatcher : public NumberParseMatcher, public UMemory {
     UChar32 fCp;
 };
 
-} // namespace impl
-} // namespace numparse
+} // namespace numparse::impl
 
 // Export a explicit template instantiations of MaybeStackArray, MemoryPool and CompactUnicodeString.
 // When building DLLs for Windows this is required even though no direct access leaks out of the i18n library.
@@ -53,13 +52,12 @@ class CodePointMatcher : public NumberParseMatcher, public UMemory {
 // Note: These need to be outside of the numparse::impl namespace, or Clang will generate a compile error.
 #if U_PF_WINDOWS <= U_PLATFORM && U_PLATFORM <= U_PF_CYGWIN
 template class U_I18N_API MaybeStackArray<numparse::impl::CodePointMatcher*, 8>; 
-template class U_I18N_API MaybeStackArray<UChar, 4>;
+template class U_I18N_API MaybeStackArray<char16_t, 4>;
 template class U_I18N_API MemoryPool<numparse::impl::CodePointMatcher, 8>;
 template class U_I18N_API numparse::impl::CompactUnicodeString<4>;
 #endif
 
-namespace numparse {
-namespace impl {
+namespace numparse::impl {
 
 struct AffixTokenMatcherSetupData {
     const CurrencySymbols& currencySymbols;
@@ -101,6 +99,8 @@ class U_I18N_API AffixTokenMatcherWarehouse : public UMemory {
 
     NumberParseMatcher* nextCodePointMatcher(UChar32 cp, UErrorCode& status);
 
+    bool hasEmptyCurrencySymbol() const;
+
   private:
     // NOTE: The following field may be unsafe to access after construction is done!
     const AffixTokenMatcherSetupData* fSetupData;
@@ -128,7 +128,7 @@ class AffixPatternMatcherBuilder : public TokenConsumer, public MutableMatcherCo
     void consumeToken(::icu::number::impl::AffixPatternType type, UChar32 cp, UErrorCode& status) override;
 
     /** NOTE: You can build only once! */
-    AffixPatternMatcher build();
+    AffixPatternMatcher build(UErrorCode& status);
 
   private:
     ArraySeriesMatcher::MatcherArray fMatchers;
@@ -160,7 +160,8 @@ class U_I18N_API AffixPatternMatcher : public ArraySeriesMatcher {
   private:
     CompactUnicodeString<4> fPattern;
 
-    AffixPatternMatcher(MatcherArray& matchers, int32_t matchersLen, const UnicodeString& pattern);
+    AffixPatternMatcher(MatcherArray& matchers, int32_t matchersLen, const UnicodeString& pattern,
+                        UErrorCode& status);
 
     friend class AffixPatternMatcherBuilder;
 };
@@ -203,10 +204,12 @@ class AffixMatcherWarehouse {
                              UErrorCode& status);
 
   private:
-    // 9 is the limit: positive, zero, and negative, each with prefix, suffix, and prefix+suffix
-    AffixMatcher fAffixMatchers[9];
-    // 6 is the limit: positive, zero, and negative, a prefix and a suffix for each
-    AffixPatternMatcher fAffixPatternMatchers[6];
+    // 18 is the limit: positive, zero, and negative, each with prefix, suffix, and prefix+suffix,
+    // and doubled since there may be an empty currency symbol
+    AffixMatcher fAffixMatchers[18];
+    // 6 is the limit: positive, zero, and negative, a prefix and a suffix for each,
+    // and doubled since there may be an empty currency symbol
+    AffixPatternMatcher fAffixPatternMatchers[12];
     // Reference to the warehouse for tokens used by the AffixPatternMatchers
     AffixTokenMatcherWarehouse* fTokenWarehouse;
 
@@ -216,9 +219,8 @@ class AffixMatcherWarehouse {
                               parse_flags_t parseFlags, UErrorCode& status);
 };
 
+} // namespace numparse::impl
 
-} // namespace impl
-} // namespace numparse
 U_NAMESPACE_END
 
 #endif //__NUMPARSE_AFFIXES_H__

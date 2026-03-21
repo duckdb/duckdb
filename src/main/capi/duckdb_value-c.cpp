@@ -30,7 +30,11 @@ void duckdb_destroy_value(duckdb_value *value) {
 }
 
 duckdb_value duckdb_create_varchar_length(const char *text, idx_t length) {
-	return WrapValue(new duckdb::Value(std::string(text, length)));
+	try {
+		return WrapValue(new duckdb::Value(std::string(text, length)));
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 duckdb_value duckdb_create_varchar(const char *text) {

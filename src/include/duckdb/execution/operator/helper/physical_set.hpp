@@ -16,6 +16,7 @@
 namespace duckdb {
 
 struct DBConfig;
+struct ConfigurationOption;
 struct ExtensionOption;
 
 //! PhysicalSet represents a SET operation (e.g. SET a = 42)
@@ -42,7 +43,8 @@ public:
 	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
 	                                 SetScope scope, const Value &value);
 
-	static void SetGenericVariable(ClientContext &context, const String &name, SetScope scope, Value target_value);
+	static void SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
+	static SetScope GetSettingScope(const ConfigurationOption &option, SetScope variable_scope);
 
 public:
 	String name;

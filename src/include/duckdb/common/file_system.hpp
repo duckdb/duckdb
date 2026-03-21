@@ -20,6 +20,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -38,6 +39,7 @@ class FileSystem;
 class Logger;
 class ClientContext;
 class QueryContext;
+class MultiFileList;
 
 enum class FileType {
 	//! Regular file
@@ -78,6 +80,7 @@ public:
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
@@ -227,13 +230,15 @@ public:
 	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
-	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
-	DUCKDB_API bool IsPathAbsolute(const string &path);
-	//! Normalize an absolute path - the goal of normalizing is converting "\test.db" and "C:/test.db" into "C:\test.db"
-	//! so that the database system cache can correctly
-	DUCKDB_API string NormalizeAbsolutePath(const string &path);
+	//! Checks if path is is an absolute path
+	DUCKDB_API virtual bool IsPathAbsolute(const string &path);
 	//! Join two paths together
 	DUCKDB_API string JoinPath(const string &a, const string &path);
+	// Join N paths together
+	template <typename... ARGS>
+	string JoinPath(const string &a, const string &b, ARGS... args) {
+		return JoinPath(JoinPath(a, b), args...);
+	}
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
 	DUCKDB_API string ConvertSeparators(const string &path);
 	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is 'example')
@@ -250,7 +255,11 @@ public:
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
+	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
+	                                          optional_ptr<FileOpener> opener);
+	DUCKDB_API unique_ptr<MultiFileList> GlobFileList(const string &path,
+	                                                  const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &pattern,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
@@ -304,6 +313,9 @@ public:
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
+	//! Canonicalize a path
+	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener = nullptr);
+
 protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
 	                                                           optional_ptr<FileOpener> opener);
@@ -313,6 +325,10 @@ protected:
 	                                          const std::function<void(OpenFileInfo &info)> &callback,
 	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
+
+	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                                               optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual bool SupportsGlobExtended() const;
 
 public:
 	template <class TARGET>

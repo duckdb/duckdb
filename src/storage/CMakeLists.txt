@@ -33,6 +33,7 @@ add_library_unity(
   optimistic_data_writer.cpp
   partial_block_manager.cpp
   single_file_block_manager.cpp
+  storage_index.cpp
   storage_info.cpp
   storage_lock.cpp
   wal_replay.cpp)

@@ -41,6 +41,9 @@ public:
 
 	void Verify(ExpressionExecutorState &root);
 
+	//! Reset any cached dictionary expression states in this expression state and its children
+	virtual void ResetDictionaryStates();
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -66,6 +69,8 @@ public:
 
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
+
+	void ResetDictionaryStates() override;
 
 public:
 	unique_ptr<FunctionLocalState> local_state;

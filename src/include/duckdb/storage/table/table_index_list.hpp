@@ -18,6 +18,8 @@ class ConflictManager;
 class LocalTableStorage;
 struct IndexStorageInfo;
 struct DataTableInfo;
+template <class T>
+class TableIndexIterationHelper;
 
 //! IndexBindState to transition index binding phases preventing lock order inversion.
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
@@ -44,28 +46,25 @@ struct IndexSerializationInfo {
 	transaction_t checkpoint_id;
 };
 
+// When serializing indexes, new IndexStorageInfos are created upon BoundIndex serialization, whereas for
+// UnboundIndex, IndexStorageInfo already exists inside the UnboundIndex.
+// We want to serialize IndexStorageInfo's in the same order that we serialized indexes, which is stored as
+// a vector of references in the ordered_infos field here.
+// UnboundIndexes still "own" the IndexStorageInfo and so a reference can just be directly pushed.
+// For BoundIndexes, however, we need to keep the newly created IndexStorageInfo's alive, and so they
+// are stored in this result type. When a BoundIndex is added to bound_infos, a reference to this is then
+// pushed to ordered_infos.
+struct IndexSerializationResult {
+	//! The ordered list of references to serialize - preserves iteration order of index_entries
+	vector<reference<const IndexStorageInfo>> ordered_infos;
+	//! Storage for bound index infos to keep them alive.
+	vector<IndexStorageInfo> bound_infos;
+};
+
 class TableIndexList {
 public:
-	//! Scan the index entries, invoking the callback method for every entry.
-	template <class T>
-	void Scan(T &&callback) {
-		lock_guard<mutex> lock(index_entries_lock);
-		for (auto &entry : index_entries) {
-			if (callback(*entry->index)) {
-				break;
-			}
-		}
-	}
-
-	template <class T>
-	void ScanEntries(T &&callback) {
-		lock_guard<mutex> lock(index_entries_lock);
-		for (auto &entry : index_entries) {
-			if (callback(*entry)) {
-				break;
-			}
-		}
-	}
+	TableIndexIterationHelper<IndexEntry> IndexEntries() const;
+	TableIndexIterationHelper<Index> Indexes() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries.
@@ -79,17 +78,16 @@ public:
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	//! Returns true, if there are no index entries.
-	bool Empty() {
-		lock_guard<mutex> lock(index_entries_lock);
-		return index_entries.empty();
+	bool Empty() const {
+		return Count() == 0;
 	}
 	//! Returns the number of index entries.
-	idx_t Count() {
+	idx_t Count() const {
 		lock_guard<mutex> lock(index_entries_lock);
 		return index_entries.size();
 	}
 	//! Returns true, if there are unbound indexes.
-	bool HasUnbound() {
+	bool HasUnbound() const {
 		lock_guard<mutex> lock(index_entries_lock);
 		return unbound_count != 0;
 	}
@@ -99,7 +97,7 @@ public:
 		index_entries = std::move(other.index_entries);
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(transaction_t checkpoint_id);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
@@ -109,7 +107,7 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of the table.
-	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
+	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
 public:
 	//! Initialize an index_chunk from a table.
@@ -121,11 +119,48 @@ public:
 
 private:
 	//! A lock to prevent any concurrent changes to the index entries.
-	mutex index_entries_lock;
+	mutable mutex index_entries_lock;
 	//! The index entries of the table.
 	vector<unique_ptr<IndexEntry>> index_entries;
 	//! Contains the number of unbound indexes.
 	idx_t unbound_count = 0;
 };
+
+template <class T>
+class TableIndexIterationHelper {
+public:
+	TableIndexIterationHelper(mutex &index_lock, const vector<unique_ptr<IndexEntry>> &index_entries);
+
+private:
+	unique_lock<mutex> lock;
+	const vector<unique_ptr<IndexEntry>> &index_entries;
+
+private:
+	class TableIndexIterator {
+	public:
+		explicit TableIndexIterator(optional_ptr<const vector<unique_ptr<IndexEntry>>> index_entries);
+
+		optional_ptr<const vector<unique_ptr<IndexEntry>>> index_entries;
+		optional_idx index;
+
+	public:
+		TableIndexIterator &operator++();
+		bool operator!=(const TableIndexIterator &other) const;
+		T &operator*() const;
+	};
+
+public:
+	TableIndexIterator begin() { // NOLINT: match stl API
+		return TableIndexIterator(&index_entries);
+	}
+	TableIndexIterator end() { // NOLINT: match stl API
+		return TableIndexIterator(nullptr);
+	}
+};
+
+template <>
+IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const;
+template <>
+Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const;
 
 } // namespace duckdb

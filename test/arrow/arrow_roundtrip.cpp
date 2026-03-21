@@ -31,7 +31,7 @@ static void TestArrowRoundtripStringView(const string &query) {
 static void TestParquetRoundtrip(const string &path) {
 	DBConfig config;
 	// This needs to be set since this test will be triggered when testing autoloading
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 
 	DuckDB db(nullptr, &config);
 	Connection con(db);
@@ -101,6 +101,21 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)", false,
 	                   true);
 
+	// UHUGEINT (lossy - should export as Decimal(38,0), not extension type)
+	{
+		DuckDB db;
+		Connection con(db);
+		auto client_properties = con.context->GetClientProperties();
+		ArrowSchema schema;
+		schema.Init();
+		vector<LogicalType> types = {LogicalType::UHUGEINT};
+		vector<string> names = {"col"};
+		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+		REQUIRE(schema.n_children == 1);
+		REQUIRE(string(schema.children[0]->format) == "d:38,0");
+		schema.release(&schema);
+	}
+
 	// BIT
 	TestArrowRoundtrip("SELECT '0101011'::BIT str FROM range(5) tbl(i)", false, true);
 
@@ -151,6 +166,10 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	DBConfig config;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
+
+#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
+	return; // Skip in relassert, takes too long
+#endif
 
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;

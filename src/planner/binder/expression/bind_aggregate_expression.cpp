@@ -160,7 +160,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.value.type().IsIntegral()) {
-					auto order_by_non_integer_literal = DBConfig::GetSetting<OrderByNonIntegerLiteralSetting>(context);
+					auto order_by_non_integer_literal = Settings::Get<OrderByNonIntegerLiteralSetting>(context);
 					if (!order_by_non_integer_literal) {
 						throw BinderException(
 						    *order.expression,
@@ -306,22 +306,23 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	aggregate->order_bys = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
-	idx_t aggr_index;
+	ProjectionIndex aggr_index;
 	auto entry = node.aggregate_map.find(*aggregate);
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
-		aggr_index = node.aggregates.size();
-		node.aggregate_map[*aggregate] = aggr_index;
-		node.aggregates.push_back(std::move(aggregate));
+		auto &aggr_ref = *aggregate;
+		aggr_index = ColumnBinding::PushExpression(node.aggregates, std::move(aggregate));
+		node.aggregate_map[aggr_ref] = aggr_index;
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
 		aggr_index = entry->second;
 	}
+	auto &bound_aggr = *node.aggregates[aggr_index];
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_uniq<BoundColumnRefExpression>(
-	    aggr.GetAlias().empty() ? node.aggregates[aggr_index]->ToString() : aggr.GetAlias(),
-	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
+	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),
+	                                                  bound_aggr.return_type,
+	                                                  ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));
 }

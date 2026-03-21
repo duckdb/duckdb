@@ -1052,3 +1052,30 @@ from pg_timezone_names()
 where name = 'America/Coyhaique'
 ----
 -03:00:00	false
+
+# 2025c
+# Baja California agreed with California’s DST rules in 1953 and in
+# 1961 through 1975, instead of observing standard time all year.
+statement ok
+set timezone='Mexico/BajaNorte';
+
+query I
+select '1962-07-31'::timestamptz;
+----
+1962-07-31 00:00:00-07
+
+# 2026a
+# Since 2022 Moldova has observed EU transition times, that is, it
+# has sprung forward at 03:00, not 02:00, and has fallen back at
+# 04:00, not 03:00.  (Thanks to Heitor David Pinto.)
+statement ok
+set timezone='Europe/Chisinau';
+
+query IIII
+select 
+	'2022-03-27 02:00:00+02'::timestamptz,
+	'2022-03-27 03:00:00+02'::timestamptz,
+	'2022-10-30 03:00:00+03'::timestamptz,
+	'2022-10-30 04:00:00+03'::timestamptz,
+----
+2022-03-27 02:00:00+02	2022-03-27 04:00:00+03	2022-10-30 03:00:00+03	2022-10-30 03:00:00+02

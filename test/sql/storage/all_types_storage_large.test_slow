@@ -2,7 +2,6 @@
 # description: Test all types storage (large)
 # group: [storage]
 
-# load the DB from disk
 load __TEST_DIR__/all_types_storage.db
 
 statement ok

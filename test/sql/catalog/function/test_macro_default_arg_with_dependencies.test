@@ -52,7 +52,7 @@ select f(x:=a) from t;
 statement error
 create macro my_macro1(a, b := a) as a + b;
 ----
-Invalid default value
+Binder Error: Default value for parameter 'b' cannot contain column names
 
 statement ok
 create table integers (a integer);
@@ -63,7 +63,7 @@ create macro my_macro2(a := i) as (
 	select min(a) from integers
 );
 ----
-Invalid default value
+Binder Error: Default value for parameter 'a' cannot contain column names
 
 # to test the dependencies we create this macro instead
 statement ok

@@ -247,21 +247,26 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 	data.offset = next;
 }
 
-static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output,
-                                bool is_table_info) {
-	if (data.offset >= view.types.size()) {
+static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData &data, ViewCatalogEntry &view,
+                                DataChunk &output, bool is_table_info) {
+	// force rebind the view to ensure the names / types are up to date
+	view.BindView(context, BindViewAction::FORCE_REBIND);
+	auto columns = view.GetColumnInfo();
+	auto &view_names = columns->names;
+	auto &view_types = columns->types;
+	if (data.offset >= view_types.size()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view.types.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view_types.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
-		auto type = view.types[i];
-		auto &name = i < view.aliases.size() ? view.aliases[i] : view.names[i];
+		auto type = view_types[i];
+		auto &name = i < view.aliases.size() ? view.aliases[i] : view_names[i];
 
 		if (is_table_info) {
 			PragmaTableInfoHelper::GetViewColumns(i, name, type, output, index);
@@ -280,7 +285,7 @@ static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &
 		PragmaTableInfoTable(state, bind_data.entry.Cast<TableCatalogEntry>(), output, bind_data.is_table_info);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		PragmaTableInfoView(state, bind_data.entry.Cast<ViewCatalogEntry>(), output, bind_data.is_table_info);
+		PragmaTableInfoView(context, state, bind_data.entry.Cast<ViewCatalogEntry>(), output, bind_data.is_table_info);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");

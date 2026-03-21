@@ -1,8 +1,8 @@
 #include "shell_prompt.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb_shell {
 

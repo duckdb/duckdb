@@ -1,0 +1,17 @@
+# name: benchmark/micro/window/selfjoin_unfiltered.benchmark
+# description: Measure performance of the window self-join optimisation without filtering
+# group: [window]
+
+name Self-Join, Unfiltered
+group micro
+subgroup window
+
+argument n 10_000_000
+
+load
+select setseed(0.8675309);
+CREATE TABLE ints AS SELECT CAST(FLOOR(RANDOM() * 100) AS INT) as rand FROM range(${n});
+
+run
+SELECT rand, count(rand) OVER (PARTITION BY rand) as reps 
+FROM ints

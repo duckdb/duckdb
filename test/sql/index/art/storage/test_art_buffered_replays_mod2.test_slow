@@ -1,0 +1,93 @@
+# name: test/sql/index/art/storage/test_art_buffered_replays_mod2.test_slow
+# description: Testing inserts and deletes work for wal index operation replays.
+# group: [storage]
+
+load __TEST_DIR__/test_art_buffered_replays_mod2.db
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement ok
+CREATE UNIQUE INDEX idx_tbl_i ON tbl(i);
+
+# Batch 1: [0, 500]
+statement ok
+INSERT INTO tbl SELECT r FROM range(0, 501) t(r);
+
+statement ok
+DELETE FROM tbl WHERE i BETWEEN 0 AND 500 AND i % 2 = 0;
+
+# Batch 2: [500, 4500]
+statement ok
+INSERT INTO tbl SELECT r FROM range(500, 4501) t(r);
+
+statement ok
+DELETE FROM tbl WHERE i BETWEEN 500 AND 4500 AND i % 2 = 0;
+
+restart
+
+# sample some ranges to test for validity
+
+loop i 0 200
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM tbl WHERE i = (${i} * 2);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT EXISTS (SELECT 1 FROM tbl WHERE i = (${i} * 2));
+----
+0
+
+query I
+SELECT EXISTS (SELECT 1 FROM tbl WHERE i = ((${i} * 2)+1));
+----
+1
+
+endloop
+
+loop i 1789 2203
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM tbl WHERE i = (${i} * 2);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT EXISTS (SELECT 1 FROM tbl WHERE i = (${i} * 2));
+----
+0
+
+query I
+SELECT EXISTS (SELECT 1 FROM tbl WHERE i = ((${i} * 2)+1));
+----
+1
+
+endloop
+
+loop i 2200 2250
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM tbl WHERE i = (${i} * 2);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT EXISTS (SELECT 1 FROM tbl WHERE i = (${i} * 2));
+----
+0
+
+query I
+SELECT EXISTS (SELECT 1 FROM tbl WHERE i = ((${i} * 2)+1));
+----
+1
+
+endloop
+

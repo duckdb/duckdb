@@ -9,6 +9,7 @@
 #pragma once
 
 #include "writer/parquet_write_stats.hpp"
+#include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -106,6 +107,38 @@ struct ParquetTimestampSOperator : public ParquetCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
+	}
+};
+
+struct ParquetTimestampInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		timestamp_t ts(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochSecondsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampMSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochMsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
+	}
+};
+
+struct ParquetTimestampNSInt96Operator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		auto ts = Timestamp::FromEpochNanoSecondsPossiblyInfinite(input);
+		return TimestampToImpalaTimestamp(ts);
 	}
 };
 
@@ -237,11 +270,6 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	}
 };
 
-struct ParquetUUIDTargetType {
-	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
-	data_t bytes[PARQUET_UUID_SIZE];
-};
-
 struct ParquetUUIDOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
@@ -274,11 +302,13 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats_p, TGT target_value) {
 		auto &stats = stats_p->Cast<UUIDStatisticsState>();
-		if (!stats.has_stats || memcmp(target_value.bytes, stats.min, ParquetUUIDTargetType::PARQUET_UUID_SIZE) < 0) {
-			memcpy(stats.min, target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+		if (!stats.has_stats ||
+		    memcmp(target_value.bytes, stats.min.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE) < 0) {
+			stats.min = target_value;
 		}
-		if (!stats.has_stats || memcmp(target_value.bytes, stats.max, ParquetUUIDTargetType::PARQUET_UUID_SIZE) > 0) {
-			memcpy(stats.max, target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+		if (!stats.has_stats ||
+		    memcmp(target_value.bytes, stats.max.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE) > 0) {
+			stats.max = target_value;
 		}
 		stats.has_stats = true;
 	}

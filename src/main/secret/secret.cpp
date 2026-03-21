@@ -7,6 +7,7 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -161,6 +162,11 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 		secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
 		secret_entry = std::move(secret_match.secret_entry);
 	}
+}
+
+KeyValueSecretReader::KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {
+	db = opener_p.TryGetDatabase();
+	context = opener_p.TryGetClientContext();
 }
 
 KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,

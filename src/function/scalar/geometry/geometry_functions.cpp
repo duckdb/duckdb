@@ -91,6 +91,11 @@ static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionIn
 
 static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+		// parameter - unknown return type
+		return nullptr;
+	}
+
 	// Check if the CRS is set in the first argument
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
@@ -115,9 +120,17 @@ static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunctio
 	const auto crs_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	if (!crs_val.IsNull()) {
 		const auto &crs_str = StringValue::Get(crs_val);
-		// Attach the CRS to the return type
-		bound_function.return_type = LogicalType::GEOMETRY(crs_str);
+
+		// Try to convert to identify
+		const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
+		if (lookup) {
+			bound_function.return_type = LogicalType::GEOMETRY(lookup->GetDefinition());
+		} else {
+			// Pass on the raw string (better than nothing)
+			bound_function.return_type = LogicalType::GEOMETRY(crs_str);
+		}
 	}
+
 	// Erase the CRS argument expression
 	return nullptr;
 }

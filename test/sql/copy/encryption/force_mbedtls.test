@@ -1,0 +1,25 @@
+# name: test/sql/copy/encryption/force_mbedtls.test
+# group: [encryption]
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET force_mbedtls_unsafe = 'true';
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM encrypted.tbl
+----
+45
+
+#openssl will be used again
+statement ok
+SET force_mbedtls_unsafe = 'false';

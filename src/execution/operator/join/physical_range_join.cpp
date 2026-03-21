@@ -4,7 +4,6 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -22,10 +21,10 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	const auto &op = global_table.op;
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
-		const auto &expr = child ? cond.right : cond.left;
-		executor.AddExpression(*expr);
+		const auto &expr = child ? cond.GetRHS() : cond.GetLHS();
+		executor.AddExpression(expr);
 
-		types.push_back(expr->return_type);
+		types.push_back(expr.return_type);
 	}
 	auto &allocator = Allocator::Get(context.client);
 	keys.Initialize(allocator, types);
@@ -155,6 +154,7 @@ public:
 			if (!table.sorted) {
 				table.MaterializeEmpty(execution.client);
 			}
+			table.global_source.reset();
 		}
 
 		event->FinishTask();
@@ -221,11 +221,91 @@ void PhysicalRangeJoin::GlobalSortedTable::GetSortedRun(ClientContext &client) {
 	if (!sorted) {
 		MaterializeEmpty(client);
 	}
+	global_source.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
 	MaterializeSortedRun(context, interrupt);
 	GetSortedRun(context.client);
+}
+
+bool PhysicalRangeJoin::LessThan(const JoinCondition &a, const JoinCondition &b) {
+	//	Comparisons come before non-comparisons
+	if (!b.IsComparison()) {
+		return a.IsComparison();
+	} else if (!a.IsComparison()) {
+		return false;
+	}
+
+	//	Both are comparisons, so use distinct counts to compare selectivities
+	//	(higher is more selective, zero is unknown/completely unselective)
+	const auto a_left = a.GetLeftStats() ? a.GetLeftStats()->GetDistinctCount() : 0;
+	const auto a_right = a.GetRightStats() ? a.GetRightStats()->GetDistinctCount() : 0;
+	const auto a_min = MinValue(a_left, a_right);
+	const auto a_type = a.GetRHS().return_type.InternalType();
+
+	const auto b_left = b.GetLeftStats() ? b.GetLeftStats()->GetDistinctCount() : 0;
+	const auto b_right = b.GetRightStats() ? b.GetRightStats()->GetDistinctCount() : 0;
+	const auto b_min = MinValue(b_left, b_right);
+	const auto b_type = b.GetRHS().return_type.InternalType();
+
+	switch (a.GetComparisonType()) {
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		switch (b.GetComparisonType()) {
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			//	Both inequalities
+			//	Prefer higher selectivities, but use the minimum of both sides
+			if (a_min != b_min) {
+				return a_min > b_min;
+			}
+			//	Prefer narrower types for faster comparisons
+			if (!TypeIsConstantSize(b_type)) {
+				return TypeIsConstantSize(a_type);
+			} else if (!TypeIsConstantSize(a_type)) {
+				return false;
+			}
+			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
+		default:
+			//	Inequalities first, so a < b
+			return true;
+		}
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		switch (b.GetComparisonType()) {
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			//	Inequalities first, so a > b
+			return false;
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			//	Both equalities
+			//	Prefer higher rhs selectivities for equalities
+			if (a_right != b_right) {
+				return a_right > b_right;
+			}
+			//	Prefer narrower types for faster comparisons
+			if (!TypeIsConstantSize(b_type)) {
+				return TypeIsConstantSize(a_type);
+			} else if (!TypeIsConstantSize(a_type)) {
+				return false;
+			}
+			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
+		default:
+			//	Inequalities first, so a > b
+			return false;
+		}
+	default:
+		//	Some other comparison
+		return false;
+	}
 }
 
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
@@ -234,34 +314,32 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
                                      unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalComparisonJoin(physical_plan, op, type, std::move(cond), join_type, estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info);
-	// Reorder the conditions so that ranges are at the front.
-	// TODO: use stats to improve the choice?
-	// TODO: Prefer fixed length types?
+	// Reorder the conditions so that selective ranges are at the front.
 	if (conditions.size() > 1) {
-		unordered_map<idx_t, idx_t> cond_idx;
-		vector<JoinCondition> conditions_p(conditions.size());
-		std::swap(conditions_p, conditions);
-		idx_t range_position = 0;
-		idx_t other_position = conditions_p.size();
-		for (idx_t i = 0; i < conditions_p.size(); ++i) {
-			switch (conditions_p[i].comparison) {
-			case ExpressionType::COMPARE_LESSTHAN:
-			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			case ExpressionType::COMPARE_GREATERTHAN:
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				conditions[range_position++] = std::move(conditions_p[i]);
-				cond_idx[i] = range_position - 1;
-				break;
-			default:
-				conditions[--other_position] = std::move(conditions_p[i]);
-				cond_idx[i] = other_position;
-				break;
-			}
+		//	Do an indirect sort so we can remap any positional references to the conditions.
+		vector<idx_t> cond_idx;
+		for (idx_t i = 0; i < conditions.size(); ++i) {
+			cond_idx.emplace_back(i);
 		}
+		std::sort(cond_idx.begin(), cond_idx.end(),
+		          [&](const idx_t &a, const idx_t &b) { return LessThan(conditions[a], conditions[b]); });
+
+		//	Move the conditions into the new order
+		vector<JoinCondition> reordered(conditions.size());
+		for (idx_t i = 0; i < cond_idx.size(); ++i) {
+			reordered[i] = std::move(conditions[cond_idx[i]]);
+		}
+		std::swap(reordered, conditions);
+
+		//	Remap any filter pushdown references.
 		if (filter_pushdown) {
+			map<idx_t, idx_t> inverse;
+			for (idx_t i = 0; i < cond_idx.size(); ++i) {
+				inverse[cond_idx[i]] = i;
+			}
 			for (auto &idx : filter_pushdown->join_condition) {
-				if (cond_idx.find(idx) != cond_idx.end()) {
-					idx = cond_idx[idx];
+				if (inverse.find(idx) != inverse.end()) {
+					idx = inverse[idx];
 				}
 			}
 		}
@@ -271,23 +349,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	children.push_back(right);
 
 	//	Fill out the left projection map.
-	left_projection_map = op.left_projection_map;
-	if (left_projection_map.empty()) {
-		const auto left_count = children[0].get().GetTypes().size();
-		left_projection_map.reserve(left_count);
-		for (column_t i = 0; i < left_count; ++i) {
-			left_projection_map.emplace_back(i);
-		}
-	}
-	//	Fill out the right projection map.
-	right_projection_map = op.right_projection_map;
-	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
-		right_projection_map.reserve(right_count);
-		for (column_t i = 0; i < right_count; ++i) {
-			right_projection_map.emplace_back(i);
-		}
-	}
+	left_projection_map = FillProjectionMap(children[0].get(), op.left_projection_map);
+	right_projection_map = FillProjectionMap(children[1].get(), op.right_projection_map);
 
 	//	Construct the unprojected type layout from the children's types
 	unprojected_types = children[0].get().GetTypes();
@@ -316,7 +379,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			auto &v = keys.data[c];
@@ -341,7 +404,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
@@ -403,7 +466,7 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorted_run,
                                         ExternalBlockIteratorState &state, Vector &sort_key_pointers,
                                         SortedRunScanState &scan_state, const idx_t chunk_idx,
-                                        const vector<idx_t> &result) {
+                                        const unsafe_vector<idx_t> &result) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
@@ -421,7 +484,7 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
                                            ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
-                                           const idx_t chunk_idx, const vector<idx_t> &result,
+                                           const idx_t chunk_idx, const unsafe_vector<idx_t> &result,
                                            SortedRunScanState &scan_state) {
 	auto &sorted = *table.sorted;
 	auto &sort_keys = chunk_state.row_locations;

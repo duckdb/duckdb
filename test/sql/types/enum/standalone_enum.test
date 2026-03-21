@@ -21,14 +21,19 @@ hello
 statement error
 SELECT 'hello'::ENUM;
 ----
-Enum needs a set of entries
+ENUM type requires at least one argument
 
 statement error
 SELECT 'hello'::ENUM(42);
 ----
-Enum type requires a set of strings as type modifiers
+ENUM type requires a set of VARCHAR arguments
 
 statement error
 SELECT 'hello'::ENUM('zzz', 42);
 ----
-Enum type requires a set of strings as type modifiers
+ENUM type requires a set of VARCHAR arguments
+
+statement error
+SELECT 'hello'::ENUM(foobar 42);
+----
+Parser Error: syntax error at or near "42"

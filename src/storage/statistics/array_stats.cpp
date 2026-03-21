@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -83,9 +84,11 @@ void ArrayStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	deserializer.Unset<LogicalType>();
 }
 
-string ArrayStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> ArrayStats::ToStruct(const BaseStatistics &stats) {
 	auto &child_stats = ArrayStats::GetChildStats(stats);
-	return StringUtil::Format("[%s]", child_stats.ToString());
+	child_list_t<Value> result;
+	result.emplace_back("child_stats", child_stats.ToStruct());
+	return result;
 }
 
 void ArrayStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {

@@ -92,7 +92,7 @@ inputs:
     default: ''
   unittest_script:
     description: 'Script/program to execute the unittests'
-    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+    default: 'python3 scripts/ci/run_tests.py ./build/release/test/unittest'
   cmake_flags:
     description: 'Flags to be passed to cmake'
     default: ''
@@ -112,7 +112,7 @@ runs:
       if: ${{ inputs.vcpkg_build == 1 }}
       uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: ce613c41372b23b1f51333815feb3edd87ef8a8b
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
     - name: Set vcpkg env variables
       if: ${{ inputs.vcpkg_build == 1 }}
@@ -171,7 +171,7 @@ runs:
         pwd
         echo "$USER"
         git config --global --add safe.directory '*'
-        make
+        python scripts/ci/retry.py -- make
         ls
 
     # Tests extension using regular require mechanism:
@@ -207,7 +207,7 @@ runs:
         rm -rf duckdb_unittest_tempdir/*
         mv build/release/extension build/extension_tmp
         rm -rf build/release
-        VCPKG_TOOLCHAIN_PATH="" make
+        python scripts/ci/retry.py -- bash -lc 'VCPKG_TOOLCHAIN_PATH="" make'
 
     # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
     - name: Run tests with auto loading

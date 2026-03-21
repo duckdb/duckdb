@@ -517,7 +517,8 @@ unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_sta
 	auto result = NumericStats::CreateEmpty(min_value.type());
 	NumericStats::SetMin(result, min_value);
 	NumericStats::SetMax(result, max_value);
-	result.CopyValidity(child_stats[0]);
+
+	result.CombineValidity(child_stats[0], child_stats[1]);
 	return result.ToUnique();
 }
 

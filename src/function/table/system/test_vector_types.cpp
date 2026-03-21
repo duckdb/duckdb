@@ -1,6 +1,11 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -306,12 +311,12 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
 	for (auto &entry : result->entries) {
-		entry->Verify();
+		entry->Verify(context.db);
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
 			entry->Flatten();
-			entry->Verify();
+			entry->Verify(context.db);
 		}
 	}
 	return std::move(result);

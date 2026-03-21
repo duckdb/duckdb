@@ -29,6 +29,9 @@ public:
 	explicit ShreddingType(const LogicalType &type);
 
 public:
+	bool operator==(const ShreddingType &other) const;
+
+public:
 	ShreddingType Copy() const;
 
 public:
@@ -36,7 +39,7 @@ public:
 	static ShreddingType Deserialize(Deserializer &source);
 
 public:
-	static ShreddingType GetShreddingTypes(const Value &val);
+	static ShreddingType GetShreddingTypes(const Value &val, ClientContext &context);
 	void AddChild(const string &name, ShreddingType &&child);
 	optional_ptr<const ShreddingType> GetChild(const string &name) const;
 

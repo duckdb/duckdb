@@ -210,13 +210,10 @@ SET SESSION schema = 'main';
 statement error
 CREATE VIEW bad_test_view AS SELECT * FROM test_table;
 ----
+Catalog Error: Table with name test_table does not exist!
 
-# TODO(omo):
-#   Currenly this fails because we bind the table name
-#   when the view is actually used vs. defined.
-#   This behavior is incompatible with PG.
-# statement ok
-# SELECT * FROM test.test_view;
+statement ok
+SELECT * FROM test.test_view;
 
 statement ok
 SET SESSION schema = 'test';

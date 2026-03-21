@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -7,7 +8,6 @@
 #include <cstring>
 
 using namespace duckdb;
-using namespace std;
 
 struct OptionValuePair {
 	OptionValuePair() {
@@ -64,6 +64,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
+	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
 	    {"allow_parser_override_extension", {"fallback"}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
@@ -79,7 +80,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_profiling", {"json"}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"file_search_path", {"test"}},
-	    {"force_compression", {"uncompressed", "Uncompressed"}},
+	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
@@ -128,6 +129,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
+	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
@@ -178,7 +180,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "custom_user_agent",
+	    "configure_profiling",
+	    "configure_metrics",
 	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",
@@ -192,6 +195,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
+	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
@@ -206,7 +210,7 @@ void RequireValueEqual(const string &option_name, const Value &left, const Value
 	}
 	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
 	                                option_name, left.ToString(), right.ToString());
-	cerr << error << endl;
+	std::cerr << error << std::endl;
 	REQUIRE(false);
 }
 
@@ -273,7 +277,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			auto error = StringUtil::Format(
 			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", option.name,
 			    option.value.ToString(), options);
-			cerr << error << endl;
+			std::cerr << error << std::endl;
 			REQUIRE(false);
 		}
 		auto original_value = GetValueForSetting(con, option.name, option.type);

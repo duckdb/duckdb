@@ -5,7 +5,6 @@
 statement ok
 pragma memory_limit='10G';
 
-
 statement ok
 CREATE OR REPLACE TABLE blah as (
         SELECT *

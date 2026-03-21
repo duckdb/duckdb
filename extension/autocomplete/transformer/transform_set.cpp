@@ -28,6 +28,7 @@ SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transform
 
 	SettingInfo result;
 	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	// TODO(Dtenwolde) Introduce TransformSettingScope for this bit
 	if (optional_scope_pr.optional_result) {
 		auto setting_scope = optional_scope_pr.optional_result->Cast<ListParseResult>();
 		auto scope_value = setting_scope.Child<ChoiceParseResult>(0);
@@ -41,14 +42,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransfo
                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &child_pr = list_pr.Child<ListParseResult>(1);
-	auto &assignment_or_timezone = child_pr.Child<ChoiceParseResult>(0);
-	return transformer.Transform<unique_ptr<SetVariableStatement>>(assignment_or_timezone);
+	return transformer.Transform<unique_ptr<SetStatement>>(child_pr.Child<ChoiceParseResult>(0).result);
 }
 
 // SetTimeZone <- 'TIME' 'ZONE' Expression
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransformer &transformer,
+unique_ptr<SetStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransformer &transformer,
                                                                      optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("Rule 'SetTimeZone' has not been implemented yet");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	return make_uniq<SetVariableStatement>("timezone", std::move(expr), SetScope::AUTOMATIC);
 }
 
 // SetVariable <- VariableScope Identifier
@@ -63,11 +65,9 @@ SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transfor
 }
 
 // StandardAssignment <- (SetVariable / SetSetting) SetAssignment
-unique_ptr<SetVariableStatement>
-PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
-                                                   optional_ptr<ParseResult> parse_result) {
-	auto &choice_pr = parse_result->Cast<ChoiceParseResult>();
-	auto &list_pr = choice_pr.result->Cast<ListParseResult>();
+unique_ptr<SetStatement> PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &first_sub_rule = list_pr.Child<ListParseResult>(0);
 
 	auto &setting_or_var_pr = first_sub_rule.Child<ChoiceParseResult>(0);
@@ -83,6 +83,8 @@ PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
 		// SET value cannot be a column reference
 		auto &col_ref = value->Cast<ColumnRefExpression>();
 		value = make_uniq<ConstantExpression>(col_ref.GetColumnName());
+	} else if (value->GetExpressionClass() == ExpressionClass::DEFAULT) {
+		return make_uniq<ResetVariableStatement>(setting_info.name, setting_info.scope);
 	}
 	return make_uniq<SetVariableStatement>(setting_info.name, std::move(value), setting_info.scope);
 }

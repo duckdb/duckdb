@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -202,7 +204,10 @@ bool StructFunction(DataChunk &args, Vector &result) {
 		chunk.SetCardinality(args.size());
 
 		for (idx_t col = 0; col < column_count; col++) {
-			const auto &struct_vector = args.data[col];
+			auto &struct_vector = args.data[col];
+			if (struct_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				struct_vector.Flatten(args.size());
+			}
 			auto &struct_vector_members = StructVector::GetEntries(struct_vector);
 			chunk.data[col].Reference(*struct_vector_members[member_idx]);
 		}

@@ -14,6 +14,7 @@
 namespace duckdb {
 class DuckTableEntry;
 class TableStatistics;
+class SingleFileCheckpointWriter;
 
 //! The table data writer is responsible for writing the data of a table to storage.
 //
@@ -29,7 +30,8 @@ public:
 public:
 	void WriteTableData(Serializer &metadata_serializer);
 
-	virtual void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) = 0;
+	virtual void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
+	                                 idx_t total_rows) = 0;
 	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                           Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
@@ -62,7 +64,8 @@ public:
 	                          MetadataWriter &table_data_writer);
 
 public:
-	void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) override;
+	void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
+	                         idx_t total_rows) override;
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;

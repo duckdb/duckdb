@@ -40,11 +40,11 @@ public:
     enum DateRuleType {
         DOM = 0,        /**< The exact day of month,
                              for example, March 11. */
-        DOW,            /**< The Nth occurence of the day of week,
+        DOW,            /**< The Nth occurrence of the day of week,
                              for example, 2nd Sunday in March. */
-        DOW_GEQ_DOM,    /**< The first occurence of the day of week on or after the day of monnth,
+        DOW_GEQ_DOM,    /**< The first occurrence of the day of week on or after the day of monnth,
                              for example, first Sunday on or after March 8. */
-        DOW_LEQ_DOM     /**< The last occurence of the day of week on or before the day of month,
+        DOW_LEQ_DOM     /**< The last occurrence of the day of week on or before the day of month,
                              for example, first Sunday on or before March 14. */
     };
 
@@ -74,7 +74,7 @@ public:
         int32_t millisInDay, TimeRuleType timeType);
 
     /**
-     * Constructs a <code>DateTimeRule</code> by the day of week and its oridinal
+     * Constructs a <code>DateTimeRule</code> by the day of week and its ordinal
      * number and the time rule.  The date rule type for an instance created
      * by this constructor is <code>DOW</code>.
      * 
@@ -160,7 +160,7 @@ public:
      * @return The date rule type.
      * @stable ICU 3.8
      */
-    DateRuleType getDateRuleType(void) const;
+    DateRuleType getDateRuleType() const;
 
     /**
      * Gets the time rule type
@@ -168,14 +168,14 @@ public:
      *         or <code>UTC_TIME</code>.
      * @stable ICU 3.8
      */
-    TimeRuleType getTimeRuleType(void) const;
+    TimeRuleType getTimeRuleType() const;
 
     /**
      * Gets the rule month.
      * @return The rule month.
      * @stable ICU 3.8
      */
-    int32_t getRuleMonth(void) const;
+    int32_t getRuleMonth() const;
 
     /**
      * Gets the rule day of month.  When the date rule type
@@ -183,7 +183,7 @@ public:
      * @return The rule day of month
      * @stable ICU 3.8
      */
-    int32_t getRuleDayOfMonth(void) const;
+    int32_t getRuleDayOfMonth() const;
 
     /**
      * Gets the rule day of week.  When the date rule type
@@ -191,25 +191,25 @@ public:
      * @return The rule day of week.
      * @stable ICU 3.8
      */
-    int32_t getRuleDayOfWeek(void) const;
+    int32_t getRuleDayOfWeek() const;
 
     /**
-     * Gets the ordinal number of the occurence of the day of week
+     * Gets the ordinal number of the occurrence of the day of week
      * in the month.  When the date rule type is not <code>DOW</code>,
      * the value is always 0.
      * @return The rule day of week ordinal number in the month.
      * @stable ICU 3.8
      */
-    int32_t getRuleWeekInMonth(void) const;
+    int32_t getRuleWeekInMonth() const;
 
     /**
      * Gets the rule time in the rule day.
      * @return The time in the rule day in milliseconds.
      * @stable ICU 3.8
      */
-    int32_t getRuleMillisInDay(void) const;
+    int32_t getRuleMillisInDay() const;
 
-private:
+  private:
     int32_t fMonth;
     int32_t fDayOfMonth;
     int32_t fDayOfWeek;
@@ -230,7 +230,7 @@ public:
      * @return          The class ID for all objects of this class.
      * @stable ICU 3.8
      */
-    static UClassID U_EXPORT2 getStaticClassID(void);
+    static UClassID U_EXPORT2 getStaticClassID();
 
     /**
      * Returns a unique class ID POLYMORPHICALLY. Pure virtual override. This
@@ -243,7 +243,7 @@ public:
      *                  other classes have different class IDs.
      * @stable ICU 3.8
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID() const override;
 };
 
 U_NAMESPACE_END

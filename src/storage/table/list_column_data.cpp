@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -88,11 +90,6 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                            idx_t scan_count) {
-	return ScanCount(state, result, scan_count);
-}
-
-idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                    idx_t scan_count) {
 	return ScanCount(state, result, scan_count);
 }
 
@@ -331,6 +328,14 @@ void ListColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	child_column->VisitBlockIds(visitor);
 }
 
+const BaseStatistics &ListColumnData::GetChildStats(const ColumnData &child) const {
+	if (!RefersToSameObject(child, *child_column)) {
+		throw InternalException("ListColumnData::GetChildStats provided column data is not a child of this list");
+	}
+	auto &stats = GetStatisticsRef();
+	return ListStats::GetChildStats(stats);
+}
+
 void ListColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
 	if (validity) {
 		throw InternalException("ListColumnData::SetValidityData cannot be used to overwrite existing validity");
@@ -395,10 +400,11 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(const Ro
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(const RowGroup &row_group,
-                                                             ColumnCheckpointInfo &checkpoint_info) {
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity->Checkpoint(row_group, checkpoint_info);
-	auto child_state = child_column->Checkpoint(row_group, checkpoint_info);
+                                                             ColumnCheckpointInfo &checkpoint_info,
+                                                             const BaseStatistics &old_stats) {
+	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info, old_stats);
+	auto validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
+	auto child_state = child_column->Checkpoint(row_group, checkpoint_info, ListStats::GetChildStats(old_stats));
 
 	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);

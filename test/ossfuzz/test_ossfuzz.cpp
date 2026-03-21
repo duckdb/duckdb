@@ -8,7 +8,6 @@
 #include <string>
 
 using namespace duckdb;
-using namespace std;
 
 constexpr const char *QUERY_DIRECTORY = "test/ossfuzz/cases";
 
@@ -40,7 +39,7 @@ static void test_runner() {
 
 struct RegisterOssfuzzTests {
 	RegisterOssfuzzTests() {
-		// register a separate test for each file in the QUERY_DIRECTORY
+		// Register a separate test for each file in the QUERY_DIRECTORY.
 		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 		fs->ListFiles(QUERY_DIRECTORY, [&](string path, bool) {
 			REGISTER_TEST_CASE(test_runner, string(QUERY_DIRECTORY) + "/" + path, "[ossfuzz][.]");

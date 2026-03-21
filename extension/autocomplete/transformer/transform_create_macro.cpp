@@ -23,10 +23,22 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGT
 	auto macro_definition_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	vector<unique_ptr<MacroFunction>> macro_functions;
 	for (auto macro_definition : macro_definition_list) {
 		info->macros.push_back(transformer.Transform<unique_ptr<MacroFunction>>(macro_definition));
 	}
+	D_ASSERT(!info->macros.empty());
+	auto macro_type = info->macros[0]->type;
+	if (info->macros.size() > 1) {
+		for (idx_t i = 1; i < macro_definition_list.size(); ++i) {
+			if (info->macros[i]->type != macro_type) {
+				throw ParserException("Cannot mix table and scalar macro function definitions");
+			}
+		}
+	}
+	info->type = macro_type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
 	result->info = std::move(info);
+	transformer.PivotEntryCheck("macro");
 	return result;
 }
 
@@ -49,12 +61,7 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 			}
 			parameter_names.insert(parameter.name);
 			if (parameter.is_default) {
-				Value default_value;
-				if (!ConstructConstantFromExpression(*parameter.expression, default_value)) {
-					throw ParserException("Invalid default value for parameter '%s': %s", parameter.name,
-					                      parameter.expression->ToString());
-				}
-				auto default_expr = make_uniq<ConstantExpression>(std::move(default_value));
+				auto default_expr = std::move(parameter.expression);
 				default_expr->SetAlias(parameter.name);
 				macro_function->default_parameters[parameter.name] = std::move(default_expr);
 				macro_function->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));

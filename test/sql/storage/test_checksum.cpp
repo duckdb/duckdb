@@ -3,7 +3,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test functioning of checksum", "[storage]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();

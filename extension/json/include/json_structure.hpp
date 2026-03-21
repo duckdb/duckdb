@@ -80,6 +80,9 @@ public:
 
 	//! Candidate types (if auto-detecting and type == LogicalTypeId::VARCHAR)
 	vector<LogicalTypeId> candidate_types;
+
+	//! Whether any UBIGINT value exceeds the BIGINT range (i.e., >= 2^63)
+	bool has_large_ubigint = false;
 };
 
 struct JSONStructure {

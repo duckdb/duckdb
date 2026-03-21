@@ -4,6 +4,16 @@
 // functions
 //===--------------------------------------------------------------------===//
 
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/fsst_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/sequence_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"
@@ -69,9 +79,14 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
 			finished = true;
 			break;
+		case VectorType::SHREDDED_VECTOR: {
+			Vector shredded_vector(LogicalType::VARIANT());
+			shredded_vector.Reference(*source);
+			shredded_vector.Flatten(source_count);
+			Copy(shredded_vector, target, *sel, source_count, source_offset, target_offset, copy_count);
+			return;
+		}
 		case VectorType::FSST_VECTOR:
-			finished = true;
-			break;
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;

@@ -114,6 +114,10 @@ public:
 		correlated_columns.insert(correlated_columns.begin(), std::move(info));
 		delim_index++;
 	}
+	void AddColumnToBack(container_type::value_type info) {
+		// Add to end
+		correlated_columns.push_back(std::move(info));
+	}
 
 	void SetDelimIndexToZero() {
 		delim_index = 0;
@@ -212,7 +216,7 @@ public:
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
-	unordered_map<idx_t, LogicalOperator *> recursive_ctes;
+	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -242,6 +246,11 @@ public:
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
+	static void BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
+	                     const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+	                     const vector<string> &aliases, vector<LogicalType> &result_types,
+	                     vector<string> &result_names);
+
 	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
@@ -254,7 +263,7 @@ public:
 	BoundStatement Bind(TableRef &ref);
 
 	//! Generates an unused index for a table
-	idx_t GenerateTableIndex();
+	TableIndex GenerateTableIndex();
 
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
@@ -279,17 +288,19 @@ public:
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
-	                                          vector<PhysicalIndex> &columns);
-	void BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+	                                          vector<PhysicalIndex> &columns,
+	                                          bool prioritize_table_when_binding = false);
+	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
 	                   vector<unique_ptr<Expression>> &update_expressions,
-	                   vector<unique_ptr<Expression>> &projection_expressions);
+	                   vector<unique_ptr<Expression>> &projection_expressions,
+	                   bool prioritize_table_when_binding = false);
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
-	                     const string &schema = INVALID_SCHEMA);
+
+	void BindLogicalType(LogicalType &type);
 
 	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
@@ -320,6 +331,8 @@ public:
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
+	void SetSearchPath(Catalog &catalog, const string &schema);
 
 private:
 	//! The parent binder (if any)
@@ -397,8 +410,24 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Build a mapping from storage column index to scan chunk index for RETURNING.
+	//! Ensures all physical columns are present in the scan.
+	//! return_columns[storage_idx] = scan_chunk_idx
+	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns);
+	//! Overload for MERGE INTO: also creates projection expressions and maps to projection indices
+	//! return_columns[storage_idx] = projection_expr_idx
+	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+	                                vector<unique_ptr<Expression>> &projection_expressions,
+	                                LogicalOperator &target_binding);
+	//! Build a sparse mapping for unique index columns only (for DELETE without RETURNING)
+	//! return_columns[storage_idx] = scan_chunk_idx (only for indexed columns)
+	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns);
+	//! Overload for MERGE INTO: builds projection expressions and maps storage_idx -> projection_expr_idx
+	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+	                            vector<unique_ptr<Expression>> &projection_expressions,
+	                            LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-	                             const string &alias, idx_t update_table_index,
+	                             const string &alias, TableIndex update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
 	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
 
@@ -450,7 +479,8 @@ private:
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
 	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
 	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
-	                                         vector<LogicalType> input_table_types, vector<string> input_table_names);
+	                                         vector<LogicalType> input_table_types, vector<string> input_table_names,
+	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 
@@ -460,7 +490,7 @@ private:
 	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
 	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
@@ -505,7 +535,7 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
 
-	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
+	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 
@@ -524,7 +554,7 @@ private:
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, idx_t proj_index,
+	                                                 LogicalGet &get, TableIndex proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
 	                                                 const vector<BindingAlias> &source_aliases,
@@ -537,6 +567,8 @@ private:
 
 	BoundCTEData PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement);
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
+
+	shared_ptr<Binder> CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

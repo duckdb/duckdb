@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 
@@ -68,7 +69,7 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 		return false;
 	}
 
-	if (!logical_get->table_filters.filters.empty()) {
+	if (logical_get->table_filters.HasFilters()) {
 		// If there are filters, we only order the row groups but do not prune
 		row_limit.SetInvalid();
 		row_offset.SetInvalid();
@@ -78,7 +79,10 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 	const auto &primary_order = logical_order->orders[0];
 	auto options = CreateRowGroupReordererOptions(row_limit, row_offset, primary_order, *logical_get, storage_index,
 	                                              logical_limit);
-	logical_get->function.set_scan_order(std::move(options), logical_get->bind_data.get());
+	if (!options) {
+		return false;
+	}
+	logical_get->SetScanOrder(std::move(options));
 
 	return true;
 }
@@ -110,7 +114,8 @@ optional_ptr<LogicalOrder> RowGroupPruner::FindLogicalOrder(const LogicalLimit &
 
 	auto &logical_order = current_op.get().Cast<LogicalOrder>();
 	for (const auto &order : logical_order.orders) {
-		// We do not support any null-first orders as this requires unimplemented logic in the row group reorderer
+		// FIXME: the logic to handle this has now been implemented in the row group reorderer,
+		// but we do not enable the optimization until more thorough testing
 		if (order.null_order == OrderByNullType::NULLS_FIRST) {
 			return nullptr;
 		}
@@ -150,8 +155,8 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 		return nullptr;
 	}
 
-	auto col_idx = pushdown_targets[0].columns[0].probe_column_index.column_index;
-	column_index = logical_get.GetColumnIds()[col_idx];
+	auto &binding = pushdown_targets[0].columns[0].probe_column_index;
+	column_index = logical_get.GetColumnIndex(binding);
 
 	return logical_get;
 }
@@ -160,11 +165,12 @@ unique_ptr<RowGroupOrderOptions>
 RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, const optional_idx row_offset,
                                                const BoundOrderByNode &primary_order, const LogicalGet &logical_get,
                                                const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
-	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
-	auto column_type =
+	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
+	const auto column_type =
 	    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
-	auto order_type = primary_order.type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
-	auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+	const auto order_type = primary_order.type;
+	const auto null_order = primary_order.null_order;
+	const auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 	optional_idx combined_limit = row_limit.IsValid()
 	                                  ? row_limit.GetIndex() + (row_offset.IsValid() ? row_offset.GetIndex() : 0)
 	                                  : optional_idx();
@@ -176,7 +182,7 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 
 		if (!partition_stats.empty()) {
 			auto offset_puning_result = RowGroupReorderer::GetOffsetAfterPruning(
-			    order_by, column_type, order_type, storage_index, row_offset.GetIndex(), partition_stats);
+			    order_by, column_type, order_type, null_order, storage_index, row_offset.GetIndex(), partition_stats);
 			if (offset_puning_result.pruned_row_group_count > 0) {
 				// We can prune row groups and reduce the offset
 				logical_limit.offset_val =
@@ -186,13 +192,13 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 					combined_limit = row_limit.GetIndex() + offset_puning_result.offset_remainder;
 				}
 
-				return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, column_type, combined_limit,
-				                                       offset_puning_result.pruned_row_group_count);
+				return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, null_order, column_type,
+				                                       combined_limit, offset_puning_result.pruned_row_group_count);
 			}
 		}
 	}
 	// Only sort row groups by primary order column and prune with limit if set
-	return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, column_type, combined_limit,
+	return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, null_order, column_type, combined_limit,
 	                                       NumericCast<uint64_t>(0));
 }
 

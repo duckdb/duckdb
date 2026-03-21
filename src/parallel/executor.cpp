@@ -8,6 +8,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
@@ -593,7 +594,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
-			if (task && DBConfig::GetConfig(context).options.scheduler_process_partial) {
+			if (task && Settings::Get<SchedulerProcessPartialSetting>(context)) {
 				auto &token = *task->token;
 				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
 				task.reset();

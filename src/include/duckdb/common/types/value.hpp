@@ -36,6 +36,7 @@ class Value {
 	friend struct UnionValue;
 	friend struct ArrayValue;
 	friend struct MapValue;
+	friend struct TypeValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -168,6 +169,7 @@ public:
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
 	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values);
 	//! Create a variant value with given list of internal variant data (keys/children/values/data)
 	DUCKDB_API static Value VARIANT(vector<Value> children);
 	//! Create a list value with the given entries
@@ -204,8 +206,11 @@ public:
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
 
+	DUCKDB_API static Value TYPE(const LogicalType &type);
+	DUCKDB_API static Value TYPE(const string_t &serialized_type);
+
 	//! Creates an aggregate state
-	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
+	DUCKDB_API static Value LEGACY_AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
@@ -466,6 +471,10 @@ struct UnionValue {
 	DUCKDB_API static const Value &GetValue(const Value &value);
 	DUCKDB_API static uint8_t GetTag(const Value &value);
 	DUCKDB_API static const LogicalType &GetType(const Value &value);
+};
+
+struct TypeValue {
+	DUCKDB_API static LogicalType GetType(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

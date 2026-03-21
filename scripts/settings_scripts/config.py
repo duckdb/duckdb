@@ -44,6 +44,7 @@ class Setting:
         aliases: List[str],
         default_scope: str,
         default_value: str,
+        conditional_defaults,
     ):
         self.name = self._get_valid_name(name)
         self.description = description
@@ -53,7 +54,7 @@ class Setting:
         self.internal_setting = internal_setting
         self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
-        self.is_generic_setting = self.scope is None
+        self.is_generic_setting = default_value is not None
         if self.is_enum and self.is_generic_setting:
             self.on_set = True
         custom_callbacks = ['set', 'reset', 'get']
@@ -72,6 +73,9 @@ class Setting:
         self.struct_name = self._get_struct_name() if len(struct_name) == 0 else struct_name
         self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
         self.default_value = default_value
+        self.conditional_defaults = conditional_defaults
+        if self.default_scope is not None and self.scope is not None:
+            raise ValueError("Only default_scope or scope can be specified")
 
     # define all comparisons to be based on the setting's name attribute
     def __eq__(self, other) -> bool:
@@ -107,7 +111,7 @@ class Setting:
         if scope == 'GLOBAL':
             return scope
         elif scope == 'LOCAL':
-            return 'SESSION'
+            return 'LOCAL'
         raise Exception(f"Invalid default scope value {scope}")
 
     # validate and return the correct type format

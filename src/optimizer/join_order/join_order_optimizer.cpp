@@ -7,6 +7,7 @@
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,8 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
-	if (depth > query_graph_manager.context.config.max_expression_depth) {
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(query_graph_manager.context);
+	if (depth > max_expression_depth) {
 		// Very deep plans will eventually consume quite some stack space
 		// Returning the current plan is always a valid choice
 		return plan;
@@ -84,14 +86,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	return new_logical_plan;
 }
 
-void JoinOrderOptimizer::AddMaterializedCTEStats(idx_t index, RelationStats &&stats) {
+void JoinOrderOptimizer::AddMaterializedCTEStats(TableIndex index, RelationStats &&stats) {
 	materialized_cte_stats.emplace(index, std::move(stats));
 }
 
-RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(idx_t index) {
+RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(TableIndex index) {
 	auto it = materialized_cte_stats.find(index);
 	if (it == materialized_cte_stats.end()) {
-		throw InternalException("Unable to find materialized CTE stats with index %llu", index);
+		throw InternalException("Unable to find materialized CTE stats with index %llu", index.index);
 	}
 	return it->second;
 }

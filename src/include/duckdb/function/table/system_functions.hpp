@@ -63,6 +63,10 @@ struct DuckDBConstraintsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBCoordinateSystemsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBSecretsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -108,6 +112,10 @@ struct DuckDBIndexesFun {
 };
 
 struct DuckDBMemoryFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBEvictionQueuesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

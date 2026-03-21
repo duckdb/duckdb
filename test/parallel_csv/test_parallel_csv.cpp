@@ -14,7 +14,6 @@
 #include <string>
 
 using namespace duckdb;
-using namespace std;
 
 //! CSV Files
 const string csv = "*.csv";
@@ -74,6 +73,9 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 
 bool RunFull(const std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
              bool set_temp_dir = false) {
+#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
+	return true; // Skip in relassert, takes too long
+#endif
 	DuckDB db(nullptr);
 	Connection conn(db);
 	// Here we run the csv file first with the full buffer.

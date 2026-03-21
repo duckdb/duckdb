@@ -250,6 +250,18 @@ public:
 		return internal >= other.internal;
 	}
 
+	shared_ptr<T, SAFE> atomic_load() const {
+		return shared_ptr<T, SAFE>(std::atomic_load(&internal));
+	}
+
+	shared_ptr<T, SAFE> atomic_load(std::memory_order order) const {
+		return shared_ptr<T, SAFE>(std::atomic_load_explicit(&internal, order));
+	}
+
+	void atomic_store(const shared_ptr<T, SAFE> &new_ptr) {
+		std::atomic_store(&internal, new_ptr.internal);
+	}
+
 private:
 	// This overload is used when the class inherits from 'enable_shared_from_this<U>'
 	template <class U, class V,

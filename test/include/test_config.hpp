@@ -96,6 +96,8 @@ public:
 	static void AppendSkipTagSet(const Value &tag_set);
 
 private:
+	//! Give preference to settings from loaded configs
+	bool test_env_from_config_loaded = false;
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 

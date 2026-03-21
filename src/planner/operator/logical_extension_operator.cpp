@@ -1,8 +1,8 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
 
@@ -26,9 +26,9 @@ void LogicalExtensionOperator::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalExtensionOperator::Deserialize(Deserializer &deserializer) {
-	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
+	auto &context = deserializer.Get<ClientContext &>();
 	auto extension_name = deserializer.ReadProperty<string>(200, "extension_name");
-	for (auto &extension : config.operator_extensions) {
+	for (auto &extension : OperatorExtension::Iterate(context)) {
 		if (extension->GetName() == extension_name) {
 			return extension->Deserialize(deserializer);
 		}

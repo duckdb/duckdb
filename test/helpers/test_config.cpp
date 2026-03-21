@@ -244,6 +244,11 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 }
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	if (test_name.find('/') == 0) {
+		// Full path specified, strip down to base path so the extension config lookup still works
+		const string stripped_test_name = test_name.c_str() + test_name.find("test/sql");
+		return tests_to_be_skipped.count(stripped_test_name);
+	}
 	return tests_to_be_skipped.count(test_name);
 }
 
@@ -302,7 +307,15 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
+		// The first of those it's throw as a test of what would happen if a task were to be throwing
+		// It's OK that PositionalTableScanner react re-throwing a different exception, so they need to be removed in
+		// this specific test setup
 		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
+		res.push_back("Unexpected interrupt from table Source in PositionalTableScanner refill");
+#endif
+#endif
 	}
 	return res;
 }
@@ -376,6 +389,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 			tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
 			                           inherit_config.tests_to_be_skipped.end());
 		}
+		bool found_duplicate_tests = false;
 		// Convert to unordered_set<string> the list of tests to be skipped
 		auto entry = options.find("skip_tests");
 		if (entry != options.end()) {
@@ -384,10 +398,18 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 				auto children = StructValue::GetChildren(value);
 				auto skip_list = ListValue::GetChildren(children[1]);
 				for (const auto &skipped_test : skip_list) {
-					tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+					auto skipped_test_str = skipped_test.GetValue<string>();
+					auto insert_result = tests_to_be_skipped.insert(skipped_test_str);
+					if (!insert_result.second) {
+						Printer::PrintF("* Test \"%s\" was already present in skipped test list", skipped_test_str);
+						found_duplicate_tests = true;
+					}
 				}
 			}
 			options.erase("skip_tests");
+		}
+		if (found_duplicate_tests) {
+			Printer::PrintF("Run python3 scripts/cleanup_config_skip_tests.py to clean up");
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
@@ -481,7 +503,8 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (test_env.empty() && options.find("test_env") != options.end()) {
+	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
+		test_env_from_config_loaded = true;
 		auto entry = options["test_env"];
 		auto list_children = ListValue::GetChildren(entry);
 		for (const auto &value : list_children) {

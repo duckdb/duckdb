@@ -1,0 +1,62 @@
+diff --git a/src/include/mysql_filter_pushdown.hpp b/src/include/mysql_filter_pushdown.hpp
+index c941c46..8366651 100644
+--- a/src/include/mysql_filter_pushdown.hpp
++++ b/src/include/mysql_filter_pushdown.hpp
+@@ -8,7 +8,7 @@
+ 
+ #pragma once
+ 
+-#include "duckdb/planner/table_filter.hpp"
++#include "duckdb/planner/table_filter_set.hpp"
+ #include "duckdb/planner/filter/conjunction_filter.hpp"
+ #include "duckdb/planner/filter/constant_filter.hpp"
+ 
+diff --git a/src/mysql_filter_pushdown.cpp b/src/mysql_filter_pushdown.cpp
+index 70ab546..9f1d512 100644
+--- a/src/mysql_filter_pushdown.cpp
++++ b/src/mysql_filter_pushdown.cpp
+@@ -84,14 +84,14 @@ string MySQLFilterPushdown::TransformFilter(string &column_name, TableFilter &fi
+ 
+ string MySQLFilterPushdown::TransformFilters(const vector<column_t> &column_ids, optional_ptr<TableFilterSet> filters,
+                                              const vector<string> &names) {
+-	if (!filters || filters->filters.empty()) {
++	if (!filters || !filters->HasFilters()) {
+ 		// no filters
+ 		return string();
+ 	}
+ 	string result;
+-	for (auto &entry : filters->filters) {
+-		auto column_name = MySQLUtils::WriteIdentifier(names[column_ids[entry.first]]);
+-		auto &filter = *entry.second;
++	for (auto &entry : *filters) {
++		auto column_name = MySQLUtils::WriteIdentifier(names[column_ids[entry.GetIndex()]]);
++		auto &filter = entry.Filter();
+ 		auto new_filter = TransformFilter(column_name, filter);
+ 		if (new_filter.empty()) {
+ 			continue;
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index b66df5d..73699f6 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -115,9 +115,9 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 			return string();
+ 		}
+ 		string result;
+-		for (auto &entry : table_scan.table_filters->filters) {
+-			auto column_index = entry.first;
+-			auto &filter = entry.second;
++		for (auto &entry : *table_scan.table_filters) {
++			auto column_index = entry.GetIndex();
++			auto &filter = entry.Filter();
+ 			string column_name;
+ 			if (column_index < table_scan.names.size()) {
+ 				const auto col_id = table_scan.column_ids[column_index].GetPrimaryIndex();
+@@ -128,7 +128,7 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 				}
+ 			}
+ 			BoundReferenceExpression bound_ref(std::move(column_name), LogicalTypeId::INVALID, 0);
+-			auto filter_expr = filter->ToExpression(bound_ref);
++			auto filter_expr = filter.ToExpression(bound_ref);
+ 			auto filter_str = filter_expr->ToString();
+ 			if (result.empty()) {
+ 				result = std::move(filter_str);

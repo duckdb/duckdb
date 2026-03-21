@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 
 #include "duckdb/common/enums/order_type.hpp"
@@ -44,10 +51,6 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		}
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
-	}
-	// push collations
-	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		ExpressionBinder::PushCollation(context, arguments[i], arguments[i]->return_type);
 	}
 	// check if all types are constant
 	bool all_constant = true;

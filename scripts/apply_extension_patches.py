@@ -9,6 +9,9 @@ import tempfile
 directory = sys.argv[1]
 patch_pattern = f"{directory}*.patch"
 
+if os.environ.get("DUCKDB_SKIP_APPLYING_PATCHES") == "1":
+    exit(0)
+
 # Find patch files matching the pattern
 patches = glob.glob(patch_pattern)
 
@@ -88,6 +91,7 @@ if len(output_lines) <= len(prev_output_lines) and prev_output_lines != output_l
     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
     with tempfile.NamedTemporaryFile() as f:
         f.write(prev_diff)
+        f.flush()
         apply_patch(f.name)
 
     print("--------------------------------------------------")

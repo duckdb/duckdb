@@ -1,0 +1,11 @@
+# name: test/sql/merge/merge_into_invalid_column.test
+# description: Test MERGE INTO via UPSERT with an invalid column
+# group: [merge]
+
+statement ok
+CREATE TABLE v0 (v1 INTEGER PRIMARY KEY);
+
+statement error
+INSERT INTO v0(x) VALUES (2) ON CONFLICT DO NOTHING;
+----
+<REGEX>:Binder Error.*does not have a column with name.*

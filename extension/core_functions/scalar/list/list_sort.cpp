@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -80,7 +81,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
 	chunk.SetCardinality(offset_lists_indices);
-	chunk.Verify();
+	chunk.Verify(context.client.db);
 
 	// sink
 	chunk.Flatten();

@@ -9,6 +9,8 @@ string CatalogTypeToString(CatalogType type) {
 	switch (type) {
 	case CatalogType::COLLATION_ENTRY:
 		return "Collation";
+	case CatalogType::COORDINATE_SYSTEM_ENTRY:
+		return "Coordinate System";
 	case CatalogType::TYPE_ENTRY:
 		return "Type";
 	case CatalogType::TABLE_ENTRY:
@@ -39,6 +41,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
+	case CatalogType::TRIGGER_ENTRY:
+		return "Trigger";
 	case CatalogType::SECRET_ENTRY:
 		return "Secret";
 	case CatalogType::SECRET_TYPE_ENTRY:
@@ -57,6 +61,9 @@ string CatalogTypeToString(CatalogType type) {
 CatalogType CatalogTypeFromString(const string &type) {
 	if (type == "Collation") {
 		return CatalogType::COLLATION_ENTRY;
+	}
+	if (type == "Coordinate System") {
+		return CatalogType::COORDINATE_SYSTEM_ENTRY;
 	}
 	if (type == "Type") {
 		return CatalogType::TYPE_ENTRY;
@@ -102,6 +109,9 @@ CatalogType CatalogTypeFromString(const string &type) {
 	}
 	if (type == "Sequence") {
 		return CatalogType::SEQUENCE_ENTRY;
+	}
+	if (type == "Trigger") {
+		return CatalogType::TRIGGER_ENTRY;
 	}
 	if (type == "INVALID") {
 		return CatalogType::INVALID;

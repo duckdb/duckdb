@@ -1,0 +1,49 @@
+# name: test/sql/join/semianti/mix_equality_inequality.test
+# description: Test SEMI/ANTI join with a mix of equality and inequality predicates
+# group: [semianti]
+
+query II
+WITH cte1 AS MATERIALIZED (
+    SELECT
+        'col1' AS col1,
+        UNNEST(
+            [TIMESTAMPTZ '2025-01-01 00:00:11+00', TIMESTAMPTZ '2025-01-01 00:00:41+00']
+        ) AS col2
+),
+cte2 AS (
+    SELECT
+        'col1' AS col1,
+        TIMESTAMPTZ '2025-01-01 00:00:40+00' AS col2,
+        'col3' AS col3,
+)
+SELECT
+    *
+FROM
+    cte1 ANTI
+    JOIN cte2 ON cte1.col1 = cte2.col1
+    AND cte1.col2 > cte2.col2;
+----
+col1	2025-01-01 00:00:11+00
+
+query II
+WITH cte1 AS MATERIALIZED (
+    SELECT
+        'col1' AS col1,
+        UNNEST(
+            [TIMESTAMPTZ '2025-01-01 00:00:11+00', TIMESTAMPTZ '2025-01-01 00:00:41+00']
+        ) AS col2
+),
+cte2 AS (
+    SELECT
+        'col1' AS col1,
+        TIMESTAMPTZ '2025-01-01 00:00:40+00' AS col2,
+        'col3' AS col3,
+)
+SELECT
+    *
+FROM
+    cte1 SEMI
+    JOIN cte2 ON cte1.col1 = cte2.col1
+    AND cte1.col2 > cte2.col2;
+----
+col1	2025-01-01 00:00:41+00

@@ -2,7 +2,8 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -13,8 +14,185 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/main/settings.hpp"
+
+#include <functional>
 
 namespace duckdb {
+
+namespace {
+
+static bool TypeContainsDecimal(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL:
+		return true;
+	case LogicalTypeId::LIST:
+		return TypeContainsDecimal(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return TypeContainsDecimal(ArrayType::GetChildType(type));
+	case LogicalTypeId::STRUCT: {
+		for (const auto &child : StructType::GetChildTypes(type)) {
+			if (TypeContainsDecimal(child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::MAP:
+		return TypeContainsDecimal(MapType::KeyType(type)) || TypeContainsDecimal(MapType::ValueType(type));
+	case LogicalTypeId::UNION: {
+		for (const auto &child : UnionType::CopyMemberTypes(type)) {
+			if (TypeContainsDecimal(child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
+class ListReduceBindLambdaContext final : public BindLambdaContext {
+public:
+	explicit ListReduceBindLambdaContext(LogicalType accumulator_type) : accumulator_type(std::move(accumulator_type)) {
+	}
+
+	const LogicalType accumulator_type;
+};
+
+LogicalType ListReduceBindLambdaOverride(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                         const idx_t parameter_idx,
+                                         optional_ptr<BindLambdaContext> bind_lambda_context) {
+	D_ASSERT(bind_lambda_context);
+	auto bind_context = bind_lambda_context->Cast<ListReduceBindLambdaContext>();
+
+	auto list_child_type = function_child_types[0];
+	if (list_child_type.id() != LogicalTypeId::SQLNULL && list_child_type.id() != LogicalTypeId::UNKNOWN) {
+		if (list_child_type.id() == LogicalTypeId::ARRAY) {
+			list_child_type = ArrayType::GetChildType(list_child_type);
+		} else if (list_child_type.id() == LogicalTypeId::LIST) {
+			list_child_type = ListType::GetChildType(list_child_type);
+		} else {
+			throw InternalException("The first argument must be a list or array type");
+		}
+	}
+	switch (parameter_idx) {
+	case 0:
+		return bind_context.accumulator_type;
+	case 1:
+		return list_child_type;
+	case 2:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to three lambda parameters!");
+	}
+}
+
+using bind_lambda_expression_t =
+    std::function<BindResult(LambdaExpression &, idx_t, const vector<LogicalType> &,
+                             optional_ptr<bind_lambda_function_t>, optional_ptr<BindLambdaContext>)>;
+
+struct ListReduceRebindResult {
+	bool did_rebind = false;
+	vector<LogicalType> capture_child_types;
+	bind_lambda_function_t override_bind_lambda = nullptr;
+	unique_ptr<BindLambdaContext> override_bind_lambda_context;
+	LogicalType override_accumulator_type_storage;
+	bool override_has_accumulator_type = false;
+};
+
+ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t depth,
+                                                   const vector<LogicalType> &function_child_types,
+                                                   bind_lambda_function_t bind_lambda_function,
+                                                   BindResult &bind_lambda_result,
+                                                   const bind_lambda_expression_t &bind_lambda_expression,
+                                                   optional_ptr<BindLambdaContext> bind_lambda_context,
+                                                   const unique_ptr<ParsedExpression> &lambda_expr_copy) {
+	ListReduceRebindResult result;
+	result.capture_child_types = function_child_types;
+
+	const bool has_initial = function_child_types.size() == 3;
+	auto &bound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
+	const auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+
+	auto list_child_type = function_child_types[0];
+	if (list_child_type.id() != LogicalTypeId::SQLNULL && list_child_type.id() != LogicalTypeId::UNKNOWN) {
+		if (list_child_type.id() == LogicalTypeId::ARRAY) {
+			list_child_type = ArrayType::GetChildType(list_child_type);
+		} else if (list_child_type.id() == LogicalTypeId::LIST) {
+			list_child_type = ListType::GetChildType(list_child_type);
+		} else {
+			throw BinderException("The first argument must be a list or array type");
+		}
+	}
+
+	LogicalType accumulator_type;
+	if (has_initial) {
+		const auto &initial_type = function_child_types[2];
+		if (!LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, accumulator_type)) {
+			throw BinderException("No common super type between initial value type %s and lambda return type %s",
+			                      initial_type.ToString(), lambda_return_type.ToString());
+		}
+	} else {
+		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
+			throw BinderException("No common super type between list element type %s and lambda return type %s",
+			                      list_child_type.ToString(), lambda_return_type.ToString());
+		}
+	}
+
+	if (has_initial) {
+		D_ASSERT(lambda_expr_copy);
+		auto rebind_child_types = function_child_types;
+		rebind_child_types[2] = accumulator_type;
+
+		auto lambda_expr_rebind_copy = lambda_expr_copy->Copy();
+		auto &lambda_expr_rebind = lambda_expr_rebind_copy->Cast<LambdaExpression>();
+		bind_lambda_result = bind_lambda_expression(lambda_expr_rebind, depth, rebind_child_types,
+		                                            &bind_lambda_function, bind_lambda_context);
+		if (bind_lambda_result.HasError()) {
+			bind_lambda_result.error.Throw();
+		}
+
+		auto &rebound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
+		// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
+		// accumulator type when decimals are involved.
+		if (TypeContainsDecimal(accumulator_type) ||
+		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->return_type)) {
+			if (rebound_lambda_expr.lambda_expr->return_type != accumulator_type) {
+				const auto old_return_type = rebound_lambda_expr.lambda_expr->return_type;
+				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.lambda_expr),
+				                                                    accumulator_type);
+				if (!cast_expr) {
+					throw BinderException("Could not cast lambda return type %s to accumulator type %s",
+					                      old_return_type.ToString(), accumulator_type.ToString());
+				}
+				rebound_lambda_expr.lambda_expr = std::move(cast_expr);
+			}
+		}
+		result.did_rebind = true;
+		result.capture_child_types = std::move(rebind_child_types);
+	} else if (accumulator_type != list_child_type) {
+		if (!lambda_expr_copy) {
+			throw InternalException("list_reduce lambda copy is missing for rebind");
+		}
+		auto &lambda_expr_rebind = lambda_expr_copy->Cast<LambdaExpression>();
+		result.override_bind_lambda = &ListReduceBindLambdaOverride;
+		result.override_bind_lambda_context = make_uniq<ListReduceBindLambdaContext>(accumulator_type);
+		bind_lambda_result = bind_lambda_expression(lambda_expr_rebind, depth, function_child_types,
+		                                            &result.override_bind_lambda, *result.override_bind_lambda_context);
+		if (bind_lambda_result.HasError()) {
+			bind_lambda_result.error.Throw();
+		}
+		result.did_rebind = true;
+		result.override_accumulator_type_storage = accumulator_type;
+		result.override_has_accumulator_type = true;
+	}
+
+	return result;
+}
+
+} // namespace
 
 BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
                                                  const LambdaSyntaxType syntax_type) {
@@ -23,14 +201,13 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
-	auto &config = ClientConfig::GetConfig(context);
-	auto setting = config.lambda_syntax;
+	auto setting = Settings::Get<LambdaSyntaxSetting>(context);
 	bool invalid_syntax =
 	    setting == LambdaSyntax::DISABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
 	bool warn_deprecated_syntax = setting == LambdaSyntax::DEFAULT && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
-	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
-	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior. \n"
+	                   "i.e.., lambda x, i: x + i, before DuckDB's next release.\n"
+	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior.\n"
 	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
 
 	BindResult lambda_bind_result;
@@ -220,12 +397,12 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// the first child is the list, the second child is the lambda expression
+	// constexpr idx_t list_ix = 0;
 	constexpr idx_t list_idx = 0;
 	constexpr idx_t lambda_expr_idx = 1;
 	D_ASSERT(function.children[lambda_expr_idx]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	vector<LogicalType> function_child_types;
-
 	// bind the list
 	ErrorData error;
 	for (idx_t i = 0; i < function.children.size(); i++) {
@@ -258,10 +435,47 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[lambda_expr_idx]->Cast<LambdaExpression>();
-	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function);
+
+	unique_ptr<ParsedExpression> lambda_expr_copy;
+	const bool is_list_reduce = func.name == "list_reduce";
+	if (is_list_reduce) {
+		// We have to make this copy before binding in case we have to double-bind
+		lambda_expr_copy = lambda_expr.Copy();
+	}
+
+	BindResult bind_lambda_result =
+	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr);
+	bind_lambda_function_t override_bind_lambda_storage = nullptr;
+	optional_ptr<bind_lambda_function_t> capture_bind_lambda = &bind_lambda_function;
+	unique_ptr<BindLambdaContext> override_bind_lambda_context;
+	auto capture_child_types = function_child_types;
 
 	if (bind_lambda_result.HasError()) {
 		return BindResult(bind_lambda_result.error);
+	}
+	auto bind_lambda_expression = [&](LambdaExpression &expr, idx_t lambda_depth, const vector<LogicalType> &types,
+	                                  optional_ptr<bind_lambda_function_t> bind_lambda_fn,
+	                                  optional_ptr<BindLambdaContext> bind_lambda_context) {
+		return BindExpression(expr, lambda_depth, types, bind_lambda_fn, bind_lambda_context);
+	};
+
+	if (is_list_reduce) {
+		// list_reduce requires binding the lambda function a second time as there is a cyclical dependency between its
+		// acc parameter type and its return type. This is resolved by initially binding it with acc = initial, and then
+		// rebinding it with acc = return type
+		auto rebind_result =
+		    MaybeRebindListReduceLambda(context, depth, function_child_types, bind_lambda_function, bind_lambda_result,
+		                                bind_lambda_expression, nullptr, lambda_expr_copy);
+		if (rebind_result.did_rebind) {
+			capture_child_types = std::move(rebind_result.capture_child_types);
+			override_bind_lambda_context = std::move(rebind_result.override_bind_lambda_context);
+			if (rebind_result.override_bind_lambda) {
+				override_bind_lambda_storage = rebind_result.override_bind_lambda;
+				capture_bind_lambda = &override_bind_lambda_storage;
+			} else {
+				capture_bind_lambda = &bind_lambda_function;
+			}
+		}
 	}
 
 	// successfully bound: replace the node with a BoundExpression
@@ -286,7 +500,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
-	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, function_child_types);
+	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda,
+	                     override_bind_lambda_context, capture_child_types);
 
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =
@@ -306,8 +521,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
 	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
 	// correctly binding lambdas one level 'out'. Therefore, the current parameter count does not matter here.
-	idx_t offset = 0;
 	if (lambda_bindings) {
+		idx_t offset = 0;
+
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 			auto &binding = (*lambda_bindings)[i - 1];
 			auto &column_names = binding.GetColumnNames();

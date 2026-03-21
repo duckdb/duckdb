@@ -1,0 +1,30 @@
+# name: test/sql/extensions/permissions_duckdb_extension.test
+# description: Test that writing (but not reading) into file ending with '.duckdb_extension' is forbidden
+# group: [extensions]
+
+statement error
+COPY (SELECT 42) TO '{TEMP_DIR}/name.duckdb_extension';
+----
+reserved for DuckDB extensions
+
+statement ok
+COPY (SELECT 42) TO '{TEMP_DIR}/name_duckdb_extension';
+
+statement error
+COPY (SELECT NULL::BLOB) TO '{TEMP_DIR}/name.duckdb_extension' (FORMAT BLOB);
+----
+reserved for DuckDB extensions
+
+statement ok
+COPY (SELECT NULL::BLOB) TO '{TEMP_DIR}/name.duckdb_extensionz' (FORMAT BLOB);
+
+statement error
+ATTACH '{TEMP_DIR}/my_name.duckdb_extension'
+----
+reserved for DuckDB extensions
+
+statement ok
+ATTACH '{TEMP_DIR}/my_name_duckdb_extension'
+
+statement ok
+FROM read_blob('build/*/repository/*/*/parquet.duckdb_extension');

@@ -174,6 +174,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 	case SQLLogicTokenType::SQLLOGIC_UNZIP:
 	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_CONTINUE:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -215,6 +216,7 @@ bool SQLLogicParser::IsTestCommand(SQLLogicTokenType &type) {
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
 	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_CONTINUE:
 	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
 	case SQLLogicTokenType::SQLLOGIC_UNZIP:
 		return false;
@@ -271,6 +273,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_UNZIP;
 	} else if (token == "tags") {
 		return SQLLogicTokenType::SQLLOGIC_TAGS;
+	} else if (token == "continue") {
+		return SQLLogicTokenType::SQLLOGIC_CONTINUE;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

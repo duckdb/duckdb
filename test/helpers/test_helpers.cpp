@@ -17,8 +17,6 @@
 #include <cmath>
 #include <fstream>
 
-using namespace std;
-
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
@@ -179,7 +177,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.
 	result->options.trim_free_blocks = true;
 #endif
-	result->options.allow_unsigned_extensions = true;
+	result->SetOptionByName("allow_unsigned_extensions", true);
 	auto storage_version = test_config.GetStorageVersion();
 	if (!storage_version.empty()) {
 		result->options.serialization_compatibility = SerializationCompatibility::FromString(storage_version);
@@ -193,12 +191,11 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto block_alloc_size = test_config.GetBlockAllocSize();
 	if (block_alloc_size.IsValid()) {
 		Storage::VerifyBlockAllocSize(block_alloc_size.GetIndex());
-		result->options.default_block_alloc_size = block_alloc_size.GetIndex();
+		result->SetOptionByName("default_block_size", Value::UBIGINT(block_alloc_size.GetIndex()));
 	}
 
 	result->options.debug_initialize = test_config.GetDebugInitialize();
-	result->options.set_variables.emplace("debug_verify_vector",
-	                                      EnumUtil::ToString(test_config.GetVectorVerification()));
+	result->SetOptionByName("debug_verify_vector", EnumUtil::ToString(test_config.GetVectorVerification()));
 	return result;
 }
 
@@ -336,7 +333,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	// create the csv on disk
 	auto csv_path = TestCreatePath("__test_csv_path.csv");
-	ofstream f(csv_path);
+	std::ofstream f(csv_path);
 	f << csv;
 	f.close();
 

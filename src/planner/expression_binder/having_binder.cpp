@@ -15,6 +15,10 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
+bool HavingBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	return column_alias_binder.DoesColumnAliasExist(colref);
+}
+
 BindResult HavingBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
@@ -28,7 +32,7 @@ unique_ptr<ParsedExpression> HavingBinder::QualifyColumnName(ColumnRefExpression
 	}
 
 	auto group_index = TryBindGroup(*qualified_colref);
-	if (group_index != DConstants::INVALID_INDEX) {
+	if (group_index.IsValid()) {
 		return qualified_colref;
 	}
 	if (column_alias_binder.DoesColumnAliasExist(colref)) {
@@ -82,9 +86,9 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 
 	// Return a GROUP BY column reference expression.
 	auto return_type = expr.expression->return_type;
-	auto column_binding = ColumnBinding(node.group_index, node.groups.group_expressions.size());
+	auto group_idx = ColumnBinding::PushExpression(node.groups.group_expressions, std::move(expr.expression));
+	auto column_binding = ColumnBinding(node.group_index, group_idx);
 	auto group_ref = make_uniq<BoundColumnRefExpression>(return_type, column_binding);
-	node.groups.group_expressions.push_back(std::move(expr.expression));
 	return BindResult(std::move(group_ref));
 }
 

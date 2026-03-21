@@ -16,6 +16,20 @@ namespace duckdb {
 //! Struct column data represents a struct
 class StructColumnData : public ColumnData {
 public:
+	struct StructColumnDataChild {
+	public:
+		StructColumnDataChild(ColumnData &col, optional_idx vector_index, ColumnScanState &child, bool should_scan)
+		    : col(col), vector_index(vector_index), state(child), should_scan(should_scan) {
+		}
+
+	public:
+		ColumnData &col;
+		optional_idx vector_index;
+		ColumnScanState &state;
+		bool should_scan;
+	};
+
+public:
 	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                 ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
@@ -27,13 +41,10 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	void IterateFields(ColumnScanState &state,
-	                   const std::function<void(idx_t child_index, optional_idx, ColumnScanState &, bool)> &callback);
+	vector<StructColumnDataChild> GetStructChildren(ColumnScanState &state) const;
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                    idx_t scan_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
@@ -55,7 +66,8 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                             const BaseStatistics &old_stats) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -69,6 +81,9 @@ public:
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(idx_t i, shared_ptr<ColumnData> child_column_p);
+	const ColumnData &GetChildColumn(idx_t index) const;
+
+	const BaseStatistics &GetChildStats(const ColumnData &child) const override;
 
 protected:
 	//! The sub-columns of the struct

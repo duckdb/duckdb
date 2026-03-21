@@ -106,6 +106,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		//! This binder is used to throw when the child expression is of a type that is not allowed.
 		TryOperatorBinder try_operator_binder(binder, context);
 		try_operator_binder.BindChild(op.children[0], depth, error);
+		// Propagate bound columns from TryOperatorBinder back to parent binder
+		// This ensures that column references inside TRY() are properly tracked for GROUP BY validation
+		for (const auto &bound_col : try_operator_binder.GetBoundColumns()) {
+			bound_columns.push_back(bound_col);
+		}
 	} else {
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			BindChild(op.children[i], depth, error);
@@ -175,7 +180,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
-		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT) {
+		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT &&
+		    !extract_expr_type.IsAggregateStateStructType()) {
 			return BindResult(StringUtil::Format(
 			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));

@@ -63,6 +63,7 @@ parser.add_argument(
     type=valid_timeout,
 )
 parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
+parser.add_argument("--test-config", action='store', help='Path to the test configuration file', default=None)
 
 args, extra_args = parser.parse_known_args()
 
@@ -197,6 +198,8 @@ def launch_test(test, list_of_tests=False):
             env['NO_DUPLICATING_HEADERS'] = '1'
         else:
             env['SUMMARIZE_FAILURES'] = '0'
+        if args.test_config:
+            test_cmd = test_cmd + ['--test-config', args.test_config]
         res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as e:
         if list_of_tests:

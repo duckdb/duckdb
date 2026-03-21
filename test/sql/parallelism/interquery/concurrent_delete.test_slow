@@ -1,0 +1,54 @@
+# name: test/sql/parallelism/interquery/concurrent_delete.test_slow
+# description: Test concurrent deletes and transaction isolation
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers FROM range(1000);
+
+concurrentloop threadid 0 10
+
+# threads 0-1
+onlyif threadid>1
+statement ok
+SELECT sleep_ms((random() * 30)::BIGINT);
+
+onlyif threadid>1
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid>1
+statement ok
+SET VARIABLE initial_count=(SELECT COUNT(*) FROM integers);
+
+loop i 0 100
+
+statement ok
+DELETE FROM integers WHERE i=${threadid} * 100 + ${i}
+
+onlyif threadid>1
+query I
+SELECT CASE
+	WHEN COUNT(*)=(getvariable('initial_count') - ${i} - 1)
+	THEN NULL
+	ELSE {'count': COUNT(*), 'initial_count': getvariable('initial_count')}
+	END
+FROM integers
+----
+NULL
+
+endloop
+
+onlyif threadid>1
+statement ok
+COMMIT
+
+endloop
+
+# check that the count is 0 now
+query I
+SELECT COUNT(*) FROM integers
+----
+0

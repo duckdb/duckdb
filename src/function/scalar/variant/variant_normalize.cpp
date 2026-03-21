@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -186,9 +190,9 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 	UnifiedVariantVectorData variant(source_format);
 
 	//! Take the original sizes of the lists, the result will be similar size, never bigger
-	auto original_keys_size = ListVector::GetListSize(VariantVector::GetKeys(variant_vec));
-	auto original_children_size = ListVector::GetListSize(VariantVector::GetChildren(variant_vec));
-	auto original_values_size = ListVector::GetListSize(VariantVector::GetValues(variant_vec));
+	auto original_keys_size = ListVector::GetTotalEntryCount(VariantVector::GetKeys(variant_vec), count);
+	auto original_children_size = ListVector::GetTotalEntryCount(VariantVector::GetChildren(variant_vec), count);
+	auto original_values_size = ListVector::GetTotalEntryCount(VariantVector::GetValues(variant_vec), count);
 
 	auto &keys = VariantVector::GetKeys(result);
 	auto &children = VariantVector::GetChildren(result);
@@ -209,7 +213,6 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 	VariantVectorData variant_data(result);
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);
-
 	for (idx_t i = 0; i < count; i++) {
 		if (!variant.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);

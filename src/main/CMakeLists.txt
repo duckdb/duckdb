@@ -35,6 +35,7 @@ add_library_unity(
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp
+  extension_callback_manager.cpp
   extension_install_info.cpp
   extension_manager.cpp
   materialized_query_result.cpp
@@ -48,6 +49,7 @@ add_library_unity(
   query_result.cpp
   result_set_manager.cpp
   stream_query_result.cpp
+  user_settings.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>

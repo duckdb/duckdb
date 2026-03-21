@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -65,29 +66,8 @@ int Terminal::IsUnsupportedTerm() {
 	return 0;
 }
 
-/* Raw mode: 1960 magic shit. */
-int Terminal::EnableRawMode() {
-#if defined(_WIN32) || defined(WIN32)
-	if (console_in) {
-		// already in raw mode
-		return 0;
-	}
-	console_in = GetStdHandle(STD_INPUT_HANDLE);
-
-	GetConsoleMode(console_in, &old_mode);
-	auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
-	SetConsoleMode(console_in, new_mode);
-#else
-	int fd = STDIN_FILENO;
-
-	if (!isatty(STDIN_FILENO)) {
-		errno = ENOTTY;
-		return -1;
-	}
-	if (!atexit_registered) {
-		atexit(linenoiseAtExit);
-		atexit_registered = 1;
-	}
+#if !defined(_WIN32) && !defined(WIN32)
+int EnableRawModeInternal(int fd) {
 	if (tcgetattr(fd, &orig_termios) == -1) {
 		errno = ENOTTY;
 		return -1;
@@ -104,7 +84,7 @@ int Terminal::EnableRawMode() {
 	raw.c_iflag |= IUTF8;
 #endif
 	raw.c_cflag |= CS8;
-	/* local modes - choing off, canonical off, no extended functions,
+	/* local modes - echoing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 	/* control chars - set return condition: min number of bytes and timer.
@@ -118,6 +98,42 @@ int Terminal::EnableRawMode() {
 		return -1;
 	}
 	rawmode = 1;
+	return 0;
+}
+
+void DisableRawModeInternal(int fd) {
+	/* Don't even check the return value as it's too late. */
+	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
+		rawmode = 0;
+	}
+}
+
+#endif
+
+/* Raw mode: 1960 magic shit. */
+int Terminal::EnableRawMode() {
+#if defined(_WIN32) || defined(WIN32)
+	if (console_in) {
+		// already in raw mode
+		return 0;
+	}
+	console_in = GetStdHandle(STD_INPUT_HANDLE);
+
+	GetConsoleMode(console_in, &old_mode);
+	auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+	SetConsoleMode(console_in, new_mode);
+#else
+	int fd = STDIN_FILENO;
+
+	if (!isatty(fd)) {
+		errno = ENOTTY;
+		return -1;
+	}
+	if (!atexit_registered) {
+		atexit(linenoiseAtExit);
+		atexit_registered = 1;
+	}
+	return EnableRawModeInternal(fd);
 #endif
 	return 0;
 }
@@ -132,10 +148,7 @@ void Terminal::DisableRawMode() {
 	}
 #else
 	int fd = STDIN_FILENO;
-	/* Don't even check the return value as it's too late. */
-	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
-		rawmode = 0;
-	}
+	DisableRawModeInternal(fd);
 #endif
 }
 
@@ -236,11 +249,10 @@ int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
 
-	// no timeout: return immediately
 	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = static_cast<int>(timeout_micros);
-	return select(1, &rfds, NULL, NULL, &tv);
+	tv.tv_sec = static_cast<time_t>(timeout_micros / 1000000);
+	tv.tv_usec = static_cast<int>(timeout_micros % 1000000);
+	return select(fd + 1, &rfds, NULL, NULL, &tv);
 #endif
 }
 
@@ -354,16 +366,19 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 
 bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 	/* Parse it. */
-	// expected format is: rgb:1e1e/1e1e/1e1e
-	idx_t offset = 0;
-	// find "rgb:"
-	for (; offset + 4 < buflen; offset++) {
-		if (memcmp(buf + offset, (const void *)"rgb:", 4) == 0) {
+	// expected format is: \x1b]11;rgb:1e1e/1e1e/1e1e
+	static const char rgb_format[] = "\x1b]11;rgb:";
+	idx_t rgb_length = sizeof(rgb_format) - 1;
+	idx_t offset;
+	for (offset = 0; offset + rgb_length < buflen; offset++) {
+		if (memcmp(buf + offset, rgb_format, rgb_length) == 0) {
 			break;
 		}
+		// not part of the rgb code - buffer the keypress
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[offset]);
 	}
 	// now parse the actual r/g/b values
-	offset += 4;
+	offset += rgb_length;
 	if (offset >= buflen) {
 		return false;
 	}
@@ -417,6 +432,9 @@ bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 void Terminal::BufferAvailableInput() {
 	// consume available input and add it to the buffer
 	int ifd = STDIN_FILENO;
+	if (!isatty(ifd)) {
+		return;
+	}
 	while (HasMoreData(ifd)) {
 		char buf[1];
 		if (read(ifd, buf, 1) != 1) {
@@ -427,43 +445,66 @@ void Terminal::BufferAvailableInput() {
 }
 
 bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+#if defined(_WIN32) || defined(WIN32)
+	// FIXME: always emit black background on Windows
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	return true;
+#else
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
+	if (!isatty(ifd)) {
+		// if stdin is not the terminal - we need to open stdin manually
+		ifd = open("/dev/tty", O_RDWR);
+		if (ifd < 0) {
+			// failed to open stdin
+			return false;
+		}
+		ofd = ifd;
+	}
 
-	if (Terminal::EnableRawMode() == -1) {
+	if (EnableRawModeInternal(ifd) == -1) {
+		if (ifd != STDIN_FILENO) {
+			close(ifd);
+		}
 		return false;
 	}
 
 	bool success = false;
 	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
 		// Read the response: until \a or until we fill up our buffer
-		char buf[64];
-		idx_t i = 0;
-		while (i < sizeof(buf) - 1) {
+		string buf;
+		char read_buf[1];
+		while (true) {
 			// check if we have data to read
-			// wait up till 1ms
-			if (!HasMoreData(ifd, 10000)) {
+			// wait up till 1s
+			if (!HasMoreData(ifd, 1000000)) {
 				// no more data available - done
 				break;
 			}
-			if (read(ifd, buf + i, 1) != 1) {
+			if (read(ifd, read_buf, 1) != 1) {
 				break;
 			}
-			if (buf[i] == '\a') {
+			char c = read_buf[0];
+			if (c == '\a') {
 				break;
 			}
-			if (i > 2 && buf[i - 1] == '\x1b' && buf[i] == '\\') {
-				i--;
+			if (!buf.empty() && buf.back() == '\x1b' && c == '\\') {
+				buf.pop_back();
 				break;
 			}
-			i++;
+			buf += c;
 		}
-		buf[i] = '\0';
 
-		success = ParseTerminalColor(color, buf, i);
+		success = ParseTerminalColor(color, buf.c_str(), buf.size());
 	}
-	Terminal::DisableRawMode();
+	DisableRawModeInternal(ifd);
+	if (ifd != STDIN_FILENO) {
+		close(ifd);
+	}
 	return success;
+#endif
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80

@@ -38,6 +38,8 @@
 %type <constr> GeneratedColumnType opt_GeneratedColumnType
 %type <node> ConstraintElem GeneratedConstraintElem
 %type <list> TableElementList
+%type <list> OptPartitionSortedOptions
+%type <defelt> OptPartitionSortedOption
 %type <ival> key_match
 %type <node> TableLikeClause
 %type <ival> OptTemp

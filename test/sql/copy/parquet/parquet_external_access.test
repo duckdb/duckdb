@@ -55,4 +55,4 @@ COPY lineitem TO '{TEMP_DIR}/lineitem.parquet'
 statement error
 SET enable_external_access=true;
 ----
-<REGEX>:.*Invalid Input Error: Cannot change.*while database is running.*
+<REGEX>:Invalid Input Error.*Cannot enable external access while database is running.*

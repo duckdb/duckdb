@@ -81,7 +81,7 @@ private:
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);
 	//! Update filter statistics from a TableFilter
-	void UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter);
+	void UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter);
 
 	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
 	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);

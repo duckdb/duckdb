@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
@@ -31,7 +33,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	D_ASSERT(LogicalTypeId::STRUCT == child_type.id() || child_type.IsAggregateStateStructType());
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");

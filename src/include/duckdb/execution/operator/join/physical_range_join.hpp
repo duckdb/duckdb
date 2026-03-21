@@ -144,7 +144,7 @@ public:
 	                  idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 
 	// Projection mappings
-	using ProjectionMapping = vector<column_t>;
+	using ProjectionMapping = vector<idx_t>;
 	ProjectionMapping left_projection_map;
 	ProjectionMapping right_projection_map;
 
@@ -152,10 +152,13 @@ public:
 	vector<LogicalType> unprojected_types;
 
 public:
+	// Compare conditions for priority
+	static bool LessThan(const JoinCondition &a, const JoinCondition &b);
+
 	// Gather the result values and slice the payload columns to those values.
 	static void SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, ExternalBlockIteratorState &state,
-	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx, const vector<idx_t> &result,
-	                               SortedRunScanState &scan_state);
+	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx,
+	                               const unsafe_vector<idx_t> &result, SortedRunScanState &scan_state);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);

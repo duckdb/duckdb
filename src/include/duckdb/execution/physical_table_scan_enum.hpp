@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/physical_table_scan_enum.hpp
+// duckdb/execution/physical_table_scan_enum.hpp
 //
 //
 //===----------------------------------------------------------------------===//

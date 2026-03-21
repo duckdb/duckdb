@@ -26,10 +26,8 @@ static string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 		// this database path is handled by a replacement open and is not a file path
 		return database;
 	}
-	if (fs.IsPathAbsolute(database)) {
-		return fs.NormalizeAbsolutePath(database);
-	}
-	return fs.NormalizeAbsolutePath(fs.JoinPath(FileSystem::GetWorkingDirectory(), database));
+	// canonicalize the path
+	return fs.CanonicalizePath(database);
 }
 
 static string GetCacheKey(const string &database_p, const DBConfig &config) {

@@ -5,7 +5,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test results API", "[api]") {
 	DuckDB db(nullptr);
@@ -196,7 +195,7 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 
 TEST_CASE("Issue #9417", "[api][.]") {
 	DBConfig config;
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 
 	DuckDB db(TestCreatePath("issue_replication.db"), &config);
 	Connection con(db);

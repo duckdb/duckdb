@@ -1,6 +1,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
@@ -8,8 +9,8 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -18,8 +19,9 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -439,15 +441,11 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
 }
 
 //===--------------------------------------------------------------------===//
-// File rotation
+// File Size Bytes
 //===--------------------------------------------------------------------===//
-bool WriteCSVRotateFiles(FunctionData &, const optional_idx &file_size_bytes) {
-	return file_size_bytes.IsValid();
-}
-
-bool WriteCSVRotateNextFile(GlobalFunctionData &gstate, FunctionData &, const optional_idx &file_size_bytes) {
+idx_t WriteCSVFileSizeBytes(GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
-	return file_size_bytes.IsValid() && global_state.FileSize() > file_size_bytes.GetIndex();
+	return global_state.FileSize();
 }
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
@@ -460,10 +458,10 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
 	info.execution_mode = WriteCSVExecutionMode;
+
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;
-	info.rotate_files = WriteCSVRotateFiles;
-	info.rotate_next_file = WriteCSVRotateNextFile;
+	info.file_size_bytes = WriteCSVFileSizeBytes;
 
 	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

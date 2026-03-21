@@ -11,7 +11,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 #include "transformer/parse_result.hpp"
+#include <mutex>
 
 namespace duckdb {
 class ParseResultAllocator;
@@ -81,18 +83,18 @@ enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
-enum class TokenType { WORD };
-
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p, idx_t offset_p) : text(std::move(text_p)), offset(offset_p) {
+	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
+	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
 		length = text.length();
 	}
 
-	TokenType type = TokenType::WORD;
+	TokenType type;
 	string text;
 	idx_t offset = 0;
 	idx_t length = 0;
+	bool unterminated = false;
 };
 
 struct MatcherSuggestion {
@@ -111,12 +113,15 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator)
-	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator) {
+	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
+	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
+	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator) {
+	      allocator(state.allocator), max_token_index(state.max_token_index),
+	      preserve_identifier_case(state.preserve_identifier_case) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -124,6 +129,18 @@ struct MatchState {
 	reference_set_t<const Matcher> added_suggestions;
 	idx_t token_index;
 	ParseResultAllocator &allocator;
+	idx_t &max_token_index;
+	bool preserve_identifier_case = true;
+
+	void UpdateMaxTokenIndex() {
+		if (token_index > max_token_index) {
+			max_token_index = token_index;
+		}
+	}
+
+	idx_t GetMaxTokenIndex() const {
+		return max_token_index;
+	}
 
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
@@ -143,8 +160,6 @@ public:
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
 	void Print() const;
-
-	static Matcher &RootMatcher(MatcherAllocator &allocator);
 
 	MatcherType Type() const {
 		return type;
@@ -190,6 +205,28 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
+};
+
+struct PEGMatcher {
+	MatcherAllocator allocator;
+
+	Matcher &Root() {
+		return *root;
+	}
+
+private:
+	friend struct PEGMatcherCache;
+	optional_ptr<Matcher> root;
+};
+
+//! Per-database cache holder for the compiled PEG root matcher.
+struct PEGMatcherCache : ParserExtensionInfo {
+	shared_ptr<PEGMatcher> GetMatcher();
+	void Invalidate();
+
+private:
+	std::mutex mutex;
+	shared_ptr<PEGMatcher> matcher;
 };
 
 } // namespace duckdb

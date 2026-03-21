@@ -1,0 +1,33 @@
+# name: test/sql/join/positional/issue20086.test
+# description: Test positional join with NULL comparison in WHERE clause
+# group: [positional]
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE TABLE t0(c0 INT, c1 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t1 VALUES (0);
+
+statement ok
+CREATE UNIQUE INDEX t0i0 ON t0(c0, c1);
+
+statement ok
+INSERT INTO t0 VALUES (1,0), (-1,NULL);
+
+statement ok
+UPDATE t0 SET c1 = NULL WHERE c0 = 1;
+
+query III
+SELECT * FROM t1 POSITIONAL JOIN t0 WHERE (t1.c0 > t0.c1) IS NULL;
+----
+0	-1	NULL
+NULL	1	NULL

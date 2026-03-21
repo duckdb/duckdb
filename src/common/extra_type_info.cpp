@@ -6,6 +6,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -216,6 +218,10 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::DeepCopy() const {
 StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
+StructTypeInfo::StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p)
+    : ExtraTypeInfo(type), child_types(std::move(child_types_p)) {
+}
+
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
     : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
 }
@@ -238,53 +244,141 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
 }
 
 //===--------------------------------------------------------------------===//
-// Aggregate State Type Info
+// Legacy Aggregate State Type Info
 //===--------------------------------------------------------------------===//
-AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {
+LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo()
+    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO) {
 }
 
-AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
+LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo(aggregate_state_t state_type_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
+}
+
+shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::Copy() const {
+	return make_shared_ptr<LegacyAggregateStateTypeInfo>(*this);
+}
+
+bool LegacyAggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<LegacyAggregateStateTypeInfo>();
+	return state_type.function_name == other.state_type.function_name &&
+	       state_type.return_type == other.state_type.return_type &&
+	       state_type.bound_argument_types == other.state_type.bound_argument_types;
+}
+
+//===--------------------------------------------------------------------===//
+// Aggregate State Type Info
+//===--------------------------------------------------------------------===//
+/*
+ * NOTE: In types.json, AggregateStateTypeInfo inherits directly from ExtraTypeInfo
+ * instead of StructTypeInfo. This is intentional because of a bug in the generation script logic:
+ * the generation script produces invalid C++ when handling
+ *    multi-level inheritance for these types (specifically, trying to access
+ *    non-static members in static Deserialize methods). Flattening the JSON
+ *    ensures the dispatch logic remains in ExtraTypeInfo::Deserialize where
+ *    the 'type' property is readily available.
+ */
+
+AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, {}) {
+}
+
+AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p)
+    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, std::move(child_types_p)),
+      state_type(std::move(state_type_p)) {
 }
 
 bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<AggregateStateTypeInfo>();
 	return state_type.function_name == other.state_type.function_name &&
 	       state_type.return_type == other.state_type.return_type &&
-	       state_type.bound_argument_types == other.state_type.bound_argument_types;
+	       state_type.bound_argument_types == other.state_type.bound_argument_types && child_types == other.child_types;
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
-	return make_shared_ptr<AggregateStateTypeInfo>(*this);
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
+	result->alias = alias;
+	return std::move(result);
+}
+
+shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
+	child_list_t<LogicalType> copied_child_types;
+	for (const auto &child_type : child_types) {
+		copied_child_types.emplace_back(child_type.first, child_type.second.DeepCopy());
+	}
+
+	vector<LogicalType> copied_bound_arguments;
+	for (const auto &arg : state_type.bound_argument_types) {
+		copied_bound_arguments.push_back(arg.DeepCopy());
+	}
+	aggregate_state_t copied_state_type(state_type.function_name, state_type.return_type.DeepCopy(),
+	                                    std::move(copied_bound_arguments));
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(copied_state_type, copied_child_types);
+	result->alias = alias;
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
 // User Type Info
 //===--------------------------------------------------------------------===//
-UserTypeInfo::UserTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO) {
+void UnboundTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
+		return;
+	}
+
+	// Try to write this as an old "USER" type, if possible
+	if (expr->type != ExpressionType::TYPE) {
+		throw SerializationException(
+		    "Cannot serialize non-type type expression when targeting database storage version '%s'",
+		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+	}
+
+	auto &type_expr = expr->Cast<TypeExpression>();
+	serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName());
+	serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog());
+	serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema());
+
+	// Try to write the user type mods too
+	vector<Value> user_type_mods;
+	for (auto &param : type_expr.GetChildren()) {
+		if (param->type != ExpressionType::VALUE_CONSTANT) {
+			throw SerializationException(
+			    "Cannot serialize non-constant type parameter when targeting serialization version %s",
+			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+		}
+
+		auto &const_expr = param->Cast<ConstantExpression>();
+		user_type_mods.push_back(const_expr.value);
+	}
+
+	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
 }
 
-UserTypeInfo::UserTypeInfo(string name_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
-}
+shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<UnboundTypeInfo>(new UnboundTypeInfo());
 
-UserTypeInfo::UserTypeInfo(string name_p, vector<Value> modifiers_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)),
-      user_type_modifiers(std::move(modifiers_p)) {
-}
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", result->expr);
 
-UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
-      user_type_name(std::move(name_p)), user_type_modifiers(std::move(modifiers_p)) {
-}
+	if (!result->expr) {
+		// This is a legacy "USER" type
+		string name;
+		deserializer.ReadPropertyWithDefault<string>(200, "name", name);
+		string catalog;
+		deserializer.ReadPropertyWithDefault<string>(201, "catalog", catalog);
+		string schema;
+		deserializer.ReadPropertyWithDefault<string>(202, "schema", schema);
 
-bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
-	auto &other = other_p->Cast<UserTypeInfo>();
-	return other.user_type_name == user_type_name;
-}
+		vector<unique_ptr<ParsedExpression>> user_type_mods;
+		auto mods = deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers");
+		for (auto &mod : mods) {
+			user_type_mods.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(mod));
+		}
 
-shared_ptr<ExtraTypeInfo> UserTypeInfo::Copy() const {
-	return make_shared_ptr<UserTypeInfo>(*this);
+		result->expr = make_uniq<TypeExpression>(catalog, schema, name, std::move(user_type_mods));
+	}
+
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -521,6 +615,28 @@ bool GeoTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 shared_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {
 	return make_shared_ptr<GeoTypeInfo>(*this);
+}
+
+//===--------------------------------------------------------------------===//
+// Unbound Type Info
+//===--------------------------------------------------------------------===//
+UnboundTypeInfo::UnboundTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
+}
+
+UnboundTypeInfo::UnboundTypeInfo(unique_ptr<ParsedExpression> expr_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), expr(std::move(expr_p)) {
+}
+
+bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<UnboundTypeInfo>();
+	if (!expr->Equals(*other.expr)) {
+		return false;
+	}
+	return true;
+}
+
+shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
+	return make_shared_ptr<UnboundTypeInfo>(expr->Copy());
 }
 
 } // namespace duckdb

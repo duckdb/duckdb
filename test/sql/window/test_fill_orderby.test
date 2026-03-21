@@ -92,6 +92,66 @@ order by i
 7	2	NULL
 9	1	NULL
 
+# No values in partition chunk
+statement ok
+with null_chunk as (
+	select 
+		1 as p, 
+		s,
+		NULL::DOUBLE as v,
+	from range(2050) tbl(s)
+	union all
+	select
+		2 as p, 
+		s,
+		s::DOUBLE as v,
+	from range(16) tbl(s)
+)
+select 
+	p, 
+	s, 
+	fill(v order by -s) over(partition by p order by s) as f,
+from null_chunk
+
+# Order by duplication optimisation
+query III
+with null_chunk as (
+	select 
+		1 as p, 
+		s,
+		NULL::DOUBLE as v,
+	from range(8) tbl(s)
+	union all
+	select
+		2 as p, 
+		s,
+		s::DOUBLE as v,
+	from range(8) tbl(s)
+)
+select 
+	p, 
+	s, 
+	fill(v order by s) over(partition by p order by s) as f,
+from null_chunk
+order by all
+----
+1	0	NULL
+1	1	NULL
+1	2	NULL
+1	3	NULL
+1	4	NULL
+1	5	NULL
+1	6	NULL
+1	7	NULL
+2	0	0.0
+2	1	1.0
+2	2	2.0
+2	3	3.0
+2	4	4.0
+2	5	5.0
+2	6	6.0
+2	7	7.0
+
 # Outside valid sort values
 query III
 with source as (

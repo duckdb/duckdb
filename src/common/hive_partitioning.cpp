@@ -21,9 +21,9 @@ struct PartitioningColumnValue {
 	string value;
 };
 
-static unordered_map<column_t, PartitioningColumnValue>
+static unordered_map<ProjectionIndex, PartitioningColumnValue>
 GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &filter_info) {
-	unordered_map<column_t, PartitioningColumnValue> result;
+	unordered_map<ProjectionIndex, PartitioningColumnValue> result;
 
 	auto &column_map = filter_info.column_map;
 	if (filter_info.filename_enabled) {
@@ -48,9 +48,10 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 }
 
 // Takes an expression and converts a list of known column_refs to constants
-static void ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
-                                          const unordered_map<column_t, PartitioningColumnValue> &known_column_values,
-                                          idx_t table_index) {
+static void
+ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
+                              const unordered_map<ProjectionIndex, PartitioningColumnValue> &known_column_values,
+                              TableIndex table_index) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 
@@ -126,7 +127,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
 	// Handle nulls
-	if (StringUtil::CIEquals(str_val, "NULL")) {
+	if (StringUtil::CIEquals(str_val, "NULL") || str_val == "__HIVE_DEFAULT_PARTITION__") {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
@@ -244,26 +245,13 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 
 	const auto &type = input.GetType();
 
-	const auto reinterpret = Value::CreateValue<T>(data[sel.get_index(0)]).GetTypeMutable() != type;
-	if (reinterpret) {
-		for (idx_t i = 0; i < count; i++) {
-			auto &key = keys[i];
-			const auto idx = sel.get_index(i);
-			if (validity.RowIsValid(idx)) {
-				key.values[col_idx] = GetHiveKeyValue(data[idx], type);
-			} else {
-				key.values[col_idx] = GetHiveKeyNullValue(type);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			auto &key = keys[i];
-			const auto idx = sel.get_index(i);
-			if (validity.RowIsValid(idx)) {
-				key.values[col_idx] = GetHiveKeyValue(data[idx]);
-			} else {
-				key.values[col_idx] = GetHiveKeyNullValue(type);
-			}
+	for (idx_t i = 0; i < count; i++) {
+		auto &key = keys[i];
+		const auto idx = sel.get_index(i);
+		if (validity.RowIsValid(idx)) {
+			key.values[col_idx] = GetHiveKeyValue(data[idx], type);
+		} else {
+			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}
 	}
 }

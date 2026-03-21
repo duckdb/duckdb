@@ -6,6 +6,7 @@ static const ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
                                                   {"https", "httpfs"},
                                                   {"md", "motherduck"},       // motherduck
                                                   {"mysql", "mysql_scanner"}, // mysql
+                                                  {"odbc", "odbc_scanner"},   // odbc
                                                   {"s3", "httpfs"},
                                                   {"postgres", "postgres_scanner"}, // postgres
                                                   {"sqlite", "sqlite_scanner"},     // sqlite

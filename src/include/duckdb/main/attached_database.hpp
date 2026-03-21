@@ -101,6 +101,7 @@ public:
 	const Catalog &ParentCatalog() const override;
 	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
+	const StorageManager &GetStorageManager() const;
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
 	DatabaseInstance &GetDatabase() {
@@ -154,7 +155,7 @@ private:
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
-	mutex close_lock;
+	shared_ptr<mutex> close_lock;
 	unordered_map<string, Value> attach_options;
 
 private:

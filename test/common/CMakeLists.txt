@@ -8,8 +8,10 @@ add_library_unity(
   test_hyperlog.cpp
   test_lru_cache.cpp
   test_numeric_cast.cpp
+  test_parse_expression.cpp
   test_parse_logical_type.cpp
   test_utf.cpp
+  test_allocator_debug_info.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
   test_string_util.cpp)

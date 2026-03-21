@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant/variant_shredded_conversion.hpp"
 #include "column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -60,18 +63,15 @@ VariantValue ConvertShreddedValue<double>::Convert(double val) {
 //! decimal4/decimal8/decimal16
 template <>
 VariantValue ConvertShreddedValue<int32_t>::ConvertDecimal(int32_t val, uint8_t width, uint8_t scale) {
-	auto value_str = Decimal::ToString(val, width, scale);
-	return VariantValue(Value(value_str));
+	return VariantValue(Value::DECIMAL(val, width, scale));
 }
 template <>
 VariantValue ConvertShreddedValue<int64_t>::ConvertDecimal(int64_t val, uint8_t width, uint8_t scale) {
-	auto value_str = Decimal::ToString(val, width, scale);
-	return VariantValue(Value(value_str));
+	return VariantValue(Value::DECIMAL(val, width, scale));
 }
 template <>
 VariantValue ConvertShreddedValue<hugeint_t>::ConvertDecimal(hugeint_t val, uint8_t width, uint8_t scale) {
-	auto value_str = Decimal::ToString(val, width, scale);
-	return VariantValue(Value(value_str));
+	return VariantValue(Value::DECIMAL(val, width, scale));
 }
 //! date
 template <>
@@ -119,7 +119,7 @@ VariantValue ConvertShreddedValue<string_t>::Convert(string_t val) {
 //! uuid
 template <>
 VariantValue ConvertShreddedValue<hugeint_t>::Convert(hugeint_t val) {
-	return VariantValue(Value(UUID::ToString(val)));
+	return VariantValue(Value::UUID(val));
 }
 
 template <class T, class OP, LogicalTypeId TYPE_ID>

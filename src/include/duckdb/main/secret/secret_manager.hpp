@@ -16,8 +16,10 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
 namespace duckdb {
-class SecretManager;
+
+struct BoundStatement;
 struct DBConfig;
+class SecretManager;
 class SchemaCatalogEntry;
 
 //! A Secret Entry in the secret manager
@@ -217,6 +219,9 @@ public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
+	bool LockDuringCreate() const override {
+		return true;
+	}
 
 protected:
 	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);

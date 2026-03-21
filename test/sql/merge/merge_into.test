@@ -3,9 +3,6 @@
 # group: [merge]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Stock(item_id int, balance int);
 
 statement ok
@@ -95,7 +92,7 @@ statement error
 WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
 MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)
 ----
-Parser
+Parser Error
 
 # we cannot specify an unconditional WHEN NOT MATCHED clause
 statement error

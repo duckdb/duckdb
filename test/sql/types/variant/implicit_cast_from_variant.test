@@ -252,12 +252,12 @@ select v::int from (values ({'a': 42}::variant)) t(v);
 ----
 Conversion Error: Can't convert VARIANT(OBJECT) value '{'a': 42}' to 'INTEGER'
 
-statement error
+query I
 select v.a.b from (values ({'a': 42}::variant)) t(v);
 ----
-Invalid Input Error: Can't extract key 'b' from a VARIANT(INT32)
+NULL
 
-statement error
+query I
 select v['helo'] from (values ({'hello': 42}::variant)) t(v);
 ----
-Invalid Input Error: VARIANT(OBJECT(hello)) is missing key 'helo'
+NULL

@@ -16,6 +16,11 @@ namespace duckdb {
 //! Struct column data represents a struct
 class VariantColumnData : public ColumnData {
 public:
+	//! Indices into the inner shredded struct: STRUCT(typed_value <type>, untyped_value_index UINTEGER)
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
+public:
 	VariantColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                  ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
@@ -33,11 +38,8 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	Vector CreateUnshreddingIntermediate(idx_t count);
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                    idx_t scan_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
@@ -59,7 +61,8 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                             const BaseStatistics &old_stats) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -72,15 +75,19 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	static void ShredVariantData(Vector &input, Vector &output, idx_t count);
-	static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
 
 private:
+	Vector CreateUnshreddingIntermediate(idx_t count) const;
 	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type,
 	                                                 BaseStatistics &stats);
+	bool PushdownShreddedFieldExtract(const StorageIndex &variant_extract, StorageIndex &out_struct_extract) const;
 	void CreateScanStates(ColumnScanState &state);
+	idx_t ScanWithCallback(ColumnScanState &state, Vector &result, idx_t target_count,
+	                       const std::function<idx_t(ColumnData &column, ColumnScanState &child_state,
+	                                                 Vector &target_vector, idx_t count)> &callback) const;
 	LogicalType GetShreddedType();
 };
 
