@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/path.hpp"
 
 namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
@@ -285,19 +286,7 @@ unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
-	// we append the ".wal" **before** a question mark in case of GET parameters
-	// but only if we are not in a windows long path (which starts with \\?\)
-	std::size_t question_mark_pos = std::string::npos;
-	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
-		question_mark_pos = path.find('?');
-	}
-	auto result = path;
-	if (question_mark_pos != std::string::npos) {
-		result.insert(question_mark_pos, suffix);
-	} else {
-		result += suffix;
-	}
-	return result;
+	return Path::AddSuffixToPath(path, suffix);
 }
 
 string StorageManager::GetCheckpointWALPath() {
