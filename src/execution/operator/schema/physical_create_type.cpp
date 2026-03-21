@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"

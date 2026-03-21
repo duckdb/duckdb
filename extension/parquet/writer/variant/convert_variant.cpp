@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
