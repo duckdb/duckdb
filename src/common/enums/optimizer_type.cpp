@@ -29,7 +29,6 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"common_aggregate", OptimizerType::COMMON_AGGREGATE},
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"limit_pushdown", OptimizerType::LIMIT_PUSHDOWN},
-    {"limited_distinct_aggregation", OptimizerType::LIMITED_DISTINCT_AGGREGATION},
     {"row_group_pruner", OptimizerType::ROW_GROUP_PRUNER},
     {"top_n", OptimizerType::TOP_N},
     {"top_n_window_elimination", OptimizerType::TOP_N_WINDOW_ELIMINATION},

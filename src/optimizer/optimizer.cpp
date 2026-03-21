@@ -274,9 +274,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = limit_pushdown.Optimize(std::move(plan));
 	});
 
-	// Limit hints for DISTINCT/GROUP BY are now pushed during physical planning
-	RunOptimizer(OptimizerType::LIMITED_DISTINCT_AGGREGATION, [&]() {});
-
 	RunOptimizer(OptimizerType::ROW_GROUP_PRUNER, [&]() {
 		RowGroupPruner row_group_pruner(context);
 		plan = row_group_pruner.Optimize(std::move(plan));
