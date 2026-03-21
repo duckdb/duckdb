@@ -258,6 +258,38 @@ SELECT json_deep_merge('{"a":{"x":1}}', '{"a":{"x":null,"y":2},"b":null}')
 ----
 {"a":{"x":1,"y":2}}
 
+# JSON null (the value) vs SQL NULL (missing) -- critical distinction
+# JSON null patch on object base: keep original (null = absent)
+query T
+SELECT json_deep_merge('{"a":1}', 'null')
+----
+{"a":1}
+
+# JSON null base with object patch: object wins
+query T
+SELECT json_deep_merge('null', '{"a":1}')
+----
+{"a":1}
+
+# Both JSON null values
+query T
+SELECT json_deep_merge('null', 'null')
+----
+null
+
+# Varargs: JSON null vs SQL NULL behave differently
+# JSON null = "no data", skipped, original preserved
+query T
+SELECT json_deep_merge('{"a":1}', 'null', '{"b":2}')
+----
+{"a":1,"b":2}
+
+# SQL NULL = reset to NULL, then next arg replaces
+query T
+SELECT json_deep_merge('{"a":1}', NULL, '{"b":2}')
+----
+{"b":2}
+
 # Constant vector test (verifies AllConstant path)
 query T
 SELECT json_deep_merge('{"a":1}', '{"b":null}') FROM range(3)
