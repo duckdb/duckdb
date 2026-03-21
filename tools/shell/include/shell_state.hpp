@@ -151,6 +151,7 @@ struct ShellTableInfo {
 };
 
 enum class BailOnError { AUTOMATIC, BAIL_ON_ERROR, DONT_BAIL_ON_ERROR };
+enum class AutoFormatMode { NO_AUTO_FORMAT, AUTO_FORMAT_COMPLETE_STATEMENTS };
 
 /*
 ** State information about the database connection is contained in an
@@ -207,6 +208,8 @@ public:
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
+	//! Controls automatic SQL formatting before execution
+	AutoFormatMode auto_format = AutoFormatMode::NO_AUTO_FORMAT;
 	//! Table name when rendering a DESCRIBE statement
 	string describe_table_name;
 

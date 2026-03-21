@@ -2946,6 +2946,9 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 */
 static char *linenoise_format(const char *zLine) {
 	auto &state = ShellState::Get();
+	if (state.auto_format == AutoFormatMode::NO_AUTO_FORMAT) {
+		return nullptr;
+	}
 	if (!state.conn) {
 		return nullptr;
 	}
