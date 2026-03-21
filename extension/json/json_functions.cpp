@@ -182,6 +182,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	functions.push_back(GetPrettyPrintFunction());
 	functions.push_back(GetSerializeSortedFunction());
+	functions.push_back(GetDeepMergeFunction());
 
 	return functions;
 }

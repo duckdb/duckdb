@@ -108,6 +108,7 @@ private:
 
 	static ScalarFunctionSet GetPrettyPrintFunction();
 	static ScalarFunctionSet GetSerializeSortedFunction();
+	static ScalarFunctionSet GetDeepMergeFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
