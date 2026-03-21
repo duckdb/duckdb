@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "capi_tester.hpp"
 
 using namespace duckdb;
