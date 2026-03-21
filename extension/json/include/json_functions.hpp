@@ -107,6 +107,7 @@ private:
 	static ScalarFunctionSet GetSerializePlanFunction();
 
 	static ScalarFunctionSet GetPrettyPrintFunction();
+	static ScalarFunctionSet GetSerializeSortedFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
