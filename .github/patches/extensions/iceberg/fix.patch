@@ -1,3 +1,9 @@
+commit 31cdf6eb6724dd4c60fe52f3122510b095a580d4
+Author: dentiny <dentinyhao@gmail.com>
+Date:   Sun Mar 22 21:20:12 2026 +0000
+
+    Sync DuckDB core
+
 diff --git a/src/aws.cpp b/src/aws.cpp
 index 608c67af..9c6744a7 100644
 --- a/src/aws.cpp
@@ -11,6 +17,50 @@ index 608c67af..9c6744a7 100644
  	auto aws_headers = req->GetHeaders();
  	auto http_headers = HTTPHeaders();
  	for (auto &header : aws_headers) {
+diff --git a/src/deletes/deletion_vector.cpp b/src/deletes/deletion_vector.cpp
+index a3974c21..5b8dd678 100644
+--- a/src/deletes/deletion_vector.cpp
++++ b/src/deletes/deletion_vector.cpp
+@@ -1,8 +1,9 @@
+ #include "deletes/deletion_vector.hpp"
+ #include "iceberg_multi_file_list.hpp"
+ 
+-#include "duckdb/storage/caching_file_system.hpp"
++#include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/bswap.hpp"
++#include "duckdb/common/file_system.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -61,10 +62,9 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
+ 	auto file_path = entry.file_path;
+ 	D_ASSERT(!entry.referenced_data_file.empty());
+ 
+-	auto caching_file_system = CachingFileSystem::Get(context);
+-
+-	auto caching_file_handle = caching_file_system.OpenFile(file_path, FileOpenFlags::FILE_FLAGS_READ);
+-	data_ptr_t data = nullptr;
++	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ;
++	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
++	auto file_handle = fs.OpenFile(file_path, flags);
+ 
+ 	D_ASSERT(!entry.content_offset.IsNull());
+ 	D_ASSERT(!entry.content_size_in_bytes.IsNull());
+@@ -72,11 +72,11 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
+ 	auto offset = entry.content_offset.GetValue<int64_t>();
+ 	auto length = entry.content_size_in_bytes.GetValue<int64_t>();
+ 
+-	auto buf_handle = caching_file_handle->Read(data, length, offset);
+-	auto buffer_data = buf_handle.Ptr();
++	auto local_buffer = Allocator::DefaultAllocator().Allocate(length);
++	fs.Read(*file_handle, local_buffer.get(), length, offset);
+ 
+ 	positional_delete_data.emplace(entry.referenced_data_file,
+-	                               IcebergDeletionVectorData::FromBlob(buffer_data, length));
++								   IcebergDeletionVectorData::FromBlob(std::move(local_buffer), length));
+ }
+ 
+ idx_t IcebergDeletionVector::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
 diff --git a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 index 0212aa3f..e1333d4f 100644
 --- a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
