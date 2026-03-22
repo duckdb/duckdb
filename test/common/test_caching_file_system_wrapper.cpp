@@ -818,6 +818,10 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 	}
 	{
 		auto handle = cfs.OpenFile(file_info, flags);
+		REQUIRE_THROWS(handle->Read(10, content.size() + 100));
+	}
+	{
+		auto handle = cfs.OpenFile(file_info, flags);
 		idx_t requested = content.size() + 100;
 		auto group = handle->Read(requested);
 		REQUIRE(requested == content.size());

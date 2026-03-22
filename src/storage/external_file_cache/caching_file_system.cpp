@@ -52,10 +52,21 @@ public:
 				block->state = CacheBlockState::LOADING;
 				lk.unlock();
 
-				try {
+			try {
 					auto &file_handle = caching_file_handle.GetFileHandle();
 					const idx_t file_size = file_handle.GetFileSize();
 					const idx_t offset = block_idx * block_size;
+					if (offset >= file_size) {
+						lk.lock();
+						block->nr_bytes = 0;
+						block->block_handle = nullptr;
+						block->state = CacheBlockState::LOADED;
+#ifdef DEBUG
+					block->checksum = 0;
+#endif
+						block->cv.notify_all();
+						return;
+					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
 					file_handle.Read(context, buf.Ptr(), to_read, offset);
@@ -239,15 +250,17 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
 			block_valid_bytes = block.nr_bytes;
 		}
-		const idx_t available_in_block = block_valid_bytes - offset_in_block;
+		const idx_t available_in_block = (block_valid_bytes > offset_in_block) ? (block_valid_bytes - offset_in_block) : 0;
 		const idx_t length = MinValue(available_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
 	}
 	if (remaining > 0) {
+		const idx_t file_size = GetFileSize();
+		const idx_t available = (location < file_size) ? (file_size - location) : 0;
 		throw InvalidInputException(
-		    "CachingFileHandle::Read: requested %llu bytes from offset %llu but only %llu bytes were read", nr_bytes,
-		    location, GetFileSize() - location);
+		    "CachingFileHandle::Read: requested %llu bytes from offset %llu but only %llu bytes were available",
+		    nr_bytes, location, available);
 	}
 
 	// After all tasks complete, check if the cache was invalidated by another thread.
