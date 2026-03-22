@@ -148,6 +148,13 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 	if (!state.storage_index.IsPushdownExtract()) {
 		// if we are scanning the entire struct we need to scan the validity
 		scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
+		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			if (!ConstantVector::IsNull(result)) {
+				throw InternalException("StructColumnData::Scan returned a constant but not NULL vector ");
+			}
+			// constant NULL struct - we don't need to scan any children, everything is already NULL
+			return scan_count;
+		}
 	}
 	auto struct_children = GetStructChildren(state);
 	for (auto &child : struct_children) {
