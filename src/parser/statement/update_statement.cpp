@@ -35,25 +35,25 @@ unique_ptr<UpdateSetInfo> UpdateSetInfo::Copy() const {
 	return unique_ptr<UpdateSetInfo>(new UpdateSetInfo(*this));
 }
 
-bool UpdateSetInfo::Equals(const unique_ptr<UpdateSetInfo> &a, const unique_ptr<UpdateSetInfo> &b) {
-	if (!a && !b) {
+bool UpdateSetInfo::Equals(const unique_ptr<UpdateSetInfo> &left, const unique_ptr<UpdateSetInfo> &right) {
+	if (!left && !right) {
 		return true;
 	}
-	if (!a || !b) {
+	if (!left || !right) {
 		return false;
 	}
-	if (a->columns != b->columns) {
+	if (left->columns != right->columns) {
 		return false;
 	}
-	if (a->expressions.size() != b->expressions.size()) {
+	if (left->expressions.size() != right->expressions.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->expressions.size(); i++) {
-		if (!ParsedExpression::Equals(a->expressions[i], b->expressions[i])) {
+	for (idx_t i = 0; i < left->expressions.size(); i++) {
+		if (!ParsedExpression::Equals(left->expressions[i], right->expressions[i])) {
 			return false;
 		}
 	}
-	return ParsedExpression::Equals(a->condition, b->condition);
+	return ParsedExpression::Equals(left->condition, right->condition);
 }
 
 UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT), node(make_uniq<UpdateQueryNode>()) {
