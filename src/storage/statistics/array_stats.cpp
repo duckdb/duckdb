@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/string_util.hpp"

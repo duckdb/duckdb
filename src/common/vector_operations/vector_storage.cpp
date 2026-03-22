@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"

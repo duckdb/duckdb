@@ -48,11 +48,11 @@ struct ParquetReaderPrefetchConfig {
 };
 
 struct ParquetScanFilter {
-	ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter);
+	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
 
-	idx_t filter_idx;
+	ProjectionIndex filter_idx;
 	TableFilter &filter;
 	unique_ptr<TableFilterState> filter_state;
 };

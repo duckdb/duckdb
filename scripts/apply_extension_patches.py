@@ -9,6 +9,9 @@ import tempfile
 directory = sys.argv[1]
 patch_pattern = f"{directory}*.patch"
 
+if os.environ.get("DUCKDB_SKIP_APPLYING_PATCHES") == "1":
+    exit(0)
+
 # Find patch files matching the pattern
 patches = glob.glob(patch_pattern)
 

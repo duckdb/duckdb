@@ -131,6 +131,8 @@ public:
 struct MultiFileCastMap;
 struct MultiFileFilterEntry;
 
+//! MultiFileLocalColumnId refers to an absolute column index within a specific file we are reading
+// i.e. if the file has columns "a, b, c", a will have MultiFileLocalColumnId(0), b = 1, c = 2
 struct MultiFileLocalColumnId {
 	friend struct MultiFileCastMap;
 
@@ -158,6 +160,9 @@ struct MultiFileColumnMapping;
 struct MultiFileFilterMap;
 struct MultiFileConstantMap;
 
+//! MultiFileLocalIndex refers to a ProjectionIndex locally within a specific file that we are reading
+//! This refers to an entry in the "column_ids" list - i.e. to get the absolute column (MultiFileLocalColumnId)
+// we can use column_ids[#MultiFileLocalColumnId]
 struct MultiFileLocalIndex {
 	//! these are allowed to access the index
 	template <class T>
@@ -166,15 +171,45 @@ struct MultiFileLocalIndex {
 	friend struct MultiFileFilterEntry;
 
 public:
-	explicit MultiFileLocalIndex(idx_t index) : index(index) {
+	explicit MultiFileLocalIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
+	}
+	explicit MultiFileLocalIndex(ProjectionIndex projection) : index(projection) {
 	}
 
 public:
 	operator idx_t() const { // NOLINT: allow implicit conversion
-		return index;
+		return GetIndex();
 	}
 	idx_t GetIndex() const {
+		if (!IsValid()) {
+			throw InternalException("MultiFileLocalIndex::GetIndex called on invalid index");
+		}
 		return index;
+	}
+	bool IsValid() const {
+		return index != DConstants::INVALID_INDEX;
+	}
+	operator ProjectionIndex() const { // NOLINT: allow implicit conversion to projection index
+		return ProjectionIndex(index);
+	}
+
+	inline bool operator==(const MultiFileLocalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator<(const MultiFileLocalIndex &rhs) const {
+		return index < rhs.index;
+	};
+	bool operator!=(const MultiFileLocalIndex &other) const {
+		return !(*this == other);
+	}
+	bool operator>(const MultiFileLocalIndex &other) const {
+		return other < *this;
+	}
+	bool operator<=(const MultiFileLocalIndex &other) const {
+		return !(other < *this);
+	}
+	bool operator>=(const MultiFileLocalIndex &other) const {
+		return !(*this < other);
 	}
 
 private:
@@ -195,6 +230,28 @@ public:
 	}
 	idx_t GetIndex() const {
 		return index;
+	}
+	operator ProjectionIndex() const { // NOLINT: allow implicit conversion to projection index
+		return ProjectionIndex(index);
+	}
+
+	inline bool operator==(const MultiFileGlobalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator<(const MultiFileGlobalIndex &rhs) const {
+		return index < rhs.index;
+	};
+	bool operator!=(const MultiFileGlobalIndex &other) const {
+		return !(*this == other);
+	}
+	bool operator>(const MultiFileGlobalIndex &other) const {
+		return other < *this;
+	}
+	bool operator<=(const MultiFileGlobalIndex &other) const {
+		return !(other < *this);
+	}
+	bool operator>=(const MultiFileGlobalIndex &other) const {
+		return !(*this < other);
 	}
 
 private:
@@ -343,3 +400,13 @@ private:
 };
 
 } // namespace duckdb
+
+namespace std {
+
+template <>
+struct hash<duckdb::MultiFileGlobalIndex> {
+	size_t operator()(const duckdb::MultiFileGlobalIndex &global_idx) const {
+		return std::hash<uint64_t> {}(global_idx.GetIndex());
+	}
+};
+} // namespace std

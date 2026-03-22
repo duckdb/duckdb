@@ -795,6 +795,15 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
 
+	// use the parser to annotate any tokens
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
+
+	auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+	peg_matcher->Root().Match(state);
+
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
 }
 

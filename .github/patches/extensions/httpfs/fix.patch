@@ -144,6 +144,7 @@ index 958df32..eb36003 100644
  
  	vector<OpenFileInfo> s3_keys;
  	if (!current_common_prefix.empty()) {
+<<<<<<< HEAD
 diff --git a/test/sql/json/table/internal_issue_6807.test_slow b/test/sql/json/table/internal_issue_6807.test_slow
 index a354a7f..e759862 100644
 --- a/test/sql/json/table/internal_issue_6807.test_slow
@@ -156,6 +157,8 @@ index a354a7f..e759862 100644
 +SELECT count(*) < 60 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
  ----
  true
+=======
+>>>>>>> main
 diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
 index 6aa2ed0..54babde 100644
 --- a/test/sql/logging/file_system_logging.test
@@ -174,6 +177,7 @@ index 6aa2ed0..54babde 100644
  CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
 -CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
  CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"CLOSE"}
+<<<<<<< HEAD
 diff --git a/test/sql/metadata_stats.test b/test/sql/metadata_stats.test
 index 27cb0a6..dfe7a26 100644
 --- a/test/sql/metadata_stats.test
@@ -184,3 +188,5 @@ index 27cb0a6..dfe7a26 100644
  ----
 -analyzed_plan	<REGEX>:.*GET: 2.*
 +analyzed_plan	<REGEX>:.*GET: 1.*
+=======
+>>>>>>> main

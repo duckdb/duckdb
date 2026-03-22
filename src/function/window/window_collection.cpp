@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 
 namespace duckdb {
@@ -169,7 +171,7 @@ void WindowCollectionChunkScanner::ReferenceStructColumns(DataChunk &chunk, Vect
 	auto &entries = StructVector::GetEntries(vec);
 	D_ASSERT(width == entries.size());
 	for (column_t i = 0; i < entries.size(); ++i) {
-		entries[i]->Reference(chunk.data[begin + i]);
+		entries[i].Reference(chunk.data[begin + i]);
 	}
 }
 

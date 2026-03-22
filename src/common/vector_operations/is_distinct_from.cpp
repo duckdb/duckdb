@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -538,11 +545,11 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 	idx_t match_count = 0;
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
 		// Slice the children to maintain density
-		Vector lchild(*lchildren[col_no]);
+		Vector lchild(lchildren[col_no]);
 		lchild.Flatten(vcount);
 		lchild.Slice(slice_sel, count);
 
-		Vector rchild(*rchildren[col_no]);
+		Vector rchild(rchildren[col_no]);
 		rchild.Flatten(vcount);
 		rchild.Slice(slice_sel, count);
 

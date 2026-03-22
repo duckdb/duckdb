@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/table/direct_file_reader.hpp"
 
 #include "duckdb/common/serializer/memory_stream.hpp"

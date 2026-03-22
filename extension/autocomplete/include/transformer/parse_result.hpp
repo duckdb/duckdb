@@ -12,6 +12,68 @@
 
 namespace duckdb {
 
+enum class TokenType {
+	INVALID,
+	KEYWORD,
+	STRING_LITERAL,
+	NUMBER_LITERAL,
+	OPERATOR,
+	IDENTIFIER,
+	COMMENT,
+	TERMINATOR,
+	CATALOG_NAME,
+	SCHEMA_NAME,
+	TABLE_NAME,
+	TYPE_NAME,
+	COLUMN_NAME,
+	SCALAR_FUNCTION,
+	TABLE_FUNCTION,
+	PRAGMA_FUNCTION,
+	SETTING_NAME,
+	ERROR
+};
+
+inline string TokenTypeToString(TokenType type) {
+	switch (type) {
+	case TokenType::KEYWORD:
+		return "KEYWORD";
+	case TokenType::STRING_LITERAL:
+		return "STRING_LITERAL";
+	case TokenType::NUMBER_LITERAL:
+		return "NUMBER_LITERAL";
+	case TokenType::OPERATOR:
+		return "OPERATOR";
+	case TokenType::IDENTIFIER:
+		return "IDENTIFIER";
+	case TokenType::COMMENT:
+		return "COMMENT";
+	case TokenType::TERMINATOR:
+		return "TERMINATOR";
+	case TokenType::ERROR:
+		return "ERROR";
+	case TokenType::CATALOG_NAME:
+		return "CATALOG_NAME";
+	case TokenType::SCHEMA_NAME:
+		return "SCHEMA_NAME";
+	case TokenType::TABLE_NAME:
+		return "TABLE_NAME";
+	case TokenType::TYPE_NAME:
+		return "TYPE_NAME";
+	case TokenType::COLUMN_NAME:
+		return "COLUMN_NAME";
+	case TokenType::SCALAR_FUNCTION:
+		return "SCALAR_FUNCTION";
+	case TokenType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case TokenType::PRAGMA_FUNCTION:
+		return "PRAGMA_FUNCTION";
+	case TokenType::SETTING_NAME:
+		return "SETTING_NAME";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 class PEGTransformer; // Forward declaration
 
 enum class ParseResultType : uint8_t {

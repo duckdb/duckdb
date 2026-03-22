@@ -15,6 +15,7 @@
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 
 namespace duckdb {
 

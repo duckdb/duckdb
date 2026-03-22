@@ -140,6 +140,8 @@ enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
 
+enum class CopyFunctionFlushBatchReason : uint8_t;
+
 enum class CopyFunctionReturnType : uint8_t;
 
 enum class CopyOverwriteMode : uint8_t;
@@ -674,6 +676,9 @@ const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
 const char* EnumUtil::ToChars<CoordinateReferenceSystemType>(CoordinateReferenceSystemType value);
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionFlushBatchReason>(CopyFunctionFlushBatchReason value);
 
 template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
@@ -1395,6 +1400,9 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
 CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType>(const char *value);
+
+template<>
+CopyFunctionFlushBatchReason EnumUtil::FromString<CopyFunctionFlushBatchReason>(const char *value);
 
 template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);

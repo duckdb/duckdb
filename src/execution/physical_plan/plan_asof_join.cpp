@@ -189,7 +189,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Wrap all the projected non-pk probe fields in `first` aggregates;
 	vector<unique_ptr<Expression>> aggregates;
 	for (const auto &right_proj : join_op.right_projection_map) {
-		const auto col_idx = op.children[1]->types.size() + right_proj.index;
+		const auto col_idx = op.children[1]->types.size() + right_proj;
 		const auto col_type = join_op.types[col_idx];
 		aggr_types.emplace_back(col_type);
 
@@ -207,7 +207,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Wrap all the projected build fields in `arg_max/min` aggregates using the inequality ordering;
 	// We are doing all this first in case we can't find a matching function.
 	for (const auto &left_proj : join_op.left_projection_map) {
-		auto col_idx = left_proj.index;
+		auto col_idx = left_proj;
 		const auto col_type = join_op.types[col_idx];
 		aggr_types.emplace_back(col_type);
 
