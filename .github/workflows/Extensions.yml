@@ -210,7 +210,6 @@ jobs:
     name: External Extensions (2nd batch)
     needs:
       - load-extension-configs
-      - vars
     uses: ./.github/workflows/_extension_distribution.yml
     with:
       exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions2_exclude_archs }}
@@ -220,7 +219,7 @@ jobs:
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
-      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
