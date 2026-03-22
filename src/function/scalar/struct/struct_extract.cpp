@@ -22,7 +22,7 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &children = StructVector::GetEntries(vec);
 	D_ASSERT(info.index < children.size());
 	auto &struct_child = children[info.index];
-	result.Reference(*struct_child);
+	result.Reference(struct_child);
 	result.Verify(args.size());
 }
 

@@ -45,7 +45,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 	optional_idx read_count;
 	for (idx_t i = 0; i < child_readers.size(); i++) {
 		auto &child = child_readers[i];
-		auto &target_vector = *struct_entries[i];
+		auto &target_vector = struct_entries[i];
 		if (!child) {
 			// if we are not scanning this vector - set it to NULL
 			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);

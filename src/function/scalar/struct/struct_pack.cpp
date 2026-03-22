@@ -25,7 +25,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 			all_const = false;
 		}
 		// same holds for this
-		child_entries[i]->Reference(args.data[i]);
+		child_entries[i].Reference(args.data[i]);
 	}
 	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.Verify(args.size());

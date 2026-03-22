@@ -120,7 +120,7 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 	}
 	auto index = field_index.GetIndex();
 	auto &children = StructVector::GetEntries(result);
-	return *children[index];
+	return children[index];
 }
 
 static void ScanChild(ColumnScanState &state, Vector &result, const std::function<idx_t(Vector &target)> &callback) {
@@ -227,7 +227,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], *child_entries[i],
+		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], child_entries[i],
 		                       count);
 	}
 	this->count += count;
@@ -254,7 +254,7 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	idx_t scan_count = validity->Fetch(state.child_states[0], row_id, result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, *child_entries[i]);
+		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, child_entries[i]);
 	}
 	return scan_count;
 }
@@ -264,7 +264,7 @@ void StructColumnData::Update(TransactionData transaction, DataTable &data_table
 	validity->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, row_group_start);
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, data_table, column_index, *child_entries[i], row_ids, update_count,
+		sub_columns[i]->Update(transaction, data_table, column_index, child_entries[i], row_ids, update_count,
 		                       row_group_start);
 	}
 }
@@ -334,7 +334,7 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	auto &child_entries = StructVector::GetEntries(result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, *child_entries[i], result_idx);
+		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, child_entries[i], result_idx);
 	}
 }
 

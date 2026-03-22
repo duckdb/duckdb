@@ -428,7 +428,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			return false;
 		}
 		//! Now cast all the values we found to the target type
-		auto &child = *children[child_idx];
+		auto &child = children[child_idx];
 		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
 			return false;
 		}
@@ -699,9 +699,9 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1]->GetType() == result.GetType()) {
+		if (shredded_entries[1].GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(*shredded_entries[1]);
+			result.Reference(shredded_entries[1]);
 			return true;
 		}
 	}

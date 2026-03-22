@@ -265,7 +265,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 	// Reference the 'input' StringBuffer, because we won't need to allocate new data
 	// for the result, all returned strings are substrings of the originals
 	for (auto &child_entry : child_entries) {
-		child_entry->SetAuxiliary(input.GetAuxiliary());
+		child_entry.SetAuxiliary(input.GetAuxiliary());
 	}
 
 	vector<RE2::Arg> argv(groupSize);
@@ -289,9 +289,9 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			                                            UnsafeNumericCast<int>(groups.size()));
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
-				ConstantVector::SetNull(*child_entry, false);
+				ConstantVector::SetNull(child_entry, false);
 				auto &extracted = ws[col];
-				auto cdata = ConstantVector::GetData<string_t>(*child_entry);
+				auto cdata = ConstantVector::GetData<string_t>(child_entry);
 				cdata[0] = string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 			}
 		}
@@ -308,7 +308,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		// Start with valid children
 		for (size_t col = 0; col < child_entries.size(); ++col) {
 			auto &child_entry = child_entries[col];
-			child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 
 		for (idx_t i = 0; i < count; ++i) {
@@ -319,7 +319,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 				                                            UnsafeNumericCast<int>(groups.size()));
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
-					auto cdata = FlatVector::GetData<string_t>(*child_entry);
+					auto cdata = FlatVector::GetData<string_t>(child_entry);
 					auto &extracted = ws[col];
 					cdata[i] = string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 				}

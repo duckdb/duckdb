@@ -1221,11 +1221,11 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	source_vec.Flatten(row_count);
 
 	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
-	const auto &vert_parts = StructVector::GetEntries(target_vec);
+	auto &vert_parts = StructVector::GetEntries(target_vec);
 	double *vert_data[V::WIDTH];
 
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1254,12 +1254,12 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	const auto &vert_parts = StructVector::GetEntries(source_vec);
+	auto &vert_parts = StructVector::GetEntries(source_vec);
 	const auto geom_data = FlatVector::GetData<string_t>(target_vec);
 	double *vert_data[V::WIDTH];
 
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1326,7 +1326,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	// Second pass, write out the linestrings
@@ -1369,11 +1369,11 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 	source_vec.Flatten(row_count);
 
 	const auto line_data = ListVector::GetData(source_vec);
-	const auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
+	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
 
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1463,7 +1463,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 	double *vert_data[V::WIDTH];
 
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1516,13 +1516,13 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 	source_vec.Flatten(row_count);
 
 	const auto poly_data = ListVector::GetData(source_vec);
-	const auto &ring_vec = ListVector::GetEntry(source_vec);
+	auto &ring_vec = ListVector::GetEntry(source_vec);
 	const auto ring_data = ListVector::GetData(ring_vec);
-	const auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
+	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1613,7 +1613,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	// Second pass, write out the multipoints
@@ -1658,11 +1658,11 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 	source_vec.Flatten(row_count);
 
 	const auto mult_data = ListVector::GetData(source_vec);
-	const auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
+	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
 
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1771,7 +1771,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	// Second pass, write out the multilinestrings
@@ -1828,12 +1828,12 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 	source_vec.Flatten(row_count);
 
 	const auto mult_data = ListVector::GetData(source_vec);
-	const auto line_vec = ListVector::GetEntry(source_vec);
+	auto &line_vec = ListVector::GetEntry(source_vec);
 	const auto line_data = ListVector::GetData(line_vec);
-	const auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
+	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1957,7 +1957,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	// Second pass, write out the multipolygons
@@ -2022,14 +2022,14 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 	source_vec.Flatten(row_count);
 
 	const auto mult_data = ListVector::GetData(source_vec);
-	const auto &poly_vec = ListVector::GetEntry(source_vec);
+	auto &poly_vec = ListVector::GetEntry(source_vec);
 	const auto poly_data = ListVector::GetData(poly_vec);
-	const auto &ring_vec = ListVector::GetEntry(poly_vec);
+	auto &ring_vec = ListVector::GetEntry(poly_vec);
 	const auto ring_data = ListVector::GetData(ring_vec);
-	const auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
+	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetData<double>(*vert_parts[i]);
+		vert_data[i] = FlatVector::GetData<double>(vert_parts[i]);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {

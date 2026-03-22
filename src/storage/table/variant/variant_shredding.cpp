@@ -641,10 +641,10 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 		auto &child_types = StructType::GetChildTypes(result_type);
 		D_ASSERT(child_types.size() == child_vectors.size());
 #endif
-		typed_value_ref = *child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
+		typed_value_ref = child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
 		if (child_vectors.size() > 1) {
 			D_ASSERT(child_vectors.size() == 2);
-			untyped_value_index = *child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
+			untyped_value_index = child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
 		}
 	}
 	auto &typed_value = typed_value_ref.get();
@@ -683,10 +683,10 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	//! First traverse the Variant to write the shredded values and collect the 'untyped_value_index'es
 	DuckDBVariantShredding shredding(count);
-	shredding.WriteVariantValues(variant, *child_vectors[1], nullptr, nullptr, nullptr, count);
+	shredding.WriteVariantValues(variant, child_vectors[1], nullptr, nullptr, nullptr, count);
 
 	//! Now we can write the unshredded values
-	auto &unshredded = *child_vectors[0];
+	auto &unshredded = child_vectors[0];
 	auto original_keys_size = ListVector::GetListSize(VariantVector::GetKeys(input));
 	auto original_children_size = ListVector::GetListSize(VariantVector::GetChildren(input));
 	auto original_values_size = ListVector::GetListSize(VariantVector::GetValues(input));

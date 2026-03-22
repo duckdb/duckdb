@@ -545,11 +545,11 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 	idx_t match_count = 0;
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
 		// Slice the children to maintain density
-		Vector lchild(*lchildren[col_no]);
+		Vector lchild(lchildren[col_no]);
 		lchild.Flatten(vcount);
 		lchild.Slice(slice_sel, count);
 
-		Vector rchild(*rchildren[col_no]);
+		Vector rchild(rchildren[col_no]);
 		rchild.Flatten(vcount);
 		rchild.Slice(slice_sel, count);
 
