@@ -1,4 +1,4 @@
-commit 31cdf6eb6724dd4c60fe52f3122510b095a580d4
+commit 9215d850991ac00cca9929af307c2dde185b1b38
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 22 21:20:12 2026 +0000
 
@@ -18,10 +18,10 @@ index 608c67af..9c6744a7 100644
  	auto http_headers = HTTPHeaders();
  	for (auto &header : aws_headers) {
 diff --git a/src/deletes/deletion_vector.cpp b/src/deletes/deletion_vector.cpp
-index a3974c21..5b8dd678 100644
+index a3974c21..ac90ccab 100644
 --- a/src/deletes/deletion_vector.cpp
 +++ b/src/deletes/deletion_vector.cpp
-@@ -1,8 +1,9 @@
+@@ -1,8 +1,10 @@
  #include "deletes/deletion_vector.hpp"
  #include "iceberg_multi_file_list.hpp"
  
@@ -29,10 +29,11 @@ index a3974c21..5b8dd678 100644
 +#include "duckdb/common/allocator.hpp"
  #include "duckdb/common/bswap.hpp"
 +#include "duckdb/common/file_system.hpp"
++#include "duckdb/common/vector_operations/unary_executor.hpp"
  
  namespace duckdb {
  
-@@ -61,10 +62,9 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
+@@ -61,10 +63,9 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
  	auto file_path = entry.file_path;
  	D_ASSERT(!entry.referenced_data_file.empty());
  
@@ -46,7 +47,7 @@ index a3974c21..5b8dd678 100644
  
  	D_ASSERT(!entry.content_offset.IsNull());
  	D_ASSERT(!entry.content_size_in_bytes.IsNull());
-@@ -72,11 +72,11 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
+@@ -72,11 +73,10 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
  	auto offset = entry.content_offset.GetValue<int64_t>();
  	auto length = entry.content_size_in_bytes.GetValue<int64_t>();
  
@@ -55,9 +56,9 @@ index a3974c21..5b8dd678 100644
 +	auto local_buffer = Allocator::DefaultAllocator().Allocate(length);
 +	fs.Read(*file_handle, local_buffer.get(), length, offset);
  
- 	positional_delete_data.emplace(entry.referenced_data_file,
+-	positional_delete_data.emplace(entry.referenced_data_file,
 -	                               IcebergDeletionVectorData::FromBlob(buffer_data, length));
-+								   IcebergDeletionVectorData::FromBlob(std::move(local_buffer), length));
++	positional_delete_data.emplace(entry.referenced_data_file, IcebergDeletionVectorData::FromBlob(local_buffer.get(), length));
  }
  
  idx_t IcebergDeletionVector::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
