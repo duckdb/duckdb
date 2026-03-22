@@ -52,7 +52,7 @@ public:
 				block->state = CacheBlockState::LOADING;
 				lk.unlock();
 
-			try {
+				try {
 					auto &file_handle = caching_file_handle.GetFileHandle();
 					const idx_t file_size = file_handle.GetFileSize();
 					const idx_t offset = block_idx * block_size;
@@ -62,7 +62,7 @@ public:
 						block->block_handle = nullptr;
 						block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
-					block->checksum = 0;
+						block->checksum = 0;
 #endif
 						block->cv.notify_all();
 						return;
@@ -250,7 +250,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
 			block_valid_bytes = block.nr_bytes;
 		}
-		const idx_t available_in_block = (block_valid_bytes > offset_in_block) ? (block_valid_bytes - offset_in_block) : 0;
+		const idx_t available_in_block =
+		    (block_valid_bytes > offset_in_block) ? (block_valid_bytes - offset_in_block) : 0;
 		const idx_t length = MinValue(available_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
