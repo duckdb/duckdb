@@ -136,7 +136,14 @@ duckdb_value duckdb_client_context_get_config_option(duckdb_client_context conte
 	duckdb::Value *res_value = nullptr;
 
 	duckdb::Value result;
-	switch (ctx.TryGetCurrentSetting(option_name, result).GetScope()) {
+	auto lookup = ctx.TryGetCurrentSetting(option_name, result);
+	if (!lookup) {
+		if (out_scope) {
+			*out_scope = DUCKDB_CONFIG_OPTION_SCOPE_INVALID;
+		}
+		return nullptr;
+	}
+	switch (lookup.GetScope()) {
 	case duckdb::SettingScope::LOCAL:
 		// This is a bit messy, but "session" is presented as LOCAL on the "settings" side of the API.
 		res_value = new duckdb::Value(std::move(result));
