@@ -210,16 +210,25 @@ jobs:
     name: External Extensions (2nd batch)
     needs:
       - load-extension-configs
-    uses: ./.github/workflows/_extension_distribution.yml
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
+      # We piggy-back extension-template to build the extensions in extension_config
+      override_repository: duckdb/extension-template
+      override_ref: main
+      upload_all_extensions: true
+      extension_name: external-extensions2
+      set_caller_as_duckdb: true
+      duckdb_version: ${{ inputs.git_ref }}
+      override_ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
       exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions2_exclude_archs }}
-      artifact_prefix: external-extensions2
-      extension_config: ${{ needs.load-extension-configs.outputs.external_extensions2_config }}
       extra_toolchains: 'rust'
-      override_tag: ${{ inputs.override_git_describe }}
-      override_duckdb_version: ${{ inputs.git_ref }}
+      use_merged_vcpkg_manifest: '1'
+      duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
-      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
+      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
+      extensions_test_selection: 'complete'
+      extra_extension_config: ${{ needs.load-extension-configs.outputs.external_extensions2_config }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
