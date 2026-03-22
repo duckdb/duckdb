@@ -721,7 +721,6 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
 		preprocessor.Preprocess(lock, parser.statements, transaction_context_state);
 
-
 		return std::move(parser.statements);
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);

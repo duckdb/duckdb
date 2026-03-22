@@ -1034,7 +1034,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 	return lhs;
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs, vector<ProjectionIndex> &projections) const {
+unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs,
+                                                                vector<ProjectionIndex> &projections) const {
 	auto lhs_get = LateMaterializationHelper::CreateLHSGet(rhs, optimizer.binder);
 	const auto lhs_rowid_column_idxs = lhs_get->function.get_row_id_columns(context, lhs_get->bind_data.get());
 	vector<TableColumn> lhs_rowid_columns;
@@ -1085,11 +1086,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
 		auto lhs_expr = make_uniq<BoundColumnRefExpression>(
-		    alias, lhs->types[lhs_rowid_idx],
-		    ColumnBinding {lhs->GetTableIndex()[0], ProjectionIndex(lhs_rowid_idx)});
-		auto rhs_expr = make_uniq<BoundColumnRefExpression>(
-		    alias, rhs->types[aggregate_offset + i],
-		    ColumnBinding {GetAggregateIdx(rhs), ProjectionIndex(rhs_rowid_idx)});
+		    alias, lhs->types[lhs_rowid_idx], ColumnBinding {lhs->GetTableIndex()[0], ProjectionIndex(lhs_rowid_idx)});
+		auto rhs_expr =
+		    make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		                                        ColumnBinding {GetAggregateIdx(rhs), ProjectionIndex(rhs_rowid_idx)});
 		join->conditions.push_back(
 		    JoinCondition(std::move(lhs_expr), std::move(rhs_expr), ExpressionType::COMPARE_EQUAL));
 	}
