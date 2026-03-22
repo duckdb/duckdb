@@ -16,26 +16,6 @@ namespace duckdb {
 // Forward declaration.
 class DatabaseInstance;
 
-namespace {
-
-// Return whether validation should occur for a specific file
-bool ShouldValidate(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db,
-                    const string &filepath) {
-	const CacheValidationMode mode = ExternalFileCacheUtil::GetCacheValidationMode(info, client_context, db);
-	switch (mode) {
-	case CacheValidationMode::VALIDATE_ALL:
-		return true;
-	case CacheValidationMode::VALIDATE_REMOTE:
-		return FileSystem::IsRemoteFile(filepath);
-	case CacheValidationMode::NO_VALIDATION:
-		return false;
-	default:
-		return true;
-	}
-}
-
-} // namespace
-
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
 //===----------------------------------------------------------------------===//
@@ -337,7 +317,16 @@ string CachingFileHandle::GetVersionTag() {
 }
 
 bool CachingFileHandle::Validate() const {
-	return ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
+	switch (validate) {
+	case CacheValidationMode::VALIDATE_ALL:
+		return true;
+	case CacheValidationMode::VALIDATE_REMOTE:
+		return FileSystem::IsRemoteFile(cached_file.path);
+	case CacheValidationMode::NO_VALIDATION:
+		return false;
+	default:
+		return true;
+	}
 }
 
 bool CachingFileHandle::CanSeek() {
