@@ -92,7 +92,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 	vector<vector<VariantValue>> child_values(child_entries.size());
 	for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 		auto &child_entry = child_entries[child_idx];
-		child_values[child_idx] = Unshred(variant, *child_entry, count, row_sel);
+		child_values[child_idx] = Unshred(variant, child_entry, count, row_sel);
 	}
 
 	//! Then compose the OBJECT value by combining all the children
@@ -204,10 +204,10 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 		D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
 		auto &child_entries = StructVector::GetEntries(shredded);
 		D_ASSERT(child_entries.size() <= 2);
-		typed_value_ref = *child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
+		typed_value_ref = child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
 		if (child_vectors.size() > 1) {
 			D_ASSERT(child_vectors.size() == 2);
-			untyped_value_index = *child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
+			untyped_value_index = child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
 		}
 	}
 	auto &typed_value = typed_value_ref.get();
@@ -258,8 +258,8 @@ void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count
 	auto &child_vectors = StructVector::GetEntries(input);
 	D_ASSERT(child_vectors.size() == 2);
 
-	auto &unshredded = *child_vectors[0];
-	auto &shredded = *child_vectors[1];
+	auto &unshredded = child_vectors[0];
+	auto &shredded = child_vectors[1];
 
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(unshredded, count, recursive_format);

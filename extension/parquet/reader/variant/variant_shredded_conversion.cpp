@@ -430,7 +430,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	for (idx_t i = 0; i < fields.size(); i++) {
 		auto &field = fields[i];
 		auto &field_name = field.first;
-		auto &field_vec = *entries[i];
+		auto &field_vec = entries[i];
 
 		shredded_fields.emplace_back(field_name);
 		auto &shredded_field = shredded_fields.back();
@@ -543,9 +543,9 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 		auto &name = group_type_children[i].first;
 		auto &vec = group_entries[i];
 		if (name == "value") {
-			value = vec.get();
+			value = &vec;
 		} else if (name == "typed_value") {
-			typed_value = vec.get();
+			typed_value = &vec;
 		} else {
 			throw InvalidInputException("Variant group can only contain 'value'/'typed_value', not: %s", name);
 		}

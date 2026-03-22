@@ -828,9 +828,9 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
 		UnifiedVectorFormat child_data;
-		child_vectors[child_idx]->ToUnifiedFormat(copy_count, child_data);
+		child_vectors[child_idx].ToUnifiedFormat(copy_count, child_data);
 
-		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], offset, copy_count);
+		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
 	}
 }
 

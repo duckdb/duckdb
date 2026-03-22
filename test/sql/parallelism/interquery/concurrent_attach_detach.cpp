@@ -279,9 +279,9 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 		auto &col_struct = chunk.data[3];
 		auto &data_struct_entries = StructVector::GetEntries(col_struct);
 		auto &entry_ubigint = data_struct_entries[0];
-		auto data_struct_ubigint = FlatVector::GetData<uint64_t>(*entry_ubigint);
+		auto data_struct_ubigint = FlatVector::GetData<uint64_t>(entry_ubigint);
 		auto &entry_varchar = data_struct_entries[1];
-		auto data_struct_varchar = FlatVector::GetData<string_t>(*entry_varchar);
+		auto data_struct_varchar = FlatVector::GetData<string_t>(entry_varchar);
 
 		for (idx_t i = 0; i < task.ids.size(); i++) {
 			auto row_idx = task.ids[i];
@@ -289,7 +289,7 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 			data_varchar[i] = StringVector::AddString(col_varchar, to_string(row_idx));
 			data_ts[i] = timestamp_t {static_cast<int64_t>(1000 * (row_idx))};
 			data_struct_ubigint[i] = row_idx;
-			data_struct_varchar[i] = StringVector::AddString(*entry_varchar, to_string(row_idx));
+			data_struct_varchar[i] = StringVector::AddString(entry_varchar, to_string(row_idx));
 		}
 
 		chunk.SetCardinality(task.ids.size());

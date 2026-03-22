@@ -106,7 +106,7 @@ struct SortKeyVectorData {
 		case PhysicalType::STRUCT: {
 			auto &children = StructVector::GetEntries(input);
 			for (auto &child : children) {
-				child_data.push_back(make_uniq<SortKeyVectorData>(*child, size, child_modifiers));
+				child_data.push_back(make_uniq<SortKeyVectorData>(child, size, child_modifiers));
 			}
 			break;
 		}
@@ -983,7 +983,7 @@ void DecodeSortKeyStruct(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVecto
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < child_entries.size(); c++) {
 		auto &child_entry = child_entries[c];
-		DecodeSortKeyRecursive(decode_data_arr, vector_data.child_data[c], *child_entry, result_offset, count);
+		DecodeSortKeyRecursive(decode_data_arr, vector_data.child_data[c], child_entry, result_offset, count);
 	}
 }
 
@@ -1230,9 +1230,9 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// Loop through the columns
 	const auto &result_type = result.GetType();
-	const auto &child_vectors = StructVector::GetEntries(result);
+	auto &child_vectors = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
-		auto &child_vector = *child_vectors[c];
+		auto &child_vector = child_vectors[c];
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
 		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
 	}
