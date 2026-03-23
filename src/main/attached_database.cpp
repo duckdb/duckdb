@@ -295,6 +295,8 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 	try {
 		auto create_checkpoint = true;
 		if (action == DatabaseCloseAction::NO_CHECKPOINT) {
+			// We want this to hit first: the local setting will override a global PRAGMA disable_checkpoint_on_shutdown
+			// that is only checked if create_checkpoint == true.
 			create_checkpoint = false;
 		} else if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
 			create_checkpoint = false;
@@ -304,7 +306,7 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 
 		if (create_checkpoint) {
 			auto &config = DBConfig::GetConfig(db);
-			if (action == DatabaseCloseAction::CHECKPOINT || config.options.checkpoint_on_shutdown) {
+			if (config.options.checkpoint_on_shutdown) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
 				storage->CreateCheckpoint(QueryContext(), options);
