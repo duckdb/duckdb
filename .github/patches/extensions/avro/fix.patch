@@ -1,11 +1,11 @@
-commit ab3e3fe27182259d08bdd5db4d676bff7c89e3a4
+commit 050598e885ea6ec14fc8e3cfffab403f5ad588da
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 22 21:21:13 2026 +0000
 
     Sync DuckDB core
 
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
-index 5317c43..3b54c1b 100644
+index 5317c43..cbe887b 100644
 --- a/src/avro_reader.cpp
 +++ b/src/avro_reader.cpp
 @@ -1,6 +1,11 @@
@@ -28,7 +28,7 @@ index 5317c43..3b54c1b 100644
 -	auto caching_file_system = CachingFileSystem::Get(context);
 +	auto &fs = FileSystem::GetFileSystem(context);
 +	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ;
-+	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
++	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
 +	auto file_handle = fs.OpenFile(this->file.path, flags);
 +	auto total_size = fs.GetFileSize(*file_handle);
  
