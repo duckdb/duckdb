@@ -38,7 +38,8 @@ enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
 //! CHECKPOINT: Throws, if the checkpoint fails. Always cleans up.
 //! TRY_CHECKPOINT: Does not throw when failing a checkpoint. Always cleans up.
-enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT };
+//! NO_CHECKPOINT: Skips checkpointing entirely. Always cleans up.
+enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, NO_CHECKPOINT };
 
 class DatabaseFilePathManager;
 
@@ -135,6 +136,7 @@ public:
 		return attach_options;
 	}
 	string StoredPath() const;
+	void SetCloseAction(DatabaseCloseAction action);
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
@@ -155,6 +157,7 @@ private:
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
+	DatabaseCloseAction close_action = DatabaseCloseAction::CHECKPOINT;
 	shared_ptr<mutex> close_lock;
 	unordered_map<string, Value> attach_options;
 

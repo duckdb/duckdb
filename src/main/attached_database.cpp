@@ -202,11 +202,15 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
+void AttachedDatabase::SetCloseAction(DatabaseCloseAction action) {
+	close_action = action;
+}
+
 void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
 	auto close_lock = attached_db->close_lock;
 	lock_guard<mutex> guard(*close_lock);
 	if (attached_db.use_count() == 1) {
-		attached_db->Close(DatabaseCloseAction::CHECKPOINT);
+		attached_db->Close(attached_db->close_action);
 	}
 	attached_db.reset();
 }
@@ -290,7 +294,9 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 
 	try {
 		auto create_checkpoint = true;
-		if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
+		if (action == DatabaseCloseAction::NO_CHECKPOINT) {
+			create_checkpoint = false;
+		} else if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
 			create_checkpoint = false;
 		} else if (!storage || storage->InMemory() || ValidChecker::IsInvalidated(db)) {
 			create_checkpoint = false;
@@ -298,7 +304,10 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 
 		if (create_checkpoint) {
 			auto &config = DBConfig::GetConfig(db);
-			if (config.options.checkpoint_on_shutdown) {
+			// checkpoint_on_shutdown only gates the shutdown/destructor path (TRY_CHECKPOINT).
+			// The detach path (CHECKPOINT) is controlled by the checkpoint_on_detach session setting,
+			// which is captured in close_action before reaching here.
+			if (action == DatabaseCloseAction::CHECKPOINT || config.options.checkpoint_on_shutdown) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
 				storage->CreateCheckpoint(QueryContext(), options);

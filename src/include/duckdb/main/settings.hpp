@@ -365,6 +365,16 @@ struct CatalogErrorMaxSchemasSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct CheckpointOnDetachSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "checkpoint_on_detach";
+	static constexpr const char *Description = "Whether to checkpoint on DETACH (per-connection)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct CheckpointThresholdSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "checkpoint_threshold";

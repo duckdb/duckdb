@@ -7,6 +7,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -253,6 +254,10 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
 		return;
+	}
+
+	if (!Settings::Get<CheckpointOnDetachSetting>(context)) {
+		attached_db->SetCloseAction(DatabaseCloseAction::NO_CHECKPOINT);
 	}
 
 	attached_db->OnDetach(context);
