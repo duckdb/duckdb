@@ -11,6 +11,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/path.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -89,6 +90,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
+    DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_LOCAL(CustomProfilingSettingsSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
@@ -204,12 +206,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 97),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 41),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 116),
-                                                     DUCKDB_SETTING_ALIAS("user", 131),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 98),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 42),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 117),
+                                                     DUCKDB_SETTING_ALIAS("user", 132),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 24),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 130),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 131),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -546,10 +548,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
-	} else if (StringUtil::Contains(options.database_path, "?")) {
-		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
-		options.temporary_directory = options.database_path + ".tmp";
+		options.temporary_directory = Path::AddSuffixToPath(options.database_path, ".tmp");
 	}
 }
 
