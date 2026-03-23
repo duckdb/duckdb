@@ -184,6 +184,48 @@ SELECT COUNT(*) FROM insert_fail_audit;
 ----
 1
 
+# FOR EACH STATEMENT trigger fires even when INSERT produces 0 rows
+statement ok
+CREATE TABLE empty_target (id INTEGER);
+
+statement ok
+CREATE TABLE empty_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_empty AFTER INSERT ON empty_target FOR EACH STATEMENT INSERT INTO empty_audit VALUES ('fired');
+
+statement ok
+INSERT INTO empty_target SELECT 1 WHERE false;
+
+query I
+SELECT COUNT(*) FROM empty_audit;
+----
+1
+
+# Trigger fires when inserting from another table
+statement ok
+CREATE TABLE batch_source (id INTEGER);
+
+statement ok
+CREATE TABLE batch_dest (id INTEGER);
+
+statement ok
+CREATE TABLE batch_audit (msg VARCHAR);
+
+statement ok
+INSERT INTO batch_source VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER trg_batch AFTER INSERT ON batch_dest INSERT INTO batch_audit VALUES ('fired');
+
+statement ok
+INSERT INTO batch_dest SELECT * FROM batch_source;
+
+query I
+SELECT COUNT(*) FROM batch_audit;
+----
+1
+
 # Recursive trigger guard: depth limit error
 statement ok
 CREATE TABLE recurse_tbl (id INTEGER);

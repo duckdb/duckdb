@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/execution/trigger_executor.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -656,6 +657,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		optimistic_writer.Merge(*writer);
 		optimistic_writer.FinalFlush();
 		memory_manager.FinalCheck();
+		TriggerExecutor::Fire(context, g_state.table, g_state.insert_count, TriggerTiming::AFTER,
+		                      TriggerEventType::INSERT_EVENT);
 		return SinkFinalizeType::READY;
 	}
 
@@ -681,6 +684,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	g_state.collections.clear();
 	data_table.FinalizeLocalAppend(append_state);
 	memory_manager.FinalCheck();
+	TriggerExecutor::Fire(context, g_state.table, g_state.insert_count, TriggerTiming::AFTER,
+	                      TriggerEventType::INSERT_EVENT);
 	return SinkFinalizeType::READY;
 }
 
