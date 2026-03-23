@@ -1,4 +1,5 @@
 #include "duckdb/parser/query_node/statement_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
@@ -21,6 +22,12 @@ BoundStatement Binder::BindNode(StatementNode &statement) {
 	default:
 		return Bind(statement.stmt);
 	}
+}
+
+BoundStatement Binder::BindNode(UpdateQueryNode &node) {
+	UpdateStatement stmt;
+	stmt.node = unique_ptr_cast<QueryNode, UpdateQueryNode>(node.Copy());
+	return Bind(stmt);
 }
 
 } // namespace duckdb
