@@ -302,6 +302,9 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 
 		if (create_checkpoint) {
 			auto &config = DBConfig::GetConfig(db);
+			// action == NO_CHECKPOINT <==> skip_checkpoint_on_detach is set
+			// If we have don't have skip_checkpoint_on_detach set nor disable_checkpoint_on_shutdown, we can
+			// checkpoint.
 			if (action != DatabaseCloseAction::NO_CHECKPOINT && config.options.checkpoint_on_shutdown) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;

@@ -1492,7 +1492,9 @@ struct SecretDirectorySetting {
 struct SkipCheckpointOnDetachSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "skip_checkpoint_on_detach";
-	static constexpr const char *Description = "Skip the automatic checkpoint when detaching a database";
+	static constexpr const char *Description =
+	    "Skip the automatic checkpoint when detaching a database. This is opt-in, so the default of false retains "
+	    "previous behavior, whereas setting it to true can override global settings.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;

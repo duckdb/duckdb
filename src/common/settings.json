@@ -1019,7 +1019,7 @@
     },
     {
         "name": "skip_checkpoint_on_detach",
-        "description": "Skip the automatic checkpoint when detaching a database",
+        "description": "Skip the automatic checkpoint when detaching a database. This is opt-in, so the default of false retains previous behavior, whereas setting it to true can override global settings.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
