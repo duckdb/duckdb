@@ -26,7 +26,7 @@ public:
 public:
 	unique_ptr<UpdateSetInfo> Copy() const;
 	string ToString() const;
-	static bool Equals(const unique_ptr<UpdateSetInfo> &a, const unique_ptr<UpdateSetInfo> &b);
+	static bool Equals(const unique_ptr<UpdateSetInfo> &left, const unique_ptr<UpdateSetInfo> &right);
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<UpdateSetInfo> Deserialize(Deserializer &deserializer);

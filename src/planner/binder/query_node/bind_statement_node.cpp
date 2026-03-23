@@ -1,5 +1,6 @@
 #include "duckdb/parser/query_node/statement_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
@@ -27,6 +28,16 @@ BoundStatement Binder::BindNode(StatementNode &statement) {
 BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	UpdateStatement stmt;
 	stmt.node = unique_ptr_cast<QueryNode, UpdateQueryNode>(node.Copy());
+	// CTEs were already processed by BindNode(QueryNode &) — clear to prevent double-processing
+	stmt.node->cte_map.map.clear();
+	return Bind(stmt);
+}
+
+BoundStatement Binder::BindNode(DeleteQueryNode &node) {
+	DeleteStatement stmt;
+	stmt.node = unique_ptr_cast<QueryNode, DeleteQueryNode>(node.Copy());
+	// CTEs were already processed by BindNode(QueryNode &) — clear to prevent double-processing
+	stmt.node->cte_map.map.clear();
 	return Bind(stmt);
 }
 
