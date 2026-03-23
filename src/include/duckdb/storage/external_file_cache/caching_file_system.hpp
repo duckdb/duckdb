@@ -77,8 +77,8 @@ private:
 	//! The associated CachedFile with cached blocks
 	CachedFile &cached_file;
 
-	//! Used to get file handle in thread-safe manner.
-	std::once_flag file_handle_once;
+	//! Used to ensure file handle and cached file metadata is only initialized once.
+	annotated_mutex file_handle_mutex;
 	//! File handle for the internal filesystem.
 	unique_ptr<FileHandle> file_handle;
 	//! Last modified time and version tag (if FileHandle is opened)
