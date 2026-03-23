@@ -1,6 +1,6 @@
 # name: test/sql/join/inner/test_prefix_range_filter_pushdown_strinline.test
 # description: String-specific prefix range filter plan checks
-# group: [join]
+# group: [inner]
 
 require strinline
 
