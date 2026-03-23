@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {
@@ -79,7 +81,7 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 	}
 
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-		auto &child = *children[child_idx];
+		auto &child = children[child_idx];
 
 		if (sel.count != count) {
 			//! Some of the STRUCT rows are NULL entirely, we have to filter these rows out of the children

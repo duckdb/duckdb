@@ -854,6 +854,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	} else {
 		metadata = std::move(metadata_p);
+		if (parquet_options.encryption_config) {
+			encryption_util = context_p.db->GetEncryptionUtil(true);
+		}
 	}
 	InitializeSchema(context_p);
 }

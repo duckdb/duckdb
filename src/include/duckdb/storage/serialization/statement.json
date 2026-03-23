@@ -16,5 +16,28 @@
         "type": "case_insensitive_map_t<idx_t>"
       }
     ]
+  },
+  {
+    "class": "UpdateSetInfo",
+    "includes": [
+      "duckdb/parser/statement/update_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 101,
+        "name": "columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 102,
+        "name": "expressions",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
   }
 ]

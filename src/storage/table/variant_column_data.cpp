@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -244,7 +247,7 @@ idx_t VariantColumnData::ScanWithCallback(
 				D_ASSERT(list_child.GetType().id() == LogicalTypeId::STRUCT);
 				D_ASSERT(StructType::GetChildCount(list_child.GetType()) == 2);
 
-				auto &typed_value = *StructVector::GetEntries(list_child)[TYPED_VALUE_INDEX];
+				auto &typed_value = StructVector::GetEntries(list_child)[TYPED_VALUE_INDEX];
 				auto list_res = Vector(LogicalType::LIST(typed_value.GetType()));
 				ListVector::SetListSize(list_res, ListVector::GetListSize(result));
 				list_res.CopyBuffer(result);
@@ -260,8 +263,8 @@ idx_t VariantColumnData::ScanWithCallback(
 			auto unshredding_intermediate = CreateUnshreddingIntermediate(target_count);
 			auto &child_vectors = StructVector::GetEntries(unshredding_intermediate);
 
-			callback(*sub_columns[0], state.child_states[1], *child_vectors[0], target_count);
-			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
+			callback(*sub_columns[0], state.child_states[1], child_vectors[0], target_count);
+			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
 
 			intermediate.Shred(unshredding_intermediate);
@@ -306,8 +309,8 @@ idx_t VariantColumnData::ScanWithCallback(
 			auto intermediate = CreateUnshreddingIntermediate(target_count);
 			auto &child_vectors = StructVector::GetEntries(intermediate);
 
-			callback(*sub_columns[0], state.child_states[1], *child_vectors[0], target_count);
-			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
+			callback(*sub_columns[0], state.child_states[1], child_vectors[0], target_count);
+			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 
 			result.Shred(intermediate);
@@ -381,8 +384,8 @@ static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, Va
 
 	//! Create the new column data for the shredded data
 	VariantColumnData::ShredVariantData(input, append_vector, count);
-	auto &unshredded_vector = *child_vectors[0];
-	auto &shredded_vector = *child_vectors[1];
+	auto &unshredded_vector = child_vectors[0];
+	auto &shredded_vector = child_vectors[1];
 
 	auto &unshredded = append_data.unshredded;
 	auto &shredded = append_data.shredded;
@@ -484,7 +487,7 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		// fetch the sub-column states
 		StorageIndex empty(0);
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, state, empty, row_id, *child_vectors[i], result_idx);
+			sub_columns[i]->FetchRow(transaction, state, empty, row_id, child_vectors[i], result_idx);
 		}
 		if (result_idx) {
 			intermediate.SetValue(0, intermediate.GetValue(result_idx));

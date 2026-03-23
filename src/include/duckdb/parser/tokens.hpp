@@ -54,6 +54,7 @@ class SetOperationNode;
 class RecursiveCTENode;
 class CTENode;
 class StatementNode;
+class UpdateQueryNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

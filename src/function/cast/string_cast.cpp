@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -218,7 +225,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 		if (!is_unnamed) {
 			child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
 		}
-		child_masks.emplace_back(FlatVector::Validity(*child_vectors[child_idx]));
+		child_masks.emplace_back(FlatVector::Validity(child_vectors[child_idx]));
 		child_masks[child_idx].get().SetAllInvalid(count);
 	}
 
@@ -247,8 +254,8 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	D_ASSERT(cast_data.child_cast_info.size() == result_children.size());
 
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
-		auto &child_varchar_vector = *child_vectors[child_idx];
-		auto &result_child_vector = *result_children[child_idx];
+		auto &child_varchar_vector = child_vectors[child_idx];
+		auto &result_child_vector = result_children[child_idx];
 		auto &child_cast_info = cast_data.child_cast_info[child_idx];
 		CastParameters child_parameters(parameters, child_cast_info.cast_data, lstate.local_states[child_idx]);
 		if (!child_cast_info.function(child_varchar_vector, result_child_vector, count, child_parameters)) {

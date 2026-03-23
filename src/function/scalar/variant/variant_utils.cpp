@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/enum_util.hpp"

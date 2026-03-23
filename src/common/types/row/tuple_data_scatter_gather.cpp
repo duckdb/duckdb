@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -211,7 +217,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			const auto &struct_source = struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
-			ComputeHeapSizes(heap_sizes_v, *struct_source, struct_format, append_sel, append_count);
+			ComputeHeapSizes(heap_sizes_v, struct_source, struct_format, append_sel, append_count);
 		}
 		break;
 	}
@@ -426,7 +432,7 @@ void TupleDataCollection::StructWithinCollectionComputeHeapSizes(Vector &heap_si
 	// Recurse
 	auto &struct_sources = StructVector::GetEntries(source_v);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-		auto &struct_source = *struct_sources[struct_col_idx];
+		auto &struct_source = struct_sources[struct_col_idx];
 
 		auto &struct_format = source_format.children[struct_col_idx];
 		WithinCollectionComputeHeapSizes(heap_sizes_v, struct_source, struct_format, append_sel, append_count,
@@ -447,7 +453,7 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 		// We have to apply it to the child vectors too
 		auto &struct_sources = StructVector::GetEntries(source_v);
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-			auto &struct_source = *struct_sources[struct_col_idx];
+			auto &struct_source = struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
 #ifdef D_ASSERT_IS_ENABLED
 			D_ASSERT(!struct_format.combined_list_data);
@@ -905,7 +911,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
-		auto &struct_source = *struct_sources[struct_col_idx];
+		auto &struct_source = struct_sources[struct_col_idx];
 		const auto &struct_source_format = source_format.children[struct_col_idx];
 		const auto &struct_scatter_function = child_functions[struct_col_idx];
 		struct_scatter_function.function(struct_source, struct_source_format, append_sel, append_count, struct_layout,
@@ -1126,7 +1132,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 	// Recurse through the children
 	auto &struct_sources = StructVector::GetEntries(source);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-		auto &struct_source = *struct_sources[struct_col_idx];
+		auto &struct_source = struct_sources[struct_col_idx];
 		auto &struct_format = source_format.children[struct_col_idx];
 		const auto &struct_scatter_function = child_functions[struct_col_idx];
 		struct_scatter_function.function(struct_source, struct_format, append_sel, append_count, layout, row_locations,
@@ -1515,7 +1521,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
-		auto &struct_target = *struct_targets[struct_col_idx];
+		auto &struct_target = struct_targets[struct_col_idx];
 		const auto &struct_gather_function = child_functions[struct_col_idx];
 		struct_gather_function.function(struct_layout, struct_row_locations, struct_col_idx, scan_sel, scan_count,
 		                                struct_target, target_sel, dummy_vector,
@@ -1682,7 +1688,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	// Recurse
 	auto &struct_targets = StructVector::GetEntries(target);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_targets.size(); struct_col_idx++) {
-		auto &struct_target = *struct_targets[struct_col_idx];
+		auto &struct_target = struct_targets[struct_col_idx];
 		const auto &struct_gather_function = child_functions[struct_col_idx];
 		struct_gather_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count, struct_target,
 		                                target_sel, list_vector, struct_gather_function.child_functions);

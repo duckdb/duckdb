@@ -254,7 +254,7 @@ jobs:
 
       - uses: actions/download-artifact@v5
         with:
-          pattern: extension-repository
+          name: extension-repository
           path: /tmp/extension-repository
 
       - name: List extensions to deploy
@@ -272,7 +272,7 @@ jobs:
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
           pip install awscli
-          ./scripts/extension-upload-repository.sh /tmp/extension-repository
+          make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository
 
   autoload-tests:
     name: Extension Autoloading Tests
@@ -294,7 +294,7 @@ jobs:
 
       - uses: actions/download-artifact@v5
         with:
-          pattern: extension-repository
+          name: extension-repository
           path: /tmp/extension-repository
 
       - name: List extensions to test with
@@ -358,7 +358,7 @@ jobs:
       - uses: actions/download-artifact@v5
         name: Download extension repository artifact
         with:
-          pattern: extension-repository
+          name: extension-repository
           path: /tmp/extension-repository
 
       - name: Copy over local extension repository

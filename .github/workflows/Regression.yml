@@ -68,7 +68,7 @@ jobs:
         run: |
           if [[ "${{ github.repository }}" == "duckdb/duckdb" && "${{ github.ref_name }}" == "main" ]]; then
             if [[ -z "${BASE_HASH}" ]]; then
-              echo "BASE_REF=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')" >> "$GITHUB_ENV"
+              echo "BASE_REF=$(make last_main_success_commit)" >> "$GITHUB_ENV"
             else
               echo "BASE_REF=${BASE_HASH}" >> "$GITHUB_ENV"
             fi

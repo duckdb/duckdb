@@ -1,0 +1,91 @@
+# name: test/sql/pragma/profiling/test_autocheckpoint_latency.test
+# description: Test that auto-checkpoint correctly reports all checkpoint-related metrics via profiling.
+# group: [profiling]
+
+require notwindows
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+SET threads = 1;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+# Disable size-based autocheckpoint so only entry count triggers it.
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+ATTACH '__TEST_DIR__/autocheckpoint_latency.db' AS acp_db;
+
+statement ok
+CREATE TABLE acp_db.tbl(id INTEGER);
+
+statement ok
+CHECKPOINT acp_db;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/acp_before.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true", "TOTAL_BYTES_WRITTEN": "true", "COMMIT_LOCAL_STORAGE_LATENCY": "true", "WRITE_TO_WAL_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+# A simple INSERT with no auto-checkpoint should have checkpoint_latency == 0 and total_bytes_written == 0.
+# COMMIT_LOCAL_STORAGE_LATENCY and WRITE_TO_WAL_LATENCY will be > 0 since the INSERT still commits and writes WAL.
+statement ok
+INSERT INTO acp_db.tbl VALUES (1);
+
+statement ok
+PRAGMA disable_profiling;
+
+query IIII
+SELECT
+    CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN total_bytes_written = 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
+FROM '__TEST_DIR__/acp_before.json';
+----
+true	true	true	true
+
+# Now set a very low entry count threshold so the next commit triggers auto-checkpoint.
+statement ok
+SET wal_autocheckpoint_entries=1;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/acp_after.json';
+
+# This INSERT should trigger auto-checkpoint on commit.
+statement ok
+INSERT INTO acp_db.tbl VALUES (2);
+
+statement ok
+PRAGMA disable_profiling;
+
+# After auto-checkpoint, all metrics should be > 0.
+query IIII
+SELECT
+    CASE WHEN checkpoint_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN total_bytes_written > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
+FROM '__TEST_DIR__/acp_after.json';
+----
+true	true	true	true
+
+statement ok
+DETACH acp_db;

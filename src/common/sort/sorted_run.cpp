@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -109,7 +112,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 			if (opc.is_payload) {
 				break;
 			}
-			chunk.data[opc.output_col_idx].Reference(*decoded_key_entries[opc.layout_col_idx]);
+			chunk.data[opc.output_col_idx].Reference(decoded_key_entries[opc.layout_col_idx]);
 		}
 
 		gathered_payload = true;

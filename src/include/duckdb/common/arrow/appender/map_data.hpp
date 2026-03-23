@@ -11,6 +11,7 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list_data.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 
 namespace duckdb {
 
