@@ -1043,8 +1043,7 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	}
 
 	idx_t column_count = row_groups[0].get().GetColumnCount();
-	for (idx_t r = 0; r < row_groups.size(); r++) {
-		auto &row_group = row_groups[r];
+	for (auto &row_group : row_groups) {
 		D_ASSERT(column_count == row_group.get().GetColumnCount());
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
