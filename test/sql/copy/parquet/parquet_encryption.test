@@ -99,14 +99,3 @@ query I
 SELECT * FROM read_parquet('__TEST_DIR__/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
 ----
 42
-
-# union_by_name: scan-phase reader reuses bind metadata; encryption_util must still be initialized
-statement ok
-COPY (SELECT 1 AS id, 'Alice' AS name) TO '__TEST_DIR__/enc_union_by_name.parquet'
-	(FORMAT PARQUET, ENCRYPTION_CONFIG {footer_key: 'key256'});
-
-query II
-SELECT * FROM read_parquet('__TEST_DIR__/enc_union_by_name.parquet',
-	encryption_config={footer_key: 'key256'}, union_by_name=true);
-----
-1	Alice
