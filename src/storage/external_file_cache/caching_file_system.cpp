@@ -258,13 +258,6 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
 	}
-	if (remaining > 0) {
-		const idx_t file_size = GetFileSize();
-		const idx_t available = (location < file_size) ? (file_size - location) : 0;
-		throw InvalidInputException(
-		    "CachingFileHandle::Read: requested %llu bytes from offset %llu but only %llu bytes were available",
-		    nr_bytes, location, available);
-	}
 
 	// After all tasks complete, check if the cache was invalidated by another thread.
 	if (Validate()) {
