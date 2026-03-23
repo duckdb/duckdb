@@ -23,26 +23,19 @@ static void SortKeys(yyjson_mut_val *val) {
 		// Extract key-value pairs
 		vector<std::pair<yyjson_mut_val *, yyjson_mut_val *>> pairs;
 		pairs.reserve(size);
-		yyjson_mut_obj_iter iter;
-		yyjson_mut_obj_iter_init(val, &iter);
-		yyjson_mut_val *key;
-		while ((key = yyjson_mut_obj_iter_next(&iter)) != nullptr) {
-			pairs.emplace_back(key, yyjson_mut_obj_iter_get_val(key));
+		idx_t idx, max;
+		yyjson_mut_val *key, *child_val;
+		yyjson_mut_obj_foreach(val, idx, max, key, child_val) {
+			pairs.emplace_back(key, child_val);
 		}
 
-		// Sort by key string (byte-order comparison)
+		// Sort by key string
 		std::sort(pairs.begin(), pairs.end(),
 		          [](const std::pair<yyjson_mut_val *, yyjson_mut_val *> &a,
 		             const std::pair<yyjson_mut_val *, yyjson_mut_val *> &b) {
-			          const char *a_str = unsafe_yyjson_get_str(a.first);
-			          idx_t a_len = unsafe_yyjson_get_len(a.first);
-			          const char *b_str = unsafe_yyjson_get_str(b.first);
-			          idx_t b_len = unsafe_yyjson_get_len(b.first);
-			          int cmp = memcmp(a_str, b_str, MinValue(a_len, b_len));
-			          if (cmp != 0) {
-				          return cmp < 0;
-			          }
-			          return a_len < b_len;
+			          const auto a_key = string_t(unsafe_yyjson_get_str(a.first), unsafe_yyjson_get_len(a.first));
+			          const auto b_key = string_t(unsafe_yyjson_get_str(b.first), unsafe_yyjson_get_len(b.first));
+			          return a_key < b_key;
 		          });
 
 		// Recursively sort nested values
@@ -56,10 +49,9 @@ static void SortKeys(yyjson_mut_val *val) {
 			yyjson_mut_obj_add(val, pair.first, pair.second);
 		}
 	} else if (yyjson_mut_is_arr(val)) {
+		idx_t idx, max;
 		yyjson_mut_val *elem;
-		yyjson_mut_arr_iter iter;
-		yyjson_mut_arr_iter_init(val, &iter);
-		while ((elem = yyjson_mut_arr_iter_next(&iter)) != nullptr) {
+		yyjson_mut_arr_foreach(val, idx, max, elem) {
 			SortKeys(elem);
 		}
 	}
