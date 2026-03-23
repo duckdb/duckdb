@@ -32,6 +32,8 @@ else
     echo "Deploying extensions from '$BASE_DIR' to bucket '$TARGET_BUCKET'.. (DRY RUN)"
 fi
 
+files=()
+
 for version_dir in $BASE_DIR/*; do
     duckdb_version=$(basename "$version_dir")
     for arch_dir in "$version_dir"/*; do
@@ -45,10 +47,19 @@ for version_dir in $BASE_DIR/*; do
         echo ""
 
         for f in $FILES; do
-            printf '%s\0%s\0%s\0' "$duckdb_version" "$architecture" "$f"
+            files+=("$duckdb_version" "$architecture" "$f")
         done
     done
-done | xargs -0 -n 3 -P "${CI_CPU_COUNT:-1}" bash -c '
+done
+
+if [ "${#files[@]}" -eq 0 ]; then
+    echo "No extensions found in '$BASE_DIR'"
+    exit 1
+fi
+
+echo "Uploading $((${#files[@]} / 3)) extension files"
+
+printf '%s\0' "${files[@]}" | xargs -0 -n 3 -P "${CI_CPU_COUNT:-1}" bash -c '
     script_dir="$1"
     target_bucket="$2"
     duckdb_version="$3"
