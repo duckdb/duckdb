@@ -27,6 +27,7 @@ Statement <-
 	TruncateStatement /
 	LoadStatement /
 	InstallStatement /
+	UpdateExtensionsStatement /
 	AnalyzeStatement /
 	MergeIntoStatement
 

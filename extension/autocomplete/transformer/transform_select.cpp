@@ -358,7 +358,7 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	MacroParameter parameter;
 	parameter.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
-	parameter.name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	parameter.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	parameter.is_default = true;
 	transformer.TransformOptional<LogicalType>(list_pr, 1, parameter.type);
 	return parameter;

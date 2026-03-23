@@ -595,6 +595,7 @@ void PEGTransformerFactory::RegisterLoad() {
 	// load.gram
 	REGISTER_TRANSFORM(TransformLoadStatement);
 	REGISTER_TRANSFORM(TransformInstallStatement);
+	REGISTER_TRANSFORM(TransformUpdateExtensionsStatement);
 	REGISTER_TRANSFORM(TransformFromSource);
 	REGISTER_TRANSFORM(TransformVersionNumber);
 }

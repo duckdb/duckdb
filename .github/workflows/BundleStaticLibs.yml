@@ -103,6 +103,7 @@ jobs:
     runs-on: windows-latest
     env:
       GEN: ninja
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:

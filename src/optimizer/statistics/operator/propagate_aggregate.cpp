@@ -74,6 +74,9 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
+	if (!column_stats) {
+		return false;
+	}
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
 		return false;
 	}
