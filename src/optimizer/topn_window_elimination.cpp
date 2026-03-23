@@ -560,10 +560,13 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 			}
 		}
 	}
-	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
+	if (window.expressions[0]->type != ExpressionType::WINDOW_FUNCTION) {
 		return false;
 	}
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	if (!window_expr.window || window_expr.window->name != "row_number") {
+		return false;
+	}
 
 	if (window_expr.orders.size() != 1) {
 		return false;

@@ -726,7 +726,7 @@ unique_ptr<BoundWindowFunction> FunctionBinder::BindWindowFunction(WindowFunctio
 
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.GetBindCallback()(context, bound_function, children, orders, arg_orders);
+		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
@@ -735,6 +735,10 @@ unique_ptr<BoundWindowFunction> FunctionBinder::BindWindowFunction(WindowFunctio
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
+
+	if (bound_function.HasValidateCallback()) {
+		bound_function.GetValidateCallback()(context, bound_function, children, orders, arg_orders);
+	}
 
 	return make_uniq<BoundWindowFunction>(std::move(bound_function), std::move(children), std::move(bind_info));
 }

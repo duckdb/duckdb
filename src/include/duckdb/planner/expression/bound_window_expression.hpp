@@ -10,22 +10,25 @@
 
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 class AggregateFunction;
+class WindowFunction;
 
 class BoundWindowExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_WINDOW;
 
 public:
-	BoundWindowExpression(ExpressionType type, LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
-	                      unique_ptr<FunctionData> bind_info);
+	BoundWindowExpression(LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
+	                      unique_ptr<WindowFunction> window, unique_ptr<FunctionData> bind_info);
 
 	//! The bound aggregate function
 	unique_ptr<AggregateFunction> aggregate;
+	//! The bound window function
+	unique_ptr<WindowFunction> window;
 	//! The bound function info
 	unique_ptr<FunctionData> bind_info;
 	//! The child expressions of the main window function

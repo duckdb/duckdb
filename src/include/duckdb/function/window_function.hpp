@@ -30,9 +30,15 @@ struct WindowFunctionInfo {
 
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*window_bind_function_t)(ClientContext &context, WindowFunction &function,
-                                                           vector<unique_ptr<Expression>> &arguments,
-                                                           vector<OrderByNode> &orders,
-                                                           vector<OrderByNode> &arg_orders);
+                                                           vector<unique_ptr<Expression>> &arguments);
+
+typedef void (*window_validate_function_t)(ClientContext &context, WindowFunction &function,
+                                           vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
+                                           vector<OrderByNode> &arg_orders);
+
+typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                   const WindowFunction &function);
+typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, WindowFunction &function);
 
 class WindowFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
@@ -54,6 +60,16 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	window_bind_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(window_bind_function_t callback) { bind = callback; }
+
+	bool HasValidateCallback() const { return validate != nullptr; }
+	window_validate_function_t GetValidateCallback() const { return validate; }
+	void SetValidateCallback(window_validate_function_t callback) { validate = callback; }
+
+	bool HasSerializationCallbacks() const { return false; }
+	void SetSerializeCallback(window_serialize_t callback) { serialize = callback; }
+	void SetDeserializeCallback(window_deserialize_t callback) { deserialize = callback; }
+	window_serialize_t GetSerializeCallback() const { return serialize; }
+	window_deserialize_t GetDeserializeCallback() const { return deserialize; }
 	// clang-format on
 
 	//! The expression enum for the window function
@@ -70,6 +86,12 @@ public:
 
 	//! The bind function (may be null)
 	window_bind_function_t bind = nullptr;
+	//! The sort validation function
+	window_validate_function_t validate = nullptr;
+
+	//! Serialization specialization. Not yet implemented
+	window_serialize_t serialize = nullptr;
+	window_deserialize_t deserialize = nullptr;
 
 public:
 	//! Additional function info, passed to the bind

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 
 #include "duckdb/function/aggregate_function.hpp"
@@ -7,15 +8,16 @@
 
 namespace duckdb {
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
-                                             unique_ptr<AggregateFunction> aggregate,
-                                             unique_ptr<FunctionData> bind_info)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, std::move(return_type)), aggregate(std::move(aggregate)),
-      bind_info(std::move(bind_info)), ignore_nulls(false), distinct(false) {
+BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
+                                             unique_ptr<WindowFunction> window, unique_ptr<FunctionData> bind_info)
+    : Expression(aggregate.get() ? ExpressionType::WINDOW_AGGREGATE : ExpressionType::WINDOW_FUNCTION,
+                 ExpressionClass::BOUND_WINDOW, std::move(return_type)),
+      aggregate(std::move(aggregate)), window(std::move(window)), bind_info(std::move(bind_info)), ignore_nulls(false),
+      distinct(false) {
 }
 
 string BoundWindowExpression::ToString() const {
-	string function_name = aggregate.get() ? aggregate->name : ExpressionTypeToString(type);
+	string function_name = aggregate.get() ? aggregate->name : window->name;
 	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
 	                                                                                       function_name);
 }
@@ -42,6 +44,12 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	// If there are aggregates, check they are equal
 	if (aggregate.get() != other.aggregate.get()) {
 		if (!aggregate || !other.aggregate || *aggregate != *other.aggregate) {
+			return false;
+		}
+	}
+	// If there are windows, check they are equal
+	if (window.get() != other.window.get()) {
+		if (!window || !other.window || *window != *other.window) {
 			return false;
 		}
 	}
@@ -133,15 +141,21 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() const {
-	auto new_window = make_uniq<BoundWindowExpression>(type, return_type, nullptr, nullptr);
-	new_window->CopyProperties(*this);
-
+	unique_ptr<AggregateFunction> agg_copy;
 	if (aggregate) {
-		new_window->aggregate = make_uniq<AggregateFunction>(*aggregate);
+		agg_copy = make_uniq<AggregateFunction>(*aggregate);
 	}
+	unique_ptr<WindowFunction> win_copy;
+	if (window) {
+		win_copy = make_uniq<WindowFunction>(*window);
+	}
+	unique_ptr<FunctionData> bind_copy;
 	if (bind_info) {
-		new_window->bind_info = bind_info->Copy();
+		bind_copy = bind_info->Copy();
 	}
+	auto new_window =
+	    make_uniq<BoundWindowExpression>(return_type, std::move(agg_copy), std::move(win_copy), std::move(bind_copy));
+	new_window->CopyProperties(*this);
 	for (auto &child : children) {
 		new_window->children.push_back(child->Copy());
 	}
@@ -190,6 +204,9 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 	if (type == ExpressionType::WINDOW_AGGREGATE) {
 		D_ASSERT(aggregate);
 		FunctionSerializer::Serialize(serializer, *aggregate, bind_info.get());
+	} else if (type == ExpressionType::WINDOW_FUNCTION) {
+		D_ASSERT(window);
+		FunctionSerializer::Serialize(serializer, *window, bind_info.get());
 	}
 	auto null_expr = unique_ptr<Expression>();
 	serializer.WriteProperty(202, "partitions", partitions);
@@ -212,15 +229,23 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<WindowFunction> window;
 	unique_ptr<FunctionData> bind_info;
 	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
 		auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
 		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
 		bind_info = std::move(entry.second);
+	} else if (expression_type == ExpressionType::WINDOW_FUNCTION) {
+		auto entry = FunctionSerializer::Deserialize<WindowFunction, WindowFunctionCatalogEntry>(
+		    deserializer, CatalogType::WINDOW_FUNCTION_ENTRY, children, return_type);
+		window = make_uniq<WindowFunction>(std::move(entry.first));
+		bind_info = std::move(entry.second);
+	} else {
+		//	Fake it??
 	}
 	auto result =
-	    make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
+	    make_uniq<BoundWindowExpression>(return_type, std::move(aggregate), std::move(window), std::move(bind_info));
 	unique_ptr<Expression> expr;
 	result->children = std::move(children);
 	deserializer.ReadProperty(202, "partitions", result->partitions);

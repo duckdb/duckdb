@@ -148,8 +148,7 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
 unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments,
-                                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	function.return_type = arguments[0]->return_type;
 
 	return nullptr;
@@ -309,9 +308,8 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
 unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments,
-                                                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
-	WindowValueExecutor::Bind(context, function, arguments, orders, arg_orders);
+                                                     vector<unique_ptr<Expression>> &arguments) {
+	WindowValueExecutor::Bind(context, function, arguments);
 
 	if (arguments.size() > 2) {
 		function.arguments[2] = function.return_type;
@@ -331,6 +329,20 @@ WindowFunctionSet LeadFun::GetFunctions() {
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind));
 
 	return funcs;
+}
+
+WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
+	auto bind = WindowLeadLagExecutor::Bind;
+	switch (nargs) {
+	case 1:
+		return WindowFunction("lead", {type}, type, ExpressionType::WINDOW_LEAD, bind);
+	case 2:
+		return WindowFunction("lead", {type, LogicalType::BIGINT}, type, ExpressionType::WINDOW_LEAD, bind);
+	case 3:
+		return WindowFunction("lead", {type, LogicalType::BIGINT, type}, type, ExpressionType::WINDOW_LEAD, bind);
+	default:
+		throw InternalException("Invalid number of arguments requested for LEAD: %lld", nargs);
+	}
 }
 
 WindowFunctionSet LagFun::GetFunctions() {
@@ -373,6 +385,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 
 	const bool has_offset = (offset_idx != DConstants::INVALID_INDEX);
 	const bool has_default = (default_idx != DConstants::INVALID_INDEX);
+	const bool is_lead = (wexpr.window->name == "lead");
 
 	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
 	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
@@ -397,7 +410,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
-			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+			if (is_lead) {
 				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 			} else {
 				val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
@@ -456,7 +469,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
-		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+		if (is_lead) {
 			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
 			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
@@ -939,16 +952,23 @@ static bool IsFillType(const LogicalType &type) {
 }
 
 unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments,
-                                                  vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
-	WindowValueExecutor::Bind(context, function, arguments, orders, arg_orders);
+                                                  vector<unique_ptr<Expression>> &arguments) {
+	WindowValueExecutor::Bind(context, function, arguments);
 
-	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
-		throw BinderException("FILL functions must have only one ORDER BY expression");
-	}
 	//	Check FILL arguments support subtraction
 	if (!IsFillType(arguments[0]->return_type)) {
 		throw BinderException("FILL argument must support subtraction");
+	}
+
+	return nullptr;
+}
+
+void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
+                                  vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
+                                  vector<OrderByNode> &arg_orders) {
+	WindowValueExecutor::Bind(context, function, arguments);
+	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
+		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
 
 	LogicalType order_type;
@@ -965,13 +985,13 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, Window
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
 	}
-
-	return nullptr;
 }
 
 WindowFunction FillFun::GetFunction() {
 	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
 	                   WindowFillExecutor::Bind);
+	fun.SetValidateCallback(WindowFillExecutor::Validate);
+
 	return fun;
 }
 

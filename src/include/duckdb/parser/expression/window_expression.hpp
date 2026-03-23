@@ -39,7 +39,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
 
 public:
-	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
+	WindowExpression(string catalog_name, string schema_name, const string &function_name);
 
 	//! Catalog of the aggregate function
 	string catalog;
@@ -91,8 +91,6 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
-
-	static ExpressionType WindowToExpressionType(string &fun_name);
 
 public:
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,

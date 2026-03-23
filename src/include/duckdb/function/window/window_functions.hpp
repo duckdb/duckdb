@@ -58,6 +58,8 @@ struct NthValueFun {
 
 struct LeadFun {
 	static WindowFunctionSet GetFunctions();
+
+	static WindowFunction GetTypedFunction(const LogicalType &type, idx_t nargs);
 };
 
 struct LagFun {
