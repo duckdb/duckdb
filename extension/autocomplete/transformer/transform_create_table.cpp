@@ -398,7 +398,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(P
 
 	auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(list_pr.Child<ListParseResult>(3));
 	fk_constraint->fk_columns = pk_list;
-	if (fk_constraint->fk_columns.size() != fk_constraint->pk_columns.size()) {
+	if (!fk_constraint->pk_columns.empty() && fk_constraint->fk_columns.size() != fk_constraint->pk_columns.size()) {
 		throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 	}
 	return std::move(fk_constraint);
