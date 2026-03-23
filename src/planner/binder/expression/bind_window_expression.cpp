@@ -327,7 +327,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 
 		if (window.exclude_clause != WindowExcludeMode::NO_OTHER && !window.arg_orders.empty() && !can_exclude) {
-			throw ParserException("EXCLUDE is not supported for the window function \"%s\"", bound_function.name);
+			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
+			                      bound_function.name);
 		}
 	}
 	auto result = make_uniq<BoundWindowExpression>(window.GetExpressionType(), sql_type, std::move(aggregate),
