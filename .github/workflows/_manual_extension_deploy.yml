@@ -154,7 +154,7 @@ jobs:
 
       - uses: actions/download-artifact@v5
         with:
-          pattern: extension-repository-${{ inputs.duckdb_ref }}
+          name: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp
 
       - name: List extensions to deploy
