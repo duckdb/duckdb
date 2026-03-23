@@ -132,16 +132,81 @@ struct GlobalFileState {
 //===--------------------------------------------------------------------===//
 // PartitionedCopy
 //===--------------------------------------------------------------------===//
-enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, DONE };
+enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, WRITE, DONE };
+
+struct PartitionedCopyTask {
+	PartitionedCopyStage stage = PartitionedCopyStage::DONE;
+	idx_t hash_bin = 0;
+};
+
+class PartitionedCopy;
+
+//! Manages a single partitioned COPY hash bin
+class PartitionedCopyHashGroup {
+public:
+	using ChunkRow = SortStrategy::ChunkRow;
+
+public:
+	PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row, idx_t hash_bin_p);
+
+public:
+	PartitionedCopyStage GetStage() const;
+	static idx_t GetTaskCount();
+
+	bool TryPrepareNextStage();
+	bool TryNextTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
+
+	void Sort(ExecutionContext &context, GlobalSinkState &sink, InterruptState &interrupt);
+	void Materialize(ExecutionContext &context, GlobalSourceState &source, InterruptState &interrupt);
+	void Mask();
+	void Write();
+
+public:
+	//! The PartitionedCopy that this hash group belongs to
+	const PartitionedCopy &partitioned_copy;
+	//! The materialized partition data (set after MATERIALIZE stage)
+	unique_ptr<ColumnDataCollection> rows;
+	//! The row count of the group
+	idx_t count = 0;
+	//! The number of blocks (chunks) in the group
+	idx_t blocks = 0;
+	//! The partition boundary mask (marks where partition key changes within the bin)
+	ValidityMask partition_mask;
+	//! The processing stage for this group
+	atomic<PartitionedCopyStage> stage;
+	//! The bin number
+	idx_t hash_bin;
+	//! Lock for stage transitions and task assignment
+	annotated_mutex lock;
+	//! Count of sorted blocks
+	atomic<idx_t> sorted;
+	//! Count of materialized blocks
+	atomic<idx_t> materialized;
+	//! Count of masked blocks
+	atomic<idx_t> masked;
+	//! Count of written blocks
+	atomic<idx_t> written;
+	//! The next task to assign (monotonic, maps task index → stage)
+	idx_t next_task = 0;
+	//! The output batch base index
+	idx_t batch_base;
+};
 
 //! Manages a partitioned COPY flush
 class PartitionedCopyState {
 public:
-	explicit PartitionedCopyState(unique_ptr<GlobalSinkState> global_sink_state_p)
-	    : global_sink_state(std::move(global_sink_state_p)), local_state_count(0), combine_count(0) {
-	}
+	PartitionedCopyState(const PartitionedCopy &partitioned_copy_p, unique_ptr<GlobalSinkState> global_sink_state_p);
 
 public:
+	void InitHashGroups();
+	bool TryAssignTask(PartitionedCopyTask &task);
+	void ExecuteTask(ExecutionContext &context, const PartitionedCopyTask &task, InterruptState &interrupt);
+	bool AllGroupsDone() const;
+
+public:
+	//! The PartitionedCopy that this state belongs to
+	const PartitionedCopy &partitioned_copy;
+
 	//! Lock for managing this state
 	annotated_mutex lock;
 
@@ -152,6 +217,10 @@ public:
 
 	//! Sort management
 	unique_ptr<GlobalSourceState> global_source_state;
+	//! Per-hash-bin processing groups (populated by InitHashGroups)
+	vector<unique_ptr<PartitionedCopyHashGroup>> hash_groups;
+	//! Number of hash groups that have completed all stages
+	atomic<idx_t> finished_groups;
 };
 
 //! Manages partitioned COPY
@@ -168,7 +237,7 @@ private:
 	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
 	void CreateNextState();
 
-private:
+public:
 	const PhysicalCopyToFile &op;
 	ClientContext &context;
 
@@ -185,11 +254,167 @@ private:
 	shared_ptr<PartitionedCopyState> flushing_state;
 };
 
+PartitionedCopyHashGroup::PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
+                                                   idx_t hash_bin_p)
+    : partitioned_copy(partitioned_copy), count(chunk_row.count), blocks(chunk_row.chunks),
+      stage(PartitionedCopyStage::SORT), hash_bin(hash_bin_p), sorted(0), materialized(0), masked(0), written(0),
+      batch_base(0) {
+}
+
+PartitionedCopyStage PartitionedCopyHashGroup::GetStage() const {
+	return stage;
+}
+
+idx_t PartitionedCopyHashGroup::GetTaskCount() {
+	return static_cast<uint8_t>(PartitionedCopyStage::DONE) - static_cast<uint8_t>(PartitionedCopyStage::SORT);
+}
+
+bool PartitionedCopyHashGroup::TryPrepareNextStage() {
+	annotated_lock_guard<annotated_mutex> prepare_guard(lock);
+	switch (stage.load()) {
+	case PartitionedCopyStage::SORT:
+		if (sorted == blocks) {
+			stage = PartitionedCopyStage::MATERIALIZE;
+			return true;
+		}
+		return false;
+	case PartitionedCopyStage::MATERIALIZE:
+		if (materialized == blocks && rows.get()) {
+			stage = PartitionedCopyStage::MASK;
+			return true;
+		}
+		return false;
+	case PartitionedCopyStage::MASK:
+		if (masked == blocks) {
+			stage = PartitionedCopyStage::WRITE;
+			return true;
+		}
+		return false;
+	case PartitionedCopyStage::WRITE:
+		if (written == blocks) {
+			stage = PartitionedCopyStage::DONE;
+			return true;
+		}
+		return false;
+	case PartitionedCopyStage::DONE:
+	default:
+		return true;
+	}
+}
+
+void PartitionedCopyHashGroup::Sort(ExecutionContext &context, GlobalSinkState &sink, InterruptState &interrupt) {
+	OperatorSinkFinalizeInput finalize_input {sink, interrupt};
+	partitioned_copy.sort_strategy->SortColumnData(context, hash_bin, finalize_input);
+	sorted += blocks;
+}
+
+void PartitionedCopyHashGroup::Materialize(ExecutionContext &context, GlobalSourceState &source,
+                                           InterruptState &interrupt) {
+	auto unused = make_uniq<LocalSourceState>();
+	OperatorSourceInput source_input {source, *unused, interrupt};
+	partitioned_copy.sort_strategy->MaterializeColumnData(context, hash_bin, source_input);
+	materialized += blocks;
+	{
+		lock_guard<mutex> guard(lock);
+		if (!rows) {
+			rows = partitioned_copy.sort_strategy->GetColumnData(hash_bin, source_input);
+		}
+	}
+}
+
+void PartitionedCopyHashGroup::Mask() {
+	// TODO: compute partition boundary mask over rows
+	masked += blocks;
+}
+
+void PartitionedCopyHashGroup::Write() {
+	// TODO: write partitioned data using partition_mask boundaries
+	written += blocks;
+}
+
+bool PartitionedCopyHashGroup::TryNextTask(PartitionedCopyTask &task) {
+	if (next_task >= GetTaskCount()) {
+		return false;
+	}
+
+	const auto task_stage =
+	    static_cast<PartitionedCopyStage>(static_cast<uint8_t>(PartitionedCopyStage::SORT) + next_task);
+	if (task_stage != stage.load()) {
+		return false;
+	}
+
+	task.hash_bin = hash_bin;
+	task.stage = task_stage;
+	++next_task;
+	return true;
+}
+
+PartitionedCopyState::PartitionedCopyState(const PartitionedCopy &partitioned_copy_p,
+                                           unique_ptr<GlobalSinkState> global_sink_state_p)
+    : partitioned_copy(partitioned_copy_p), global_sink_state(std::move(global_sink_state_p)), local_state_count(0),
+      combine_count(0), finished_groups(0) {
+}
+
+void PartitionedCopyState::InitHashGroups() {
+	D_ASSERT(global_source_state);
+	const auto &chunk_rows = partitioned_copy.sort_strategy->GetHashGroups(*global_source_state);
+	idx_t total_blocks = 0;
+	for (idx_t i = 0; i < chunk_rows.size(); i++) {
+		auto hash_group = make_uniq<PartitionedCopyHashGroup>(partitioned_copy, chunk_rows[i], i);
+		hash_group->batch_base = total_blocks;
+		total_blocks += chunk_rows[i].chunks;
+		hash_groups.push_back(std::move(hash_group));
+	}
+}
+
+bool PartitionedCopyState::TryAssignTask(PartitionedCopyTask &task) {
+	for (auto &hash_group : hash_groups) {
+		if (!hash_group) {
+			continue;
+		}
+		hash_group->TryPrepareNextStage();
+		{
+			annotated_lock_guard<annotated_mutex> guard(hash_group->lock);
+			if (hash_group->TryNextTask(task)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void PartitionedCopyState::ExecuteTask(ExecutionContext &context, const PartitionedCopyTask &task,
+                                       InterruptState &interrupt) {
+	auto &hash_group = *hash_groups[task.hash_bin];
+	switch (task.stage) {
+	case PartitionedCopyStage::SORT:
+		hash_group.Sort(context, *global_sink_state, interrupt);
+		break;
+	case PartitionedCopyStage::MATERIALIZE:
+		hash_group.Materialize(context, *global_source_state, interrupt);
+		break;
+	case PartitionedCopyStage::MASK:
+		hash_group.Mask();
+		break;
+	case PartitionedCopyStage::WRITE:
+		hash_group.Write();
+		hash_group.TryPrepareNextStage(); // advance WRITE → DONE
+		finished_groups++;
+		break;
+	default:
+		throw InternalException("Invalid PartitionedCopyStage in PartitionedCopyState::ExecuteTask");
+	}
+}
+
+bool PartitionedCopyState::AllGroupsDone() const {
+	return finished_groups >= hash_groups.size();
+}
+
 class PartitionedCopyLocalState : public LocalSinkState {
 public:
 	shared_ptr<PartitionedCopyState> current_state;
 	unique_ptr<LocalSinkState> sort_strategy_local_state;
-	idx_t append_count = DConstants::INVALID_INDEX;
+	idx_t append_count = 0;
 };
 
 PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &context_p)
@@ -213,7 +438,7 @@ void PartitionedCopy::CreateNextState() {
 	auto global_sink_state = sort_strategy->GetGlobalSinkState(context);
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(!sinking_state);
-	sinking_state = make_shared_ptr<PartitionedCopyState>(std::move(global_sink_state));
+	sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
 }
 
 unique_ptr<LocalSinkState> PartitionedCopy::GetLocalState(ExecutionContext &) {
@@ -282,7 +507,7 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 			sort_strategy->Finalize(context, sort_strategy_finalize_input);
 			lstate.current_state->global_source_state =
 			    sort_strategy->GetGlobalSourceState(context, *lstate.current_state->global_sink_state);
-			lstate.current_state->task = PartitionedCopyStage::SORT;
+			lstate.current_state->InitHashGroups();
 		}
 
 		lstate.sort_strategy_local_state.reset();
@@ -295,19 +520,20 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 void PartitionedCopy::Flush(ExecutionContext &execution_context, GlobalSinkState &gstate,
                             InterruptState &interrupt_state) {
 	auto flushing_state_copy = flushing_state;
-	if (!flushing_state_copy) {
-		return; // Nothing to do
+	if (!flushing_state_copy || !flushing_state_copy->global_source_state) {
+		return; // Finalization not yet complete, nothing to do
 	}
 
-	auto state_task = flushing_state_copy->task.load(std::memory_order_relaxed);
-	if (state_task == PartitionedCopyStage::SINK) {
-		return; // Nothing to do
+	PartitionedCopyTask task;
+	while (flushing_state_copy->TryAssignTask(task)) {
+		flushing_state_copy->ExecuteTask(execution_context, task, interrupt_state);
 	}
 
-	// TODO: loop through task assignment and execution
-	auto &hash_groups = sort_strategy->GetHashGroups(*flushing_state_copy->global_source_state);
-	if (state_task == PartitionedCopyStage::SORT) {
-		sort_strategy->SortColumnData(execution_context)
+	if (flushing_state_copy->AllGroupsDone()) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		D_ASSERT(flushing_state && RefersToSameObject(*flushing_state, *flushing_state_copy));
+		flushing_state.reset();
+		flushing = false;
 	}
 }
 
@@ -391,7 +617,7 @@ CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
 		try {
 			fs.TryRemoveFile(file);
 		} catch (...) {
-			// TryRemoveFile migth fail for a varieaty of reasons, but we can't really propagate error codes here, so
+			// TryRemoveFile might fail for a variety of reasons, but we can't really propagate error codes here, so
 			// best effort cleanup
 		}
 	}
