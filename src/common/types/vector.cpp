@@ -588,11 +588,12 @@ void Vector::SetValue(idx_t index, const Value &val) {
 }
 
 Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
-	const Vector *vector = &v_p;
+	const_reference<Vector> current_vector_ref(v_p);
 	idx_t index = index_p;
 	bool finished = false;
 	while (!finished) {
-		switch (vector->GetVectorType()) {
+	    auto &current_vector = current_vector_ref.get();
+		switch (current_vector.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR:
 			index = 0;
 			finished = true;
@@ -605,9 +606,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			break;
 		// dictionary: apply dictionary and forward to child
 		case VectorType::DICTIONARY_VECTOR: {
-			auto &sel_vector = DictionaryVector::SelVector(*vector);
-			auto &child = DictionaryVector::Child(*vector);
-			vector = &child;
+			auto &sel_vector = DictionaryVector::SelVector(current_vector);
+			auto &child = DictionaryVector::Child(current_vector);
+			current_vector_ref = child;
 			index = sel_vector.get_index(index);
 			break;
 		}
@@ -616,8 +617,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			Vector copy(LogicalType::VARIANT());
 			SelectionVector sel(1);
 			sel.set_index(0, index);
-			auto &shredded = ShreddedVector::GetShreddedVector(v_p);
-			auto &unshredded = ShreddedVector::GetUnshreddedVector(v_p);
+			auto &shredded = ShreddedVector::GetShreddedVector(current_vector);
+			auto &unshredded = ShreddedVector::GetUnshreddedVector(current_vector);
 
 			Vector sliced_shredded(shredded, sel, 1);
 			Vector sliced_unshredded(unshredded, sel, 1);
@@ -637,32 +638,32 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
-			SequenceVector::GetSequence(*vector, start, increment);
-			return Value::Numeric(vector->GetType(),
+			SequenceVector::GetSequence(current_vector, start, increment);
+			return Value::Numeric(current_vector.GetType(),
 			                      start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
 		}
 	}
-	auto data = vector->data;
-	auto &validity = vector->validity;
-	auto &type = vector->GetType();
-
+    auto &vector = current_vector_ref.get();
+	auto data = vector.data;
+	auto &validity = vector.validity;
+	auto &type = vector.GetType();
 	if (!validity.RowIsValid(index)) {
-		return Value(vector->GetType());
+		return Value(vector.GetType());
 	}
 
-	if (vector->GetVectorType() == VectorType::FSST_VECTOR) {
-		if (vector->GetType().InternalType() != PhysicalType::VARCHAR) {
+	if (vector.GetVectorType() == VectorType::FSST_VECTOR) {
+		if (vector.GetType().InternalType() != PhysicalType::VARCHAR) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
-		auto decoder = FSSTVector::GetDecoder(*vector);
-		auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*vector);
+		auto decoder = FSSTVector::GetDecoder(vector);
+		auto &decompress_buffer = FSSTVector::GetDecompressBuffer(vector);
 		auto string_val = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
 		                                                  decompress_buffer);
-		switch (vector->GetType().id()) {
+		switch (type.id()) {
 		case LogicalTypeId::VARCHAR:
 			return Value(std::move(string_val));
 		case LogicalTypeId::BLOB:
@@ -672,7 +673,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 	}
 
-	switch (vector->GetType().id()) {
+	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(reinterpret_cast<bool *>(data)[index]);
 	case LogicalTypeId::TINYINT:
@@ -773,7 +774,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
-		return Value::LEGACY_AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
+		return Value::LEGACY_AGGREGATE_STATE(type, const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -784,7 +785,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 	case LogicalTypeId::MAP: {
 		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
-		auto &child_vec = ListVector::GetEntry(*vector);
+		auto &child_vec = ListVector::GetEntry(vector);
 		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
@@ -795,26 +796,26 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		// Remember to pass the original index_p here so we dont slice twice when looking up the tag
 		// in case this is a dictionary vector
 		union_tag_t tag;
-		if (UnionVector::TryGetTag(*vector, index_p, tag)) {
-			auto value = UnionVector::GetMember(*vector, tag).GetValue(index_p);
+		if (UnionVector::TryGetTag(vector, index_p, tag)) {
+			auto value = UnionVector::GetMember(vector, tag).GetValue(index_p);
 			auto members = UnionType::CopyMemberTypes(type);
 			return Value::UNION(members, tag, std::move(value));
 		} else {
-			return Value(vector->GetType());
+			return Value(type);
 		}
 	}
 	case LogicalTypeId::VARIANT: {
 		duckdb::vector<Value> children;
-		children.emplace_back(VariantVector::GetKeys(*vector).GetValue(index_p));
-		children.emplace_back(VariantVector::GetChildren(*vector).GetValue(index_p));
-		children.emplace_back(VariantVector::GetValues(*vector).GetValue(index_p));
-		children.emplace_back(VariantVector::GetData(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetKeys(vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetChildren(vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetValues(vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetData(vector).GetValue(index_p));
 		return Value::VARIANT(children);
 	}
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
-		auto &child_entries = StructVector::GetEntries(*vector);
+		auto &child_entries = StructVector::GetEntries(vector);
 		duckdb::vector<Value> children;
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
@@ -830,7 +831,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 	case LogicalTypeId::LIST: {
 		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
-		auto &child_vec = ListVector::GetEntry(*vector);
+		auto &child_vec = ListVector::GetEntry(vector);
 		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
@@ -840,7 +841,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::ARRAY: {
 		auto stride = ArrayType::GetSize(type);
 		auto offset = index * stride;
-		auto &child_vec = ArrayVector::GetEntry(*vector);
+		auto &child_vec = ArrayVector::GetEntry(vector);
 		duckdb::vector<Value> children;
 		for (idx_t i = offset; i < offset + stride; i++) {
 			children.push_back(child_vec.GetValue(i));
