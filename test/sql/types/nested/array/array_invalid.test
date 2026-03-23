@@ -38,13 +38,13 @@ SELECT array_value();
 statement error
 CREATE TABLE t1(a INT, b INT[-1]);
 ----
-Parser Error: syntax error at or near "-"
+<REGEX>:(.*Parser Error.*syntax error at or near "-".*|Parser Error: Array size must be greater than 0.*)
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
 CREATE TABLE t1(a INT, b INT['foobar']);
 ----
-Parser Error: syntax error at or near "'foobar'"
+<REGEX>:(.*Parser Error.*syntax error at or near "'foobar'".*|Binder Error.*Expected an integer as array bound instead of foobar.*)
 
 # Should not be able to cast array to 0 elements
 statement error
@@ -56,16 +56,16 @@ SELECT ([1,2,3]::INTEGER[3])::INTEGER[0];
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
 ----
-Parser Error: syntax error at or near "-"
+<REGEX>:(.*Parser Error.*syntax error at or near "-".*|Parser Error: Array size must be greater than 0.*)
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
 ----
-Parser Error: syntax error at or near "1.5"
+<REGEX>:(.*Parser Error.*syntax error at or near "1.5"|Binder Error.*Expected an integer as array bound instead of.*)
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER['foobar'];
 ----
-Parser Error: syntax error at or near "'foobar'"
+<REGEX>:(.*Parser Error.*syntax error at or near "'foobar'".*|Binder Error.*Expected an integer as array bound instead of foobar.*)

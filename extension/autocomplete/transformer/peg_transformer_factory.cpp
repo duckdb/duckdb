@@ -54,7 +54,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		auto error_message = "Syntax error at or near \"" + error_token.text + "\"";
+		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
 	match_result->name = "Statement";
