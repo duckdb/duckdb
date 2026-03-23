@@ -579,6 +579,7 @@ void PEGTransformerFactory::RegisterInsert() {
 	REGISTER_TRANSFORM(TransformOnConflictClause);
 	REGISTER_TRANSFORM(TransformOnConflictTarget);
 	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
+	REGISTER_TRANSFORM(TransformOnConflictIndexTarget);
 	REGISTER_TRANSFORM(TransformOnConflictAction);
 	REGISTER_TRANSFORM(TransformOnConflictUpdate);
 	REGISTER_TRANSFORM(TransformOnConflictNothing);
