@@ -78,7 +78,6 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
-	bool should_checkpoint = true;
 	vector<idx_t> existing_extra_metadata_blocks;
 	optional_idx write_count;
 };

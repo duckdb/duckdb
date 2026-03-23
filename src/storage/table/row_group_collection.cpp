@@ -1556,7 +1556,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
-	bool skipped_row_groups = false;
 	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
@@ -1569,7 +1568,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
-			D_ASSERT(writer.GetCheckpointOptions().type == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
 
@@ -1593,28 +1591,18 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 		// check if we should write this row group to the persistent storage
 		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
-		if (row_group_write_data.should_checkpoint) {
-			if (skipped_row_groups) {
-				throw InternalException("Checkpoint failure - we are writing a row group AFTER we skipped writing a "
-				                        "row group due to concurrent insertions. This will change the row-ids of the "
-				                        "written row groups which can cause subtle issues later.");
-			}
-			auto pointer =
-			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
-			if (debug_verify_blocks) {
-				pointer_copy = pointer;
-			}
-			// for any columns that are not yet loaded add them to the list of columns with incomplete stats
-			auto unloaded_columns = row_group_writer->GetUnloadedColumns();
-			for (auto &column_idx : unloaded_columns) {
-				columns_with_incomplete_stats.insert(column_idx);
-			}
-
-			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
-		} else {
-			debug_verify_blocks = false;
-			skipped_row_groups = true;
+		auto pointer =
+		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
+		if (debug_verify_blocks) {
+			pointer_copy = pointer;
 		}
+		// for any columns that are not yet loaded add them to the list of columns with incomplete stats
+		auto unloaded_columns = row_group_writer->GetUnloadedColumns();
+		for (auto &column_idx : unloaded_columns) {
+			columns_with_incomplete_stats.insert(column_idx);
+		}
+
+		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;
 
@@ -1741,14 +1729,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 	}
 	l.Release();
-
-	if (skipped_row_groups) {
-		// if we skipped any rows groups we cannot override the base stats
-		// because the stats reflect only the *checkpointed* row groups
-		// the stats of the extra (not checkpointed) row groups is not included
-		// hence the stats do not correctly reflect the current in-memory state of the table
-		writer.SetCannotOverrideStats();
-	}
 
 	// flush any partial blocks BEFORE updating the row group pointer
 	// flushing partial blocks updates where data lives
