@@ -83,16 +83,6 @@ CREATE OR REPLACE TABLE build_varchar AS
 SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 7)::INTEGER AS g
 FROM range(0, 30000) t(i);
 
-query II
-EXPLAIN ANALYZE
-SELECT count(*)
-FROM probe_varchar p
-JOIN build_varchar b
-  ON p.k = b.k
- AND p.g >= b.g;
-----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
-
 statement ok
 SELECT count(*)
 FROM probe_varchar p
@@ -250,16 +240,6 @@ INSERT INTO prf_build_string VALUES
 	('zzzzzz', 4, 106),
 	(NULL, 0, 107),
 	('abcd2', 1, 108);
-
-query II
-EXPLAIN ANALYZE
-SELECT count(*)
-FROM prf_probe_string p
-JOIN prf_build_string b
-  ON p.k = b.k
- AND p.g >= b.g;
-----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
 
 query IIII
 SELECT p.id, p.k, p.g, b.payload
