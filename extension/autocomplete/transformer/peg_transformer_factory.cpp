@@ -1097,7 +1097,7 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 		result.schema = input[1];
 		result.name = input[2];
 	} else {
-		throw ParserException("Too many dots found.");
+		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
 	return result;
 }

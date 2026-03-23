@@ -1504,7 +1504,7 @@ PEGTransformerFactory::TransformPositionalExpression(PEGTransformer &transformer
 	auto &const_expr = number->Cast<ConstantExpression>();
 	int32_t index = const_expr.value.GetValue<int32_t>();
 	if (index <= 0) {
-		throw ParserException("Positional index must be greater than 0");
+		throw ParserException("Positional reference node needs to be >= 1");
 	}
 	return make_uniq<PositionalReferenceExpression>(NumericCast<idx_t>(index));
 }
