@@ -685,10 +685,22 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 
 	// Project the group columns
 	const auto compact_group_columns = group_table_idx == aggregate_table_idx;
+	map<idx_t, idx_t> compact_group_projection_idxs;
+	if (compact_group_columns) {
+		set<idx_t> ordered_group_projection_idxs;
+		for (const auto &group_idx : group_idxs) {
+			ordered_group_projection_idxs.insert(group_idx.second);
+		}
+		idx_t compact_idx = 0;
+		for (const auto group_projection_idx : ordered_group_projection_idxs) {
+			compact_group_projection_idxs[group_projection_idx] = compact_idx++;
+		}
+	}
 	idx_t current_column_idx = 0;
 	for (auto group_idx : group_idxs) {
 		const auto group_referencing_idx = group_idx.first;
-		const auto column_idx = compact_group_columns ? current_column_idx : group_idx.second;
+		const auto column_idx =
+		    compact_group_columns ? compact_group_projection_idxs[group_idx.second] : group_idx.second;
 		new_bindings[group_referencing_idx].table_index = group_table_idx;
 		new_bindings[group_referencing_idx].column_index = column_idx;
 
