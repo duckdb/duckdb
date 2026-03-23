@@ -1268,6 +1268,9 @@ public:
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);
+			if (!checkpoint_task) {
+				throw InternalException("Failed to get checkpoint task for row group we just merged");
+			}
 			checkpoint_task->ExecuteTask();
 		}
 	}
@@ -1284,7 +1287,8 @@ private:
 	idx_t merge_rows;
 };
 
-void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state) {
+void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+                                               optional_idx checkpoint_row_group_count) {
 	auto options = checkpoint_state.writer.GetCheckpointOptions();
 	// currently we can only vacuum deletes if we are doing a full checkpoint
 	state.can_vacuum_deletes = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
@@ -1296,18 +1300,18 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// this limits what kind of vacuuming we can do
 	state.can_change_row_ids = info->GetIndexes().Empty();
 	// obtain the set of committed row counts for each row group
+	auto row_group_count = checkpoint_state.SegmentCount();
 	vector<optional_idx> committed_counts;
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
+	if (checkpoint_row_group_count.IsValid() && checkpoint_row_group_count.GetIndex() > row_group_count) {
+		// we have row groups that were concurrently appended to this collection
+		// don't vacuum - otherwise we can move row groups which could cause committed row-ids to be moved around
+		// while transactions are still processing / depending on them being stable (during e.g. commit)
+		state.can_vacuum_deletes = false;
+		return;
+	}
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
-		auto should_checkpoint = row_group.ShouldCheckpointRowGroup(options.transaction_id);
-		if (!should_checkpoint) {
-			// this row group does not belong to this checkpoint - it was written by a newer commit
-			// don't vacuum - otherwise we might move this row group around
-			// which could cause the subsequent commit / clean-up to fail
-			state.can_vacuum_deletes = false;
-			return;
-		}
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (!state.can_change_row_ids) {
 			idx_t total_count = row_group.count;
@@ -1445,6 +1449,11 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 //===--------------------------------------------------------------------===//
 unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheckpointState &checkpoint_state,
                                                                  idx_t segment_idx) {
+	auto row_group_count = checkpoint_state.writer.GetRowGroupCount();
+	if (row_group_count.IsValid() && segment_idx >= row_group_count.GetIndex()) {
+		// this row group was appended AFTER the checkpoint was started - we should not be checkpointing it
+		return nullptr;
+	}
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
@@ -1454,7 +1463,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
 
 	VacuumState vacuum_state;
-	InitializeVacuumState(checkpoint_state, vacuum_state);
+	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
 	try {
 		// schedule tasks
@@ -1482,7 +1491,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);
 				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+				if (checkpoint_task) {
+					checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+				}
 			}
 			vacuum_state.row_start += row_group.count;
 		}

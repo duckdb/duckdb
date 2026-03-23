@@ -45,6 +45,12 @@ public:
 	void SetCannotOverrideStats() {
 		override_base_stats = false;
 	}
+	optional_idx GetRowGroupCount() {
+		return row_group_count;
+	}
+	void SetRowGroupCount(optional_idx row_group_count_p) {
+		row_group_count = row_group_count_p;
+	}
 
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
@@ -55,6 +61,8 @@ protected:
 	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
 	bool override_base_stats = true;
+
+	optional_idx row_group_count;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {
