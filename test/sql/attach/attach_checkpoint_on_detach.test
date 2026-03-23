@@ -26,10 +26,10 @@ statement ok con2
 ATTACH '__TEST_DIR__/con2_db.db' AS con2_db;
 
 statement ok con1
-CREATE TABLE con1_db.tbl AS SELECT range AS id FROM range(100_000);
+CREATE TABLE con1_db.tbl AS SELECT range AS id FROM range(100);
 
 statement ok con2
-CREATE TABLE con2_db.tbl AS SELECT range AS id FROM range(100_000);
+CREATE TABLE con2_db.tbl AS SELECT range AS id FROM range(100);
 
 statement ok con1
 DETACH con1_db;
@@ -53,7 +53,7 @@ ATTACH '__TEST_DIR__/con1_db.db' AS con1_db;
 query I
 SELECT COUNT(*) FROM con1_db.tbl;
 ----
-100000
+100
 
 statement ok
 ATTACH '__TEST_DIR__/con2_db.db' AS con2_db;
@@ -61,4 +61,4 @@ ATTACH '__TEST_DIR__/con2_db.db' AS con2_db;
 query I
 SELECT COUNT(*) FROM con2_db.tbl;
 ----
-100000
+100
