@@ -36,9 +36,10 @@ enum class AttachVisibility { SHOWN, HIDDEN };
 //! Use this mode with caution, as it disables recovery from crashes for the file.
 enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
-//! CHECKPOINT: Throws, if the checkpoint fails. Always cleans up.
-//! TRY_CHECKPOINT: Does not throw when failing a checkpoint. Always cleans up.
-//! NO_CHECKPOINT: Skips checkpointing entirely. Always cleans up.
+//! CHECKPOINT: Throws if the checkpoint fails.
+//! TRY_CHECKPOINT: Does not throw when failing a checkpoint.
+//! NO_CHECKPOINT: Skips checkpointing entirely.
+//! All actions always clean up.
 enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, NO_CHECKPOINT };
 
 class DatabaseFilePathManager;

@@ -195,7 +195,7 @@
     },
     {
         "name": "checkpoint_on_detach",
-        "description": "Whether to checkpoint on DETACH (per-connection)",
+        "description": "Whether or not to automatically checkpoint when detaching a database",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"

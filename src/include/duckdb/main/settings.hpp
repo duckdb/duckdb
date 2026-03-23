@@ -368,7 +368,7 @@ struct CatalogErrorMaxSchemasSetting {
 struct CheckpointOnDetachSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "checkpoint_on_detach";
-	static constexpr const char *Description = "Whether to checkpoint on DETACH (per-connection)";
+	static constexpr const char *Description = "Whether or not to automatically checkpoint when detaching a database";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;

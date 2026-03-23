@@ -304,9 +304,6 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 
 		if (create_checkpoint) {
 			auto &config = DBConfig::GetConfig(db);
-			// checkpoint_on_shutdown only gates the shutdown/destructor path (TRY_CHECKPOINT).
-			// The detach path (CHECKPOINT) is controlled by the checkpoint_on_detach session setting,
-			// which is captured in close_action before reaching here.
 			if (action == DatabaseCloseAction::CHECKPOINT || config.options.checkpoint_on_shutdown) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
