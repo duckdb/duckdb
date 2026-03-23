@@ -101,15 +101,10 @@ EXPLAIN SELECT * FROM large_structs WHERE i.a > 150000;
 ----
 physical_plan	<REGEX>:.*Filters:.*i\.a>150000.*
 
-# FIXME: pushdown extract filters cannot be pushed down currently
-mode skip
-
 query II
 EXPLAIN SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;
 ----
 physical_plan	<REGEX>:.*Filters:.*i\.a>150000.*
-
-mode unskip
 
 query III
 SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;

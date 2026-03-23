@@ -3,6 +3,13 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"
@@ -95,21 +102,21 @@ void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, 
 	idx_t col_no = 0;
 	if (HAS_RSEL) {
 		if (FIRST_HASH) {
-			VectorOperations::Hash(*children[col_no++], hashes, *rsel, count);
+			VectorOperations::Hash(children[col_no++], hashes, *rsel, count);
 		} else {
-			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
+			VectorOperations::CombineHash(hashes, children[col_no++], *rsel, count);
 		}
 		while (col_no < children.size()) {
-			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
+			VectorOperations::CombineHash(hashes, children[col_no++], *rsel, count);
 		}
 	} else {
 		if (FIRST_HASH) {
-			VectorOperations::Hash(*children[col_no++], hashes, count);
+			VectorOperations::Hash(children[col_no++], hashes, count);
 		} else {
-			VectorOperations::CombineHash(hashes, *children[col_no++], count);
+			VectorOperations::CombineHash(hashes, children[col_no++], count);
 		}
 		while (col_no < children.size()) {
-			VectorOperations::CombineHash(hashes, *children[col_no++], count);
+			VectorOperations::CombineHash(hashes, children[col_no++], count);
 		}
 	}
 }

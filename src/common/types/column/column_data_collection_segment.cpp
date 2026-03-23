@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -223,8 +228,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &child_vectors = StructVector::GetEntries(result);
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
-			auto child_count =
-			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
+			auto child_count = ReadVector(state, GetChildIndex(vdata.child_index, child_idx), child_vectors[child_idx]);
 			if (child_count != vcount) {
 				throw InternalException("Column Data Collection: mismatch in struct child sizes");
 			}

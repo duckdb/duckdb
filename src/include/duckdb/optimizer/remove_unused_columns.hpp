@@ -77,6 +77,8 @@ enum class BaseColumnPrunerMode : uint8_t {
 struct MaterializedCTEInfo {
 public:
 	column_binding_map_t<ReferencedColumn> column_references;
+	unordered_set<TableIndex> expected_readers;
+	unordered_set<TableIndex> seen_readers;
 	bool everything_referenced = true;
 };
 

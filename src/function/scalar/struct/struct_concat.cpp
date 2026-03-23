@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -19,7 +21,7 @@ static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector
 	for (auto &arg : args.data) {
 		const auto &child_cols = StructVector::GetEntries(arg);
 		for (auto &child_col : child_cols) {
-			result_cols[offset++]->Reference(*child_col);
+			result_cols[offset++].Reference(child_col);
 		}
 	}
 	D_ASSERT(offset == result_cols.size());

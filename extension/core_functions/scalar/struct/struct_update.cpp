@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -34,11 +36,11 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 
 		if (update == new_entries.end()) {
 			// No update present, copy from source
-			result_child_entries[field_idx]->Reference(*starting_child);
+			result_child_entries[field_idx].Reference(starting_child);
 		} else {
 			// We found a replacement of the same name to update
 			auto arg_idx = update->second;
-			result_child_entries[field_idx]->Reference(args.data[arg_idx]);
+			result_child_entries[field_idx].Reference(args.data[arg_idx]);
 			is_new_field[arg_idx] = false;
 		}
 	}
@@ -46,7 +48,7 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 	// Assign the new (not updated) children to the end of the result vector.
 	for (idx_t arg_idx = 1, field_idx = starting_child_entries.size(); arg_idx < args.ColumnCount(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
-			result_child_entries[field_idx++]->Reference(args.data[arg_idx]);
+			result_child_entries[field_idx++].Reference(args.data[arg_idx]);
 		}
 	}
 

@@ -64,6 +64,16 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 	return GetFunctionByOffset(index.GetIndex());
 }
 
+WindowFunctionSet::WindowFunctionSet() : FunctionSet("") {
+}
+
+WindowFunctionSet::WindowFunctionSet(string name) : FunctionSet(std::move(name)) {
+}
+
+WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
+}
+
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 

@@ -2,6 +2,9 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
 
@@ -89,7 +92,7 @@ public:
 			auto &children = result.auxiliary->Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
 				auto &child_cache = child_caches[i]->Cast<VectorCacheBuffer>();
-				child_cache.ResetFromCache(*children[i], child_caches[i]);
+				child_cache.ResetFromCache(children[i], child_caches[i]);
 			}
 			break;
 		}

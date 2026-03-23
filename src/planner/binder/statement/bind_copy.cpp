@@ -74,6 +74,9 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 		copy_options["filename_pattern"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 		copy_options["file_extension"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 		copy_options["per_thread_output"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+		copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+		copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 		copy_options["file_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["partition_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_files"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -84,6 +87,17 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 		copy_options["hive_file_pattern"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	}
 	return copy_options;
+}
+
+static idx_t ParseBytesArg(const string &name, Value &arg) {
+	if (arg.type().id() == LogicalTypeId::VARCHAR) {
+		return DBConfig::ParseMemoryLimit(arg.ToString());
+	}
+	if (!arg.DefaultTryCastAs(LogicalType::UBIGINT)) {
+		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
+		                      StringUtil::Upper(name));
+	}
+	return arg.GetValue<idx_t>();
 }
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
@@ -113,7 +127,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
+	optional_idx batch_size;
+	optional_idx batch_size_bytes;
 	optional_idx file_size_bytes;
+	optional_idx batches_per_file;
 	vector<idx_t> partition_cols;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
@@ -167,18 +184,26 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			bind_input.file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 		} else if (loption == "per_thread_output") {
 			per_thread_output = GetBooleanArg(context, option.second);
+		} else if (loption == "batch_size" || loption == "row_group_size") {
+			if (option.second.empty()) {
+				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE cannot be empty");
+			}
+			batch_size = option.second[0].GetValue<uint64_t>();
+		} else if (loption == "batch_size_bytes" || loption == "row_group_size_bytes") {
+			if (option.second.empty()) {
+				throw BinderException("BATCH_SIZE_BYTES/ROW_GROUP_SIZE_BYTES cannot be empty");
+			}
+			batch_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "file_size_bytes") {
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
-			if (!function.rotate_files) {
-				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
+			file_size_bytes = ParseBytesArg(loption, option.second[0]);
+		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
+			if (option.second.empty()) {
+				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE cannot be empty");
 			}
-			if (option.second[0].GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
-				file_size_bytes = DBConfig::ParseMemoryLimit(option.second[0].ToString());
-			} else {
-				file_size_bytes = option.second[0].GetValue<uint64_t>();
-			}
+			batches_per_file = option.second[0].GetValue<uint64_t>();
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
@@ -212,8 +237,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
 	}
-	if (user_set_use_tmp_file && file_size_bytes.IsValid()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES for COPY");
+	if (user_set_use_tmp_file && (file_size_bytes.IsValid() || batches_per_file.IsValid())) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
 	}
 	if (user_set_use_tmp_file && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
@@ -221,7 +246,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	if (per_thread_output && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
 	}
-	if (file_size_bytes.IsValid() && !partition_cols.empty()) {
+	if ((file_size_bytes.IsValid() || batches_per_file.IsValid()) && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
 	}
 	if (!write_partition_columns) {
@@ -285,11 +310,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
-	const auto rotate = function.rotate_files && function.rotate_files(*function_data, file_size_bytes);
+	const auto rotate = file_size_bytes.IsValid() || batches_per_file.IsValid();
 	if (rotate) {
-		if (!function.rotate_next_file) {
-			throw InternalException("rotate_next_file not implemented for \"%s\"", function.extension);
-		}
 		if (user_set_use_tmp_file) {
 			throw NotImplementedException(
 			    "Can't combine USE_TMP_FILE and file rotation (e.g., ROW_GROUPS_PER_FILE) for COPY");
@@ -297,6 +319,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		if (!partition_cols.empty()) {
 			throw NotImplementedException(
 			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
+		}
+		if (!function.prepare_batch || !function.flush_batch) {
+			throw NotImplementedException(
+			    "Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY with FORMAT %s", function.name);
 		}
 	}
 	if (!write_empty_file) {
@@ -319,9 +345,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->filename_pattern = filename_pattern;
 	copy->file_extension = bind_input.file_extension;
 	copy->per_thread_output = per_thread_output;
-	if (file_size_bytes.IsValid()) {
-		copy->file_size_bytes = file_size_bytes;
-	}
+	copy->batch_size = batch_size;
+	copy->batch_size_bytes = batch_size_bytes;
+	copy->batches_per_file = batches_per_file;
+	copy->file_size_bytes = file_size_bytes;
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->write_partition_columns = write_partition_columns;
@@ -347,6 +374,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		break;
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
+	// This must be set
+	if (!copy->batch_size.IsValid() && copy->function.desired_batch_size) {
+		copy->batch_size = copy->function.desired_batch_size(context, *copy->bind_data);
 	}
 
 	BoundStatement result;

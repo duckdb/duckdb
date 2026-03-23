@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -192,7 +194,7 @@ bool StructFunction(DataChunk &args, Vector &result) {
 	for (idx_t member_idx = 0; member_idx < result_members.size(); member_idx++) {
 		// Same type for each column's member.
 		vector<LogicalType> types;
-		const auto member_type = result_members[member_idx]->GetType();
+		const auto member_type = result_members[member_idx].GetType();
 		for (idx_t col = 0; col < column_count; col++) {
 			types.push_back(member_type);
 		}
@@ -207,10 +209,10 @@ bool StructFunction(DataChunk &args, Vector &result) {
 				struct_vector.Flatten(args.size());
 			}
 			auto &struct_vector_members = StructVector::GetEntries(struct_vector);
-			chunk.data[col].Reference(*struct_vector_members[member_idx]);
+			chunk.data[col].Reference(struct_vector_members[member_idx]);
 		}
 
-		if (!PopulateChild(chunk, *result_members[member_idx])) {
+		if (!PopulateChild(chunk, result_members[member_idx])) {
 			return false;
 		}
 	}
