@@ -163,7 +163,7 @@ public:
 	OrderMasks order_masks;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
-	// The processing stage for this group
+	//! The processing stage for this group
 	atomic<WindowGroupStage> stage;
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;

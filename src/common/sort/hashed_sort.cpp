@@ -405,7 +405,7 @@ SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSin
 	return SinkCombineResultType::FINISHED;
 }
 
-void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) {
+void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const {
 	auto &gstate = finalize.global_state.Cast<HashedSortGlobalSinkState>();
 
 	//	Loop over the partitions and add them to each hash group's global sort state

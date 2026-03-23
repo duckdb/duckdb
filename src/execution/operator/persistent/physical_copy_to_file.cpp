@@ -4,7 +4,8 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/common/sorting/sort_strategy.hpp"
+#include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
@@ -129,18 +130,19 @@ struct GlobalFileState {
 };
 
 //===--------------------------------------------------------------------===//
-// PhysicalCopyPartitionState
+// PartitionedCopy
 //===--------------------------------------------------------------------===//
-enum class PhysicalCopyPartitionTask : uint8_t { SINK, FLUSH };
+enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, DONE };
 
-class PhysicalCopyPartitionFlushState {
+//! Manages a partitioned COPY flush
+class PartitionedCopyState {
 public:
-	explicit PhysicalCopyPartitionFlushState(unique_ptr<GlobalSinkState> global_sink_state_p)
+	explicit PartitionedCopyState(unique_ptr<GlobalSinkState> global_sink_state_p)
 	    : global_sink_state(std::move(global_sink_state_p)), local_state_count(0), combine_count(0) {
 	}
 
 public:
-	//! Lock for managing state machine
+	//! Lock for managing this state
 	annotated_mutex lock;
 
 	//! Sink management
@@ -148,166 +150,165 @@ public:
 	idx_t local_state_count DUCKDB_GUARDED_BY(lock);
 	idx_t combine_count DUCKDB_GUARDED_BY(lock);
 
-	//! Source state
-	unique_ptr<GlobalSourceState> global_source_state DUCKDB_GUARDED_BY(lock);
+	//! Sort management
+	unique_ptr<GlobalSourceState> global_source_state;
 };
 
-class PhysicalCopyPartitionState {
+//! Manages partitioned COPY
+class PartitionedCopy {
 public:
-	PhysicalCopyPartitionState(const PhysicalCopyToFile &op, ClientContext &context);
+	PartitionedCopy(const PhysicalCopyToFile &op, ClientContext &context);
 
 public:
-	//! PhysicalOperator-like interface
-	SinkResultType Sink(ExecutionContext &execution_context, DataChunk &chunk, OperatorSinkInput &sink_input);
-	SinkCombineResultType Combine(ExecutionContext &execution_context, OperatorSinkCombineInput &combine_input);
-	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          OperatorSinkFinalizeInput &finalize_input);
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context);
+	void Sink(ExecutionContext &execution_context, DataChunk &chunk, OperatorSinkInput &sink_input);
+	void Flush(ExecutionContext &execution_context, GlobalSinkState &gstate, InterruptState &interrupt_state);
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context);
 
 private:
-	HashedSort ConstructHashedSort() const;
-	void CreateHashedSortState();
+	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
+	void CreateNextState();
 
 private:
 	const PhysicalCopyToFile &op;
 	ClientContext &context;
 
-	//! Window function partition/sort with PhysicalOperator-like interface
-	const HashedSort hashed_sort;
+	//! Partition/sort strategy with PhysicalOperator-like interface
+	const unique_ptr<const SortStrategy> sort_strategy;
 
 	//! Lock for managing states
 	annotated_mutex lock;
-	//! The current task
-	atomic<PhysicalCopyPartitionTask> task;
+	//! Whether a flushing state currently exists
+	atomic<bool> flushing;
 
 	//! Current sink and combine states
-	unique_ptr<PhysicalCopyPartitionFlushState> hashed_sort_sink_state DUCKDB_GUARDED_BY(lock);
-	unique_ptr<PhysicalCopyPartitionFlushState> hashed_sort_combine_state DUCKDB_GUARDED_BY(lock);
+	shared_ptr<PartitionedCopyState> sinking_state;
+	shared_ptr<PartitionedCopyState> flushing_state;
 };
 
-class PhysicalCopyPartitionLocalState : public LocalSinkState {
+class PartitionedCopyLocalState : public LocalSinkState {
 public:
-	optional_ptr<PhysicalCopyPartitionFlushState> current_state;
-	unique_ptr<LocalSinkState> local_sink_state;
+	shared_ptr<PartitionedCopyState> current_state;
+	unique_ptr<LocalSinkState> sort_strategy_local_state;
 	idx_t append_count = DConstants::INVALID_INDEX;
 };
 
-PhysicalCopyPartitionState::PhysicalCopyPartitionState(const PhysicalCopyToFile &op_p, ClientContext &context_p)
-    : op(op_p), context(context_p), hashed_sort(ConstructHashedSort()), task(PhysicalCopyPartitionTask::SINK) {
-	CreateHashedSortState();
+PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &context_p)
+    : op(op_p), context(context_p), sort_strategy(ConstructSortStrategy()), flushing(false) {
+	CreateNextState();
 }
 
-HashedSort PhysicalCopyPartitionState::ConstructHashedSort() const {
+unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 	vector<unique_ptr<Expression>> partition_bys;
 	for (auto &col : op.partition_columns) {
 		partition_bys.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col], col));
 	}
 	vector<BoundOrderByNode> order_bys;
 	vector<unique_ptr<BaseStatistics>> partition_stats;
-	return HashedSort(context, partition_bys, order_bys, op.expected_types, partition_stats, op.estimated_cardinality);
+
+	return SortStrategy::Factory(context, partition_bys, order_bys, op.children[0].get().GetTypes(), partition_stats,
+	                             op.estimated_cardinality);
 }
 
-void PhysicalCopyPartitionState::CreateHashedSortState() {
-	auto global_sink_state = hashed_sort.GetGlobalSinkState(context);
+void PartitionedCopy::CreateNextState() {
+	auto global_sink_state = sort_strategy->GetGlobalSinkState(context);
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	D_ASSERT(!hashed_sort_sink_state);
-	hashed_sort_sink_state = make_uniq<PhysicalCopyPartitionFlushState>(std::move(global_sink_state));
+	D_ASSERT(!sinking_state);
+	sinking_state = make_shared_ptr<PartitionedCopyState>(std::move(global_sink_state));
 }
 
-unique_ptr<LocalSinkState> PhysicalCopyPartitionState::GetLocalSinkState(ExecutionContext &) {
-	return make_uniq<PhysicalCopyPartitionLocalState>();
+unique_ptr<LocalSinkState> PartitionedCopy::GetLocalState(ExecutionContext &) {
+	return make_uniq<PartitionedCopyLocalState>();
 }
 
-SinkResultType PhysicalCopyPartitionState::Sink(ExecutionContext &execution_context, DataChunk &chunk,
-                                                OperatorSinkInput &sink_input) {
-	// Create new hashed sort local state if necessary
-	auto &lstate = sink_input.local_state.Cast<PhysicalCopyPartitionLocalState>();
-	if (!lstate.local_sink_state) {
-		lstate.local_sink_state = hashed_sort.GetLocalSinkState(execution_context);
+void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk, OperatorSinkInput &sink_input) {
+	// Create new local state if necessary
+	auto &lstate = sink_input.local_state.Cast<PartitionedCopyLocalState>();
+	if (!lstate.current_state) {
+		lstate.current_state = sinking_state;
+		lstate.sort_strategy_local_state = sort_strategy->GetLocalSinkState(execution_context);
 		lstate.append_count = 0;
-
-		{
-			annotated_lock_guard<annotated_mutex> guard(lock);
-			lstate.current_state = hashed_sort_sink_state;
-		}
 
 		annotated_lock_guard<annotated_mutex> guard(lstate.current_state->lock);
 		lstate.current_state->local_state_count++;
 	}
 
-	// Sink into hashed sort
-	OperatorSinkInput hashed_sort_sink_input {*lstate.current_state->global_sink_state, *lstate.local_sink_state,
-	                                          sink_input.interrupt_state};
-	hashed_sort.Sink(execution_context, chunk, hashed_sort_sink_input);
+	// Sink into sort strategy
+	OperatorSinkInput sort_strategy_sink_input {*lstate.current_state->global_sink_state,
+	                                            *lstate.sort_strategy_local_state, sink_input.interrupt_state};
+	sort_strategy->Sink(execution_context, chunk, sort_strategy_sink_input);
 	lstate.append_count += chunk.size();
 
 	if (lstate.append_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(context) &&
-	    task.load(std::memory_order_relaxed) == PhysicalCopyPartitionTask::SINK) {
-		// This thread has exceeded the threshold, but the task was not set to FLUSH yet, grab lock and check again
+	    !flushing.load(std::memory_order_relaxed)) {
+		// This thread has exceeded the threshold, but we're not flushing yet, grab lock and check again
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (task == PhysicalCopyPartitionTask::SINK) {
-			D_ASSERT(RefersToSameObject(*lstate.current_state, *hashed_sort_sink_state));
-			D_ASSERT(!hashed_sort_combine_state);
+		if (!flushing) {
+			D_ASSERT(RefersToSameObject(*lstate.current_state, *sinking_state));
+			D_ASSERT(!flushing_state);
 
 			// Move current sink state to combine state, update task to FLUSH, and create a new sink state
-			hashed_sort_combine_state = std::move(hashed_sort_sink_state);
-			task = PhysicalCopyPartitionTask::FLUSH;
-			CreateHashedSortState();
+			flushing_state = std::move(sinking_state);
+			flushing = true;
+			CreateNextState();
 		}
 	}
 
-	// Check if we need to do any flushing
-	if (task.load(std::memory_order_relaxed) == PhysicalCopyPartitionTask::FLUSH) {
-		// Grab the lock and check again if it's FLUSH, and check if this thread's state is equal to the combine state
-		bool combine;
-		{
-			annotated_lock_guard<annotated_mutex> guard(lock);
-			if (task != PhysicalCopyPartitionTask::FLUSH) {
-				return SinkResultType::NEED_MORE_INPUT; // No longer flushing
-			}
-			combine = RefersToSameObject(*lstate.current_state, *hashed_sort_combine_state);
-		}
+	if (!flushing.load(std::memory_order_relaxed)) {
+		return; // Nothing left to do
+	}
 
-		if (combine) {
-			// This thread's local state is currently being flushed, combine it (lock-free)
-			OperatorSinkCombineInput hashed_sort_combine_input {*lstate.current_state->global_sink_state,
-			                                                    *lstate.local_sink_state, sink_input.interrupt_state};
-			hashed_sort.Combine(execution_context, hashed_sort_combine_input);
-		}
-
+	bool combine = false;
+	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
+		combine = flushing_state && RefersToSameObject(*lstate.current_state, *flushing_state);
 	}
 
-	return SinkResultType::NEED_MORE_INPUT;
+	if (combine) {
+		// This thread's local state is currently being flushed, combine it (lock-free), and reset
+		OperatorSinkCombineInput sort_strategy_combine_input {
+		    *lstate.current_state->global_sink_state, *lstate.sort_strategy_local_state, sink_input.interrupt_state};
+		sort_strategy->Combine(execution_context, sort_strategy_combine_input);
+
+		// Update state, last combining thread finalizes
+		bool finalize;
+		{
+			annotated_lock_guard<annotated_mutex> guard(lstate.current_state->lock);
+			finalize = ++lstate.current_state->combine_count == lstate.current_state->local_state_count;
+		}
+
+		if (finalize) {
+			OperatorSinkFinalizeInput sort_strategy_finalize_input {*lstate.current_state->global_sink_state,
+			                                                        sink_input.interrupt_state};
+			sort_strategy->Finalize(context, sort_strategy_finalize_input);
+			lstate.current_state->global_source_state =
+			    sort_strategy->GetGlobalSourceState(context, *lstate.current_state->global_sink_state);
+			lstate.current_state->task = PartitionedCopyStage::SORT;
+		}
+
+		lstate.sort_strategy_local_state.reset();
+		lstate.current_state.reset();
+	}
+
+	Flush(execution_context, sink_input.global_state, sink_input.interrupt_state);
 }
 
-SinkCombineResultType PhysicalCopyPartitionState::Combine(ExecutionContext &execution_context,
-                                                          OperatorSinkCombineInput &combine_input) {
-	D_ASSERT(task == PhysicalCopyPartitionTask::FLUSH);
-
-	// Increment combine count before actually combining
-	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		combine_count++;
+void PartitionedCopy::Flush(ExecutionContext &execution_context, GlobalSinkState &gstate,
+                            InterruptState &interrupt_state) {
+	auto flushing_state_copy = flushing_state;
+	if (!flushing_state_copy) {
+		return; // Nothing to do
 	}
 
-	// Call combine on the hashed sort
-	auto &lstate = combine_input.local_state.Cast<PhysicalCopyPartitionLocalState>();
-	OperatorSinkCombineInput hashed_sort_input {*hashed_sort_global_sink_state, *lstate.hashed_sort_local_sink_state,
-	                                            combine_input.interrupt_state};
-	hashed_sort.Combine(execution_context, hashed_sort_input);
-
-	// Check if
-	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (combine_count != local_state_count) {
-			const auto block_result = combine_input.global_state.BlockSink(combine_input.interrupt_state);
-			return block_result == SinkResultType::BLOCKED ? SinkCombineResultType::BLOCKED
-			                                               : SinkCombineResultType::FINISHED;
-		}
+	auto state_task = flushing_state_copy->task.load(std::memory_order_relaxed);
+	if (state_task == PartitionedCopyStage::SINK) {
+		return; // Nothing to do
 	}
 
-	//
+	// TODO: loop through task assignment and execution
+	auto &hash_groups = sort_strategy->GetHashGroups(*flushing_state_copy->global_source_state);
+	if (state_task == PartitionedCopyStage::SORT) {
+		sort_strategy->SortColumnData(execution_context)
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -355,7 +356,7 @@ public:
 	unique_ptr<ColumnDataCollection> last_batch DUCKDB_GUARDED_BY(last_batch_lock);
 
 	//! Partitioning state
-	unique_ptr<PhysicalCopyPartitionState> partition_state;
+	unique_ptr<PartitionedCopy> partitioned_copy;
 
 	//! Created directories
 	unordered_set<string> created_directories;
@@ -591,14 +592,12 @@ class CopyToFunctionLocalState : public LocalSinkState {
 public:
 	CopyToFunctionLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p,
 	                         CopyToFunctionGlobalState &gstate_p, unique_ptr<LocalFunctionData> local_state)
-	    : op(op_p), context(context_p), gstate(gstate_p), local_state(std::move(local_state)) {
+	    : op(op_p), context(context_p), gstate(gstate_p), local_file_state(std::move(local_state)) {
 	}
 
 public:
 	//! Partitioned append functions
-	void InitializePartitionedAppendState();
 	void AppendToPartition(DataChunk &chunk, InterruptState &interrupt_state);
-	void ResetPartitionedAppendState();
 	void SetDataWithoutPartitions(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
 	                              const vector<idx_t> &part_cols);
 	void FlushPartitions();
@@ -608,34 +607,33 @@ public:
 	ExecutionContext &context;
 	CopyToFunctionGlobalState &gstate;
 
-	unique_ptr<GlobalFileState> global_state;
-	unique_ptr<LocalFunctionData> local_state;
+	//! Global/local file state (unpartitioned write)
+	unique_ptr<GlobalFileState> global_file_state;
+	unique_ptr<LocalFunctionData> local_file_state;
 
-	//! For prepare/flush batch
+	//! Current append batch (unpartitioned write)
 	unique_ptr<ColumnDataCollection> batch;
 	ColumnDataAppendState batch_append_state;
 
+	//! Local state (partitioned write)
+	unique_ptr<LocalSinkState> partitioned_copy_local_state;
+
+	//! Total number of rows copied by this thread
 	idx_t total_rows_copied = 0;
-
-	//! Buffers the tuples in partitions before writing
-	unique_ptr<LocalSinkState> hashed_sort_local_sink;
-
-	idx_t append_count = 0;
 };
 
 void CopyToFunctionLocalState::InitializePartitionedAppendState() {
-	hashed_sort_local_sink = gstate.hashed_sort->GetLocalSinkState(context);
-	append_count = 0;
+	partitioned_copy_local_state = gstate.hashed_sort->GetLocalSinkState(context);
 }
 
 void CopyToFunctionLocalState::AppendToPartition(DataChunk &chunk, InterruptState &interrupt_state) {
-	if (!hashed_sort_local_sink) {
+	if (!partitioned_copy_local_state) {
 		// re-initialize the append
 		InitializePartitionedAppendState();
 	}
 
 	// TODO: maybe check sink result type?
-	OperatorSinkInput input {*gstate.hashed_sort_global_sink, *hashed_sort_local_sink, interrupt_state};
+	OperatorSinkInput input {*gstate.hashed_sort_global_sink, *partitioned_copy_local_state, interrupt_state};
 	gstate.hashed_sort->Sink(context, chunk, input);
 
 	append_count += chunk.size();
@@ -646,7 +644,7 @@ void CopyToFunctionLocalState::AppendToPartition(DataChunk &chunk, InterruptStat
 }
 
 void CopyToFunctionLocalState::ResetPartitionedAppendState() {
-	hashed_sort_local_sink.reset();
+	partitioned_copy_local_state.reset();
 	append_count = 0;
 }
 
@@ -668,7 +666,7 @@ void CopyToFunctionLocalState::SetDataWithoutPartitions(DataChunk &chunk, const 
 }
 
 void CopyToFunctionLocalState::FlushPartitions() {
-	if (!hashed_sort_local_sink) {
+	if (!partitioned_copy_local_state) {
 		return;
 	}
 	part_buffer->FlushAppendState(*part_buffer_append_state);
@@ -867,7 +865,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		if (partition_output) {
-			state->partition_state = make_uniq<PhysicalCopyPartitionState>(*this, context);
+			state->partitioned_copy = make_uniq<PartitionedCopy>(*this, context);
 		}
 
 		return std::move(state);
@@ -917,8 +915,8 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	const CopyFunctionBatchAnalyzer batch_analyzer(*lstate.batch, batch_size, batch_size_bytes);
 	if (batch_analyzer.MeetsFlushCriteria()) {
 		lstate.batch_append_state.current_chunk_state.handles.clear();
-		auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
-		FlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun, lstate.local_state,
+		auto &file_state_ptr = per_thread_output ? lstate.global_file_state : gstate.global_state;
+		FlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun, lstate.local_file_state,
 		           std::move(lstate.batch), PhysicalCopyToFilePhase::SINK);
 	}
 
@@ -942,10 +940,10 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 	if (per_thread_output) {
 		if (lstate.batch) {
-			FlushBatch(context.client, gstate, lstate.global_state, gstate.create_file_state_fun, lstate.local_state,
-			           std::move(lstate.batch), PhysicalCopyToFilePhase::COMBINE);
+			FlushBatch(context.client, gstate, lstate.global_file_state, gstate.create_file_state_fun,
+			           lstate.local_file_state, std::move(lstate.batch), PhysicalCopyToFilePhase::COMBINE);
 		}
-		function.copy_to_finalize(context.client, *bind_data, *lstate.global_state->data);
+		function.copy_to_finalize(context.client, *bind_data, *lstate.global_file_state->data);
 		return SinkCombineResultType::FINISHED;
 	}
 
@@ -978,8 +976,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		return SinkCombineResultType::FINISHED;
 	}
 
-	auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
-	FlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun, lstate.local_state,
+	auto &file_state_ptr = per_thread_output ? lstate.global_file_state : gstate.global_state;
+	FlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun, lstate.local_file_state,
 	           std::move(batch), PhysicalCopyToFilePhase::COMBINE);
 
 	return SinkCombineResultType::FINISHED;
