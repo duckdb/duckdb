@@ -58,12 +58,9 @@ public:
 					const idx_t offset = block_idx * block_size;
 					if (offset >= file_size) {
 						lk.lock();
-						block->nr_bytes = 0;
-						block->block_handle = nullptr;
-						block->state = CacheBlockState::LOADED;
-#ifdef DEBUG
-						block->checksum = 0;
-#endif
+						// If there're other workers waiting for this block, we need to reset the block to empty state
+						// for another attempt.
+						block->state = CacheBlockState::EMPTY;
 						block->cv.notify_all();
 						return;
 					}

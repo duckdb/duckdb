@@ -812,14 +812,24 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
 	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
 
+	// Partial read across EOF.
 	{
 		auto handle = cfs.OpenFile(file_info, flags);
 		REQUIRE_THROWS(handle->Read(100, content.size() - 10));
 	}
+	// Complete read across EOF.
 	{
 		auto handle = cfs.OpenFile(file_info, flags);
 		REQUIRE_THROWS(handle->Read(10, content.size() + 100));
 	}
+	// Continuous reads across EOF.
+	{
+		auto handle1 = cfs.OpenFile(file_info, flags);
+		auto handle2 = cfs.OpenFile(file_info, flags);
+		REQUIRE_THROWS(handle1->Read(10, content.size() + 100));
+		REQUIRE_THROWS(handle2->Read(10, content.size() + 100));
+	}
+	// Seek and read across EOF.
 	{
 		auto handle = cfs.OpenFile(file_info, flags);
 		idx_t requested = content.size() + 100;
