@@ -96,6 +96,10 @@ public:
 	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
 	void ModifyTable(DataTable &tbl);
 
+	void SetIsCheckpointTransaction() {
+		is_checkpoint_transaction = true;
+	}
+
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
@@ -122,6 +126,8 @@ private:
 	};
 	//! Active locks on tables
 	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
+	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
+	bool is_checkpoint_transaction = false;
 };
 
 } // namespace duckdb
