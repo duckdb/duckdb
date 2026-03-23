@@ -977,7 +977,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TempPersistent <- 'TEMP'\n"
 	"TemporaryPersistent <- 'TEMPORARY'\n"
 	"CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?\n"
-	"CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' SelectStatementInternal WithData?\n"
+	"CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' Statement WithData?\n"
 	"PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions\n"
 	"PartitionOptSortedOptions <- PartitionOptions SortedOptions?\n"
 	"SortedOptPartitionOptions <- SortedOptions PartitionOptions?\n"

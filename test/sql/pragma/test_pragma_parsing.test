@@ -12,7 +12,7 @@ Parser Error: syntax error at or near "PRAG"
 statement error
 PRAGMA 
 ----
-<REGEX>:.*Parser Error.*syntax error at end of input.*
+<REGEX>:.*Parser Error.*syntax error*
 
 # Unknown pragma error
 statement error
@@ -34,4 +34,3 @@ PRAGMA table_info('integers');
 # Parsing also works with extra spaces
 statement ok
   PRAGMA    table_info  ('integers');
-

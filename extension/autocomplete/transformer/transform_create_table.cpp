@@ -98,7 +98,7 @@ CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &tran
 	// child 1: PartitionSortedOptions?
 	// child 2: WithList?
 	// child 3: 'AS'
-	// child 4: SelectStatementInternal
+	// child 4: Statement
 	// child 5: WithData?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	CreateTableAs result;
@@ -108,7 +108,11 @@ CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &tran
 	result.partition_keys = std::move(pso.partition_keys);
 	result.sort_keys = std::move(pso.sort_keys);
 	transformer.TransformOptional<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr, 2, result.options);
-	result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(4));
+	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(4));
+	if (stmt->type != StatementType::SELECT_STATEMENT) {
+		throw ParserException("CREATE TABLE AS requires a SELECT clause");
+	}
+	result.select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(stmt));
 	transformer.TransformOptional<bool>(list_pr, 5, result.with_data);
 	if (result.with_data) {
 		auto limit_modifier = make_uniq<LimitModifier>();
