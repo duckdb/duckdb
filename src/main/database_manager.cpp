@@ -257,7 +257,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 
 	if (Settings::Get<SkipCheckpointOnDetachSetting>(context)) {
-		attached_db->SetCloseAction(DatabaseCloseAction::NO_CHECKPOINT);
+		attached_db->SetCloseAction(DatabaseCloseAction::SKIP_CHECKPOINT);
 	}
 
 	attached_db->OnDetach(context);

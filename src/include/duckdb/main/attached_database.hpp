@@ -38,9 +38,9 @@ enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
 //! CHECKPOINT: Throws if the checkpoint fails.
 //! TRY_CHECKPOINT: Does not throw when failing a checkpoint.
-//! NO_CHECKPOINT: Skips checkpointing entirely.
+//! SKIP_CHECKPOINT: Skips checkpointing entirely.
 //! All actions always clean up.
-enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, NO_CHECKPOINT };
+enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, SKIP_CHECKPOINT };
 
 class DatabaseFilePathManager;
 
