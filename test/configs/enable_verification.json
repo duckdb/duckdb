@@ -126,7 +126,8 @@
         "test/sql/types/geo/geometry_shred_checkpoint.test",
         "test/sql/window/test_window_constant_allocator.test",
         "test/parquet/variant/variant_stats_propagation.test",
-        "test/sql/types/geo/geometry_compatability.test"
+        "test/sql/types/geo/geometry_compatability.test",
+        "test/sql/copy/parquet/parquet_glob_cache.test"
       ]
     },
     {

@@ -1,0 +1,35 @@
+# name: test/issues/general/test_21372.test
+# description: Issue 21372 - common subplan extraction can reorder join outputs and break column binding resolution
+# group: [general]
+
+statement ok
+CREATE TABLE pp_test_cohort AS
+SELECT 1 AS cohort_definition_id, 1 AS subject_id, CAST('2017-01-01' AS DATE) AS cohort_start_date,
+       CAST('2017-01-01' AS DATE) AS cohort_end_date;
+
+statement ok
+CREATE TABLE pp_test_cohort_set AS
+SELECT 1 AS cohort_definition_id, 'cohort_1' AS cohort_name;
+
+query TTITT
+SELECT
+  cohort_name AS cohort_name_reference,
+  cohort_start_date,
+  pp_test_cohort.subject_id AS subject_id,
+  cohort_name_comparator,
+  cohort_start_date_comparator
+FROM pp_test_cohort
+LEFT JOIN pp_test_cohort_set
+  ON (pp_test_cohort.cohort_definition_id = pp_test_cohort_set.cohort_definition_id)
+INNER JOIN (
+  SELECT
+    cohort_name AS cohort_name_comparator,
+    cohort_start_date AS cohort_start_date_comparator,
+    subject_id
+  FROM pp_test_cohort
+  LEFT JOIN pp_test_cohort_set
+    ON (pp_test_cohort.cohort_definition_id = pp_test_cohort_set.cohort_definition_id)
+) zz
+  ON (pp_test_cohort.subject_id = zz.subject_id);
+----
+cohort_1	2017-01-01	1	cohort_1	2017-01-01
