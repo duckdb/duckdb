@@ -8,6 +8,8 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
+#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -297,6 +299,32 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 //===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
+WindowFunctionSet LeadFun::GetFunctions() {
+	WindowFunctionSet funcs("lead");
+
+	funcs.AddFunction(WindowFunction({LogicalType::TEMPLATE("T"), LogicalType::BIGINT, LogicalType::TEMPLATE("T")},
+	                                 LogicalType::TEMPLATE("T"), ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(WindowFunction({LogicalType::TEMPLATE("T"), LogicalType::BIGINT}, LogicalType::TEMPLATE("T"),
+	                                 ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(
+	    WindowFunction({LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"), ExpressionType::WINDOW_LEAD));
+
+	return funcs;
+}
+
+WindowFunctionSet LagFun::GetFunctions() {
+	WindowFunctionSet funcs("lag");
+
+	funcs.AddFunction(WindowFunction({LogicalType::TEMPLATE("T"), LogicalType::BIGINT, LogicalType::TEMPLATE("T")},
+	                                 LogicalType::TEMPLATE("T"), ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(WindowFunction({LogicalType::TEMPLATE("T"), LogicalType::BIGINT}, LogicalType::TEMPLATE("T"),
+	                                 ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(
+	    WindowFunction({LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"), ExpressionType::WINDOW_LEAD));
+
+	return funcs;
+}
+
 WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
 }
@@ -465,6 +493,12 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	}
 }
 
+WindowFunction FirstValueFun::GetFunction() {
+	WindowFunction fun("first_value", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"),
+	                   ExpressionType::WINDOW_FIRST_VALUE);
+	return fun;
+}
+
 WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
 }
@@ -516,6 +550,12 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 		// Didn't find one
 		FlatVector::SetNull(result, i, true);
 	});
+}
+
+WindowFunction LastValueFun::GetFunction() {
+	WindowFunction fun("last_value", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"),
+	                   ExpressionType::WINDOW_LAST_VALUE);
+	return fun;
 }
 
 WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -575,6 +615,12 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 		// Didn't find one
 		FlatVector::SetNull(result, i, true);
 	});
+}
+
+WindowFunction NthValueFun::GetFunction() {
+	WindowFunction fun("nth_value", {LogicalType::TEMPLATE("T"), LogicalType::BIGINT}, LogicalType::TEMPLATE("T"),
+	                   ExpressionType::WINDOW_NTH_VALUE);
+	return fun;
 }
 
 WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -862,6 +908,11 @@ static fill_value_t GetFillValueFunction(const LogicalType &type) {
 	default:
 		throw InternalException("Unsupported FILL value type.");
 	}
+}
+
+WindowFunction FillFun::GetFunction() {
+	WindowFunction fun("fill", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"), ExpressionType::WINDOW_FILL);
+	return fun;
 }
 
 WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,

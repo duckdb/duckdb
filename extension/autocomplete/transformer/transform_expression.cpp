@@ -260,6 +260,11 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		if (transformer.in_window_definition) {
 			throw ParserException("window functions are not allowed in window definitions");
 		}
+		//	We map first/last OVER() to first_value/last_value.
+		//	Not sure the semantics match, but we are stuck with it.
+		if (lowercase_name == "first" || lowercase_name == "last") {
+			lowercase_name += "_value";
+		}
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
