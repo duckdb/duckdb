@@ -1,4 +1,4 @@
-commit 9215d850991ac00cca9929af307c2dde185b1b38
+commit 1a506c14870e232f5e214c5c3cb2a634222b2a03
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 22 21:20:12 2026 +0000
 
@@ -540,3 +540,15 @@ index 15350c54..4ab34c16 100644
  		get.AddColumnId(physical_index.index);
  		update.columns.push_back(physical_index);
  	}
+diff --git a/src/storage/table_update/iceberg_add_snapshot.cpp b/src/storage/table_update/iceberg_add_snapshot.cpp
+index a431d261..a0311fb2 100644
+--- a/src/storage/table_update/iceberg_add_snapshot.cpp
++++ b/src/storage/table_update/iceberg_add_snapshot.cpp
+@@ -7,7 +7,6 @@
+ #include "duckdb/parallel/thread_context.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+-#include "duckdb/storage/caching_file_system.hpp"
+ 
+ namespace duckdb {
+ 
