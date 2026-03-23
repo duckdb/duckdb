@@ -322,6 +322,10 @@ public:
 			string hex_string = "x" + result;
 			return make_uniq<ConstantExpression>(Value(hex_string));
 		}
+		case SpecialStringCharacter::BIT_STRING: {
+			string bit_string = "b" + result;
+			return make_uniq<ConstantExpression>(Value(bit_string));
+		}
 		case SpecialStringCharacter::ESCAPE_STRING:
 			string escaped_result;
 			escaped_result.reserve(result.size());

@@ -384,6 +384,9 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransf
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto check_expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+	if (check_expr->HasSubquery()) {
+		throw ParserException("subqueries prohibited in CHECK constraints");
+	}
 	auto result = make_uniq<CheckConstraint>(std::move(check_expr));
 	return std::move(result);
 }
@@ -395,6 +398,9 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(P
 
 	auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(list_pr.Child<ListParseResult>(3));
 	fk_constraint->fk_columns = pk_list;
+	if (!fk_constraint->pk_columns.empty() && fk_constraint->fk_columns.size() != fk_constraint->pk_columns.size()) {
+		throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
+	}
 	return std::move(fk_constraint);
 }
 
