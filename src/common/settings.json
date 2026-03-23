@@ -536,6 +536,16 @@
         "custom_implementation": true
     },
     {
+        "name": "enable_suspended_queries",
+        "description": "Allow streaming query results to be suspended and resumed when interleaving with other statements in an explicit transaction",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "enable_view_dependencies",
         "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",

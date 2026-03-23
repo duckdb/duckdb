@@ -809,6 +809,19 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableSuspendedQueriesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_suspended_queries";
+	static constexpr const char *Description = "Allow streaming query results to be suspended and resumed when "
+	                                           "interleaving with other statements in an explicit transaction";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static bool OnLocalSet(ClientContext &context, const Value &input);
+	static bool OnLocalReset(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableViewDependenciesSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_view_dependencies";

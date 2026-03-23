@@ -212,6 +212,14 @@ public:
 
 	//! Whether or not the given result object (streaming query result or pending query result) is active
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
+	//! Whether or not the given result is in the suspended queries stack
+	DUCKDB_API bool IsSuspendedResult(ClientContextLock &lock, BaseQueryResult &result);
+
+	enum class ResumeResultCode : uint8_t { SUCCESS, NOT_SUSPENDED, TRANSACTION_ENDED, CANNOT_SUSPEND_ACTIVE };
+	//! Resume a suspended query that owns the given result
+	DUCKDB_API ResumeResultCode ResumeQueryForResult(ClientContextLock &lock, BaseQueryResult &result);
+	//! Cancel and remove a suspended query that owns the given result
+	DUCKDB_API bool CancelSuspendedResult(ClientContextLock &lock, BaseQueryResult &result);
 
 	//! Returns the current executor
 	Executor &GetExecutor();
@@ -256,8 +264,10 @@ private:
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
+	//! If allow_suspend is true and there is an open streaming result in an explicit transaction,
+	//! the active query will be suspended instead of destroyed.
 	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
-	                     bool invalidate_transaction = false);
+	                     bool invalidate_transaction = false, bool allow_suspend = false);
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                                   unique_ptr<SQLStatement> statement,
 	                                                                   shared_ptr<PreparedStatementData> &prepared,
@@ -320,10 +330,17 @@ private:
 	bool ErrorInvalidatesTransaction(ExceptionType type);
 
 private:
+	//! Suspend the active query context (park it for later resume)
+	void SuspendActiveQuery(ClientContextLock &lock);
+	//! Clean up a single suspended query context (cancel executor, notify states)
+	void CleanupSuspendedQuery(unique_ptr<ActiveQueryContext> &sq);
+
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
 	//! The currently active query context
 	unique_ptr<ActiveQueryContext> active_query;
+	//! Stack of suspended query contexts (for interleaved streaming + DML)
+	vector<unique_ptr<ActiveQueryContext>> suspended_queries;
 	//! The current query progress
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context

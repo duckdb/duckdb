@@ -20,6 +20,10 @@ StreamQueryResult::StreamQueryResult(ErrorData error) : QueryResult(QueryResultT
 }
 
 StreamQueryResult::~StreamQueryResult() {
+	try {
+		Close();
+	} catch (...) { // NOLINT: destructor must not throw
+	}
 }
 
 string StreamQueryResult::ToString() {
@@ -171,18 +175,49 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
 	bool invalidated = !success || !context;
 	if (!invalidated) {
-		invalidated = !context->IsActiveResult(lock, *this);
+		// Check if this result is either the active result or a suspended result
+		invalidated = !context->IsActiveResult(lock, *this) && !context->IsSuspendedResult(lock, *this);
 	}
 	return !invalidated;
 }
 
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
-	if (!IsOpenInternal(lock)) {
-		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+	if (!success || !context) {
+		string error_str = "Attempting to fetch from an unsuccessful or closed streaming result";
 		if (HasError()) {
 			error_str += StringUtil::Format("\nError: %s", GetError());
 		}
 		throw InvalidInputException(error_str);
+	}
+	if (!context->IsActiveResult(lock, *this)) {
+		// Not the active result — try to resume from suspended state
+		auto resume_result = context->ResumeQueryForResult(lock, *this);
+		if (resume_result != ClientContext::ResumeResultCode::SUCCESS) {
+			string error_str;
+			switch (resume_result) {
+			case ClientContext::ResumeResultCode::NOT_SUSPENDED:
+				error_str = "Streaming result was invalidated by a new query on this connection. "
+				            "To interleave streaming with other statements, use SET enable_suspended_queries = true "
+				            "inside an explicit transaction (BEGIN TRANSACTION)";
+				break;
+			case ClientContext::ResumeResultCode::TRANSACTION_ENDED:
+				error_str = "Cannot resume streaming result: the transaction was committed or rolled back "
+				            "while the stream was suspended";
+				break;
+			case ClientContext::ResumeResultCode::CANNOT_SUSPEND_ACTIVE:
+				error_str = "Cannot resume streaming result: another query is actively executing "
+				            "on this connection. Wait for it to complete before fetching from the suspended stream";
+				break;
+			default:
+				error_str = "Attempting to fetch from an unsuccessful or closed streaming result";
+				break;
+			}
+			if (HasError()) {
+				error_str += StringUtil::Format("\nError: %s", GetError());
+			}
+			throw InvalidInputException(error_str);
+		}
+		// Successfully resumed — active_query now points to our context
 	}
 }
 
@@ -196,6 +231,14 @@ bool StreamQueryResult::IsOpen() {
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
+	// If this stream is in the suspended queries stack, remove and clean it up.
+	// Otherwise the suspended executor and its resources leak until transaction end.
+	if (context) {
+		auto lock = context->LockContext();
+		if (context->IsSuspendedResult(*lock, *this)) {
+			context->CancelSuspendedResult(*lock, *this);
+		}
+	}
 	context.reset();
 }
 

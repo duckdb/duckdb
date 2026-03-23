@@ -95,6 +95,10 @@ public:
 	bool HasOpenResult() const {
 		return open_result != nullptr;
 	}
+	QueryResultType GetOpenResultType() const {
+		D_ASSERT(open_result);
+		return open_result->type;
+	}
 
 private:
 	//! The currently open result
@@ -108,23 +112,21 @@ struct DebugClientContextState : public ClientContextState {
 			return;
 		}
 		D_ASSERT(!active_transaction);
-		D_ASSERT(!active_query);
+		D_ASSERT(active_query_count == 0);
 	}
 
 	bool active_transaction = false;
-	bool active_query = false;
+	//! Counter instead of bool to support overlapping query lifetimes from suspension.
+	//! A suspended query's BeginQuery was called but its EndQuery hasn't fired yet
+	//! when a new query's BeginQuery fires.
+	idx_t active_query_count = 0;
 
 	void QueryBegin(ClientContext &context) override {
-		if (active_query) {
-			throw InternalException("DebugClientContextState::QueryBegin called when a query is already active");
-		}
-		active_query = true;
+		active_query_count++;
 	}
 	void QueryEnd(ClientContext &context) override {
-		if (!active_query) {
-			throw InternalException("DebugClientContextState::QueryEnd called when no query is active");
-		}
-		active_query = false;
+		D_ASSERT(active_query_count > 0);
+		active_query_count--;
 	}
 	void TransactionBegin(MetaTransaction &transaction, ClientContext &context) override {
 		if (active_transaction) {
@@ -199,6 +201,12 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 
 void ClientContext::Destroy() {
 	auto lock = LockContext();
+	// Clean up suspended queries: cancel executors and notify registered states,
+	// since their BeginQuery was called but EndQuery was never called (suspension skips it).
+	for (auto &sq : suspended_queries) {
+		CleanupSuspendedQuery(sq);
+	}
+	suspended_queries.clear();
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
@@ -289,6 +297,11 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
 				ValidChecker::Invalidate(ActiveTransaction(), "Failed to commit");
+				// Clear all suspended queries since the transaction is dead.
+				for (auto &sq : suspended_queries) {
+					CleanupSuspendedQuery(sq);
+				}
+				suspended_queries.clear();
 			}
 		}
 	} catch (std::exception &ex) {
@@ -320,9 +333,19 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	return error;
 }
 
-void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction) {
+void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction,
+                                    bool allow_suspend) {
 	if (!active_query) {
 		// no query currently active
+		return;
+	}
+	// If suspension is allowed, the setting is enabled, and we have an open streaming result
+	// in an explicit transaction, suspend the active query instead of destroying it.
+	// Only suspend StreamQueryResults — PendingQueryResults are mid-execution and must not be interrupted.
+	if (allow_suspend && config.enable_suspended_queries && active_query->HasOpenResult() &&
+	    active_query->GetOpenResultType() == QueryResultType::STREAM_RESULT && !transaction.IsAutoCommit() &&
+	    !invalidate_transaction) {
+		SuspendActiveQuery(lock);
 		return;
 	}
 	if (active_query->executor) {
@@ -344,6 +367,105 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 		result->SetError(error);
 	}
 	D_ASSERT(!active_query);
+}
+
+void ClientContext::CleanupSuspendedQuery(unique_ptr<ActiveQueryContext> &sq) {
+	if (sq && sq->executor) {
+		sq->executor->CancelTasks();
+	}
+	for (auto const &s : registered_state->States()) {
+		s->QueryEnd(*this, nullptr);
+	}
+}
+
+void ClientContext::SuspendActiveQuery(ClientContextLock &lock) {
+	D_ASSERT(active_query);
+	D_ASSERT(active_query->HasOpenResult());
+	D_ASSERT(!transaction.IsAutoCommit());
+
+	// Do NOT call executor->CancelTasks() — we need pipeline state intact for resume.
+	// CancelTasks() sets cancelled=true and destroys pipelines, making resume impossible.
+
+	// Do NOT call QueryEnd on registered states — this is a park operation, not a query end.
+	// The query's BeginQuery/EndQuery lifecycle is unaffected by suspension.
+
+	active_query->progress_bar.reset();
+	if (transaction.HasActiveTransaction()) {
+		transaction.ResetActiveQuery();
+	}
+
+	// Park it
+	suspended_queries.push_back(std::move(active_query));
+	query_deadline.SetInvalid();
+	query_progress.Initialize();
+}
+
+ClientContext::ResumeResultCode ClientContext::ResumeQueryForResult(ClientContextLock &lock, BaseQueryResult &result) {
+	// First, find the index of the target query in the suspended stack.
+	// We must NOT iterate with iterators while also modifying the vector (SuspendActiveQuery pushes).
+	idx_t target_idx = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; i < suspended_queries.size(); i++) {
+		if (suspended_queries[i]->IsOpenResult(result)) {
+			target_idx = i;
+			break;
+		}
+	}
+	if (target_idx == DConstants::INVALID_INDEX) {
+		return ResumeResultCode::NOT_SUSPENDED;
+	}
+
+	// If another query is currently active (e.g., a different stream),
+	// suspend it first to maintain the single-active-query invariant.
+	// Only suspend StreamQueryResults — PendingQueryResults are mid-execution and must not be interrupted.
+	if (active_query) {
+		if (active_query->HasOpenResult() && !transaction.IsAutoCommit() &&
+		    active_query->GetOpenResultType() == QueryResultType::STREAM_RESULT) {
+			SuspendActiveQuery(lock);
+			// SuspendActiveQuery pushes to the end of suspended_queries,
+			// so target_idx is still valid (elements before it didn't move).
+		} else {
+			// Active query has no open result — can't suspend, bail out
+			return ResumeResultCode::CANNOT_SUSPEND_ACTIVE;
+		}
+	}
+
+	D_ASSERT(!active_query);
+	D_ASSERT(target_idx < suspended_queries.size());
+
+	// If the transaction was rolled back or committed while the query was suspended,
+	// we can't resume — clean up the suspended query and return false.
+	if (!transaction.HasActiveTransaction()) {
+		CleanupSuspendedQuery(suspended_queries[target_idx]);
+		suspended_queries.erase(suspended_queries.begin() + NumericCast<int64_t>(target_idx));
+		return ResumeResultCode::TRANSACTION_ENDED;
+	}
+
+	active_query = std::move(suspended_queries[target_idx]);
+	suspended_queries.erase(suspended_queries.begin() + NumericCast<int64_t>(target_idx));
+	// Re-register active query number with the transaction.
+	// Do NOT call QueryBegin on states — the query was never "ended".
+	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
+	return ResumeResultCode::SUCCESS;
+}
+
+bool ClientContext::IsSuspendedResult(ClientContextLock &lock, BaseQueryResult &result) {
+	for (auto &sq : suspended_queries) {
+		if (sq->IsOpenResult(result)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ClientContext::CancelSuspendedResult(ClientContextLock &lock, BaseQueryResult &result) {
+	for (idx_t i = 0; i < suspended_queries.size(); i++) {
+		if (suspended_queries[i]->IsOpenResult(result)) {
+			CleanupSuspendedQuery(suspended_queries[i]);
+			suspended_queries.erase(suspended_queries.begin() + NumericCast<int64_t>(i));
+			return true;
+		}
+	}
+	return false;
 }
 
 Executor &ClientContext::GetExecutor() {
@@ -699,8 +821,10 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {
-	//! Cleanup any open results and reset the interrupted flag
-	CleanupInternal(lock);
+	//! Cleanup any open results and reset the interrupted flag.
+	//! allow_suspend=true: if a streaming result is open in an explicit transaction,
+	//! suspend it instead of destroying it, enabling interleaved streaming + DML.
+	CleanupInternal(lock, nullptr, false, /*allow_suspend=*/true);
 	interrupted = false;
 }
 

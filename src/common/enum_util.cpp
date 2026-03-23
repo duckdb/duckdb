@@ -135,6 +135,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -4288,6 +4289,26 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	return static_cast<ResultModifierType>(StringUtil::StringToEnum(GetResultModifierTypeValues(), 4, "ResultModifierType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetResumeResultCodeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ResumeResultCode::SUCCESS), "SUCCESS" },
+		{ static_cast<uint32_t>(ResumeResultCode::NOT_SUSPENDED), "NOT_SUSPENDED" },
+		{ static_cast<uint32_t>(ResumeResultCode::TRANSACTION_ENDED), "TRANSACTION_ENDED" },
+		{ static_cast<uint32_t>(ResumeResultCode::CANNOT_SUSPEND_ACTIVE), "CANNOT_SUSPEND_ACTIVE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ResumeResultCode>(ResumeResultCode value) {
+	return StringUtil::EnumToString(GetResumeResultCodeValues(), 4, "ResumeResultCode", static_cast<uint32_t>(value));
+}
+
+template<>
+ResumeResultCode EnumUtil::FromString<ResumeResultCode>(const char *value) {
+	return static_cast<ResumeResultCode>(StringUtil::StringToEnum(GetResumeResultCodeValues(), 4, "ResumeResultCode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {

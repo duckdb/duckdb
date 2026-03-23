@@ -1094,6 +1094,17 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Suspended Queries
+//===----------------------------------------------------------------------===//
+bool EnableSuspendedQueriesSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	return true;
+}
+
+bool EnableSuspendedQueriesSetting::OnLocalReset(ClientContext &context) {
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {

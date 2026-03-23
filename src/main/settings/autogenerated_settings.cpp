@@ -139,6 +139,29 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Suspended Queries
+//===----------------------------------------------------------------------===//
+void EnableSuspendedQueriesSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (!OnLocalSet(context, input)) {
+		return;
+	}
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_suspended_queries = input.GetValue<bool>();
+}
+
+void EnableSuspendedQueriesSetting::ResetLocal(ClientContext &context) {
+	if (!OnLocalReset(context)) {
+		return;
+	}
+	ClientConfig::GetConfig(context).enable_suspended_queries = ClientConfig().enable_suspended_queries;
+}
+
+Value EnableSuspendedQueriesSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.enable_suspended_queries);
+}
+
+//===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
 void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
