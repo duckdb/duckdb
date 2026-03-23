@@ -702,9 +702,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 string GetPosixVersionTag(struct stat s) {
 	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
 	uint64_t version_tag[4];
-	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
-	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
-	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
 	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
 
 	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
