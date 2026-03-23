@@ -112,6 +112,12 @@ PEGTransformerFactory::TransformOnConflictExpressionTarget(PEGTransformer &trans
 	return result;
 }
 
+OnConflictExpressionTarget
+PEGTransformerFactory::TransformOnConflictIndexTarget(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
+}
+
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictAction(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
