@@ -1,4 +1,4 @@
-commit 1a506c14870e232f5e214c5c3cb2a634222b2a03
+commit 1b372ab031ed3fe47a0364d67d66efd04bb379bf
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 22 21:20:12 2026 +0000
 
@@ -486,6 +486,18 @@ index d2d8f9df..6522c068 100644
  
  namespace duckdb {
  
+diff --git a/src/storage/create_table/iceberg_create_table_request.cpp b/src/storage/create_table/iceberg_create_table_request.cpp
+index 53a0135a..eff3d6aa 100644
+--- a/src/storage/create_table/iceberg_create_table_request.cpp
++++ b/src/storage/create_table/iceberg_create_table_request.cpp
+@@ -11,7 +11,6 @@
+ #include "duckdb/execution/execution_context.hpp"
+ #include "duckdb/parallel/thread_context.hpp"
+ #include "duckdb/storage/buffer_manager.hpp"
+-#include "duckdb/storage/caching_file_system.hpp"
+ 
+ using namespace duckdb_yyjson;
+ namespace duckdb {
 diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
 index 31356682..b64f0b5b 100644
 --- a/src/storage/iceberg_insert.cpp
