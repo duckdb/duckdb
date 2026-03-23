@@ -352,6 +352,13 @@ endif
 clean:
 	rm -rf build
 
+EXTENSION_REPOSITORY_PATH ?= build/release/repository
+EXTENSION_BUCKET ?= duckdb-core-extensions
+
+.PHONY: upload-extensions
+upload-extensions:
+	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
+
 debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
 	cd build/debug && \

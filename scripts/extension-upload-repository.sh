@@ -45,20 +45,32 @@ for version_dir in $BASE_DIR/*; do
         echo ""
 
         for f in $FILES; do
-            if [[ $architecture == wasm* ]]; then
-                ext_name=`basename $f .duckdb_extension.wasm`
-            else
-                ext_name=`basename $f .duckdb_extension`
-            fi
-            
-            echo "Processing extension: $ext_name (architecture: $architecture, version: $duckdb_version, path: $f)"
-            
-            # args: <name> <extension_version> <duckdb_version> <architecture> <s3_bucket> <copy_to_latest> <copy_to_versioned> [<path_to_ext>]
-            $script_dir/extension-upload-single.sh $ext_name "" "$duckdb_version" "$architecture" "$TARGET_BUCKET" true false "$(dirname "$f")"
-
-            echo ""
+            printf '%s\0%s\0%s\0' "$duckdb_version" "$architecture" "$f"
         done
-        echo ""
     done
-done
+done | xargs -0 -n 3 -P "${CI_CPU_COUNT:-1}" bash -c '
+    script_dir="$1"
+    target_bucket="$2"
+    duckdb_version="$3"
+    architecture="$4"
+    f="$5"
 
+    if [[ $architecture == wasm* ]]; then
+        ext_name=$(basename "$f" .duckdb_extension.wasm)
+    else
+        ext_name=$(basename "$f" .duckdb_extension)
+    fi
+
+    log_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-upload.XXXXXX") || exit 1
+    trap '\''rm -f "$log_file"'\'' EXIT
+
+    {
+        echo "Processing extension: $ext_name (architecture: $architecture, version: $duckdb_version, path: $f)"
+        "$script_dir/extension-upload-single.sh" "$ext_name" "" "$duckdb_version" "$architecture" "$target_bucket" true false "$(dirname "$f")"
+        echo ""
+    } >"$log_file" 2>&1
+
+    cat "$log_file"
+    rm -f "$log_file"
+    trap - EXIT
+' bash "$script_dir" "$TARGET_BUCKET"
