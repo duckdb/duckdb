@@ -204,7 +204,8 @@ static bool TryGetProjectionIndex(const Expression &expr, ProjectionIndex &resul
 	}
 	case ExpressionType::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == "struct_extract" || func.function.name == "struct_extract_at") {
+		if (func.function.name == "struct_extract" || func.function.name == "struct_extract_at" ||
+		    func.function.name == "map_extract_value" || func.function.name == "list_extract") {
 			auto &child_expr = func.children[0];
 			return TryGetProjectionIndex(*child_expr, result);
 		}

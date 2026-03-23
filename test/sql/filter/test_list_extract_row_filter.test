@@ -76,6 +76,11 @@ query II
 SELECT id, nums FROM list_data WHERE nums[10] > 0 ORDER BY id;
 ----
 
+# Test index 0 (invalid in 1-based indexing, returns NULL)
+query II
+SELECT id, nums FROM list_data WHERE nums[0] > 0 ORDER BY id;
+----
+
 # Test NULL list
 query II
 SELECT id, nums FROM list_data WHERE nums[1] IS NULL ORDER BY id;
@@ -93,6 +98,11 @@ query II
 SELECT id, nums FROM list_data WHERE nums[-2] = 200 ORDER BY id;
 ----
 2	[100, 200, 300]
+
+# Test negative index out of bounds (returns NULL)
+query II
+SELECT id, nums FROM list_data WHERE nums[-100] > 0 ORDER BY id;
+----
 
 # Test combined filters (MAP + regular column)
 query II

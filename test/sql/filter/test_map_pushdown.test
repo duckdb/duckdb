@@ -18,7 +18,7 @@ INSERT INTO test_maps VALUES
 query II
 EXPLAIN SELECT * FROM test_maps WHERE data['a'] > 25;
 ----
-physical_plan	<REGEX>:.*Filters:.*map_extract_value\(data.*25.*
+physical_plan	<REGEX>:.*Filters:.*element_at\(data.*a\).*25.*
 
 query II
 SELECT * FROM test_maps WHERE data['a'] > 25 ORDER BY id;
