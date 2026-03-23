@@ -311,6 +311,8 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterInfo> TransformAlterViewStmt(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
+	static unique_ptr<AlterInfo> TransformAlterSchemaStmt(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterInfo> TransformAlterSequenceStmt(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,

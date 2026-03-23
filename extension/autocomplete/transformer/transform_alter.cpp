@@ -85,6 +85,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 	return std::move(result);
 }
 
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Altering schemas is not yet supported");
+}
+
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
