@@ -194,13 +194,6 @@
         "default_value": "100"
     },
     {
-        "name": "checkpoint_on_detach",
-        "description": "Whether or not to automatically checkpoint when detaching a database",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
-    },
-    {
         "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "VARCHAR",
@@ -1023,6 +1016,13 @@
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "skip_checkpoint_on_detach",
+        "description": "Skip the automatic checkpoint when detaching a database",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "storage_block_prefetch",

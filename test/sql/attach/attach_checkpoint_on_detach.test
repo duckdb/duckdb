@@ -1,5 +1,5 @@
 # name: test/sql/attach/attach_checkpoint_on_detach.test
-# description: Test the checkpoint_on_detach per-session setting.
+# description: Test the skip_checkpoint_on_detach per-session setting.
 # group: [attach]
 
 require noforcestorage
@@ -30,7 +30,7 @@ SET wal_autocheckpoint = '1TB';
 
 # locally disabled, globally enabled -> no checkpoint.
 statement ok con2
-SET checkpoint_on_detach = false;
+SET skip_checkpoint_on_detach = true;
 
 statement ok con2
 ATTACH '__TEST_DIR__/con2_db.db' AS con2_db;
