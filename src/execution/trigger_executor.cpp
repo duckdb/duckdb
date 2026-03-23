@@ -29,6 +29,7 @@ static void ExecuteTriggerBody(ClientContext &context, const string &sql_body_te
 	if (parser.statements.empty()) {
 		return;
 	}
+	D_ASSERT(parser.statements.size() == 1);
 
 	Planner planner(context);
 	planner.CreatePlan(std::move(parser.statements[0]));
