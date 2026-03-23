@@ -91,7 +91,7 @@ def get_tidy_invocation(
         start.append('-export-fixes')
         # Get a temporary file. We immediately close the handle so clang-tidy can
         # overwrite it.
-        (handle, name) = tempfile.mkstemp(suffix='.yaml', dir=tmpdir)
+        handle, name = tempfile.mkstemp(suffix='.yaml', dir=tmpdir)
         os.close(handle)
         start.append(name)
     for arg in extra_arg:

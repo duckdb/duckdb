@@ -6,7 +6,6 @@ import subprocess
 import sys
 from tqdm import tqdm
 
-
 OLD_DB_NAME = "old.duckdb"
 NEW_DB_NAME = "new.duckdb"
 PROFILE_FILENAME = "duckdb_profile.json"

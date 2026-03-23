@@ -2,7 +2,6 @@ import os
 import json
 from pathlib import Path
 
-
 function_groups = {
     ('src', 'include/duckdb', 'function'): ['scalar', 'aggregate'],
     ('extension', 'core_functions/include', 'core_functions'): ['scalar', 'aggregate'],
@@ -177,9 +176,7 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
 	{FUNCTION}
 };
 
-'''.replace(
-                '{STRUCT}', struct_name
-            )
+'''.replace('{STRUCT}', struct_name)
             .replace('{NAME}', entry['name'])
             .replace('{PARAMETERS}', parameter_line)
             .replace('{DESCRIPTION}', description_line)
@@ -210,19 +207,13 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
                     print("Unknown entry type " + aliased_type + ' for entry ' + struct_name)
                     exit(1)
                 function_type_set[alias_struct_name] = aliased_type
-                new_text += (
-                    '''struct {STRUCT} {
+                new_text += '''struct {STRUCT} {
 	using ALIAS = {ALIAS};
 
 	static constexpr const char *Name = "{NAME}";
 };
 
-'''.replace(
-                        '{STRUCT}', alias_struct_name
-                    )
-                    .replace('{NAME}', alias)
-                    .replace('{ALIAS}', struct_name)
-                )
+'''.replace('{STRUCT}', alias_struct_name).replace('{NAME}', alias).replace('{ALIAS}', struct_name)
     new_text += get_footer()
     with open(header_path, 'w+') as f:
         f.write(new_text)

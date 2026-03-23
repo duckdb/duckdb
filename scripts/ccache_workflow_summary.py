@@ -15,7 +15,6 @@ import subprocess
 import sys
 from typing import Dict, List, Optional
 
-
 HITS_RE = re.compile(r"Hits:\s*\d+\s*/\s*\d+\s*\(\s*([0-9]+(?:\.[0-9]+)?)\s*%\)")
 
 

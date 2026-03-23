@@ -90,14 +90,10 @@ print(header)
 table_list = run_query('show tables')
 for table_name in table_list.split('\n'):
     table_name = table_name.strip()
-    print(
-        '''
+    print('''
 //===--------------------------------------------------------------------===//
 // $NAME
-//===--------------------------------------------------------------------===//'''.replace(
-            '$NAME', table_name
-        )
-    )
+//===--------------------------------------------------------------------===//'''.replace('$NAME', table_name))
     struct_name = str(table_name.title().replace('_', '')) + 'Info'
     column_count = int(run_query(prepare_query(column_count_query, table_name, struct_name)).strip())
     pk_column_count = int(run_query(prepare_query(pk_column_count_query, table_name, struct_name)).strip())
