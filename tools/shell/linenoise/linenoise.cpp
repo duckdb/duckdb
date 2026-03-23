@@ -116,6 +116,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 	next_key.action = KEY_NULL;
 	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
+	bool accepted_completion_with_enter = false;
 	// we only start rendering completion suggestions once we start tabbing through them
 	render_completion_suggestion = false;
 	if (completions.empty()) {
@@ -231,6 +232,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 			if (accepted_completion.extra_char != '\0' && next_key.action == accepted_completion.extra_char) {
 				next_key.action = KEY_NULL;
 			}
+			accepted_completion_with_enter = next_key.action == ENTER;
 			/* Update buffer and return */
 			int nwritten = snprintf(buf, buflen, "%s", accepted_completion.completion.c_str());
 			pos = accepted_completion.cursor_pos;
@@ -240,8 +242,8 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 	// no longer completing - clear list of completions
 	completion_list.completions.clear();
 	completion_idx = optional_idx();
-	if (next_key.action == ENTER) {
-		// if we accepted the completion by pressing ENTER
+	if (next_key.action == ENTER && !accepted_completion_with_enter) {
+		// keep ENTER as a completion-dismiss action unless it accepted a completion
 		next_key.action = KEY_NULL;
 	}
 	return true; /* Return last read character */
