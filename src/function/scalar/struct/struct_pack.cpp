@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -23,7 +25,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 			all_const = false;
 		}
 		// same holds for this
-		child_entries[i]->Reference(args.data[i]);
+		child_entries[i].Reference(args.data[i]);
 	}
 	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.Verify(args.size());

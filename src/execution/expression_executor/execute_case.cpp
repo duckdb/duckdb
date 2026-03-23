@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -198,7 +202,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 		ValidityFillLoop(vector, result, sel, count);
 		D_ASSERT(vector_entries.size() == result_entries.size());
 		for (idx_t i = 0; i < vector_entries.size(); i++) {
-			FillSwitch(*vector_entries[i], *result_entries[i], sel, count);
+			FillSwitch(vector_entries[i], result_entries[i], sel, count);
 		}
 		break;
 	}

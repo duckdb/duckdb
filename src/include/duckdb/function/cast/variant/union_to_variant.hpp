@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {
@@ -13,7 +15,7 @@ bool ConvertUnionToVariant(ToVariantSourceData &source, ToVariantGlobalResultDat
 
 	vector<ToVariantSourceData> member_data;
 	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
-		auto &child = *children[child_idx];
+		auto &child = children[child_idx];
 
 		//! Convert all the children, ignore nulls, only write the non-null values
 		//! UNION will have exactly 1 non-null value for each row
@@ -35,7 +37,7 @@ bool ConvertUnionToVariant(ToVariantSourceData &source, ToVariantGlobalResultDat
 	for (idx_t i = 0; i < count; i++) {
 		bool is_null = true;
 		for (idx_t child_idx = 1; child_idx < children.size() && is_null; child_idx++) {
-			auto &child = *children[child_idx];
+			auto &child = children[child_idx];
 			if (child.GetType().id() == LogicalTypeId::SQLNULL) {
 				continue;
 			}

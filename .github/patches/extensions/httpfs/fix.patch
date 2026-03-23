@@ -1,8 +1,8 @@
 diff --git a/src/hffs.cpp b/src/hffs.cpp
-index 7ffe7d0..00d7861 100644
+index eb16c4f..442e828 100644
 --- a/src/hffs.cpp
 +++ b/src/hffs.cpp
-@@ -209,8 +209,8 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
+@@ -212,8 +212,8 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
  
  	FileOpenerInfo info;
  	info.file_path = path;
@@ -13,7 +13,7 @@ index 7ffe7d0..00d7861 100644
  	auto &http_params = params->Cast<HTTPFSParams>();
  	SetParams(http_params, path, opener);
  	auto http_state = HTTPState::TryGetState(opener).get();
-@@ -284,8 +284,8 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
+@@ -287,8 +287,8 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
  	FileOpenerInfo info;
  	info.file_path = file.path;
  
@@ -25,7 +25,7 @@ index 7ffe7d0..00d7861 100644
  
  	return duckdb::make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, std::move(params));
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 9277cd1..b41f448 100644
+index 16009fd..5dfec68 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
 @@ -24,7 +24,7 @@
@@ -37,7 +37,7 @@ index 9277cd1..b41f448 100644
  	if (opener) {
  		return opener->GetHTTPUtil();
  	}
-@@ -400,8 +400,8 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
+@@ -408,8 +408,8 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
  	FileOpenerInfo info;
  	info.file_path = file.path;
  
@@ -113,10 +113,10 @@ index 879a6d6..3baab91 100644
  	string GetName() const override;
  };
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index 1bb040f..ec8f0df 100644
+index 958df32..eb36003 100644
 --- a/src/s3fs.cpp
 +++ b/src/s3fs.cpp
-@@ -944,8 +944,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
+@@ -697,8 +697,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
  	auto parsed_s3_url = S3UrlParse(file.path, auth_params);
  	ReadQueryParams(parsed_s3_url.query_param, auth_params);
  
@@ -127,7 +127,7 @@ index 1bb040f..ec8f0df 100644
  
  	return duckdb::make_uniq<S3FileHandle>(*this, file, flags, std::move(params), auth_params,
  	                                       S3ConfigParams::ReadFrom(opener));
-@@ -1308,8 +1308,8 @@ bool S3GlobResult::ExpandNextPath() const {
+@@ -1062,8 +1062,8 @@ bool S3GlobResult::ExpandNextPath() const {
  	}
  
  	FileOpenerInfo info = {glob_pattern};
@@ -138,3 +138,21 @@ index 1bb040f..ec8f0df 100644
  
  	vector<OpenFileInfo> s3_keys;
  	if (!current_common_prefix.empty()) {
+diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
+index 6aa2ed0..54babde 100644
+--- a/test/sql/logging/file_system_logging.test
++++ b/test/sql/logging/file_system_logging.test
+@@ -43,7 +43,6 @@ require httpfs
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+ 
+-# FIXME: investigate why we call READ twice?
+ query IIII
+ SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
+ FROM duckdb_logs
+@@ -52,5 +51,4 @@ ORDER BY timestamp
+ ----
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
+-CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"CLOSE"}

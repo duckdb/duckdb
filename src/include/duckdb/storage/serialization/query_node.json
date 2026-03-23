@@ -191,5 +191,41 @@
         "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
     ]
+  },
+  {
+    "class": "UpdateQueryNode",
+    "base": "QueryNode",
+    "enum": "UPDATE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/update_query_node.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "from_table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 203,
+        "name": "set_info",
+        "type": "UpdateSetInfo*"
+      },
+      {
+        "id": 204,
+        "name": "prioritize_table_when_binding",
+        "type": "bool",
+        "default": "false"
+      }
+    ]
   }
 ]

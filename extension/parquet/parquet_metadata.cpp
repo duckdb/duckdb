@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "parquet_metadata.hpp"
 
 #include "parquet_statistics.hpp"
@@ -882,9 +885,9 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 
 	vector<reference<Vector>> vectors;
 	for (auto &entry : result_struct_entries) {
-		vectors.push_back(std::ref(*entry.get()));
-		entry->SetVectorType(VectorType::FLAT_VECTOR);
-		auto &validity = FlatVector::Validity(*entry);
+		vectors.push_back(std::ref(entry));
+		entry.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &validity = FlatVector::Validity(entry);
 		validity.Initialize(count);
 	}
 	for (idx_t i = 0; i < count; i++) {

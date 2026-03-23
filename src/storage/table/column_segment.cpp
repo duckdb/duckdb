@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 #include "duckdb/common/limits.hpp"
@@ -554,8 +556,8 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		// Apply the filter on the child vector
 		auto &child_vec = StructVector::GetEntries(vector)[struct_filter.child_idx];
 		UnifiedVectorFormat child_data;
-		child_vec->ToUnifiedFormat(scan_count, child_data);
-		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
+		child_vec.ToUnifiedFormat(scan_count, child_data);
+		return FilterSelection(sel, child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
 		                       approved_tuple_count);
 	}
 	case TableFilterType::BLOOM_FILTER: {

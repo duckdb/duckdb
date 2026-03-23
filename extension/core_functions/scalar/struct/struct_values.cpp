@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp" // VariableReturnBindData
@@ -23,7 +25,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	// We would use result.Reference(input) also for this case,
 	// but that function asserts that the logical types are the same
 	for (idx_t i = 0; i < input_children.size(); i++) {
-		result_children[i]->Reference(*input_children[i]);
+		result_children[i].Reference(input_children[i]);
 	}
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {

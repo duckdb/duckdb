@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {
