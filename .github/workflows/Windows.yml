@@ -10,6 +10,8 @@ on:
         type: string
       run_all:
         type: string
+      runner_windows_2022_x64:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -19,6 +21,8 @@ on:
       skip_tests:
         type: string
       run_all:
+        type: string
+      runner_windows_2022_x64:
         type: string
 
 concurrency:
@@ -36,7 +40,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: windows-latest
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
     steps:
     - uses: actions/checkout@v6
       with:
