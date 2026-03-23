@@ -77,7 +77,7 @@ CREATE TRIGGER trg_fail AFTER INSERT ON strict_target INSERT INTO strict_target 
 statement error
 INSERT INTO strict_target VALUES (999);
 ----
-<REGEX>:.*
+Constraint Error: PRIMARY KEY or UNIQUE constraint violation: duplicate key "999"
 
 # Neither the insert into strict_target nor the trigger's insert should persist
 query I
@@ -176,7 +176,7 @@ INSERT INTO insert_fail_target VALUES (1);
 statement error
 INSERT INTO insert_fail_target VALUES (1);
 ----
-<REGEX>:.*
+Constraint Error: Duplicate key "id: 1" violates primary key constraint.
 
 # Trigger must not have fired for the failed INSERT
 query I
@@ -194,4 +194,4 @@ CREATE TRIGGER trg_recurse AFTER INSERT ON recurse_tbl INSERT INTO recurse_tbl V
 statement error
 INSERT INTO recurse_tbl VALUES (1);
 ----
-<REGEX>:.*
+Invalid Input Error: Trigger recursion depth limit (8) exceeded.

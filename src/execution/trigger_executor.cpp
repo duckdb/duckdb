@@ -108,7 +108,7 @@ static void FireTriggers(ClientContext &context, const vector<TriggerInfo> &trig
 void TriggerExecutor::Fire(ClientContext &context, TableCatalogEntry &table, idx_t row_count, TriggerTiming timing,
                            TriggerEventType event_type) {
 	if (context.trigger_depth >= MAX_TRIGGER_DEPTH) {
-		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded — possible infinite trigger loop",
+		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded.",
 		                            MAX_TRIGGER_DEPTH);
 	}
 	auto triggers = CollectTriggers(context, table, timing, event_type);
