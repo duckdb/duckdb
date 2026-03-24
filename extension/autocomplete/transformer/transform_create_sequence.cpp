@@ -1,4 +1,5 @@
 #include "ast/sequence_option.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "transformer/peg_transformer.hpp"
 
 namespace duckdb {
@@ -21,13 +22,19 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 		for (auto seq_option : repeat_seq_options.children) {
 			auto seq_result = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option);
 			if (sequence_options.find(seq_result.first) != sequence_options.end()) {
-				throw ParserException("CREATE SEQUENCE option %s has already been specified before.", seq_result.first);
+				throw ParserException("%s should be passed at most once", StringUtil::Upper(seq_result.first));
 			}
 			sequence_options.insert(std::move(seq_result));
 		}
 	}
 	bool no_min = sequence_options.find("nominvalue") != sequence_options.end();
 	bool no_max = sequence_options.find("nomaxvalue") != sequence_options.end();
+	if (no_min && sequence_options.find("minvalue") != sequence_options.end()) {
+		throw ParserException("MINVALUE should be passed at most once");
+	}
+	if (no_max && sequence_options.find("maxvalue") != sequence_options.end()) {
+		throw ParserException("MAXVALUE should be passed at most once");
+	}
 	bool has_start_value = false;
 	bool min_value_set = false;
 	bool max_value_set = false;
@@ -176,7 +183,7 @@ string PEGTransformerFactory::TransformSeqMinOrMax(PEGTransformer &transformer,
 pair<string, unique_ptr<SequenceOption>>
 PEGTransformerFactory::TransformSeqNoMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto rule_name = transformer.TransformEnum<string>(list_pr.Child<ListParseResult>(1));
+	auto rule_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 	auto seq_info = rule_name == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;
 	return make_pair("no" + rule_name, make_uniq<ValueSequenceOption>(seq_info, true));
 }

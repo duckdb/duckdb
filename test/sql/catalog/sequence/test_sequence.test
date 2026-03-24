@@ -533,28 +533,28 @@ select currval(true);
 statement error
 CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
 ----
-<REGEX>:.*Parser Error: Maxvalue should be passed as most once.*
+<REGEX>:.*(MAXVALUE|Maxvalue) should be passed (at|as) most once.*
 
 # min value specified more than once
 statement error
 CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
 ----
-<REGEX>:.*Parser Error: Minvalue should be passed as most once.*
+<REGEX>:.*(MINVALUE|Minvalue) should be passed (at|as) most once.*
 
 # start value specified more than once
 statement error
 CREATE SEQUENCE wrongseq START 13 START WITH 3;
 ----
-<REGEX>:.*Parser Error: Start value should be passed as most once.*
+<REGEX>:.*(START|Start value) should be passed (at|as) most once.*
 
 # cycle value specified more than once
 statement error
 CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
 ----
-<REGEX>:.*Parser Error: Cycle value should be passed as most once.*
+<REGEX>:.*(CYCLE|Cycle value) should be passed (at|as) most once.*
 
 # increment value specified more than once
 statement error
 CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;
 ----
-<REGEX>:.*Parser Error: Increment value should be passed as most once.*
+<REGEX>:.*(INCREMENT|Increment value) should be passed (at|as) most once.*
