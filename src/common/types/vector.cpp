@@ -138,12 +138,12 @@ void Vector::Reinterpret(const Vector &other) {
 	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
+	ConstReference(other);
 	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
-		Vector new_vector(GetType(), nullptr);
+		Vector new_vector(this_type, nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
 	}
-	ConstReference(other);
 }
 
 void Vector::ConstReference(const Vector &other) const {
