@@ -223,8 +223,7 @@ protected:
 class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)),
-	      cached_hashes(LogicalType::HASH, nullptr) {
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
 	}
 
 public:
@@ -234,7 +233,7 @@ public:
 	string id;
 	//! For caching the hashes of a child buffer
 	mutex cached_hashes_lock;
-	Vector cached_hashes;
+	unique_ptr<Vector> cached_hashes;
 };
 
 } // namespace duckdb

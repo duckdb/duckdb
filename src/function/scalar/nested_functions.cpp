@@ -10,11 +10,10 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	const auto list_size = ListVector::GetListSize(input);
 	ListVector::SetListSize(result, list_size);
 
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.Flatten(count);
 
 	// Copy the list validity
-	FlatVector::SetValidity(result, input_data.validity);
+	FlatVector::SetValidity(result, FlatVector::Validity(input));
 
 	// Copy the struct validity
 	UnifiedVectorFormat input_struct_data;
@@ -32,10 +31,6 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto &input_values = MapVector::GetValues(input);
 	auto &result_values = MapVector::GetValues(result);
 	result_values.Reference(input_values);
-
-	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		result.Slice(*input_data.sel, count);
-	}
 
 	// Set the right vector type
 	result.SetVectorType(input.GetVectorType());
