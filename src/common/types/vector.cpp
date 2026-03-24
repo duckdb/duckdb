@@ -346,12 +346,6 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	}
 
 	switch (GetAuxiliary()->GetBufferType()) {
-	case VectorBufferType::LIST_BUFFER: {
-		auto &vector_list_buffer = auxiliary->Cast<VectorListBuffer>();
-		auto &child = vector_list_buffer.GetChild();
-		child.FindResizeInfos(resize_infos, multiplier);
-		break;
-	}
 	case VectorBufferType::STRUCT_BUFFER: {
 		auto &vector_struct_buffer = auxiliary->Cast<VectorStructBuffer>();
 		auto &children = vector_struct_buffer.GetChildren();

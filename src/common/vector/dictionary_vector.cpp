@@ -18,15 +18,14 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	auto &child = input.auxiliary->Cast<VectorChildBuffer>();
 	lock_guard<mutex> guard(child.cached_hashes_lock);
 
-	auto data_ptr = FlatVector::GetData(child.cached_hashes);
-	if (!data_ptr) {
+	if (!child.cached_hashes) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
 		D_ASSERT(!child.size.IsValid() || child.size.GetIndex() == dictionary_size);
-		child.cached_hashes.Initialize(false, dictionary_size);
-		VectorOperations::Hash(child.data, child.cached_hashes, dictionary_size);
+		child.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
+		VectorOperations::Hash(child.data, *child.cached_hashes, dictionary_size);
 	}
-	return child.cached_hashes;
+	return *child.cached_hashes;
 }
 
 } // namespace duckdb
