@@ -19,10 +19,11 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 		ConstantVector::SetNull(result, true);
 		return;
 	}
+	auto all_constant = args.AllConstant();
 
-	MapUtil::ReinterpretMap(result, map, count);
+	MapUtil::ReinterpretMap(result, map, all_constant ? 1 : count);
 
-	if (args.AllConstant()) {
+	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	result.Verify(count);
