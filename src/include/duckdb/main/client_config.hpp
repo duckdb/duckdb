@@ -26,7 +26,8 @@ class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
 
-typedef std::function<PhysicalOperator &(ClientContext &context, PreparedStatementData &data)> get_result_collector_t;
+typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
+    get_result_collector_t;
 
 struct ClientConfig {
 	//! If the query profiler is enabled or not.

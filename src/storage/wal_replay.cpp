@@ -631,6 +631,9 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	bool is_set = false;
 	deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+		if (i >= MainHeader::DB_IDENTIFIER_LEN) {
+			throw IOException("Corrupt file - database identifier in header out of range");
+		}
 		db_identifier[i] = list.ReadElement<uint8_t>();
 		is_set = true;
 	});

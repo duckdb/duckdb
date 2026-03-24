@@ -236,4 +236,14 @@ FROM (VALUES
     result = test.run()
     result.check_stdout("🇺🇸 flag")
 
+def test_struct_spaces_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement('.maxwidth 80')
+        .statement("select { column1: 'apple river cloud hammer bright', column2: 'forest table ocean pencil green' } s;")
+    )
+    result = test.run()
+    # verify the entire string is printed
+    result.check_stdout("apple river cloud hammer bright")
+
 # fmt: on

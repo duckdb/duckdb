@@ -705,6 +705,17 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
+string GetPosixVersionTag(struct stat s) {
+	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
+	uint64_t version_tag[4];
+	Store(UnsafeNumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
+	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
+
+	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+}
+
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
@@ -747,6 +758,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
 		// last modified time
 		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(status.st_mtime)));
+		// version tag
+		options.emplace("etag", Value::BLOB_RAW(GetPosixVersionTag(status)));
 
 		// invoke callback
 		callback(info);
@@ -1498,15 +1511,7 @@ string LocalFileSystem::GetVersionTag(FileHandle &handle) {
 	if (fstat(fd, &s) == -1) {
 		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
 	}
-
-	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
-	uint64_t version_tag[4];
-	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
-	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
-	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
-	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
-
-	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+	return GetPosixVersionTag(s);
 #endif
 }
 
