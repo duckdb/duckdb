@@ -314,7 +314,8 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &context, GlobalSour
 	OperatorSourceInput source_input {source, *unused, interrupt};
 	partitioned_copy.sort_strategy->MaterializeColumnData(context, hash_bin, source_input);
 	materialized += blocks;
-	{
+
+	if (materialized >= blocks) {
 		lock_guard<mutex> guard(lock);
 		if (!rows) {
 			rows = partitioned_copy.sort_strategy->GetColumnData(hash_bin, source_input);
