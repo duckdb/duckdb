@@ -1283,8 +1283,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, create_sql.c_str(), &result) == DuckDBError) {
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&result);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
 		break;
@@ -1296,8 +1297,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&result);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
 		break;
