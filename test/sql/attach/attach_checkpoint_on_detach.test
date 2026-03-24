@@ -1,10 +1,10 @@
 # name: test/sql/attach/attach_checkpoint_on_detach.test
-# description: Test the skip_checkpoint_on_detach per-session setting.
+# description: Test the checkpoint_on_detach per-session setting.
 # group: [attach]
 
 require noforcestorage
 
-# Globally disabled, locally enabled -> no checkpoint
+# Unset + global disabled → no checkpoint (defers to global).
 statement ok con1
 SET wal_autocheckpoint = '1TB';
 
@@ -25,12 +25,12 @@ SELECT COUNT(*) FROM glob('__TEST_DIR__/con1_db.db.wal')
 ----
 1
 
+# Explicit false + global enabled → no checkpoint (override).
 statement ok con2
 SET wal_autocheckpoint = '1TB';
 
-# locally disabled, globally enabled -> no checkpoint.
 statement ok con2
-SET skip_checkpoint_on_detach = true;
+SET checkpoint_on_detach = 'false';
 
 statement ok con2
 ATTACH '__TEST_DIR__/con2_db.db' AS con2_db;
@@ -46,6 +46,31 @@ SELECT COUNT(*) FROM glob('__TEST_DIR__/con2_db.db.wal')
 ----
 1
 
+# Explicit true + global disabled → checkpoint (override).
+statement ok con3
+SET wal_autocheckpoint = '1TB';
+
+statement ok con3
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok con3
+SET checkpoint_on_detach = 'true';
+
+statement ok con3
+ATTACH '__TEST_DIR__/con3_db.db' AS con3_db;
+
+statement ok con3
+CREATE TABLE con3_db.tbl AS SELECT range AS id FROM range(100);
+
+statement ok con3
+DETACH con3_db;
+
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/con3_db.db.wal')
+----
+0
+
+# Verify data integrity after re-attaching.
 statement ok
 ATTACH '__TEST_DIR__/con1_db.db' AS con1_db;
 
@@ -59,5 +84,13 @@ ATTACH '__TEST_DIR__/con2_db.db' AS con2_db;
 
 query I
 SELECT COUNT(*) FROM con2_db.tbl;
+----
+100
+
+statement ok
+ATTACH '__TEST_DIR__/con3_db.db' AS con3_db;
+
+query I
+SELECT COUNT(*) FROM con3_db.tbl;
 ----
 100

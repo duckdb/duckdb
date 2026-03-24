@@ -137,13 +137,12 @@ public:
 		return attach_options;
 	}
 	string StoredPath() const;
-	void SetCloseAction(DatabaseCloseAction action);
-
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
-	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database);
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database,
+	                                       DatabaseCloseAction action = DatabaseCloseAction::CHECKPOINT);
 
 private:
 	DatabaseInstance &db;
@@ -158,7 +157,6 @@ private:
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
-	DatabaseCloseAction close_action = DatabaseCloseAction::CHECKPOINT;
 	shared_ptr<mutex> close_lock;
 	unordered_map<string, Value> attach_options;
 

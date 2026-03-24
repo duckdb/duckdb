@@ -256,14 +256,20 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		return;
 	}
 
-	if (Settings::Get<SkipCheckpointOnDetachSetting>(context)) {
-		attached_db->SetCloseAction(DatabaseCloseAction::SKIP_CHECKPOINT);
+	auto close_action = DatabaseCloseAction::CHECKPOINT;
+	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
+	if (checkpoint_on_detach == "true") {
+		close_action = DatabaseCloseAction::CHECKPOINT;
+	} else if (checkpoint_on_detach == "false") {
+		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
+	} else if (!DBConfig::GetConfig(context).options.checkpoint_on_shutdown) {
+		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	}
 
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
-	AttachedDatabase::InvokeCloseIfLastReference(attached_db);
+	AttachedDatabase::InvokeCloseIfLastReference(attached_db, close_action);
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {

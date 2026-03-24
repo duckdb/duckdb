@@ -202,15 +202,12 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::SetCloseAction(DatabaseCloseAction action) {
-	close_action = action;
-}
-
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db,
+                                                  DatabaseCloseAction action) {
 	auto close_lock = attached_db->close_lock;
 	lock_guard<mutex> guard(*close_lock);
 	if (attached_db.use_count() == 1) {
-		attached_db->Close(attached_db->close_action);
+		attached_db->Close(action);
 	}
 	attached_db.reset();
 }
@@ -301,9 +298,14 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 		}
 
 		if (create_checkpoint) {
-			auto &config = DBConfig::GetConfig(db);
-			// If we have don't have skip_checkpoint_on_detach set nor disable_checkpoint_on_shutdown, then checkpoint.
-			if (action != DatabaseCloseAction::SKIP_CHECKPOINT && config.options.checkpoint_on_shutdown) {
+			auto should_checkpoint = false;
+			if (action == DatabaseCloseAction::CHECKPOINT) {
+				should_checkpoint = true;
+			} else if (action == DatabaseCloseAction::TRY_CHECKPOINT) {
+				auto &config = DBConfig::GetConfig(db);
+				should_checkpoint = config.options.checkpoint_on_shutdown;
+			}
+			if (should_checkpoint) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
 				storage->CreateCheckpoint(QueryContext(), options);
