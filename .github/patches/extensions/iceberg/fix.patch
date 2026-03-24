@@ -12,7 +12,7 @@ index 608c67af..9c6744a7 100644
  	auto http_headers = HTTPHeaders();
  	for (auto &header : aws_headers) {
 diff --git a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
-index 0212aa3f..78bf6d9d 100644
+index 0212aa3f..e1333d4f 100644
 --- a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 +++ b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 @@ -1,3 +1,5 @@
@@ -21,6 +21,15 @@ index 0212aa3f..78bf6d9d 100644
  #include "iceberg_avro_multi_file_reader.hpp"
  #include "iceberg_avro_multi_file_list.hpp"
  #include "duckdb/common/exception.hpp"
+@@ -467,7 +469,7 @@ void IcebergAvroMultiFileReader::FinalizeChunk(ClientContext &context, const Mul
+ 	auto &data_file_column = output_chunk.data[4];
+ 	auto &data_struct_children = StructVector::GetEntries(data_file_column);
+ 
+-	auto &first_row_id_column = *data_struct_children[15];
++	auto &first_row_id_column = data_struct_children[15];
+ 
+ 	auto &first_row_id_validity = FlatVector::Validity(first_row_id_column);
+ 	auto first_row_id_data = FlatVector::GetData<int64_t>(first_row_id_column);
 diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
 index 02a3b3d3..3dbbc921 100644
 --- a/src/iceberg_functions/iceberg_multi_file_list.cpp
@@ -274,7 +283,7 @@ index 62b71d18..1d8a5e1f 100644
  	mutable mutex entry_lock;
  	mutable vector<IcebergManifestEntry> manifest_entries;
 diff --git a/src/manifest_list_reader.cpp b/src/manifest_list_reader.cpp
-index 68d290a8..b670dc45 100644
+index 68d290a8..987c8162 100644
 --- a/src/manifest_list_reader.cpp
 +++ b/src/manifest_list_reader.cpp
 @@ -1,3 +1,6 @@
@@ -284,8 +293,23 @@ index 68d290a8..b670dc45 100644
  #include "manifest_reader.hpp"
  #include "include/metadata/iceberg_manifest_list.hpp"
  
+@@ -62,10 +65,10 @@ idx_t ManifestListReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergMan
+ 	auto &child_vectors = StructVector::GetEntries(field_summary_vec);
+ 
+ 	idx_t partition_index = 0;
+-	auto &contains_null = *child_vectors[partition_index++];
+-	auto &contains_nan = *child_vectors[partition_index++];
+-	auto &lower_bound = *child_vectors[partition_index++];
+-	auto &upper_bound = *child_vectors[partition_index++];
++	auto &contains_null = child_vectors[partition_index++];
++	auto &contains_nan = child_vectors[partition_index++];
++	auto &lower_bound = child_vectors[partition_index++];
++	auto &upper_bound = child_vectors[partition_index++];
+ 
+ 	optional_ptr<Vector> first_row_id;
+ 	if (iceberg_version >= 3) {
 diff --git a/src/manifest_reader.cpp b/src/manifest_reader.cpp
-index dba21c67..a7ad6cef 100644
+index dba21c67..acfabf08 100644
 --- a/src/manifest_reader.cpp
 +++ b/src/manifest_reader.cpp
 @@ -1,3 +1,6 @@
@@ -295,6 +319,92 @@ index dba21c67..a7ad6cef 100644
  #include "manifest_reader.hpp"
  
  namespace duckdb {
+@@ -32,8 +35,8 @@ idx_t ManifestReader::Read(idx_t count, vector<IcebergManifestEntry> &result) {
+ 
+ static unordered_map<int32_t, Value> GetBounds(Vector &bounds, idx_t index) {
+ 	auto &bounds_child = ListVector::GetEntry(bounds);
+-	auto keys = FlatVector::GetData<int32_t>(*StructVector::GetEntries(bounds_child)[0]);
+-	auto &values = *StructVector::GetEntries(bounds_child)[1];
++	auto keys = FlatVector::GetData<int32_t>(StructVector::GetEntries(bounds_child)[0]);
++	auto &values = StructVector::GetEntries(bounds_child)[1];
+ 	auto bounds_list = FlatVector::GetData<list_entry_t>(bounds);
+ 
+ 	unordered_map<int32_t, Value> parsed_bounds;
+@@ -53,8 +56,8 @@ static unordered_map<int32_t, Value> GetBounds(Vector &bounds, idx_t index) {
+ 
+ static unordered_map<int32_t, int64_t> GetCounts(Vector &counts, idx_t index) {
+ 	auto &counts_child = ListVector::GetEntry(counts);
+-	auto keys = FlatVector::GetData<int32_t>(*StructVector::GetEntries(counts_child)[0]);
+-	auto values = FlatVector::GetData<int64_t>(*StructVector::GetEntries(counts_child)[1]);
++	auto keys = FlatVector::GetData<int32_t>(StructVector::GetEntries(counts_child)[0]);
++	auto values = FlatVector::GetData<int64_t>(StructVector::GetEntries(counts_child)[1]);
+ 	auto counts_list = FlatVector::GetData<list_entry_t>(counts);
+ 
+ 	unordered_map<int32_t, int64_t> parsed_counts;
+@@ -113,35 +116,35 @@ idx_t ManifestReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergManifes
+ 	auto &data_file_entries = StructVector::GetEntries(data_file);
+ 	optional_ptr<Vector> content;
+ 	if (iceberg_version >= 2) {
+-		content = *data_file_entries[entry_index++];
++		content = data_file_entries[entry_index++];
+ 	}
+-	auto &file_path = *data_file_entries[entry_index++];
+-	auto &file_format = *data_file_entries[entry_index++];
+-	auto &partition = *data_file_entries[entry_index++];
+-	auto &record_count = *data_file_entries[entry_index++];
+-	auto &file_size_in_bytes = *data_file_entries[entry_index++];
+-	auto &column_sizes = *data_file_entries[entry_index++];
+-	auto &value_counts = *data_file_entries[entry_index++];
+-	auto &null_value_counts = *data_file_entries[entry_index++];
+-	auto &nan_value_counts = *data_file_entries[entry_index++];
+-	auto &lower_bounds = *data_file_entries[entry_index++];
+-	auto &upper_bounds = *data_file_entries[entry_index++];
+-	auto &split_offsets = *data_file_entries[entry_index++];
+-	auto &equality_ids = *data_file_entries[entry_index++];
+-	auto &sort_order_id = *data_file_entries[entry_index++];
++	auto &file_path = data_file_entries[entry_index++];
++	auto &file_format = data_file_entries[entry_index++];
++	auto &partition = data_file_entries[entry_index++];
++	auto &record_count = data_file_entries[entry_index++];
++	auto &file_size_in_bytes = data_file_entries[entry_index++];
++	auto &column_sizes = data_file_entries[entry_index++];
++	auto &value_counts = data_file_entries[entry_index++];
++	auto &null_value_counts = data_file_entries[entry_index++];
++	auto &nan_value_counts = data_file_entries[entry_index++];
++	auto &lower_bounds = data_file_entries[entry_index++];
++	auto &upper_bounds = data_file_entries[entry_index++];
++	auto &split_offsets = data_file_entries[entry_index++];
++	auto &equality_ids = data_file_entries[entry_index++];
++	auto &sort_order_id = data_file_entries[entry_index++];
+ 	optional_ptr<Vector> first_row_id;
+ 	if (iceberg_version >= 3) {
+-		first_row_id = *data_file_entries[entry_index++];
++		first_row_id = data_file_entries[entry_index++];
+ 	}
+ 	optional_ptr<Vector> referenced_data_file;
+ 	if (iceberg_version >= 2) {
+-		referenced_data_file = *data_file_entries[entry_index++];
++		referenced_data_file = data_file_entries[entry_index++];
+ 	}
+ 	optional_ptr<Vector> content_offset;
+ 	optional_ptr<Vector> content_size_in_bytes;
+ 	if (iceberg_version >= 3) {
+-		content_offset = *data_file_entries[entry_index++];
+-		content_size_in_bytes = *data_file_entries[entry_index++];
++		content_offset = data_file_entries[entry_index++];
++		content_size_in_bytes = data_file_entries[entry_index++];
+ 	}
+ 
+ 	auto status_data = FlatVector::GetData<int32_t>(status);
+@@ -174,7 +177,7 @@ idx_t ManifestReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergManifes
+ 		D_ASSERT(partition_children.size() == scan_info.partition_field_id_to_type.size());
+ 		idx_t child_index = 0;
+ 		for (auto &it : scan_info.partition_field_id_to_type) {
+-			partition_vectors.emplace_back(it.first, *partition_children[child_index++]);
++			partition_vectors.emplace_back(it.first, partition_children[child_index++]);
+ 		}
+ 	}
+ 
 diff --git a/src/storage/catalog/iceberg_schema_entry.cpp b/src/storage/catalog/iceberg_schema_entry.cpp
 index 88c7537c..c4e63923 100644
 --- a/src/storage/catalog/iceberg_schema_entry.cpp

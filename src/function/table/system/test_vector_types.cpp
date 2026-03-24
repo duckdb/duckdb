@@ -181,7 +181,7 @@ struct TestVectorSequence {
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(result);
 			for (auto &child_entry : child_entries) {
-				GenerateVector(info, child_entry->GetType(), *child_entry);
+				GenerateVector(info, child_entry.GetType(), child_entry);
 			}
 			break;
 		}

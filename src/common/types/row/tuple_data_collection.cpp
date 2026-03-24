@@ -329,7 +329,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		auto &entries = StructVector::GetEntries(vector);
 		D_ASSERT(format.children.size() == entries.size());
 		for (idx_t struct_col_idx = 0; struct_col_idx < entries.size(); struct_col_idx++) {
-			ToUnifiedFormatInternal(format.children[struct_col_idx], *entries[struct_col_idx], count);
+			ToUnifiedFormatInternal(format.children[struct_col_idx], entries[struct_col_idx], count);
 		}
 		break;
 	}

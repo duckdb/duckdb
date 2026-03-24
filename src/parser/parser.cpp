@@ -9,6 +9,7 @@
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
@@ -703,8 +704,8 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = parser.statements[0]->Cast<UpdateStatement>();
-	update_columns = std::move(update.set_info->columns);
-	expressions = std::move(update.set_info->expressions);
+	update_columns = std::move(update.node->set_info->columns);
+	expressions = std::move(update.node->set_info->expressions);
 }
 
 vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list, ParserOptions options) {

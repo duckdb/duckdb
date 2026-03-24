@@ -105,8 +105,8 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 		auto source_idx = cast_data.source_indexes[i];
 		auto target_idx = cast_data.target_indexes[i];
 
-		auto &source_vector = *source_vectors[source_idx];
-		auto &target_vector = *target_children[target_idx];
+		auto &source_vector = source_vectors[source_idx];
+		auto &target_vector = target_children[target_idx];
 
 		auto &child_cast_info = cast_data.child_cast_info[i];
 		CastParameters child_parameters(parameters, child_cast_info.cast_data, l_state.local_states[i]);
@@ -119,7 +119,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	if (!cast_data.target_null_indexes.empty()) {
 		for (idx_t i = 0; i < cast_data.target_null_indexes.size(); i++) {
 			auto target_idx = cast_data.target_null_indexes[i];
-			auto &target_vector = *target_children[target_idx];
+			auto &target_vector = target_children[target_idx];
 
 			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(target_vector, true);
@@ -172,13 +172,13 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			if (c > 0) {
 				string_length += SEP_LENGTH;
 			}
-			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto add_escapes = !base_children[c].GetType().IsNested();
 			auto string_length_func = add_escapes ? VectorCastHelpers::CalculateEscapedStringLength<false>
 			                                      : VectorCastHelpers::CalculateStringLength;
 
-			children[c]->Flatten(count);
-			auto &child_validity = FlatVector::Validity(*children[c]);
-			auto data = FlatVector::GetData<string_t>(*children[c]);
+			children[c].Flatten(count);
+			auto &child_validity = FlatVector::Validity(children[c]);
+			auto data = FlatVector::GetData<string_t>(children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
 				string_length += VectorCastHelpers::CalculateEscapedStringLength<true>(name, key_needs_quotes[c]);
@@ -203,12 +203,12 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto add_escapes = !base_children[c].GetType().IsNested();
 			auto write_string_func =
 			    add_escapes ? VectorCastHelpers::WriteEscapedString<false> : VectorCastHelpers::WriteString;
 
-			auto &child_validity = FlatVector::Validity(*children[c]);
-			auto data = FlatVector::GetData<string_t>(*children[c]);
+			auto &child_validity = FlatVector::Validity(children[c]);
+			auto data = FlatVector::GetData<string_t>(children[c]);
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;
 				// "{<name>: <value>}"
@@ -318,7 +318,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	bool values_converted = true;
 	auto &map_values = MapVector::GetValues(result);
 	for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
-		auto &source_field = *source_children[field_idx];
+		auto &source_field = source_children[field_idx];
 		Vector temp_converted(MapType::ValueType(result.GetType()), count);
 		CastParameters child_params(parameters, cast_data.value_casts[field_idx].cast_data,
 		                            local_state.value_states[field_idx]);

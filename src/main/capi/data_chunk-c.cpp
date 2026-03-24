@@ -225,7 +225,7 @@ duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) 
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(duckdb::StructVector::GetEntries(*v)[index].get());
+	return reinterpret_cast<duckdb_vector>(&duckdb::StructVector::GetEntries(*v)[index]);
 }
 
 duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {

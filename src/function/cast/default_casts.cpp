@@ -91,7 +91,7 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 	D_ASSERT(source_entries.size() == result_entries.size());
 
 	for (idx_t i = 0; i < source_entries.size(); i++) {
-		result_entries[i]->Reference(*source_entries[i]);
+		result_entries[i].Reference(source_entries[i]);
 	}
 
 	source.Flatten(count);

@@ -196,7 +196,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	child_result_sel.Initialize(count);
 
 	for (idx_t child_idx = 0; child_idx < shredded_types.size(); child_idx++) {
-		auto &child_vec = *shredded_fields[child_idx];
+		auto &child_vec = shredded_fields[child_idx];
 		D_ASSERT(child_vec.GetType() == shredded_types[child_idx].second);
 
 		//! Prepare the path component to perform the lookup for

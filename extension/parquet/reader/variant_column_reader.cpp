@@ -68,7 +68,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
 	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
-	auto &value_intermediate = *group_entries[0];
+	auto &value_intermediate = group_entries[0];
 
 	auto metadata_values =
 	    child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out, metadata_intermediate);
@@ -84,7 +84,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
+		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");

@@ -21,7 +21,7 @@ static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector
 	for (auto &arg : args.data) {
 		const auto &child_cols = StructVector::GetEntries(arg);
 		for (auto &child_col : child_cols) {
-			result_cols[offset++]->Reference(*child_col);
+			result_cols[offset++].Reference(child_col);
 		}
 	}
 	D_ASSERT(offset == result_cols.size());

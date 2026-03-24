@@ -333,7 +333,7 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
 		auto &struct_key_v = *names.at(StructType::GetChildName(value_v.GetType(), entry_i));
-		auto &struct_val_v = *entries[entry_i];
+		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
 	}
 	// Whole struct can be NULL

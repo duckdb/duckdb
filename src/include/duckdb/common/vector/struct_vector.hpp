@@ -21,21 +21,21 @@ public:
 	~VectorStructBuffer() override;
 
 public:
-	const vector<unique_ptr<Vector>> &GetChildren() const {
+	const vector<Vector> &GetChildren() const {
 		return children;
 	}
-	vector<unique_ptr<Vector>> &GetChildren() {
+	vector<Vector> &GetChildren() {
 		return children;
 	}
 
 private:
 	//! child vectors used for nested data
-	vector<unique_ptr<Vector>> children;
+	vector<Vector> children;
 };
 
 struct StructVector {
-	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
-	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
+	DUCKDB_API static const vector<Vector> &GetEntries(const Vector &vector);
+	DUCKDB_API static vector<Vector> &GetEntries(Vector &vector);
 };
 
 } // namespace duckdb

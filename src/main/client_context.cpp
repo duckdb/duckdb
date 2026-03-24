@@ -38,6 +38,7 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -929,8 +930,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 					parser.ParseQuery(statement->ToString());
 					if (statement->type == StatementType::UPDATE_STATEMENT) {
 						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
-						parser.statements[0]->Cast<UpdateStatement>().prioritize_table_when_binding =
-						    statement->Cast<UpdateStatement>().prioritize_table_when_binding;
+						parser.statements[0]->Cast<UpdateStatement>().node->prioritize_table_when_binding =
+						    statement->Cast<UpdateStatement>().node->prioritize_table_when_binding;
 					}
 					statement = std::move(parser.statements[0]);
 				} catch (const NotImplementedException &) {
