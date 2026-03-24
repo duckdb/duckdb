@@ -52,7 +52,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	if (alter_option_list.size() > 1) {
 		throw ParserException("Only one ALTER command per statement is supported");
 	}
-	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
+	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(alter_option_list[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->catalog = table->catalog_name;
 	result->schema = table->schema_name;
