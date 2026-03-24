@@ -286,35 +286,6 @@
     "constructor": ["sample_percentage"]
   },
   {
-    "class": "PivotColumn",
-    "includes": [
-      "duckdb/parser/tableref/pivotref.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "pivot_expressions",
-        "type": "vector<ParsedExpression*>"
-      },
-      {
-        "id": 101,
-        "name": "unpivot_names",
-        "type": "vector<string>"
-      },
-      {
-        "id": 102,
-        "name": "entries",
-        "type": "vector<PivotColumnEntry>"
-      },
-      {
-        "id": 103,
-        "name": "pivot_enum",
-        "type": "string"
-      }
-    ],
-    "pointer_type": "none"
-  },
-  {
     "class": "BoundPivotInfo",
     "includes": [
       "duckdb/planner/tableref/bound_pivotref.hpp"

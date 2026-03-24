@@ -342,6 +342,8 @@ enum class PhysicalTableScanExecutionStrategy : uint8_t;
 
 enum class PhysicalType : uint8_t;
 
+enum class PivotRefType : uint8_t;
+
 enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
@@ -969,6 +971,9 @@ const char* EnumUtil::ToChars<PhysicalTableScanExecutionStrategy>(PhysicalTableS
 
 template<>
 const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
+
+template<>
+const char* EnumUtil::ToChars<PivotRefType>(PivotRefType value);
 
 template<>
 const char* EnumUtil::ToChars<PragmaType>(PragmaType value);
@@ -1678,6 +1683,9 @@ PhysicalTableScanExecutionStrategy EnumUtil::FromString<PhysicalTableScanExecuti
 
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
+
+template<>
+PivotRefType EnumUtil::FromString<PivotRefType>(const char *value);
 
 template<>
 PragmaType EnumUtil::FromString<PragmaType>(const char *value);

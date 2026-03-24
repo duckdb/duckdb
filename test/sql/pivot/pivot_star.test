@@ -1,0 +1,21 @@
+# name: test/sql/pivot/pivot_star.test
+# group: [pivot]
+
+load __TEST_DIR__/pivot_star.db readwrite
+
+statement ok
+CREATE TABLE t(id INT, jan INT, feb INT);
+
+statement ok
+CREATE VIEW poison_view AS SELECT * FROM t UNPIVOT (val FOR col IN (*));
+
+statement ok
+CREATE VIEW expr_view AS SELECT * FROM t UNPIVOT (val FOR col IN (1+2+id));
+
+query II
+SELECT * FROM poison_view;
+----
+
+query IIII
+SELECT * FROM expr_view;
+----
