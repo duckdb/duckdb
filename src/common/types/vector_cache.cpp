@@ -57,9 +57,9 @@ public:
 		result.validity.Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
+			result.buffer->SetData(owned_data.get());
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
-			result.buffer->SetData(owned_data.get());
 			// propagate through child
 			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
 			auto &list_buffer = result.auxiliary->Cast<VectorListBuffer>();
@@ -96,8 +96,8 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.auxiliary.reset();
 			result.buffer->SetData(owned_data.get());
+			result.auxiliary.reset();
 			break;
 		}
 	}
@@ -117,7 +117,7 @@ private:
 	AllocatedData owned_data;
 	//! Child caches (if any). Used for nested types.
 	vector<buffer_ptr<VectorBuffer>> child_caches;
-	//! Aux data for the vector git (if any)
+	//! Aux data for the vector (if any)
 	buffer_ptr<VectorBuffer> auxiliary;
 	//! Capacity of the vector
 	idx_t capacity;
