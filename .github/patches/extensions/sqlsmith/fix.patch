@@ -9,10 +9,10 @@ index 4602928..66efab0 100644
 +#include "duckdb/parser/query_node/update_query_node.hpp"
  #include "duckdb/parser/statement/select_statement.hpp"
  #endif
- 
+
 @@ -432,11 +433,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
  }
- 
+
  void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 -	Simplify(stmt.cte_map);
 -	SimplifyOptional(stmt.from_table);
@@ -25,5 +25,52 @@ index 4602928..66efab0 100644
 +	Simplify(*stmt.node->set_info);
 +	SimplifyList(stmt.node->returning_list);
  }
- 
+
  void StatementSimplifier::Simplify(SQLStatement &stmt) {
+
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index 72e8f5b..6e33fee 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -957,9 +957,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 		case ExpressionType::WINDOW_NTILE:
+ 		case ExpressionType::WINDOW_FIRST_VALUE:
+ 		case ExpressionType::WINDOW_LAST_VALUE:
++			min_parameters = 1;
++			break;
+ 		case ExpressionType::WINDOW_LEAD:
+ 		case ExpressionType::WINDOW_LAG:
+ 			min_parameters = 1;
++			max_parameters = 3;
+ 			break;
+ 		case ExpressionType::WINDOW_NTH_VALUE:
+ 			min_parameters = 2;
+@@ -1014,15 +1017,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 	default:
+ 		break;
+ 	}
+-	switch (type) {
+-	case ExpressionType::WINDOW_LEAD:
+-	case ExpressionType::WINDOW_LAG:
+-		result->offset_expr = RandomExpression(30);
+-		result->default_expr = RandomExpression(30);
+-		break;
+-	default:
+-		break;
+-	}
+ 	return std::move(result);
+ }
+
+diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
+index 4602928..3f4037b 100644
+--- a/src/statement_simplifier.cpp
++++ b/src/statement_simplifier.cpp
+@@ -357,8 +357,6 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
+ 		SimplifyChildExpression(expr, window.filter_expr);
+ 		SimplifyChildExpression(expr, window.start_expr);
+ 		SimplifyChildExpression(expr, window.end_expr);
+-		SimplifyChildExpression(expr, window.offset_expr);
+-		SimplifyChildExpression(expr, window.default_expr);
+ 		SimplifyEnum(window.ignore_nulls, false);
+ 		SimplifyEnum(window.distinct, false);
+ 		SimplifyEnum(window.start, WindowBoundary::UNBOUNDED_PRECEDING);
