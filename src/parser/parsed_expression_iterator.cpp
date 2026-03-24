@@ -8,6 +8,8 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
@@ -341,6 +343,30 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		}
 		for (auto &expr : del_node.returning_list) {
 			expr_callback(expr);
+		}
+		break;
+	}
+	case QueryNodeType::INSERT_QUERY_NODE: {
+		auto &ins_node = node.Cast<InsertQueryNode>();
+		if (ins_node.select_statement) {
+			EnumerateQueryNodeChildren(*ins_node.select_statement->node, expr_callback, ref_callback);
+		}
+		if (ins_node.table_ref) {
+			EnumerateTableRefChildren(*ins_node.table_ref, expr_callback, ref_callback);
+		}
+		for (auto &expr : ins_node.returning_list) {
+			expr_callback(expr);
+		}
+		if (ins_node.on_conflict_info && ins_node.on_conflict_info->set_info) {
+			for (auto &expr : ins_node.on_conflict_info->set_info->expressions) {
+				expr_callback(expr);
+			}
+			if (ins_node.on_conflict_info->set_info->condition) {
+				expr_callback(ins_node.on_conflict_info->set_info->condition);
+			}
+		}
+		if (ins_node.on_conflict_info && ins_node.on_conflict_info->condition) {
+			expr_callback(ins_node.on_conflict_info->condition);
 		}
 		break;
 	}
