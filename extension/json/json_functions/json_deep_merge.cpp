@@ -14,20 +14,9 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 		return yyjson_mut_val_mut_copy(doc, patch);
 	}
 
-	// If orig is not an object, apply patch to empty (skipping nulls)
+	// If orig is not an object, patch replaces it entirely (same as merge_patch)
 	if (!yyjson_mut_is_obj(orig)) {
-		auto builder = yyjson_mut_obj(doc);
-		idx_t idx, max;
-		yyjson_mut_val *key, *patch_val;
-		yyjson_mut_obj_foreach(patch, idx, max, key, patch_val) {
-			if (unsafe_yyjson_is_null(patch_val)) {
-				continue;
-			}
-			auto mut_key = yyjson_mut_val_mut_copy(doc, key);
-			auto merged_val = DeepMerge(doc, nullptr, patch_val);
-			yyjson_mut_obj_add(builder, mut_key, merged_val);
-		}
-		return builder;
+		return yyjson_mut_val_mut_copy(doc, patch);
 	}
 
 	// Both are objects: deep merge with null coalescing

@@ -65,6 +65,17 @@ SELECT json_deep_merge('{"a":1}', '{"b":null}')
 ----
 {"a":1}
 
+# Non-object orig with null in patch: patch replaces entirely (same as merge_patch)
+query T
+SELECT json_deep_merge('42', '{"a":null}')
+----
+{"a":null}
+
+query T
+SELECT json_deep_merge('42', '{"a":1,"b":null}')
+----
+{"a":1,"b":null}
+
 # Non-object: patch replaces base (same as merge_patch)
 query T
 SELECT json_deep_merge('[1, 2]', '[true, false]')
