@@ -20,6 +20,7 @@ class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
 struct SelCache;
+enum class VectorConstructorAction;
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
@@ -39,8 +40,6 @@ class Vector {
 	friend class VectorCacheBuffer;
 
 public:
-	//! Create a vector that references the other vector
-	DUCKDB_API explicit Vector(const Vector &other);
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Create a vector that slices another vector between a pair of offsets
@@ -65,6 +64,9 @@ public:
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
+	//! Create a new vector that references the other vector
+	DUCKDB_API static Vector Ref(const Vector &other);
+
 	//! Create a vector that references the specified value.
 	DUCKDB_API void Reference(const Value &value);
 	//! Causes this vector to reference the data held by the other vector.
@@ -198,6 +200,9 @@ private:
 	//! This is only used internally in `Flatten` - since referencing
 	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
 	void ConstReference(const Vector &other) const;
+
+	//! Create a vector that references the other vector
+	Vector(const Vector &other, VectorConstructorAction action);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated

@@ -36,6 +36,8 @@
 #include <cstring> // strlen() on Solaris
 namespace duckdb {
 
+enum class VectorConstructorAction { REFERENCE_VECTOR };
+
 Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), validity(capacity) {
 	if (create_data) {
@@ -57,7 +59,7 @@ Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
 	ResetFromCache(cache);
 }
 
-Vector::Vector(const Vector &other) : type(other.type) {
+Vector::Vector(const Vector &other, VectorConstructorAction) : type(other.type) {
 	Reference(other);
 }
 
@@ -76,6 +78,10 @@ Vector::Vector(const Value &value) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept
     : vector_type(other.vector_type), type(std::move(other.type)), validity(std::move(other.validity)),
       buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
+}
+
+Vector Vector::Ref(const Vector &other) {
+	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }
 
 void Vector::Reference(const Value &value) {
@@ -229,7 +235,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
 			auto &child_vector = DictionaryVector::Child(*this);
 
-			Vector new_child(child_vector);
+			Vector new_child(Vector::Ref(child_vector));
 			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
 			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
 		}
@@ -246,7 +252,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		return;
 	}
 
-	Vector child_vector(*this);
+	Vector child_vector(Vector::Ref(*this));
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
 		child_vector.auxiliary = make_buffer<VectorStructBuffer>(*this, sel, count);
@@ -1108,7 +1114,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 			format.validity = FlatVector::Validity(child);
 		} else {
 			// dictionary with non-flat child: create a new reference to the child and flatten it
-			Vector child_vector(child);
+			Vector child_vector(Vector::Ref(child));
 			child_vector.Flatten(sel, count);
 			auto new_aux = make_buffer<VectorChildBuffer>(std::move(child_vector));
 
@@ -1381,7 +1387,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			Vector serialized_vector(*this);
+			Vector serialized_vector(Vector::Ref(*this));
 			serialized_vector.Flatten(count);
 
 			auto &child = ArrayVector::GetEntry(serialized_vector);

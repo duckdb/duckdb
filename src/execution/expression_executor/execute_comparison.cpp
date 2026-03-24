@@ -299,8 +299,8 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, optional_ptr<con
 	SelectionVector maybe_vec(count);
 
 	// Handle NULL nested values
-	Vector l_not_null(left);
-	Vector r_not_null(right);
+	Vector l_not_null(Vector::Ref(left));
+	Vector r_not_null(Vector::Ref(right));
 
 	auto match_count = SelectNotNull(l_not_null, r_not_null, count, *sel, maybe_vec, false_opt, null_mask);
 	auto no_match_count = count - match_count;
