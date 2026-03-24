@@ -67,7 +67,7 @@ void FSSTVector::SetCount(Vector &vector, idx_t count) {
 	fsst_string_buffer.SetCount(count);
 }
 
-idx_t FSSTVector::GetCount(Vector &vector) {
+idx_t FSSTVector::GetCount(const Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (!vector.auxiliary) {

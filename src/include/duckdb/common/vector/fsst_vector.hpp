@@ -30,7 +30,7 @@ public:
 	void SetCount(idx_t count) {
 		total_string_count = count;
 	}
-	idx_t GetCount() {
+	idx_t GetCount() const {
 		return total_string_count;
 	}
 
@@ -73,7 +73,7 @@ struct FSSTVector {
 	DUCKDB_API static vector<unsigned char> &GetDecompressBuffer(const Vector &vector);
 	//! Setting the string count is required to be able to correctly flatten the vector
 	DUCKDB_API static void SetCount(Vector &vector, idx_t count);
-	DUCKDB_API static idx_t GetCount(Vector &vector);
+	DUCKDB_API static idx_t GetCount(const Vector &vector);
 };
 
 } // namespace duckdb

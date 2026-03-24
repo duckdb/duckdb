@@ -112,8 +112,10 @@ public:
 	DUCKDB_API void Print() const;
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	DUCKDB_API void Flatten(idx_t count);
-	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count);
+	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
+	//! As such, it can be used on constant vectors.
+	DUCKDB_API void Flatten(idx_t count) const;
+	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 	//! Creates a UnifiedVectorFormat of a vector
 	//! The UnifiedVectorFormat allows efficient reading of vectors regardless of their vector type
 	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
@@ -194,22 +196,24 @@ private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
 
-	//! Flatten a constant vector
-	void FlattenConstant(idx_t count);
+	//! This allows a vector to reference another vector while const
+	//! This is only used internally in `Flatten` - since referencing
+	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
+	void ConstReference(const Vector &other) const;
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
 	//! constant, if it is compressed)
-	VectorType vector_type;
+	mutable VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	LogicalType type;
 	//! The validity mask of the vector
-	ValidityMask validity;
+	mutable ValidityMask validity;
 	//! The main buffer holding the data of the vector
-	buffer_ptr<VectorBuffer> buffer;
+	mutable buffer_ptr<VectorBuffer> buffer;
 	//! The buffer holding auxiliary data of the vector
 	//! e.g. a string vector uses this to store strings
-	buffer_ptr<VectorBuffer> auxiliary;
+	mutable buffer_ptr<VectorBuffer> auxiliary;
 };
 
 //! The VectorChildBuffer holds a child Vector
