@@ -1,5 +1,6 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
+#include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
@@ -4396,5 +4397,44 @@ TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
 	db.adbc_error.release(&db.adbc_error);
 
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto &input_data = db.QueryArrow("SELECT 44 as value");
+
+	AdbcStatement adbc_statement;
+	InitializeADBCError(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "nonexistent_schema",
+	                                       &db.adbc_error)));
+
+	const char *ingest_option_mode;
+	SECTION("REPLACE") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_REPLACE;
+	}
+	SECTION("CREATE_APPEND") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_CREATE_APPEND;
+	}
+
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ingest_option_mode, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
 }
 } // namespace duckdb
