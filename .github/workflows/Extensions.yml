@@ -189,7 +189,7 @@ jobs:
             opt_in_archs: ''
             extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
             extra_toolchains: rust
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: smvv/extension-ci-tools/.github/workflows/_extension_distribution.yml@allow-custom-runners
     with:
       # We piggy-back extension-template to build the extensions in extension_config
       override_repository: duckdb/extension-template
@@ -200,8 +200,8 @@ jobs:
       reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
       set_caller_as_duckdb: true
       duckdb_version: ${{ inputs.git_ref }}
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      override_ci_tools_repository: smvv/extension-ci-tools
+      ci_tools_version: allow-custom-runners
       exclude_archs: ${{ matrix.exclude_archs }}
       opt_in_archs: ${{ matrix.opt_in_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
@@ -218,7 +218,7 @@ jobs:
     name: External Extensions (2nd batch)
     needs:
       - load-extension-configs
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: smvv/extension-ci-tools/.github/workflows/_extension_distribution.yml@allow-custom-runners
     with:
       # We piggy-back extension-template to build the extensions in extension_config
       override_repository: duckdb/extension-template
@@ -227,8 +227,8 @@ jobs:
       extension_name: external-extensions2
       set_caller_as_duckdb: true
       duckdb_version: ${{ inputs.git_ref }}
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      override_ci_tools_repository: smvv/extension-ci-tools
+      ci_tools_version: allow-custom-runners
       exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions2_exclude_archs }}
       extra_toolchains: 'rust'
       use_merged_vcpkg_manifest: '1'
