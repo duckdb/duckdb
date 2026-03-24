@@ -1077,6 +1077,7 @@ bool JSONParser::Process(const string &value) {
 	state = JSONState::REGULAR;
 	char quote_char = '"';
 	bool can_parse_value = false;
+	bool in_unquoted_value = false;
 	pos = 0;
 	for (; success && pos < value.size(); pos++) {
 		auto c = value[pos];
@@ -1109,6 +1110,7 @@ bool JSONParser::Process(const string &value) {
 				}
 				separators.pop_back();
 				HandleBracketClose(c);
+				in_unquoted_value = false;
 				break;
 			}
 			case '"':
@@ -1120,6 +1122,7 @@ bool JSONParser::Process(const string &value) {
 			case ',':
 				// comma - move to next line
 				HandleComma(c);
+				in_unquoted_value = false;
 				break;
 			case ':':
 				HandleColon();
@@ -1135,11 +1138,16 @@ bool JSONParser::Process(const string &value) {
 				HandleCharacter(c);
 				break;
 			case ' ':
+				if (in_unquoted_value) {
+					HandleCharacter(c);
+				}
+				break;
 			case '\t':
 			case '\n':
 				// skip whitespace
 				break;
 			default:
+				in_unquoted_value = true;
 				HandleCharacter(c);
 				break;
 			}

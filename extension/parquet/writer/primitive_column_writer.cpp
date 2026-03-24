@@ -144,7 +144,7 @@ void PrimitiveColumnWriter::WriteLevels(Allocator &allocator, WriteStream &temp_
 	}
 
 	// write the levels using the RLE-BP encoding
-	const auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
+	const auto bit_width = RleBpDecoder::ComputeBitWidthFromMaxValue(max_value);
 	RleBpEncoder rle_encoder(bit_width);
 
 	// have to write to an intermediate stream first because we need to know the size

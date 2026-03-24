@@ -482,7 +482,8 @@
       {
         "id": 217,
         "name": "has_ignore_nulls",
-        "type": "bool"
+        "type": "bool",
+        "version": "8"
       }
     ],
     "constructor": ["type", "children", "offset_expr", "default_expr"]
