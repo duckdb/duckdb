@@ -178,7 +178,6 @@
     {
       "reason": "Runs too long in release mode.",
       "paths": [
-        "test/sql/limit/test_limit0.test",
         "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
         "test/sql/sample/reservoir_testing_percentage.test",
         "test/sql/window/test_constant_orderby.test"
