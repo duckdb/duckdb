@@ -1700,7 +1700,9 @@ PEGTransformerFactory::TransformWindowClause(PEGTransformer &transformer, option
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	transformer.in_window_definition = true;
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
+	transformer.in_window_definition = false;
 	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
 	return std::move(window_function);
 }
