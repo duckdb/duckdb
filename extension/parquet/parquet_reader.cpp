@@ -319,9 +319,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("DECIMAL requires a length and scale specifier!");
 			}
 			if (s_ele.scale < 0) {
-			throw IOException("Invalid Parquet file: DECIMAL schema element has negative scale");
-		}
-		schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
+				throw IOException("Invalid Parquet file: DECIMAL schema element has negative scale");
+			}
+			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
 			if (s_ele.precision > DecimalType::MaxWidth()) {
 				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
 				return LogicalType::DOUBLE;
@@ -598,9 +598,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 		idx_t c_idx = 0;
 		if (s_ele.__isset.num_children && s_ele.num_children < 0) {
-		throw IOException("Invalid Parquet file: schema element \"%s\" has negative num_children", s_ele.name);
-	}
-	idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
+			throw IOException("Invalid Parquet file: schema element \"%s\" has negative num_children", s_ele.name);
+		}
+		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
 		while (c_idx < num_children) {
 			next_schema_idx++;
 
