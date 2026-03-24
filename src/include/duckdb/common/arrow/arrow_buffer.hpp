@@ -86,19 +86,19 @@ struct ArrowBuffer {
 	}
 
 private:
-    void ReserveInternal(idx_t bytes) {
-        data_ptr_t new_ptr;
-        if (dataptr) {
-            new_ptr = data_ptr_cast(realloc(dataptr, bytes));
-        } else {
-            new_ptr = data_ptr_cast(malloc(bytes));
-        }
-        if (!new_ptr) {
-            throw OutOfMemoryException("ArrowBuffer: failed to allocate %llu bytes", (unsigned long long)bytes);
-        }
-        dataptr = new_ptr;
-        capacity = bytes;
-    }
+	void ReserveInternal(idx_t bytes) {
+		data_ptr_t new_ptr;
+		if (dataptr) {
+			new_ptr = data_ptr_cast(realloc(dataptr, bytes));
+		} else {
+			new_ptr = data_ptr_cast(malloc(bytes));
+		}
+		if (!new_ptr) {
+			throw OutOfMemoryException("ArrowBuffer: failed to allocate %llu bytes", (unsigned long long)bytes);
+		}
+		dataptr = new_ptr;
+		capacity = bytes;
+	}
 
 private:
 	data_ptr_t dataptr = nullptr;
