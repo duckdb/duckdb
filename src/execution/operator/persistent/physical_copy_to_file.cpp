@@ -282,7 +282,8 @@ PartitionedCopyStage PartitionedCopyHashGroup::GetStage() const {
 }
 
 idx_t PartitionedCopyHashGroup::GetTaskCount() const {
-	return group_threads * (uint8_t(PartitionedCopyStage::DONE) - uint8_t(PartitionedCopyStage::SORT));
+	return group_threads *
+	       (static_cast<uint8_t>(PartitionedCopyStage::DONE) - static_cast<uint8_t>(PartitionedCopyStage::SORT));
 }
 
 idx_t PartitionedCopyHashGroup::InitTasks(idx_t per_thread_p) {
@@ -376,15 +377,15 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 		partition_mask.SetValidUnsafe(0);
 	}
 
-	// Only compare partition columns (not future order columns)
+	// Only compare partition columns (not order columns)
 	const auto key_count = partitioned_copy.op.partition_columns.size();
 	auto &scan_cols = partitioned_copy.sort_strategy->sort_ids;
 
 	WindowDeltaScanner(*rows, task.begin_idx, task.end_idx, scan_cols, key_count,
-	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
-	                       SelectionVector &distinct, const SelectionVector &matching) {
-		                   for (idx_t i = 0; i < ndistinct; ++i) {
-			                   partition_mask.SetValidUnsafe(row_idx + distinct.get_index(i));
+	                   [&](const idx_t row_idx, DataChunk &, DataChunk &, const idx_t ndistinct,
+	                       const SelectionVector &distinct, const SelectionVector &) {
+		                   for (idx_t i = 0; i < ndistinct; i++) {
+			                   partition_mask.SetValidUnsafe(row_idx + distinct.get_index_unsafe(i));
 		                   }
 	                   });
 
@@ -472,16 +473,16 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &context, const Partitio
 	auto &hash_group = *hash_groups[task.hash_bin];
 	switch (task.stage) {
 	case PartitionedCopyStage::SORT:
-		hash_group.Sort(context, *global_sink_state, interrupt, task.begin_idx, task.end_idx);
+		hash_group.Sort(context, *global_sink_state, interrupt, task);
 		break;
 	case PartitionedCopyStage::MATERIALIZE:
-		hash_group.Materialize(context, *global_source_state, interrupt, task.begin_idx, task.end_idx);
+		hash_group.Materialize(context, *global_source_state, interrupt, task);
 		break;
 	case PartitionedCopyStage::MASK:
-		hash_group.Mask(task.begin_idx, task.end_idx);
+		hash_group.Mask(task);
 		break;
 	case PartitionedCopyStage::WRITE:
-		hash_group.Write(task.begin_idx, task.end_idx);
+		hash_group.Write(task);
 		break;
 	default:
 		throw InternalException("Invalid PartitionedCopyStage in PartitionedCopyState::ExecuteTask");
