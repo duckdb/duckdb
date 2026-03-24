@@ -4368,4 +4368,33 @@ TEST_CASE("ADBC - Re-execute same statement while prior stream is open", "[adbc]
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
 }
 
+TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	const auto query = "CREATE MACRO my_macro(x) AS x + 1";
+	auto result = db.Query(query);
+	REQUIRE(!result->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, query, &db.adbc_error)));
+
+	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
+	int64_t rows_affected = -1;
+	auto status = AdbcStatementExecuteQuery(&stmt, &out_stream, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(out_stream.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
 } // namespace duckdb
