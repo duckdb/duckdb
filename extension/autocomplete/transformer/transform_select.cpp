@@ -300,7 +300,11 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectClause(PEGTransform
 			result->modifiers.push_back(std::move(distinct_modifier));
 		}
 	}
-	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto opt_target_list = list_pr.Child<OptionalParseResult>(2);
+	if (!opt_target_list.HasResult()) {
+		throw ParserException("SELECT clause without selection list");
+	}
+	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_target_list.optional_result);
 	for (auto &expr_ptr : target_list) {
 		result->select_list.push_back(std::move(expr_ptr));
 	}
@@ -1482,7 +1486,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		auto type_str = transformer.Transform<string>(group_by_list.Child<ListParseResult>(0));
 		auto extract_parens = ExtractResultFromParens(group_by_list.Child<ListParseResult>(1));
 		if (!extract_parens->Cast<OptionalParseResult>().HasResult()) {
-			throw ParserException("CUBE or ROLLUP column list cannot be emptied");
+			throw ParserException("CUBE or ROLLUP column list cannot be empty");
 		}
 		auto expr_list = ExtractParseResultsFromList(extract_parens->Cast<OptionalParseResult>().optional_result);
 

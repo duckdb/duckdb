@@ -136,13 +136,17 @@ ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transf
 
 ColumnElements PEGTransformerFactory::TransformCreateColumnList(PEGTransformer &transformer,
                                                                 optional_ptr<ParseResult> parse_result) {
-	// CreateColumnList <- Parens(CreateTableColumnList) PartitionSortedOptions? WithList?
-	// child 0: Parens(CreateTableColumnList)
+	// CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
+	// child 0: Parens(CreateTableColumnList?)
 	// child 1: PartitionSortedOptions?
 	// child 2: WithList?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto create_table_column_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto result = transformer.Transform<ColumnElements>(create_table_column_list);
+	auto create_table_column_list =
+	    ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<OptionalParseResult>();
+	if (!create_table_column_list.HasResult()) {
+		throw ParserException("Table must have at least one column!");
+	}
+	auto result = transformer.Transform<ColumnElements>(create_table_column_list.optional_result);
 	PartitionSortedOptions pso;
 	transformer.TransformOptional<PartitionSortedOptions>(list_pr, 1, pso);
 	result.partition_keys = std::move(pso.partition_keys);

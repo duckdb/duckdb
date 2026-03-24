@@ -71,7 +71,7 @@ Parser Error: syntax error at or near ")"
 statement error
 WITH cte1 AS (SELECT 1), cte2 AS (SELECT ) SELECT * FROM cte1;
 ----
-Parser Error: syntax error at or near ")"
+Parser Error: SELECT clause without selection list
 
 statement error
 SELECT count(*) FILTER (WHERE ) FROM tbl;
