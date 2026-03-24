@@ -475,7 +475,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			prev_was_keyword = false;
 			result += ',';
 			at_line_start = false;
-			if (paren_stack.empty()) {
+			if (paren_stack.empty() || paren_stack.back().has_clauses) {
 				write_newline();
 				write_indent(content_indent());
 			} else {

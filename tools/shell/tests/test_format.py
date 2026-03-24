@@ -238,4 +238,23 @@ def test_format_stdin_does_not_modify_files(shell, tmp_path):
     assert result.status_code == 0
     assert "SELECT 1" in result.stdout
 
+
+def test_format_subquery_select_list_multiline(shell):
+    """SELECT columns inside a JOIN subquery each get their own line when the list is long."""
+    sql = (
+        "SELECT id FROM t "
+        "LEFT JOIN ("
+        "SELECT avg(a.address_valuation) AS avg_val, sum(a.address_zone) AS sum_zone, count(a.address_zone) AS cnt_zone "
+        "FROM s GROUP BY s.id"
+        ") sub ON t.id = sub.id"
+    )
+    result = run_format_stdin(shell, sql)
+    assert result.status_code == 0
+    # Each column in the subquery's SELECT list should be on its own line
+    assert "avg(a.address_valuation) AS avg_val,\n" in result.stdout
+    assert "sum(a.address_zone) AS sum_zone,\n" in result.stdout
+    assert "count(a.address_zone) AS cnt_zone\n" in result.stdout
+    # Columns must NOT all run together on one line
+    assert "avg_val, sum(" not in result.stdout
+
 # fmt: on
