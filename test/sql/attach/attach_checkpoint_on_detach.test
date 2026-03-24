@@ -140,4 +140,4 @@ SELECT COUNT(*) FROM glob('__TEST_DIR__/test7.db.wal')
 statement error
 SET checkpoint_on_detach = 'blah blah blah';
 ----
-Invalid Input Error
+unrecognized value "blah blah blah" for enum "CheckpointOnDetach"
