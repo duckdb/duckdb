@@ -241,6 +241,14 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: 'false'
       run_all: 'true'
+      runners: >-
+        {
+          "linux_x64": "${{ needs.prepare.outputs.runner_linux_x64 }}",
+          "linux_22_x64": "${{ needs.prepare.outputs.runner_linux_22_x64 }}",
+          "linux_arm64": "${{ needs.prepare.outputs.runner_linux_arm64 }}",
+          "macos_arm64": "${{ needs.prepare.outputs.runner_macos_arm64 }}",
+          "macos_14_arm64": "${{ needs.prepare.outputs.runner_macos_14_arm64 }}"
+        }
 
  wasm-eh:
     name: Wasm EH
