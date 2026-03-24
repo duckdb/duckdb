@@ -6,11 +6,11 @@
 namespace duckdb {
 
 void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
+	input.Flatten(count);
+
 	// Copy the list size
 	const auto list_size = ListVector::GetListSize(input);
 	ListVector::SetListSize(result, list_size);
-
-	input.Flatten(count);
 
 	// Copy the list validity
 	FlatVector::SetValidity(result, FlatVector::Validity(input));
