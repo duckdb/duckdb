@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/main/settings.hpp"
 #include "fmt/format.h"
 
@@ -132,7 +133,7 @@ struct GlobalFileState {
 //===--------------------------------------------------------------------===//
 // PartitionedCopy
 //===--------------------------------------------------------------------===//
-enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, WRITE, DONE };
+enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, BATCH, WRITE, DONE };
 
 struct PartitionedCopyTask {
 	PartitionedCopyStage stage = PartitionedCopyStage::DONE;
@@ -164,13 +165,15 @@ public:
 
 	bool TryPrepareNextStage();
 	bool TryNextTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
+	bool TryNextBatchTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
+	bool TryNextWriteTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
 
 	void Sort(ExecutionContext &context, GlobalSinkState &sink, InterruptState &interrupt,
 	          const PartitionedCopyTask &task);
 	void Materialize(ExecutionContext &context, GlobalSourceState &source, InterruptState &interrupt,
 	                 const PartitionedCopyTask &task);
 	void Mask(const PartitionedCopyTask &task);
-	void Write(const PartitionedCopyTask &task);
+	void Batch(const PartitionedCopyTask &task);
 
 private:
 	void AllocateMask();
@@ -178,36 +181,50 @@ private:
 public:
 	//! The PartitionedCopy that this hash group belongs to
 	const PartitionedCopy &partitioned_copy;
-	//! The materialized partition data (set after MATERIALIZE stage)
-	unique_ptr<ColumnDataCollection> rows;
+
 	//! The row count of the group
-	idx_t count = 0;
+	const idx_t count;
 	//! The number of blocks (chunks) in the group
-	idx_t blocks = 0;
+	const idx_t blocks;
+	//! The bin number
+	const idx_t hash_bin;
+
+	//! The materialized partition data (set after MATERIALIZE stage)
+	unique_ptr<ColumnDataCollection> collection;
 	//! The partition boundary mask (marks where partition key changes within the bin)
 	ValidityMask partition_mask;
-	//! The processing stage for this group
-	atomic<PartitionedCopyStage> stage;
-	//! The bin number
-	idx_t hash_bin;
+
 	//! Lock for stage transitions and task assignment
 	annotated_mutex lock;
+	//! The processing stage for this group
+	atomic<PartitionedCopyStage> stage;
+
+	//! The next task to assign (monotonic, maps task index → stage)
+	idx_t next_task = 0;
+	//! The output batch base index
+	idx_t batch_base = 0;
+	//! The number of blocks per thread (for MASK parallelism)
+	idx_t per_thread = 0;
+	//! The number of parallel threads for this group
+	idx_t group_threads = 0;
+
 	//! Count of sorted blocks
 	atomic<idx_t> sorted;
 	//! Count of materialized blocks
 	atomic<idx_t> materialized;
 	//! Count of masked blocks
 	atomic<idx_t> masked;
-	//! Count of written blocks
-	atomic<idx_t> written;
-	//! The next task to assign (monotonic, maps task index → stage)
-	idx_t next_task = 0;
-	//! The output batch base index
-	idx_t batch_base;
-	//! The number of blocks per thread (for MASK parallelism)
-	idx_t per_thread = 0;
-	//! The number of parallel threads for this group
-	idx_t group_threads = 0;
+	//! Count of batched rows
+	atomic<idx_t> batched;
+
+	//! The current row index (during BATCH stage)
+	idx_t batch_row_idx DUCKDB_GUARDED_BY(lock) = 0;
+	//! The current partition index (hive)
+	idx_t partition_idx DUCKDB_GUARDED_BY(lock) = 0;
+	//! Used to iterate over chunks (during BATCH stage)
+	ColumnDataScanState scan_state;
+	//! The batched data (set during BATCH stage), mapping from partition idx to batches (in order)
+	map<idx_t, vector<unique_ptr<ColumnDataCollection>>> batches DUCKDB_GUARDED_BY(lock);
 };
 
 //! Manages a partitioned COPY flush
@@ -272,9 +289,8 @@ public:
 
 PartitionedCopyHashGroup::PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
                                                    idx_t hash_bin_p)
-    : partitioned_copy(partitioned_copy), count(chunk_row.count), blocks(chunk_row.chunks),
-      stage(PartitionedCopyStage::SORT), hash_bin(hash_bin_p), sorted(0), materialized(0), masked(0), written(0),
-      batch_base(0) {
+    : partitioned_copy(partitioned_copy), count(chunk_row.count), blocks(chunk_row.chunks), hash_bin(hash_bin_p),
+      stage(PartitionedCopyStage::SORT), sorted(0), materialized(0), masked(0), batched(0) {
 }
 
 PartitionedCopyStage PartitionedCopyHashGroup::GetStage() const {
@@ -302,7 +318,7 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 		}
 		return false;
 	case PartitionedCopyStage::MATERIALIZE:
-		if (materialized == blocks && rows.get()) {
+		if (materialized == blocks && collection.get()) {
 			stage = PartitionedCopyStage::MASK;
 			return true;
 		}
@@ -313,9 +329,9 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 			return true;
 		}
 		return false;
-	case PartitionedCopyStage::WRITE:
-		if (written == blocks) {
-			stage = PartitionedCopyStage::DONE;
+	case PartitionedCopyStage::BATCH:
+		if (batched == count) {
+			stage = PartitionedCopyStage::WRITE;
 			return true;
 		}
 		return false;
@@ -343,8 +359,9 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &context, GlobalSour
 
 	if (materialized >= blocks) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!rows) {
-			rows = partitioned_copy.sort_strategy->GetColumnData(hash_bin, source_input);
+		if (!collection) {
+			collection = partitioned_copy.sort_strategy->GetColumnData(hash_bin, source_input);
+			collection->InitializeScan(scan_state);
 		}
 	}
 }
@@ -360,7 +377,7 @@ void PartitionedCopyHashGroup::AllocateMask() {
 void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::MASK);
 	D_ASSERT(count > 0);
-	D_ASSERT(rows);
+	D_ASSERT(collection);
 
 	AllocateMask();
 
@@ -381,7 +398,7 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 	const auto key_count = partitioned_copy.op.partition_columns.size();
 	auto &scan_cols = partitioned_copy.sort_strategy->sort_ids;
 
-	WindowDeltaScanner(*rows, task.begin_idx, task.end_idx, scan_cols, key_count,
+	WindowDeltaScanner(*collection, task.begin_idx, task.end_idx, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &, DataChunk &, const idx_t ndistinct,
 	                       const SelectionVector &distinct, const SelectionVector &) {
 		                   for (idx_t i = 0; i < ndistinct; i++) {
@@ -392,13 +409,27 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 	masked += (task.begin_idx - task.end_idx);
 }
 
-void PartitionedCopyHashGroup::Write(const PartitionedCopyTask &task) {
+void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::WRITE);
 	// TODO: write partitioned data using partition_mask boundaries
-	written += (task.end_idx - task.begin_idx);
+	//  we probably don't want to use begin/end idx here
+	//  we need to perform well in case of skew, many tiny partitions, etc.
+	//  we also need the written batches to be exactly as specified by batch size (bytes) etc.
+
+	batched += (task.end_idx - task.begin_idx);
 }
 
 bool PartitionedCopyHashGroup::TryNextTask(PartitionedCopyTask &task) {
+	// We diverge from the PhysicalWindow parallelism model for these two stages
+	switch (stage.load()) {
+	case PartitionedCopyStage::BATCH:
+		return TryNextBatchTask(task);
+	case PartitionedCopyStage::WRITE:
+		return TryNextWriteTask(task);
+	default:
+		break;
+	}
+
 	if (next_task >= GetTaskCount()) {
 		return false;
 	}
@@ -411,6 +442,64 @@ bool PartitionedCopyHashGroup::TryNextTask(PartitionedCopyTask &task) {
 	task.begin_idx = task.thread_idx * per_thread;
 	task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, blocks);
 	++next_task;
+	return true;
+}
+
+bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
+	if (batch_row_idx == count) {
+		return false;
+	}
+	auto &partition_batches = batches[partition_idx];
+
+	// Reuse these fields
+	task.hash_bin = partition_idx;
+	task.thread_idx = partition_batches.size();
+	task.begin_idx = batch_row_idx;
+
+	// Find the end_idx
+	bool found_next_partition = false;
+	idx_t current_batch_size_bytes = 0;
+	const auto &segments = collection->GetSegments();
+	while (batch_row_idx < count) {
+		// Look for the next partition boundary within the current chunk
+		D_ASSERT(batch_row_idx <= scan_state.next_row_index);
+		for (; batch_row_idx < scan_state.next_row_index; batch_row_idx++) {
+			if (partition_mask.RowIsValidUnsafe(batch_row_idx)) {
+				found_next_partition = true;
+				break;
+			}
+		}
+
+		if (found_next_partition) {
+			break; // Found the next partition boundary
+		}
+
+		// Did not find the next partition boundary, add chunk
+		auto &segment = segments[scan_state.segment_index];
+		const auto current_batch_size = batch_row_idx - task.begin_idx;
+		current_batch_size_bytes += segment->GetChunkAllocationSize(scan_state.chunk_index);
+		const CopyFunctionBatchAnalyzer batch_analyzer(current_batch_size, current_batch_size_bytes,
+		                                               partitioned_copy.op.batch_size,
+		                                               partitioned_copy.op.batch_size_bytes);
+		if (batch_analyzer.MeetsFlushCriteria()) {
+			break; // Batch is large enough - stop
+		}
+
+		// Move to the next chunk
+		idx_t chunk_index;
+		idx_t segment_index;
+		idx_t row_index;
+		const auto success = collection->NextScanIndex(scan_state, chunk_index, segment_index, row_index);
+		if (!success) {
+			throw InternalException("NextScanIndex failed in PartitionedCopyHashGroup::TryNextBatchTask");
+		}
+	}
+	task.end_idx = batch_row_idx;
+
+	// Update partition/batch counters
+	partition_idx += found_next_partition;
+	partition_batches.emplace_back();
+
 	return true;
 }
 
@@ -481,9 +570,10 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &context, const Partitio
 	case PartitionedCopyStage::MASK:
 		hash_group.Mask(task);
 		break;
-	case PartitionedCopyStage::WRITE:
-		hash_group.Write(task);
+	case PartitionedCopyStage::BATCH:
+		hash_group.Batch(task);
 		break;
+	case PartitionedCopyStage::WRITE:
 	default:
 		throw InternalException("Invalid PartitionedCopyStage in PartitionedCopyState::ExecuteTask");
 	}
@@ -1023,8 +1113,8 @@ void CopyToFunctionLocalState::FlushPartitions() {
 				partition_batch->Append(partition_batch_append_state, filtered_chunk);
 			}
 
-			const CopyFunctionBatchAnalyzer batch_analyze(*partition_batch, op.batch_size, op.batch_size_bytes);
-			if (batch_analyze.MeetsFlushCriteria()) {
+			const CopyFunctionBatchAnalyzer batch_analyzer(*partition_batch, op.batch_size, op.batch_size_bytes);
+			if (batch_analyzer.MeetsFlushCriteria()) {
 				partition_batch_append_state.current_chunk_state.handles.clear();
 				op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
 				              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
