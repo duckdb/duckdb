@@ -190,6 +190,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
 	if (s_ele.__isset.type_length) {
+		if (s_ele.type_length < 0) {
+			throw IOException("Invalid Parquet file: schema element \"%s\" has negative type_length", s_ele.name);
+		}
 		schema.type_length = NumericCast<uint32_t>(s_ele.type_length);
 	}
 	schema.parquet_type = s_ele.type;
@@ -314,6 +317,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		case ConvertedType::DECIMAL:
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
+			}
+			if (s_ele.scale < 0) {
+				throw IOException("Invalid Parquet file: DECIMAL schema element has negative scale");
 			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
 			if (s_ele.precision > DecimalType::MaxWidth()) {
@@ -591,6 +597,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		vector<ParquetColumnSchema> child_schemas;
 
 		idx_t c_idx = 0;
+		if (s_ele.__isset.num_children && s_ele.num_children < 0) {
+			throw IOException("Invalid Parquet file: schema element \"%s\" has negative num_children", s_ele.name);
+		}
 		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
 		while (c_idx < num_children) {
 			next_schema_idx++;

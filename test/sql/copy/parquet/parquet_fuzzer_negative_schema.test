@@ -1,0 +1,11 @@
+# name: test/sql/copy/parquet/parquet_fuzzer_negative_schema.test
+# description: Test that corrupted parquet files with negative schema values throw proper errors
+# group: [parquet]
+
+require parquet
+
+# duckdb-fuzzer #4360: negative num_children in parquet schema
+statement error
+FROM read_parquet('data/parquet-testing/fuzzer/20260321_f68be5.parquet', filename=true, filename=map {1: {name: 'cool_column', type: 'VARCHAR', default_value: NULL}});
+----
+Invalid Parquet file
