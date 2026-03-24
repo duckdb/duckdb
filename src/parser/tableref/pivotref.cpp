@@ -312,9 +312,11 @@ vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &ser
 
 		// Otherwise this is a PIVOT with an expression we could not fold.
 		// Older versions of DuckDB do not support this, so throw an exception.
+		const auto target_version = serializer.GetOptions().serialization_compatibility.duckdb_version;
+
 		throw SerializationException(
-		    "Cannot serialize arbitrary expression pivot entries when targeting database storage version '%s'",
-		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+		    "Cannot serialize non-constant expression '%s' in pivot list when targeting database storage version '%s'",
+		    entry.expr->ToString(), target_version);
 	}
 
 	return result;
