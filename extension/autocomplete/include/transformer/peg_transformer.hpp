@@ -801,7 +801,7 @@ private:
 	static string TransformInetOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformListOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer,
-	                                                   optional_ptr<ParseResult> parse_result);
+	                                                  optional_ptr<ParseResult> parse_result);
 	static bool TransformAnyOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -1456,8 +1456,7 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<ParsedExpression>> TransformUpdateSetElement(PEGTransformer &transformer,
 	                                                                            optional_ptr<ParseResult> parse_result);
-	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer,
-	                                             optional_ptr<ParseResult> parse_result);
+	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,

@@ -388,14 +388,14 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
 
 // UniqueConstraintSpec <- UniqueUsingIndex / ColumnIdList
 vector<string> PEGTransformerFactory::TransformUniqueConstraintSpec(PEGTransformer &transformer,
-                                                                     optional_ptr<ParseResult> parse_result) {
+                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<vector<string>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 // UniqueUsingIndex <- 'USING' 'INDEX' Identifier
 vector<string> PEGTransformerFactory::TransformUniqueUsingIndex(PEGTransformer &transformer,
-                                                                 optional_ptr<ParseResult> parse_result) {
+                                                                optional_ptr<ParseResult> parse_result) {
 	throw ParserException("UNIQUE USING INDEX is not supported");
 }
 
