@@ -610,6 +610,10 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopUniqueConstraint(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformUniqueConstraintSpec(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformUniqueUsingIndex(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformCheckConstraint(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopForeignKeyConstraint(PEGTransformer &transformer,
@@ -1451,6 +1455,8 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<ParsedExpression>> TransformUpdateSetElement(PEGTransformer &transformer,
 	                                                                            optional_ptr<ParseResult> parse_result);
+	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer,
+	                                             optional_ptr<ParseResult> parse_result);
 
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,

@@ -289,6 +289,8 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformTopLevelConstraintList);
 	REGISTER_TRANSFORM(TransformTopPrimaryKeyConstraint);
 	REGISTER_TRANSFORM(TransformTopUniqueConstraint);
+	REGISTER_TRANSFORM(TransformUniqueConstraintSpec);
+	REGISTER_TRANSFORM(TransformUniqueUsingIndex);
 	REGISTER_TRANSFORM(TransformCheckConstraint);
 	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
 	REGISTER_TRANSFORM(TransformForeignKeyConstraint);
@@ -836,6 +838,7 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetTuple);
 	REGISTER_TRANSFORM(TransformUpdateSetElementList);
 	REGISTER_TRANSFORM(TransformUpdateSetElement);
+	REGISTER_TRANSFORM(TransformUpdateSetColumnTarget);
 }
 
 void PEGTransformerFactory::RegisterVacuum() {

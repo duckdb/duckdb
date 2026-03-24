@@ -383,8 +383,20 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
-	auto result = make_uniq<UniqueConstraint>(column_list, false);
-	return std::move(result);
+	return make_uniq<UniqueConstraint>(column_list, false);
+}
+
+// UniqueConstraintSpec <- UniqueUsingIndex / ColumnIdList
+vector<string> PEGTransformerFactory::TransformUniqueConstraintSpec(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<vector<string>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+// UniqueUsingIndex <- 'USING' 'INDEX' Identifier
+vector<string> PEGTransformerFactory::TransformUniqueUsingIndex(PEGTransformer &transformer,
+                                                                 optional_ptr<ParseResult> parse_result) {
+	throw ParserException("UNIQUE USING INDEX is not supported");
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
