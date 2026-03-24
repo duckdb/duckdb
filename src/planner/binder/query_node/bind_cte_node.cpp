@@ -1,4 +1,5 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -36,6 +37,9 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		break;
 	case QueryNodeType::STATEMENT_NODE:
 		result = current_binder.get().BindNode(node.Cast<StatementNode>());
+		break;
+	case QueryNodeType::UPDATE_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<UpdateQueryNode>());
 		break;
 	default:
 		throw InternalException("Unsupported query node type");

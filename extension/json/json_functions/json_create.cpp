@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/union_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -327,7 +333,7 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
 		auto &struct_key_v = *names.at(StructType::GetChildName(value_v.GetType(), entry_i));
-		auto &struct_val_v = *entries[entry_i];
+		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
 	}
 	// Whole struct can be NULL

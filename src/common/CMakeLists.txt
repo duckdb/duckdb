@@ -15,6 +15,7 @@ add_subdirectory(serializer)
 add_subdirectory(sort)
 add_subdirectory(types)
 add_subdirectory(value_operations)
+add_subdirectory(vector)
 add_subdirectory(vector_operations)
 
 if(${EXIT_TIME_DESTRUCTORS_WARNING})

@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -808,9 +810,9 @@ void ParquetVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varia
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &name = child_types[i].first;
 		if (name == "value") {
-			value = child_vectors[i].get();
+			value = &child_vectors[i];
 		} else if (name == "typed_value") {
-			typed_value = child_vectors[i].get();
+			typed_value = &child_vectors[i];
 		}
 	}
 
@@ -863,7 +865,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);
-	auto &metadata = *result_vectors[0];
+	auto &metadata = result_vectors[0];
 	CreateMetadata(variant, metadata, count);
 
 	ParquetVariantShredding shredding;

@@ -1,0 +1,29 @@
+diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
+index 4602928..66efab0 100644
+--- a/src/statement_simplifier.cpp
++++ b/src/statement_simplifier.cpp
+@@ -10,6 +10,7 @@
+ #include "duckdb/parser/statement/insert_statement.hpp"
+ #include "duckdb/parser/statement/prepare_statement.hpp"
+ #include "duckdb/parser/statement/update_statement.hpp"
++#include "duckdb/parser/query_node/update_query_node.hpp"
+ #include "duckdb/parser/statement/select_statement.hpp"
+ #endif
+ 
+@@ -432,11 +433,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
+ }
+ 
+ void StatementSimplifier::Simplify(UpdateStatement &stmt) {
+-	Simplify(stmt.cte_map);
+-	SimplifyOptional(stmt.from_table);
+-	D_ASSERT(stmt.set_info);
+-	Simplify(*stmt.set_info);
+-	SimplifyList(stmt.returning_list);
++	Simplify(stmt.node->cte_map);
++	SimplifyOptional(stmt.node->from_table);
++	D_ASSERT(stmt.node->set_info);
++	Simplify(*stmt.node->set_info);
++	SimplifyList(stmt.node->returning_list);
+ }
+ 
+ void StatementSimplifier::Simplify(SQLStatement &stmt) {

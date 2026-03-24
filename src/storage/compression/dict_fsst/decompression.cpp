@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/storage/compression/dict_fsst/decompression.hpp"
 #include "fsst.h"
 #include "duckdb/common/fsst.hpp"

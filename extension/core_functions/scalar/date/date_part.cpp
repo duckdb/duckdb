@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -2018,15 +2020,15 @@ struct StructDatePart {
 				ConstantVector::SetNull(result, false);
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
-					ConstantVector::SetNull(*child_entry, false);
+					ConstantVector::SetNull(child_entry, false);
 					const auto part_index = size_t(info.part_codes[col]);
 					if (owners[part_index] == col) {
 						if (IsBigintDatepart(info.part_codes[col])) {
 							bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-							    ConstantVector::GetData<int64_t>(*child_entry);
+							    ConstantVector::GetData<int64_t>(child_entry);
 						} else {
 							double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-							    ConstantVector::GetData<double>(*child_entry);
+							    ConstantVector::GetData<double>(child_entry);
 						}
 					}
 				}
@@ -2035,7 +2037,7 @@ struct StructDatePart {
 					DatePart::StructOperator::Operation(bigint_values, double_values, tdata[0], 0, part_mask);
 				} else {
 					for (auto &child_entry : child_entries) {
-						ConstantVector::SetNull(*child_entry, true);
+						ConstantVector::SetNull(child_entry, true);
 					}
 				}
 			}
@@ -2056,8 +2058,8 @@ struct StructDatePart {
 			// Start with valid children
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
-				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
-				auto &child_validity = FlatVector::Validity(*child_entry);
+				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
+				auto &child_validity = FlatVector::Validity(child_entry);
 				if (child_validity.GetData()) {
 					child_validity.SetAllValid(count);
 				}
@@ -2067,10 +2069,10 @@ struct StructDatePart {
 				if (owners[part_index] == col) {
 					if (IsBigintDatepart(info.part_codes[col])) {
 						bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-						    FlatVector::GetData<int64_t>(*child_entry);
+						    FlatVector::GetData<int64_t>(child_entry);
 					} else {
 						double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-						    FlatVector::GetData<double>(*child_entry);
+						    FlatVector::GetData<double>(child_entry);
 					}
 				}
 			}
@@ -2082,13 +2084,13 @@ struct StructDatePart {
 						DatePart::StructOperator::Operation(bigint_values, double_values, tdata[idx], i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
-							FlatVector::Validity(*child_entry).SetInvalid(i);
+							FlatVector::Validity(child_entry).SetInvalid(i);
 						}
 					}
 				} else {
 					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(*child_entry).SetInvalid(i);
+						FlatVector::Validity(child_entry).SetInvalid(i);
 					}
 				}
 			}
@@ -2099,7 +2101,7 @@ struct StructDatePart {
 			const auto part_index = size_t(info.part_codes[col]);
 			const auto owner = owners[part_index];
 			if (owner != col) {
-				child_entries[col]->Reference(*child_entries[owner]);
+				child_entries[col].Reference(child_entries[owner]);
 			}
 		}
 

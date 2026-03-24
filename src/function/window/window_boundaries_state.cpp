@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_boundaries_state.hpp"
