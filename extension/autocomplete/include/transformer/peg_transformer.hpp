@@ -1456,6 +1456,8 @@ private:
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer,
+	                                                     optional_ptr<ParseResult> parse_result);
 
 	// vacuum.gram
 	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer,

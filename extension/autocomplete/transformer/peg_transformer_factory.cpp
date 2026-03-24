@@ -800,6 +800,7 @@ void PEGTransformerFactory::RegisterUse() {
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
 	REGISTER_TRANSFORM(TransformUseTarget);
+	REGISTER_TRANSFORM(TransformUseTargetCatalogSchema);
 }
 
 void PEGTransformerFactory::RegisterSet() {

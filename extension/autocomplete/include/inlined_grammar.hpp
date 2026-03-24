@@ -1439,7 +1439,8 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"AttachOptions <- GenericCopyOptionList\n"
 	"DetachStatement <- 'DETACH' Database? IfExists? CatalogName\n"
 	"UseStatement <- 'USE' UseTarget\n"
-	"UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName\n"
+	"UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName\n"
+	"UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*\n"
 	"CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments\n"
 
 };

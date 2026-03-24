@@ -1602,7 +1602,8 @@ DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 
 UseStatement <- 'USE' UseTarget
 
-UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
+UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
+UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 
