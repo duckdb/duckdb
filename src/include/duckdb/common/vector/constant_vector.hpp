@@ -28,12 +28,12 @@ struct ConstantVector {
 	static inline const_data_ptr_t GetData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return vector.data;
+		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	static inline data_ptr_t GetData(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return vector.data;
+		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {

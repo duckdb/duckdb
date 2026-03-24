@@ -152,7 +152,6 @@ public:
 
 	inline void CopyBuffer(Vector &other) {
 		buffer = other.buffer;
-		data = other.data;
 	}
 
 	//! Resizes the vector.
@@ -171,9 +170,6 @@ public:
 	}
 	inline const LogicalType &GetType() const {
 		return type;
-	}
-	inline data_ptr_t GetData() const {
-		return data;
 	}
 
 	inline buffer_ptr<VectorBuffer> GetAuxiliary() {
@@ -207,8 +203,6 @@ protected:
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	LogicalType type;
-	//! A pointer to the data.
-	data_ptr_t data;
 	//! The validity mask of the vector
 	ValidityMask validity;
 	//! The main buffer holding the data of the vector

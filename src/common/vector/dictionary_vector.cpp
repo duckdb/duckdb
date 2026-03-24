@@ -17,7 +17,8 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	auto &child = input.auxiliary->Cast<VectorChildBuffer>();
 	lock_guard<mutex> guard(child.cached_hashes_lock);
 
-	if (!child.cached_hashes.data) {
+	auto data_ptr = FlatVector::GetData(child.cached_hashes);
+	if (!data_ptr) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
 		D_ASSERT(!child.size.IsValid() || child.size.GetIndex() == dictionary_size);
