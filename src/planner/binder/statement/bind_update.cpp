@@ -118,7 +118,10 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
-	auto &node = *stmt.node;
+	return Bind(*stmt.node);
+}
+
+BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	unique_ptr<LogicalOperator> root;
 
 	// visit the table reference
