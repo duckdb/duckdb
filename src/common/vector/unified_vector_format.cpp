@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
 
