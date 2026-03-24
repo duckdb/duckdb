@@ -1710,9 +1710,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			if (res != DuckDBSuccess) {
 				auto err = duckdb_result_error(&stream_wrapper->result);
 				SetError(error, err);
+				bool interrupted = IsInterruptError(err);
 				duckdb_destroy_result(&stream_wrapper->result);
 				free(stream_wrapper);
-				return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+				return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			// Recreate wrappers for next iteration
 			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
