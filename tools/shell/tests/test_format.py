@@ -61,8 +61,7 @@ def test_format_cte(shell, tmp_path):
     result, contents = run_format(shell, p)
     assert result.status_code == 0
     expected = (
-        "WITH\n"
-        "    cte AS (\n"
+        "WITH cte AS (\n"
         "        SELECT id\n"
         "        FROM users\n"
         "        WHERE active = 1\n"

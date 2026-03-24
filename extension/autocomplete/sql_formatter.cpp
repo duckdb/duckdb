@@ -126,6 +126,7 @@ bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 	    "GROUP BY", "ORDER BY", "UNION ALL", "UNION DISTINCT", "INTERSECT ALL", "INTERSECT DISTINCT", "EXCEPT ALL",
 	    "EXCEPT DISTINCT", "INNER JOIN", "CROSS JOIN", "NATURAL JOIN", "LEFT JOIN", "LEFT OUTER JOIN", "RIGHT JOIN",
 	    "RIGHT OUTER JOIN", "FULL JOIN", "FULL OUTER JOIN", "INSERT INTO", "DELETE FROM", "ON CONFLICT",
+	    "WITH RECURSIVE",
 	    // DDL compound keywords
 	    "CREATE TABLE", "CREATE VIEW", "CREATE INDEX", "CREATE UNIQUE INDEX", "CREATE SCHEMA", "CREATE SEQUENCE",
 	    "CREATE MACRO", "CREATE FUNCTION", "CREATE TYPE", "CREATE TEMP TABLE", "CREATE TEMP VIEW",
@@ -203,6 +204,8 @@ idx_t SQLFormatter::DetectCompoundClause(const vector<MatcherToken> &tokens, idx
 	    {"LEFT",    "JOIN"             }, {"LEFT",  "OUTER", "JOIN"},
 	    {"RIGHT",   "JOIN"             }, {"RIGHT", "OUTER", "JOIN"},
 	    {"FULL",    "JOIN"             }, {"FULL",  "OUTER", "JOIN"},
+	    // WITH RECURSIVE
+	    {"WITH",    "RECURSIVE"        },
 	    // Special CREATE form
 	    {"CREATE",  "UNIQUE", "INDEX"  },
 	};
@@ -503,6 +506,10 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 				auto sp = compound_text.rfind(' ');
 				const string last_word = (sp == string::npos) ? compound_text : compound_text.substr(sp + 1);
 				emit_clause(ApplyCase(compound_text, original_text, /*is_structural=*/true), last_word);
+				// WITH / WITH RECURSIVE: keep CTE name on the same line
+				if (compound_text == "WITH" || compound_text == "WITH RECURSIVE") {
+					after_clause = false;
+				}
 				i += 1 + extra;
 				continue;
 			}

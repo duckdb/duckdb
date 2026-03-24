@@ -51,8 +51,7 @@ true
 # ── CTE (WITH … AS) and HAVING ────────────────────────────────────────────────
 # CTE body is structured (contains SELECT/FROM/WHERE) so it is never inlined.
 query I
-SELECT duckdb_format_sql('WITH cte AS (SELECT id FROM users WHERE active = 1) SELECT id FROM cte GROUP BY id HAVING count(*) > 5') = $$WITH
-    cte AS (
+SELECT duckdb_format_sql('WITH cte AS (SELECT id FROM users WHERE active = 1) SELECT id FROM cte GROUP BY id HAVING count(*) > 5') = $$WITH cte AS (
         SELECT id
         FROM users
         WHERE active = 1
@@ -419,3 +418,248 @@ query I
 SELECT duckdb_format_sql(NULL)
 ----
 NULL
+
+# ══ Multiple CTEs ═══════════════════════════════════════════════════════════
+
+# ── Two CTEs with JOIN in outer query ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('WITH cte1 AS (SELECT id, name FROM users WHERE active = 1), cte2 AS (SELECT user_id, sum(amount) as total FROM orders GROUP BY user_id) SELECT cte1.name, cte2.total FROM cte1 JOIN cte2 ON cte1.id = cte2.user_id') = $$WITH cte1 AS (
+        SELECT id, name
+        FROM users
+        WHERE active = 1
+    ),
+    cte2 AS (
+        SELECT user_id, sum(amount) AS total
+        FROM orders
+        GROUP BY user_id
+    )
+SELECT cte1.name, cte2.total
+FROM cte1
+JOIN cte2 ON cte1.id = cte2.user_id$$
+----
+true
+
+# ── Three CTEs — last one uses UNION ALL ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('WITH a AS (SELECT 1), b AS (SELECT 2), c AS (SELECT * FROM a UNION ALL SELECT * FROM b) SELECT * FROM c') = $$WITH a AS (
+        SELECT 1
+    ),
+    b AS (
+        SELECT 2
+    ),
+    c AS (
+        SELECT *
+        FROM a
+        UNION ALL
+        SELECT *
+        FROM b
+    )
+SELECT *
+FROM c$$
+----
+true
+
+# ── Recursive CTE with UNION ALL and JOIN ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('WITH RECURSIVE tree AS (SELECT id, parent_id, name, 0 as depth FROM nodes WHERE parent_id IS NULL UNION ALL SELECT n.id, n.parent_id, n.name, t.depth + 1 FROM nodes n INNER JOIN tree t ON n.parent_id = t.id) SELECT * FROM tree ORDER BY depth, name') = $$WITH RECURSIVE tree AS (
+        SELECT id, parent_id, name, 0 AS depth
+        FROM nodes
+        WHERE parent_id IS NULL
+        UNION ALL
+        SELECT n.id, n.parent_id, n.name, t.depth + 1
+        FROM nodes n
+        INNER JOIN tree t ON n.parent_id = t.id
+    )
+SELECT *
+FROM tree
+ORDER BY depth, name$$
+----
+true
+
+# ══ String literals with newlines ═══════════════════════════════════════════
+
+# ── Single-quoted string containing a newline — preserved as-is ───────────────
+query I
+SELECT duckdb_format_sql('SELECT ''hello
+world'' FROM t') = $$SELECT 'hello
+world'
+FROM t$$
+----
+true
+
+# ── Multi-line string literal with surrounding columns ────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT ''line1
+line2
+line3'', 42 FROM t') = $$SELECT 'line1
+line2
+line3',
+    42
+FROM t$$
+----
+true
+
+# ── String with escaped quotes — preserved as-is ─────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT ''it''''s a test'' FROM t') = $$SELECT 'it''s a test'
+FROM t$$
+----
+true
+
+# ══ Big / Long Expressions ══════════════════════════════════════════════════
+
+# ── Many columns — SELECT list exceeds threshold → one per line ───────────────
+query I
+SELECT duckdb_format_sql('SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, coalesce(x, y, z) AS val, case when a > 1 then ''yes'' when a > 0 then ''maybe'' else ''no'' end as result FROM very_long_table_name_here WHERE some_column_name = 1 AND another_column > 2 AND yet_another_column < 100 ORDER BY a, b, c, d') = $$SELECT
+    a,
+    b,
+    c,
+    d,
+    e,
+    f,
+    g,
+    h,
+    i,
+    j,
+    k,
+    l,
+    m,
+    n,
+    coalesce(x, y, z) AS val,
+    CASE
+        WHEN a > 1 THEN 'yes'
+        WHEN a > 0 THEN 'maybe'
+        ELSE 'no'
+    END AS result
+FROM very_long_table_name_here
+WHERE some_column_name = 1
+  AND another_column > 2
+  AND yet_another_column < 100
+ORDER BY a, b, c, d$$
+----
+true
+
+# ── Long SELECT list that fits on one line ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q FROM very_long_table_name WHERE x = 1') = $$SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q
+FROM very_long_table_name
+WHERE x = 1$$
+----
+true
+
+# ── Long arithmetic expression exceeding threshold ────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a + b * c - d / e + f % g + h * (i + j) - k * l + m * n * o + p - q + r * s FROM t') = $$SELECT
+    a + b * c - d / e + f % g + h *(i + j) - k * l + m * n * o + p - q + r * s
+FROM t$$
+----
+true
+
+# ── Long WHERE with many conditions — collapsed first, aligned conjunctions ──
+query I
+SELECT duckdb_format_sql('SELECT a, b, very_long_column_name_1, very_long_column_name_2, very_long_column_name_3, very_long_column_name_4 FROM t WHERE very_long_column_name_1 > 100 AND very_long_column_name_2 < 200 AND very_long_column_name_3 = ''test'' AND very_long_column_name_4 IS NOT NULL GROUP BY ALL ORDER BY ALL') = $$SELECT
+    a,
+    b,
+    very_long_column_name_1,
+    very_long_column_name_2,
+    very_long_column_name_3,
+    very_long_column_name_4
+FROM t
+WHERE very_long_column_name_1 > 100
+  AND very_long_column_name_2 < 200
+  AND very_long_column_name_3 = 'test'
+  AND very_long_column_name_4 IS NOT NULL
+GROUP BY ALL
+ORDER BY ALL$$
+----
+true
+
+# ══ Database and Schema Qualifications ══════════════════════════════════════
+
+# ── Three-part name (db.schema.table) in FROM and WHERE ──────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM mydb.myschema.mytable WHERE mydb.myschema.mytable.id = 1') = $$SELECT a
+FROM mydb.myschema.mytable
+WHERE mydb.myschema.mytable.id = 1$$
+----
+true
+
+# ── Catalog-qualified names with JOIN and alias ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM catalog1.schema1.table1 t1 INNER JOIN catalog2.schema2.table2 t2 ON t1.id = t2.id WHERE catalog1.schema1.table1.status = ''active''') = $$SELECT a
+FROM catalog1.schema1.table1 t1
+INNER JOIN catalog2.schema2.table2 t2 ON t1.id = t2.id
+WHERE catalog1.schema1.table1.status = 'active'$$
+----
+true
+
+# ── Schema-qualified name in FROM with alias ──────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT s.id, s.name FROM mydb.information_schema.tables s WHERE s.table_schema = ''main''') = $$SELECT s.id, s.name
+FROM mydb.information_schema.tables s
+WHERE s.table_schema = 'main'$$
+----
+true
+
+# ── CREATE TABLE with schema qualification ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE mydb.myschema.mytable (id INTEGER PRIMARY KEY, name VARCHAR)') = $$CREATE TABLE mydb.myschema.mytable(
+    id INTEGER PRIMARY KEY,
+    name VARCHAR
+)$$
+----
+true
+
+# ══ DuckDB-Specific Syntax ══════════════════════════════════════════════════
+
+# ── GROUP BY ALL / ORDER BY ALL ──────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT name, count(*) FROM users GROUP BY ALL ORDER BY ALL') = $$SELECT name, count(*)
+FROM users
+GROUP BY ALL
+ORDER BY ALL$$
+----
+true
+
+# ── GROUP BY ALL / ORDER BY ALL with LIMIT ───────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT region, product, sum(amount), count(*) FROM sales GROUP BY ALL ORDER BY ALL LIMIT 100') = $$SELECT region, product, sum(amount), count(*)
+FROM sales
+GROUP BY ALL
+ORDER BY ALL
+LIMIT 100$$
+----
+true
+
+# ── Lambda function — list_transform ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT list_transform([1, 2, 3], x -> x + 1)') = $$SELECT list_transform([ 1, 2, 3 ], x -> x + 1)$$
+----
+true
+
+# ── Nested lambdas — list_apply(list_filter(…)) ─────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT list_apply(list_filter([1,2,3,4,5], x -> x > 2), y -> y * 10)') = $$SELECT
+    list_apply(list_filter([ 1, 2, 3, 4, 5 ], x -> x > 2), y -> y * 10)$$
+----
+true
+
+# ── Dot syntax for method-style function calls ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT [1, 2, 3].list_transform(x -> x + 1)') = $$SELECT [ 1, 2, 3 ].list_transform(x -> x + 1)$$
+----
+true
+
+# ── Dot syntax — method call on string literal ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT ''hello
+world''.upper()') = $$SELECT 'hello
+world'.upper()$$
+----
+true
+
+# ── Dot syntax — struct field access ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT struct_pack(a := 1, b := ''hello'').a') = $$SELECT struct_pack(a := 1, b := 'hello').a$$
+----
+true
