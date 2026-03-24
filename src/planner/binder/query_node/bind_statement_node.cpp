@@ -25,20 +25,4 @@ BoundStatement Binder::BindNode(StatementNode &statement) {
 	}
 }
 
-BoundStatement Binder::BindNode(UpdateQueryNode &node) {
-	UpdateStatement stmt;
-	stmt.node = unique_ptr_cast<QueryNode, UpdateQueryNode>(node.Copy());
-	// CTEs were already processed by BindNode(QueryNode &) — clear to prevent double-processing
-	stmt.node->cte_map.map.clear();
-	return Bind(stmt);
-}
-
-BoundStatement Binder::BindNode(DeleteQueryNode &node) {
-	DeleteStatement stmt;
-	stmt.node = unique_ptr_cast<QueryNode, DeleteQueryNode>(node.Copy());
-	// CTEs were already processed by BindNode(QueryNode &) — clear to prevent double-processing
-	stmt.node->cte_map.map.clear();
-	return Bind(stmt);
-}
-
 } // namespace duckdb

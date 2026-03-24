@@ -87,26 +87,10 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
-	case StatementType::DELETE_STATEMENT: {
-		auto &del = statement.Cast<DeleteStatement>();
-		auto &cte_map = del.node->cte_map;
-		if (cte_map.map.empty()) {
-			return Bind(del);
-		}
-		auto stmt_node = make_uniq<StatementNode>(del);
-		stmt_node->cte_map = cte_map.Copy();
-		return Bind(*stmt_node);
-	}
-	case StatementType::UPDATE_STATEMENT: {
-		auto &update = statement.Cast<UpdateStatement>();
-		auto &cte_map = update.node->cte_map;
-		if (cte_map.map.empty()) {
-			return Bind(update);
-		}
-		auto stmt_node = make_uniq<StatementNode>(update);
-		stmt_node->cte_map = cte_map.Copy();
-		return Bind(*stmt_node);
-	}
+	case StatementType::DELETE_STATEMENT:
+		return Bind(statement.Cast<DeleteStatement>());
+	case StatementType::UPDATE_STATEMENT:
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:

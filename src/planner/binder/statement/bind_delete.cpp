@@ -13,7 +13,10 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
-	auto &node = *stmt.node;
+	return Bind(*stmt.node);
+}
+
+BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	// visit the table reference
 	auto bound_table = Bind(*node.table);
 	auto root = std::move(bound_table.plan);
