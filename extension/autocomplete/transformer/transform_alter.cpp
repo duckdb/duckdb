@@ -48,7 +48,10 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
-
+	auto alter_option_list = ExtractParseResultsFromList(list_pr.GetChild(3));
+	if (alter_option_list.size() > 1) {
+		throw ParserException("Only one ALTER command per statement is supported");
+	}
 	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->catalog = table->catalog_name;
