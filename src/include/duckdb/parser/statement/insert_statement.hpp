@@ -20,7 +20,6 @@ class Serializer;
 class Deserializer;
 class InsertQueryNode;
 
-
 enum class OnConflictAction : uint8_t {
 	THROW,
 	NOTHING,
