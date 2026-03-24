@@ -895,33 +895,7 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete
 		return;
 	}
 
-	// Scan the two row IDs in the leaf.
-	Iterator it(*this);
-	it.FindMinimum(leaf);
-	ARTKey empty_key = ARTKey();
-	set<row_t> row_ids;
-	RowIdSetOutput output(row_ids, 2);
-	auto result = it.Scan(empty_key, output, false);
-	if (result != ARTScanResult::COMPLETED || row_ids.size() != 2) {
-		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
-	}
-
-	if (!deleted_row_ids.empty()) {
-		for (const auto row_id : row_ids) {
-			for (auto deleted_row_id : deleted_row_ids) {
-				if (deleted_row_id == row_id) {
-					return;
-				}
-			}
-		}
-	}
-
-	auto row_id_it = row_ids.begin();
-	if (manager.AddHit(i, *row_id_it)) {
-		conflict_idx = i;
-	}
-	row_id_it++;
-	manager.AddSecondHit(i, *row_id_it);
+	throw InternalException("VerifyLeaf - unexpected non-inlined leaf");
 }
 
 void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
