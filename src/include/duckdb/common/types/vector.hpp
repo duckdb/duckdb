@@ -40,7 +40,7 @@ class Vector {
 
 public:
 	//! Create a vector that references the other vector
-	DUCKDB_API Vector(Vector &other);
+	DUCKDB_API explicit Vector(const Vector &other);
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Create a vector that slices another vector between a pair of offsets
@@ -61,8 +61,6 @@ public:
 	*/
 	DUCKDB_API Vector(LogicalType type, bool create_data, bool initialize_to_zero,
 	                  idx_t capacity = STANDARD_VECTOR_SIZE);
-	// implicit copying of Vectors is not allowed
-	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
