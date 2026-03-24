@@ -181,6 +181,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalType);
 	REGISTER_TRANSFORM(TransformIntervalInterval);
 	REGISTER_TRANSFORM(TransformInterval);
+	REGISTER_TRANSFORM(TransformIntervalToInterval);
 	REGISTER_TRANSFORM(TransformSetofType);
 	Register("NumericModType", &TransformDecimalType);
 	Register("DecType", &TransformDecimalType);
