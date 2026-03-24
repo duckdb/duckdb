@@ -54,6 +54,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
+#include "highlighting.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
@@ -2892,6 +2893,64 @@ static string GetHomeDirectory() {
 string ShellState::GetDefaultDuckDBRC() {
 	duckdb::LocalFileSystem lfs;
 	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
+}
+
+MetadataResult ShellState::FormatSQL(string &sql) {
+	if (sql.empty()) {
+		// no input
+		return MetadataResult::SUCCESS;
+	}
+	// Format through the duckdb_format_sql SQL function using a prepared statement.
+	auto result = conn->Query("SELECT duckdb_format_sql($1)", duckdb::Value(sql));
+	if (result->HasError()) {
+		PrintF(PrintOutput::STDERR, "%s: %s\n", program_name, result->GetError().c_str());
+		return MetadataResult::FAIL;
+	}
+	sql = string();
+	for (auto &row : *result) {
+		sql = row.GetValue<string>(0) + "\n";
+	}
+	return MetadataResult::SUCCESS;
+}
+
+void ShellState::HighlightSQL(string &sql) {
+	if (!stdout_is_console || !duckdb::Highlighting::IsEnabled()) {
+		// highlighting is not enabled
+		return;
+	}
+	auto tokens = duckdb::Highlighting::Tokenize(const_cast<char *>(sql.c_str()), sql.size(), false);
+	auto highlighted =
+	    duckdb::Highlighting::HighlightText(const_cast<char *>(sql.c_str()), sql.size(), 0, sql.size(), tokens);
+	sql = std::move(highlighted);
+}
+
+string ShellState::ReadFileContents(FILE *f) {
+	char buf[4096];
+	size_t n;
+	string result;
+	while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+		result.append(buf, n);
+	}
+	return result;
+}
+
+string ShellState::ReadFileContents(const string &filename) {
+	FILE *f = fopen(filename.c_str(), "rb");
+	if (!f) {
+		throw duckdb::IOException("cannot open '%s' for reading: %s\n", filename.c_str(), strerror(errno));
+	}
+	string result = ReadFileContents(f);
+	fclose(f);
+	return result;
+}
+
+void ShellState::WriteFileContents(const string &filename, const string &content) {
+	FILE *out = fopen(filename.c_str(), "wb");
+	if (!out) {
+		throw duckdb::IOException("cannot open '%s' for writing: %s\n", filename.c_str(), strerror(errno));
+	}
+	fwrite(content.c_str(), 1, content.size(), out);
+	fclose(out);
 }
 
 /*

@@ -437,6 +437,11 @@ public:
 	FILE *OpenOutputFile(const char *zFile, int bTextMode);
 	static void SetPrompt(char prompt[], const string &new_value);
 	static string ModeToString(RenderMode mode);
+	MetadataResult FormatSQL(string &sql);
+	void HighlightSQL(string &sql);
+	string ReadFileContents(FILE *f);
+	string ReadFileContents(const string &filename);
+	void WriteFileContents(const string &filename, const string &content);
 };
 
 struct PagerState {

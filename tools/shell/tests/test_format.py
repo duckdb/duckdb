@@ -178,4 +178,64 @@ def test_format_empty_file(shell, tmp_path):
     result, _ = run_format(shell, p)
     assert result.status_code == 0
 
+
+# ---------------------------------------------------------------------------
+# -format (stdin -> stdout) tests
+# ---------------------------------------------------------------------------
+
+def run_format_stdin(shell, sql_input):
+    """Pipe sql_input through 'duckdb -format' and return a TestResult."""
+    result = ShellTest(shell).add_argument("-format").input_file(None).run_raw(sql_input)
+    return result
+
+
+def test_format_stdin_basic(shell):
+    """Basic SELECT via stdin is formatted and printed to stdout."""
+    result = run_format_stdin(shell, "select a, b from t where x = 1")
+    assert result.status_code == 0
+    assert "SELECT a, b" in result.stdout
+    assert "FROM t" in result.stdout
+    assert "WHERE x = 1" in result.stdout
+
+
+def test_format_stdin_multi_statement(shell):
+    """Multiple statements are formatted correctly via stdin."""
+    result = run_format_stdin(shell, "select a from t; select b from u")
+    assert result.status_code == 0
+    assert "SELECT a\nFROM t;\nSELECT b\nFROM u" in result.stdout
+
+
+def test_format_stdin_join(shell):
+    """JOIN clauses are formatted when piped via stdin."""
+    result = run_format_stdin(shell, "select a from t1 inner join t2 on t1.id = t2.id where t1.active = true")
+    assert result.status_code == 0
+    assert "INNER JOIN t2 ON t1.id = t2.id" in result.stdout
+    assert "WHERE t1.active = TRUE" in result.stdout
+
+
+def test_format_stdin_cte(shell):
+    """CTE formatting works via stdin."""
+    sql = ("WITH cte AS (SELECT id FROM users WHERE active = 1) "
+           "SELECT id FROM cte GROUP BY id HAVING count(*) > 5")
+    result = run_format_stdin(shell, sql)
+    assert result.status_code == 0
+    assert "WITH cte AS (" in result.stdout
+    assert "SELECT id" in result.stdout
+    assert "FROM cte" in result.stdout
+    assert "GROUP BY id" in result.stdout
+    assert "HAVING count(*) > 5" in result.stdout
+
+
+def test_format_stdin_empty(shell):
+    """Empty stdin exits cleanly."""
+    result = run_format_stdin(shell, "")
+    assert result.status_code == 0
+
+
+def test_format_stdin_does_not_modify_files(shell, tmp_path):
+    """The -format flag only writes to stdout, not to any file."""
+    result = run_format_stdin(shell, "select 1")
+    assert result.status_code == 0
+    assert "SELECT 1" in result.stdout
+
 # fmt: on
