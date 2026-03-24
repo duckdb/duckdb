@@ -1130,7 +1130,7 @@ string PEGTransformerFactory::TransformListOperator(PEGTransformer &transformer,
 }
 
 pair<string, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto op_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto subquery_type = transformer.Transform<bool>(list_pr.Child<ListParseResult>(1));
