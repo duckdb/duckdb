@@ -325,6 +325,9 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 
 void DataChunk::Slice(idx_t offset, idx_t slice_count) {
 	D_ASSERT(offset + slice_count <= size());
+	if (offset == 0 && slice_count == size()) {
+		return;
+	}
 	SelectionVector sel(slice_count);
 	for (idx_t i = 0; i < slice_count; i++) {
 		sel.set_index(i, offset + i);

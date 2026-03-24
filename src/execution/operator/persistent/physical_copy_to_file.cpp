@@ -220,9 +220,9 @@ public:
 	//! The current row index (during BATCH stage)
 	idx_t batch_row_idx DUCKDB_GUARDED_BY(lock) = 0;
 	//! The current partition index (hive)
-	idx_t partition_idx DUCKDB_GUARDED_BY(lock) = 0;
+	idx_t batch_partition_idx DUCKDB_GUARDED_BY(lock) = 0;
 	//! Used to iterate over chunks (during BATCH stage)
-	ColumnDataScanState scan_state;
+	ColumnDataScanState batch_scan_state;
 	//! The batched data (set during BATCH stage), mapping from partition idx to batches (in order)
 	map<idx_t, vector<unique_ptr<ColumnDataCollection>>> batches DUCKDB_GUARDED_BY(lock);
 };
@@ -361,7 +361,7 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &context, GlobalSour
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (!collection) {
 			collection = partitioned_copy.sort_strategy->GetColumnData(hash_bin, source_input);
-			collection->InitializeScan(scan_state);
+			collection->InitializeScan(batch_scan_state);
 		}
 	}
 }
@@ -416,6 +416,45 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	//  we need to perform well in case of skew, many tiny partitions, etc.
 	//  we also need the written batches to be exactly as specified by batch size (bytes) etc.
 
+	const auto &op = partitioned_copy.op;
+	vector<column_t> column_ids;
+	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
+	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
+		if (op.write_partition_columns || part_col_set.find(col_idx) == part_col_set.end()) {
+			column_ids.push_back(col_idx);
+		}
+	}
+
+	// Initialize the scan
+	ColumnDataScanState scan_state;
+	collection->InitializeScan(scan_state, column_ids);
+	DataChunk scan_chunk;
+	collection->InitializeScanChunk(scan_state, scan_chunk);
+	collection->Seek(task.begin_idx, scan_state, scan_chunk);
+	D_ASSERT(task.begin_idx >= scan_state.current_row_index);
+
+	// Initialize the append
+	auto batch = make_uniq<ColumnDataCollection>(partitioned_copy.context, scan_chunk.GetTypes());
+	ColumnDataAppendState append_state;
+	batch->InitializeAppend(append_state);
+
+	while (scan_state.current_row_index < task.end_idx) {
+		// Slice the chunk accordingly
+		const auto begin = MaxValue(task.begin_idx, scan_state.current_row_index);
+		const auto end = MinValue(scan_state.current_row_index + scan_chunk.size(), task.end_idx);
+		scan_chunk.Slice(begin - scan_state.current_row_index, end - begin);
+
+		batch->Append(append_state, scan_chunk);
+		collection->Scan(scan_state, scan_chunk);
+	}
+
+	// Move the batch into the global state (under lock)
+	// TODO: if this batch is an entire partition, we can immediately write it without moving it in here
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		batches[task.hash_bin][task.thread_idx] = std::move(batch);
+	}
+
 	batched += (task.end_idx - task.begin_idx);
 }
 
@@ -449,10 +488,11 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 	if (batch_row_idx == count) {
 		return false;
 	}
-	auto &partition_batches = batches[partition_idx];
+	auto &partition_batches = batches[batch_partition_idx];
 
 	// Reuse these fields
-	task.hash_bin = partition_idx;
+	task.stage = PartitionedCopyStage::BATCH;
+	task.hash_bin = batch_partition_idx;
 	task.thread_idx = partition_batches.size();
 	task.begin_idx = batch_row_idx;
 
@@ -462,8 +502,8 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 	const auto &segments = collection->GetSegments();
 	while (batch_row_idx < count) {
 		// Look for the next partition boundary within the current chunk
-		D_ASSERT(batch_row_idx <= scan_state.next_row_index);
-		for (; batch_row_idx < scan_state.next_row_index; batch_row_idx++) {
+		D_ASSERT(batch_row_idx <= batch_scan_state.next_row_index);
+		for (; batch_row_idx < batch_scan_state.next_row_index; batch_row_idx++) {
 			if (partition_mask.RowIsValidUnsafe(batch_row_idx)) {
 				found_next_partition = true;
 				break;
@@ -475,9 +515,9 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 		}
 
 		// Did not find the next partition boundary, add chunk
-		auto &segment = segments[scan_state.segment_index];
+		auto &segment = segments[batch_scan_state.segment_index];
 		const auto current_batch_size = batch_row_idx - task.begin_idx;
-		current_batch_size_bytes += segment->GetChunkAllocationSize(scan_state.chunk_index);
+		current_batch_size_bytes += segment->GetChunkAllocationSize(batch_scan_state.chunk_index);
 		const CopyFunctionBatchAnalyzer batch_analyzer(current_batch_size, current_batch_size_bytes,
 		                                               partitioned_copy.op.batch_size,
 		                                               partitioned_copy.op.batch_size_bytes);
@@ -489,7 +529,7 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 		idx_t chunk_index;
 		idx_t segment_index;
 		idx_t row_index;
-		const auto success = collection->NextScanIndex(scan_state, chunk_index, segment_index, row_index);
+		const auto success = collection->NextScanIndex(batch_scan_state, chunk_index, segment_index, row_index);
 		if (!success) {
 			throw InternalException("NextScanIndex failed in PartitionedCopyHashGroup::TryNextBatchTask");
 		}
@@ -497,7 +537,7 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 	task.end_idx = batch_row_idx;
 
 	// Update partition/batch counters
-	partition_idx += found_next_partition;
+	batch_partition_idx += found_next_partition;
 	partition_batches.emplace_back();
 
 	return true;
