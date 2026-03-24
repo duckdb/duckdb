@@ -4,6 +4,8 @@
 
 require noforcestorage
 
+require no_alternative_verify
+
 statement ok
 SET wal_autocheckpoint = '1TB';
 
