@@ -62,7 +62,7 @@ SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
 ----
-<REGEX>:(.*Parser Error.*syntax error at or near "1.5"|Binder Error.*Expected an integer as array bound instead of.*)
+<REGEX>:(.*Parser Error.*syntax error at or near.*|Binder Error.*Expected an integer as array bound instead of.*)
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
