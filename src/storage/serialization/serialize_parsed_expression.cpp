@@ -370,7 +370,9 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
 	serializer.WritePropertyWithDefault<bool>(215, "distinct", distinct);
 	serializer.WritePropertyWithDefault<vector<OrderByNode>>(216, "arg_orders", arg_orders);
-	serializer.WritePropertyWithDefault<bool>(217, "has_ignore_nulls", has_ignore_nulls);
+	if (serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault<bool>(217, "has_ignore_nulls", has_ignore_nulls);
+	}
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
