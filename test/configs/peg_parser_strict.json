@@ -44,6 +44,12 @@
       ]
     },
     {
+      "reason": "PEG parser does not work yet with parser extensions",
+      "paths": [
+        "test/extension/consistent_semicolon_extension_parse.test"
+      ]
+    },
+    {
       "reason": "Different behaviour compared to PostgreSQL parser",
       "paths": [
         "test/sql/function/string/test_string_slice.test",
