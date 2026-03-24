@@ -1093,7 +1093,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 	}
 }
 
-void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
+void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -1103,7 +1103,8 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 
 		auto &child = DictionaryVector::Child(*this);
 		if (child.GetVectorType() == VectorType::FLAT_VECTOR) {
-			format.data = FlatVector::GetData(child);
+			// FIXME: unified vector format should have a const ptr
+			format.data = const_cast<data_ptr_t>(FlatVector::GetData(child));
 			format.validity = FlatVector::Validity(child);
 		} else {
 			// dictionary with non-flat child: create a new reference to the child and flatten it
@@ -1119,8 +1120,9 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 	}
 	case VectorType::CONSTANT_VECTOR:
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
-		format.data = ConstantVector::GetData(*this);
-		format.validity = ConstantVector::Validity(*this);
+		// FIXME: unified vector format should have a const ptr
+		format.data = const_cast<data_ptr_t>(ConstantVector::GetData(*this));
+		format.validity = const_cast<ValidityMask &>(ConstantVector::Validity(*this));
 		break;
 	case VectorType::SHREDDED_VECTOR:
 		// unshred and call ToUnifiedFormat recursively
@@ -1130,13 +1132,14 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 	default:
 		Flatten(count);
 		format.sel = FlatVector::IncrementalSelectionVector();
-		format.data = FlatVector::GetData(*this);
-		format.validity = FlatVector::Validity(*this);
+		// FIXME: unified vector format should have a const ptr
+		format.data = const_cast<data_ptr_t>(FlatVector::GetData(*this));
+		format.validity = const_cast<ValidityMask &>(FlatVector::Validity(*this));
 		break;
 	}
 }
 
-void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
+void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
 	input.ToUnifiedFormat(count, data.unified);
 	data.logical_type = input.GetType();
 

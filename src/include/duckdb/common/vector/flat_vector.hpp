@@ -27,6 +27,9 @@ struct FlatVector {
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
+	static inline const_data_ptr_t GetData(const Vector &vector) {
+		return ConstantVector::GetData(vector);
+	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
 		return ConstantVector::GetData<T>(vector);

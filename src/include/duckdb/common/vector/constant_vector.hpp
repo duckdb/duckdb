@@ -62,6 +62,10 @@ struct ConstantVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return vector.validity;
 	}
+	static inline const ValidityMask &Validity(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+		return vector.validity;
+	}
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector(idx_t count, SelectionVector &owned_sel);
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector();
 	//! Turns "vector" into a constant vector by referencing a value within the source vector
