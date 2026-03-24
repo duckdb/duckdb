@@ -1029,7 +1029,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ColumnIdList <- Parens(List(ColId))\n"
 	"PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>\n"
 	"QuotedIdentifier <- '\"' [^\"]* '\"'\n"
-	"DottedIdentifier <- Identifier ('.' Identifier)*\n"
+	"DottedIdentifier <- Identifier ('.' ColLabel)*\n"
 	"Identifier <- QuotedIdentifier / PlainIdentifier\n"
 	"ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier\n"
 	"ColIdOrString <- ColId / StringLiteral\n"

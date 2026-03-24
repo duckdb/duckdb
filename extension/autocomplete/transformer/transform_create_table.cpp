@@ -246,7 +246,7 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 		auto repeat_elements = optional_elements.optional_result->Cast<RepeatParseResult>();
 		for (auto &child_ref : repeat_elements.children) {
 			auto &sub_list = child_ref->Cast<ListParseResult>();
-			parts.push_back(sub_list.Child<IdentifierParseResult>(1).identifier);
+			parts.push_back(transformer.Transform<string>(sub_list.GetChild(1)));
 		}
 	}
 	return parts;
