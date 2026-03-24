@@ -4437,4 +4437,37 @@ TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
 }
+
+TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto r1 = db.Query("CREATE TABLE test_table(x INTEGER UNIQUE)");
+	REQUIRE(!r1->HasError());
+	auto r2 = db.Query("INSERT INTO test_table VALUES (42)");
+	REQUIRE(!r2->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "INSERT INTO test_table VALUES ($1)", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&stmt, &db.adbc_error)));
+
+	// Bind a stream containing the duplicate value — will trigger a UNIQUE violation
+	auto &input_data = db.QueryArrow("SELECT 42 AS x");
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &db.adbc_error)));
+
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&stmt, nullptr, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
 } // namespace duckdb
