@@ -21,7 +21,7 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 	auto all_constant = args.AllConstant();
 
-	MapUtil::ReinterpretMap(result, map, all_constant ? 1 : count);
+	MapUtil::ReinterpretMap(result, map, count);
 
 	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
