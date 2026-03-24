@@ -3,7 +3,6 @@
 #include "duckdb/common/limits.hpp"
 
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/common/enums/pivotref_type.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -272,67 +271,52 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 	}
 }
 
-void PivotColumn::Serialize(Serializer &serializer) const {
-	const auto is_unpivot = !unpivot_names.empty();
-	serializer.GetSerializationData().Set<PivotRefType>(is_unpivot ? PivotRefType::UNPIVOT : PivotRefType::PIVOT);
+vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &serializer) const {
+	vector<PivotColumnEntry> result;
 
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
-	                                                                          pivot_expressions);
-	serializer.WritePropertyWithDefault<vector<string>>(101, "unpivot_names", unpivot_names);
-	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", entries);
-	serializer.WritePropertyWithDefault<string>(103, "pivot_enum", pivot_enum);
-
-	serializer.GetSerializationData().Unset<PivotRefType>();
-}
-
-PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
-	PivotColumn result;
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
-	                                                                           result.pivot_expressions);
-	deserializer.ReadPropertyWithDefault<vector<string>>(101, "unpivot_names", result.unpivot_names);
-	deserializer.ReadPropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", result.entries);
-	deserializer.ReadPropertyWithDefault<string>(103, "pivot_enum", result.pivot_enum);
-	return result;
-}
-
-void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(7) || !expr) {
-		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
-		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-	} else {
-		// We used to only support constant values in PIVOT entries, and folded expressions in the
-		// transformer. So we need to seriaize in a backwards compatible way here by trying to fold
-		// the expression back to constant values.
-		vector<Value> dummy_values;
-		if (TryFoldForBackwardsCompatibility(expr, dummy_values)) {
-			// Great, we folded the expression back to constant values, so serialize those values and ignore the expr
-			serializer.WritePropertyWithDefault<vector<Value>>(100, "values", dummy_values);
-			serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", nullptr);
-		} else {
-			// We could not fold the expression. Check if this is an UNPIVOT
-			const auto is_unpivot = serializer.GetSerializationData().Get<PivotRefType>() == PivotRefType::UNPIVOT;
-
-			if (!is_unpivot) {
-				// We cannot serialize expressions for regular pivots, so throw here.
-				throw SerializationException(
-				    "Cannot serialize arbitrary expression pivot entries when targeting database storage version '%s'",
-				    serializer.GetOptions().serialization_compatibility.duckdb_version);
-			}
-
-			// Okay, fine, UNPIVOT always allows expressions, so serialize the expression instead
-			serializer.WritePropertyWithDefault<vector<Value>>(100, "values", dummy_values);
-			serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
+	if (serializer.ShouldSerialize(7)) {
+		// Latest version, serialize as is.
+		// Unfortunately, we have to make a deep copy to return vector by value.
+		for (auto &entry : entries) {
+			result.push_back(entry.Copy());
 		}
-		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+		return result;
 	}
-}
 
-PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
-	PivotColumnEntry result;
-	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
-	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
+	// For PIVOT, We need to potentially transform entries to deal with older serialization versions.
+	const auto is_unpivot = !unpivot_names.empty();
+
+	for (auto &entry : entries) {
+		auto result_entry = entry.Copy();
+		if (!entry.expr) {
+			// No expression, just values, so we can serialize as-is
+			result.push_back(std::move(result_entry));
+			continue;
+		}
+
+		// Try to constant-fold the expression back into values
+		vector<Value> folded_values;
+		if (TryFoldForBackwardsCompatibility(result_entry.expr, folded_values)) {
+			// Set the folded values and clear the expression for serialization
+			result_entry.values = std::move(folded_values);
+			result_entry.expr.reset();
+			result.push_back(std::move(result_entry));
+			continue;
+		}
+
+		// UNPIVOT always supported expressions, so if we didn't fold, that's fine, we can serialize the expr as-is
+		if (is_unpivot) {
+			result.push_back(std::move(result_entry));
+			continue;
+		}
+
+		// Otherwise this is a PIVOT with an expression we could not fold.
+		// Older versions of DuckDB do not support this, so throw an exception.
+		throw SerializationException(
+		    "Cannot serialize arbitrary expression pivot entries when targeting database storage version '%s'",
+		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+	}
+
 	return result;
 }
 

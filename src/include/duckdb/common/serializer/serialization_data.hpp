@@ -15,7 +15,6 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/enums/pivotref_type.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -147,23 +146,6 @@ inline CatalogType SerializationData::Get() {
 
 template <>
 inline void SerializationData::Unset<CatalogType>() {
-	AssertNotEmpty(enums);
-	enums.pop();
-}
-
-template <>
-inline void SerializationData::Set(PivotRefType type) {
-	enums.push(idx_t(type));
-}
-
-template <>
-inline PivotRefType SerializationData::Get() {
-	AssertNotEmpty(enums);
-	return PivotRefType(enums.top());
-}
-
-template <>
-inline void SerializationData::Unset<PivotRefType>() {
 	AssertNotEmpty(enums);
 	enums.pop();
 }

@@ -55,7 +55,6 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
-#include "duckdb/common/enums/pivotref_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
@@ -3878,24 +3877,6 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 	return static_cast<PhysicalType>(StringUtil::StringToEnum(GetPhysicalTypeValues(), 21, "PhysicalType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPivotRefTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PivotRefType::PIVOT), "PIVOT" },
-		{ static_cast<uint32_t>(PivotRefType::UNPIVOT), "UNPIVOT" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PivotRefType>(PivotRefType value) {
-	return StringUtil::EnumToString(GetPivotRefTypeValues(), 2, "PivotRefType", static_cast<uint32_t>(value));
-}
-
-template<>
-PivotRefType EnumUtil::FromString<PivotRefType>(const char *value) {
-	return static_cast<PivotRefType>(StringUtil::StringToEnum(GetPivotRefTypeValues(), 2, "PivotRefType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {
