@@ -1469,7 +1469,7 @@ AlterStatement <- 'ALTER' AlterOptions
 
 AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
 
-AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions
+AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
 AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
 AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /

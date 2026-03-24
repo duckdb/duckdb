@@ -1334,7 +1334,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CopyData <- 'DATA'\n"
 	"AlterStatement <- 'ALTER' AlterOptions\n"
 	"AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt\n"
-	"AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions\n"
+	"AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)\n"
 	"AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter\n"
 	"AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /\n"
 	"        RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions\n"
