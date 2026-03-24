@@ -299,6 +299,8 @@ def run_batch(config: TestRunnerConfig, batch):
     message = None
     peak_rss_bytes = 0
 
+    # On Windows the child process cannot reopen a NamedTemporaryFile while it
+    # is still open here, so keep it after close and unlink it ourselves.
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
