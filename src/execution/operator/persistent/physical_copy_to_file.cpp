@@ -150,7 +150,7 @@ public:
 	using ChunkRow = SortStrategy::ChunkRow;
 
 public:
-	PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row, idx_t hash_bin_p);
+	PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row, idx_t hash_bin);
 
 public:
 	PartitionedCopyStage GetStage() const;
@@ -213,7 +213,7 @@ public:
 //! Manages a partitioned COPY flush
 class PartitionedCopyState {
 public:
-	PartitionedCopyState(const PartitionedCopy &partitioned_copy_p, unique_ptr<GlobalSinkState> global_sink_state_p);
+	PartitionedCopyState(const PartitionedCopy &partitioned_copy, unique_ptr<GlobalSinkState> global_sink_state);
 
 public:
 	void InitHashGroups();
@@ -402,7 +402,7 @@ bool PartitionedCopyHashGroup::TryNextTask(PartitionedCopyTask &task) {
 	if (next_task >= GetTaskCount()) {
 		return false;
 	}
-	task.stage = PartitionedCopyStage(next_task / group_threads);
+	task.stage = static_cast<PartitionedCopyStage>(next_task / group_threads);
 	if (task.stage != stage.load()) {
 		return false;
 	}
