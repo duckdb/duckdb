@@ -2291,7 +2291,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTr
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto expr_list_opt = extract_parens->Cast<OptionalParseResult>();
 	if (!expr_list_opt.HasResult()) {
-		throw InvalidInputException("Can't pack nothing into a struct");
+		return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row",
+		                                     vector<unique_ptr<ParsedExpression>>());
 	}
 	auto expr_list = ExtractParseResultsFromList(expr_list_opt.optional_result);
 	vector<unique_ptr<ParsedExpression>> results;

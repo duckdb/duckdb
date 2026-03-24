@@ -777,6 +777,7 @@ void PEGTransformerFactory::RegisterSelect() {
 
 	REGISTER_TRANSFORM(TransformWithClause);
 	REGISTER_TRANSFORM(TransformWithStatement);
+	REGISTER_TRANSFORM(TransformCTEBody);
 	REGISTER_TRANSFORM(TransformMaterialized);
 	REGISTER_TRANSFORM(TransformHavingClause);
 	REGISTER_TRANSFORM(TransformOffsetValue);

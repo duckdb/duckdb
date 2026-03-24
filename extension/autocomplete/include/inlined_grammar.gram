@@ -1221,7 +1221,13 @@ SetopExcept <- 'EXCEPT'
 ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
-ResultModifiers <- OrderByClause? LimitOffset?
+ResultModifiers <- OrderByClause? LimitOffset? LockingClause?
+LockingClause <- 'FOR' ForLockingStrength
+ForLockingStrength <- ForNoKeyUpdate / ForKeyShare / ForUpdate / ForShare
+ForNoKeyUpdate <- 'NO' 'KEY' 'UPDATE'
+ForKeyShare <- 'KEY' 'SHARE'
+ForUpdate <- 'UPDATE'
+ForShare <- 'SHARE'
 LimitOffset <- LimitOffsetClause / OffsetLimitClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
@@ -1231,9 +1237,12 @@ SimpleSelectParens <- Parens(SimpleSelect)
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- SelectFromClause / FromSelectClause
-SelectFromClause <- SelectClause FromClause?
+SelectFromClause <- SelectClause IntoClause? FromClause?
+IntoClause <- 'INTO' QualifiedName
 FromSelectClause <- FromClause SelectClause?
-WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? SubqueryReference
+WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
+CTEBody <- Parens(CTEBodyContent)
+CTEBodyContent <- SelectStatementInternal / Statement
 UsingKey <- 'USING' 'KEY' ColumnIdList
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
@@ -1513,7 +1522,7 @@ AlterSequenceStmt <- 'SEQUENCE' IfExists? QualifiedSequenceName AlterSequenceOpt
 QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
-SetSequenceOption <- List(SequenceOption)
+SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
 

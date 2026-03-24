@@ -134,15 +134,24 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTr
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto option_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	for (auto option : option_list) {
-		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(option);
+	auto &repeat_pr = list_pr.Child<RepeatParseResult>(0);
+	bool has_owned = false;
+	unique_ptr<AlterInfo> owned_info;
+	for (auto &seq_option_pr : repeat_pr.children) {
+		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option_pr);
 		if (seq_option.first == "owned") {
+			if (has_owned) {
+				throw ParserException("Owned by value should be passed as most once");
+			}
+			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
 			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
-			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
-			                                      owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
+			owned_info = make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
+			                                            owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
 		}
+	}
+	if (owned_info) {
+		return owned_info;
 	}
 	throw NotImplementedException("ALTER SEQUENCE option not yet supported");
 }

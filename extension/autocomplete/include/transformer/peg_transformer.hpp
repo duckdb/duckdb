@@ -1379,6 +1379,7 @@ private:
 	TransformWithStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformUsingKey(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TableRef> TransformCTEBody(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);

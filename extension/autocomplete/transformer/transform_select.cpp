@@ -241,7 +241,11 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectFromClause(PEGTrans
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
-	auto opt_from = list_pr.Child<OptionalParseResult>(1);
+	auto into_opt = list_pr.Child<OptionalParseResult>(1);
+	if (into_opt.HasResult()) {
+		throw ParserException("SELECT INTO not supported");
+	}
+	auto opt_from = list_pr.Child<OptionalParseResult>(2);
 	if (opt_from.HasResult()) {
 		select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(opt_from.optional_result);
 	} else {
@@ -1281,6 +1285,10 @@ PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer, opt
 	if (limit_offset) {
 		result.push_back(std::move(limit_offset));
 	}
+	auto locking_opt = list_pr.Child<OptionalParseResult>(2);
+	if (locking_opt.HasResult()) {
+		throw ParserException("SELECT locking clause is not supported");
+	}
 	return result;
 }
 
@@ -1647,6 +1655,21 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, optio
 	auto subquery_ref = unique_ptr_cast<TableRef, SubqueryRef>(std::move(table_ref));
 	result->query = std::move(subquery_ref->subquery);
 	return make_pair(cte_name, std::move(result));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformCTEBody(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// CTEBody <- Parens(CTEBodyContent)
+	auto inner = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	// CTEBodyContent <- SelectStatementInternal / Statement
+	auto &content_list = inner->Cast<ListParseResult>();
+	auto &body_choice = content_list.Child<ChoiceParseResult>(0);
+	if (body_choice.result->name != "SelectStatementInternal") {
+		throw ParserException("A CTE needs a SELECT");
+	}
+	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(body_choice.result);
+	return make_uniq<SubqueryRef>(std::move(select_statement));
 }
 
 bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
