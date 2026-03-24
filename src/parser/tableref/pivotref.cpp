@@ -274,10 +274,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 
 void PivotColumn::Serialize(Serializer &serializer) const {
 	const auto is_unpivot = !unpivot_names.empty();
-	if (is_unpivot) {
-		// This is an unpivot column
-		serializer.GetSerializationData().Set<PivotRefType>(PivotRefType::UNPIVOT);
-	}
+	serializer.GetSerializationData().Set<PivotRefType>(is_unpivot ? PivotRefType::UNPIVOT : PivotRefType::PIVOT);
 
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
 	                                                                          pivot_expressions);
@@ -285,10 +282,7 @@ void PivotColumn::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", entries);
 	serializer.WritePropertyWithDefault<string>(103, "pivot_enum", pivot_enum);
 
-	if (is_unpivot) {
-		// This is an unpivot column
-		serializer.GetSerializationData().Unset<PivotRefType>();
-	}
+	serializer.GetSerializationData().Unset<PivotRefType>();
 }
 
 PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
