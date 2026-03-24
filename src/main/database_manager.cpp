@@ -258,9 +258,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 
 	auto close_action = DatabaseCloseAction::CHECKPOINT;
 	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
-	if (checkpoint_on_detach == "true") {
+	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
 		close_action = DatabaseCloseAction::CHECKPOINT;
-	} else if (checkpoint_on_detach == "false") {
+	} else if (checkpoint_on_detach == CheckpointOnDetach::DISABLED) {
 		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
 	} else if (!DBConfig::GetConfig(context).options.checkpoint_on_shutdown) {
 		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;

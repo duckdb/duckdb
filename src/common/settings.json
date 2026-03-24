@@ -195,10 +195,10 @@
     },
     {
         "name": "checkpoint_on_detach",
-        "description": "Override checkpoint behavior when detaching a database. When set to true or false, overrides the global checkpoint_on_shutdown setting for detach operations. When unset, defers to checkpoint_on_shutdown.",
-        "type": "VARCHAR",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "type": "ENUM<CheckpointOnDetach>",
         "default_scope": "local",
-        "default_value": ""
+        "default_value": "DEFAULT"
     },
     {
         "name": "checkpoint_threshold",

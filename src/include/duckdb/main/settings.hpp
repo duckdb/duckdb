@@ -366,15 +366,16 @@ struct CatalogErrorMaxSchemasSetting {
 };
 
 struct CheckpointOnDetachSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = CheckpointOnDetach;
 	static constexpr const char *Name = "checkpoint_on_detach";
 	static constexpr const char *Description =
-	    "Override checkpoint behavior when detaching a database. When set to true or false, overrides the global "
-	    "checkpoint_on_shutdown setting for detach operations. When unset, defers to checkpoint_on_shutdown.";
+	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
+	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
 	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "";
+	static constexpr const char *DefaultValue = "DEFAULT";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct CheckpointThresholdSetting {
