@@ -33,7 +33,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_value.cpp
     json_functions/json_serialize_sql.cpp
     json_functions/json_serialize_plan.cpp
-    json_functions/json_serialize_sorted.cpp
+    json_functions/json_normalize.cpp
     json_functions/json_deep_merge.cpp
     json_functions/read_json.cpp
     json_functions/read_json_objects.cpp)

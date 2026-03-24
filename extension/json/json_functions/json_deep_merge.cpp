@@ -8,26 +8,33 @@ namespace duckdb {
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
 	// If patch is not an object, it replaces orig entirely (unless null)
 	if (!yyjson_mut_is_obj(patch)) {
-		// Null in patch means "no data" -- keep original if available
 		if (unsafe_yyjson_is_null(patch) && orig) {
 			return yyjson_mut_val_mut_copy(doc, orig);
 		}
 		return yyjson_mut_val_mut_copy(doc, patch);
 	}
 
-	auto builder = yyjson_mut_obj(doc);
-
-	// If orig is not an object, treat it as an empty object
-	yyjson_mut_val local_orig;
-	memset(&local_orig, 0, sizeof(local_orig));
+	// If orig is not an object, apply patch to empty (skipping nulls)
 	if (!yyjson_mut_is_obj(orig)) {
-		local_orig.tag = builder->tag;
-		local_orig.uni = builder->uni;
-		orig = &local_orig;
+		auto builder = yyjson_mut_obj(doc);
+		idx_t idx, max;
+		yyjson_mut_val *key, *patch_val;
+		yyjson_mut_obj_foreach(patch, idx, max, key, patch_val) {
+			if (unsafe_yyjson_is_null(patch_val)) {
+				continue;
+			}
+			auto mut_key = yyjson_mut_val_mut_copy(doc, key);
+			auto merged_val = DeepMerge(doc, nullptr, patch_val);
+			yyjson_mut_obj_add(builder, mut_key, merged_val);
+		}
+		return builder;
 	}
 
-	// Copy all keys from orig that are NOT in patch (or where patch value is null)
-	if (orig != &local_orig) {
+	// Both are objects: deep merge with null coalescing
+	auto builder = yyjson_mut_obj(doc);
+
+	// Copy orig keys not in patch or where patch value is null
+	{
 		idx_t idx, max;
 		yyjson_mut_val *key, *orig_val;
 		yyjson_mut_obj_foreach(orig, idx, max, key, orig_val) {
@@ -40,7 +47,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 		}
 	}
 
-	// Merge non-null items from patch -- null values are skipped (original preserved above)
+	// Merge non-null items from patch
 	{
 		idx_t idx, max;
 		yyjson_mut_val *key, *patch_val;
@@ -82,29 +89,23 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	auto doc = JSONCommon::CreateDocument(alc);
 	const auto count = args.size();
 
-	// Read the first json arg
 	auto origs = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	DeepMergeReadObjects(doc, args.data[0], origs, count);
 
-	// Read the next json args one by one and merge them into the first json arg
 	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
 		DeepMergeReadObjects(doc, args.data[arg_idx], patches, count);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
-				// Next json arg is NULL, obj becomes NULL
 				origs[i] = nullptr;
 			} else if (origs[i] == nullptr) {
-				// Current obj is NULL, obj becomes next json arg
 				origs[i] = patches[i];
 			} else {
-				// Neither is NULL, deep merge them
 				origs[i] = DeepMerge(doc, origs[i], patches[i]);
 			}
 		}
 	}
 
-	// Write to result vector
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {

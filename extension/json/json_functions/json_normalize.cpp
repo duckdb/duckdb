@@ -57,8 +57,8 @@ static void SortKeys(yyjson_mut_val *val) {
 	}
 }
 
-//! Serialize JSON with all object keys sorted, enabling deterministic hashing
-static void SerializeSortedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+//! Normalize JSON: sort all object keys recursively, serialize compact
+static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -93,14 +93,14 @@ static void SerializeSortedFunction(DataChunk &args, ExpressionState &state, Vec
 	JSONAllocator::AddBuffer(result, alc);
 }
 
-static void GetSerializeSortedFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
-	set.AddFunction(ScalarFunction("json_serialize_sorted", {json}, LogicalType::VARCHAR, SerializeSortedFunction,
-	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
+static void GetNormalizeFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
+	set.AddFunction(ScalarFunction("json_normalize", {json}, LogicalType::VARCHAR, NormalizeFunction, nullptr, nullptr,
+	                               nullptr, JSONFunctionLocalState::Init));
 }
 
-ScalarFunctionSet JSONFunctions::GetSerializeSortedFunction() {
-	ScalarFunctionSet set("json_serialize_sorted");
-	GetSerializeSortedFunctionInternal(set, LogicalType::JSON());
+ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {
+	ScalarFunctionSet set("json_normalize");
+	GetNormalizeFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 

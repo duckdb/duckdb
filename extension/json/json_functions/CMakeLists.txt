@@ -17,7 +17,7 @@ add_library_unity(
   json_valid.cpp
   json_value.cpp
   json_serialize_plan.cpp
-  json_serialize_sorted.cpp
+  json_normalize.cpp
   json_serialize_sql.cpp
   json_deep_merge.cpp
   read_json.cpp
