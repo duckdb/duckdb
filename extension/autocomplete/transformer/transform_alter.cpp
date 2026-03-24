@@ -141,7 +141,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTrans
 		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option_pr);
 		if (seq_option.first == "owned") {
 			if (has_owned) {
-				throw ParserException("Owned by value should be passed as most once");
+				throw ParserException("Owned by value should be passed at most once");
 			}
 			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
