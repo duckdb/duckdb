@@ -8,6 +8,7 @@
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
