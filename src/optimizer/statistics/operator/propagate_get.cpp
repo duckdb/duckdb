@@ -11,7 +11,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -230,9 +229,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 				break;
 			}
 			// filter is true or null; we can replace this with a not null filter
-			auto not_null = make_uniq<IsNotNullFilter>();
+			auto not_null =
+			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+			not_null->children.push_back(make_uniq<BoundReferenceExpression>(stats.GetType(), 0));
 			get.table_filters.SetFilterByColumnIndex(table_filter_column,
-			                                         ExpressionFilter::FromTableFilter(*not_null, stats.GetType()));
+			                                         make_uniq<ExpressionFilter>(std::move(not_null)));
 			break;
 		}
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:

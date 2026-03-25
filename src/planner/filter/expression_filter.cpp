@@ -285,14 +285,27 @@ static void ReplaceStructExtractAt(unique_ptr<Expression> &expr, const string &c
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&column_name](unique_ptr<Expression> &child) { ReplaceStructExtractAt(child, column_name); });
 
-	// Check if this is a struct_extract_at function call
+	// Check if this is a struct_extract/struct_extract_at function call
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func_expr = expr->Cast<BoundFunctionExpression>();
-		if (func_expr.function.name == "struct_extract_at" && !func_expr.children.empty()) {
+		if ((func_expr.function.name == "struct_extract_at" || func_expr.function.name == "struct_extract") &&
+		    !func_expr.children.empty()) {
 			auto &child_type = func_expr.children[0]->return_type;
 			if (child_type.id() == LogicalTypeId::STRUCT) {
-				auto &bind_data = func_expr.bind_info->Cast<StructExtractBindData>();
-				auto &field_name = StructType::GetChildName(child_type, bind_data.index);
+				string field_name;
+				if (func_expr.function.name == "struct_extract_at") {
+					auto &bind_data = func_expr.bind_info->Cast<StructExtractBindData>();
+					field_name = StructType::GetChildName(child_type, bind_data.index);
+				} else if (func_expr.children.size() > 1 &&
+				           func_expr.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+					auto &field_value = func_expr.children[1]->Cast<BoundConstantExpression>().value;
+					if (field_value.type().id() == LogicalTypeId::VARCHAR) {
+						field_name = field_value.GetValue<string>();
+					}
+				}
+				if (field_name.empty()) {
+					return;
+				}
 				// Build the dot-notation name from the child
 				string base_name;
 				if (func_expr.children[0]->type == ExpressionType::BOUND_REF) {
