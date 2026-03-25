@@ -214,14 +214,6 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 		                      result.error.RawMessage());
 	}
 	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
-			throw NotImplementedException("Parser override has not yet implemented this "
-			                              "transformer rule.\nOriginal error: %s",
-			                              result.error.RawMessage());
-		}
-		if (result.error.Type() == ExceptionType::PARSER) {
-			result.error.Throw();
-		}
 		result.error.Throw();
 	}
 }
@@ -256,46 +248,6 @@ void Parser::ParseQuery(const string &query) {
 				}
 				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
 					ThrowParserOverrideError(result);
-				}
-				if (options.parser_override_setting == AllowParserOverride::STRICT_WHEN_SUPPORTED) {
-					auto statement = GetStatement(query);
-					if (!statement) {
-						break;
-					}
-					bool is_supported = false;
-					switch (statement->type) {
-					case StatementType::ANALYZE_STATEMENT:
-					case StatementType::VACUUM_STATEMENT:
-					case StatementType::CALL_STATEMENT:
-					case StatementType::MERGE_INTO_STATEMENT:
-					case StatementType::TRANSACTION_STATEMENT:
-					case StatementType::VARIABLE_SET_STATEMENT:
-					case StatementType::LOAD_STATEMENT:
-					case StatementType::EXPLAIN_STATEMENT:
-					case StatementType::PREPARE_STATEMENT:
-					case StatementType::ATTACH_STATEMENT:
-					case StatementType::SELECT_STATEMENT:
-					case StatementType::DETACH_STATEMENT:
-					case StatementType::DELETE_STATEMENT:
-					case StatementType::DROP_STATEMENT:
-					case StatementType::ALTER_STATEMENT:
-					case StatementType::PRAGMA_STATEMENT:
-					case StatementType::INSERT_STATEMENT:
-					case StatementType::UPDATE_STATEMENT:
-					case StatementType::COPY_DATABASE_STATEMENT:
-					case StatementType::CREATE_STATEMENT:
-					case StatementType::COPY_STATEMENT:
-					case StatementType::SET_STATEMENT: {
-						is_supported = true;
-						break;
-					}
-					default:
-						is_supported = false;
-						break;
-					}
-					if (is_supported) {
-						ThrowParserOverrideError(result);
-					}
 				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK_OVERRIDE) {
 					continue;
 				}

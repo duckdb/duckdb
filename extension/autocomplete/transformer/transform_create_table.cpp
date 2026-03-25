@@ -98,7 +98,7 @@ CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &tran
 	// child 1: PartitionSortedOptions?
 	// child 2: WithList?
 	// child 3: 'AS'
-	// child 4: SelectStatementInternal
+	// child 4: Statement
 	// child 5: WithData?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	CreateTableAs result;
@@ -108,7 +108,11 @@ CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &tran
 	result.partition_keys = std::move(pso.partition_keys);
 	result.sort_keys = std::move(pso.sort_keys);
 	transformer.TransformOptional<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr, 2, result.options);
-	result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(4));
+	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(4));
+	if (stmt->type != StatementType::SELECT_STATEMENT) {
+		throw ParserException("CREATE TABLE AS requires a SELECT clause");
+	}
+	result.select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(stmt));
 	transformer.TransformOptional<bool>(list_pr, 5, result.with_data);
 	if (result.with_data) {
 		auto limit_modifier = make_uniq<LimitModifier>();
@@ -132,13 +136,17 @@ ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transf
 
 ColumnElements PEGTransformerFactory::TransformCreateColumnList(PEGTransformer &transformer,
                                                                 optional_ptr<ParseResult> parse_result) {
-	// CreateColumnList <- Parens(CreateTableColumnList) PartitionSortedOptions? WithList?
-	// child 0: Parens(CreateTableColumnList)
+	// CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
+	// child 0: Parens(CreateTableColumnList?)
 	// child 1: PartitionSortedOptions?
 	// child 2: WithList?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto create_table_column_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto result = transformer.Transform<ColumnElements>(create_table_column_list);
+	auto create_table_column_list =
+	    ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<OptionalParseResult>();
+	if (!create_table_column_list.HasResult()) {
+		throw ParserException("Table must have at least one column!");
+	}
+	auto result = transformer.Transform<ColumnElements>(create_table_column_list.optional_result);
 	PartitionSortedOptions pso;
 	transformer.TransformOptional<PartitionSortedOptions>(list_pr, 1, pso);
 	result.partition_keys = std::move(pso.partition_keys);
@@ -238,7 +246,7 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 		auto repeat_elements = optional_elements.optional_result->Cast<RepeatParseResult>();
 		for (auto &child_ref : repeat_elements.children) {
 			auto &sub_list = child_ref->Cast<ListParseResult>();
-			parts.push_back(sub_list.Child<IdentifierParseResult>(1).identifier);
+			parts.push_back(transformer.Transform<string>(sub_list.GetChild(1)));
 		}
 	}
 	return parts;
@@ -375,8 +383,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
-	auto result = make_uniq<UniqueConstraint>(column_list, false);
-	return std::move(result);
+	return make_uniq<UniqueConstraint>(column_list, false);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
