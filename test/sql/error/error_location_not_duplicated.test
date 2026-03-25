@@ -1,10 +1,6 @@
 # name: test/sql/error/error_location_not_duplicated.test
-# description: Verify that the LINE X: position indicator is not duplicated when ProcessError is called multiple times on the same error
+# description: Verify that the LINE X: position indicator is not duplicated
 # group: [error]
-
-# Regression test: AddErrorLocation used to leave the "position" key in extra_info after formatting,
-# causing the LINE X: indicator to be appended twice when ProcessError was invoked on the same
-# ErrorData object more than once (e.g. ParseStatementsInternal + PendingQuery both calling ProcessError).
 
 statement error
 SELECT 1 AS foo frommmm b;
