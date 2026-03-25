@@ -57,8 +57,10 @@ jobs:
       runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.select_runner.outputs.runner_windows_2022_x64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
       runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.build_runners.outputs.runners }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
     env:
@@ -100,6 +102,7 @@ jobs:
               echo "runner_linux_x64=namespace-profile-linux-x64"
               echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
               echo "runner_linux_arm64=namespace-profile-linux-arm64"
+              echo "runner_windows_2022_x64=namespace-profile-windows-x64"
               echo "runner_macos_arm64=namespace-profile-macos-arm64"
               echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
             } >> "$GITHUB_OUTPUT"
@@ -109,12 +112,30 @@ jobs:
               echo "runner_linux_x64=ubuntu-latest"
               echo "runner_linux_22_x64=ubuntu-22.04"
               echo "runner_linux_arm64=ubuntu-24.04-arm"
+              echo "runner_windows_2022_x64=windows-2022"
               echo "runner_macos_arm64=macos-14"
               echo "runner_macos_14_arm64=macos-14"
             } >> "$GITHUB_OUTPUT"
           fi
 
           grep runner_ "$GITHUB_OUTPUT"
+
+      - name: Build runners JSON
+        id: build_runners
+        run: |
+          echo "runners<<EOF" >> "$GITHUB_OUTPUT"
+          cat <<EOF >> "$GITHUB_OUTPUT"
+          {
+            "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
+            "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
+            "linux_arm64": "${{ steps.select_runner.outputs.runner_linux_arm64 }}",
+            "windows_2022_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
+            "windows_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
+            "macos_arm64": "${{ steps.select_runner.outputs.runner_macos_arm64 }}",
+            "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
+          }
+          EOF
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Install tools
         run: make format_tools
@@ -241,14 +262,7 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: 'false'
       run_all: 'true'
-      runners: >-
-        {
-          "linux_x64": "${{ needs.prepare.outputs.runner_linux_x64 }}",
-          "linux_22_x64": "${{ needs.prepare.outputs.runner_linux_22_x64 }}",
-          "linux_arm64": "${{ needs.prepare.outputs.runner_linux_arm64 }}",
-          "macos_arm64": "${{ needs.prepare.outputs.runner_macos_arm64 }}",
-          "macos_14_arm64": "${{ needs.prepare.outputs.runner_macos_14_arm64 }}"
-        }
+      runners: ${{ needs.prepare.outputs.runners }}
 
  wasm-eh:
     name: Wasm EH
@@ -382,9 +396,12 @@ jobs:
  windows:
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     with:
       git_ref: ${{ github.sha }}
+      runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
       skip_tests: 'false'
       run_all: 'true'
 
