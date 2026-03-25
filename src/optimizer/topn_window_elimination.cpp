@@ -563,9 +563,6 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 			}
 		}
 	}
-	if (window.expressions[0]->type != ExpressionType::WINDOW_FUNCTION) {
-		return false;
-	}
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	if (!window_expr.window || window_expr.window->name != "row_number") {
 		return false;

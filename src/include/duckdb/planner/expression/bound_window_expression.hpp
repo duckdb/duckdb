@@ -84,5 +84,12 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Remove LEAD/LAG offset/default
+	vector<unique_ptr<Expression>> SerializedChildren(Serializer &serializer) const;
+	unique_ptr<Expression> SerializedOffset(Serializer &serializer) const;
+	unique_ptr<Expression> SerializedDefault(Serializer &serializer) const;
 };
+
 } // namespace duckdb
