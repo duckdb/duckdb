@@ -7,8 +7,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -257,20 +255,10 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		return;
 	}
 
-	auto close_action = DatabaseCloseAction::CHECKPOINT;
-	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
-	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
-		close_action = DatabaseCloseAction::CHECKPOINT;
-	} else if (checkpoint_on_detach == CheckpointOnDetach::DISABLED) {
-		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
-	} else if (!DBConfig::GetConfig(context).options.checkpoint_on_shutdown) {
-		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
-	}
-
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
-	AttachedDatabase::InvokeCloseIfLastReference(attached_db, close_action);
+	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {

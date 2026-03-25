@@ -2,9 +2,11 @@
 
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -202,12 +204,21 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db,
-                                                  DatabaseCloseAction action) {
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+	auto close_action = DatabaseCloseAction::CHECKPOINT;
+	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
+	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
+		close_action = DatabaseCloseAction::CHECKPOINT;
+	} else if (checkpoint_on_detach == CheckpointOnDetach::DISABLED) {
+		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
+	} else if (!DBConfig::GetConfig(context).options.checkpoint_on_shutdown) {
+		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
+	}
+
 	auto close_lock = attached_db->close_lock;
 	lock_guard<mutex> guard(*close_lock);
 	if (attached_db.use_count() == 1) {
-		attached_db->Close(action);
+		attached_db->Close(close_action);
 	}
 	attached_db.reset();
 }
