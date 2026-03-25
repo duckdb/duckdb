@@ -310,16 +310,16 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 				FlatVector::SetNull(result, entry.index, true);
 				continue;
 			}
-            auto str = CreateStringPiece(*entry.value);
-            auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
-                                                        UnsafeNumericCast<int>(groups.size()));
-            for (size_t col = 0; col < child_entries.size(); ++col) {
-                auto &child_entry = child_entries[col];
-                auto cdata = FlatVector::GetData<string_t>(child_entry);
-                auto &extracted = ws[col];
-                cdata[entry.index] =
-                    string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
-            }
+			auto str = CreateStringPiece(*entry.value);
+			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
+			                                            UnsafeNumericCast<int>(groups.size()));
+			for (size_t col = 0; col < child_entries.size(); ++col) {
+				auto &child_entry = child_entries[col];
+				auto cdata = FlatVector::GetData<string_t>(child_entry);
+				auto &extracted = ws[col];
+				cdata[entry.index] =
+				    string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
+			}
 		}
 	}
 }

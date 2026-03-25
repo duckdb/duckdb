@@ -43,6 +43,8 @@ class Vector {
 	template <class T>
 	class VectorIterationHelper;
 
+	class VectorValidityHelper;
+
 public:
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
@@ -199,6 +201,10 @@ public:
 		return VectorIterationHelper<T>(*this, count);
 	}
 
+	VectorValidityHelper ValidityEntries(idx_t count) const {
+		return VectorValidityHelper(*this, count);
+	}
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
@@ -228,6 +234,27 @@ protected:
 	mutable buffer_ptr<VectorBuffer> auxiliary;
 
 private:
+	class VectorValidityHelper {
+	public:
+		VectorValidityHelper(const Vector &vector, idx_t count) : count(count) {
+			vector.ToUnifiedFormat(count, format);
+		}
+
+		bool IsValid(idx_t i) const {
+			return format.validity.RowIsValid(format.sel->get_index(i));
+		}
+		bool CanHaveNull() const {
+			return !format.validity.AllValid();
+		}
+		idx_t size() const {
+			return count;
+		}
+
+	private:
+		UnifiedVectorFormat format;
+		idx_t count;
+	};
+
 	template <class T>
 	class VectorIterationHelper {
 	public:
@@ -247,7 +274,7 @@ private:
 			optional<T> value;
 
 			bool IsValid() const {
-			    return value.has_value();
+				return value.has_value();
 			}
 		};
 
@@ -351,10 +378,10 @@ private:
 		}
 		//! Returns the value at the specified location without checking the NULL mask
 		T GetValueUnsafe(idx_t i) const {
-		    return data[format.sel->get_index(i)];
+			return data[format.sel->get_index(i)];
 		}
 		bool CanHaveNull() const {
-		    return !format.validity.AllValid();
+			return !format.validity.AllValid();
 		}
 	};
 };

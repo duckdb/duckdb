@@ -40,14 +40,9 @@ static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int6
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
-	UnifiedVectorFormat list_data;
-	UnifiedVectorFormat offsets_data;
 
-	list.ToUnifiedFormat(count, list_data);
-	offsets.ToUnifiedFormat(count, offsets_data);
-
-	const auto list_ptr = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
-	const auto offsets_ptr = UnifiedVectorFormat::GetData<int64_t>(offsets_data);
+	auto list_entries = list.Entries<list_entry_t>(count);
+	auto offsets_entries = offsets.Entries<int64_t>(count);
 
 	UnifiedVectorFormat child_data;
 	auto &child_vector = ListVector::GetEntry(list);
@@ -59,15 +54,15 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 	optional_idx first_valid_child_idx;
 	for (idx_t i = 0; i < count; i++) {
-		const auto list_index = list_data.sel->get_index(i);
-		const auto offsets_index = offsets_data.sel->get_index(i);
+		auto list_entry = list_entries[i];
+		auto offsets_entry = offsets_entries[i];
 
-		if (!list_data.validity.RowIsValid(list_index) || !offsets_data.validity.RowIsValid(offsets_index)) {
+		if (!list_entry.IsValid() || !offsets_entry.IsValid()) {
 			invalid_offsets.push_back(i);
 			continue;
 		}
 
-		const auto child_offset = TryGetChildOffset(list_ptr[list_index], offsets_ptr[offsets_index]);
+		const auto child_offset = TryGetChildOffset(*list_entry.value, *offsets_entry.value);
 
 		if (!child_offset.IsValid()) {
 			invalid_offsets.push_back(i);

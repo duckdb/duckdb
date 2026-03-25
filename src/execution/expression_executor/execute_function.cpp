@@ -150,12 +150,12 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
 	for (auto &arg : args.data) {
-		UnifiedVectorFormat arg_data;
-		arg.ToUnifiedFormat(count, arg_data);
-
+		auto entries = arg.ValidityEntries(count);
+		if (!entries.CanHaveNull()) {
+			continue;
+		}
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = arg_data.sel->get_index(i);
-			if (!arg_data.validity.RowIsValid(idx)) {
+			if (!entries.IsValid(i)) {
 				combined_mask.SetInvalid(i);
 			}
 		}

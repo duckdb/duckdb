@@ -31,30 +31,29 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 		ConstantVector::SetNull(result, is_null);
 		return;
 	}
-    // perform generic loop
-     // we use uint8 to avoid load of gunk bools
-    auto left_data = left.Entries<uint8_t>(count);
-    auto right_data = right.Entries<uint8_t>(count);
+	// perform generic loop
+	// we use uint8 to avoid load of gunk bools
+	auto left_data = left.Entries<uint8_t>(count);
+	auto right_data = right.Entries<uint8_t>(count);
 
-    result.SetVectorType(VectorType::FLAT_VECTOR);
-    auto result_data = FlatVector::GetData<bool>(result);
-    auto &result_mask = FlatVector::Validity(result);
-    if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
-        for (idx_t i = 0; i < count; i++) {
-            auto left_entry = left_data[i];
-            auto right_entry = right_data[i];
-            bool is_null =
-                OP::Operation((*left_entry.value) > 0, (*right_entry.value) > 0, !left_entry.IsValid(),
-                              !right_entry.IsValid(), result_data[i]);
-            result_mask.Set(i, !is_null);
-        }
-    } else {
-        for (idx_t i = 0; i < count; i++) {
-            auto left_val = left_data.GetValueUnsafe(i);
-            auto right_val = right_data.GetValueUnsafe(i);
-            result_data[i] = OP::SimpleOperation(left_val, right_val);
-        }
-    }
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<bool>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
+		for (idx_t i = 0; i < count; i++) {
+			auto left_entry = left_data[i];
+			auto right_entry = right_data[i];
+			bool is_null = OP::Operation((*left_entry.value) > 0, (*right_entry.value) > 0, !left_entry.IsValid(),
+			                             !right_entry.IsValid(), result_data[i]);
+			result_mask.Set(i, !is_null);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto left_val = left_data.GetValueUnsafe(i);
+			auto right_val = right_data.GetValueUnsafe(i);
+			result_data[i] = OP::SimpleOperation(left_val, right_val);
+		}
+	}
 }
 
 /*

@@ -278,18 +278,13 @@ idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector 
 }
 
 void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, ValidityMask &null_mask) {
-	UnifiedVectorFormat vdata;
-	vec.ToUnifiedFormat(count, vdata);
-
-	if (vdata.validity.AllValid()) {
+	auto entries = vec.ValidityEntries(count);
+	if (!entries.CanHaveNull()) {
 		return;
 	}
-
 	for (idx_t i = 0; i < count; ++i) {
-		const auto ridx = sel.get_index(i);
-		const auto vidx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(vidx)) {
-			null_mask.SetInvalid(ridx);
+		if (!entries.IsValid(i)) {
+			null_mask.SetInvalid(sel.get_index(i));
 		}
 	}
 }
@@ -330,15 +325,11 @@ template <class OP>
 idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
                             const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
                             OptionalSelection &false_opt, optional_ptr<ValidityMask> null_mask) {
-	UnifiedVectorFormat lvdata, rvdata;
-	left.ToUnifiedFormat(count, lvdata);
-	right.ToUnifiedFormat(count, rvdata);
-
-	auto &lmask = lvdata.validity;
-	auto &rmask = rvdata.validity;
+	auto ldata = left.ValidityEntries(count);
+	auto rdata = right.ValidityEntries(count);
 
 	idx_t remaining = 0;
-	if (lmask.AllValid() && rmask.AllValid()) {
+	if (!ldata.CanHaveNull() && !rdata.CanHaveNull()) {
 		//	None are NULL, distinguish values.
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = sel.get_index(i);
@@ -353,10 +344,8 @@ idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; ++i) {
 		const auto result_idx = sel.get_index(i);
-		const auto lidx = lvdata.sel->get_index(i);
-		const auto ridx = rvdata.sel->get_index(i);
-		const auto lnull = !lmask.RowIsValid(lidx);
-		const auto rnull = !rmask.RowIsValid(ridx);
+		const auto lnull = !ldata.IsValid(i);
+		const auto rnull = !rdata.IsValid(i);
 		if (lnull || rnull) {
 			// If either is NULL then we can major distinguish them
 			if (null_mask) {
