@@ -127,11 +127,11 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function = expression.Cast<BoundFunctionExpression>();
 		if (function.function.name == SelectivityOptionalFilterScalarFun::NAME && function.bind_info) {
-			auto bind_data = dynamic_cast<SelectivityOptionalFilterFunctionData *>(function.bind_info.get());
-			if (bind_data && bind_data->child_filter_expr) {
+			auto &bind_data = function.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			if (bind_data.child_filter_expr) {
 				fast_path = ExpressionFilterFastPath::SELECTIVITY_OPTIONAL;
-				EnableSelectivityTracking(bind_data->selectivity_threshold, bind_data->n_vectors_to_check);
-				selectivity_child_state = make_uniq<ExpressionFilterState>(context, *bind_data->child_filter_expr);
+				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+				selectivity_child_state = make_uniq<ExpressionFilterState>(context, *bind_data.child_filter_expr);
 				initialize_executor();
 				return;
 			}
@@ -142,26 +142,30 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 			return;
 		}
 		if (function.function.name == PerfectHashJoinScalarFun::NAME && function.bind_info) {
-			auto bind_data = dynamic_cast<PerfectHashJoinFunctionData *>(function.bind_info.get());
-			if (bind_data) {
-				fast_path = ExpressionFilterFastPath::PERFECT_HASH_JOIN;
-				if (bind_data->n_vectors_to_check != 0) {
-					EnableSelectivityTracking(bind_data->selectivity_threshold, bind_data->n_vectors_to_check);
-				}
+			auto &bind_data = function.bind_info->Cast<PerfectHashJoinFunctionData>();
+			if (!bind_data.executor) {
 				initialize_executor();
 				return;
 			}
+			fast_path = ExpressionFilterFastPath::PERFECT_HASH_JOIN;
+			if (bind_data.n_vectors_to_check != 0) {
+				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+			}
+			initialize_executor();
+			return;
 		}
 		if (function.function.name == PrefixRangeScalarFun::NAME && function.bind_info) {
-			auto bind_data = dynamic_cast<PrefixRangeFunctionData *>(function.bind_info.get());
-			if (bind_data) {
-				fast_path = ExpressionFilterFastPath::PREFIX_RANGE;
-				if (bind_data->n_vectors_to_check != 0) {
-					EnableSelectivityTracking(bind_data->selectivity_threshold, bind_data->n_vectors_to_check);
-				}
+			auto &bind_data = function.bind_info->Cast<PrefixRangeFunctionData>();
+			if (!bind_data.filter) {
 				initialize_executor();
 				return;
 			}
+			fast_path = ExpressionFilterFastPath::PREFIX_RANGE;
+			if (bind_data.n_vectors_to_check != 0) {
+				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+			}
+			initialize_executor();
+			return;
 		}
 	}
 	initialize_executor();

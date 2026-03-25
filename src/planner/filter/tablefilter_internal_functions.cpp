@@ -39,34 +39,35 @@ unique_ptr<FunctionData> TableFilterInternalFunctions::Bind(ClientContext &conte
 }
 // LCOV_EXCL_STOP
 
-//! Passthrough FunctionData created during deserialization when runtime state is unavailable.
-//! Functions check for this type and return TRUE for all rows.
-struct PassthroughFilterFunctionData : public FunctionData {
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<PassthroughFilterFunctionData>();
-	}
-	bool Equals(const FunctionData &other) const override {
-		return other.Cast<PassthroughFilterFunctionData>().Copy() != nullptr;
-	}
-};
-
 static void TableFilterInternalSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                          const ScalarFunction &function) {
 	// Runtime state cannot be serialized - write nothing
 }
 
 static unique_ptr<FunctionData> TableFilterInternalDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	// Return a passthrough FunctionData - functions will return TRUE for all rows
-	return make_uniq<PassthroughFilterFunctionData>();
+	auto key_type = function.arguments.empty() ? LogicalType::ANY : function.arguments[0];
+	if (function.name == BloomFilterScalarFun::NAME) {
+		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, 0);
+	}
+	if (function.name == PerfectHashJoinScalarFun::NAME) {
+		return make_uniq<PerfectHashJoinFunctionData>(nullptr, string(), 0.0f, 0);
+	}
+	if (function.name == PrefixRangeScalarFun::NAME) {
+		return make_uniq<PrefixRangeFunctionData>(nullptr, string(), key_type, 0.0f, 0);
+	}
+	if (function.name == DynamicFilterScalarFun::NAME) {
+		return make_uniq<DynamicFilterFunctionData>(nullptr);
+	}
+	throw InternalException("Unsupported internal tablefilter function \"%s\" during deserialization", function.name);
 }
 
 static void OptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                     const ScalarFunction &function) {
-	auto data = bind_data ? dynamic_cast<const OptionalFilterFunctionData *>(bind_data.get()) : nullptr;
-	if (!data) {
+	if (!bind_data) {
 		return;
 	}
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data->child_filter_expr);
+	auto &data = bind_data->Cast<OptionalFilterFunctionData>();
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data.child_filter_expr);
 }
 
 static unique_ptr<FunctionData> OptionalFilterDeserialize(Deserializer &deserializer, ScalarFunction &function) {
@@ -76,13 +77,13 @@ static unique_ptr<FunctionData> OptionalFilterDeserialize(Deserializer &deserial
 
 static void SelectivityOptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                                const ScalarFunction &function) {
-	auto data = bind_data ? dynamic_cast<const SelectivityOptionalFilterFunctionData *>(bind_data.get()) : nullptr;
-	if (!data) {
+	if (!bind_data) {
 		return;
 	}
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data->child_filter_expr);
-	serializer.WritePropertyWithDefault<float>(201, "selectivity_threshold", data->selectivity_threshold);
-	serializer.WritePropertyWithDefault<idx_t>(202, "n_vectors_to_check", data->n_vectors_to_check);
+	auto &data = bind_data->Cast<SelectivityOptionalFilterFunctionData>();
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data.child_filter_expr);
+	serializer.WritePropertyWithDefault<float>(201, "selectivity_threshold", data.selectivity_threshold);
+	serializer.WritePropertyWithDefault<idx_t>(202, "n_vectors_to_check", data.n_vectors_to_check);
 }
 
 static unique_ptr<FunctionData> SelectivityOptionalFilterDeserialize(Deserializer &deserializer,
@@ -152,7 +153,7 @@ struct SelectivityTrackingLocalState : public FunctionLocalState {
 // BloomFilterFunctionData
 //===----------------------------------------------------------------------===//
 
-BloomFilterFunctionData::BloomFilterFunctionData(BloomFilter &filter_p, bool filters_null_values_p,
+BloomFilterFunctionData::BloomFilterFunctionData(optional_ptr<BloomFilter> filter_p, bool filters_null_values_p,
                                                  const string &key_column_name_p, const LogicalType &key_type_p,
                                                  float selectivity_threshold_p, idx_t n_vectors_to_check_p)
     : filter(filter_p), filters_null_values(filters_null_values_p), key_column_name(key_column_name_p),
@@ -166,7 +167,7 @@ unique_ptr<FunctionData> BloomFilterFunctionData::Copy() const {
 
 bool BloomFilterFunctionData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<BloomFilterFunctionData>();
-	return RefersToSameObject(filter, other.filter) && filters_null_values == other.filters_null_values &&
+	return filter.get() == other.filter.get() && filters_null_values == other.filters_null_values &&
 	       key_column_name == other.key_column_name && key_type == other.key_type;
 }
 
@@ -287,19 +288,11 @@ bool SelectivityOptionalFilterFunctionData::Equals(const FunctionData &other_p) 
 
 static unique_ptr<FunctionLocalState>
 BloomFilterInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
-	if (dynamic_cast<const PassthroughFilterFunctionData *>(bind_data)) {
-		return nullptr;
-	}
 	auto &data = bind_data->Cast<BloomFilterFunctionData>();
-	if (data.n_vectors_to_check == 0) {
+	if (!data.filter || data.n_vectors_to_check == 0) {
 		return nullptr;
 	}
 	return make_uniq<SelectivityTrackingLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
-}
-
-static bool IsPassthroughData(ExpressionState &state) {
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	return func_expr.bind_info && dynamic_cast<const PassthroughFilterFunctionData *>(func_expr.bind_info.get());
 }
 
 static void SetAllTrue(DataChunk &args, Vector &result) {
@@ -308,10 +301,6 @@ static void SetAllTrue(DataChunk &args, Vector &result) {
 }
 
 static void BloomFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (IsPassthroughData(state)) {
-		SetAllTrue(args, result);
-		return;
-	}
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.bind_info->Cast<BloomFilterFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
@@ -323,6 +312,10 @@ static void BloomFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<bool>(result);
 
+	if (!func_data.filter) {
+		SetAllTrue(args, result);
+		return;
+	}
 	if (tracking_state && !tracking_state->IsActive()) {
 		// Paused due to high selectivity - return TRUE for all
 		for (idx_t i = 0; i < count; i++) {
@@ -350,7 +343,7 @@ static void BloomFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 				passed++;
 			}
 		} else {
-			result_data[i] = func_data.filter.LookupOne(hash_data[i]);
+			result_data[i] = func_data.filter->LookupOne(hash_data[i]);
 			if (result_data[i]) {
 				passed++;
 			}
@@ -415,31 +408,31 @@ FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatistics
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto &data = input.bind_data->Cast<BloomFilterFunctionData>();
-	if (!data.filter.IsInitialized()) {
+	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
 	switch (data.key_type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedBloomFilterPrune<uint8_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint8_t>(*data.filter, input.stats);
 	case PhysicalType::UINT16:
-		return TemplatedBloomFilterPrune<uint16_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint16_t>(*data.filter, input.stats);
 	case PhysicalType::UINT32:
-		return TemplatedBloomFilterPrune<uint32_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint32_t>(*data.filter, input.stats);
 	case PhysicalType::UINT64:
-		return TemplatedBloomFilterPrune<uint64_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint64_t>(*data.filter, input.stats);
 	case PhysicalType::UINT128:
-		return TemplatedBloomFilterPrune<uhugeint_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uhugeint_t>(*data.filter, input.stats);
 	case PhysicalType::INT8:
-		return TemplatedBloomFilterPrune<int8_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int8_t>(*data.filter, input.stats);
 	case PhysicalType::INT16:
-		return TemplatedBloomFilterPrune<int16_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int16_t>(*data.filter, input.stats);
 	case PhysicalType::INT32:
-		return TemplatedBloomFilterPrune<int32_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int32_t>(*data.filter, input.stats);
 	case PhysicalType::INT64:
-		return TemplatedBloomFilterPrune<int64_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int64_t>(*data.filter, input.stats);
 	case PhysicalType::INT128:
-		return TemplatedBloomFilterPrune<hugeint_t>(data.filter, input.stats);
+		return TemplatedBloomFilterPrune<hugeint_t>(*data.filter, input.stats);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -451,21 +444,14 @@ FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatistics
 
 static unique_ptr<FunctionLocalState>
 PerfectHashJoinInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
-	if (dynamic_cast<const PassthroughFilterFunctionData *>(bind_data)) {
-		return nullptr;
-	}
 	auto &data = bind_data->Cast<PerfectHashJoinFunctionData>();
-	if (data.n_vectors_to_check == 0) {
+	if (!data.executor || data.n_vectors_to_check == 0) {
 		return nullptr;
 	}
 	return make_uniq<SelectivityTrackingLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static void PerfectHashJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (IsPassthroughData(state)) {
-		SetAllTrue(args, result);
-		return;
-	}
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.bind_info->Cast<PerfectHashJoinFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
@@ -601,21 +587,14 @@ FilterPropagateResult PerfectHashJoinScalarFun::FilterPrune(const FunctionStatis
 
 static unique_ptr<FunctionLocalState>
 PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
-	if (dynamic_cast<const PassthroughFilterFunctionData *>(bind_data)) {
-		return nullptr;
-	}
 	auto &data = bind_data->Cast<PrefixRangeFunctionData>();
-	if (data.n_vectors_to_check == 0) {
+	if (!data.filter || data.n_vectors_to_check == 0) {
 		return nullptr;
 	}
 	return make_uniq<SelectivityTrackingLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static void PrefixRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (IsPassthroughData(state)) {
-		SetAllTrue(args, result);
-		return;
-	}
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.bind_info->Cast<PrefixRangeFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
@@ -696,10 +675,6 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 //===----------------------------------------------------------------------===//
 
 static void DynamicFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (IsPassthroughData(state)) {
-		SetAllTrue(args, result);
-		return;
-	}
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
 	auto count = args.size();
@@ -788,12 +763,12 @@ FilterPropagateResult OptionalFilterScalarFun::FilterPrune(const FunctionStatist
 	if (!input.bind_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto data = dynamic_cast<const OptionalFilterFunctionData *>(input.bind_data.get());
-	if (!data || !data->child_filter_expr) {
+	auto &data = input.bind_data->Cast<OptionalFilterFunctionData>();
+	if (!data.child_filter_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// Delegate to the child expression's statistics check
-	return ExpressionFilter::CheckExpressionStatistics(*data->child_filter_expr, input.stats);
+	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
 }
 
 //===----------------------------------------------------------------------===//
@@ -813,22 +788,15 @@ struct SelectivityOptionalFilterLocalState : public FunctionLocalState {
 static unique_ptr<FunctionLocalState> SelectivityOptionalFilterInitLocalState(ExpressionState &state,
                                                                               const BoundFunctionExpression &expr,
                                                                               FunctionData *bind_data) {
-	if (dynamic_cast<const PassthroughFilterFunctionData *>(bind_data)) {
+	auto &data = bind_data->Cast<SelectivityOptionalFilterFunctionData>();
+	if (!data.child_filter_expr) {
 		return nullptr;
 	}
-	auto data = dynamic_cast<SelectivityOptionalFilterFunctionData *>(bind_data);
-	if (!data || !data->child_filter_expr) {
-		return nullptr;
-	}
-	return make_uniq<SelectivityOptionalFilterLocalState>(state.GetContext(), *data->child_filter_expr,
-	                                                      data->n_vectors_to_check, data->selectivity_threshold);
+	return make_uniq<SelectivityOptionalFilterLocalState>(state.GetContext(), *data.child_filter_expr,
+	                                                      data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static void SelectivityOptionalFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (IsPassthroughData(state)) {
-		SetAllTrue(args, result);
-		return;
-	}
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
 	if (!local_state_ptr) {
 		SetAllTrue(args, result);
@@ -877,11 +845,11 @@ FilterPropagateResult SelectivityOptionalFilterScalarFun::FilterPrune(const Func
 	if (!input.bind_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto data = dynamic_cast<const SelectivityOptionalFilterFunctionData *>(input.bind_data.get());
-	if (!data || !data->child_filter_expr) {
+	auto &data = input.bind_data->Cast<SelectivityOptionalFilterFunctionData>();
+	if (!data.child_filter_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return ExpressionFilter::CheckExpressionStatistics(*data->child_filter_expr, input.stats);
+	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
 }
 
 } // namespace duckdb

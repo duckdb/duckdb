@@ -26,10 +26,11 @@ struct TableFilterInternalFunctions {
 
 //! FunctionData for bloom filter internal function
 struct BloomFilterFunctionData : public FunctionData {
-	BloomFilterFunctionData(BloomFilter &filter_p, bool filters_null_values_p, const string &key_column_name_p,
-	                        const LogicalType &key_type_p, float selectivity_threshold_p, idx_t n_vectors_to_check_p);
+	BloomFilterFunctionData(optional_ptr<BloomFilter> filter_p, bool filters_null_values_p,
+	                        const string &key_column_name_p, const LogicalType &key_type_p,
+	                        float selectivity_threshold_p, idx_t n_vectors_to_check_p);
 
-	BloomFilter &filter;
+	optional_ptr<BloomFilter> filter;
 	bool filters_null_values;
 	string key_column_name;
 	LogicalType key_type;

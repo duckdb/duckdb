@@ -497,17 +497,20 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (func.function.name == OptionalFilterScalarFun::NAME) {
-			auto data = func.bind_info ? dynamic_cast<OptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
-			if (data && data->child_filter_expr) {
-				return CollectValuesAndComparisonsFromExpression(*data->child_filter_expr, in_values, comparisons);
+			if (func.bind_info) {
+				auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+				if (data.child_filter_expr) {
+					return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+				}
 			}
 			return true;
 		}
 		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
-			auto data =
-			    func.bind_info ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
-			if (data && data->child_filter_expr) {
-				return CollectValuesAndComparisonsFromExpression(*data->child_filter_expr, in_values, comparisons);
+			if (func.bind_info) {
+				auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+				if (data.child_filter_expr) {
+					return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+				}
 			}
 			return true;
 		}
@@ -590,17 +593,22 @@ static bool ExtractComparisonsAndInFiltersFromExpression(const Expression &expr,
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (func.function.name == OptionalFilterScalarFun::NAME) {
-			auto data = func.bind_info ? dynamic_cast<OptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
-			if (data && data->child_filter_expr) {
-				return ExtractComparisonsAndInFiltersFromExpression(*data->child_filter_expr, comparisons, in_filters);
+			if (func.bind_info) {
+				auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+				if (data.child_filter_expr) {
+					return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons,
+					                                                    in_filters);
+				}
 			}
 			return true;
 		}
 		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
-			auto data =
-			    func.bind_info ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
-			if (data && data->child_filter_expr) {
-				return ExtractComparisonsAndInFiltersFromExpression(*data->child_filter_expr, comparisons, in_filters);
+			if (func.bind_info) {
+				auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+				if (data.child_filter_expr) {
+					return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons,
+					                                                    in_filters);
+				}
 			}
 			return true;
 		}
