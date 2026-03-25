@@ -946,7 +946,7 @@ static string GetWindowsVersionTag(const BY_HANDLE_FILE_INFORMATION &file_info) 
 	ULARGE_INTEGER last_write_time;
 	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
 	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
-	return WindowsComputeVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
+	return GetWindowsVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
 }
 
 static string GetWindowsVersionTag(const WIN32_FIND_DATAW &ffd) {
@@ -958,7 +958,7 @@ static string GetWindowsVersionTag(const WIN32_FIND_DATAW &ffd) {
 	ULARGE_INTEGER last_write_time;
 	last_write_time.LowPart = ffd.ftLastWriteTime.dwLowDateTime;
 	last_write_time.HighPart = ffd.ftLastWriteTime.dwHighDateTime;
-	return WindowsComputeVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
+	return GetWindowsVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
 }
 
 struct WindowsFileHandle : public FileHandle {
