@@ -294,20 +294,7 @@ ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
 unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chunk) {
-	// cast to the varchar chunk
-	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
-	vector<duckdb::LogicalType> all_varchar;
-	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		all_varchar.emplace_back(duckdb::LogicalType(duckdb::LogicalTypeId::VARCHAR));
-	}
-	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
-
-	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
-	}
-	varchar_chunk->SetCardinality(chunk.size());
-	varchar_chunk->Flatten();
-	return varchar_chunk;
+	return chunk.CastToVarchar(*state.conn->context);
 }
 
 bool RenderingQueryResult::TryConvertChunk() {
@@ -1289,38 +1276,8 @@ public:
 		return result;
 	}
 
-	static bool RequiresJSONCast(const duckdb::LogicalType &type) {
-		if (type.IsNested()) {
-			// cast nested types to JSON to preserve structure
-			return true;
-		}
-		if (type.IsFloating()) {
-			// cast floating point numbers to JSON to correctly deal with inf / nan
-			return true;
-		}
-		return false;
-	}
-
 	unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk) override {
-		// convert all nested types to JSON directly
-		duckdb::DataChunk json_chunk;
-		vector<duckdb::LogicalType> all_json;
-		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-			if (!RequiresJSONCast(chunk.data[c].GetType())) {
-				all_json.emplace_back(duckdb::LogicalType(duckdb::LogicalTypeId::VARCHAR));
-			} else {
-				all_json.emplace_back(duckdb::LogicalType::JSON());
-			}
-		}
-		json_chunk.Initialize(duckdb::Allocator::DefaultAllocator(), all_json);
-
-		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
-		}
-		json_chunk.SetCardinality(chunk.size());
-		json_chunk.Flatten();
-		// now convert the JSON chunk to VARCHAR
-		return ShellRenderer::ConvertChunk(json_chunk);
+		return chunk.CastToVarchar(*state.conn->context, true);
 	}
 
 	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
