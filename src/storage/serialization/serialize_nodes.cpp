@@ -404,7 +404,7 @@ OrderByNode OrderByNode::Deserialize(Deserializer &deserializer) {
 void PivotColumn::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions", pivot_expressions);
 	serializer.WritePropertyWithDefault<vector<string>>(101, "unpivot_names", unpivot_names);
-	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", entries);
+	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", GetEntriesForSerialization(serializer));
 	serializer.WritePropertyWithDefault<string>(103, "pivot_enum", pivot_enum);
 }
 
@@ -414,6 +414,20 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(101, "unpivot_names", result.unpivot_names);
 	deserializer.ReadPropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", result.entries);
 	deserializer.ReadPropertyWithDefault<string>(103, "pivot_enum", result.pivot_enum);
+	return result;
+}
+
+void PivotColumnEntry::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
+	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+}
+
+PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
+	PivotColumnEntry result;
+	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
+	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
 	return result;
 }
 
