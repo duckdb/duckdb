@@ -136,6 +136,11 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 				return;
 			}
 		}
+		if (function.function.name == OptionalFilterScalarFun::NAME && function.bind_info) {
+			fast_path = ExpressionFilterFastPath::OPTIONAL;
+			initialize_executor();
+			return;
+		}
 		if (function.function.name == PerfectHashJoinScalarFun::NAME && function.bind_info) {
 			auto bind_data = dynamic_cast<PerfectHashJoinFunctionData *>(function.bind_info.get());
 			if (bind_data) {
