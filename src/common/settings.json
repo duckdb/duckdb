@@ -84,6 +84,13 @@
         ]
     },
     {
+        "name": "allowed_configs",
+        "description": "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "allowed_directories",
         "description": "List of directories/prefixes that are ALWAYS allowed to be queried - even when enable_external_access is false",
         "type": "VARCHAR[]",
@@ -187,6 +194,13 @@
         "default_value": "100"
     },
     {
+        "name": "checkpoint_on_detach",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "type": "ENUM<CheckpointOnDetach>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "VARCHAR",
@@ -209,6 +223,17 @@
         "aliases": [
             "custom_profiling_settings",
             "configure_metrics"
+        ]
+    },
+    {
+        "name": "current_transaction_invalidation_policy",
+        "description": "Which types of exceptions invalidate the database for the current transaction",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "default_value": "STANDARD_POLICY",
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -728,7 +753,7 @@
     },
     {
         "name": "lock_configuration",
-        "description": "Whether or not the configuration can be altered",
+        "description": "Whether or not configurations can be altered",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "false"

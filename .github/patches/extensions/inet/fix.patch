@@ -1,0 +1,17 @@
+diff --git a/src/inet_functions.cpp b/src/inet_functions.cpp
+index afa7446..2f0234a 100644
+--- a/src/inet_functions.cpp
++++ b/src/inet_functions.cpp
+@@ -49,9 +49,9 @@ bool INetFunctions::CastVarcharToINET(Vector &source, Vector &result,
+   source.ToUnifiedFormat(count, vdata);
+ 
+   auto &entries = StructVector::GetEntries(result);
+-  auto ip_type = FlatVector::GetData<uint8_t>(*entries[0]);
+-  auto address_data = FlatVector::GetData<hugeint_t>(*entries[1]);
+-  auto mask_data = FlatVector::GetData<uint16_t>(*entries[2]);
++  auto ip_type = FlatVector::GetData<uint8_t>(entries[0]);
++  auto address_data = FlatVector::GetData<hugeint_t>(entries[1]);
++  auto mask_data = FlatVector::GetData<uint16_t>(entries[2]);
+ 
+   auto input = UnifiedVectorFormat::GetData<string_t>(vdata);
+   bool success = true;

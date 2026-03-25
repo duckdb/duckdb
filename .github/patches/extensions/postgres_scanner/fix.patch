@@ -1,3 +1,29 @@
+diff --git a/src/include/postgres_binary_writer.hpp b/src/include/postgres_binary_writer.hpp
+index fef2faf..cff8e8c 100644
+--- a/src/include/postgres_binary_writer.hpp
++++ b/src/include/postgres_binary_writer.hpp
+@@ -11,6 +11,9 @@
+ #include "duckdb.hpp"
+ #include "duckdb/common/types/interval.hpp"
+ #include "duckdb/common/serializer/memory_stream.hpp"
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
+ #include "postgres_conversion.hpp"
+ 
+ namespace duckdb {
+@@ -427,9 +430,9 @@ public:
+ 			WriteRawInteger<int32_t>(0);                     // data size (nop for now)
+ 			WriteRawInteger<uint32_t>(child_entries.size()); // column count
+ 			for (auto &child : child_entries) {
+-				auto value_oid = PostgresUtils::ToPostgresOid(child->GetType());
++				auto value_oid = PostgresUtils::ToPostgresOid(child.GetType());
+ 				WriteRawInteger<uint32_t>(value_oid); // value oid
+-				WriteValue(*child, r);
++				WriteValue(child, r);
+ 			}
+ 			auto end_position = stream.GetPosition();
+ 			// after writing all list elements update the field size
 diff --git a/src/include/postgres_filter_pushdown.hpp b/src/include/postgres_filter_pushdown.hpp
 index d3dc0b6..471bc4c 100644
 --- a/src/include/postgres_filter_pushdown.hpp
@@ -11,8 +37,59 @@ index d3dc0b6..471bc4c 100644
  #include "duckdb/planner/filter/conjunction_filter.hpp"
  #include "duckdb/planner/filter/constant_filter.hpp"
  
+diff --git a/src/postgres_binary_reader.cpp b/src/postgres_binary_reader.cpp
+index c7fd72e..7260477 100644
+--- a/src/postgres_binary_reader.cpp
++++ b/src/postgres_binary_reader.cpp
+@@ -1,3 +1,6 @@
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
+ #include "postgres_binary_reader.hpp"
+ #include "postgres_scanner.hpp"
+ 
+@@ -427,8 +430,8 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+ 		auto &child_entries = StructVector::GetEntries(out_vec);
+ 		if (postgres_type.info == PostgresTypeAnnotation::GEOM_POINT) {
+ 			D_ASSERT(value_len == sizeof(double) * 2);
+-			FlatVector::GetData<double>(*child_entries[0])[output_offset] = ReadDouble();
+-			FlatVector::GetData<double>(*child_entries[1])[output_offset] = ReadDouble();
++			FlatVector::GetData<double>(child_entries[0])[output_offset] = ReadDouble();
++			FlatVector::GetData<double>(child_entries[1])[output_offset] = ReadDouble();
+ 			break;
+ 		}
+ 		auto entry_count = ReadInteger<uint32_t>();
+@@ -437,7 +440,7 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+ 			                        entry_count);
+ 		}
+ 		for (idx_t c = 0; c < entry_count; c++) {
+-			auto &child = *child_entries[c];
++			auto &child = child_entries[c];
+ 			auto value_oid = ReadInteger<uint32_t>();
+ 			ReadValue(child.GetType(), postgres_type.children[c], child, output_offset);
+ 		}
+diff --git a/src/postgres_copy_to.cpp b/src/postgres_copy_to.cpp
+index 72580a3..2b2c910 100644
+--- a/src/postgres_copy_to.cpp
++++ b/src/postgres_copy_to.cpp
+@@ -1,3 +1,6 @@
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
+ #include "postgres_connection.hpp"
+ #include "postgres_binary_writer.hpp"
+ #include "postgres_text_writer.hpp"
+@@ -214,7 +217,7 @@ void CastStructToPostgres(ClientContext &context, Vector &input, Vector &varchar
+ 	vector<Vector> child_varchar_vectors;
+ 	for (idx_t c = 0; c < child_vectors.size(); c++) {
+ 		Vector child_varchar(LogicalType::VARCHAR, size);
+-		CastToPostgresVarchar(context, *child_vectors[c], child_varchar, size);
++		CastToPostgresVarchar(context, child_vectors[c], child_varchar, size);
+ 		child_varchar_vectors.push_back(std::move(child_varchar));
+ 	}
+ 
 diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
-index c2f981a..fcdcf3e 100644
+index c2f981a..cabe77f 100644
 --- a/src/postgres_filter_pushdown.cpp
 +++ b/src/postgres_filter_pushdown.cpp
 @@ -127,20 +127,20 @@ string PostgresFilterPushdown::TransformFilter(string &column_name, TableFilter
@@ -29,7 +106,7 @@ index c2f981a..fcdcf3e 100644
 +	for (auto &entry : *filters) {
  		string column_name;
 -		auto column_id = column_ids[entry.first];
-+		auto column_id = column_ids[entry.ColumnIndex()];
++		auto column_id = column_ids[entry.GetIndex()];
  		if (IsVirtualColumn(column_id)) {
  			column_name = "ctid";
  		} else {
@@ -40,6 +117,26 @@ index c2f981a..fcdcf3e 100644
  		auto filter_text = TransformFilter(column_name, filter, column_id);
  
  		if (filter_text.empty()) {
+diff --git a/src/postgres_text_reader.cpp b/src/postgres_text_reader.cpp
+index 9a1bbed..60c99d2 100644
+--- a/src/postgres_text_reader.cpp
++++ b/src/postgres_text_reader.cpp
+@@ -1,3 +1,6 @@
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
+ #include "postgres_text_reader.hpp"
+ #include "postgres_scanner.hpp"
+ #include "duckdb/common/types/blob.hpp"
+@@ -245,7 +248,7 @@ void PostgresTextReader::ConvertStruct(Vector &source, Vector &target, const Pos
+ 		ParsePostgresStruct(struct_parser, strings[i]);
+ 	}
+ 	for (idx_t c = 0; c < children.size(); c++) {
+-		ConvertVector(struct_parser.data.data[c], *children[c],
++		ConvertVector(struct_parser.data.data[c], children[c],
+ 		              c >= postgres_type.children.size() ? PostgresType() : postgres_type.children[c], count);
+ 	}
+ }
 diff --git a/src/storage/postgres_merge_into.cpp b/src/storage/postgres_merge_into.cpp
 index 03188d6..7bcab80 100644
 --- a/src/storage/postgres_merge_into.cpp

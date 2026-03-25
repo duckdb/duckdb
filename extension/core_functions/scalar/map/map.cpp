@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -67,7 +68,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto keys_entries = UnifiedVectorFormat::GetData<list_entry_t>(keys_data);
 
 	// the KEYs child vector
-	auto keys_child_vector = ListVector::GetEntry(keys);
+	auto &keys_child_vector = ListVector::GetEntry(keys);
 	UnifiedVectorFormat keys_child_data;
 	keys_child_vector.ToUnifiedFormat(ListVector::GetListSize(keys), keys_child_data);
 
@@ -77,7 +78,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto values_entries = UnifiedVectorFormat::GetData<list_entry_t>(values_data);
 
 	// the VALUEs child vector
-	auto values_child_vector = ListVector::GetEntry(values);
+	auto &values_child_vector = ListVector::GetEntry(values);
 	UnifiedVectorFormat values_child_data;
 	values_child_vector.ToUnifiedFormat(ListVector::GetListSize(values), values_child_data);
 

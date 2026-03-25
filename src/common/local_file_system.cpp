@@ -705,6 +705,17 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
+string GetPosixVersionTag(struct stat s) {
+	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
+	uint64_t version_tag[4];
+	Store(UnsafeNumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
+	Store(UnsafeNumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
+	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
+
+	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+}
+
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
@@ -747,6 +758,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
 		// last modified time
 		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(status.st_mtime)));
+		// version tag
+		options.emplace("etag", Value::BLOB_RAW(GetPosixVersionTag(status)));
 
 		// invoke callback
 		callback(info);
@@ -1491,22 +1504,37 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
 	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
 #ifdef _WIN32
-	return "";
+	auto &whandle = handle.Cast<WindowsFileHandle>();
+	BY_HANDLE_FILE_INFORMATION file_info;
+	if (!GetFileInformationByHandle(whandle.fd, &file_info)) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get version tag for file \"%s\": %s", handle.path, error);
+	}
+
+	ULARGE_INTEGER last_write_time;
+	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
+	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
+
+	const uint64_t file_size =
+	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
+	const uint64_t file_index =
+	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
+
+	// volume serial + file index identify the file; size + last write time protect against in-place rewrites
+	uint64_t version_tag[4];
+	Store(static_cast<uint64_t>(file_info.dwVolumeSerialNumber), data_ptr_cast(&version_tag[0]));
+	Store(file_index, data_ptr_cast(&version_tag[1]));
+	Store(file_size, data_ptr_cast(&version_tag[2]));
+	Store(last_write_time.QuadPart, data_ptr_cast(&version_tag[3]));
+
+	return string(char_ptr_cast(version_tag), sizeof(version_tag));
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
 	}
-
-	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
-	uint64_t version_tag[4];
-	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
-	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
-	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
-	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
-
-	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+	return GetPosixVersionTag(s);
 #endif
 }
 

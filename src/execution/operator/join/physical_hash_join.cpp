@@ -1,8 +1,13 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -10,6 +15,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
@@ -21,16 +27,14 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/execution/join_hashtable.hpp"
-#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 
@@ -281,10 +285,10 @@ public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
 	    : context(context_p), op(op_p),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
-	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
-	      probe_side_requirement(0), scanned_data(false) {
-		hash_table = op.InitializeHashTable(context);
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
+	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
+	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
+		hash_table = op.InitializeHashTable(context, initial_radix_bits);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -327,6 +331,8 @@ public:
 	//! Temporary memory state for managing this operator's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 
+	//! Initial radix bits
+	const idx_t initial_radix_bits;
 	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
@@ -378,7 +384,7 @@ public:
 			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
 		}
 
-		hash_table = op.InitializeHashTable(context);
+		hash_table = op.InitializeHashTable(context, gstate.initial_radix_bits);
 		hash_table->GetSinkCollection().InitializeAppendState(append_state);
 
 		gstate.active_local_states++;
@@ -402,10 +408,12 @@ public:
 	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
-unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
-	                                       rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
-	                                       predicate ? predicate.get() : nullptr, lhs_output_in_probe);
+unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
+                                                                const idx_t initial_radix_bits) const {
+	auto result =
+	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type, initial_radix_bits,
+	                             rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
+	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -582,7 +590,7 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width;
+	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width + 1;
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;
@@ -672,14 +680,24 @@ public:
 
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
-	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
-	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p)
-	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
-	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
+	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event, optional_idx partition_idx_p,
+	                     optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state_p = nullptr)
+	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p), partition_idx(partition_idx_p),
+	      prefix_range_state(prefix_range_state_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
+		const auto &data_collection = sink.hash_table->GetDataCollection();
+		if (!partition_idx.IsValid()) {
+			// Single-threaded finalize
+			sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state);
+		} else {
+			// Parallel finalize - each thread processes one partition
+			const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
+			for (auto &chunk_range : chunk_ranges) {
+				sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state);
+			}
+		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -689,9 +707,8 @@ public:
 
 private:
 	HashJoinGlobalSinkState &sink;
-	idx_t chunk_idx_from;
-	idx_t chunk_idx_to;
-	bool parallel;
+	optional_idx partition_idx;
+	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
 };
 
 class HashJoinFinalizeEvent : public BasePipelineEvent {
@@ -704,35 +721,49 @@ public:
 
 public:
 	void Schedule() override {
-		auto &context = pipeline->GetClientContext();
+		auto &ht = *sink.hash_table;
+		const auto build_prefix_range_filter = ht.ShouldBuildPrefixRangeFilter();
+		const bool finalize_single_threaded = FinalizeSingleThreaded(sink, false);
 
 		vector<shared_ptr<Task>> finalize_tasks;
-		auto &ht = *sink.hash_table;
-		const auto chunk_count = ht.GetDataCollection().ChunkCount();
-
-		// if the keys are too skewed, we finalize single-threaded
-		if (FinalizeSingleThreaded(sink, true)) {
+		if (finalize_single_threaded) {
 			// Single-threaded finalize
+			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
 			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
+			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), optional_idx(), prefix_range_state));
 		} else {
 			// Parallel finalize
-			const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
-			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx += chunks_per_task) {
-				auto chunk_idx_to = MinValue<idx_t>(chunk_idx + chunks_per_task, chunk_count);
-				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, chunk_idx,
-				                                                         chunk_idx_to, true, sink.op));
+			const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
+			const auto &current_partitions = ht.GetCurrentPartitions();
+			for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+				if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
+					continue; // Partition is not being built on
+				}
+				auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
+				finalize_tasks.push_back(
+				    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), partition_idx, prefix_range_state));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
 	}
 
 	void FinishEvent() override {
+		for (auto &prefix_range_state : prefix_range_states) {
+			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
+		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
+
+private:
+	optional_ptr<PrefixRangeFilter::BuildState> RegisterPrefixRangeState(JoinHashTable &ht) {
+		prefix_range_states.push_back(ht.InitializePrefixRangeBuildState());
+		return *prefix_range_states.back();
+	}
+
+	vector<unique_ptr<PrefixRangeFilter::BuildState>> prefix_range_states;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -791,7 +822,7 @@ public:
 
 public:
 	void Schedule() override {
-		D_ASSERT(sink.hash_table->GetRadixBits() > JoinHashTable::INITIAL_RADIX_BITS);
+		D_ASSERT(sink.hash_table->GetRadixBits() > sink.initial_radix_bits);
 		auto block_size = sink.hash_table->buffer_manager.GetBlockSize();
 
 		idx_t total_size = 0;
@@ -807,7 +838,7 @@ public:
 
 		// Assume 8 blocks per partition per thread (4 input, 4 output)
 		auto partition_multiplier =
-		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - JoinHashTable::INITIAL_RADIX_BITS);
+		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - sink.initial_radix_bits);
 		auto thread_memory = 2 * blocks_per_vector * partition_multiplier * block_size;
 		auto repartition_threads = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / thread_memory, 1);
 
@@ -940,6 +971,37 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	return true;
 }
 
+bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                                     const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+                                                     const Value &min, const Value &max) const {
+	if (!CanUseBloomFilter(context, op, cmp, ht)) {
+		return false;
+	}
+
+	if (ht->NullValuesAreEqual(0)) {
+		// TODO: Support "A is B" type joins
+		return false;
+	}
+
+	static constexpr idx_t BUILD_SIZE_THRESHOLD = 524288;
+	bool ht_is_small = ht->Count() <= BUILD_SIZE_THRESHOLD;
+	bool span_is_small = false;
+
+	uhugeint_t span;
+	if (PrefixRangeFilter::TryComputeSpan(min, max, span)) {
+		static const auto SPAN_THRESHOLD = Uhugeint::Convert(1048576);
+		span_is_small = span <= SPAN_THRESHOLD;
+	} else {
+		return false;
+	}
+
+	if (!ht_is_small && !span_is_small) {
+		return false;
+	}
+
+	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
+}
+
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
                                              const JoinFilterPushdownFilter &info,
                                              ProjectionIndex filter_col_idx) const {
@@ -950,8 +1012,7 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	ht.SetBuildBloomFilter(true);
 	auto filter =
 	    make_uniq_base<TableFilter, BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
-	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::BF_THRESHOLD,
-	                                              SelectivityOptionalFilter::BF_CHECK_N);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::BF);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
@@ -961,9 +1022,27 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
                                                        ProjectionIndex filter_col_idx) const {
 	const auto key_name = op.Cast<PhysicalHashJoin>().conditions[0].GetRHS().ToString();
 	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name);
-	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::PHJ_THRESHOLD,
-	                                              SelectivityOptionalFilter::PHJ_CHECK_N);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::PHJ);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+}
+
+void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
+                                                       JoinHashTable &ht, const PhysicalOperator &op,
+                                                       ProjectionIndex filter_col_idx, const Value &min_val,
+                                                       const Value &max_val) const {
+	const auto key_type = ht.conditions[0].GetLHS().return_type;
+	if (!ht.GetPrefixRangeFilter()) {
+		auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
+		prefix_filter->Initialize(context, ht.Count(), min_val, max_val);
+		ht.SetPrefixRangeFilter(std::move(prefix_filter));
+		ht.SetBuildPrefixRangeFilter();
+	}
+
+	const auto key_name = ht.conditions[0].GetRHS().ToString();
+	auto rf_filter = make_uniq<PrefixRangeTableFilter>(ht.GetPrefixRangeFilter(), key_name, key_type);
+
+	auto opt_rf_filter = make_uniq<SelectivityOptionalFilter>(std::move(rf_filter), SelectivityOptionalFilterType::PRF);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_rf_filter));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
@@ -981,10 +1060,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
                                       const ProjectionIndex &filter_col_idx, unique_ptr<TableFilter> filter) {
-	info.dynamic_filters->PushFilter(op, filter_col_idx,
-	                                 make_uniq<SelectivityOptionalFilter>(std::move(filter),
-	                                                                      SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
-	                                                                      SelectivityOptionalFilter::MIN_MAX_CHECK_N));
+	info.dynamic_filters->PushFilter(
+	    op, filter_col_idx,
+	    make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::MIN_MAX));
 }
 
 unique_ptr<DataChunk>
@@ -1020,8 +1098,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				// min = max - single value
 				// generate a "one-sided" comparison filter for the LHS
 				// Note that this also works for equalities.
-				info.dynamic_filters->PushFilter(op, filter_col_idx,
-				                                 make_uniq<ConstantFilter>(cmp, std::move(min_val)));
+				info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ConstantFilter>(cmp, min_val));
 			} else {
 				// min != max - generate a range filter or bloom filter + optional range filter
 				// for non-equalities, the range must be half-open
@@ -1032,7 +1109,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					CreateDynamicMinMaxFilter(
 					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val)));
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val));
 					break;
 				}
 				default:
@@ -1044,14 +1121,17 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					CreateDynamicMinMaxFilter(
 					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val)));
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val));
 					break;
 				}
 				default:
 					break;
 				}
+
 				if (perfect_join_executor) {
 					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
+				} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val, max_val)) {
+					RegisterPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
 				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(op, *ht, info, filter_col_idx);
 				}

@@ -118,7 +118,7 @@ vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types,
 		vector<LogicalType> result_types;
 		result_types.reserve(projection_map.size());
 		for (auto index : projection_map) {
-			result_types.push_back(types[index.index]);
+			result_types.push_back(types[index]);
 		}
 		return result_types;
 	}
@@ -132,7 +132,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
-			result_bindings.push_back(bindings[index.index]);
+			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
 	}

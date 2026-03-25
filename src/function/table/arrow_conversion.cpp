@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -1158,7 +1164,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto &child_entries = StructVector::GetEntries(vector);
 		auto &struct_validity_mask = FlatVector::Validity(vector);
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
-			auto &child_entry = *child_entries[child_idx];
+			auto &child_entry = child_entries[child_idx];
 			auto &child_array = *array.children[child_idx];
 			auto &child_type = struct_info.GetChild(child_idx);
 			auto &child_state = array_state.GetChild(child_idx);

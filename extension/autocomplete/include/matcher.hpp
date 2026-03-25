@@ -11,7 +11,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 #include "transformer/parse_result.hpp"
+#include <mutex>
 
 namespace duckdb {
 class ParseResultAllocator;
@@ -80,31 +82,6 @@ struct AutoCompleteSuggestion {
 enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
-
-enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT, TERMINATOR, ERROR };
-
-inline string TokenTypeToString(TokenType type) {
-	switch (type) {
-	case TokenType::KEYWORD:
-		return "KEYWORD";
-	case TokenType::STRING_LITERAL:
-		return "STRING_LITERAL";
-	case TokenType::NUMBER_LITERAL:
-		return "NUMBER_LITERAL";
-	case TokenType::OPERATOR:
-		return "OPERATOR";
-	case TokenType::IDENTIFIER:
-		return "IDENTIFIER";
-	case TokenType::COMMENT:
-		return "COMMENT";
-	case TokenType::TERMINATOR:
-		return "TERMINATOR";
-	case TokenType::ERROR:
-		return "ERROR";
-	default:
-		return "UNKNOWN";
-	}
-}
 
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
@@ -184,8 +161,6 @@ public:
 	virtual string ToString() const = 0;
 	void Print() const;
 
-	static Matcher &RootMatcher(MatcherAllocator &allocator);
-
 	MatcherType Type() const {
 		return type;
 	}
@@ -230,6 +205,28 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
+};
+
+struct PEGMatcher {
+	MatcherAllocator allocator;
+
+	Matcher &Root() {
+		return *root;
+	}
+
+private:
+	friend struct PEGMatcherCache;
+	optional_ptr<Matcher> root;
+};
+
+//! Per-database cache holder for the compiled PEG root matcher.
+struct PEGMatcherCache : ParserExtensionInfo {
+	shared_ptr<PEGMatcher> GetMatcher();
+	void Invalidate();
+
+private:
+	std::mutex mutex;
+	shared_ptr<PEGMatcher> matcher;
 };
 
 } // namespace duckdb

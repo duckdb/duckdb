@@ -1,4 +1,6 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -243,6 +245,30 @@ string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transfo
                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(1).identifier;
+}
+
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	// DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<DropStatement>();
+	auto info = make_uniq<DropInfo>();
+	info->type = CatalogType::TRIGGER_ENTRY;
+	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+
+	auto trigger_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	info->catalog = trigger_name.catalog;
+	info->schema = trigger_name.schema;
+	info->name = trigger_name.name;
+
+	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
+	auto extra_info = make_uniq<ExtraDropTriggerInfo>();
+	extra_info->base_table = std::move(base_table);
+	info->extra_drop_info = std::move(extra_info);
+
+	result->info = std::move(info);
+	return result;
 }
 
 } // namespace duckdb

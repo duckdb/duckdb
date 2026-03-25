@@ -35,7 +35,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 	column_binding_map_t<ProjectionIndex> duplicate_map;
 	vector<pair<ProjectionIndex, ProjectionIndex>> duplicates;
 	for (auto group_idx : ProjectionIndex::GetIndexes(groups.size())) {
-		const auto &group = groups[group_idx.index];
+		const auto &group = groups[group_idx];
 		if (group->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
@@ -73,8 +73,8 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		const auto &removed_idx = duplicate.second;
 
 		// Store expression and remove it from groups
-		stored_expressions.emplace_back(std::move(groups[removed_idx.index]));
-		groups.erase_at(removed_idx.index);
+		stored_expressions.emplace_back(std::move(groups[removed_idx]));
+		groups.erase_at(removed_idx);
 
 		// This optimizer should run before statistics propagation, so this should be empty
 		// If it runs after, then group_stats should be updated too
@@ -98,7 +98,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 				grouping_set.erase(group_idx);
 			}
 			for (const auto group_idx : group_indices_to_reinsert) {
-				grouping_set.insert(ProjectionIndex(group_idx.index - 1));
+				grouping_set.insert(ProjectionIndex(group_idx - 1));
 			}
 		}
 
@@ -110,7 +110,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		for (auto &map_entry : group_binding_map) {
 			auto &new_binding = map_entry.second;
 			if (new_binding.column_index > removed_idx) {
-				new_binding.column_index.index--;
+				new_binding.column_index = ProjectionIndex(new_binding.column_index - 1);
 			}
 		}
 	}

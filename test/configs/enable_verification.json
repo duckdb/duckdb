@@ -115,6 +115,7 @@
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/join/asof/test_asof_limit.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
@@ -125,7 +126,8 @@
         "test/sql/types/geo/geometry_shred_checkpoint.test",
         "test/sql/window/test_window_constant_allocator.test",
         "test/parquet/variant/variant_stats_propagation.test",
-        "test/sql/types/geo/geometry_compatability.test"
+        "test/sql/types/geo/geometry_compatability.test",
+        "test/sql/copy/parquet/parquet_glob_cache.test"
       ]
     },
     {
@@ -176,7 +178,6 @@
     {
       "reason": "Runs too long in release mode.",
       "paths": [
-        "test/sql/limit/test_limit0.test",
         "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
         "test/sql/sample/reservoir_testing_percentage.test",
         "test/sql/window/test_constant_orderby.test"

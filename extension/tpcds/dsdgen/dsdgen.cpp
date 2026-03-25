@@ -13,7 +13,6 @@
 #include <cassert>
 
 using namespace duckdb;
-using namespace std;
 
 namespace tpcds {
 

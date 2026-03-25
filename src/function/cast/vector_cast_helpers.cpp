@@ -442,9 +442,8 @@ idx_t VectorStringToMap::CountPartsMap(const string_t &input) {
 }
 
 // ------- STRUCT SPLIT -------
-bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<Vector>> &varchar_vectors,
-                                       idx_t &row_idx, string_map_t<idx_t> &child_names,
-                                       vector<reference<ValidityMask>> &child_masks) {
+bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &varchar_vectors, idx_t &row_idx,
+                                       string_map_t<idx_t> &child_names, vector<reference<ValidityMask>> &child_masks) {
 	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
@@ -533,7 +532,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			if (pos == len) {
 				return false;
 			}
-			auto &child_vec = *varchar_vectors[child_idx];
+			auto &child_vec = varchar_vectors[child_idx];
 			auto string_data = FlatVector::GetData<string_t>(child_vec);
 			auto &child_mask = child_masks[child_idx].get();
 
@@ -576,7 +575,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			if (pos == len) {
 				return false;
 			}
-			auto &child_vec = *varchar_vectors[child_idx];
+			auto &child_vec = varchar_vectors[child_idx];
 			auto string_data = FlatVector::GetData<string_t>(child_vec);
 			auto &child_mask = child_masks[child_idx].get();
 

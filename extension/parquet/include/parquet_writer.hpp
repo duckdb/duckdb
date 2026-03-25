@@ -57,6 +57,15 @@ enum class ParquetVersion : uint8_t {
 	V2 = 2, //! Includes the encodings above
 };
 
+enum class TimeStampIsAdjustedToUTC : uint8_t {
+	//! true if TZ, false if not
+	AUTO,
+	//! Always true
+	ALWAYS_TRUE,
+	//! Always false
+	ALWAYS_FALSE,
+};
+
 class ParquetWriteTransformData {
 public:
 	ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
@@ -93,9 +102,6 @@ public:
 	}
 
 public:
-	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason);
-
-public:
 	unique_ptr<ParquetWriter> writer;
 	optional_ptr<const PhysicalOperator> op;
 	mutex lock;
@@ -112,7 +118,8 @@ public:
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
 	              double bloom_filter_false_positive_ratio, int64_t compression_level, ParquetVersion parquet_version,
-	              GeoParquetVersion geoparquet_version);
+	              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96,
+	              TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc);
 	~ParquetWriter();
 
 public:
@@ -122,9 +129,11 @@ public:
 	void Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data);
 	void Finalize();
 
-	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
+	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type,
+	                                                          bool write_timestamp_as_int96);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-	                                bool allow_geometry, ClientContext &context);
+	                                bool allow_geometry, ClientContext &context, bool write_timestamp_as_int96,
+	                                TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc);
 
 	ClientContext &GetContext() {
 		return context;
@@ -171,6 +180,12 @@ public:
 	GeoParquetVersion GetGeoParquetVersion() const {
 		return geoparquet_version;
 	}
+	bool WriteTimestampAsInt96() const {
+		return write_timestamp_as_int96;
+	}
+	TimeStampIsAdjustedToUTC TimestampIsAdjustedToUTC() const {
+		return timestamp_is_adjusted_to_utc;
+	}
 	const string &GetFileName() const {
 		return file_name;
 	}
@@ -182,7 +197,8 @@ public:
 	GeoParquetFileMetadata &GetGeoParquetData();
 
 	static bool TryGetParquetType(const LogicalType &duckdb_type,
-	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr);
+	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr,
+	                              bool write_timestamp_as_int96 = false);
 
 	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
 	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
@@ -211,6 +227,8 @@ private:
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
 	GeoParquetVersion geoparquet_version;
+	bool write_timestamp_as_int96;
+	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc;
 
 	unique_ptr<BufferedFileWriter> writer;
 	//! Atomics to reduce contention when rotating writes to multiple Parquet files

@@ -144,7 +144,7 @@ void PrimitiveColumnWriter::WriteLevels(Allocator &allocator, WriteStream &temp_
 	}
 
 	// write the levels using the RLE-BP encoding
-	const auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
+	const auto bit_width = RleBpDecoder::ComputeBitWidthFromMaxValue(max_value);
 	RleBpEncoder rle_encoder(bit_width);
 
 	// have to write to an intermediate stream first because we need to know the size
@@ -443,7 +443,7 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	auto allow_geometry = schema.allow_geometry;
 
 	duckdb_parquet::SchemaElement schema_element;
-	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
+	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type, writer.WriteTimestampAsInt96());
 	schema_element.repetition_type = repetition_type;
 	schema_element.__isset.num_children = false;
 	schema_element.__isset.type = true;
@@ -453,7 +453,8 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 		schema_element.__isset.field_id = true;
 		schema_element.field_id = field_id.GetIndex();
 	}
-	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext());
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
+	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());
 	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());

@@ -6,6 +6,8 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 
 namespace duckdb {
 
@@ -156,18 +158,19 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
                                                       const string &column_name, const AlterEntryData &table_data,
                                                       const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
-	update_statement->prioritize_table_when_binding = true;
+	auto &node = *update_statement->node;
+	node.prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
 	table_ref->catalog_name = table_data.catalog;
 	table_ref->schema_name = table_data.schema;
 	table_ref->table_name = table_data.name;
-	update_statement->table = std::move(table_ref);
+	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
 	set_info->columns.push_back(column_name);
 	set_info->expressions.push_back(original_expression->Copy());
-	update_statement->set_info = std::move(set_info);
+	node.set_info = std::move(set_info);
 
 	multi_statement->statements.push_back(std::move(update_statement));
 }
@@ -426,4 +429,39 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTran
 	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
 	return std::move(result);
 }
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetOptions(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// SetOptions <- 'SET' RelOptionList
+	// child 0: 'SET' keyword, child 1: RelOptionList
+	auto options =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	return make_uniq<SetTableOptionsInfo>(AlterEntryData(), std::move(options));
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// ResetOptions <- 'RESET' RelOptionList
+	// child 0: 'RESET' keyword, child 1: RelOptionList
+	auto options_map =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	case_insensitive_set_t option_names;
+	for (auto &opt : options_map) {
+		if (!opt.second) {
+			option_names.insert(opt.first);
+		}
+		if (opt.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
+		}
+		auto &const_expr = opt.second->Cast<ConstantExpression>();
+		if (!const_expr.value.IsNull()) {
+			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
+		}
+		option_names.insert(opt.first);
+	}
+	return make_uniq<ResetTableOptionsInfo>(AlterEntryData(), std::move(option_names));
+}
+
 } // namespace duckdb

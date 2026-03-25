@@ -19,7 +19,6 @@ on:
       - '!.github/workflows/Windows.yml'
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
-      - '!.github/workflows/LinuxRelease.yml'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
@@ -35,7 +34,6 @@ on:
       - '!.github/workflows/Windows.yml'
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
-      - '!.github/workflows/LinuxRelease.yml'
 
 
 concurrency:
@@ -53,19 +51,46 @@ jobs:
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
     outputs:
+      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.select_runner.outputs.runner_windows_2022_x64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.build_runners.outputs.runners }}
+      linux_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_cli_matrix }}
+      linux_musl_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_musl_cli_matrix }}
+      extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
+
+      - name: Detect changes
+        id: changed
+        uses: tj-actions/changed-files@v47
+        with:
+          files_yaml: |
+            extensions:
+              - .github/config/**
+              - .github/patches/**
+              - extensions/**
+
+      - name: Configure extensions
+        id: extensions
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
+          else
+            echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select CI runner
         id: select_runner
@@ -73,21 +98,72 @@ jobs:
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
             {
+              echo "runner_linux_small=namespace-profile-linux-small"
               echo "runner_linux_x64=namespace-profile-linux-x64"
               echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
               echo "runner_linux_arm64=namespace-profile-linux-arm64"
+              echo "runner_windows_2022_x64=namespace-profile-windows-x64"
               echo "runner_macos_arm64=namespace-profile-macos-arm64"
+              echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
             } >> "$GITHUB_OUTPUT"
           else
             {
+              echo "runner_linux_small=ubuntu-latest"
               echo "runner_linux_x64=ubuntu-latest"
               echo "runner_linux_22_x64=ubuntu-22.04"
               echo "runner_linux_arm64=ubuntu-24.04-arm"
+              echo "runner_windows_2022_x64=windows-2022"
               echo "runner_macos_arm64=macos-14"
+              echo "runner_macos_14_arm64=macos-14"
             } >> "$GITHUB_OUTPUT"
           fi
 
           grep runner_ "$GITHUB_OUTPUT"
+
+      - name: Build runners JSON
+        id: build_runners
+        run: |
+          echo "runners<<EOF" >> "$GITHUB_OUTPUT"
+          cat <<EOF >> "$GITHUB_OUTPUT"
+          {
+            "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
+            "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
+            "linux_arm64": "${{ steps.select_runner.outputs.runner_linux_arm64 }}",
+            "windows_2022_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
+            "windows_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
+            "macos_arm64": "${{ steps.select_runner.outputs.runner_macos_arm64 }}",
+            "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
+          }
+          EOF
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux CLI matrices
+        id: build_linux_cli_matrices
+        run: |
+          linux_cli_matrix=$(
+            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+              '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
+          )
+
+          linux_musl_cli_matrix=$(
+            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+              '[{runner: $runner, arch: "arm64"}]'
+          )
+
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            linux_cli_matrix=$(
+              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+                '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
+            )
+
+            linux_musl_cli_matrix=$(
+              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+                '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
+            )
+          fi
+
+          echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
+          echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
       - name: Install tools
         run: make format_tools
@@ -121,20 +197,21 @@ jobs:
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
       REDUCE_SYMBOLS: 1
+      EXTENSIONS_STATIC_BUILD: 0
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      run: make relassert
+      run: python3 scripts/ci/retry.py -- make relassert
 
     - name: Smoke tests
       run: make smoke
@@ -146,7 +223,7 @@ jobs:
       run: make relassert-artifact
 
     - name: Upload relassert build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-debug-relassert-build
         path: build/relassert-artifact.tar.gz
@@ -160,12 +237,12 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-debug-relassert-build
         path: build
@@ -188,7 +265,14 @@ jobs:
  regression:
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+      - linux-release
+    with:
+      build_current_release: 'false'
+      runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
+      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
     uses: ./.github/workflows/CodeQuality.yml
@@ -198,11 +282,35 @@ jobs:
  extensions:
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     with:
       git_ref: ${{ github.sha }}
+      extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: 'false'
       run_all: 'true'
+      runners: ${{ needs.prepare.outputs.runners }}
+
+ wasm-eh:
+    name: Wasm EH
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: mymindstorm/setup-emsdk@v13
+      with:
+        version: latest
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Build
+      run: make wasm_ci
 
  linux-release:
     name: Linux Release
@@ -212,39 +320,16 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+    - uses: ./.github/actions/linux_release_build
       with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
-
-    - name: Build
-      env:
-        BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
-        DISABLE_SANITIZER: 1
-        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        USE_MERGED_VCPKG_MANIFEST: 1
-      run: make release
-
-    - name: Smoke tests
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
-
-    - name: Prepare release artifact
-      run: make release-artifact
-
-    - name: Upload release build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-release-build
-        path: build/release-artifact.tar.gz
-        if-no-files-found: error
+        artifact_name: linux-release-build
 
     - name: Build linux default release
       run: make clean release
@@ -255,7 +340,7 @@ jobs:
         mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
 
     - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-default-release-build
         path: build/linux-default-release.tar.gz
@@ -269,12 +354,12 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download release build artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build
@@ -296,14 +381,14 @@ jobs:
       - linux-release
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Download linux default release artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-default-release-build
         path: build
@@ -319,25 +404,292 @@ jobs:
     - name: Banned Symbol Check
       run: python3 scripts/banned_symbols_check.py --directory build/release/src
 
- linux-cli:
-    uses: ./.github/workflows/LinuxRelease.yml
-    secrets: inherit
-    needs: linux-debug
-    with:
-      git_ref: ${{ github.sha }}
-      skip_tests: 'false'
+ linux-release-cli:
+    name: Linux CLI (${{ matrix.config.arch }})
+    needs:
+      - prepare
+      - linux-release-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.prepare.outputs.linux_cli_matrix) }}
+    runs-on: ${{ matrix.config.runner }}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - name: Install pytest
+      run: |
+        python3 -m pip install --break-system-packages pytest
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Build
+      run: |
+        export PWD=`pwd`
+        docker run                                                             \
+        -v$PWD:$PWD                                                            \
+        -e GEN=ninja                                                           \
+        -e CC='ccache gcc'                                                     \
+        -e CXX='ccache g++'                                                    \
+        -e CCACHE_DIR=$PWD/.ccache                                             \
+        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
+        -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+        -e BUILD_BENCHMARK=1                                                   \
+        -e FORCE_WARN_UNUSED=1                                                 \
+        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
+        bash -c "
+          set -e
+          cat /etc/os-release
+          dnf install -y \
+            ccache       \
+            ninja-build  \
+            perl-IPC-Cmd
+          git config --global --add safe.directory $PWD
+          make -C $PWD
+        "
+
+    - name: Print platform
+      run: ./build/release/duckdb -c "PRAGMA platform;"
+
+    - name: Deploy
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
+        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: duckdb-binaries-linux-${{ matrix.config.arch }}
+        path: |
+          libduckdb-linux-${{ matrix.config.arch }}.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}.gz
+
+    - name: Test
+      run: make allunit
+
+    - name: Release specific tests
+      run: make unittest_release_tag
+
+    - name: Tools Tests
+      run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+    - name: Examples
+      run: |
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+
+ linux-musl-release-cli:
+    name: Linux CLI (${{ matrix.config.arch }}-musl)
+    needs:
+      - prepare
+      - linux-release-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.prepare.outputs.linux_musl_cli_matrix) }}
+    runs-on: ${{ matrix.config.runner }}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Build
+      shell: bash
+      run: |
+        export PWD=`pwd`
+        docker run                                                          \
+        -v$PWD:$PWD                                                         \
+        -e GEN=ninja                                                        \
+        -e CC='ccache gcc'                                                  \
+        -e CXX='ccache g++'                                                 \
+        -e CCACHE_DIR=$PWD/.ccache                                          \
+        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
+        -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
+        -e BUILD_BENCHMARK=1                                                \
+        -e FORCE_WARN_UNUSED=1                                              \
+        alpine:3.22                                                         \
+        sh -c "
+          set -e
+          cat /etc/os-release
+          apk add   \
+            ccache  \
+            cmake   \
+            g++     \
+            git     \
+            make    \
+            samurai
+          git config --global --add safe.directory $PWD
+          make -C $PWD
+        "
+
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
+        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: duckdb-binaries-linux-${{ matrix.config.arch }}-musl
+        path: |
+          libduckdb-linux-${{ matrix.config.arch }}-musl.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+
+    - name: Test
+      shell: bash
+      run: |
+        export PWD=`pwd`
+        docker run   \
+        -v$PWD:$PWD  \
+        -e CI=1      \
+        alpine:3.22                                                         \
+        sh -c "
+          set -e
+          cat /etc/os-release
+          apk add      \
+            make       \
+            python3    \
+            py3-pytest
+          cd $PWD
+          echo Tests
+          make allunit
+          echo Release specific tests
+          make unittest_release_tag
+          echo Tools Tests
+          python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+          echo Examples
+          build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+          build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
+        "
+
+ main_julia:
+    name: Julia ${{ matrix.version }}
+    if: ${{ github.ref_name == 'main' }}
+    needs: linux-release-cli
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.10'
+          - '1'
+        arch:
+          - x64
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        ref: ${{ github.sha }}
+
+    - uses: julia-actions/setup-julia@v2
+      with:
+        version: ${{ matrix.version }}
+        arch: ${{ matrix.arch }}
+
+    - uses: actions/download-artifact@v5
+      with:
+        name: duckdb-binaries-linux-amd64
+        path: linux-release-artifacts
+
+    - name: Extract DuckDB Linux release artifacts
+      shell: bash
+      run: |
+        mkdir -p build/release/src
+        unzip -j linux-release-artifacts/duckdb_cli-linux-amd64.zip "duckdb" -d build/release
+        chmod +x build/release/duckdb
+        unzip -j linux-release-artifacts/libduckdb-linux-amd64.zip "libduckdb.so*" -d build/release/src
+        ls -lah build/release/duckdb
+        ls -lah build/release/src/libduckdb.so*
+
+    - name: Run Tests
+      shell: bash
+      run: |
+        JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
+        export JULIA_DUCKDB_LIBRARY
+        export JULIA_NUM_THREADS=2
+        export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
+        ls "$JULIA_DUCKDB_LIBRARY"
+        cd tools/juliapkg
+        julia --project -e "import Pkg; Pkg.test()"
+
+    - name: Format Check
+      if: ${{ always() && matrix.version == '1.10' }}
+      shell: bash
+      run: |
+        cd tools/juliapkg
+        julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
+        ./format_check.sh
+
+ upload-libduckdb-src:
+    name: Upload libduckdb-src.zip
+    needs: linux-release-cli
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        ref: ${{ github.sha }}
+
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+    with:
+      runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     with:
       git_ref: ${{ github.sha }}
+      runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
       skip_tests: 'false'
       run_all: 'true'
 
@@ -354,19 +706,20 @@ jobs:
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
       DISABLE_POINTER_SALT: 1
+      DISABLE_GCC_FUNCTION_SECTIONS: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        run: make relassert
+        run: python3 scripts/ci/retry.py -- make relassert
 
       - name: Test
         run: make unittest_relassert
@@ -384,10 +737,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -411,17 +764,19 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq valgrind clang
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
-      run: make relassert
+      run: python3 scripts/ci/retry.py -- make relassert
 
     - name: Output version info
       shell: bash
@@ -447,10 +802,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -462,16 +817,18 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-24.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -491,18 +848,18 @@ jobs:
       - linux-release
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Install
       shell: bash
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build

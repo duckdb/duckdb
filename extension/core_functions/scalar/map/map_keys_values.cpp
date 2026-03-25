@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -21,7 +22,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	auto count = args.size();
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	auto child = get_child_vector(map);
+	auto &child = get_child_vector(map);
 
 	auto &entries = ListVector::GetEntry(result);
 	entries.Reference(child);
