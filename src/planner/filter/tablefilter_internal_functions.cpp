@@ -18,6 +18,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
+#include "duckdb/function/scalar/tablefilter_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
@@ -855,6 +856,30 @@ FilterPropagateResult SelectivityOptionalFilterScalarFun::FilterPrune(const Func
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
+}
+
+ScalarFunction InternalTableFilterBloomFilterFun::GetFunction() {
+	return BloomFilterScalarFun::GetFunction();
+}
+
+ScalarFunction InternalTableFilterDynamicFun::GetFunction() {
+	return DynamicFilterScalarFun::GetFunction();
+}
+
+ScalarFunction InternalTableFilterOptionalFun::GetFunction() {
+	return OptionalFilterScalarFun::GetFunction();
+}
+
+ScalarFunction InternalTableFilterPerfectHashJoinFun::GetFunction() {
+	return PerfectHashJoinScalarFun::GetFunction();
+}
+
+ScalarFunction InternalTableFilterPrefixRangeFun::GetFunction() {
+	return PrefixRangeScalarFun::GetFunction();
+}
+
+ScalarFunction InternalTableFilterSelectivityOptionalFun::GetFunction() {
+	return SelectivityOptionalFilterScalarFun::GetFunction();
 }
 
 } // namespace duckdb
