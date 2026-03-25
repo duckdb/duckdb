@@ -22,7 +22,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 		for (auto seq_option : repeat_seq_options.children) {
 			auto seq_result = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option);
 			if (sequence_options.find(seq_result.first) != sequence_options.end()) {
-				throw ParserException("%s should be passed at most once", StringUtil::Upper(seq_result.first));
+				auto seq_option_capital = StringUtil::Lower(seq_result.first);
+				seq_option_capital[0] = StringUtil::CharacterToUpper(seq_option_capital[0]);
+				throw ParserException("%s should be passed at most once", seq_option_capital);
 			}
 			sequence_options.insert(std::move(seq_result));
 		}
@@ -30,10 +32,10 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 	bool no_min = sequence_options.find("nominvalue") != sequence_options.end();
 	bool no_max = sequence_options.find("nomaxvalue") != sequence_options.end();
 	if (no_min && sequence_options.find("minvalue") != sequence_options.end()) {
-		throw ParserException("MINVALUE should be passed at most once");
+		throw ParserException("Minvalue should be passed at most once");
 	}
 	if (no_max && sequence_options.find("maxvalue") != sequence_options.end()) {
-		throw ParserException("MAXVALUE should be passed at most once");
+		throw ParserException("Maxvalue should be passed at most once");
 	}
 	bool has_start_value = false;
 	bool min_value_set = false;
