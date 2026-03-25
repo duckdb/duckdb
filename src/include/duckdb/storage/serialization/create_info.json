@@ -369,8 +369,8 @@
       },
       {
         "id": 208,
-        "name": "sql_body_text",
-        "type": "string"
+        "name": "sql_body",
+        "type": "QueryNode*"
       }
     ]
   }

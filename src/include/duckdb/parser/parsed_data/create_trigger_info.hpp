@@ -10,7 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
-#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
@@ -30,10 +30,8 @@ struct CreateTriggerInfo : public CreateInfo {
 	vector<string> columns;
 	//! Whether this fires FOR EACH ROW or FOR EACH STATEMENT
 	TriggerForEach for_each;
-	//! The SQL body text (for serialization)
-	string sql_body_text;
-	//! The parsed SQL body of the trigger (not serialized)
-	unique_ptr<SQLStatement> sql_body;
+	//! The parsed SQL body of the trigger (INSERT/UPDATE/DELETE as QueryNode)
+	unique_ptr<QueryNode> sql_body;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

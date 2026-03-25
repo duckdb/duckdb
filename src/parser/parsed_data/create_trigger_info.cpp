@@ -18,7 +18,6 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
-	result->sql_body_text = sql_body_text;
 	if (sql_body) {
 		result->sql_body = sql_body->Copy();
 	}

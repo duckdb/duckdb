@@ -53,6 +53,33 @@ upd_col_trigger	[id]
 statement ok
 CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
 
+# --- Trigger with UPDATE body ---
+statement ok
+CREATE TRIGGER update_body_trigger AFTER INSERT ON t1 UPDATE log_table SET id = 99 WHERE log_table.id = 1;
+
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'update_body_trigger';
+----
+update_body_trigger	CREATE TRIGGER update_body_trigger AFTER INSERT ON t1 FOR EACH STATEMENT UPDATE log_table SET id = 99 WHERE (log_table.id = 1);
+
+# --- Trigger with DELETE body ---
+statement ok
+CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t1 DELETE FROM log_table WHERE log_table.id = 1;
+
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'delete_body_trigger';
+----
+delete_body_trigger	CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t1 FOR EACH STATEMENT DELETE FROM log_table WHERE (log_table.id = 1);
+
+# --- Trigger with INSERT ... SELECT body ---
+statement ok
+CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t1 INSERT INTO log_table SELECT id FROM t1;
+
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'insert_select_trigger';
+----
+insert_select_trigger	CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t1 FOR EACH STATEMENT INSERT INTO log_table SELECT id FROM t1;
+
 # Cleanup - CASCADE to drop dependent triggers
 statement ok
 DROP TABLE t1 CASCADE;

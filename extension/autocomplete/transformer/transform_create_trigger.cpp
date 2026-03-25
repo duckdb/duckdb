@@ -1,7 +1,26 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
+
+static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
+	switch (stmt->type) {
+	case StatementType::INSERT_STATEMENT:
+		return unique_ptr_cast<InsertQueryNode, QueryNode>(std::move(stmt->Cast<InsertStatement>().node));
+	case StatementType::UPDATE_STATEMENT:
+		return unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(stmt->Cast<UpdateStatement>().node));
+	case StatementType::DELETE_STATEMENT:
+		return unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(stmt->Cast<DeleteStatement>().node));
+	default:
+		throw ParserException("Trigger body must be an INSERT, UPDATE, or DELETE statement");
+	}
+}
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
@@ -32,8 +51,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	info->columns = std::move(trigger_event.columns);
 	info->base_table = std::move(base_table);
 	info->for_each = for_each;
-	info->sql_body_text = sql_body->ToString();
-	info->sql_body = std::move(sql_body);
+	info->sql_body = ExtractQueryNode(std::move(sql_body));
 	result->info = std::move(info);
 	return result;
 }

@@ -11,7 +11,8 @@ namespace duckdb {
 TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info)
     : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.trigger_name),
       base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())), timing(info.timing),
-      event_type(info.event_type), columns(info.columns), for_each(info.for_each), sql_body_text(info.sql_body_text) {
+      event_type(info.event_type), columns(info.columns), for_each(info.for_each),
+      sql_body(info.sql_body ? info.sql_body->Copy() : nullptr) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -33,7 +34,9 @@ unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
-	result->sql_body_text = sql_body_text;
+	if (sql_body) {
+		result->sql_body = sql_body->Copy();
+	}
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;
@@ -60,8 +63,8 @@ string TriggerCatalogEntry::ToSQL() const {
 	ss << " ON ";
 	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
-	if (!sql_body_text.empty()) {
-		ss << " " << sql_body_text;
+	if (sql_body) {
+		ss << " " << sql_body->ToString();
 	}
 	ss << ";";
 	return ss.str();
