@@ -663,8 +663,3 @@ cleanup-vcpkg:
 
 test-utils:
 	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
-
-.PHONY: last_main_success_commit
-
-last_main_success_commit:
-	PAGER= gh run list --repo duckdb/duckdb --branch=main --workflow=Main --event=workflow_dispatch --status=success --json=headSha --limit=1 --jq '.[0].headSha'
