@@ -11,7 +11,7 @@ template <class T>
 
 void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
 	auto result_data = (T *)target;
-	for(auto entry : source.Entries<T>(count)) {
+	for (auto entry : source.Entries<T>(count)) {
 		if (!entry.value) {
 			result_data[entry.index] = NullValue<T>();
 		} else {
