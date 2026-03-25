@@ -27,11 +27,14 @@ index 72e8f5b..06fc74a 100644
  
  	return delete_statement;
 diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
-index 4602928..c3cf639 100644
+index 4602928..d728a1c 100644
 --- a/src/statement_simplifier.cpp
 +++ b/src/statement_simplifier.cpp
-@@ -10,6 +10,8 @@
+@@ -8,8 +8,11 @@
+ #include "duckdb/parser/expression/list.hpp"
+ #include "duckdb/parser/statement/delete_statement.hpp"
  #include "duckdb/parser/statement/insert_statement.hpp"
++#include "duckdb/parser/query_node/insert_query_node.hpp"
  #include "duckdb/parser/statement/prepare_statement.hpp"
  #include "duckdb/parser/statement/update_statement.hpp"
 +#include "duckdb/parser/query_node/update_query_node.hpp"
@@ -39,7 +42,18 @@ index 4602928..c3cf639 100644
  #include "duckdb/parser/statement/select_statement.hpp"
  #endif
  
-@@ -401,11 +403,11 @@ void StatementSimplifier::Simplify(InsertStatement &stmt) {
+@@ -395,17 +398,19 @@ void StatementSimplifier::Simplify(SelectStatement &stmt) {
+ }
+ 
+ void StatementSimplifier::Simplify(InsertStatement &stmt) {
+-	Simplify(stmt.cte_map);
+-	Simplify(*stmt.select_statement);
+-	SimplifyList(stmt.returning_list);
++	Simplify(stmt.node->cte_map);
++	if (stmt.node->select_statement) {
++		Simplify(*stmt.node->select_statement);
++	}
++	SimplifyList(stmt.node->returning_list);
  }
  
  void StatementSimplifier::Simplify(DeleteStatement &stmt) {
@@ -56,7 +70,7 @@ index 4602928..c3cf639 100644
  }
  
  void StatementSimplifier::Simplify(UpdateSetInfo &info) {
-@@ -432,11 +434,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
+@@ -432,11 +437,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
  }
  
  void StatementSimplifier::Simplify(UpdateStatement &stmt) {
