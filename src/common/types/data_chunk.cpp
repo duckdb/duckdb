@@ -246,6 +246,61 @@ vector<LogicalType> DataChunk::GetTypes() const {
 	return types;
 }
 
+static bool RequiresJSONCast(const LogicalType &type) {
+	if (type.IsNested()) {
+		return true;
+	}
+	if (type.IsFloating()) {
+		return true;
+	}
+	return false;
+}
+
+unique_ptr<DataChunk> DataChunk::CastToVarchar(ClientContext &context, bool complex_objects_as_json) {
+	auto col_count = ColumnCount();
+
+	// Step 1: set up the output chunk
+	auto varchar_chunk = make_uniq<DataChunk>();
+	vector<LogicalType> all_varchar(col_count, LogicalType::VARCHAR);
+	varchar_chunk->Initialize(Allocator::DefaultAllocator(), all_varchar);
+
+	// Step 2: if complex_objects_as_json, pre-cast nested/floating columns through JSON
+	DataChunk json_chunk;
+	if (complex_objects_as_json) {
+		vector<LogicalType> json_types;
+		for (idx_t c = 0; c < col_count; c++) {
+			if (RequiresJSONCast(data[c].GetType())) {
+				json_types.emplace_back(LogicalType::JSON());
+			} else {
+				json_types.emplace_back(data[c].GetType());
+			}
+		}
+		json_chunk.Initialize(Allocator::DefaultAllocator(), json_types);
+		for (idx_t c = 0; c < col_count; c++) {
+			if (data[c].GetType() == json_types[c]) {
+				json_chunk.data[c].Reference(data[c]);
+			} else {
+				VectorOperations::Cast(context, data[c], json_chunk.data[c], size());
+			}
+		}
+		json_chunk.SetCardinality(size());
+		json_chunk.Flatten();
+	}
+
+	// Step 3: cast all columns to VARCHAR
+	auto &source = complex_objects_as_json ? json_chunk : *this;
+	for (idx_t c = 0; c < col_count; c++) {
+		if (source.data[c].GetType().id() == LogicalTypeId::VARCHAR) {
+			varchar_chunk->data[c].Reference(source.data[c]);
+		} else {
+			VectorOperations::Cast(context, source.data[c], varchar_chunk->data[c], size());
+		}
+	}
+	varchar_chunk->SetCardinality(size());
+	varchar_chunk->Flatten();
+	return varchar_chunk;
+}
+
 string DataChunk::ToString() const {
 	string retval = "Chunk - [" + to_string(ColumnCount()) + " Columns]\n";
 	for (idx_t i = 0; i < ColumnCount(); i++) {

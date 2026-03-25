@@ -155,6 +155,10 @@ public:
 	//! Returns a list of types of the vectors of this data chunk
 	DUCKDB_API vector<LogicalType> GetTypes() const;
 
+	//! Cast all columns to VARCHAR and return a new DataChunk.
+	//! If complex_objects_as_json is true, nested and floating-point types are cast through JSON first.
+	DUCKDB_API unique_ptr<DataChunk> CastToVarchar(ClientContext &context, bool complex_objects_as_json = false);
+
 	//! Converts this DataChunk to a printable string representation
 	DUCKDB_API string ToString() const;
 	DUCKDB_API void Print() const;

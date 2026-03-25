@@ -671,12 +671,12 @@ void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_col
 		idx_t insert_count = MinValue<idx_t>(fetch_result.size(), top_rows - row_idx);
 
 		// cast all columns to varchar
+		auto varchar_chunk = fetch_result.CastToVarchar(context);
 		for (idx_t c = 0; c < column_count; c++) {
-			auto &source_vector = fetch_result.data[c];
 			auto &target_vector = top_collection.Values(insert_result, c);
 			auto &render_lengths = top_collection.RenderLengths(insert_result, c);
-			VectorOperations::Cast(context, source_vector, target_vector, insert_count);
-			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
+			target_vector.Reference(varchar_chunk->data[c]);
+			ConvertRenderVector(target_vector, render_lengths, insert_count, fetch_result.data[c].GetType(),
 			                    null_render_length);
 		}
 		insert_result.SetCardinality(insert_count);
@@ -789,12 +789,12 @@ void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bott
 			chunk.Flatten();
 		}
 
+		auto varchar_chunk = chunk.CastToVarchar(context);
 		for (idx_t c = 0; c < column_count; c++) {
-			auto &source_vector = chunk.data[c];
 			auto &target_vector = bottom_collection.Values(insert_result, c);
 			auto &render_lengths = bottom_collection.RenderLengths(insert_result, c);
-			VectorOperations::Cast(context, source_vector, target_vector, insert_count);
-			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
+			target_vector.Reference(varchar_chunk->data[c]);
+			ConvertRenderVector(target_vector, render_lengths, insert_count, chunk.data[c].GetType(),
 			                    null_render_length);
 		}
 		insert_result.SetCardinality(insert_count);
