@@ -5,57 +5,9 @@
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
-      "reason": "Does not produce prepared statement",
+      "reason": "Strict mode is currently not compatible with loadable parser override extensions. Requires redesign of the parser selection setting.",
       "paths": [
-        "test/sql/types/map/map_empty.test"
-      ]
-    },
-    {
-      "reason": "Test expects lowercase option name",
-      "paths": [
-        "test/sql/copy/csv/test_encodings.test_slow",
-        "test/sql/copy/parquet/copy_option_suggestion.test"
-      ]
-    },
-    {
-      "reason": "Parser error",
-      "paths": [
-        "test/sql/json/scalar/test_json_extract.test"
-      ]
-    },
-    {
-      "reason": "Tokenizer issue",
-      "paths": [
-        "test/sql/function/list/lambdas/arrow/lambda_scope_deprecated.test"
-      ]
-    },
-    {
-      "reason": "Setting option to 'strict' changes behavior of first tests",
-      "paths": [
-        "test/extension/loadable_parser_override.test",
-        "test/sql/peg_parser/transformer/peg_transformer.test",
-        "test/sql/collate/test_unsupported_collations.test",
-        "test/extension/test_custom_type_modifier_cast.test",
-        "test/extension/test_alias_point.test",
-        "test/extension/concurrent_load_extension.test",
-        "test/extension/test_tags.test",
-        "test/extension/load_test_alias.test",
-        "test/extension/load_extension.test"
-      ]
-    },
-    {
-      "reason": "PEG parser does not work yet with parser extensions",
-      "paths": [
-        "test/extension/consistent_semicolon_extension_parse.test"
-      ]
-    },
-    {
-      "reason": "Different behaviour compared to PostgreSQL parser",
-      "paths": [
-        "test/sql/function/string/test_string_slice.test",
-        "test/sql/function/string/test_subscript.test",
-        "test/sql/prepared/parameter_variants.test",
-        "test/sql/parser/digit_separators.test"
+        "test/extension/loadable_parser_override.test"
       ]
     }
   ]
