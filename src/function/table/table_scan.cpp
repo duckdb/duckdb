@@ -500,6 +500,10 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
 			return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
 		}
+		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		}
 		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
 			return true;
 		}
@@ -580,6 +584,10 @@ static bool ExtractComparisonsAndInFiltersFromExpression(const Expression &expr,
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons, in_filters);
+		}
+		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 			return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons, in_filters);
 		}
 		// Bloom, PHJ, prefix_range, dynamic: ignore but don't block

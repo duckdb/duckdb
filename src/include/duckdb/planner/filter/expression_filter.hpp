@@ -58,8 +58,12 @@ public:
 	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
 	//! Check if an expression tree is entirely optional filter semantics
 	static bool IsOptionalExpression(const Expression &expr);
+	//! Check if the root of an expression tree is an optional filter wrapper
+	static bool IsRootOptionalExpression(const Expression &expr);
 	//! Check if a table filter is an optional filter, including expression-backed optional filters
 	static bool IsOptionalFilter(const TableFilter &filter);
+	//! Check if a table filter root is optional, matching legacy OPTIONAL_FILTER behavior
+	static bool IsRootOptionalFilter(const TableFilter &filter);
 
 private:
 	//! Produce human-readable ToString for internal tablefilter functions

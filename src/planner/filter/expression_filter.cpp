@@ -282,8 +282,8 @@ unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter
 
 static void ReplaceStructExtractAt(unique_ptr<Expression> &expr, const string &column_name) {
 	// Recursively process children first
-	ExpressionIterator::EnumerateChildren(*expr,
-	                                      [&column_name](unique_ptr<Expression> &child) { ReplaceStructExtractAt(child, column_name); });
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&column_name](unique_ptr<Expression> &child) { ReplaceStructExtractAt(child, column_name); });
 
 	// Check if this is a struct_extract_at function call
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
@@ -308,8 +308,7 @@ static void ReplaceStructExtractAt(unique_ptr<Expression> &expr, const string &c
 	}
 }
 
-string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression &func_expr,
-                                                  const string &column_name) {
+string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression &func_expr, const string &column_name) {
 	auto &func_name = func_expr.function.name;
 	if (func_name == BloomFilterScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<BloomFilterFunctionData>();
@@ -329,6 +328,9 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 		}
 	} else if (func_name == OptionalFilterScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<OptionalFilterFunctionData>();
+		return "optional: " + ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+	} else if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
+		auto &data = func_expr.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 		return "optional: " + ExpressionToFriendlyString(*data.child_filter_expr, column_name);
 	}
 	return string();
@@ -391,7 +393,6 @@ void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, 
 	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column, replace_type); });
 }
 
-
 bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const string &func_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
@@ -401,6 +402,12 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 		// Check inside optional filter bind data (it wraps a child expression)
 		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
+				return true;
+			}
+		}
+		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
 				return true;
 			}
@@ -418,7 +425,8 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		return func.function.name == OptionalFilterScalarFun::NAME;
+		return func.function.name == OptionalFilterScalarFun::NAME ||
+		       func.function.name == SelectivityOptionalFilterScalarFun::NAME;
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.type == ExpressionType::CONJUNCTION_AND) {
@@ -436,6 +444,15 @@ bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
 	return false;
 }
 
+bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	return func.function.name == OptionalFilterScalarFun::NAME ||
+	       func.function.name == SelectivityOptionalFilterScalarFun::NAME;
+}
+
 bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
 	if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
 		return true;
@@ -445,6 +462,17 @@ bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
 	}
 	auto &expr_filter = filter.Cast<ExpressionFilter>();
 	return IsOptionalExpression(*expr_filter.expr);
+}
+
+bool ExpressionFilter::IsRootOptionalFilter(const TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+		return true;
+	}
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		return false;
+	}
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	return IsRootOptionalExpression(*expr_filter.expr);
 }
 
 unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) const {

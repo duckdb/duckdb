@@ -9,12 +9,14 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
 static bool IsSimpleFilterColumnRef(const Expression &expression) {
-	return expression.type == ExpressionType::BOUND_REF || expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+	return expression.type == ExpressionType::BOUND_REF ||
+	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
@@ -62,6 +64,41 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 			}
 			if (expression.type == ExpressionType::OPERATOR_IS_NOT_NULL) {
 				fast_path = ExpressionFilterFastPath::IS_NOT_NULL;
+				initialize_executor();
+				return;
+			}
+		}
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = expression.Cast<BoundFunctionExpression>();
+		if (function.function.name == SelectivityOptionalFilterScalarFun::NAME && function.bind_info) {
+			auto bind_data = dynamic_cast<SelectivityOptionalFilterFunctionData *>(function.bind_info.get());
+			if (bind_data && bind_data->child_filter_expr) {
+				fast_path = ExpressionFilterFastPath::SELECTIVITY_OPTIONAL;
+				EnableSelectivityTracking(bind_data->selectivity_threshold, bind_data->n_vectors_to_check);
+				selectivity_child_state = make_uniq<ExpressionFilterState>(context, *bind_data->child_filter_expr);
+				initialize_executor();
+				return;
+			}
+		}
+		if (function.function.name == PerfectHashJoinScalarFun::NAME && function.bind_info) {
+			auto bind_data = dynamic_cast<PerfectHashJoinFunctionData *>(function.bind_info.get());
+			if (bind_data) {
+				fast_path = ExpressionFilterFastPath::PERFECT_HASH_JOIN;
+				if (bind_data->n_vectors_to_check != 0) {
+					EnableSelectivityTracking(bind_data->selectivity_threshold, bind_data->n_vectors_to_check);
+				}
+				initialize_executor();
+				return;
+			}
+		}
+		if (function.function.name == PrefixRangeScalarFun::NAME && function.bind_info) {
+			auto bind_data = dynamic_cast<PrefixRangeFunctionData *>(function.bind_info.get());
+			if (bind_data) {
+				fast_path = ExpressionFilterFastPath::PREFIX_RANGE;
+				if (bind_data->n_vectors_to_check != 0) {
+					EnableSelectivityTracking(bind_data->selectivity_threshold, bind_data->n_vectors_to_check);
+				}
 				initialize_executor();
 				return;
 			}

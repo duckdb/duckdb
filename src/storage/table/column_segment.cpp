@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 #include "duckdb/common/limits.hpp"
@@ -9,7 +10,9 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -489,8 +492,8 @@ static idx_t ExecuteConstantComparisonSelection(SelectionVector &sel, Vector &ve
 }
 
 static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-                                             const Expression &expression, ExpressionFilterState &state,
-                                             idx_t scan_count, idx_t &approved_tuple_count) {
+                                              const Expression &expression, ExpressionFilterState &state,
+                                              idx_t scan_count, idx_t &approved_tuple_count) {
 	if (approved_tuple_count == 0) {
 		return 0;
 	}
@@ -528,6 +531,92 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
 		case ExpressionFilterFastPath::IS_NOT_NULL:
 			return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
+		case ExpressionFilterFastPath::SELECTIVITY_OPTIONAL: {
+			if (!state.IsSelectivityActive()) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+			auto &function = expression.Cast<BoundFunctionExpression>();
+			auto bind_data = function.bind_info
+			                     ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(function.bind_info.get())
+			                     : nullptr;
+			if (!bind_data || !bind_data->child_filter_expr || !state.selectivity_child_state) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+
+			const auto approved_before = approved_tuple_count;
+			ExecuteExpressionFilterSelection(sel, vector, vdata, *bind_data->child_filter_expr,
+			                                 *state.selectivity_child_state, scan_count, approved_tuple_count);
+			state.UpdateSelectivity(approved_tuple_count, approved_before);
+			return approved_tuple_count;
+		}
+		case ExpressionFilterFastPath::PERFECT_HASH_JOIN: {
+			if (!state.IsSelectivityActive()) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+			auto &function = expression.Cast<BoundFunctionExpression>();
+			auto bind_data =
+			    function.bind_info ? dynamic_cast<PerfectHashJoinFunctionData *>(function.bind_info.get()) : nullptr;
+			if (!bind_data || !bind_data->executor) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+
+			const auto approved_before = approved_tuple_count;
+			approved_tuple_count = 0;
+			Vector keys_sliced(vector, sel, approved_before);
+			SelectionVector probe_sel(approved_before);
+			bind_data->executor->FillSelectionVectorSwitchProbe(keys_sliced, approved_before, probe_sel,
+			                                                    approved_tuple_count, nullptr);
+
+			if (approved_tuple_count != approved_before) {
+				if (sel.IsSet()) {
+					for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
+						const auto sliced_sel_idx = probe_sel.get_index_unsafe(idx);
+						const auto original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
+						sel.set_index(idx, original_sel_idx);
+					}
+				} else {
+					sel.Initialize(probe_sel);
+				}
+			}
+			state.UpdateSelectivity(approved_tuple_count, approved_before);
+			return approved_tuple_count;
+		}
+		case ExpressionFilterFastPath::PREFIX_RANGE: {
+			if (!state.IsSelectivityActive()) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+			auto &function = expression.Cast<BoundFunctionExpression>();
+			auto bind_data =
+			    function.bind_info ? dynamic_cast<PrefixRangeFunctionData *>(function.bind_info.get()) : nullptr;
+			if (!bind_data || !bind_data->filter || !bind_data->filter->IsInitialized()) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+
+			const auto approved_before = approved_tuple_count;
+			Vector keys_sliced(vector, sel, approved_before);
+			SelectionVector result_sel(approved_before);
+			approved_tuple_count = bind_data->filter->LookupKeys(keys_sliced, result_sel, approved_before);
+
+			if (approved_tuple_count != approved_before) {
+				if (sel.IsSet()) {
+					for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
+						const auto sliced_sel_idx = result_sel.get_index_unsafe(idx);
+						const auto original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
+						sel.set_index(idx, original_sel_idx);
+					}
+				} else {
+					sel.Initialize(result_sel);
+				}
+			}
+			state.UpdateSelectivity(approved_tuple_count, approved_before);
+			return approved_tuple_count;
+		}
 		default:
 			break;
 		}
@@ -675,7 +764,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		auto &expression_filter = filter.Cast<ExpressionFilter>();
 		return ExecuteExpressionFilterSelection(sel, vector, vdata, *expression_filter.expr, state, scan_count,
-		                                       approved_tuple_count);
+		                                        approved_tuple_count);
 	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");

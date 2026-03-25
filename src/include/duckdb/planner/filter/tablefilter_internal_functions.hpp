@@ -27,8 +27,7 @@ struct TableFilterInternalFunctions {
 //! FunctionData for bloom filter internal function
 struct BloomFilterFunctionData : public FunctionData {
 	BloomFilterFunctionData(BloomFilter &filter_p, bool filters_null_values_p, const string &key_column_name_p,
-	                        const LogicalType &key_type_p, float selectivity_threshold_p,
-	                        idx_t n_vectors_to_check_p);
+	                        const LogicalType &key_type_p, float selectivity_threshold_p, idx_t n_vectors_to_check_p);
 
 	BloomFilter &filter;
 	bool filters_null_values;
@@ -43,9 +42,8 @@ struct BloomFilterFunctionData : public FunctionData {
 
 //! FunctionData for perfect hash join internal function
 struct PerfectHashJoinFunctionData : public FunctionData {
-	PerfectHashJoinFunctionData(optional_ptr<const PerfectHashJoinExecutor> executor_p,
-	                            const string &key_column_name_p, float selectivity_threshold_p,
-	                            idx_t n_vectors_to_check_p);
+	PerfectHashJoinFunctionData(optional_ptr<const PerfectHashJoinExecutor> executor_p, const string &key_column_name_p,
+	                            float selectivity_threshold_p, idx_t n_vectors_to_check_p);
 
 	optional_ptr<const PerfectHashJoinExecutor> executor;
 	string key_column_name;
@@ -59,8 +57,7 @@ struct PerfectHashJoinFunctionData : public FunctionData {
 //! FunctionData for prefix range internal function
 struct PrefixRangeFunctionData : public FunctionData {
 	PrefixRangeFunctionData(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
-	                        const LogicalType &key_type_p, float selectivity_threshold_p,
-	                        idx_t n_vectors_to_check_p);
+	                        const LogicalType &key_type_p, float selectivity_threshold_p, idx_t n_vectors_to_check_p);
 
 	optional_ptr<PrefixRangeFilter> filter;
 	string key_column_name;
@@ -88,6 +85,20 @@ struct OptionalFilterFunctionData : public FunctionData {
 	unique_ptr<Expression> child_filter_expr;
 
 	explicit OptionalFilterFunctionData(unique_ptr<Expression> child_filter_expr_p);
+
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other) const override;
+};
+
+//! FunctionData for selectivity-optional filter internal function
+struct SelectivityOptionalFilterFunctionData : public FunctionData {
+	//! The child filter expression, executed only while it remains selective enough
+	unique_ptr<Expression> child_filter_expr;
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+
+	SelectivityOptionalFilterFunctionData(unique_ptr<Expression> child_filter_expr_p, float selectivity_threshold_p,
+	                                      idx_t n_vectors_to_check_p);
 
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other) const override;
@@ -153,6 +164,20 @@ struct DynamicFilterScalarFun {
 struct OptionalFilterScalarFun {
 	static constexpr const char *NAME = "__internal_tablefilter_optional";
 	static constexpr const char *Name = "__internal_tablefilter_optional";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+	static ScalarFunction GetFunction(const LogicalType &input_type);
+	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
+};
+
+//! Factory for selectivity-optional filter internal function
+struct SelectivityOptionalFilterScalarFun {
+	static constexpr const char *NAME = "__internal_tablefilter_selectivity_optional";
+	static constexpr const char *Name = "__internal_tablefilter_selectivity_optional";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";

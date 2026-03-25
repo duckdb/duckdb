@@ -527,7 +527,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (filter.IsOnlyForZoneMapFiltering()) {
+		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -571,7 +571,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		D_ASSERT(target_row >= row_start);
 		D_ASSERT(target_row <= row_start + this->count);
 		// target_vector_index must be row-group-relative (same coordinate space as state.vector_index)
-//		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
+		//		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
 		idx_t target_vector_index = target_row / STANDARD_VECTOR_SIZE;
 
 		if (!target_vector_index_max.IsValid() || target_vector_index_max.GetIndex() < target_vector_index) {

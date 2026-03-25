@@ -69,6 +69,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(PrefixRangeScalarFun),
 	DUCKDB_SCALAR_FUNCTION(DynamicFilterScalarFun),
 	DUCKDB_SCALAR_FUNCTION(OptionalFilterScalarFun),
+	DUCKDB_SCALAR_FUNCTION(SelectivityOptionalFilterScalarFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralBigintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralHugeintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralIntegerFun),

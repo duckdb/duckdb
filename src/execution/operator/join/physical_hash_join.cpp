@@ -1012,6 +1012,17 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
 }
 
+static unique_ptr<Expression> WrapSelectivityOptionalFilter(unique_ptr<Expression> child_expr, const LogicalType &type,
+                                                            float selectivity_threshold, idx_t n_vectors_to_check) {
+	auto func = SelectivityOptionalFilterScalarFun::GetFunction(type);
+	auto bind_data = make_uniq<SelectivityOptionalFilterFunctionData>(std::move(child_expr), selectivity_threshold,
+	                                                                  n_vectors_to_check);
+	vector<unique_ptr<Expression>> args;
+	args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
+	                                          std::move(bind_data));
+}
+
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
                                              const JoinFilterPushdownFilter &info,
                                              ProjectionIndex filter_col_idx) const {
@@ -1022,12 +1033,13 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	ht.SetBuildBloomFilter(true);
 	auto func = BloomFilterScalarFun::GetFunction(key_type);
 	auto bind_data =
-	    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type, 0.5f, 6);
+	    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type, 0.0f, 0);
 	vector<unique_ptr<Expression>> args;
 	args.push_back(make_uniq<BoundReferenceExpression>(key_type, 0));
 	auto func_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
 	                                                    std::move(bind_data));
-	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(func_expr)));
+	auto wrapped_expr = WrapSelectivityOptionalFilter(std::move(func_expr), key_type, 0.5f, 6);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(wrapped_expr)));
 }
 
 void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &op,
@@ -1037,12 +1049,13 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
 	const auto key_name = op.Cast<PhysicalHashJoin>().conditions[0].GetRHS().ToString();
 	auto key_type = op.Cast<PhysicalHashJoin>().conditions[0].GetLHS().return_type;
 	auto func = PerfectHashJoinScalarFun::GetFunction(key_type);
-	auto bind_data = make_uniq<PerfectHashJoinFunctionData>(&perfect_join_executor, key_name, 0.3f, 6);
+	auto bind_data = make_uniq<PerfectHashJoinFunctionData>(&perfect_join_executor, key_name, 0.0f, 0);
 	vector<unique_ptr<Expression>> args;
 	args.push_back(make_uniq<BoundReferenceExpression>(key_type, 0));
 	auto func_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
 	                                                    std::move(bind_data));
-	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(func_expr)));
+	auto wrapped_expr = WrapSelectivityOptionalFilter(std::move(func_expr), key_type, 0.3f, 6);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(wrapped_expr)));
 }
 
 void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
@@ -1059,12 +1072,13 @@ void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownF
 
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
 	auto func = PrefixRangeScalarFun::GetFunction(key_type);
-	auto bind_data = make_uniq<PrefixRangeFunctionData>(ht.GetPrefixRangeFilter(), key_name, key_type, 0.5f, 6);
+	auto bind_data = make_uniq<PrefixRangeFunctionData>(ht.GetPrefixRangeFilter(), key_name, key_type, 0.0f, 0);
 	vector<unique_ptr<Expression>> args;
 	args.push_back(make_uniq<BoundReferenceExpression>(key_type, 0));
 	auto func_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
 	                                                    std::move(bind_data));
-	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(func_expr)));
+	auto wrapped_expr = WrapSelectivityOptionalFilter(std::move(func_expr), key_type, 0.5f, 6);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(wrapped_expr)));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
@@ -1085,7 +1099,8 @@ static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const Jo
                                       const LogicalType &col_type) {
 	auto col_ref = make_uniq<BoundReferenceExpression>(col_type, 0);
 	auto expr = filter->ToExpression(*col_ref);
-	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(expr)));
+	auto wrapped_expr = WrapSelectivityOptionalFilter(std::move(expr), col_type, 0.9f, 6);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(wrapped_expr)));
 }
 
 unique_ptr<DataChunk>
@@ -1148,8 +1163,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					CreateDynamicMinMaxFilter(
 					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val),
-					    max_val.type());
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val), max_val.type());
 					break;
 				}
 				default:
