@@ -82,6 +82,8 @@ private:
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);
 	//! Update filter statistics from a TableFilter
 	void UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter);
+	//! Update filter statistics from an ExpressionFilter's expression
+	void UpdateExpressionFilterStatistics(BaseStatistics &input, const Expression &expr);
 
 	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
 	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);

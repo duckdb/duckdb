@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
@@ -254,6 +255,46 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		return Cost(*struct_filter.child_filter);
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto &expr = *expr_filter.expr;
+		// Estimate cost based on the expression type
+		switch (expr.type) {
+		case ExpressionType::OPERATOR_IS_NULL:
+		case ExpressionType::OPERATOR_IS_NOT_NULL:
+			return 5;
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				auto &comp = expr.Cast<BoundComparisonExpression>();
+				if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+					auto &constant = comp.right->Cast<BoundConstantExpression>();
+					return ExpressionCost(constant.value.type().InternalType(), 1);
+				}
+			}
+			return 10;
+		}
+		case ExpressionType::COMPARE_IN:
+			return 10;
+		case ExpressionType::CONJUNCTION_AND:
+		case ExpressionType::CONJUNCTION_OR:
+			return 5;
+		default:
+			// Internal functions (bloom filter, dynamic, optional) are cheap
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+				auto &func_expr = expr.Cast<BoundFunctionExpression>();
+				if (func_expr.function.name.find("__internal_tablefilter_optional") != string::npos ||
+				    func_expr.function.name.find("__internal_tablefilter_dynamic") != string::npos) {
+					return 0;
+				}
+			}
+			return 1000;
+		}
 	}
 	default:
 		return 1000;

@@ -31,6 +31,12 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
@@ -449,6 +455,154 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
+struct ComparisonCondition {
+	ExpressionType type;
+	Value constant;
+};
+
+//! Collect IN values and comparison conditions from an expression tree
+static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, value_set_t &in_values,
+                                                      vector<ComparisonCondition> &comparisons) {
+	// Handle COMPARE_IN: col IN (v1, v2, v3, ...)
+	if (expr.type == ExpressionType::COMPARE_IN && expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		for (idx_t i = 1; i < op.children.size(); i++) {
+			if (op.children[i]->type == ExpressionType::VALUE_CONSTANT) {
+				in_values.insert(op.children[i]->Cast<BoundConstantExpression>().value);
+			}
+		}
+		return true;
+	}
+	// Handle comparison: col op value (only if one side is a direct column reference)
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comp = expr.Cast<BoundComparisonExpression>();
+		Value val;
+		bool left_is_ref = comp.left->GetExpressionClass() == ExpressionClass::BOUND_REF;
+		bool right_is_ref = comp.right->GetExpressionClass() == ExpressionClass::BOUND_REF;
+		if (comp.right->type == ExpressionType::VALUE_CONSTANT && left_is_ref) {
+			val = comp.right->Cast<BoundConstantExpression>().value;
+		} else if (comp.left->type == ExpressionType::VALUE_CONSTANT && right_is_ref) {
+			val = comp.left->Cast<BoundConstantExpression>().value;
+		} else {
+			return false;
+		}
+		if (comp.GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+			// Equality is also an IN value
+			in_values.insert(val);
+		}
+		comparisons.push_back({comp.GetExpressionType(), std::move(val)});
+		return true;
+	}
+	// Handle internal functions (optional wraps child expression in bind data)
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		}
+		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+			return true;
+		}
+	}
+	// Handle AND conjunctions
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr.type == ExpressionType::CONJUNCTION_AND) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		for (auto &child : conj.children) {
+			if (!CollectValuesAndComparisonsFromExpression(*child, in_values, comparisons)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
+//! Check if a value qualifies against all comparison conditions (mirrors ConstantFilter::Compare)
+static bool ValueQualifies(const Value &value, const vector<ComparisonCondition> &comparisons) {
+	for (auto &comp : comparisons) {
+		bool passes;
+		switch (comp.type) {
+		case ExpressionType::COMPARE_EQUAL:
+			passes = ValueOperations::Equals(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+			passes = ValueOperations::NotEquals(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_GREATERTHAN:
+			passes = ValueOperations::GreaterThan(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			passes = ValueOperations::GreaterThanEquals(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+			passes = ValueOperations::LessThan(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			passes = ValueOperations::LessThanEquals(value, comp.constant);
+			break;
+		default:
+			return true;
+		}
+		if (!passes) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! Extract values from an ExpressionFilter expression for index scan purposes.
+//! Collects IN values and comparisons, then prunes IN values that don't satisfy comparisons.
+static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &values) {
+	value_set_t in_values;
+	vector<ComparisonCondition> comparisons;
+	if (!CollectValuesAndComparisonsFromExpression(expr, in_values, comparisons)) {
+		return false;
+	}
+	if (in_values.empty()) {
+		return false;
+	}
+	// Prune IN values that don't satisfy the comparison conditions
+	for (auto &val : in_values) {
+		if (ValueQualifies(val, comparisons)) {
+			values.insert(val);
+		}
+	}
+	return !values.empty();
+}
+
+//! Helper for ExpressionFilter: recursively extract information from expressions
+static bool ExtractComparisonsAndInFiltersFromExpression(const Expression &expr,
+                                                         vector<const_reference<ConstantFilter>> &comparisons,
+                                                         vector<const_reference<InFilter>> &in_filters) {
+	// Handle internal optional filter: unwrap to child expression in bind data
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons, in_filters);
+		}
+		// Bloom, PHJ, prefix_range, dynamic: ignore but don't block
+		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+			return true;
+		}
+	}
+	// Handle AND conjunctions
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr.type == ExpressionType::CONJUNCTION_AND) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		for (auto &child : conj.children) {
+			if (!ExtractComparisonsAndInFiltersFromExpression(*child, comparisons, in_filters)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	// For expressions we can't decompose into ConstantFilter/InFilter references,
+	// return false so the caller uses the fallback expression path
+	return false;
+}
+
 bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_reference<ConstantFilter>> &comparisons,
                                     vector<const_reference<InFilter>> &in_filters) {
 	switch (filter.filter_type) {
@@ -481,6 +635,10 @@ bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_refe
 			}
 		}
 		return true;
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		return ExtractComparisonsAndInFiltersFromExpression(*expr_filter.expr, comparisons, in_filters);
 	}
 	default:
 		return false;
@@ -545,6 +703,16 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	}
 
 	// Attempt matching the top-level filter to the index expression.
+	if (expressions.empty()) {
+		// For ExpressionFilter, try to extract values directly from the expression
+		if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+			auto &expr_filter = filter.Cast<ExpressionFilter>();
+			value_set_t values;
+			if (ExtractValuesFromExpression(*expr_filter.expr, values) && !values.empty()) {
+				ExtractExpressionsFromValues(values, *bound_ref, expressions);
+			}
+		}
+	}
 	if (expressions.empty()) {
 		auto filter_expr = filter.ToExpression(*bound_ref);
 		expressions.push_back(std::move(filter_expr));

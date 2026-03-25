@@ -1,5 +1,7 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -138,14 +140,20 @@ void TableFilterSet::PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter>
 		filters[col_idx] = std::move(filter);
 	} else {
 		// there is already a filter: AND it together
-		if (entry->second->filter_type == TableFilterType::CONJUNCTION_AND) {
-			auto &and_filter = entry->second->Cast<ConjunctionAndFilter>();
-			and_filter.child_filters.push_back(std::move(filter));
+		if (entry->second->filter_type == TableFilterType::EXPRESSION_FILTER &&
+		    filter->filter_type == TableFilterType::EXPRESSION_FILTER) {
+			auto &existing = entry->second->Cast<ExpressionFilter>();
+			auto &new_filter = filter->Cast<ExpressionFilter>();
+			auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+			and_expr->children.push_back(std::move(existing.expr));
+			and_expr->children.push_back(std::move(new_filter.expr));
+			filters[col_idx] = make_uniq<ExpressionFilter>(std::move(and_expr));
 		} else {
-			auto and_filter = make_uniq<ConjunctionAndFilter>();
-			and_filter->child_filters.push_back(std::move(entry->second));
-			and_filter->child_filters.push_back(std::move(filter));
-			filters[col_idx] = std::move(and_filter);
+			// legacy path - combine via ConjunctionAndFilter then convert
+			auto conjunction = make_uniq<ConjunctionAndFilter>();
+			conjunction->child_filters.push_back(std::move(entry->second));
+			conjunction->child_filters.push_back(std::move(filter));
+			filters[col_idx] = ExpressionFilter::FromTableFilter(*conjunction);
 		}
 	}
 }

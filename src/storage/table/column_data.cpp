@@ -6,6 +6,9 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -389,7 +392,14 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// for dynamic filters we never consider the segment being "checked" as it can always change
-	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
+	bool is_dynamic = filter.filter_type == TableFilterType::DYNAMIC_FILTER;
+	if (!is_dynamic && filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		// Recursively check if any sub-expression is a dynamic filter
+		// (dynamic may be nested inside optional/conjunction wrappers)
+		is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
+	}
+	state.segment_checked = !is_dynamic;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);

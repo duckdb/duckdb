@@ -2,6 +2,7 @@
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/geometry_functions.hpp"
@@ -63,6 +64,11 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUintegerFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUsmallintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUtinyintFun),
+	DUCKDB_SCALAR_FUNCTION(BloomFilterScalarFun),
+	DUCKDB_SCALAR_FUNCTION(PerfectHashJoinScalarFun),
+	DUCKDB_SCALAR_FUNCTION(PrefixRangeScalarFun),
+	DUCKDB_SCALAR_FUNCTION(DynamicFilterScalarFun),
+	DUCKDB_SCALAR_FUNCTION(OptionalFilterScalarFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralBigintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralHugeintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralIntegerFun),

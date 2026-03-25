@@ -26,6 +26,7 @@ public:
 
 public:
 	bool Equals(const TableFilter &other) const override {
+		throw InternalException("ConjunctionFilter is a legacy filter type");
 		return TableFilter::Equals(other);
 	}
 };

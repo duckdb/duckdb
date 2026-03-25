@@ -5,17 +5,28 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+static void InternalFilterSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
+	throw NotImplementedException("Internal table filter functions cannot be serialized");
+}
+
+static unique_ptr<FunctionData> InternalFilterDeserialize(Deserializer &, ScalarFunction &) {
+	throw NotImplementedException("Internal table filter functions cannot be deserialized");
+}
 
 TopN::TopN(ClientContext &context_p) : context(context_p) {
 }
@@ -117,19 +128,42 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		D_ASSERT(target.columns.size() == 1);
 		auto col_binding = target.columns[0].probe_column_index;
 
-		// create the actual dynamic filter
-		auto dynamic_filter = make_uniq<DynamicFilter>(filter_data);
-		unique_ptr<TableFilter> pushed_filter = std::move(dynamic_filter);
-		if (nulls_first) {
-			auto or_filter = make_uniq<ConjunctionOrFilter>();
-			or_filter->child_filters.push_back(make_uniq<IsNullFilter>());
-			or_filter->child_filters.push_back(std::move(pushed_filter));
-			pushed_filter = std::move(or_filter);
-		}
-		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
+		// create the actual dynamic filter as an ExpressionFilter with internal function
+		auto dynamic_func = DynamicFilterScalarFun::GetFunction(type);
+		dynamic_func.serialize = InternalFilterSerialize;
+		dynamic_func.deserialize = InternalFilterDeserialize;
+		auto dynamic_bind = make_uniq<DynamicFilterFunctionData>(filter_data);
+		vector<unique_ptr<Expression>> args;
+		args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+		auto dynamic_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(dynamic_func),
+		                                                       std::move(args), std::move(dynamic_bind));
 
-		// push the filter into the table scan
-		get.table_filters.PushFilter(col_binding.column_index, std::move(optional_filter));
+		unique_ptr<Expression> pushed_expr = std::move(dynamic_expr);
+
+		if (nulls_first) {
+			// Create OR(IS_NULL(col), dynamic_filter(col))
+			auto is_null =
+			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+			is_null->children.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+
+			auto or_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+			or_expr->children.push_back(std::move(is_null));
+			or_expr->children.push_back(std::move(pushed_expr));
+			pushed_expr = std::move(or_expr);
+		}
+
+		// Wrap in optional function
+		auto opt_func = OptionalFilterScalarFun::GetFunction(type);
+		opt_func.serialize = InternalFilterSerialize;
+		opt_func.deserialize = InternalFilterDeserialize;
+		auto opt_bind = make_uniq<OptionalFilterFunctionData>(std::move(pushed_expr));
+		vector<unique_ptr<Expression>> opt_args;
+		opt_args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+		auto opt_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(opt_func),
+		                                                   std::move(opt_args), std::move(opt_bind));
+
+		auto expr_filter = make_uniq<ExpressionFilter>(std::move(opt_expr));
+		get.table_filters.PushFilter(col_binding.column_index, std::move(expr_filter));
 	}
 }
 

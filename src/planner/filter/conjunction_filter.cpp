@@ -8,6 +8,7 @@ ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::
 }
 
 FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	// the OR filter is true if ANY of the children is true
 	D_ASSERT(!child_filters.empty());
 	for (auto &filter : child_filters) {
@@ -22,6 +23,7 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats
 }
 
 string ConjunctionOrFilter::ToString(const string &column_name) const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	string result;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {
@@ -33,6 +35,7 @@ string ConjunctionOrFilter::ToString(const string &column_name) const {
 }
 
 bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
@@ -49,6 +52,7 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 }
 
 unique_ptr<TableFilter> ConjunctionOrFilter::Copy() const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	auto result = make_uniq<ConjunctionOrFilter>();
 	for (auto &filter : child_filters) {
 		result->child_filters.push_back(filter->Copy());
@@ -68,6 +72,7 @@ ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType
 }
 
 FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	// the AND filter is true if ALL of the children is true
 	D_ASSERT(!child_filters.empty());
 	auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
@@ -83,6 +88,7 @@ FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stat
 }
 
 string ConjunctionAndFilter::ToString(const string &column_name) const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	string result;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {
@@ -94,6 +100,7 @@ string ConjunctionAndFilter::ToString(const string &column_name) const {
 }
 
 bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
@@ -110,6 +117,7 @@ bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 }
 
 unique_ptr<TableFilter> ConjunctionAndFilter::Copy() const {
+	throw InternalException("ConjunctionOrFilter is a legacy filter type");
 	auto result = make_uniq<ConjunctionAndFilter>();
 	for (auto &filter : child_filters) {
 		result->child_filters.push_back(filter->Copy());

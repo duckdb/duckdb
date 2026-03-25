@@ -948,7 +948,7 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 			}
 			res->child_filters.push_back(std::move(child_filter));
 		}
-		return std::move(res);
+		return ExpressionFilter::FromTableFilter(*res);
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &and_filter = global_filter.Cast<ConjunctionAndFilter>();
@@ -960,7 +960,7 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 			}
 			res->child_filters.push_back(std::move(child_filter));
 		}
-		return std::move(res);
+		return ExpressionFilter::FromTableFilter(*res);
 	}
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = global_filter.Cast<StructFilter>();
@@ -981,7 +981,8 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 			return nullptr;
 		}
 		auto child_name = struct_type[struct_mapping.index].first;
-		return make_uniq<StructFilter>(struct_mapping.index, std::move(child_name), std::move(new_child_filter));
+		auto temp = StructFilter(struct_mapping.index, std::move(child_name), std::move(new_child_filter));
+		return ExpressionFilter::FromTableFilter(temp);
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = global_filter.Cast<OptionalFilter>();
@@ -989,7 +990,8 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		if (!child_result) {
 			return nullptr;
 		}
-		return make_uniq<OptionalFilter>(std::move(child_result));
+		auto temp = OptionalFilter(std::move(child_result));
+		return ExpressionFilter::FromTableFilter(temp);
 	}
 	case TableFilterType::DYNAMIC_FILTER: {
 		// we can't transfer dynamic filters over casts directly
@@ -1010,8 +1012,8 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	}
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
-		// these filters can just be copied as they don't depend on type
-		return global_filter.Copy();
+		// these filters can just be converted as they don't depend on type
+		return ExpressionFilter::FromTableFilter(global_filter);
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = global_filter.Cast<ConstantFilter>();
 		auto new_constant = constant_filter.constant;
@@ -1022,7 +1024,8 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		if (!new_constant.DefaultTryCastAs(target_type)) {
 			return nullptr;
 		}
-		return make_uniq<ConstantFilter>(constant_filter.comparison_type, std::move(new_constant));
+		auto temp = ConstantFilter(constant_filter.comparison_type, std::move(new_constant));
+		return ExpressionFilter::FromTableFilter(temp);
 	}
 	case TableFilterType::IN_FILTER: {
 		auto &in_filter = global_filter.Cast<InFilter>();
@@ -1036,7 +1039,8 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 				return nullptr;
 			}
 		}
-		return make_uniq<InFilter>(std::move(in_list));
+		auto temp = InFilter(std::move(in_list));
+		return ExpressionFilter::FromTableFilter(temp);
 	}
 	case TableFilterType::EXPRESSION_FILTER:
 		// unsupported

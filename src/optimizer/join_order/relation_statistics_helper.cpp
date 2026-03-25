@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 #include <math.h>
 
@@ -466,6 +467,31 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 		if (column_count > 0) {
 			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
 			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+		}
+		return cardinality_after_filters;
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto &expr = *expr_filter.expr;
+		// Handle AND conjunctions
+		if (expr.type == ExpressionType::CONJUNCTION_AND) {
+			auto &conj = expr.Cast<BoundConjunctionExpression>();
+			for (auto &child : conj.children) {
+				auto child_filter = ExpressionFilter(child->Copy());
+				cardinality_after_filters =
+				    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, child_filter, base_stats));
+			}
+			return cardinality_after_filters;
+		}
+		// Handle equality comparisons
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto &comp = expr.Cast<BoundComparisonExpression>();
+			if (comp.type == ExpressionType::COMPARE_EQUAL) {
+				auto column_count = base_stats.GetDistinctCount();
+				if (column_count > 0) {
+					cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+				}
+			}
 		}
 		return cardinality_after_filters;
 	}

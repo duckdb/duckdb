@@ -13,6 +13,15 @@
 
 namespace duckdb {
 class ExpressionExecutor;
+class ConstantFilter;
+class IsNullFilter;
+class IsNotNullFilter;
+class InFilter;
+class ConjunctionAndFilter;
+class ConjunctionOrFilter;
+class StructFilter;
+
+class BoundFunctionExpression;
 
 class ExpressionFilter : public TableFilter {
 public:
@@ -28,6 +37,14 @@ public:
 	bool EvaluateWithConstant(ClientContext &context, const Value &val);
 	bool EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const;
 
+	//! Convert any TableFilter to an ExpressionFilter using a BoundReferenceExpression(0) as column placeholder
+	//! col_type should be specified for filters that don't contain constants (IsNull, IsNotNull)
+	static unique_ptr<ExpressionFilter> FromTableFilter(const TableFilter &filter,
+	                                                    const LogicalType &col_type = LogicalType::ANY);
+
+	//! Enhanced CheckStatistics that recognizes standard expression patterns
+	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);
+
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 	string ToString(const string &column_name) const override;
 	bool Equals(const TableFilter &other) const override;
@@ -37,6 +54,14 @@ public:
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 	static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
 	                                       ExpressionType replace_type = ExpressionType::BOUND_REF);
+	//! Check if an expression tree contains an internal function with the given name
+	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
+
+private:
+	//! Produce human-readable ToString for internal tablefilter functions
+	static string InternalFunctionToString(const BoundFunctionExpression &func_expr, const string &column_name);
+	//! Recursively convert expression to friendly string, handling internal functions
+	static string ExpressionToFriendlyString(const Expression &expression, const string &column_name);
 };
 
 } // namespace duckdb

@@ -10,6 +10,7 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "parquet_reader.hpp"
@@ -783,7 +784,7 @@ private:
 
 	unique_ptr<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>> protocol;
 	optional_ptr<Allocator> allocator;
-	unique_ptr<ConstantFilter> filter;
+	unique_ptr<ExpressionFilter> filter;
 };
 
 template <>
@@ -820,9 +821,10 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
-	filter = make_uniq<ConstantFilter>(
+	auto temp_filter = ConstantFilter(
 	    ExpressionType::COMPARE_EQUAL,
 	    probe_constant.CastAs(context, reader.GetColumns()[probe_column_idx.GetIndex()].type));
+	filter = ExpressionFilter::FromTableFilter(temp_filter);
 }
 
 idx_t ParquetBloomProbeProcessor::TotalRowCount(ParquetReader &reader) {

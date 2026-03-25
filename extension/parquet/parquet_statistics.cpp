@@ -15,6 +15,10 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
@@ -621,6 +625,39 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 		return child_has_constant;
 	}
 	default:
+		if (duckdb_filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+			auto &expr_filter = duckdb_filter.Cast<ExpressionFilter>();
+			auto &expr = *expr_filter.expr;
+			// Handle comparison expressions
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				auto &comp = expr.Cast<BoundComparisonExpression>();
+				if (comp.type == ExpressionType::COMPARE_EQUAL &&
+				    comp.right->type == ExpressionType::VALUE_CONSTANT) {
+					auto &constant = comp.right->Cast<BoundConstantExpression>();
+					return !constant.value.IsNull();
+				}
+			}
+			// Handle AND conjunctions
+			if (expr.type == ExpressionType::CONJUNCTION_AND) {
+				auto &conj = expr.Cast<BoundConjunctionExpression>();
+				bool child_has_constant = false;
+				for (auto &child : conj.children) {
+					auto child_filter = ExpressionFilter(child->Copy());
+					child_has_constant |= HasFilterConstants(child_filter);
+				}
+				return child_has_constant;
+			}
+			// Handle OR conjunctions
+			if (expr.type == ExpressionType::CONJUNCTION_OR) {
+				auto &conj = expr.Cast<BoundConjunctionExpression>();
+				bool child_has_constant = false;
+				for (auto &child : conj.children) {
+					auto child_filter = ExpressionFilter(child->Copy());
+					child_has_constant |= HasFilterConstants(child_filter);
+				}
+				return child_has_constant;
+			}
+		}
 		return false;
 	}
 }
@@ -691,6 +728,40 @@ static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilte
 		return all_children_true;
 	}
 	default:
+		if (duckdb_filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+			auto &expr_filter = duckdb_filter.Cast<ExpressionFilter>();
+			auto &expr = *expr_filter.expr;
+			// Handle comparison expressions
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				auto &comp = expr.Cast<BoundComparisonExpression>();
+				if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+					auto &constant = comp.right->Cast<BoundConstantExpression>();
+					auto is_compare_equal = comp.type == ExpressionType::COMPARE_EQUAL;
+					auto hash = ValueXXH64(constant.value);
+					return hash > 0 && !bloom_filter.FilterCheck(hash) && is_compare_equal;
+				}
+			}
+			// Handle AND conjunctions
+			if (expr.type == ExpressionType::CONJUNCTION_AND) {
+				auto &conj = expr.Cast<BoundConjunctionExpression>();
+				bool any_children_true = false;
+				for (auto &child : conj.children) {
+					auto child_filter = ExpressionFilter(child->Copy());
+					any_children_true |= ApplyBloomFilter(child_filter, bloom_filter);
+				}
+				return any_children_true;
+			}
+			// Handle OR conjunctions
+			if (expr.type == ExpressionType::CONJUNCTION_OR) {
+				auto &conj = expr.Cast<BoundConjunctionExpression>();
+				bool all_children_true = true;
+				for (auto &child : conj.children) {
+					auto child_filter = ExpressionFilter(child->Copy());
+					all_children_true &= ApplyBloomFilter(child_filter, bloom_filter);
+				}
+				return all_children_true;
+			}
+		}
 		return false;
 	}
 }
