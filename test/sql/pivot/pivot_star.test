@@ -31,4 +31,4 @@ CREATE VIEW expr_view AS SELECT * FROM t UNPIVOT (val FOR col IN (1+2+id));
 statement error
 CREATE VIEW v AS PIVOT t ON id IN (CASE WHEN true THEN 'a' END) USING (SUM(feb))
 ----
-TransactionContext Error: Failed to commit: Cannot serialize non-constant expression 'CASE  WHEN (CAST('t' AS BOOLEAN)) THEN ('a') ELSE NULL END' in pivot list when targeting database storage version ''
+Cannot serialize non-constant expression 'CASE  WHEN (CAST('t' AS BOOLEAN)) THEN ('a') ELSE NULL END' in pivot list when targeting database storage version
