@@ -94,7 +94,7 @@ private:
 			new_ptr = data_ptr_cast(malloc(bytes));
 		}
 		if (!new_ptr) {
-			throw OutOfMemoryException("ArrowBuffer: failed to allocate %llu bytes", (unsigned long long)bytes);
+			throw OutOfMemoryException("ArrowBuffer: failed to allocate %llu bytes", bytes);
 		}
 		dataptr = new_ptr;
 		capacity = bytes;
