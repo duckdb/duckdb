@@ -496,13 +496,20 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	// Handle internal functions (optional wraps child expression in bind data)
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-			return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		if (func.function.name == OptionalFilterScalarFun::NAME) {
+			auto data = func.bind_info ? dynamic_cast<OptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
+			if (data && data->child_filter_expr) {
+				return CollectValuesAndComparisonsFromExpression(*data->child_filter_expr, in_values, comparisons);
+			}
+			return true;
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-			return CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
+			auto data =
+			    func.bind_info ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
+			if (data && data->child_filter_expr) {
+				return CollectValuesAndComparisonsFromExpression(*data->child_filter_expr, in_values, comparisons);
+			}
+			return true;
 		}
 		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
 			return true;
@@ -582,13 +589,20 @@ static bool ExtractComparisonsAndInFiltersFromExpression(const Expression &expr,
 	// Handle internal optional filter: unwrap to child expression in bind data
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-			return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons, in_filters);
+		if (func.function.name == OptionalFilterScalarFun::NAME) {
+			auto data = func.bind_info ? dynamic_cast<OptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
+			if (data && data->child_filter_expr) {
+				return ExtractComparisonsAndInFiltersFromExpression(*data->child_filter_expr, comparisons, in_filters);
+			}
+			return true;
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-			return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons, in_filters);
+		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
+			auto data =
+			    func.bind_info ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
+			if (data && data->child_filter_expr) {
+				return ExtractComparisonsAndInFiltersFromExpression(*data->child_filter_expr, comparisons, in_filters);
+			}
+			return true;
 		}
 		// Bloom, PHJ, prefix_range, dynamic: ignore but don't block
 		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {

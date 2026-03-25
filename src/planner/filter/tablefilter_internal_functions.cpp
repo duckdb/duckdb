@@ -60,6 +60,41 @@ static unique_ptr<FunctionData> TableFilterInternalDeserialize(Deserializer &des
 	return make_uniq<PassthroughFilterFunctionData>();
 }
 
+static void OptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                    const ScalarFunction &function) {
+	auto data = bind_data ? dynamic_cast<const OptionalFilterFunctionData *>(bind_data.get()) : nullptr;
+	if (!data) {
+		return;
+	}
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data->child_filter_expr);
+}
+
+static unique_ptr<FunctionData> OptionalFilterDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+	auto child_filter_expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr");
+	return make_uniq<OptionalFilterFunctionData>(std::move(child_filter_expr));
+}
+
+static void SelectivityOptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                               const ScalarFunction &function) {
+	auto data = bind_data ? dynamic_cast<const SelectivityOptionalFilterFunctionData *>(bind_data.get()) : nullptr;
+	if (!data) {
+		return;
+	}
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data->child_filter_expr);
+	serializer.WritePropertyWithDefault<float>(201, "selectivity_threshold", data->selectivity_threshold);
+	serializer.WritePropertyWithDefault<idx_t>(202, "n_vectors_to_check", data->n_vectors_to_check);
+}
+
+static unique_ptr<FunctionData> SelectivityOptionalFilterDeserialize(Deserializer &deserializer,
+                                                                     ScalarFunction &function) {
+	auto child_filter_expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr");
+	auto selectivity_threshold =
+	    deserializer.ReadPropertyWithExplicitDefault<float>(201, "selectivity_threshold", 0.5f);
+	auto n_vectors_to_check = deserializer.ReadPropertyWithExplicitDefault<idx_t>(202, "n_vectors_to_check", idx_t(6));
+	return make_uniq<SelectivityOptionalFilterFunctionData>(std::move(child_filter_expr), selectivity_threshold,
+	                                                        n_vectors_to_check);
+}
+
 //===----------------------------------------------------------------------===//
 // Selectivity tracking local state
 //===----------------------------------------------------------------------===//
@@ -744,8 +779,8 @@ ScalarFunction OptionalFilterScalarFun::GetFunction(const LogicalType &input_typ
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, OptionalFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
 	func.SetFilterPruneCallback(OptionalFilterScalarFun::FilterPrune);
-	func.serialize = TableFilterInternalSerialize;
-	func.deserialize = TableFilterInternalDeserialize;
+	func.serialize = OptionalFilterSerialize;
+	func.deserialize = OptionalFilterDeserialize;
 	return func;
 }
 
@@ -753,12 +788,12 @@ FilterPropagateResult OptionalFilterScalarFun::FilterPrune(const FunctionStatist
 	if (!input.bind_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &data = input.bind_data->Cast<OptionalFilterFunctionData>();
-	if (!data.child_filter_expr) {
+	auto data = dynamic_cast<const OptionalFilterFunctionData *>(input.bind_data.get());
+	if (!data || !data->child_filter_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// Delegate to the child expression's statistics check
-	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
+	return ExpressionFilter::CheckExpressionStatistics(*data->child_filter_expr, input.stats);
 }
 
 //===----------------------------------------------------------------------===//
@@ -781,12 +816,12 @@ static unique_ptr<FunctionLocalState> SelectivityOptionalFilterInitLocalState(Ex
 	if (dynamic_cast<const PassthroughFilterFunctionData *>(bind_data)) {
 		return nullptr;
 	}
-	auto &data = bind_data->Cast<SelectivityOptionalFilterFunctionData>();
-	if (!data.child_filter_expr) {
+	auto data = dynamic_cast<SelectivityOptionalFilterFunctionData *>(bind_data);
+	if (!data || !data->child_filter_expr) {
 		return nullptr;
 	}
-	return make_uniq<SelectivityOptionalFilterLocalState>(state.GetContext(), *data.child_filter_expr,
-	                                                      data.n_vectors_to_check, data.selectivity_threshold);
+	return make_uniq<SelectivityOptionalFilterLocalState>(state.GetContext(), *data->child_filter_expr,
+	                                                      data->n_vectors_to_check, data->selectivity_threshold);
 }
 
 static void SelectivityOptionalFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -833,8 +868,8 @@ ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType
 	                    TableFilterInternalFunctions::Bind);
 	func.SetInitStateCallback(SelectivityOptionalFilterInitLocalState);
 	func.SetFilterPruneCallback(SelectivityOptionalFilterScalarFun::FilterPrune);
-	func.serialize = TableFilterInternalSerialize;
-	func.deserialize = TableFilterInternalDeserialize;
+	func.serialize = SelectivityOptionalFilterSerialize;
+	func.deserialize = SelectivityOptionalFilterDeserialize;
 	return func;
 }
 
@@ -842,11 +877,11 @@ FilterPropagateResult SelectivityOptionalFilterScalarFun::FilterPrune(const Func
 	if (!input.bind_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &data = input.bind_data->Cast<SelectivityOptionalFilterFunctionData>();
-	if (!data.child_filter_expr) {
+	auto data = dynamic_cast<const SelectivityOptionalFilterFunctionData *>(input.bind_data.get());
+	if (!data || !data->child_filter_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
+	return ExpressionFilter::CheckExpressionStatistics(*data->child_filter_expr, input.stats);
 }
 
 } // namespace duckdb

@@ -327,11 +327,20 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 			return "Dynamic Filter";
 		}
 	} else if (func_name == OptionalFilterScalarFun::NAME) {
-		auto &data = func_expr.bind_info->Cast<OptionalFilterFunctionData>();
-		return "optional: " + ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+		auto data =
+		    func_expr.bind_info ? dynamic_cast<OptionalFilterFunctionData *>(func_expr.bind_info.get()) : nullptr;
+		if (!data || !data->child_filter_expr) {
+			return "optional";
+		}
+		return "optional: " + ExpressionToFriendlyString(*data->child_filter_expr, column_name);
 	} else if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
-		auto &data = func_expr.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-		return "optional: " + ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+		auto data = func_expr.bind_info
+		                ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(func_expr.bind_info.get())
+		                : nullptr;
+		if (!data || !data->child_filter_expr) {
+			return "optional";
+		}
+		return "optional: " + ExpressionToFriendlyString(*data->child_filter_expr, column_name);
 	}
 	return string();
 }
@@ -400,15 +409,16 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 			return true;
 		}
 		// Check inside optional filter bind data (it wraps a child expression)
-		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
+		if (func.function.name == OptionalFilterScalarFun::NAME) {
+			auto data = func.bind_info ? dynamic_cast<OptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
+			if (data && data->child_filter_expr && ContainsInternalFunction(*data->child_filter_expr, func_name)) {
 				return true;
 			}
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
+		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
+			auto data =
+			    func.bind_info ? dynamic_cast<SelectivityOptionalFilterFunctionData *>(func.bind_info.get()) : nullptr;
+			if (data && data->child_filter_expr && ContainsInternalFunction(*data->child_filter_expr, func_name)) {
 				return true;
 			}
 		}
