@@ -44,7 +44,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	executor.Execute(input, keys);
 
 	// Do not operate on primary key directly to avoid modifying the input chunk
-	auto &primary = keys.data[0];
+	auto primary = Vector::Ref(keys.data[0]);
 	// Count the NULLs so we can exclude them later
 	has_null += MergeNulls(primary, global_table.op.conditions);
 	count += keys.size();

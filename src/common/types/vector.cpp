@@ -1202,7 +1202,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	if (compressed_serialization) {
 		auto vtype = GetVectorType();
 		if (vtype == VectorType::DICTIONARY_VECTOR && DictionaryVector::DictionarySize(*this).IsValid()) {
-			auto &dict = DictionaryVector::Child(*this);
+			auto dict = Vector::Ref(DictionaryVector::Child(*this));
 			if (dict.GetVectorType() == VectorType::FLAT_VECTOR) {
 				idx_t dict_count = DictionaryVector::DictionarySize(*this).GetIndex();
 				auto old_sel = DictionaryVector::SelVector(*this);
