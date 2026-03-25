@@ -524,13 +524,19 @@
   {
     "class": "TableFilterSet",
     "includes": [
-      "duckdb/planner/table_filter.hpp"
+      "duckdb/planner/table_filter.hpp",
+      "duckdb/planner/expression.hpp"
     ],
     "members": [
       {
         "id": 100,
         "name": "filters",
         "type": "map<ProjectionIndex, TableFilter*>"
+      },
+      {
+        "id": 101,
+        "name": "generic_filters",
+        "type": "vector<Expression*>"
       }
     ],
     "pointer_type": "none"

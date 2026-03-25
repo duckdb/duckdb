@@ -821,9 +821,9 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
-	auto temp_filter = ConstantFilter(
-	    ExpressionType::COMPARE_EQUAL,
-	    probe_constant.CastAs(context, reader.GetColumns()[probe_column_idx.GetIndex()].type));
+	auto temp_filter =
+	    ConstantFilter(ExpressionType::COMPARE_EQUAL,
+	                   probe_constant.CastAs(context, reader.GetColumns()[probe_column_idx.GetIndex()].type));
 	filter = ExpressionFilter::FromTableFilter(temp_filter);
 }
 

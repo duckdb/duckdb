@@ -20,6 +20,9 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 	for (auto &entry : table_filters) {
 		table_filter_set->SetFilterByColumnIndex(entry.GetIndex(), entry.TakeFilter());
 	}
+	for (auto &filter : table_filters.GetGenericFilters()) {
+		table_filter_set->PushFilter(filter->Copy());
+	}
 	return table_filter_set;
 }
 

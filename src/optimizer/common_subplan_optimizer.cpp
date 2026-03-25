@@ -323,6 +323,9 @@ private:
 				auto &expression_filter = entry.Filter().Cast<ExpressionFilter>();
 				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
 			}
+			for (auto &filter : get.table_filters.GetMutableGenericFilters()) {
+				ConvertExpression<TYPE>(*filter, info_idx, can_materialize);
+			}
 		}
 		return can_materialize;
 	}

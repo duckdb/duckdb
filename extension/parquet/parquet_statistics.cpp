@@ -631,8 +631,7 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 			// Handle comparison expressions
 			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 				auto &comp = expr.Cast<BoundComparisonExpression>();
-				if (comp.type == ExpressionType::COMPARE_EQUAL &&
-				    comp.right->type == ExpressionType::VALUE_CONSTANT) {
+				if (comp.type == ExpressionType::COMPARE_EQUAL && comp.right->type == ExpressionType::VALUE_CONSTANT) {
 					auto &constant = comp.right->Cast<BoundConstantExpression>();
 					return !constant.value.IsNull();
 				}

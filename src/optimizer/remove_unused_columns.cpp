@@ -771,6 +771,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		//! Now visit the filter to add to the 'column_references'
 		VisitExpression(&filter_expressions.back());
 	}
+	for (auto &filter : get.table_filters.GetGenericFilters()) {
+		filter_expressions.push_back(filter->Copy());
+		VisitExpression(&filter_expressions.back());
+	}
 
 	//! Check with the LogicalGet whether pushdown-extract is supported
 	CheckPushdownExtract(get);
@@ -849,6 +853,21 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 				throw InternalException("RemoveUnusedColumns: removed a filter column");
 			}
 			remapped_filters.PushFilter(it->second, entry.TakeFilter());
+		}
+		for (auto &filter : get.table_filters.GetMutableGenericFilters()) {
+			auto filter_copy = filter->Copy();
+			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+			    filter_copy, [&](BoundColumnRefExpression &column_ref, unique_ptr<Expression> &expr) {
+				    if (column_ref.binding.table_index != get.table_index) {
+					    return;
+				    }
+				    auto it = old_to_new_pos.find(column_ref.binding.column_index);
+				    if (it == old_to_new_pos.end()) {
+					    throw InternalException("RemoveUnusedColumns: removed a generic filter column");
+				    }
+				    column_ref.binding.column_index = it->second;
+			    });
+			remapped_filters.PushFilter(std::move(filter_copy));
 		}
 		get.table_filters = std::move(remapped_filters);
 	}

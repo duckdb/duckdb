@@ -167,7 +167,7 @@ bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, Tabl
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		auto emits_nulls = state.executor ? expr_filter.EvaluateWithConstant(*state.executor, Value(reader.Type()))
-		                                 : expr_filter.EvaluateWithConstant(state.GetContext(), Value(reader.Type()));
+		                                  : expr_filter.EvaluateWithConstant(state.GetContext(), Value(reader.Type()));
 		return !emits_nulls;
 	}
 	case TableFilterType::IS_NULL:

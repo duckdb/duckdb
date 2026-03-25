@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -16,13 +17,16 @@
 
 namespace duckdb {
 
-//! The filters in here are non-composite (only need a single column to be evaluated)
-//! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
+//! A TableFilterSet stores both column-local table filters and generic pushed-down expressions.
 class TableFilterSet {
 public:
 	void PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
+	void PushFilter(unique_ptr<Expression> filter);
 	bool HasFilters() const;
+	bool HasColumnFilters() const;
+	bool HasGenericFilters() const;
 	idx_t FilterCount() const;
+	idx_t GenericFilterCount() const;
 	bool HasFilter(ProjectionIndex col_idx) const;
 	TableFilter &GetFilterByColumnIndexMutable(ProjectionIndex col_idx);
 	optional_ptr<TableFilter> TryGetFilterByColumnIndexMutable(ProjectionIndex col_idx);
@@ -36,6 +40,13 @@ public:
 	static bool Equals(TableFilterSet *left, TableFilterSet *right);
 
 	unique_ptr<TableFilterSet> Copy() const;
+
+	const vector<unique_ptr<Expression>> &GetGenericFilters() const {
+		return generic_filters;
+	}
+	vector<unique_ptr<Expression>> &GetMutableGenericFilters() {
+		return generic_filters;
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static TableFilterSet Deserialize(Deserializer &deserializer);
@@ -106,6 +117,7 @@ public:
 
 private:
 	map<ProjectionIndex, unique_ptr<TableFilter>> filters;
+	vector<unique_ptr<Expression>> generic_filters;
 };
 
 class DynamicTableFilterSet {

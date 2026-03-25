@@ -19,7 +19,7 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
                                 optional_ptr<TableFilterSet> table_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
-	if (table_filters) {
+	if (table_filters && table_filters->HasColumnFilters()) {
 		filters.Initialize(*context, *table_filters, column_ids);
 	}
 	if (table_sampling) {

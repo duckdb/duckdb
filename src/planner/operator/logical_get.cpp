@@ -81,6 +81,13 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 			filters_info += filter.ToString(column_name);
 		}
 	}
+	for (auto &filter : table_filters.GetGenericFilters()) {
+		if (!first_item) {
+			filters_info += "\n";
+		}
+		first_item = false;
+		filters_info += filter->ToString();
+	}
 	result["Filters"] = filters_info;
 
 	if (extra_info.sample_options) {

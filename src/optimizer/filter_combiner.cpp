@@ -402,23 +402,33 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	// we can only pushdown expressions that refer to exactly one column
+	bool single_column = true;
+	for (auto &binding : bindings) {
+		if (binding.table_index != get.table_index) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+	}
 	for (idx_t i = 1; i < bindings.size(); i++) {
 		if (bindings[i] != bindings[0]) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+			single_column = false;
+			break;
 		}
 	}
 	if (!get.function.pushdown_expression(context, get, expr)) {
 		// the scan does not support pushing down THIS expression
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	// replace the BoundColumnRefExpression with a BoundReference
-	auto filter_expr = expr.Copy();
-	ReplaceWithBoundReference(filter_expr);
+	if (single_column) {
+		// replace the BoundColumnRefExpression with a BoundReference
+		auto filter_expr = expr.Copy();
+		ReplaceWithBoundReference(filter_expr);
 
-	// push the expression filter
-	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
-	get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
+		// push the expression filter
+		auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
+		get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
+	} else {
+		get.table_filters.PushFilter(expr.Copy());
+	}
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 

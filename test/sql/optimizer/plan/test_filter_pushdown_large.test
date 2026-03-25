@@ -25,6 +25,12 @@ SELECT i, k FROM (SELECT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY
 3	3
 4	4
 
+# generic pushed-down filters must keep scanning after an entire chunk is filtered out
+query I
+SELECT i FROM vals1 WHERE i + j = 5000
+----
+2500
+
 # pushdown past DISTINCT
 query II
 SELECT i, k FROM (SELECT DISTINCT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i
@@ -238,4 +244,3 @@ SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, va
 # SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
 # WHERE tbl2.k<5000 AND (tbl2.k=5000 OR tbl2.k>5000);
 # 0
-
