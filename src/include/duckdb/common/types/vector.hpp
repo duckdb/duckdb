@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
 
@@ -38,6 +39,9 @@ class Vector {
 
 	friend class DataChunk;
 	friend class VectorCacheBuffer;
+
+    template <class T>
+    class VectorIterationHelper;
 
 public:
 	//! Create a vector that slices another vector
@@ -190,6 +194,12 @@ public:
 	// Transform vector to an equivalent nested vector
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
+
+    template <class T>
+    VectorIterationHelper<T> Entries(idx_t count) const {
+        return VectorIterationHelper<T>(*this, count);
+    }
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
@@ -217,6 +227,61 @@ protected:
 	//! The buffer holding auxiliary data of the vector
 	//! e.g. a string vector uses this to store strings
 	mutable buffer_ptr<VectorBuffer> auxiliary;
+
+private:
+    template <class T>
+    class VectorIterationHelper {
+    public:
+        VectorIterationHelper(const Vector &vector, idx_t count) {
+            vector.ToUnifiedFormat(count, format);
+        }
+
+    private:
+        UnifiedVectorFormat format;
+        idx_t count;
+
+    private:
+        struct VectorValueEntry {
+            idx_t index;
+            optional<T> value;
+        };
+
+        class VectorIterator {
+        public:
+            explicit VectorIterator(UnifiedVectorFormat &format, idx_t index) : format(format), data(UnifiedVectorFormat::GetData<T>(format)), index(index) {
+            }
+
+        public:
+            VectorIterator &operator++() {
+                ++index;
+                return *this;
+            }
+            bool operator!=(const VectorIterator &other) const {
+                return index != other.index;
+            }
+            VectorValueEntry operator*() const {
+                VectorValueEntry result;
+                result.index = index;
+                auto sel_idx = format.sel->get_index(index);
+                if (format.validity.RowIsValid(sel_idx)) {
+                    result.value = data[sel_idx];
+                }
+                return result;
+            }
+        private:
+            UnifiedVectorFormat &format;
+            const T *data;
+            idx_t index;
+        };
+
+    public:
+        VectorIterator begin() { // NOLINT: match stl API
+            return VectorIterator(format, 0);
+        }
+        VectorIterator end() { // NOLINT: match stl API
+            return VectorIterator(format, count);
+        }
+    };
 };
 
 //! The VectorChildBuffer holds a child Vector
