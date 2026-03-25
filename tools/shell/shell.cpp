@@ -3026,6 +3026,23 @@ void ShellState::Initialize() {
 		linenoiseSetPrompt(continuePrompt, continuePromptSelected, scrollUpPrompt, scrollDownPrompt);
 	}
 #endif
+#if defined(_WIN32) || defined(WIN32)
+	if (stdout_is_console) {
+		// On Windows virtual terminal processing may be disabled by default,
+		// we need it enabled (even when highlighting is off) to process
+		// ANSI escape sequences, for example the position of the cursor.
+		HANDLE out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (out_handle != INVALID_HANDLE_VALUE) {
+			DWORD mode = 0;
+			if (GetConsoleMode(out_handle, &mode)) {
+				if (!(mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+					mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+					SetConsoleMode(out_handle, mode);
+				}
+			}
+		}
+	}
+#endif
 }
 
 void ShellState::DetectDarkLightMode() {
