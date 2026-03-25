@@ -18,6 +18,9 @@ void FileBufferHandleGroup::CopyTo(data_ptr_t dest, idx_t nr_bytes) const {
 			break;
 		}
 		const idx_t to_copy = MinValue(mh.length, nr_bytes - copied);
+		if (to_copy == 0) {
+			continue;
+		}
 		memcpy(dest + copied, mh.handle.Ptr() + mh.start_offset, to_copy);
 		copied += to_copy;
 	}
