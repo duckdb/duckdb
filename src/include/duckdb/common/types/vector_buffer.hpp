@@ -69,15 +69,20 @@ public:
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
-	explicit VectorBuffer(VectorBufferType type) : buffer_type(type) {
+	explicit VectorBuffer(VectorBufferType type) : buffer_type(type), data_ptr(nullptr) {
 	}
-	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
+	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
 		if (data_size > 0) {
-			data = Allocator::DefaultAllocator().Allocate(data_size);
+			allocated_data = Allocator::DefaultAllocator().Allocate(data_size);
+			data_ptr = allocated_data.get();
 		}
 	}
+	explicit VectorBuffer(data_ptr_t data_ptr_p)
+	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
+	}
 	explicit VectorBuffer(AllocatedData &&data_p)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
+	    : buffer_type(VectorBufferType::STANDARD_BUFFER), allocated_data(std::move(data_p)) {
+		data_ptr = allocated_data.get();
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -86,11 +91,17 @@ public:
 
 public:
 	data_ptr_t GetData() {
-		return data.get();
+		return data_ptr;
 	}
 
 	void SetData(AllocatedData &&new_data) {
-		data = std::move(new_data);
+		allocated_data = std::move(new_data);
+		data_ptr = allocated_data.get();
+	}
+
+	void SetData(data_ptr_t data) {
+		data_ptr = data;
+		allocated_data.Reset();
 	}
 
 	VectorAuxiliaryData *GetAuxiliaryData() {
@@ -106,7 +117,7 @@ public:
 	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
-		return data.GetAllocator();
+		return allocated_data.GetAllocator();
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -126,7 +137,8 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	AllocatedData data;
+	data_ptr_t data_ptr;
+	AllocatedData allocated_data;
 
 public:
 	template <class TARGET>

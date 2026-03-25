@@ -622,7 +622,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		} else {
 			// standard case: we can handle everything at once - run the expression once
 			DataChunk chunk;
-			chunk.data.emplace_back(vector);
+			chunk.data.emplace_back(Vector::Ref(vector));
 			chunk.SetCardinality(scan_count);
 			approved_tuple_count = state.executor.SelectExpression(chunk, result_sel, sel, approved_tuple_count);
 		}

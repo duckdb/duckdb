@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -17,14 +18,14 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	auto &child = input.auxiliary->Cast<VectorChildBuffer>();
 	lock_guard<mutex> guard(child.cached_hashes_lock);
 
-	if (!child.cached_hashes.data) {
+	if (!child.cached_hashes) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
 		D_ASSERT(!child.size.IsValid() || child.size.GetIndex() == dictionary_size);
-		child.cached_hashes.Initialize(false, dictionary_size);
-		VectorOperations::Hash(child.data, child.cached_hashes, dictionary_size);
+		child.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
+		VectorOperations::Hash(child.data, *child.cached_hashes, dictionary_size);
 	}
-	return child.cached_hashes;
+	return *child.cached_hashes;
 }
 
 } // namespace duckdb

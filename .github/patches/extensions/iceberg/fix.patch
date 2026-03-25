@@ -189,6 +189,19 @@ index e0b57e41..de141b97 100644
  				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
  				           data_file.file_path);
  				//! Skip this file
+diff --git a/src/iceberg_functions/iceberg_multi_file_reader.cpp b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+index cda34b67..6693bcab 100644
+--- a/src/iceberg_functions/iceberg_multi_file_reader.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+@@ -447,7 +447,7 @@ void IcebergMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFi
+ 	if (diff > 0) {
+ 		int32_t start = input_chunk.ColumnCount() - diff;
+ 		for (int32_t i = 0; i < diff; i++) {
+-			output_chunk.data.emplace_back(input_chunk.data[start + i]);
++			output_chunk.data.emplace_back(Vector::Ref(input_chunk.data[start + i]));
+ 		}
+ 	}
+ 
 diff --git a/src/iceberg_manifest.cpp b/src/iceberg_manifest.cpp
 index 194dce6d..ca1e62d1 100644
 --- a/src/iceberg_manifest.cpp
