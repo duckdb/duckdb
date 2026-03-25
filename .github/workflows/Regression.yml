@@ -167,6 +167,7 @@ jobs:
               --threads 2 \
               "${extra_args[@]}"; then
               status=1
+              echo "::error title=Regression suite failed::$(basename "$benchmark" .csv) in ${{ matrix.name }}"
             fi
             echo "::endgroup::"
           done
