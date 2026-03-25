@@ -137,7 +137,7 @@ jobs:
     needs:
       - win-release-64
     if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
-    runs-on: windows-latest
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
 
     steps:
     - uses: actions/checkout@v6
