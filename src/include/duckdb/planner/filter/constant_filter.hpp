@@ -14,6 +14,7 @@
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class ConstantFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::CONSTANT_COMPARISON;

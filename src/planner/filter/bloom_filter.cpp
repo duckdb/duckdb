@@ -1,5 +1,6 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -81,7 +82,7 @@ inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
-	return column_name + " IN BF(" + key_column_name + ")";
+	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
 void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
@@ -96,46 +97,11 @@ void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, con
 
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                             BFTableFilterState &state) const {
-	if (state.current_capacity < approved_tuple_count) {
-		state.hashes_v.Initialize(false, approved_tuple_count);
-		state.bf_sel.Initialize(approved_tuple_count);
-		state.current_capacity = approved_tuple_count;
-	}
-
-	HashInternal(keys_v, sel, approved_tuple_count, state);
-
-	idx_t found_count;
-	if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		const auto constant_hash = *ConstantVector::GetData<hash_t>(state.hashes_v);
-		const bool found = this->filter.LookupOne(constant_hash);
-		found_count = found ? approved_tuple_count : 0;
-	} else {
-		state.hashes_v.Flatten(approved_tuple_count);
-		found_count = this->filter.LookupHashes(state.hashes_v, state.bf_sel, approved_tuple_count);
-	}
-
-	// all the elements have been found, we don't need to translate anything
-	if (found_count == approved_tuple_count) {
-		return approved_tuple_count;
-	}
-
-	if (sel.IsSet()) {
-		for (idx_t idx = 0; idx < found_count; idx++) {
-			const idx_t flat_sel_idx = state.bf_sel.get_index(idx);
-			const idx_t original_sel_idx = sel.get_index(flat_sel_idx);
-			sel.set_index(idx, original_sel_idx);
-		}
-	} else {
-		sel.Initialize(state.bf_sel);
-	}
-
-	approved_tuple_count = found_count;
-	return approved_tuple_count;
+	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
 bool BFTableFilter::FilterValue(const Value &value) const {
-	const auto hash = value.Hash();
-	return filter.LookupOne(hash);
+	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
 template <class T>
@@ -173,47 +139,24 @@ static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, con
 }
 
 FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
-	switch (stats.GetType().InternalType()) {
-	case PhysicalType::UINT8:
-		return TemplatedCheckStatistics<uint8_t>(filter, stats);
-	case PhysicalType::UINT16:
-		return TemplatedCheckStatistics<uint16_t>(filter, stats);
-	case PhysicalType::UINT32:
-		return TemplatedCheckStatistics<uint32_t>(filter, stats);
-	case PhysicalType::UINT64:
-		return TemplatedCheckStatistics<uint64_t>(filter, stats);
-	case PhysicalType::UINT128:
-		return TemplatedCheckStatistics<uhugeint_t>(filter, stats);
-	case PhysicalType::INT8:
-		return TemplatedCheckStatistics<int8_t>(filter, stats);
-	case PhysicalType::INT16:
-		return TemplatedCheckStatistics<int16_t>(filter, stats);
-	case PhysicalType::INT32:
-		return TemplatedCheckStatistics<int32_t>(filter, stats);
-	case PhysicalType::INT64:
-		return TemplatedCheckStatistics<int64_t>(filter, stats);
-	case PhysicalType::INT128:
-		return TemplatedCheckStatistics<hugeint_t>(filter, stats);
-	default:
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
+	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
 bool BFTableFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<BFTableFilter>();
-	return RefersToSameObject(filter, other.filter) && filters_null_values == other.filters_null_values &&
-	       key_column_name == other.key_column_name && key_type == other.key_type;
+	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 unique_ptr<TableFilter> BFTableFilter::Copy() const {
-	return make_uniq<BFTableFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);
+	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
 unique_ptr<Expression> BFTableFilter::ToExpression(const Expression &column) const {
-	auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
-	return std::move(bound_constant);
+	auto func = BloomFilterScalarFun::GetFunction(column.return_type);
+	auto bind_data =
+	    make_uniq<BloomFilterFunctionData>(filter, filters_null_values, key_column_name, key_type, 0.0f, 0);
+	vector<unique_ptr<Expression>> args;
+	args.push_back(column.Copy());
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
+	                                          std::move(bind_data));
 }
 
 void BFTableFilter::Serialize(Serializer &serializer) const {
@@ -228,8 +171,7 @@ unique_ptr<TableFilter> BFTableFilter::Deserialize(Deserializer &deserializer) {
 	auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
 	auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
 
-	BloomFilter filter;
-	auto result = make_uniq<BFTableFilter>(filter, filters_null_values, key_column_name, key_type);
+	auto result = make_uniq<BFTableFilter>(nullptr, filters_null_values, key_column_name, key_type);
 	return std::move(result);
 }
 

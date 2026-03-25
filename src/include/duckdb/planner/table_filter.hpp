@@ -62,6 +62,7 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
+	[[noreturn]] static void ThrowDeprecated(const string &filter_name);
 
 public:
 	template <class TARGET>

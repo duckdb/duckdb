@@ -17,6 +17,7 @@ namespace duckdb {
 
 class PerfectHashJoinExecutor;
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class PerfectHashJoinFilter final : public TableFilter {
 public:
 	static constexpr auto TYPE = TableFilterType::PERFECT_HASH_JOIN_FILTER;

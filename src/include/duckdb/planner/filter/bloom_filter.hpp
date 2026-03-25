@@ -10,6 +10,7 @@
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
@@ -41,9 +42,10 @@ private:
 	uint64_t *bf;
 };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class BFTableFilter final : public TableFilter {
 private:
-	BloomFilter &filter;
+	optional_ptr<BloomFilter> filter;
 
 	bool filters_null_values;
 	string key_column_name;
@@ -53,8 +55,8 @@ public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BFTableFilter(BloomFilter &filter_p, const bool filters_null_values_p, const string &key_column_name_p,
-	                       const LogicalType &key_type_p)
+	explicit BFTableFilter(optional_ptr<BloomFilter> filter_p, const bool filters_null_values_p,
+	                       const string &key_column_name_p, const LogicalType &key_type_p)
 	    : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p),
 	      key_column_name(key_column_name_p), key_type(key_type_p) {
 	}

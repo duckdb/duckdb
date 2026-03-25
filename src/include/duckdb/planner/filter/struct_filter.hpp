@@ -14,6 +14,7 @@
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class StructFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::STRUCT_EXTRACT;

@@ -35,51 +35,11 @@ bool ConstantFilter::Compare(const Value &value) const {
 }
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!stats.CanHaveNoNull()) {
-		// no non-null values are possible: always false
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	FilterPropagateResult result;
-	D_ASSERT(constant.type().id() == stats.GetType().id());
-	switch (constant.type().InternalType()) {
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::UINT128:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		result = NumericStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
-		break;
-	case PhysicalType::VARCHAR:
-		switch (stats.GetStatsType()) {
-		case StatisticsType::STRING_STATS:
-			result = StringStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
-			break;
-		default:
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		break;
-	default:
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-		// the numeric filter is always true, but the column can have NULL values
-		// we can't prune the filter
-		if (stats.CanHaveNull()) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-	}
-	return result;
+	TableFilter::ThrowDeprecated("ConstantFilter");
 }
 
 string ConstantFilter::ToString(const string &column_name) const {
-	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToSQLString();
+	TableFilter::ThrowDeprecated("ConstantFilter");
 }
 
 unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) const {
@@ -89,15 +49,11 @@ unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) co
 }
 
 bool ConstantFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<ConstantFilter>();
-	return other.comparison_type == comparison_type && other.constant == constant;
+	TableFilter::ThrowDeprecated("ConstantFilter");
 }
 
 unique_ptr<TableFilter> ConstantFilter::Copy() const {
-	return make_uniq<ConstantFilter>(comparison_type, constant);
+	TableFilter::ThrowDeprecated("ConstantFilter");
 }
 
 } // namespace duckdb

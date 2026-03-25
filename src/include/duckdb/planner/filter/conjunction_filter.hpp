@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class ConjunctionFilter : public TableFilter {
 public:
 	explicit ConjunctionFilter(TableFilterType filter_type_p) : TableFilter(filter_type_p) {
@@ -26,11 +27,11 @@ public:
 
 public:
 	bool Equals(const TableFilter &other) const override {
-		throw InternalException("ConjunctionFilter is a legacy filter type");
-		return TableFilter::Equals(other);
+		TableFilter::ThrowDeprecated("ConjunctionFilter");
 	}
 };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class ConjunctionOrFilter : public ConjunctionFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::CONJUNCTION_OR;
@@ -46,6 +47,7 @@ public:
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class ConjunctionAndFilter : public ConjunctionFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::CONJUNCTION_AND;

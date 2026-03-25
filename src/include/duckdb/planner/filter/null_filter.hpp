@@ -12,6 +12,7 @@
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class IsNullFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::IS_NULL;
@@ -28,6 +29,7 @@ public:
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class IsNotNullFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::IS_NOT_NULL;

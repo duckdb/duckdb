@@ -861,11 +861,8 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 			//! Not initialized
 			return true;
 		}
-		if (!dynamic_filter.filter_data->filter) {
-			//! No filter present
-			return true;
-		}
-		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
+		return DynamicFilterData::CompareValue(dynamic_filter.filter_data->comparison_type,
+		                                       dynamic_filter.filter_data->constant, constant);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
@@ -1004,11 +1001,9 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		if (!dynamic_filter.filter_data->initialized) {
 			return nullptr;
 		}
-		if (!dynamic_filter.filter_data->filter) {
-			return nullptr;
-		}
 		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
-		return TryCastTableFilter(*dynamic_filter.filter_data->filter, mapping, target_type);
+		auto temp = ConstantFilter(dynamic_filter.filter_data->comparison_type, dynamic_filter.filter_data->constant);
+		return TryCastTableFilter(temp, mapping, target_type);
 	}
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:

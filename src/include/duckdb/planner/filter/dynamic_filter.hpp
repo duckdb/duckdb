@@ -12,21 +12,29 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
 struct DynamicFilterData {
+	DynamicFilterData() : comparison_type(ExpressionType::INVALID) {
+	}
+	DynamicFilterData(ExpressionType comparison_type_p, Value constant_p);
+
 	mutex lock;
-	unique_ptr<ConstantFilter> filter;
+	ExpressionType comparison_type;
+	Value constant;
 	atomic<bool> initialized = {false};
 
 	void SetValue(Value val);
 	void Reset();
+	static bool CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value);
+	static FilterPropagateResult CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+	                                             const Value &constant);
 };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class DynamicFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::DYNAMIC_FILTER;

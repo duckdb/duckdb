@@ -12,8 +12,8 @@
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 
 namespace duckdb {
 
@@ -107,7 +107,18 @@ SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> fil
 }
 
 FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics &stats) const {
-	return child_filter->CheckStatistics(stats);
+	TableFilter::ThrowDeprecated("SelectivityOptionalFilter");
+}
+
+unique_ptr<Expression> SelectivityOptionalFilter::ToExpression(const Expression &column) const {
+	auto func = SelectivityOptionalFilterScalarFun::GetFunction(column.return_type);
+	auto child_expr = child_filter ? child_filter->ToExpression(column) : nullptr;
+	auto bind_data = make_uniq<SelectivityOptionalFilterFunctionData>(std::move(child_expr), selectivity_threshold,
+	                                                                  n_vectors_to_check);
+	vector<unique_ptr<Expression>> args;
+	args.push_back(column.Copy());
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
+	                                          std::move(bind_data));
 }
 
 void SelectivityOptionalFilter::Serialize(Serializer &serializer) const {
@@ -125,35 +136,20 @@ unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &des
 }
 void SelectivityOptionalFilter::FiltersNullValues(const LogicalType &type, bool &filters_nulls,
                                                   bool &filters_valid_values, TableFilterState &filter_state) const {
-	const auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
-	return ConstantFun::FiltersNullValues(type, *this->child_filter, filters_nulls, filters_valid_values,
-	                                      *state.child_state);
+	TableFilter::ThrowDeprecated("SelectivityOptionalFilter");
 }
 unique_ptr<TableFilterState> SelectivityOptionalFilter::InitializeState(ClientContext &context) const {
-	D_ASSERT(child_filter);
-	auto child_filter_state = TableFilterState::Initialize(context, *child_filter);
-	return make_uniq<SelectivityOptionalFilterState>(std::move(child_filter_state), this->n_vectors_to_check,
-	                                                 this->selectivity_threshold);
+	TableFilter::ThrowDeprecated("SelectivityOptionalFilter");
 }
 
 idx_t SelectivityOptionalFilter::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                                  TableFilterState &filter_state, const idx_t scan_count,
                                                  idx_t &approved_tuple_count) const {
-	auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
-	if (state.stats.IsActive()) {
-		const idx_t approved_before = approved_tuple_count;
-		const idx_t accepted_count = ColumnSegment::FilterSelection(
-		    sel, vector, vdata, *child_filter, *state.child_state, scan_count, approved_tuple_count);
-		state.stats.Update(accepted_count, approved_before);
-		return accepted_count;
-	}
-	state.stats.Update(0, 0);
-	return scan_count;
+	TableFilter::ThrowDeprecated("SelectivityOptionalFilter");
 }
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
-	auto copy = make_uniq<SelectivityOptionalFilter>(child_filter->Copy(), selectivity_threshold, n_vectors_to_check);
-	return unique_ptr_cast<SelectivityOptionalFilter, TableFilter>(std::move(copy));
+	TableFilter::ThrowDeprecated("SelectivityOptionalFilter");
 }
 
 } // namespace duckdb

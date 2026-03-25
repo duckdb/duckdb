@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
@@ -116,9 +115,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
 	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
-	auto base_filter = make_uniq<ConstantFilter>(comparison_type, std::move(minimum_value));
-	auto filter_data = make_shared_ptr<DynamicFilterData>();
-	filter_data->filter = std::move(base_filter);
+	auto filter_data = make_shared_ptr<DynamicFilterData>(comparison_type, std::move(minimum_value));
 
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
@@ -142,8 +139,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 
 		if (nulls_first) {
 			// Create OR(IS_NULL(col), dynamic_filter(col))
-			auto is_null =
-			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+			auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 			is_null->children.push_back(make_uniq<BoundReferenceExpression>(type, 0));
 
 			auto or_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);

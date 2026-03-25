@@ -38,6 +38,7 @@ public:
 	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
 };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class PrefixRangeTableFilter final : public TableFilter {
 private:
 	optional_ptr<PrefixRangeFilter> filter;

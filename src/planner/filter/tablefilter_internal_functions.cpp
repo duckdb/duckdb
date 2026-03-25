@@ -20,7 +20,6 @@
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
@@ -690,8 +689,13 @@ static void DynamicFilterFunction(DataChunk &args, ExpressionState &state, Vecto
 		return;
 	}
 
-	lock_guard<mutex> l(func_data.filter_data->lock);
-	auto &constant_filter = *func_data.filter_data->filter;
+	ExpressionType comparison_type;
+	Value constant;
+	{
+		lock_guard<mutex> l(func_data.filter_data->lock);
+		comparison_type = func_data.filter_data->comparison_type;
+		constant = func_data.filter_data->constant;
+	}
 	auto &input = args.data[0];
 
 	UnifiedVectorFormat input_data;
@@ -703,7 +707,7 @@ static void DynamicFilterFunction(DataChunk &args, ExpressionState &state, Vecto
 			result_data[i] = false;
 		} else {
 			auto val = input.GetValue(idx);
-			result_data[i] = constant_filter.Compare(val);
+			result_data[i] = DynamicFilterData::CompareValue(comparison_type, constant, val);
 		}
 	}
 }
@@ -733,7 +737,8 @@ FilterPropagateResult DynamicFilterScalarFun::FilterPrune(const FunctionStatisti
 	if (!data.filter_data->initialized) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return data.filter_data->filter->CheckStatistics(input.stats);
+	return DynamicFilterData::CheckStatistics(input.stats, data.filter_data->comparison_type,
+	                                          data.filter_data->constant);
 }
 
 //===----------------------------------------------------------------------===//

@@ -8,56 +8,19 @@ ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::
 }
 
 FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	// the OR filter is true if ANY of the children is true
-	D_ASSERT(!child_filters.empty());
-	for (auto &filter : child_filters) {
-		auto prune_result = filter->CheckStatistics(stats);
-		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-	}
-	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	TableFilter::ThrowDeprecated("ConjunctionOrFilter");
 }
 
 string ConjunctionOrFilter::ToString(const string &column_name) const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	string result;
-	for (idx_t i = 0; i < child_filters.size(); i++) {
-		if (i > 0) {
-			result += " OR ";
-		}
-		result += child_filters[i]->ToString(column_name);
-	}
-	return result;
+	TableFilter::ThrowDeprecated("ConjunctionOrFilter");
 }
 
 bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	if (!ConjunctionFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<ConjunctionOrFilter>();
-	if (other.child_filters.size() != child_filters.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < other.child_filters.size(); i++) {
-		if (!child_filters[i]->Equals(*other.child_filters[i])) {
-			return false;
-		}
-	}
-	return true;
+	TableFilter::ThrowDeprecated("ConjunctionOrFilter");
 }
 
 unique_ptr<TableFilter> ConjunctionOrFilter::Copy() const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	auto result = make_uniq<ConjunctionOrFilter>();
-	for (auto &filter : child_filters) {
-		result->child_filters.push_back(filter->Copy());
-	}
-	return std::move(result);
+	TableFilter::ThrowDeprecated("ConjunctionOrFilter");
 }
 
 unique_ptr<Expression> ConjunctionOrFilter::ToExpression(const Expression &column) const {
@@ -72,57 +35,19 @@ ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType
 }
 
 FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	// the AND filter is true if ALL of the children is true
-	D_ASSERT(!child_filters.empty());
-	auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-	for (auto &filter : child_filters) {
-		auto prune_result = filter->CheckStatistics(stats);
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		} else if (prune_result != result) {
-			result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-	}
-	return result;
+	TableFilter::ThrowDeprecated("ConjunctionAndFilter");
 }
 
 string ConjunctionAndFilter::ToString(const string &column_name) const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	string result;
-	for (idx_t i = 0; i < child_filters.size(); i++) {
-		if (i > 0) {
-			result += " AND ";
-		}
-		result += child_filters[i]->ToString(column_name);
-	}
-	return result;
+	TableFilter::ThrowDeprecated("ConjunctionAndFilter");
 }
 
 bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	if (!ConjunctionFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<ConjunctionAndFilter>();
-	if (other.child_filters.size() != child_filters.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < other.child_filters.size(); i++) {
-		if (!child_filters[i]->Equals(*other.child_filters[i])) {
-			return false;
-		}
-	}
-	return true;
+	TableFilter::ThrowDeprecated("ConjunctionAndFilter");
 }
 
 unique_ptr<TableFilter> ConjunctionAndFilter::Copy() const {
-	throw InternalException("ConjunctionOrFilter is a legacy filter type");
-	auto result = make_uniq<ConjunctionAndFilter>();
-	for (auto &filter : child_filters) {
-		result->child_filters.push_back(filter->Copy());
-	}
-	return std::move(result);
+	TableFilter::ThrowDeprecated("ConjunctionAndFilter");
 }
 
 unique_ptr<Expression> ConjunctionAndFilter::ToExpression(const Expression &column) const {

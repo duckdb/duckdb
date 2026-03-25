@@ -49,6 +49,7 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 
 enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class SelectivityOptionalFilter final : public OptionalFilter {
 public:
 	float selectivity_threshold;
@@ -60,6 +61,7 @@ public:
 public:
 	unique_ptr<TableFilter> Copy() const override;
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
+	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 	void FiltersNullValues(const LogicalType &type, bool &filters_nulls, bool &filters_valid_values,

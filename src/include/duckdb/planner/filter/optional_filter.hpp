@@ -14,6 +14,7 @@
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class OptionalFilter : public TableFilter {
 public:
 	static constexpr auto TYPE = TableFilterType::OPTIONAL_FILTER;
@@ -37,12 +38,9 @@ public:
 	}
 
 	virtual void FiltersNullValues(const LogicalType &type, bool &filters_nulls, bool &filters_valid_values,
-	                               TableFilterState &filter_state) const {
-	}
+	                               TableFilterState &filter_state) const;
 
-	virtual unique_ptr<TableFilterState> InitializeState(ClientContext &context) const {
-		return make_uniq<TableFilterState>();
-	}
+	virtual unique_ptr<TableFilterState> InitializeState(ClientContext &context) const;
 
 	virtual idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
 	                              TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count) const;
