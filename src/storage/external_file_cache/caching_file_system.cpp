@@ -270,13 +270,6 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		}
 	}
 
-	// Check whether all requested bytes were read, without HEAD requests.
-	if (remaining != 0) {
-		throw IOException(
-		    "Could not read enough bytes from file \"%s\": attempted to read %llu bytes from location %llu", GetPath(),
-		    nr_bytes, location);
-	}
-
 	return FileBufferHandleGroup(std::move(mem_handles));
 }
 

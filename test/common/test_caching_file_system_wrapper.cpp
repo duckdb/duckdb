@@ -812,24 +812,20 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
 	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
 
-	// Partial read across EOF.
+	// Seeking Read past EOF returns partial data.
 	{
 		auto handle = cfs.OpenFile(file_info, flags);
-		REQUIRE_THROWS(handle->Read(100, content.size() - 10));
+		auto group = handle->Read(100, content.size() - 10);
+		auto &handles = group.GetHandles();
+		REQUIRE(handles.size() == 1);
+		REQUIRE(handles[0].length == 10);
+
+		string result(10, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), 10);
+		REQUIRE(result == content.substr(content.size() - 10, 10));
 	}
-	// Complete read across EOF.
-	{
-		auto handle = cfs.OpenFile(file_info, flags);
-		REQUIRE_THROWS(handle->Read(10, content.size() + 100));
-	}
-	// Continuous reads across EOF.
-	{
-		auto handle1 = cfs.OpenFile(file_info, flags);
-		auto handle2 = cfs.OpenFile(file_info, flags);
-		REQUIRE_THROWS(handle1->Read(10, content.size() + 100));
-		REQUIRE_THROWS(handle2->Read(10, content.size() + 100));
-	}
-	// Seek and read across EOF.
+
+	// Non-seeking Read past EOF truncates nr_bytes to remaining file size.
 	{
 		auto handle = cfs.OpenFile(file_info, flags);
 		idx_t requested = content.size() + 100;
