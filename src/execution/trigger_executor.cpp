@@ -11,8 +11,6 @@
 
 namespace duckdb {
 
-constexpr idx_t TriggerExecutor::MAX_TRIGGER_DEPTH;
-
 struct TriggerDepthGuard {
 	explicit TriggerDepthGuard(idx_t &depth) : depth(depth) {
 		depth++;
