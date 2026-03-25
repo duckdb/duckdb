@@ -252,13 +252,21 @@ public:
 
 	void Match(const char *str) {
 		if (!TryMatch(str)) {
-			throw InvalidInputException("Expected '%s' but got '%c' at position %zu", str, *pos, pos - beg);
+			// Check if this would go EOF
+			if (pos + strlen(str) >= end) {
+				throw MakeError("Expected '%s' but got end of input", str);
+			}
+
+			throw MakeError("Expected '%s' but got '%c'", str, *pos);
 		}
 	}
 
 	void Match(char c) {
 		if (!TryMatch(c)) {
-			throw InvalidInputException("Expected '%c' but got '%c' at position %zu", c, *pos, pos - beg);
+			if (pos >= end) {
+				throw MakeError("Expected '%c' but got end of input", c);
+			}
+			throw MakeError("Expected '%c' but got '%c'", c, *pos);
 		}
 	}
 
@@ -267,7 +275,7 @@ public:
 		double num;
 		const auto res = duckdb_fast_float::from_chars(pos, end, num);
 		if (res.ec != std::errc()) {
-			throw InvalidInputException("Expected number at position %zu", pos - beg);
+			throw MakeError("Expected number");
 		}
 
 		pos = res.ptr; // update position to the end of the parsed number
@@ -284,25 +292,52 @@ public:
 		pos = beg;
 	}
 
-private:
+	template <class... ARGS>
+	InvalidInputException MakeError(const char *raw_msg, ARGS... args) const {
+		const auto byte_offset = UnsafeNumericCast<idx_t>(pos - beg);
+		auto msg = StringUtil::Format("Failed to parse geometry: %s at offset %lu",
+		                              StringUtil::Format(raw_msg, args...), byte_offset);
+		if (query_location.IsValid()) {
+			const auto expr_offset = optional_idx(query_location.GetIndex() + byte_offset);
+			return InvalidInputException(Exception::InitializeExtraInfo(expr_offset), msg);
+		} else {
+			return InvalidInputException(msg);
+		}
+	}
+
+	void SetQueryLocation(optional_idx location) {
+		query_location = location;
+	}
+
 	void SkipWhitespace() {
 		while (pos < end && isspace(*pos)) {
 			pos++;
 		}
 	}
 
+private:
 	const char *beg;
 	const char *pos;
 	const char *end;
+	optional_idx query_location;
 };
 
 void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth, bool parent_has_z, bool parent_has_m) {
 	if (depth == Geometry::MAX_RECURSION_DEPTH) {
-		throw InvalidInputException("Geometry string exceeds maximum recursion depth of %d",
-		                            Geometry::MAX_RECURSION_DEPTH);
+		throw reader.MakeError("Geometry string exceeds maximum recursion depth of %d", Geometry::MAX_RECURSION_DEPTH);
 	}
 
-	GeometryType type;
+	// Skip leading whitespace
+	reader.SkipWhitespace();
+
+	// EWKT dialect (ignore SRID if present)
+	if (reader.TryMatch("SRID")) {
+		reader.Match('=');
+		reader.MatchNumber();
+		reader.Match(';');
+	}
+
+	GeometryType type = GeometryType::INVALID;
 
 	if (reader.TryMatch("point")) {
 		type = GeometryType::POINT;
@@ -319,7 +354,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 	} else if (reader.TryMatch("geometrycollection")) {
 		type = GeometryType::GEOMETRYCOLLECTION;
 	} else {
-		throw InvalidInputException("Unknown geometry type at position %zu", reader.GetPosition());
+		throw reader.MakeError("Unknown geometry type");
 	}
 
 	const auto has_z = reader.TryMatch("z");
@@ -328,8 +363,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 	const auto is_empty = reader.TryMatch("empty");
 
 	if ((depth != 0) && ((parent_has_z != has_z) || (parent_has_m != has_m))) {
-		throw InvalidInputException("Geometry has inconsistent Z/M dimensions, starting at position %zu",
-		                            reader.GetPosition());
+		throw reader.MakeError("Geometry has inconsistent Z/M dimensions");
 	}
 
 	// How many dimensions does this geometry have?
@@ -428,6 +462,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 			}
 			part_count.value++;
 		} while (reader.TryMatch(','));
+		reader.Match(')');
 		writer.Write(part_count);
 	} break;
 	case GeometryType::MULTILINESTRING: {
@@ -443,18 +478,23 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 			writer.Write<uint8_t>(1);
 			writer.Write<uint32_t>(part_meta);
 
-			auto vert_count = writer.Reserve<uint32_t>();
-			reader.Match('(');
-			do {
-				for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
-					auto value = reader.MatchNumber();
-					writer.Write<double>(value);
-				}
-				vert_count.value++;
-			} while (reader.TryMatch(','));
-			reader.Match(')');
-			writer.Write(vert_count);
-			part_count.value++;
+			if (reader.TryMatch("EMPTY")) {
+				writer.Write<uint32_t>(0); // No vertices in empty linestring
+				part_count.value++;
+			} else {
+				auto vert_count = writer.Reserve<uint32_t>();
+				reader.Match('(');
+				do {
+					for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
+						auto value = reader.MatchNumber();
+						writer.Write<double>(value);
+					}
+					vert_count.value++;
+				} while (reader.TryMatch(','));
+				reader.Match(')');
+				writer.Write(vert_count);
+				part_count.value++;
+			}
 		} while (reader.TryMatch(','));
 		reader.Match(')');
 		writer.Write(part_count);
@@ -472,25 +512,30 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 			writer.Write<uint8_t>(1);
 			writer.Write<uint32_t>(part_meta);
 
-			auto ring_count = writer.Reserve<uint32_t>();
-			reader.Match('(');
-			do {
-				auto vert_count = writer.Reserve<uint32_t>();
+			if (reader.TryMatch("EMPTY")) {
+				writer.Write<uint32_t>(0); // No rings in empty polygon
+				part_count.value++;
+			} else {
+				auto ring_count = writer.Reserve<uint32_t>();
 				reader.Match('(');
 				do {
-					for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
-						auto value = reader.MatchNumber();
-						writer.Write<double>(value);
-					}
-					vert_count.value++;
+					auto vert_count = writer.Reserve<uint32_t>();
+					reader.Match('(');
+					do {
+						for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
+							auto value = reader.MatchNumber();
+							writer.Write<double>(value);
+						}
+						vert_count.value++;
+					} while (reader.TryMatch(','));
+					reader.Match(')');
+					writer.Write(vert_count);
+					ring_count.value++;
 				} while (reader.TryMatch(','));
 				reader.Match(')');
-				writer.Write(vert_count);
-				ring_count.value++;
-			} while (reader.TryMatch(','));
-			reader.Match(')');
-			writer.Write(ring_count);
-			part_count.value++;
+				writer.Write(ring_count);
+				part_count.value++;
+			}
 		} while (reader.TryMatch(','));
 		reader.Match(')');
 		writer.Write(part_count);
@@ -511,8 +556,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 		writer.Write(part_count);
 	} break;
 	default:
-		throw InvalidInputException("Unknown geometry type %d at position %zu", static_cast<int>(type),
-		                            reader.GetPosition());
+		throw reader.MakeError("Unknown geometry type %d", static_cast<int>(type));
 	}
 }
 
@@ -1037,8 +1081,10 @@ void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
 	result.Reinterpret(source);
 }
 
-bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
+bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict,
+                          optional_idx query_location) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
+	reader.SetQueryLocation(query_location);
 	BlobWriter writer;
 
 	FromStringRecursive(reader, writer, 0, false, false);
@@ -1046,6 +1092,10 @@ bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &re
 	const auto &buffer = writer.GetBuffer();
 	result = StringVector::AddStringOrBlob(result_vector, buffer.data(), buffer.size());
 	return true;
+}
+
+bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
+	return FromString(wkt_text, result, result_vector, strict, optional_idx::Invalid());
 }
 
 string_t Geometry::ToString(Vector &result, const string_t &geom) {
