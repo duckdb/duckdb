@@ -142,14 +142,9 @@ public:
 
 public:
 	void Initialize();
-	void CreateDir(const string &dir_path, FileSystem &fs);
-	optional_ptr<CopyToFileInfo> AddFile(const StorageLockKey &l, const string &file_name,
-	                                     CopyFunctionReturnType return_type);
 
-	void FinalizePartitions();
-	unique_ptr<GlobalFileState> CreatePartitionFileState(const StorageLockKey &l, const vector<Value> &values);
-	PartitionWriteInfo &GetPartitionWriteInfo(const vector<Value> &values);
-	void FinishPartitionWrite(PartitionWriteInfo &info);
+	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
+	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
 
 private:
 	void FinalizePartition(PartitionWriteInfo &info);
@@ -158,8 +153,10 @@ public:
 	const PhysicalCopyToFile &op;
 	ClientContext &context;
 
+	annotated_mutex lock;
+
 	//! Lock guarding the global state
-	StorageLock lock;
+	StorageLock storage_lock;
 	//! Whether the copy was successfully initialized/finalized
 	atomic<bool> initialized;
 	bool finalized;
@@ -177,11 +174,11 @@ public:
 	unique_ptr<PartitionedCopy> partitioned_copy;
 
 	//! Created directories
-	unordered_set<string> created_directories;
+	unordered_set<string> created_directories DUCKDB_GUARDED_BY(lock);
 	//! The list of files created by this operator
-	vector<string> created_files;
+	vector<string> created_files DUCKDB_GUARDED_BY(lock);
 	//! Written file info and stats
-	vector<unique_ptr<CopyToFileInfo>> written_files;
+	vector<unique_ptr<CopyToFileInfo>> written_files DUCKDB_GUARDED_BY(lock);
 
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
@@ -233,29 +230,22 @@ public:
 //===--------------------------------------------------------------------===//
 // PartitionedCopy hpp
 //===--------------------------------------------------------------------===//
-enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, BATCH, PREPARE, FLUSH, DONE };
+enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, BATCH, FLUSH, DONE };
 
 struct PartitionedCopyTask {
-	//! PhysicalWindow-like task management
 	PartitionedCopyStage stage = PartitionedCopyStage::DONE;
 	idx_t hash_bin = 0;
 	idx_t thread_idx = 0;
 	idx_t begin_idx = 0;
 	idx_t end_idx = 0;
-
-	//! PartitionedCopy-specific task management
-	unique_ptr<ColumnDataCollection> batch;
-	optional_ptr<const vector<Value>> values;
 };
 
 struct PartitionedCopyBatchState {
 	vector<Value> values;
 	vector<unique_ptr<ColumnDataCollection>> batches;
-};
+	idx_t next_batch_idx = 0;
 
-struct PartitionedCopyPrepareState {
 	unique_ptr<GlobalFileState> file_state;
-	vector<unique_ptr<PreparedBatchData>> prepared_batches;
 };
 
 //! Manages a single partitioned COPY hash bin
@@ -267,7 +257,7 @@ public:
 	static constexpr auto WINDOW_TASKS_DONE = PartitionedCopyStage::BATCH;
 
 public:
-	PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row, idx_t hash_bin);
+	PartitionedCopyHashGroup(PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row, idx_t hash_bin);
 
 public:
 	PartitionedCopyStage GetStage() const;
@@ -282,7 +272,6 @@ public:
 	bool TryPrepareNextStage();
 	bool TryNextTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
 	bool TryNextBatchTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
-	bool TryNextPrepareTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
 	bool TryNextFlushTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
 
 	void Sort(ExecutionContext &context, GlobalSinkState &sink, InterruptState &interrupt,
@@ -291,14 +280,14 @@ public:
 	                 const PartitionedCopyTask &task);
 	void Mask(const PartitionedCopyTask &task);
 	void Batch(const PartitionedCopyTask &task);
-	void Prepare(const PartitionedCopyTask &task);
+	void Flush(ExecutionContext &execution_context, const PartitionedCopyTask &task);
 
 private:
 	void AllocateMask();
 
 public:
 	//! The PartitionedCopy that this hash group belongs to
-	const PartitionedCopy &partitioned_copy;
+	PartitionedCopy &partitioned_copy;
 
 	//! The row count of the group
 	const idx_t count;
@@ -335,35 +324,33 @@ public:
 
 	//! The current row index (during BATCH stage)
 	idx_t batch_row_idx DUCKDB_GUARDED_BY(lock) = 0;
-	//! The current partition index (hive)
-	idx_t batch_partition_idx DUCKDB_GUARDED_BY(lock) = 0;
 	//! Used to iterate over chunks (during BATCH stage)
 	ColumnDataScanState batch_scan_state DUCKDB_GUARDED_BY(lock);
 	//! The batched data (set during BATCH stage), mapping from partition idx to batches (in order)
-	unordered_map<idx_t, PartitionedCopyBatchState> batch_states DUCKDB_GUARDED_BY(lock);
+	vector<PartitionedCopyBatchState> batch_states DUCKDB_GUARDED_BY(lock);
 	//! Count of batched rows
 	atomic<idx_t> batched;
 
-	//! The prepared batched data (set during PREPARE stage), mapping from partition idx to prepared batches (in order)
-	unordered_map<idx_t, PartitionedCopyPrepareState> prepare_states DUCKDB_GUARDED_BY(lock);
+	//! The current partition index for flushing
+	idx_t flush_partition_idx DUCKDB_GUARDED_BY(lock) = 0;
 	//! Count of prepared rows
-	atomic<idx_t> prepared;
+	atomic<idx_t> flushed;
 };
 
 //! Manages a partitioned COPY flush
 class PartitionedCopyState {
 public:
-	PartitionedCopyState(const PartitionedCopy &partitioned_copy, unique_ptr<GlobalSinkState> global_sink_state);
+	PartitionedCopyState(PartitionedCopy &partitioned_copy, unique_ptr<GlobalSinkState> global_sink_state);
 
 public:
 	void InitHashGroups();
 	bool TryAssignTask(PartitionedCopyTask &task);
-	void ExecuteTask(ExecutionContext &context, const PartitionedCopyTask &task, InterruptState &interrupt);
+	void ExecuteTask(ExecutionContext &execution_context, const PartitionedCopyTask &task, InterruptState &interrupt);
 	bool AllGroupsDone() const;
 
 public:
 	//! The PartitionedCopy that this state belongs to
-	const PartitionedCopy &partitioned_copy;
+	PartitionedCopy &partitioned_copy;
 
 	//! Lock for managing this state
 	annotated_mutex lock;
@@ -390,7 +377,7 @@ public:
 	void Flush(ExecutionContext &execution_context, GlobalSinkState &gstate, InterruptState &interrupt_state);
 
 	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values);
-	string GetOrCreateDirectory(string path, const vector<Value> &values);
+	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
 
 private:
 	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
@@ -398,8 +385,8 @@ private:
 
 public:
 	const PhysicalCopyToFile &op;
-	CopyToFileGlobalState &copy_gstate;
 	ClientContext &context;
+	CopyToFileGlobalState &copy_gstate;
 
 	//! Partition/sort strategy with PhysicalOperator-like interface
 	const unique_ptr<const SortStrategy> sort_strategy;
@@ -414,14 +401,14 @@ public:
 	shared_ptr<PartitionedCopyState> flushing_state;
 
 	//! Keep track of offsets for FileNameSegmentType::OFFSET
-	vector_of_value_map_t<idx_t> previous_partitions;
-	idx_t global_offset = 0;
+	vector_of_value_map_t<idx_t> previous_partitions DUCKDB_GUARDED_BY(lock);
+	idx_t global_offset DUCKDB_GUARDED_BY(lock) = 0;
 };
 
-PartitionedCopyHashGroup::PartitionedCopyHashGroup(const PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
+PartitionedCopyHashGroup::PartitionedCopyHashGroup(PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
                                                    idx_t hash_bin_p)
     : partitioned_copy(partitioned_copy), count(chunk_row.count), blocks(chunk_row.chunks), hash_bin(hash_bin_p),
-      stage(PartitionedCopyStage::SORT), sorted(0), materialized(0), masked(0), batched(0) {
+      stage(PartitionedCopyStage::SORT), sorted(0), materialized(0), masked(0), batched(0), flushed(0) {
 }
 
 PartitionedCopyStage PartitionedCopyHashGroup::GetStage() const {
@@ -455,24 +442,18 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 		return false;
 	case PartitionedCopyStage::MASK:
 		if (masked == blocks) {
-			stage = PartitionedCopyStage::PREPARE;
+			stage = PartitionedCopyStage::BATCH;
 			return true;
 		}
 		return false;
 	case PartitionedCopyStage::BATCH:
 		if (batched == count) {
-			stage = PartitionedCopyStage::PREPARE;
-			return true;
-		}
-		return false;
-	case PartitionedCopyStage::PREPARE:
-		if (batch_states.empty()) {
 			stage = PartitionedCopyStage::FLUSH;
 			return true;
 		}
 		return false;
 	case PartitionedCopyStage::FLUSH:
-		if (prepare_states.empty()) {
+		if (flushed == count) {
 			stage = PartitionedCopyStage::DONE;
 			return true;
 		}
@@ -488,8 +469,6 @@ bool PartitionedCopyHashGroup::TryNextTask(PartitionedCopyTask &task) {
 	switch (stage.load()) {
 	case PartitionedCopyStage::BATCH:
 		return TryNextBatchTask(task);
-	case PartitionedCopyStage::PREPARE:
-		return TryNextPrepareTask(task);
 	case PartitionedCopyStage::FLUSH:
 		return TryNextFlushTask(task);
 	default:
@@ -515,11 +494,14 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 	if (batch_row_idx == count) {
 		return false;
 	}
-	auto &batch_state = batch_states[batch_partition_idx];
+	if (partition_mask.RowIsValidUnsafe(batch_row_idx)) {
+		batch_states.emplace_back();
+	}
+	auto &batch_state = batch_states.back();
 
 	// Reuse these fields
 	task.stage = PartitionedCopyStage::BATCH;
-	task.hash_bin = batch_partition_idx;
+	task.hash_bin = batch_states.size() - 1;
 	task.thread_idx = batch_state.batches.size();
 	task.begin_idx = batch_row_idx;
 
@@ -564,56 +546,46 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 	task.end_idx = batch_row_idx;
 
 	// Update partition/batch counters
-	batch_partition_idx += found_next_partition;
 	batch_state.batches.emplace_back();
 
 	return true;
 }
 
-bool PartitionedCopyHashGroup::TryNextPrepareTask(PartitionedCopyTask &task) {
-	if (batch_states.empty()) {
+bool PartitionedCopyHashGroup::TryNextFlushTask(PartitionedCopyTask &task) {
+	if (flush_partition_idx == batch_states.size()) {
 		return false;
 	}
 
-	task.stage = PartitionedCopyStage::PREPARE;
-	const auto it = batch_states.begin();
-	task.hash_bin = it->first;
-	auto &batch_state = it->second;
-	for (idx_t partition_batch_idx = 0; partition_batch_idx < batch_state.batches.size(); partition_batch_idx++) {
-		auto &batch = batch_state.batches[partition_batch_idx];
-		if (!batch) {
-			continue;
-		}
+	auto &batch_state = batch_states[flush_partition_idx];
 
-		task.thread_idx = partition_batch_idx;
-		task.batch = std::move(batch);
-		task.values = batch_state.values;
+	task.stage = PartitionedCopyStage::FLUSH;
+	task.hash_bin = flush_partition_idx;
+	task.thread_idx = batch_state.next_batch_idx++;
+	task.begin_idx = 0;
+	task.end_idx = batch_state.batches[task.thread_idx]->Count();
 
-		if (partition_batch_idx == batch_state.batches.size() - 1) {
-			batch_states.erase(it);
-		}
-		break;
+	if (batch_state.next_batch_idx == batch_state.batches.size()) {
+		flush_partition_idx++;
+		batch_state.next_batch_idx = 0;
 	}
+
 	return true;
 }
 
-bool PartitionedCopyHashGroup::TryNextFlushTask(PartitionedCopyTask &task) {
-}
-
-void PartitionedCopyHashGroup::Sort(ExecutionContext &context, GlobalSinkState &sink, InterruptState &interrupt,
-                                    const PartitionedCopyTask &task) {
+void PartitionedCopyHashGroup::Sort(ExecutionContext &execution_context, GlobalSinkState &sink,
+                                    InterruptState &interrupt, const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::SORT);
 	OperatorSinkFinalizeInput finalize_input {sink, interrupt};
-	partitioned_copy.sort_strategy->SortColumnData(context, hash_bin, finalize_input);
+	partitioned_copy.sort_strategy->SortColumnData(execution_context, hash_bin, finalize_input);
 	sorted += (task.end_idx - task.begin_idx);
 }
 
-void PartitionedCopyHashGroup::Materialize(ExecutionContext &context, GlobalSourceState &source,
+void PartitionedCopyHashGroup::Materialize(ExecutionContext &execution_context, GlobalSourceState &source,
                                            InterruptState &interrupt, const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::MATERIALIZE);
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput source_input {source, *unused, interrupt};
-	partitioned_copy.sort_strategy->MaterializeColumnData(context, hash_bin, source_input);
+	partitioned_copy.sort_strategy->MaterializeColumnData(execution_context, hash_bin, source_input);
 	materialized += (task.end_idx - task.begin_idx);
 
 	if (materialized >= blocks) {
@@ -670,10 +642,6 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 
 void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::BATCH);
-	// TODO: write partitioned data using partition_mask boundaries
-	//  we probably don't want to use begin/end idx here
-	//  we need to perform well in case of skew, many tiny partitions, etc.
-	//  we also need the written batches to be exactly as specified by batch size (bytes) etc.
 
 	const auto &op = partitioned_copy.op;
 	vector<column_t> column_ids;
@@ -729,38 +697,28 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	batched += (task.end_idx - task.begin_idx);
 }
 
-void PartitionedCopyHashGroup::Prepare(const PartitionedCopyTask &task) {
-	D_ASSERT(task.stage == PartitionedCopyStage::PREPARE);
+void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, const PartitionedCopyTask &task) {
+	D_ASSERT(task.stage == PartitionedCopyStage::FLUSH);
 
-	optional_ptr<PartitionedCopyPrepareState> prepare_state;
+	optional_ptr<PartitionedCopyBatchState> batch_state;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		prepare_state = prepare_states[task.thread_idx];
-		if (!prepare_state->file_state) {
+		batch_state = batch_states[task.hash_bin];
+		if (!batch_state->file_state) {
+			batch_state->file_state = partitioned_copy.CreatePartitionFileState(batch_state->values);
 		}
 	}
 
-	task.stage = PartitionedCopyStage::PREPARE;
-	const auto it = batch_states.begin();
-	task.hash_bin = it->first;
-	for (idx_t partition_batch_idx = 0; partition_batch_idx < it->second.size(); partition_batch_idx++) {
-		auto &batch = it->second[partition_batch_idx];
-		if (!batch) {
-			continue;
-		}
+	auto local_copy_state =
+	    partitioned_copy.op.function.copy_to_initialize_local(execution_context, *partitioned_copy.op.bind_data);
+	auto &batch = batch_state->batches[task.thread_idx];
+	partitioned_copy.op.FlushBatch(partitioned_copy.context, partitioned_copy.copy_gstate, batch_state->file_state,
+	                               nullptr, local_copy_state, std::move(batch), PhysicalCopyToFilePhase::COMBINE);
 
-		task.thread_idx = partition_batch_idx;
-		task.batch = std::move(batch);
-
-		if (partition_batch_idx == it->second.size() - 1) {
-			batch_states.erase(it);
-		}
-		break;
-	}
-	return true;
+	flushed += (task.begin_idx - task.end_idx);
 }
 
-PartitionedCopyState::PartitionedCopyState(const PartitionedCopy &partitioned_copy_p,
+PartitionedCopyState::PartitionedCopyState(PartitionedCopy &partitioned_copy_p,
                                            unique_ptr<GlobalSinkState> global_sink_state_p)
     : partitioned_copy(partitioned_copy_p), global_sink_state(std::move(global_sink_state_p)), local_state_count(0),
       combine_count(0) {
@@ -814,15 +772,15 @@ bool PartitionedCopyState::TryAssignTask(PartitionedCopyTask &task) {
 	return false;
 }
 
-void PartitionedCopyState::ExecuteTask(ExecutionContext &context, const PartitionedCopyTask &task,
+void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, const PartitionedCopyTask &task,
                                        InterruptState &interrupt) {
 	auto &hash_group = *hash_groups[task.hash_bin];
 	switch (task.stage) {
 	case PartitionedCopyStage::SORT:
-		hash_group.Sort(context, *global_sink_state, interrupt, task);
+		hash_group.Sort(execution_context, *global_sink_state, interrupt, task);
 		break;
 	case PartitionedCopyStage::MATERIALIZE:
-		hash_group.Materialize(context, *global_source_state, interrupt, task);
+		hash_group.Materialize(execution_context, *global_source_state, interrupt, task);
 		break;
 	case PartitionedCopyStage::MASK:
 		hash_group.Mask(task);
@@ -830,7 +788,9 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &context, const Partitio
 	case PartitionedCopyStage::BATCH:
 		hash_group.Batch(task);
 		break;
-	case PartitionedCopyStage::PREPARE:
+	case PartitionedCopyStage::FLUSH:
+		hash_group.Flush(execution_context, task);
+		break;
 	default:
 		throw InternalException("Invalid PartitionedCopyStage in PartitionedCopyState::ExecuteTask");
 	}
@@ -975,48 +935,62 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, GlobalSinkState
 }
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values) {
-	// TODO: maybe respect Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context) ??
+	// TODO: respect Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)
 
+	// Keep track of offset for FileNameSegmentType::OFFSET
 	idx_t offset = 0;
-	if (op.hive_file_pattern) {
-		auto prev_offset = previous_partitions.find(values);
-		if (prev_offset != previous_partitions.end()) {
-			offset = prev_offset->second;
-		}
-	} else {
-		offset = global_offset++;
-	}
-
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	// Create a writer for the current file
-	const auto hive_path = GetOrCreateDirectory(op.GetTrimmedPath(context, op.file_path), values);
-	auto full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
-	if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
-		// when appending, we first check if the file exists
-		while (fs.FileExists(full_path)) {
-			// file already exists - re-generate name
-			if (!op.filename_pattern.HasUUID()) {
-				throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (op.hive_file_pattern) {
+			auto prev_offset = previous_partitions.find(values);
+			if (prev_offset != previous_partitions.end()) {
+				offset = prev_offset->second;
 			}
-			full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
+		} else {
+			offset = global_offset++;
 		}
 	}
-	copy_gstate.created_files.push_back(full_path);
+
+	// Update global state under lock
 	optional_ptr<CopyToFileInfo> written_file_info;
-	if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
-		written_file_info = copy_gstate.AddFile(l, full_path, op.return_type);
+	string full_path;
+	{
+		annotated_lock_guard<annotated_mutex> guard(copy_gstate.lock);
+
+		// Create a writer for the current file
+		auto &fs = FileSystem::GetFileSystem(context);
+		const auto hive_path = GetOrCreateDirectory(op.GetTrimmedPath(context, op.file_path), values);
+		full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
+		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
+			// when appending, we first check if the file exists
+			while (fs.FileExists(full_path)) {
+				// file already exists - re-generate name
+				if (!op.filename_pattern.HasUUID()) {
+					throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
+				}
+				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
+			}
+		}
+
+		copy_gstate.created_files.push_back(full_path);
+		if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
+			written_file_info = copy_gstate.AddFile(full_path);
+		}
 	}
 
-	// initialize writes
+	// Initialize write
 	auto file_state =
 	    make_uniq<GlobalFileState>(op.function.copy_to_initialize_global(context, *op.bind_data, full_path), full_path);
+	if (op.function.initialize_operator) {
+		op.function.initialize_operator(*file_state->data, op);
+	}
+
 	if (written_file_info) {
-		// set up the file stats for the copy
+		// Set up the file stats
 		op.function.copy_to_get_written_statistics(context, *op.bind_data, *file_state->data,
 		                                           *written_file_info->file_stats);
 
-		// set the partition info
+		// Set partition info
 		vector<Value> partition_keys;
 		vector<Value> partition_values;
 		for (idx_t i = 0; i < op.partition_columns.size(); i++) {
@@ -1028,16 +1002,13 @@ unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vect
 		written_file_info->partition_keys = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR,
 		                                               std::move(partition_keys), std::move(partition_values));
 	}
-	if (op.function.initialize_operator) {
-		op.function.initialize_operator(*file_state->data, op);
-	}
 
 	return file_state;
 }
 
 string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &values) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	copy_gstate.CreateDir(path, fs);
+	copy_gstate.CreateDir(path);
 	if (op.hive_file_pattern) {
 		for (idx_t i = 0; i < op.partition_columns.size(); i++) {
 			const auto &partition_col_name = op.names[op.partition_columns[i]];
@@ -1051,7 +1022,7 @@ string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &v
 				p_dir += HivePartitioning::Escape(partition_value.ToString());
 			}
 			path = fs.JoinPath(path, p_dir);
-			copy_gstate.CreateDir(path, fs);
+			copy_gstate.CreateDir(path);
 		}
 	}
 	return path;
@@ -1086,7 +1057,7 @@ void CopyToFileGlobalState::Initialize() {
 	if (initialized) {
 		return;
 	}
-	auto write_lock = lock.GetExclusiveLock();
+	auto write_lock = storage_lock.GetExclusiveLock();
 	if (initialized) {
 		return;
 	}
@@ -1105,7 +1076,8 @@ void CopyToFileGlobalState::Initialize() {
 	initialized = true;
 }
 
-void CopyToFileGlobalState::CreateDir(const string &dir_path, FileSystem &fs) {
+void CopyToFileGlobalState::CreateDir(const string &dir_path) {
+	auto &fs = FileSystem::GetFileSystem(context);
 	if (created_directories.find(dir_path) != created_directories.end()) {
 		// already attempted to create this directory
 		return;
@@ -1139,12 +1111,10 @@ string CopyToFileGlobalState::GetOrCreateDirectory(const vector<idx_t> &cols, bo
 	return path;
 }
 
-optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const StorageLockKey &l, const string &file_name,
-                                                            CopyFunctionReturnType return_type) {
-	D_ASSERT(l.GetType() == StorageLockType::EXCLUSIVE);
+optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const string &file_name) {
 	auto file_info = make_uniq<CopyToFileInfo>(file_name);
 	optional_ptr<CopyToFileInfo> result;
-	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+	if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
 		result = file_info.get();
 	}
@@ -1246,7 +1216,7 @@ unique_ptr<GlobalFileState> CopyToFileGlobalState::CreatePartitionFileState(cons
 }
 
 PartitionWriteInfo &CopyToFileGlobalState::GetPartitionWriteInfo(const vector<Value> &values) {
-	auto global_lock = lock.GetExclusiveLock();
+	auto global_lock = storage_lock.GetExclusiveLock();
 	// check if we have already started writing this partition
 	auto active_write_entry = active_partitioned_writes.find(values);
 	if (active_write_entry != active_partitioned_writes.end()) {
@@ -1266,7 +1236,7 @@ PartitionWriteInfo &CopyToFileGlobalState::GetPartitionWriteInfo(const vector<Va
 }
 
 void CopyToFileGlobalState::FinishPartitionWrite(PartitionWriteInfo &info) {
-	auto global_lock = lock.GetExclusiveLock();
+	auto global_lock = storage_lock.GetExclusiveLock();
 	info.active_writes--;
 }
 
@@ -1511,7 +1481,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 		auto state = make_uniq<CopyToFileGlobalState>(*this, context);
 		if (!per_thread_output && Rotate() && write_empty_file) {
-			auto global_lock = state->lock.GetExclusiveLock();
+			auto global_lock = state->storage_lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
 		}
 
@@ -1655,7 +1625,7 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 		// already happened in combine
 		if (NumericCast<int64_t>(gstate.rows_copied.load()) == 0 && sink_state != nullptr) {
 			// no rows from source, write schema to file
-			auto global_lock = gstate.lock.GetExclusiveLock();
+			auto global_lock = gstate.storage_lock.GetExclusiveLock();
 			gstate.global_state = CreateFileState(context, *sink_state, *global_lock);
 			function.copy_to_finalize(context, *bind_data, *gstate.global_state->data);
 		}
@@ -1693,7 +1663,7 @@ void PhysicalCopyToFile::FlushBatch(
 
 	while (true) {
 		// Grab global lock and dereference the current file state (and corresponding lock)
-		auto global_guard = gstate.lock.GetExclusiveLock();
+		auto global_guard = gstate.storage_lock.GetExclusiveLock();
 		if (!file_state_ptr) {
 			file_state_ptr = create_file_state_fun(*global_guard);
 		}
