@@ -186,7 +186,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	// Get bindings and types from filter to use in top-most operator later
 	const auto topmost_bindings = filter.GetColumnBindings();
-	auto new_bindings = TraverseProjectionBindings(topmost_bindings, child);
+	vector<ColumnBinding> new_bindings;
+	if (!TraverseProjectionBindings(topmost_bindings, child, new_bindings)) {
+		return op;
+	}
 
 	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child.get().Cast<LogicalWindow>();
@@ -647,9 +650,10 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	return aggregate_args;
 }
 
-vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
-                                                                        reference<LogicalOperator> &op) {
-	auto new_bindings = old_bindings;
+bool TopNWindowElimination::TraverseProjectionBindings(const vector<ColumnBinding> &old_bindings,
+                                                       reference<LogicalOperator> &op,
+                                                       vector<ColumnBinding> &new_bindings) {
+	new_bindings = old_bindings;
 
 	// Traverse child projections to retrieve projections on window output
 	while (op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -659,13 +663,17 @@ vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const st
 			auto &new_binding = new_bindings[i];
 			D_ASSERT(new_binding.table_index == projection.table_index);
 			VisitExpression(&projection.expressions[new_binding.column_index]);
+			if (column_references.size() != 1) {
+				column_references.clear();
+				return false;
+			}
 			new_binding = column_references.begin()->first;
 			column_references.clear();
 		}
 		op = *op.get().children[0];
 	}
 
-	return new_bindings;
+	return true;
 }
 
 void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const unique_ptr<LogicalOperator> &op,
