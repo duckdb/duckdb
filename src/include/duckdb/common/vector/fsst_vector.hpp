@@ -53,21 +53,13 @@ struct FSSTVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
 		vector.validity.Initialize(new_validity);
 	}
-	static inline const_data_ptr_t GetCompressedData(const Vector &vector) {
+	static inline const string_t *GetCompressedData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.data;
+		return reinterpret_cast<string_t *>(vector.buffer->GetData());
 	}
-	static inline data_ptr_t GetCompressedData(Vector &vector) {
+	static inline string_t *GetCompressedData(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.data;
-	}
-	template <class T>
-	static inline const T *GetCompressedData(const Vector &vector) {
-		return (const T *)FSSTVector::GetCompressedData(vector);
-	}
-	template <class T>
-	static inline T *GetCompressedData(Vector &vector) {
-		return (T *)FSSTVector::GetCompressedData(vector);
+		return reinterpret_cast<string_t *>(vector.buffer->GetData());
 	}
 	//! Decompresses an FSST_VECTOR into a FLAT_VECTOR. Note: validity is not copied.
 	static void DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,
