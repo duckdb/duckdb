@@ -124,9 +124,15 @@ jobs:
           tree /tmp/repository_generation
 
       - name: Merge into single repository
+        shell: bash
         run: |
           mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}
-          cp -r /tmp/repository_generation/*/*/*/* /tmp/merged_repository/${{ inputs.duckdb_ref }}
+          shopt -s nullglob
+          for platform_dir in /tmp/repository_generation/*/*/*/*; do
+            platform="$(basename "$platform_dir")"
+            mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
+            cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
+          done
           tree /tmp/merged_repository
 
       - name: Remove all non-target extensions

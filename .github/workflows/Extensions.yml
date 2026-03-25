@@ -278,9 +278,15 @@ jobs:
           tree /tmp/repository_generation
 
       - name: Merge into single repository
+        shell: bash
         run: |
           mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}
-          cp -r /tmp/repository_generation/*/*/*/* /tmp/merged_repository/${{ inputs.git_ref }}
+          shopt -s nullglob
+          for platform_dir in /tmp/repository_generation/*/*/*/*; do
+            platform="$(basename "$platform_dir")"
+            mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}/"$platform"
+            cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.git_ref }}/"$platform"
+          done
           tree /tmp/merged_repository
 
       - uses: actions/upload-artifact@v7
