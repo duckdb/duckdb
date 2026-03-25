@@ -1446,6 +1446,36 @@ PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer,
 	return std::move(expr);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
+	// QuestionMarkNumberedParameter <- '?' NumberLiteral
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+
+	auto &const_expr = number->Cast<ConstantExpression>();
+	int32_t param_number = const_expr.value.GetValue<int32_t>();
+
+	if (param_number <= 0) {
+		throw ParserException("Parameter numbers must be greater than 0");
+	}
+
+	auto expr = make_uniq<ParameterExpression>();
+	string identifier = const_expr.value.ToString();
+	idx_t known_param_index = DConstants::INVALID_INDEX;
+
+	transformer.GetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+
+	if (known_param_index == DConstants::INVALID_INDEX) {
+		known_param_index = NumericCast<idx_t>(param_number);
+		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+	}
+
+	expr->identifier = identifier;
+	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+	return std::move(expr);
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	// NumberedParameter <- '$' NumberLiteral

@@ -83,7 +83,8 @@ MapStructField <- Expression ':' Expression
 
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
-Parameter <- AnonymousParameter / NumberedParameter / ColLabelParameter
+Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter
+QuestionMarkNumberedParameter <- '?' NumberLiteral
 AnonymousParameter <- '?'
 NumberedParameter <- '$' NumberLiteral
 ColLabelParameter <- '$' ColLabel
