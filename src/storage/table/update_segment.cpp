@@ -1048,7 +1048,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update, idx_t count,
                              SelectionVector &sel) {
-	auto update_data = update.GetDataNoConst<string_t>(update);
+	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
 	if (mask.AllValid()) {
 		stats.statistics.SetHasNoNullFast();
@@ -1056,9 +1056,6 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 			auto idx = update.sel->get_index(i);
 			auto &str = update_data[idx];
 			StringStats::Update(stats.statistics, str);
-			if (!str.IsInlined()) {
-				update_data[idx] = segment->GetStringHeap().AddBlob(str);
-			}
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -1072,9 +1069,6 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 				sel.set_index(not_null_count++, i);
 				auto &str = update_data[idx];
 				StringStats::Update(stats.statistics, str);
-				if (!str.IsInlined()) {
-					update_data[idx] = segment->GetStringHeap().AddBlob(str);
-				}
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
@@ -1300,6 +1294,18 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 	}
 	if (count == 0) {
 		return;
+	}
+	if (statistics_update_function == UpdateStringStatistics) {
+		// for strings - we need to push all strings we are going to place here into the string heap of the segment
+		update_p.Flatten(count);
+		auto update_data = FlatVector::GetData<string_t>(update_p);
+		auto &validity = FlatVector::Validity(update_p);
+		for (idx_t i = 0; i < count; i++) {
+			if (validity.RowIsValid(i)) {
+				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
+			}
+		}
+		update_p.ToUnifiedFormat(count, update_format);
 	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
