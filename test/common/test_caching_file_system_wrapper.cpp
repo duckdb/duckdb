@@ -120,6 +120,10 @@ public:
 	bool CanSeek() override {
 		return true;
 	}
+
+	string GetVersionTag(FileHandle &handle) override {
+		return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+	}
 };
 
 // A file system that counts OpenFile calls to verify when the underlying file is (not) opened.
