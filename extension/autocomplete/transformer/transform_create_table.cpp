@@ -386,7 +386,6 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
 	return make_uniq<UniqueConstraint>(column_list, false);
 }
 
-
 unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
