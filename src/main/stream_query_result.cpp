@@ -192,19 +192,19 @@ void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	if (!context->IsActiveResult(lock, *this)) {
 		// Not the active result — try to resume from suspended state
 		auto resume_result = context->ResumeQueryForResult(lock, *this);
-		if (resume_result != ClientContext::ResumeResultCode::SUCCESS) {
+		if (resume_result != ResumeResultCode::SUCCESS) {
 			string error_str;
 			switch (resume_result) {
-			case ClientContext::ResumeResultCode::NOT_SUSPENDED:
+			case ResumeResultCode::NOT_SUSPENDED:
 				error_str = "Streaming result was invalidated by a new query on this connection. "
 				            "To interleave streaming with other statements, use SET enable_suspended_queries = true "
 				            "inside an explicit transaction (BEGIN TRANSACTION)";
 				break;
-			case ClientContext::ResumeResultCode::TRANSACTION_ENDED:
+			case ResumeResultCode::TRANSACTION_ENDED:
 				error_str = "Cannot resume streaming result: the transaction was committed or rolled back "
 				            "while the stream was suspended";
 				break;
-			case ClientContext::ResumeResultCode::CANNOT_SUSPEND_ACTIVE:
+			case ResumeResultCode::CANNOT_SUSPEND_ACTIVE:
 				error_str = "Cannot resume streaming result: another query is actively executing "
 				            "on this connection. Wait for it to complete before fetching from the suspended stream";
 				break;

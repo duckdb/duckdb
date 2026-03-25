@@ -62,6 +62,8 @@ struct PendingQueryParameters {
 	QueryParameters query_parameters;
 };
 
+enum class ResumeResultCode : uint8_t { SUCCESS, NOT_SUSPENDED, TRANSACTION_ENDED, CANNOT_SUSPEND_ACTIVE };
+
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public enable_shared_from_this<ClientContext> {
@@ -215,7 +217,6 @@ public:
 	//! Whether or not the given result is in the suspended queries stack
 	DUCKDB_API bool IsSuspendedResult(ClientContextLock &lock, BaseQueryResult &result);
 
-	enum class ResumeResultCode : uint8_t { SUCCESS, NOT_SUSPENDED, TRANSACTION_ENDED, CANNOT_SUSPEND_ACTIVE };
 	//! Resume a suspended query that owns the given result
 	DUCKDB_API ResumeResultCode ResumeQueryForResult(ClientContextLock &lock, BaseQueryResult &result);
 	//! Cancel and remove a suspended query that owns the given result

@@ -400,7 +400,7 @@ void ClientContext::SuspendActiveQuery(ClientContextLock &lock) {
 	query_progress.Initialize();
 }
 
-ClientContext::ResumeResultCode ClientContext::ResumeQueryForResult(ClientContextLock &lock, BaseQueryResult &result) {
+ResumeResultCode ClientContext::ResumeQueryForResult(ClientContextLock &lock, BaseQueryResult &result) {
 	// First, find the index of the target query in the suspended stack.
 	// We must NOT iterate with iterators while also modifying the vector (SuspendActiveQuery pushes).
 	idx_t target_idx = DConstants::INVALID_INDEX;
