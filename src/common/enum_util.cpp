@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
+#include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -1059,6 +1060,25 @@ const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value) {
 template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value) {
 	return static_cast<CheckpointAbort>(StringUtil::StringToEnum(GetCheckpointAbortValues(), 7, "CheckpointAbort", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCheckpointOnDetachValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CheckpointOnDetach::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(CheckpointOnDetach::ENABLED), "ENABLED" },
+		{ static_cast<uint32_t>(CheckpointOnDetach::DISABLED), "DISABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value) {
+	return StringUtil::EnumToString(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", static_cast<uint32_t>(value));
+}
+
+template<>
+CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value) {
+	return static_cast<CheckpointOnDetach>(StringUtil::StringToEnum(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", value));
 }
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {
