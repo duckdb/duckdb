@@ -128,7 +128,7 @@ jobs:
         run: |
           mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}
           shopt -s nullglob
-          for platform_dir in /tmp/repository_generation/*/*/*/*; do
+          for platform_dir in /tmp/repository_generation/*/*/*; do
             platform="$(basename "$platform_dir")"
             mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
             cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
