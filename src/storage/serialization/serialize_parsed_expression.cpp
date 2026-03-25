@@ -356,21 +356,23 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
 	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
 	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", SerializedChildren(serializer));
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partitions", partitions);
 	serializer.WritePropertyWithDefault<vector<OrderByNode>>(205, "orders", orders);
 	serializer.WriteProperty<WindowBoundary>(206, "start", start);
 	serializer.WriteProperty<WindowBoundary>(207, "end", end);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(208, "start_expr", start_expr);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(209, "end_expr", end_expr);
-	/* [Deleted] (unique_ptr<ParsedExpression>) "offset_expr" */
-	/* [Deleted] (unique_ptr<ParsedExpression>) "default_expr" */
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(210, "offset_expr", SerializedOffset(serializer));
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", SerializedDefault(serializer));
 	serializer.WritePropertyWithDefault<bool>(212, "ignore_nulls", ignore_nulls);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
 	serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
 	serializer.WritePropertyWithDefault<bool>(215, "distinct", distinct);
 	serializer.WritePropertyWithDefault<vector<OrderByNode>>(216, "arg_orders", arg_orders);
-	serializer.WritePropertyWithDefault<bool>(217, "has_ignore_nulls", has_ignore_nulls);
+	if (serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault<bool>(217, "has_ignore_nulls", has_ignore_nulls);
+	}
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {

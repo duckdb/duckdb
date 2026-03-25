@@ -230,7 +230,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		expr->catalog = qualified_function.catalog;
 		expr->schema = qualified_function.schema;
-		expr->function_name = lowercase_name;
+		expr->SetFunctionName(lowercase_name);
 
 		expr->children = std::move(function_children);
 		expr->has_ignore_nulls = has_ignore_nulls_result;

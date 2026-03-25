@@ -409,7 +409,8 @@
       {
         "id": 203,
         "name": "children",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "serialize_property": "SerializedChildren(serializer)"
       },
       {
         "id": 204,
@@ -445,13 +446,13 @@
         "id": 210,
         "name": "offset_expr",
         "type": "ParsedExpression*",
-        "status": "read_only"
+        "serialize_property": "SerializedOffset(serializer)"
       },
       {
         "id": 211,
         "name": "default_expr",
         "type": "ParsedExpression*",
-        "status": "read_only"
+        "serialize_property": "SerializedDefault(serializer)"
       },
       {
         "id": 212,
@@ -482,7 +483,8 @@
       {
         "id": 217,
         "name": "has_ignore_nulls",
-        "type": "bool"
+        "type": "bool",
+        "version": "8"
       }
     ],
     "constructor": ["type", "children", "offset_expr", "default_expr"]

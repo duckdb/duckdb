@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -87,17 +88,9 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:
-		return BindWithCTE(statement.Cast<DeleteStatement>());
-	case StatementType::UPDATE_STATEMENT: {
-		auto &update = statement.Cast<UpdateStatement>();
-		auto &cte_map = update.node->cte_map;
-		if (cte_map.map.empty()) {
-			return Bind(update);
-		}
-		auto stmt_node = make_uniq<StatementNode>(update);
-		stmt_node->cte_map = cte_map.Copy();
-		return Bind(*stmt_node);
-	}
+		return Bind(statement.Cast<DeleteStatement>());
+	case StatementType::UPDATE_STATEMENT:
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:

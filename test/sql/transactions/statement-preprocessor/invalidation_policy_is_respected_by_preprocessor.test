@@ -1,0 +1,36 @@
+# name: test/sql/transactions/statement-preprocessor/invalidation_policy_is_respected_by_preprocessor.test
+# group: [statement-preprocessor]
+
+statement ok
+ATTACH '__TEST_DIR__/wal_replay.db';
+
+statement ok
+USE wal_replay;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint='1TB'
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
+
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+# would invalidate with ALL_ERRORS_INVALIDATE_TRANSACTION but not with STANDARD_POLICY
+statement error
+SELECT nonexistent_column FROM t;
+----
+Binder Error: Referenced column "nonexistent_column" not found in FROM clause!
+
+# does not result in invalid transaction
+statement ok
+from t;
+
+statement ok
+commit;

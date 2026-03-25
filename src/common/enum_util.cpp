@@ -4098,19 +4098,20 @@ const StringUtil::EnumStringLiteral *GetQueryNodeTypeValues() {
 		{ static_cast<uint32_t>(QueryNodeType::RECURSIVE_CTE_NODE), "RECURSIVE_CTE_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::CTE_NODE), "CTE_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::STATEMENT_NODE), "STATEMENT_NODE" },
-		{ static_cast<uint32_t>(QueryNodeType::UPDATE_QUERY_NODE), "UPDATE_QUERY_NODE" }
+		{ static_cast<uint32_t>(QueryNodeType::UPDATE_QUERY_NODE), "UPDATE_QUERY_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::DELETE_QUERY_NODE), "DELETE_QUERY_NODE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
-	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 7, "QueryNodeType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 8, "QueryNodeType", static_cast<uint32_t>(value));
 }
 
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
-	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 7, "QueryNodeType", value));
+	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 8, "QueryNodeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
@@ -5193,6 +5194,24 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value) {
 	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 5, "TimestampCastResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TransactionInvalidationPolicy::STANDARD_POLICY), "STANDARD_POLICY" },
+		{ static_cast<uint32_t>(TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION), "ALL_ERRORS_INVALIDATE_TRANSACTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value) {
+	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
+	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {

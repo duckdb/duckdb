@@ -2,9 +2,6 @@
 # description: Test VARIANT distinctions
 # group: [variant]
 
-statement ok
-PRAGMA enable_verification
-
 # Constant single integer column distinctions
 query T
 SELECT [1]::VARIANT IS NOT DISTINCT FROM [2]

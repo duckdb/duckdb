@@ -1,5 +1,6 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
 
@@ -8,14 +9,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeleteStatement(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 
 	auto result = make_uniq<DeleteStatement>();
+	auto &node = *result->node;
 	auto with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
-		result->cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
+		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
 	}
-	result->table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(3));
-	transformer.TransformOptional<vector<unique_ptr<TableRef>>>(list_pr, 4, result->using_clauses);
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, result->condition);
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 6, result->returning_list);
+	node.table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(3));
+	transformer.TransformOptional<vector<unique_ptr<TableRef>>>(list_pr, 4, node.using_clauses);
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, node.condition);
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 6, node.returning_list);
 	return std::move(result);
 }
 
@@ -42,7 +44,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTruncateStatement(PEGTr
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DeleteStatement>();
-	result->table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
+	result->node->table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
 	return std::move(result);
 }
 

@@ -86,6 +86,12 @@ set -x
 
 # Use a tarball so executable bits are preserved when passing build artifacts between jobs.
 # Use -4 to balance compression ratio (small enough output size) with compression time (a few sec).
-tar -C "$ARTIFACT_ROOT" -cf - "$BUILD_TYPE" | gzip -4 > "$ARTIFACT_TARBALL"
+if command -v pigz >/dev/null 2>&1; then
+	COMPRESSOR=(pigz -4)
+else
+	COMPRESSOR=(gzip -4)
+fi
+
+tar -C "$ARTIFACT_ROOT" -cf - "$BUILD_TYPE" | "${COMPRESSOR[@]}" > "$ARTIFACT_TARBALL"
 
 ls -lh "$ARTIFACT_TARBALL"
