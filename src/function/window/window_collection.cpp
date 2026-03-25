@@ -112,9 +112,8 @@ void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
 		}
 
 		// Column was valid, make sure it still is.
-		UnifiedVectorFormat data;
-		chunk.data[col_idx].ToUnifiedFormat(chunk.size(), data);
-		if (!data.validity.AllValid()) {
+		auto validity_entries = chunk.data[col_idx].ValidityEntries(chunk.size());
+		if (validity_entries.CanHaveNull()) {
 			collection.all_valids[col_idx] = false;
 		}
 	}

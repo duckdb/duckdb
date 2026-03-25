@@ -288,16 +288,14 @@ child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
 void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 
-	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	auto entries = vector.Entries<string_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		auto index = vdata.sel->get_index(idx);
-		if (!vdata.validity.RowIsValid(index)) {
+		auto entry = entries[idx];
+		if (!entry.IsValid()) {
 			continue;
 		}
-		auto value = data[index];
+		auto value = *entry.value;
 		auto data = value.GetData();
 		auto len = value.GetSize();
 		// LCOV_EXCL_START

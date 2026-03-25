@@ -236,20 +236,14 @@ static inline Value GetHiveKeyNullValue(const LogicalType &type) {
 template <class T>
 static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
                                             const idx_t count) {
-	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(count, format);
-
-	const auto &sel = *format.sel;
-	const auto data = UnifiedVectorFormat::GetData<T>(format);
-	const auto &validity = format.validity;
-
+	auto entries = input.Entries<T>(count);
 	const auto &type = input.GetType();
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
-		const auto idx = sel.get_index(i);
-		if (validity.RowIsValid(idx)) {
-			key.values[col_idx] = GetHiveKeyValue(data[idx], type);
+		auto entry = entries[i];
+		if (entry.IsValid()) {
+			key.values[col_idx] = GetHiveKeyValue(*entry.value, type);
 		} else {
 			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}

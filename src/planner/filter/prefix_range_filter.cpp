@@ -77,15 +77,11 @@ public:
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state_p) const override {
 		auto &state = static_cast<NumericBuildState &>(state_p);
-		UnifiedVectorFormat vector_data;
-		keys.ToUnifiedFormat(count, vector_data);
-		const auto key_data = UnifiedVectorFormat::GetData<const T>(vector_data);
-		const auto &validity_mask = vector_data.validity;
+		auto entries = keys.template Entries<T>(count);
 
-		if (validity_mask.AllValid()) {
+		if (!entries.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
-				const idx_t data_idx = vector_data.sel->get_index(i);
-				const U &key = static_cast<U>(key_data[data_idx]);
+				const U &key = static_cast<U>(entries.GetValueUnsafe(i));
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
@@ -93,11 +89,11 @@ public:
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
-				const auto data_idx = vector_data.sel->get_index(i);
-				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
+				auto entry = entries[i];
+				if (!entry.IsValid()) {
 					continue;
 				}
-				const U &key = static_cast<U>(key_data[data_idx]);
+				const U &key = static_cast<U>(*entry.value);
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
@@ -129,27 +125,23 @@ public:
 			return LookupOneValue(keys.GetValue(0)) ? count : 0;
 		}
 
-		UnifiedVectorFormat vector_data;
-		keys.ToUnifiedFormat(count, vector_data);
-		const auto data = UnifiedVectorFormat::GetData<const T>(vector_data);
-		const auto &validity_mask = vector_data.validity;
+		auto entries = keys.template Entries<T>(count);
 
 		idx_t found_count = 0;
-		if (validity_mask.AllValid()) {
+		if (!entries.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				result_sel.set_index(found_count, i);
-				const auto data_idx = vector_data.sel->get_index(i);
-				const auto &key = data[data_idx];
+				const auto &key = entries.GetValueUnsafe(i);
 				found_count += LookupOne(key);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
-				const auto data_idx = vector_data.sel->get_index(i);
-				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
+				auto entry = entries[i];
+				if (!entry.IsValid()) {
 					continue;
 				}
 				result_sel.set_index(found_count, i);
-				const auto &key = data[data_idx];
+				const auto &key = *entry.value;
 				found_count += LookupOne(key);
 			}
 		}

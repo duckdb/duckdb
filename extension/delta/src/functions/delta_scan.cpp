@@ -381,14 +381,12 @@ static SelectionVector DuckSVFromDeltaSV(const ffi::KernelBoolSlice &dv, Vector 
                                          idx_t &select_count) {
 	D_ASSERT(row_id_column.GetType() == LogicalType::BIGINT);
 
-	UnifiedVectorFormat data;
-	row_id_column.ToUnifiedFormat(count, data);
-	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(data);
+	auto entries = row_id_column.Entries<int64_t>(count);
 
 	SelectionVector result {count};
 	idx_t current_select = 0;
 	for (idx_t i = 0; i < count; i++) {
-		auto row_id = row_ids[data.sel->get_index(i)];
+		auto row_id = entries.GetValueUnsafe(i);
 
 		// TODO: why are deletion vectors not spanning whole data?
 		if (row_id >= dv.len || dv.ptr[row_id]) {

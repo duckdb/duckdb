@@ -123,9 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetEntry(sort_result_vec);
 
 	// get the lists data
-	UnifiedVectorFormat lists_data;
-	sort_result_vec.ToUnifiedFormat(count, lists_data);
-	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
+	auto list_entries = sort_result_vec.Entries<list_entry_t>(count);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -148,14 +146,15 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	bool data_to_sort = false;
 
 	for (idx_t i = 0; i < count; i++) {
-		auto lists_index = lists_data.sel->get_index(i);
-		const auto &list_entry = list_entries[lists_index];
+		auto entry = list_entries[i];
 
 		// nothing to do for this list
-		if (!lists_data.validity.RowIsValid(lists_index)) {
+		if (!entry.IsValid()) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
+
+		const auto &list_entry = *entry.value;
 
 		// empty list, no sorting required
 		if (list_entry.length == 0) {
@@ -188,7 +187,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ListVector::Reserve(result, lists_size);
 		ListVector::SetListSize(result, lists_size);
 		auto result_data = ListVector::GetData(result);
-		memcpy(result_data, list_entries, count * sizeof(list_entry_t));
+		for (idx_t i = 0; i < count; i++) {
+			result_data[i] = list_entries.GetValueUnsafe(i);
+		}
 	}
 
 	if (data_to_sort) {

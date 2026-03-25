@@ -15,19 +15,16 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 }
 
 static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
-	UnifiedVectorFormat input_data;
-	auto &input_vector = input;
-	input_vector.ToUnifiedFormat(count, input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
+	auto entries = input.Entries<string_t>(count);
 
 	// Read the documents
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(idx)) {
+		auto entry = entries[i];
+		if (!entry.IsValid()) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] =
-			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, &doc->alc)->root);
+			objs[i] = yyjson_val_mut_copy(
+			    doc, JSONCommon::ReadDocument(*entry.value, JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }

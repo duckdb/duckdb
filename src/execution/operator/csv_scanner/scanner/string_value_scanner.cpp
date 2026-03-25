@@ -1083,14 +1083,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					continue;
 				}
 				// An error happened, to propagate it we need to figure out the exact line where the casting failed.
-				UnifiedVectorFormat inserted_column_data;
-				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
-				UnifiedVectorFormat parse_column_data;
-				parse_vector.ToUnifiedFormat(parse_chunk.size(), parse_column_data);
+				auto inserted_validity = result_vector.ValidityEntries(parse_chunk.size());
+				auto parse_validity = parse_vector.ValidityEntries(parse_chunk.size());
 
 				for (; line_error < parse_chunk.size(); line_error++) {
-					if (!inserted_column_data.validity.RowIsValid(line_error) &&
-					    parse_column_data.validity.RowIsValid(line_error)) {
+					if (!inserted_validity.IsValid(line_error) && parse_validity.IsValid(line_error)) {
 						break;
 					}
 				}
@@ -1128,8 +1125,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				D_ASSERT(state_machine->options.ignore_errors.GetValue());
 				// We are ignoring errors. We must continue but ignoring borked-rows
 				for (; line_error < parse_chunk.size(); line_error++) {
-					if (!inserted_column_data.validity.RowIsValid(line_error) &&
-					    parse_column_data.validity.RowIsValid(line_error)) {
+					if (!inserted_validity.IsValid(line_error) && parse_validity.IsValid(line_error)) {
 						result.borked_rows.insert(line_error);
 						vector<Value> row;
 						for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {

@@ -286,17 +286,15 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	not_matched.count = 0;
 	not_matched_by_source.count = 0;
 
-	UnifiedVectorFormat row_id_data;
-	chunk.data[row_id_index].ToUnifiedFormat(chunk.size(), row_id_data);
+	auto row_id_validity = chunk.data[row_id_index].ValidityEntries(chunk.size());
 	if (source_marker.IsValid()) {
 		// source marker - check both row id and source marker
-		UnifiedVectorFormat source_marker_data;
-		chunk.data[source_marker.GetIndex()].ToUnifiedFormat(chunk.size(), source_marker_data);
+		auto source_marker_validity = chunk.data[source_marker.GetIndex()].ValidityEntries(chunk.size());
 		for (idx_t i = 0; i < chunk.size(); i++) {
-			if (!source_marker_data.validity.RowIsValid(source_marker_data.sel->get_index(i))) {
+			if (!source_marker_validity.IsValid(i)) {
 				// source marker is NULL - no source match
 				not_matched_by_source.sel.set_index(not_matched_by_source.count++, i);
-			} else if (!row_id_data.validity.RowIsValid(row_id_data.sel->get_index(i))) {
+			} else if (!row_id_validity.IsValid(i)) {
 				// target marker is NULL - no target match
 				not_matched.sel.set_index(not_matched.count++, i);
 			} else {
@@ -307,8 +305,7 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	} else {
 		// no source marker - only check row-ids
 		for (idx_t i = 0; i < chunk.size(); i++) {
-			auto idx = row_id_data.sel->get_index(i);
-			if (row_id_data.validity.RowIsValid(idx)) {
+			if (row_id_validity.IsValid(i)) {
 				// match
 				matched.sel.set_index(matched.count++, i);
 			} else {

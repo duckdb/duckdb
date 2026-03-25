@@ -2042,11 +2042,7 @@ struct StructDatePart {
 				}
 			}
 		} else {
-			UnifiedVectorFormat rdata;
-			input.ToUnifiedFormat(count, rdata);
-
-			const auto &arg_valid = rdata.validity;
-			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
+			auto entries = input.template Entries<INPUT_TYPE>(count);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -2078,10 +2074,10 @@ struct StructDatePart {
 			}
 
 			for (idx_t i = 0; i < count; ++i) {
-				const auto idx = rdata.sel->get_index(i);
-				if (arg_valid.RowIsValid(idx)) {
-					if (Value::IsFinite(tdata[idx])) {
-						DatePart::StructOperator::Operation(bigint_values, double_values, tdata[idx], i, part_mask);
+				auto entry = entries[i];
+				if (entry.IsValid()) {
+					if (Value::IsFinite(*entry.value)) {
+						DatePart::StructOperator::Operation(bigint_values, double_values, *entry.value, i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
 							FlatVector::Validity(child_entry).SetInvalid(i);

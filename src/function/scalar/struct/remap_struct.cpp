@@ -109,22 +109,19 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(result_size, format);
-		if (!format.validity.AllValid()) {
+		auto entries = input.Entries<list_entry_t>(result_size);
+		if (entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
-				auto input_idx = format.sel->get_index(i);
-				if (!format.validity.RowIsValid(input_idx)) {
+				if (!entries[i].IsValid()) {
 					result_validity.SetInvalid(i);
 				}
 			}
 			has_top_level_null = !result_validity.AllValid();
 		}
-		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = list_data[format.sel->get_index(i)];
+			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 	// set up the correct vector references
@@ -162,22 +159,19 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(result_size, format);
-		if (!format.validity.AllValid()) {
+		auto entries = input.Entries<list_entry_t>(result_size);
+		if (entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
-				auto input_idx = format.sel->get_index(i);
-				if (!format.validity.RowIsValid(input_idx)) {
+				if (!entries[i].IsValid()) {
 					result_validity.SetInvalid(i);
 				}
 			}
 			has_top_level_null = !result_validity.AllValid();
 		}
-		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = list_data[format.sel->get_index(i)];
+			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 
@@ -207,13 +201,11 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 			return;
 		}
 	} else {
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(result_size, format);
-		if (!format.validity.AllValid()) {
+		auto validity_entries = input.ValidityEntries(result_size);
+		if (validity_entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
-				auto input_idx = format.sel->get_index(i);
-				if (!format.validity.RowIsValid(input_idx)) {
+				if (!validity_entries.IsValid(i)) {
 					result_validity.SetInvalid(i);
 				}
 			}

@@ -358,14 +358,13 @@ struct ArrowBool8 {
 		}
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		UnifiedVectorFormat format;
-		source.ToUnifiedFormat(count, format);
+		auto entries = source.Entries<bool>(count);
 		auto &result_validity = FlatVector::Validity(result);
-		auto source_ptr = UnifiedVectorFormat::GetData<bool>(format);
 		auto result_ptr = FlatVector::GetData<int8_t>(result);
 		for (idx_t i = 0; i < count; i++) {
-			if (format.validity.RowIsValid(i)) {
-				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			auto entry = entries[i];
+			if (entry.IsValid()) {
+				result_ptr[i] = static_cast<int8_t>(*entry.value);
 			} else {
 				result_validity.SetInvalid(i);
 			}

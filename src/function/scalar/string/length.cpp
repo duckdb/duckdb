@@ -84,15 +84,14 @@ void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result)
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnifiedVectorFormat format;
-	args.data[0].ToUnifiedFormat(args.size(), format);
+	auto validity_entries = args.data[0].ValidityEntries(args.size());
 
 	// for arrays the length is constant
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<int64_t>(result)[0] = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
 
 	// but we do need to take null values into account
-	if (format.validity.AllValid()) {
+	if (!validity_entries.CanHaveNull()) {
 		// if there are no null values we can just return the constant
 		return;
 	}
@@ -100,8 +99,7 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	result.Flatten(args.size());
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t r = 0; r < args.size(); r++) {
-		auto idx = format.sel->get_index(r);
-		if (!format.validity.RowIsValid(idx)) {
+		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
 		}
 	}

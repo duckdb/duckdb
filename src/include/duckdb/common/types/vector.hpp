@@ -8,8 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
-#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
 

@@ -413,11 +413,7 @@ struct ICUDatePart : public ICUDateFunc {
 				}
 			}
 		} else {
-			UnifiedVectorFormat rdata;
-			input.ToUnifiedFormat(count, rdata);
-
-			const auto &arg_valid = rdata.validity;
-			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
+			auto entries = input.template Entries<INPUT_TYPE>(count);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto &child_entries = StructVector::GetEntries(result);
@@ -427,11 +423,11 @@ struct ICUDatePart : public ICUDateFunc {
 
 			auto &res_valid = FlatVector::Validity(result);
 			for (idx_t i = 0; i < count; ++i) {
-				const auto idx = rdata.sel->get_index(i);
-				if (arg_valid.RowIsValid(idx)) {
+				auto entry = entries[i];
+				if (entry.IsValid()) {
 					res_valid.SetValid(i);
-					auto micros = SetTime(calendar, tdata[idx]);
-					const auto is_finite = Timestamp::IsFinite(tdata[idx]);
+					auto micros = SetTime(calendar, *entry.value);
+					const auto is_finite = Timestamp::IsFinite(*entry.value);
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
