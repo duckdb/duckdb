@@ -227,5 +227,35 @@
         "default": "false"
       }
     ]
+  },
+  {
+    "class": "DeleteQueryNode",
+    "base": "QueryNode",
+    "enum": "DELETE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/delete_query_node.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 201,
+        "name": "table",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "using_clauses",
+        "type": "vector<TableRef*>"
+      },
+      {
+        "id": 203,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
   }
 ]

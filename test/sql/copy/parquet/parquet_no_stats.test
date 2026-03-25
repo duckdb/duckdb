@@ -1,0 +1,10 @@
+# name: test/sql/copy/parquet/parquet_no_stats.test
+# description: Test MIN/MAX aggregates on Parquet files without column statistics (#21477)
+# group: [parquet]
+
+require parquet
+
+query II
+SELECT min(x), max(x) FROM read_parquet('${DATA_DIR}/parquet-testing/no_stats.parquet');
+----
+1	1

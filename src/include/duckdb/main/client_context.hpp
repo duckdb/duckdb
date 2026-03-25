@@ -192,7 +192,7 @@ public:
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-	DUCKDB_API void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
+	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -316,6 +316,8 @@ private:
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
+
+	bool ErrorInvalidatesTransaction(ExceptionType type);
 
 private:
 	//! Lock on using the ClientContext in parallel

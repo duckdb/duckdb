@@ -115,6 +115,9 @@ endif
 ifneq (${EXTENSION_STATIC_BUILD}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
+ifeq (${DISABLE_GCC_FUNCTION_SECTIONS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_GCC_FUNCTION_SECTIONS=1
+endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
 endif
@@ -352,6 +355,13 @@ endif
 clean:
 	rm -rf build
 
+EXTENSION_REPOSITORY_PATH ?= build/release/repository
+EXTENSION_BUCKET ?= duckdb-core-extensions
+
+.PHONY: upload-extensions
+upload-extensions:
+	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
+
 debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
 	cd build/debug && \
@@ -483,7 +493,7 @@ endef
 .PHONY: toolsci format_tools
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config,ninja-build mold ccache pkg-config)
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
 	pkg-config --exists libcurl || { \
 		sudo apt-get update -y -qq; \
 		sudo apt-get install -y -qq libcurl4-openssl-dev; \
@@ -653,3 +663,8 @@ cleanup-vcpkg:
 
 test-utils:
 	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+
+.PHONY: last_main_success_commit
+
+last_main_success_commit:
+	PAGER= gh run list --repo duckdb/duckdb --branch=main --workflow=Main --event=workflow_dispatch --status=success --json=headSha --limit=1 --jq '.[0].headSha'

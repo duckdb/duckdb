@@ -6,7 +6,8 @@ add_library_unity(
   select_node.cpp
   set_operation_node.cpp
   statement_node.cpp
-  update_query_node.cpp)
+  update_query_node.cpp
+  delete_query_node.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_query_node>
     PARENT_SCOPE)

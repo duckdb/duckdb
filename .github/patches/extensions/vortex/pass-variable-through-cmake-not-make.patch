@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 9f92376..20d6bf8 100644
+index fd205af..5eaae5b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.22)
+@@ -6,6 +6,11 @@ cmake_policy(SET CMP0135 NEW)
  set(TARGET_NAME vortex)
  project(${TARGET_NAME}_project)
  
@@ -11,9 +11,9 @@ index 9f92376..20d6bf8 100644
 +    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ftls-model=global-dynamic")
 +endif()
 +
+ set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
- set(CMAKE_CXX_STANDARD 17)
- 
 diff --git a/Makefile b/Makefile
 index 3017d3f..808f019 100644
 --- a/Makefile

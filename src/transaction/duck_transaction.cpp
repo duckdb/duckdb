@@ -179,6 +179,9 @@ UndoBufferProperties DuckTransaction::GetUndoProperties() {
 }
 
 bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
+	if (is_checkpoint_transaction) {
+		return false;
+	}
 	if (!ChangesMade()) {
 		// read-only transactions cannot trigger an automated checkpoint
 		return false;

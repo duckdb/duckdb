@@ -67,7 +67,7 @@ index bc4134a..b4d5601 100644
  	// Vectorized conversion from columnar to row-wise
  	RTreeEntry entries[STANDARD_VECTOR_SIZE];
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index 3b37ca8..fa54ae8 100644
+index 520d2b1..d27c65f 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 @@ -27,6 +27,7 @@
@@ -468,7 +468,7 @@ index 72722cc..c64825a 100644
  	UnaryExecutor::Execute<list_entry_t, string_t>(poly_vector, result, count, [&](list_entry_t polygon_entry) {
  		auto offset = polygon_entry.offset;
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 750bd2e..89d1677 100644
+index 31cd743..c98b7f7 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
 @@ -442,8 +442,8 @@ struct ST_Area {
@@ -1381,10 +1381,10 @@ index 26e4bc3..bc8bb83 100644
  
  #include "duckdb/function/replacement_scan.hpp"
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index 19c7e99..5d9b001 100644
+index 206624e..64b165b 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
 +++ b/src/spatial/modules/proj/proj_module.cpp
-@@ -814,8 +814,8 @@ struct ST_Area_Spheroid {
+@@ -813,8 +813,8 @@ struct ST_Area_Spheroid {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &coord_vec = ListVector::GetEntry(ring_vec);
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
@@ -1395,7 +1395,7 @@ index 19c7e99..5d9b001 100644
  
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
-@@ -1008,8 +1008,8 @@ struct ST_Perimeter_Spheroid {
+@@ -1007,8 +1007,8 @@ struct ST_Perimeter_Spheroid {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &coord_vec = ListVector::GetEntry(ring_vec);
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
@@ -1406,7 +1406,7 @@ index 19c7e99..5d9b001 100644
  
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
-@@ -1186,8 +1186,8 @@ struct ST_Length_Spheroid {
+@@ -1185,8 +1185,8 @@ struct ST_Length_Spheroid {
  
  		auto &coord_vec = ListVector::GetEntry(line_vec);
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
@@ -1509,10 +1509,10 @@ index 3714311..a4bc929 100644
  	vector<unique_ptr<BaseStatistics>> join_stats;
  
 diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
-index e46d5ad..f660a78 100644
+index 725512d..b0b219c 100644
 --- a/src/spatial/operators/spatial_join_optimizer.cpp
 +++ b/src/spatial/operators/spatial_join_optimizer.cpp
-@@ -66,8 +66,8 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
+@@ -77,8 +77,8 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
  	                                                           nullptr, func.is_operator);
  }
  
@@ -1523,7 +1523,7 @@ index e46d5ad..f660a78 100644
  
  	const auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
  
-@@ -143,8 +143,8 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+@@ -160,8 +160,8 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
  	// Get the table indexes that are reachable from the left and right children
  	const auto &left_child = cmp_join.children[0];
  	const auto &right_child = cmp_join.children[1];
@@ -1534,7 +1534,7 @@ index e46d5ad..f660a78 100644
  	LogicalJoin::GetTableReferences(*left_child, left_bindings);
  	LogicalJoin::GetTableReferences(*right_child, right_bindings);
  
-@@ -167,7 +167,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+@@ -184,7 +184,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
  	spatial_join->types = std::move(cmp_join.types);
  	spatial_join->left_projection_map = std::move(cmp_join.left_projection_map);
  	spatial_join->right_projection_map = std::move(cmp_join.right_projection_map);
@@ -1542,7 +1542,7 @@ index e46d5ad..f660a78 100644
  	spatial_join->mark_index = cmp_join.mark_index;
  	spatial_join->has_estimated_cardinality = cmp_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = cmp_join.estimated_cardinality;
-@@ -224,8 +223,8 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+@@ -241,8 +240,8 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
  	// Get the table indexes that are reachable from the left and right children
  	auto &left_child = any_join.children[0];
  	auto &right_child = any_join.children[1];
@@ -1553,7 +1553,7 @@ index e46d5ad..f660a78 100644
  	LogicalJoin::GetTableReferences(*left_child, left_bindings);
  	LogicalJoin::GetTableReferences(*right_child, right_bindings);
  
-@@ -274,7 +273,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+@@ -291,7 +290,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
  	spatial_join->types = std::move(any_join.types);
  	spatial_join->left_projection_map = std::move(any_join.left_projection_map);
  	spatial_join->right_projection_map = std::move(any_join.right_projection_map);
