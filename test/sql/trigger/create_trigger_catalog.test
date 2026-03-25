@@ -21,7 +21,7 @@ CREATE TRIGGER my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
 
 # Verify trigger appears in duckdb_triggers
 query TTTT
-SELECT trigger_name, table_name, timing, event_manipulation FROM duckdb_triggers() WHERE trigger_name = 'my_trigger';
+SELECT trigger_name, table_name, action_timing, event_manipulation FROM duckdb_triggers() WHERE trigger_name = 'my_trigger';
 ----
 my_trigger	t1	AFTER	INSERT
 

@@ -39,7 +39,7 @@ static unique_ptr<FunctionData> DuckDBTriggersBind(ClientContext &context, Table
 	names.emplace_back("table_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("timing");
+	names.emplace_back("action_timing");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("event_manipulation");
@@ -48,8 +48,8 @@ static unique_ptr<FunctionData> DuckDBTriggersBind(ClientContext &context, Table
 	names.emplace_back("columns");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	names.emplace_back("for_each_row");
-	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("for_each");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -103,7 +103,7 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 			col_vals.emplace_back(col_name);
 		}
 		output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(col_vals)));
-		output.SetValue(col++, count, Value::BOOLEAN(trigger.for_each == TriggerForEach::ROW));
+		output.SetValue(col++, count, Value(EnumUtil::ToString(trigger.for_each)));
 		output.SetValue(col++, count, Value(trigger.comment));
 		output.SetValue(col++, count, Value::MAP(trigger.tags));
 		output.SetValue(col++, count, Value::BOOLEAN(trigger.temporary));

@@ -48,7 +48,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	switch (parent.type) {
 	case CatalogType::TRIGGER_ENTRY:
 		// Triggers do not support ALTER — always a CREATE
-		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY && entry.type != CatalogType::TRIGGER_ENTRY);
+		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
 		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
 		break;
 	case CatalogType::TABLE_ENTRY:
