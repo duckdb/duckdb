@@ -221,7 +221,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		if (lowercase_name == "first" || lowercase_name == "last") {
 			lowercase_name += "_value";
 		}
-		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 
 		if (export_opt.HasResult()) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
@@ -231,8 +230,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		expr->catalog = qualified_function.catalog;
 		expr->schema = qualified_function.schema;
-		expr->function_name = lowercase_name;
-		expr->type = win_fun_type;
+		expr->SetFunctionName(lowercase_name);
 
 		expr->children = std::move(function_children);
 		expr->has_ignore_nulls = has_ignore_nulls_result;
@@ -1944,8 +1942,7 @@ PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	//! Create a dummy result to add modifiers to
-	auto result =
-	    make_uniq<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, INVALID_CATALOG, INVALID_SCHEMA, string());
+	auto result = make_uniq<WindowExpression>(INVALID_CATALOG, INVALID_SCHEMA, string());
 	auto partition_opt = list_pr.Child<OptionalParseResult>(0);
 	if (partition_opt.HasResult()) {
 		result->partitions = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(partition_opt.optional_result);

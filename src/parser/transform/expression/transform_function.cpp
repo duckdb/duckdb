@@ -168,13 +168,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			lowercase_name += "_value";
 		}
 
-		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
-
 		if (root.export_state) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
+		auto expr = make_uniq<WindowExpression>(std::move(catalog), std::move(schema), lowercase_name);
 		expr->has_ignore_nulls = (root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS);
 		expr->ignore_nulls = (root.agg_ignore_nulls == duckdb_libpgquery::PG_IGNORE_NULLS);
 		expr->distinct = root.agg_distinct;

@@ -115,6 +115,9 @@ endif
 ifneq (${EXTENSION_STATIC_BUILD}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
+ifeq (${DISABLE_GCC_FUNCTION_SECTIONS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_GCC_FUNCTION_SECTIONS=1
+endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
 endif
@@ -490,7 +493,7 @@ endef
 .PHONY: toolsci format_tools
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config,ninja-build mold ccache pkg-config)
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
 	pkg-config --exists libcurl || { \
 		sudo apt-get update -y -qq; \
 		sudo apt-get install -y -qq libcurl4-openssl-dev; \

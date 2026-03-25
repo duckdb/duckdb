@@ -39,7 +39,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
 
 public:
-	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
+	WindowExpression(const string &catalog_name, const string &schema, const string &function_name);
 
 	//! Catalog of the aggregate function
 	string catalog;
@@ -92,7 +92,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
-	static ExpressionType WindowToExpressionType(string &fun_name);
+	void SetFunctionName(const string &function_name);
 
 public:
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
@@ -277,8 +277,16 @@ public:
 	}
 
 private:
+	static ExpressionType WindowToExpressionType(const string &fun_name);
+
+	//	Backwards-compatible serialization interface
 	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
 	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);
+
+	//	Remove LEAD/LAG offset/default
+	vector<unique_ptr<ParsedExpression>> SerializedChildren(Serializer &serializer) const;
+	unique_ptr<ParsedExpression> SerializedOffset(Serializer &serializer) const;
+	unique_ptr<ParsedExpression> SerializedDefault(Serializer &serializer) const;
 };
 
 } // namespace duckdb
