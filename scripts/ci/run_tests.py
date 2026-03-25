@@ -488,15 +488,18 @@ def main():
         print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
+    unittest_bin = args.unittest_bin
+    if os.name == "nt":
+        unittest_bin = unittest_bin.replace("/", "\\")
     if args.track_runtime is not None:
         print("enabling runtime tracking forces batch_size=1")
         batch_size = 1
     else:
         batch_size = args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, test_flags, args.patterns) as test_file:
+    with open_test_list(args.test_list, unittest_bin, test_flags, args.patterns) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
-            unittest_bin=args.unittest_bin,
+            unittest_bin=unittest_bin,
             test_flags=test_flags,
             patterns=args.patterns,
             test_command=args.test_command,
