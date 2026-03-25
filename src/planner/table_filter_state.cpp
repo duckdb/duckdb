@@ -19,6 +19,56 @@ static bool IsSimpleFilterColumnRef(const Expression &expression) {
 	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
+static bool HasSupportedFastPathComparisonType(ExpressionType comparison_type) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool HasSupportedFastPathPhysicalType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
+	case PhysicalType::VARCHAR:
+	case PhysicalType::BOOL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool CanUseConstantComparisonFastPath(const Expression &column, ExpressionType comparison_type,
+                                             const Value &constant) {
+	if (!HasSupportedFastPathComparisonType(comparison_type)) {
+		return false;
+	}
+	if (constant.IsNull()) {
+		return true;
+	}
+	return HasSupportedFastPathPhysicalType(column.return_type);
+}
+
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
 	auto initialize_executor = [&]() {
 		executor = make_uniq<ExpressionExecutor>(context);
@@ -39,14 +89,19 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 	}
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comparison = expression.Cast<BoundComparisonExpression>();
-		if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT) {
+		if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT &&
+		    CanUseConstantComparisonFastPath(*comparison.left, comparison.GetExpressionType(),
+		                                     comparison.right->Cast<BoundConstantExpression>().value)) {
 			fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
 			comparison_type = comparison.GetExpressionType();
 			constant = comparison.right->Cast<BoundConstantExpression>().value;
 			initialize_executor();
 			return;
 		}
-		if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+		if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT &&
+		    CanUseConstantComparisonFastPath(*comparison.right,
+		                                     FlipComparisonExpression(comparison.GetExpressionType()),
+		                                     comparison.left->Cast<BoundConstantExpression>().value)) {
 			fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
 			comparison_type = FlipComparisonExpression(comparison.GetExpressionType());
 			constant = comparison.left->Cast<BoundConstantExpression>().value;

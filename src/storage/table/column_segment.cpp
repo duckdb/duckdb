@@ -312,6 +312,23 @@ static idx_t TemplatedFilterSelection(const UnifiedVectorFormat &vdata, T predic
 }
 
 template <class T>
+static idx_t TemplatedDistinctFromSelection(const UnifiedVectorFormat &vdata, const T &predicate,
+                                            const SelectionVector &sel, const idx_t approved_tuple_count,
+                                            SelectionVector &result_sel) {
+	auto &mask = vdata.validity;
+	const auto vec = UnifiedVectorFormat::GetData<const T>(vdata);
+	idx_t result_count = 0;
+	for (idx_t i = 0; i < approved_tuple_count; i++) {
+		const auto idx = sel.get_index(i);
+		auto vector_idx = vdata.sel->get_index(idx);
+		bool comparison_result = !mask.RowIsValidUnsafe(vector_idx) || NotEquals::Operation(vec[vector_idx], predicate);
+		result_sel.set_index(result_count, idx);
+		result_count += comparison_result;
+	}
+	return result_count;
+}
+
+template <class T>
 static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, SelectionVector &sel,
                                   idx_t &approved_tuple_count, ExpressionType comparison_type) {
 	SelectionVector new_sel(approved_tuple_count);
@@ -335,6 +352,15 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		} else {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, NotEquals, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
+		}
+		break;
+	}
+	case ExpressionType::COMPARE_DISTINCT_FROM: {
+		if (mask.AllValid()) {
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, NotEquals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
+		} else {
+			approved_tuple_count = TemplatedDistinctFromSelection(vdata, predicate, sel, approved_tuple_count, new_sel);
 		}
 		break;
 	}
@@ -378,6 +404,16 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		}
 		break;
 	}
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+		if (mask.AllValid()) {
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, Equals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
+		} else {
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, Equals, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
+		}
+		break;
+	}
 	default:
 		throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 	}
@@ -414,6 +450,25 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 static idx_t ExecuteConstantComparisonSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                                 const Value &constant, ExpressionType comparison_type,
                                                 idx_t &approved_tuple_count) {
+	if (constant.IsNull()) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			approved_tuple_count = 0;
+			return 0;
+		default:
+			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
+		}
+	}
+
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::UINT8: {
 		auto predicate = UTinyIntValue::Get(constant);
@@ -473,6 +528,11 @@ static idx_t ExecuteConstantComparisonSelection(SelectionVector &sel, Vector &ve
 	case PhysicalType::DOUBLE: {
 		auto predicate = DoubleValue::Get(constant);
 		FilterSelectionSwitch<double>(vdata, predicate, sel, approved_tuple_count, comparison_type);
+		break;
+	}
+	case PhysicalType::INTERVAL: {
+		auto predicate = IntervalValue::Get(constant);
+		FilterSelectionSwitch<interval_t>(vdata, predicate, sel, approved_tuple_count, comparison_type);
 		break;
 	}
 	case PhysicalType::VARCHAR: {
