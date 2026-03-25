@@ -241,11 +241,7 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectFromClause(PEGTrans
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
-	auto into_opt = list_pr.Child<OptionalParseResult>(1);
-	if (into_opt.HasResult()) {
-		throw ParserException("SELECT INTO not supported");
-	}
-	auto opt_from = list_pr.Child<OptionalParseResult>(2);
+	auto opt_from = list_pr.Child<OptionalParseResult>(1);
 	if (opt_from.HasResult()) {
 		select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(opt_from.optional_result);
 	} else {
@@ -1284,10 +1280,6 @@ PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer, opt
 	transformer.TransformOptional<unique_ptr<ResultModifier>>(list_pr, 1, limit_offset);
 	if (limit_offset) {
 		result.push_back(std::move(limit_offset));
-	}
-	auto locking_opt = list_pr.Child<OptionalParseResult>(2);
-	if (locking_opt.HasResult()) {
-		throw ParserException("SELECT locking clause is not supported");
 	}
 	return result;
 }

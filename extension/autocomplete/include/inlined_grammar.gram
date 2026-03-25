@@ -1081,9 +1081,7 @@ TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
 ConstraintNameClause <- 'CONSTRAINT' Identifier
 TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
-TopUniqueConstraint <- 'UNIQUE' UniqueConstraintSpec
-UniqueConstraintSpec <- UniqueUsingIndex / ColumnIdList
-UniqueUsingIndex <- 'USING' 'INDEX' Identifier
+TopUniqueConstraint <- 'UNIQUE' ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
 ColumnIdList <- Parens(List(ColId))
 
@@ -1221,13 +1219,7 @@ SetopExcept <- 'EXCEPT'
 ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
-ResultModifiers <- OrderByClause? LimitOffset? LockingClause?
-LockingClause <- 'FOR' ForLockingStrength
-ForLockingStrength <- ForNoKeyUpdate / ForKeyShare / ForUpdate / ForShare
-ForNoKeyUpdate <- 'NO' 'KEY' 'UPDATE'
-ForKeyShare <- 'KEY' 'SHARE'
-ForUpdate <- 'UPDATE'
-ForShare <- 'SHARE'
+ResultModifiers <- OrderByClause? LimitOffset?
 LimitOffset <- LimitOffsetClause / OffsetLimitClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
@@ -1237,8 +1229,7 @@ SimpleSelectParens <- Parens(SimpleSelect)
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- SelectFromClause / FromSelectClause
-SelectFromClause <- SelectClause IntoClause? FromClause?
-IntoClause <- 'INTO' QualifiedName
+SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
 WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
 CTEBody <- Parens(CTEBodyContent)
