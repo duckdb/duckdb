@@ -1,15 +1,73 @@
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
-ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
-	executor.AddExpression(expression);
+static bool IsSimpleFilterColumnRef(const Expression &expression) {
+	return expression.type == ExpressionType::BOUND_REF || expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+}
+
+ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
+	auto initialize_executor = [&]() {
+		executor = make_uniq<ExpressionExecutor>(context);
+		executor->AddExpression(expression);
+	};
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
+		if (conjunction.type == ExpressionType::CONJUNCTION_AND && !conjunction.children.empty()) {
+			child_states.reserve(conjunction.children.size());
+			for (auto &child : conjunction.children) {
+				child_states.push_back(make_uniq<ExpressionFilterState>(context, *child));
+			}
+			if (conjunction.children.size() > 1) {
+				adaptive_filter = make_uniq<AdaptiveFilter>(expression);
+			}
+			return;
+		}
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comparison = expression.Cast<BoundComparisonExpression>();
+		if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT) {
+			fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
+			comparison_type = comparison.GetExpressionType();
+			constant = comparison.right->Cast<BoundConstantExpression>().value;
+			initialize_executor();
+			return;
+		}
+		if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+			fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
+			comparison_type = FlipComparisonExpression(comparison.GetExpressionType());
+			constant = comparison.left->Cast<BoundConstantExpression>().value;
+			initialize_executor();
+			return;
+		}
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
+		auto &op = expression.Cast<BoundOperatorExpression>();
+		if (op.children.size() == 1 && IsSimpleFilterColumnRef(*op.children[0])) {
+			if (expression.type == ExpressionType::OPERATOR_IS_NULL) {
+				fast_path = ExpressionFilterFastPath::IS_NULL;
+				initialize_executor();
+				return;
+			}
+			if (expression.type == ExpressionType::OPERATOR_IS_NOT_NULL) {
+				fast_path = ExpressionFilterFastPath::IS_NOT_NULL;
+				initialize_executor();
+				return;
+			}
+		}
+	}
+	initialize_executor();
 }
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {

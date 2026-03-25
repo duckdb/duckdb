@@ -34,7 +34,7 @@ public:
 	unique_ptr<Expression> expr;
 
 public:
-	bool EvaluateWithConstant(ClientContext &context, const Value &val);
+	bool EvaluateWithConstant(ClientContext &context, const Value &val) const;
 	bool EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const;
 
 	//! Convert any TableFilter to an ExpressionFilter using a BoundReferenceExpression(0) as column placeholder

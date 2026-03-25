@@ -25,7 +25,7 @@ ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
     : TableFilter(TableFilterType::EXPRESSION_FILTER), expr(std::move(expr_p)) {
 }
 
-bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) {
+bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
 	ExpressionExecutor executor(context, *expr);
 	return EvaluateWithConstant(executor, val);
 }

@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -45,11 +46,32 @@ public:
 	vector<unique_ptr<TableFilterState>> child_states;
 };
 
+enum class ExpressionFilterFastPath : uint8_t { NONE, CONSTANT_COMPARISON, IS_NULL, IS_NOT_NULL };
+
 struct ExpressionFilterState : public TableFilterState {
 public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
 
-	ExpressionExecutor executor;
+	bool HasChildFilters() const {
+		return !child_states.empty();
+	}
+	bool HasFastPath() const {
+		return fast_path != ExpressionFilterFastPath::NONE;
+	}
+	ClientContext &GetContext() {
+		if (executor) {
+			return executor->GetContext();
+		}
+		D_ASSERT(!child_states.empty());
+		return child_states[0]->GetContext();
+	}
+
+	ExpressionFilterFastPath fast_path = ExpressionFilterFastPath::NONE;
+	ExpressionType comparison_type = ExpressionType::INVALID;
+	Value constant;
+	vector<unique_ptr<ExpressionFilterState>> child_states;
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	unique_ptr<ExpressionExecutor> executor;
 };
 
 struct BFTableFilterState final : public TableFilterState {
