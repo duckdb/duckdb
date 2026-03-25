@@ -2,12 +2,6 @@
 # description: Test usage of metadata cache in COUNT(*)
 # group: [parquet]
 
-# On Windows, freshly checked-out files can fail the metadata cache validity
-# check because local-file reuse falls back to last_modified and requires files
-# without a version tag to be older than 10 seconds, so the bind rewrite keeps
-# PARQUET_SCAN even when the cache entry exists.
-require notwindows
-
 require parquet
 
 statement ok

@@ -929,6 +929,38 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	return file_metadata;
 }
 
+static string GetWindowsVersionTag(uint64_t file_size, uint64_t creation_time, uint64_t last_write_time) {
+	uint64_t version_tag[3];
+	Store(file_size, data_ptr_cast(&version_tag[0]));
+	Store(creation_time, data_ptr_cast(&version_tag[1]));
+	Store(last_write_time, data_ptr_cast(&version_tag[2]));
+	return string(char_ptr_cast(version_tag), sizeof(version_tag));
+}
+
+static string GetWindowsVersionTag(const BY_HANDLE_FILE_INFORMATION &file_info) {
+	const uint64_t file_size =
+	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
+	ULARGE_INTEGER creation_time;
+	creation_time.LowPart = file_info.ftCreationTime.dwLowDateTime;
+	creation_time.HighPart = file_info.ftCreationTime.dwHighDateTime;
+	ULARGE_INTEGER last_write_time;
+	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
+	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
+	return WindowsComputeVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
+}
+
+static string GetWindowsVersionTag(const WIN32_FIND_DATAW &ffd) {
+	const uint64_t file_size =
+	    (static_cast<uint64_t>(ffd.nFileSizeHigh) << 32) | static_cast<uint64_t>(ffd.nFileSizeLow);
+	ULARGE_INTEGER creation_time;
+	creation_time.LowPart = ffd.ftCreationTime.dwLowDateTime;
+	creation_time.HighPart = ffd.ftCreationTime.dwHighDateTime;
+	ULARGE_INTEGER last_write_time;
+	last_write_time.LowPart = ffd.ftLastWriteTime.dwLowDateTime;
+	last_write_time.HighPart = ffd.ftLastWriteTime.dwHighDateTime;
+	return WindowsComputeVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
+}
+
 struct WindowsFileHandle : public FileHandle {
 public:
 	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags)
@@ -1315,6 +1347,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		// last modified time
 		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
 		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
+		// etag
+		options.emplace("etag", Value(GetWindowsVersionTag(ffd)));
 
 		// callback
 		callback(info);
@@ -1510,24 +1544,7 @@ string LocalFileSystem::GetVersionTag(FileHandle &handle) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to get version tag for file \"%s\": %s", handle.path, error);
 	}
-
-	ULARGE_INTEGER last_write_time;
-	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
-	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
-
-	const uint64_t file_size =
-	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
-	const uint64_t file_index =
-	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
-
-	// volume serial + file index identify the file; size + last write time protect against in-place rewrites
-	uint64_t version_tag[4];
-	Store(static_cast<uint64_t>(file_info.dwVolumeSerialNumber), data_ptr_cast(&version_tag[0]));
-	Store(file_index, data_ptr_cast(&version_tag[1]));
-	Store(file_size, data_ptr_cast(&version_tag[2]));
-	Store(last_write_time.QuadPart, data_ptr_cast(&version_tag[3]));
-
-	return string(char_ptr_cast(version_tag), sizeof(version_tag));
+	return GetWindowsVersionTag(file_info);
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
