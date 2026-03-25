@@ -259,6 +259,9 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &expr = *expr_filter.expr;
+		if (ExpressionFilter::IsOptionalExpression(expr)) {
+			return 0;
+		}
 		// Estimate cost based on the expression type
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_IS_NULL:

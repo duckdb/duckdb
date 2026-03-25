@@ -138,7 +138,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
-			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+			if (!ExpressionFilter::IsOptionalFilter(entry.Filter())) {
 				has_non_optional_filters = true;
 			}
 		}

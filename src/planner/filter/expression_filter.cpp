@@ -415,6 +415,38 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 	return found;
 }
 
+bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		return func.function.name == OptionalFilterScalarFun::NAME;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr.type == ExpressionType::CONJUNCTION_AND) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		if (conj.children.empty()) {
+			return false;
+		}
+		for (auto &child : conj.children) {
+			if (!IsOptionalExpression(*child)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
+bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+		return true;
+	}
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		return false;
+	}
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	return IsOptionalExpression(*expr_filter.expr);
+}
+
 unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) const {
 	auto expr_copy = expr->Copy();
 	ReplaceExpressionRecursive(expr_copy, column);

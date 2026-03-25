@@ -56,6 +56,10 @@ public:
 	                                       ExpressionType replace_type = ExpressionType::BOUND_REF);
 	//! Check if an expression tree contains an internal function with the given name
 	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
+	//! Check if an expression tree is entirely optional filter semantics
+	static bool IsOptionalExpression(const Expression &expr);
+	//! Check if a table filter is an optional filter, including expression-backed optional filters
+	static bool IsOptionalFilter(const TableFilter &filter);
 
 private:
 	//! Produce human-readable ToString for internal tablefilter functions
