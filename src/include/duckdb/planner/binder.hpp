@@ -440,6 +440,8 @@ private:
 	BoundStatement BindNode(RecursiveCTENode &node);
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
+	BoundStatement BindNode(UpdateQueryNode &node);
+	BoundStatement BindNode(DeleteQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);

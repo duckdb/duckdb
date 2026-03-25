@@ -1,0 +1,20 @@
+add_library_unity(
+  duckdb_common_vector_types
+  OBJECT
+  array_vector.cpp
+  constant_vector.cpp
+  dictionary_vector.cpp
+  flat_vector.cpp
+  fsst_vector.cpp
+  list_vector.cpp
+  map_vector.cpp
+  sequence_vector.cpp
+  shredded_vector.cpp
+  string_vector.cpp
+  struct_vector.cpp
+  unified_vector_format.cpp
+  union_vector.cpp
+  variant_vector.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_vector_types>
+    PARENT_SCOPE)

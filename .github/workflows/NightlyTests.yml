@@ -831,3 +831,45 @@ jobs:
           else
             echo "All BWC tests passed."
           fi
+
+  # checks that cmake-generated project is consistent on re-configure
+  cmake-reconfigure-check:
+    name: CMake Reconfigure Check
+    runs-on: ${{ matrix.os }}
+    needs: check-draft
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Dir
+        run: |
+          mkdir build
+
+      - name: Configure
+        working-directory: build
+        run: |
+          cmake .. -G Ninja
+
+      - name: Reconfigure
+        working-directory: build
+        run: |
+          cp build.ninja clean_build.ninja
+          cmake .. -G Ninja
+
+      - name: Cleanup Build Files
+        working-directory: build
+        run: |
+          perl -i -ne 'print unless /TARGET_COMPILE_PDB/' clean_build.ninja
+          perl -i -ne 'print unless /TARGET_COMPILE_PDB/' build.ninja
+          perl -i -ne 'print unless /TARGET_PDB/' clean_build.ninja
+          perl -i -ne 'print unless /TARGET_PDB/' build.ninja
+          perl -i -ne 'print unless /DuckDBConfig.cmake.in/' clean_build.ninja
+          perl -i -ne 'print unless /DuckDBConfig.cmake.in/' build.ninja
+
+      - name: Compare Build Files
+        working-directory: build
+        run: |
+          diff -u clean_build.ninja build.ninja

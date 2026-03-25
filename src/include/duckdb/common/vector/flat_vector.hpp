@@ -44,12 +44,12 @@ struct FlatVector {
 		return ConstantVector::GetDataUnsafe<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		vector.data = data;
+		VerifyFlatVector(vector);
+		vector.buffer->SetData(data);
 	}
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {

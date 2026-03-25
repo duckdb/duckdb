@@ -1,28 +1,3 @@
-commit cf27a82878f55aa60ced8ddf4c922e9985e56ddc
-Author: dentiny <dentinyhao@gmail.com>
-Date:   Wed Mar 25 11:28:03 2026 +0000
-
-    Sync DuckDB core
-
-diff --git a/duckdb b/duckdb
-index 775cda2..490e7a8 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 775cda2b490eafb7630dbe3fe4c6708ec8197021
-+Subproject commit 490e7a8f479b607798541d21dccf2815abfa673a
-diff --git a/test/sql/json/table/internal_issue_6807.test_slow b/test/sql/json/table/internal_issue_6807.test_slow
-index a354a7f..e759862 100644
---- a/test/sql/json/table/internal_issue_6807.test_slow
-+++ b/test/sql/json/table/internal_issue_6807.test_slow
-@@ -13,6 +13,6 @@ statement ok
- CREATE TABLE T AS FROM 'https://data.gharchive.org/2023-02-08-0.json.gz';
- 
- query I
--SELECT count(*) < 20 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
-+SELECT count(*) < 60 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
- ----
- true
 diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
 index 6aa2ed0..54babde 100644
 --- a/test/sql/logging/file_system_logging.test

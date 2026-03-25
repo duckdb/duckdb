@@ -409,7 +409,7 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
                                                               const vector<ColumnIndex> &indexes,
-                                                              const ParquetColumnSchema &schema) {
+                                                              const ParquetColumnSchema &schema) const {
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
@@ -461,7 +461,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 	}
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
+unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) const {
 	auto ret = CreateReaderRecursive(context, column_indexes, *root_schema);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
@@ -854,6 +854,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	} else {
 		metadata = std::move(metadata_p);
+		if (parquet_options.encryption_config) {
+			encryption_util = context_p.db->GetEncryptionUtil(true);
+		}
 	}
 	InitializeSchema(context_p);
 }
@@ -975,7 +978,7 @@ string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAl
 	}
 }
 
-uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) const {
 	return object.read(&iprot);
 }
 
@@ -987,7 +990,7 @@ uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TPro
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-                                 const uint32_t buffer_size) {
+                                 const uint32_t buffer_size) const {
 	return iprot.getTransport()->read(buffer, buffer_size);
 }
 
@@ -998,7 +1001,7 @@ uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProt
 	                               *encryption_util, aad_crypto_metadata);
 }
 
-static idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
+static idx_t GetRowGroupOffset(const ParquetReader &reader, idx_t group_idx) {
 	idx_t row_group_offset = 0;
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	for (idx_t i = 0; i < group_idx; i++) {
@@ -1233,7 +1236,7 @@ ParquetScanFilter::~ParquetScanFilter() {
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state,
-                                   vector<idx_t> groups_to_read) {
+                                   vector<idx_t> groups_to_read) const {
 	state.current_group = -1;
 	state.finished = false;
 	state.offset_in_group = 0;

@@ -27,6 +27,8 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -60,6 +62,8 @@ template class unique_ptr<VacuumStatement>;
 template class unique_ptr<QueryNode>;
 template class unique_ptr<SelectNode>;
 template class unique_ptr<SetOperationNode>;
+template class unique_ptr<UpdateQueryNode>;
+template class unique_ptr<DeleteQueryNode>;
 template class unique_ptr<ParsedExpression>;
 template class unique_ptr<CaseExpression>;
 template class unique_ptr<CastExpression>;

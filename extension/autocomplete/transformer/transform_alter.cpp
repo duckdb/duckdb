@@ -6,6 +6,8 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 
 namespace duckdb {
 
@@ -156,18 +158,19 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
                                                       const string &column_name, const AlterEntryData &table_data,
                                                       const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
-	update_statement->prioritize_table_when_binding = true;
+	auto &node = *update_statement->node;
+	node.prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
 	table_ref->catalog_name = table_data.catalog;
 	table_ref->schema_name = table_data.schema;
 	table_ref->table_name = table_data.name;
-	update_statement->table = std::move(table_ref);
+	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
 	set_info->columns.push_back(column_name);
 	set_info->expressions.push_back(original_expression->Copy());
-	update_statement->set_info = std::move(set_info);
+	node.set_info = std::move(set_info);
 
 	multi_statement->statements.push_back(std::move(update_statement));
 }

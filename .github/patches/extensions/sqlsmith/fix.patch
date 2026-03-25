@@ -1,0 +1,75 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index 72e8f5b..06fc74a 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -18,6 +18,7 @@
+ #include "duckdb/parser/statement/attach_statement.hpp"
+ #include "duckdb/parser/statement/create_statement.hpp"
+ #include "duckdb/parser/statement/delete_statement.hpp"
++#include "duckdb/parser/query_node/delete_query_node.hpp"
+ #include "duckdb/parser/statement/detach_statement.hpp"
+ #include "duckdb/parser/statement/insert_statement.hpp"
+ #include "duckdb/parser/statement/multi_statement.hpp"
+@@ -189,12 +190,12 @@ unique_ptr<DeleteStatement> StatementGenerator::GenerateDelete() {
+ 		if (entry.type == CatalogType::TABLE_ENTRY) {
+ 			auto result = make_uniq<BaseTableRef>();
+ 			result->table_name = entry.name;
+-			delete_statement->table = std::move(result);
++			delete_statement->node->table = std::move(result);
+ 		} else {
+-			delete_statement->table = GenerateTableRef();
++			delete_statement->node->table = GenerateTableRef();
+ 		}
+ 	} else {
+-		delete_statement->table = GenerateTableRef();
++		delete_statement->node->table = GenerateTableRef();
+ 	}
+ 
+ 	return delete_statement;
+diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
+index 4602928..c3cf639 100644
+--- a/src/statement_simplifier.cpp
++++ b/src/statement_simplifier.cpp
+@@ -10,6 +10,8 @@
+ #include "duckdb/parser/statement/insert_statement.hpp"
+ #include "duckdb/parser/statement/prepare_statement.hpp"
+ #include "duckdb/parser/statement/update_statement.hpp"
++#include "duckdb/parser/query_node/update_query_node.hpp"
++#include "duckdb/parser/query_node/delete_query_node.hpp"
+ #include "duckdb/parser/statement/select_statement.hpp"
+ #endif
+ 
+@@ -401,11 +403,11 @@ void StatementSimplifier::Simplify(InsertStatement &stmt) {
+ }
+ 
+ void StatementSimplifier::Simplify(DeleteStatement &stmt) {
+-	Simplify(stmt.cte_map);
+-	SimplifyOptional(stmt.condition);
+-	SimplifyExpression(stmt.condition);
+-	SimplifyList(stmt.using_clauses);
+-	SimplifyList(stmt.returning_list);
++	Simplify(stmt.node->cte_map);
++	SimplifyOptional(stmt.node->condition);
++	SimplifyExpression(stmt.node->condition);
++	SimplifyList(stmt.node->using_clauses);
++	SimplifyList(stmt.node->returning_list);
+ }
+ 
+ void StatementSimplifier::Simplify(UpdateSetInfo &info) {
+@@ -432,11 +434,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
+ }
+ 
+ void StatementSimplifier::Simplify(UpdateStatement &stmt) {
+-	Simplify(stmt.cte_map);
+-	SimplifyOptional(stmt.from_table);
+-	D_ASSERT(stmt.set_info);
+-	Simplify(*stmt.set_info);
+-	SimplifyList(stmt.returning_list);
++	Simplify(stmt.node->cte_map);
++	SimplifyOptional(stmt.node->from_table);
++	D_ASSERT(stmt.node->set_info);
++	Simplify(*stmt.node->set_info);
++	SimplifyList(stmt.node->returning_list);
+ }
+ 
+ void StatementSimplifier::Simplify(SQLStatement &stmt) {

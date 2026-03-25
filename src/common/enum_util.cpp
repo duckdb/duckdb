@@ -1038,6 +1038,7 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 		{ static_cast<uint32_t>(CatalogType::COPY_FUNCTION_ENTRY), "COPY_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::MACRO_ENTRY), "MACRO_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TABLE_MACRO_ENTRY), "TABLE_MACRO_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::WINDOW_FUNCTION_ENTRY), "WINDOW_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::DELETED_ENTRY), "DELETED_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::RENAMED_ENTRY), "RENAMED_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::SECRET_ENTRY), "SECRET_ENTRY" },
@@ -1050,12 +1051,12 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
-	return StringUtil::EnumToString(GetCatalogTypeValues(), 25, "CatalogType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCatalogTypeValues(), 26, "CatalogType", static_cast<uint32_t>(value));
 }
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
-	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 25, "CatalogType", value));
+	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 26, "CatalogType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
@@ -4115,19 +4116,21 @@ const StringUtil::EnumStringLiteral *GetQueryNodeTypeValues() {
 		{ static_cast<uint32_t>(QueryNodeType::BOUND_SUBQUERY_NODE), "BOUND_SUBQUERY_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::RECURSIVE_CTE_NODE), "RECURSIVE_CTE_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::CTE_NODE), "CTE_NODE" },
-		{ static_cast<uint32_t>(QueryNodeType::STATEMENT_NODE), "STATEMENT_NODE" }
+		{ static_cast<uint32_t>(QueryNodeType::STATEMENT_NODE), "STATEMENT_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::UPDATE_QUERY_NODE), "UPDATE_QUERY_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::DELETE_QUERY_NODE), "DELETE_QUERY_NODE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
-	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 6, "QueryNodeType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 8, "QueryNodeType", static_cast<uint32_t>(value));
 }
 
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
-	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 6, "QueryNodeType", value));
+	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 8, "QueryNodeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
@@ -5210,6 +5213,24 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value) {
 	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 5, "TimestampCastResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TransactionInvalidationPolicy::STANDARD_POLICY), "STANDARD_POLICY" },
+		{ static_cast<uint32_t>(TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION), "ALL_ERRORS_INVALIDATE_TRANSACTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value) {
+	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
+	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {

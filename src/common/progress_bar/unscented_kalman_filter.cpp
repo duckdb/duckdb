@@ -44,7 +44,7 @@ void UnscentedKalmanFilter::Update(double progress, double time) {
 }
 
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
-	// If the initial progress is zero we can't yet initalize, since the filter
+	// If the initial progress is zero we can't yet initialize, since the filter
 	// wont' have a reasonable guess about query velocity, just wait until some
 	// progress has been made.
 	if (initial_progress == 0.0 || current_time == 0.0) {

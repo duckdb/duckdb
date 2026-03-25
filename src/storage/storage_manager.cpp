@@ -17,9 +17,11 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/path.hpp"
 
 namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
@@ -202,17 +204,23 @@ bool StorageManager::HasWAL() const {
 	return true;
 }
 
-bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
+bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
+                                        ActiveCheckpointWrapper &active_checkpoint) {
 	unique_ptr<lock_guard<mutex>> guard;
+	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
 	if (!options.wal_lock) {
 		// not holding the WAL lock yet - grab it
 		guard = GetWALLock();
 	}
-	// while holding the WAL lock - get the last committed transaction from the transaction manager
-	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
-	// any new commits made will be written to the next wal
-	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-	options.transaction_id = transaction_manager.GetNewCheckpointId();
+	if (active_checkpoint.HasCheckpointContext()) {
+		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
+		// The start time of this transaction defines the visibility for checkpointing, any new commits are written
+		// to the next WAL.
+		active_checkpoint.GetCheckpointTransaction(options);
+	} else {
+		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
+		options.transaction_id = transaction_manager.GetLastCommit();
+	}
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
 	if (!wal) {
@@ -286,19 +294,7 @@ unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
-	// we append the ".wal" **before** a question mark in case of GET parameters
-	// but only if we are not in a windows long path (which starts with \\?\)
-	std::size_t question_mark_pos = std::string::npos;
-	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
-		question_mark_pos = path.find('?');
-	}
-	auto result = path;
-	if (question_mark_pos != std::string::npos) {
-		result.insert(question_mark_pos, suffix);
-	} else {
-		result += suffix;
-	}
-	return result;
+	return Path::AddSuffixToPath(path, suffix);
 }
 
 string StorageManager::GetCheckpointWALPath() {

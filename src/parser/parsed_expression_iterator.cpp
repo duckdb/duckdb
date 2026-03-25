@@ -6,6 +6,8 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
@@ -302,6 +304,43 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		auto &setop_node = node.Cast<SetOperationNode>();
 		for (auto &child : setop_node.children) {
 			EnumerateQueryNodeChildren(*child, expr_callback, ref_callback);
+		}
+		break;
+	}
+	case QueryNodeType::UPDATE_QUERY_NODE: {
+		auto &upd_node = node.Cast<UpdateQueryNode>();
+		if (upd_node.table) {
+			EnumerateTableRefChildren(*upd_node.table, expr_callback, ref_callback);
+		}
+		if (upd_node.from_table) {
+			EnumerateTableRefChildren(*upd_node.from_table, expr_callback, ref_callback);
+		}
+		if (upd_node.set_info) {
+			for (auto &expr : upd_node.set_info->expressions) {
+				expr_callback(expr);
+			}
+			if (upd_node.set_info->condition) {
+				expr_callback(upd_node.set_info->condition);
+			}
+		}
+		for (auto &expr : upd_node.returning_list) {
+			expr_callback(expr);
+		}
+		break;
+	}
+	case QueryNodeType::DELETE_QUERY_NODE: {
+		auto &del_node = node.Cast<DeleteQueryNode>();
+		if (del_node.table) {
+			EnumerateTableRefChildren(*del_node.table, expr_callback, ref_callback);
+		}
+		for (auto &using_clause : del_node.using_clauses) {
+			EnumerateTableRefChildren(*using_clause, expr_callback, ref_callback);
+		}
+		if (del_node.condition) {
+			expr_callback(del_node.condition);
+		}
+		for (auto &expr : del_node.returning_list) {
+			expr_callback(expr);
 		}
 		break;
 	}
