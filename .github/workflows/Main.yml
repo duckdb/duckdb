@@ -408,7 +408,7 @@ jobs:
     name: Linux CLI (${{ matrix.config.arch }})
     needs:
       - prepare
-      - linux-debug
+      - linux-release-tests
     strategy:
       fail-fast: false
       matrix:
@@ -496,7 +496,7 @@ jobs:
     name: Linux CLI (${{ matrix.config.arch }}-musl)
     needs:
       - prepare
-      - linux-debug
+      - linux-release-tests
     strategy:
       fail-fast: false
       matrix:
