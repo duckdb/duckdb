@@ -155,7 +155,7 @@ void ListFunction(DataChunk &args, Vector &result) {
 	auto unified_format = args.ToUnifiedFormat();
 	vector<const list_entry_t *> col_data;
 	for (idx_t col = 0; col < column_count; col++) {
-		auto list = args.data[col];
+		auto &list = args.data[col];
 		col_data.push_back(UnifiedVectorFormat::GetData<list_entry_t>(unified_format[col]));
 
 		const auto length = ListVector::GetListSize(list);

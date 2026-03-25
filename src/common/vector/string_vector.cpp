@@ -76,7 +76,7 @@ void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	string_buffer.AddHeapReference(std::move(buffer));
 }
 
-void StringVector::AddHeapReference(Vector &vector, Vector &other) {
+void StringVector::AddHeapReference(Vector &vector, const Vector &other) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(other.GetType().InternalType() == PhysicalType::VARCHAR);
 

@@ -482,6 +482,24 @@ index 31cd743..c98b7f7 100644
  
  		UnaryExecutor::Execute<list_entry_t, double>(input, result, count, [&](list_entry_t polygon) {
  			auto polygon_offset = polygon.offset;
+@@ -482,7 +482,7 @@ struct ST_Area {
+ 	// LINESTRING_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void LineStringAreaFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		UnaryExecutor::Execute<list_entry_t, double>(input, result, args.size(), [](list_entry_t) { return 0; });
+ 	}
+ 
+@@ -1386,7 +1386,7 @@ struct ST_Centroid {
+ 	// LINESTRING_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
 @@ -1394,12 +1394,12 @@ struct ST_Centroid {
  		auto line_vertex_entries = ListVector::GetData(input);
  		auto &line_vertex_vec = ListVector::GetEntry(input);
@@ -499,6 +517,15 @@ index 31cd743..c98b7f7 100644
  		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  
  			auto in_row_idx = format.sel->get_index(out_row_idx);
+@@ -1443,7 +1443,7 @@ struct ST_Centroid {
+ 	// POLYGON_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecutePolygon(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
 @@ -1453,12 +1453,12 @@ struct ST_Centroid {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &vertex_vec = ListVector::GetEntry(ring_vec);
@@ -516,7 +543,13 @@ index 31cd743..c98b7f7 100644
  
  		for (idx_t in_row_idx = 0; in_row_idx < count; in_row_idx++) {
  			if (format.validity.RowIsValid(in_row_idx)) {
-@@ -1535,14 +1535,14 @@ struct ST_Centroid {
+@@ -1530,19 +1530,19 @@ struct ST_Centroid {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	template <class T>
+ 	static void ExecuteBox(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
  		UnifiedVectorFormat format;
  		input.ToUnifiedFormat(count, format);
  		auto &box_children = StructVector::GetEntries(input);
@@ -719,7 +752,15 @@ index 31cd743..c98b7f7 100644
  
  		// Now we can fill the result vector
  		idx_t line_data_offset = 0;
-@@ -3525,12 +3525,12 @@ struct ST_FlipCoordinates {
+@@ -3518,19 +3518,19 @@ struct ST_FlipCoordinates {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	// TODO: We should be able to optimize these and avoid the flatten
+ 	static void ExecutePoint(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 
+ 		// TODO: Avoid flatten
  		input.Flatten(count);
  
  		auto &coords_in = StructVector::GetEntries(input);
@@ -736,9 +777,19 @@ index 31cd743..c98b7f7 100644
  
  		memcpy(x_data_out, y_data_in, count * sizeof(double));
  		memcpy(y_data_out, x_data_in, count * sizeof(double));
-@@ -3552,8 +3552,8 @@ struct ST_FlipCoordinates {
+@@ -3544,16 +3544,16 @@ struct ST_FlipCoordinates {
+ 	// LINESTRING_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
  
- 		auto coord_vec_in = ListVector::GetEntry(input);
+ 		// TODO: Avoid flatten
+ 		input.Flatten(count);
+ 
+-		auto coord_vec_in = ListVector::GetEntry(input);
++		auto &coord_vec_in = ListVector::GetEntry(input);
  		auto &coords_in = StructVector::GetEntries(coord_vec_in);
 -		auto x_data_in = FlatVector::GetData<double>(*coords_in[0]);
 -		auto y_data_in = FlatVector::GetData<double>(*coords_in[1]);
@@ -747,9 +798,12 @@ index 31cd743..c98b7f7 100644
  
  		auto coord_count = ListVector::GetListSize(input);
  		ListVector::Reserve(result, coord_count);
-@@ -3565,8 +3565,8 @@ struct ST_FlipCoordinates {
+@@ -3563,10 +3563,10 @@ struct ST_FlipCoordinates {
+ 		auto line_entries_out = ListVector::GetData(result);
+ 		memcpy(line_entries_out, line_entries_in, count * sizeof(list_entry_t));
  
- 		auto coord_vec_out = ListVector::GetEntry(result);
+-		auto coord_vec_out = ListVector::GetEntry(result);
++		auto &coord_vec_out = ListVector::GetEntry(result);
  		auto &coords_out = StructVector::GetEntries(coord_vec_out);
 -		auto x_data_out = FlatVector::GetData<double>(*coords_out[0]);
 -		auto y_data_out = FlatVector::GetData<double>(*coords_out[1]);
@@ -758,9 +812,23 @@ index 31cd743..c98b7f7 100644
  
  		memcpy(x_data_out, y_data_in, coord_count * sizeof(double));
  		memcpy(y_data_out, x_data_in, coord_count * sizeof(double));
-@@ -3591,8 +3591,8 @@ struct ST_FlipCoordinates {
+@@ -3580,25 +3580,25 @@ struct ST_FlipCoordinates {
+ 	// POLYGON_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecutePolygon(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
  
- 		auto coord_vec_in = ListVector::GetEntry(ring_vec_in);
+ 		// TODO: Avoid flatten
+ 		input.Flatten(count);
+ 
+-		auto ring_vec_in = ListVector::GetEntry(input);
++		auto &ring_vec_in = ListVector::GetEntry(input);
+ 		auto ring_count = ListVector::GetListSize(input);
+ 
+-		auto coord_vec_in = ListVector::GetEntry(ring_vec_in);
++		auto &coord_vec_in = ListVector::GetEntry(ring_vec_in);
  		auto &coords_in = StructVector::GetEntries(coord_vec_in);
 -		auto x_data_in = FlatVector::GetData<double>(*coords_in[0]);
 -		auto y_data_in = FlatVector::GetData<double>(*coords_in[1]);
@@ -769,9 +837,19 @@ index 31cd743..c98b7f7 100644
  
  		auto coord_count = ListVector::GetListSize(ring_vec_in);
  
-@@ -3612,8 +3612,8 @@ struct ST_FlipCoordinates {
+ 		ListVector::Reserve(result, ring_count);
+ 		ListVector::SetListSize(result, ring_count);
+-		auto ring_vec_out = ListVector::GetEntry(result);
++		auto &ring_vec_out = ListVector::GetEntry(result);
+ 		ListVector::Reserve(ring_vec_out, coord_count);
+ 		ListVector::SetListSize(ring_vec_out, coord_count);
  
- 		auto coord_vec_out = ListVector::GetEntry(ring_vec_out);
+@@ -3610,10 +3610,10 @@ struct ST_FlipCoordinates {
+ 		auto coord_entries_out = ListVector::GetData(ring_vec_out);
+ 		memcpy(coord_entries_out, coord_entries_in, ring_count * sizeof(list_entry_t));
+ 
+-		auto coord_vec_out = ListVector::GetEntry(ring_vec_out);
++		auto &coord_vec_out = ListVector::GetEntry(ring_vec_out);
  		auto &coords_out = StructVector::GetEntries(coord_vec_out);
 -		auto x_data_out = FlatVector::GetData<double>(*coords_out[0]);
 -		auto y_data_out = FlatVector::GetData<double>(*coords_out[1]);
@@ -780,7 +858,15 @@ index 31cd743..c98b7f7 100644
  
  		memcpy(x_data_out, y_data_in, coord_count * sizeof(double));
  		memcpy(y_data_out, x_data_in, coord_count * sizeof(double));
-@@ -3635,16 +3635,16 @@ struct ST_FlipCoordinates {
+@@ -3628,23 +3628,23 @@ struct ST_FlipCoordinates {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteBox(DataChunk &args, ExpressionState &state, Vector &result) {
+ 
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 
+ 		// TODO: Avoid flatten
  		input.Flatten(count);
  
  		auto &children_in = StructVector::GetEntries(input);
@@ -805,6 +891,15 @@ index 31cd743..c98b7f7 100644
  
  		memcpy(min_x_out, min_y_in, count * sizeof(double));
  		memcpy(min_y_out, min_x_in, count * sizeof(double));
+@@ -3657,7 +3657,7 @@ struct ST_FlipCoordinates {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteGeometry(DataChunk &args, ExpressionState &state, Vector &result) {
+ 
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 
+ 		UnaryExecutor::Execute<string_t, string_t>(input, result, count, [&](const string_t &blob) {
 @@ -4752,9 +4752,9 @@ struct ST_GeomFromWKB {
  
  		input.Flatten(count);
@@ -890,6 +985,15 @@ index 31cd743..c98b7f7 100644
  
  		UnifiedVectorFormat input_vdata1;
  		UnifiedVectorFormat input_vdata2;
+@@ -7590,7 +7590,7 @@ struct ST_NPoints {
+ 	// Execute (LINESTRING_2D)
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		UnaryExecutor::Execute<list_entry_t, idx_t>(input, result, args.size(),
+ 		                                            [](list_entry_t input) { return input.length; });
+ 	}
 @@ -7721,8 +7721,8 @@ struct ST_Perimeter {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &coord_vec = ListVector::GetEntry(ring_vec);
@@ -940,6 +1044,17 @@ index 31cd743..c98b7f7 100644
  
  		if (count == 1) {
  			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+@@ -8127,8 +8127,8 @@ struct ST_PointN {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+ 
+-		auto geom_vec = args.data[0];
+-		auto index_vec = args.data[1];
++		auto &geom_vec = args.data[0];
++		auto &index_vec = args.data[1];
+ 		auto count = args.size();
+ 		UnifiedVectorFormat geom_format;
+ 		geom_vec.ToUnifiedFormat(count, geom_format);
 @@ -8138,12 +8138,12 @@ struct ST_PointN {
  		auto line_vertex_entries = ListVector::GetData(geom_vec);
  		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
@@ -957,7 +1072,15 @@ index 31cd743..c98b7f7 100644
  
  		auto index_data = FlatVector::GetData<int32_t>(index_vec);
  
-@@ -8436,8 +8436,8 @@ struct ST_RemoveRepeatedPoints {
+@@ -8429,15 +8429,15 @@ struct ST_RemoveRepeatedPoints {
+ 	// LINESTRING_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
  
  		auto in_line_entries = ListVector::GetData(input);
  		auto &in_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(input));
@@ -1001,6 +1124,17 @@ index 31cd743..c98b7f7 100644
  
  			// Copy the first point
  			out_x_data[out_offset] = in_x_data[in_offset];
+@@ -8547,8 +8547,8 @@ struct ST_RemoveRepeatedPoints {
+ 	// LINESTRING_2D (With Tolerance)
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineStringWithTolerance(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto input = args.data[0];
+-		auto tolerance = args.data[1];
++		auto &input = args.data[0];
++		auto &tolerance = args.data[1];
+ 		auto count = args.size();
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
 @@ -8558,8 +8558,8 @@ struct ST_RemoveRepeatedPoints {
  
  		auto in_line_entries = ListVector::GetData(input);
@@ -1045,6 +1179,15 @@ index 31cd743..c98b7f7 100644
  
  			// Copy the first point
  			out_x_data[out_offset] = in_x_data[in_offset];
+@@ -8758,7 +8758,7 @@ struct ST_StartPoint {
+ 	// LINESTRING_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto geom_vec = args.data[0];
++		auto &geom_vec = args.data[0];
+ 		auto count = args.size();
+ 
+ 		UnifiedVectorFormat geom_format;
 @@ -8767,12 +8767,12 @@ struct ST_StartPoint {
  		auto line_vertex_entries = ListVector::GetData(geom_vec);
  		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
@@ -1062,6 +1205,15 @@ index 31cd743..c98b7f7 100644
  
  		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  			auto in_row_idx = geom_format.sel->get_index(out_row_idx);
+@@ -8883,7 +8883,7 @@ struct ST_EndPoint {
+ 	// LINESTRING_2D
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+-		auto geom_vec = args.data[0];
++		auto &geom_vec = args.data[0];
+ 		auto count = args.size();
+ 
+ 		UnifiedVectorFormat geom_format;
 @@ -8892,12 +8892,12 @@ struct ST_EndPoint {
  		auto line_vertex_entries = ListVector::GetData(geom_vec);
  		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
@@ -1110,6 +1262,15 @@ index 31cd743..c98b7f7 100644
  
  		UnaryExecutor::ExecuteWithNulls<list_entry_t, double>(
  		    line_vec, result, args.size(), [&](const list_entry_t &line, ValidityMask &mask, idx_t idx) {
+@@ -9248,7 +9248,7 @@ struct VertexAggFunctionBase {
+ 	static void ExecutePolygon(DataChunk &args, ExpressionState &, Vector &result) {
+ 		D_ASSERT(args.data.size() == 1);
+ 
+-		auto input = args.data[0];
++		auto &input = args.data[0];
+ 		auto count = args.size();
+ 
+ 		UnifiedVectorFormat format;
 @@ -9259,7 +9259,7 @@ struct VertexAggFunctionBase {
  		auto &vertex_vec = ListVector::GetEntry(ring_vec);
  		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
@@ -1257,7 +1418,7 @@ index 206624e..64b165b 100644
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
 diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
-index 57b34d0..6ceb429 100644
+index 57b34d0..1e975af 100644
 --- a/src/spatial/modules/shapefile/shapefile_module.cpp
 +++ b/src/spatial/modules/shapefile/shapefile_module.cpp
 @@ -1,3 +1,5 @@
@@ -1266,7 +1427,7 @@ index 57b34d0..6ceb429 100644
  #include "spatial/modules/shapefile/shapefile_module.hpp"
  #include "spatial/geometry/geometry_serialization.hpp"
  #include "spatial/geometry/sgl.hpp"
-@@ -1005,10 +1007,10 @@ struct Shapefile_Meta {
+@@ -1005,11 +1007,11 @@ struct Shapefile_Meta {
  		auto shape_type_data = FlatVector::GetData<uint8_t>(shape_type_vector);
  		auto &bounds_vector = output.data[2];
  		auto &bounds_vector_children = StructVector::GetEntries(bounds_vector);
@@ -1274,13 +1435,15 @@ index 57b34d0..6ceb429 100644
 -		auto miny_data = FlatVector::GetData<double>(*bounds_vector_children[1]);
 -		auto maxx_data = FlatVector::GetData<double>(*bounds_vector_children[2]);
 -		auto maxy_data = FlatVector::GetData<double>(*bounds_vector_children[3]);
+-		auto record_count_vector = output.data[3];
 +		auto minx_data = FlatVector::GetData<double>(bounds_vector_children[0]);
 +		auto miny_data = FlatVector::GetData<double>(bounds_vector_children[1]);
 +		auto maxx_data = FlatVector::GetData<double>(bounds_vector_children[2]);
 +		auto maxy_data = FlatVector::GetData<double>(bounds_vector_children[3]);
- 		auto record_count_vector = output.data[3];
++		auto &record_count_vector = output.data[3];
  		auto record_count_data = FlatVector::GetData<int32_t>(record_count_vector);
  
+ 		auto output_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.files.size() - state.current_file_idx);
 diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
 index 0e5c07c..48596c5 100644
 --- a/src/spatial/operators/spatial_join_logical.cpp

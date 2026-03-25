@@ -730,7 +730,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 		bloom_filter.InsertHashes(hashes_v, count);
 	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
-	auto row_locations = chunk_state.row_locations;
+	auto &row_locations = chunk_state.row_locations;
 	if (parallel) {
 		InsertHashesLoop<true>(atomic_entries, row_locations, hashes_v, count, insert_state, *data_collection, *this);
 	} else {

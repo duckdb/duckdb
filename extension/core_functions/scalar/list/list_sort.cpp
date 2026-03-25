@@ -113,7 +113,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	InterruptState interrupt_state;
 	OperatorSinkInput sink_input {*global_sink_state, *local_sink_state, interrupt_state};
 
-	Vector sort_result_vec = info.is_grade_up ? Vector(input_lists.GetType()) : result;
+	Vector sort_result_vec = info.is_grade_up ? Vector(input_lists.GetType()) : Vector::Ref(result);
 
 	// this ensures that we do not change the order of the entries in the input chunk
 	VectorOperations::Copy(input_lists, sort_result_vec, count, 0, 0);
@@ -217,7 +217,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 
 			// construct the selection vector with the new order from the result vectors
-			Vector result_vector(result_chunk.data[0]);
+			Vector result_vector(Vector::Ref(result_chunk.data[0]));
 			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
 			auto row_count = result_chunk.size();
 

@@ -545,11 +545,11 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 	idx_t match_count = 0;
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
 		// Slice the children to maintain density
-		Vector lchild(lchildren[col_no]);
+		Vector lchild(Vector::Ref(lchildren[col_no]));
 		lchild.Flatten(vcount);
 		lchild.Slice(slice_sel, count);
 
-		Vector rchild(rchildren[col_no]);
+		Vector rchild(Vector::Ref(rchildren[col_no]));
 		rchild.Flatten(vcount);
 		rchild.Slice(slice_sel, count);
 
@@ -633,8 +633,8 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	Vector lentry_flattened(ListVector::GetEntry(left));
-	Vector rentry_flattened(ListVector::GetEntry(right));
+	Vector lentry_flattened(Vector::Ref(ListVector::GetEntry(left)));
+	Vector rentry_flattened(Vector::Ref(ListVector::GetEntry(right)));
 	lentry_flattened.Flatten(ListVector::GetListSize(left));
 	rentry_flattened.Flatten(ListVector::GetListSize(right));
 	Vector lchild(lentry_flattened, lcursor, count);
@@ -783,8 +783,8 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	Vector lentry_flattened(ArrayVector::GetEntry(left));
-	Vector rentry_flattened(ArrayVector::GetEntry(right));
+	Vector lentry_flattened(Vector::Ref(ArrayVector::GetEntry(left)));
+	Vector rentry_flattened(Vector::Ref(ArrayVector::GetEntry(right)));
 	lentry_flattened.Flatten(ArrayVector::GetTotalSize(left));
 	rentry_flattened.Flatten(ArrayVector::GetTotalSize(right));
 	Vector lchild(lentry_flattened, lcursor, count);
@@ -990,8 +990,8 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 	SelectionVector maybe_vec(count);
 
 	// Handle NULL nested values
-	Vector l_not_null(left);
-	Vector r_not_null(right);
+	Vector l_not_null(Vector::Ref(left));
+	Vector r_not_null(Vector::Ref(right));
 
 	idx_t match_count = 0;
 	auto unknown = DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt,

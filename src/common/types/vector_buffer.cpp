@@ -158,7 +158,7 @@ ManagedVectorBuffer::~ManagedVectorBuffer() {
 }
 
 ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
-    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(shredded_data_p)) {
+    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
 }
 
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {

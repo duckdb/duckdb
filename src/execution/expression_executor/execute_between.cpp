@@ -137,9 +137,9 @@ idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionS
 	throw InternalException("ExpressionExecutor::Select not available with DUCKDB_SMALLER_BINARY");
 #else
 	// resolve the children
-	Vector input(state->intermediate_chunk.data[0]);
-	Vector lower(state->intermediate_chunk.data[1]);
-	Vector upper(state->intermediate_chunk.data[2]);
+	Vector input(Vector::Ref(state->intermediate_chunk.data[0]));
+	Vector lower(Vector::Ref(state->intermediate_chunk.data[1]));
+	Vector upper(Vector::Ref(state->intermediate_chunk.data[2]));
 
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
