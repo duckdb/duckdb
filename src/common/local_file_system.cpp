@@ -1348,7 +1348,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
 		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
 		// etag
-		options.emplace("etag", Value(GetWindowsVersionTag(ffd)));
+		options.emplace("etag", Value::BLOB_RAW(GetWindowsVersionTag(ffd)));
 
 		// callback
 		callback(info);
