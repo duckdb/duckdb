@@ -1,3 +1,59 @@
+commit d1416293580a95b6027defb682f1b29265f8d954
+Author: dentiny <dentinyhao@gmail.com>
+Date:   Wed Mar 25 11:56:19 2026 +0000
+
+    Sync DuckDB core
+
+diff --git a/src/deletes/deletion_vector.cpp b/src/deletes/deletion_vector.cpp
+index 4248c353..d3e19c4f 100644
+--- a/src/deletes/deletion_vector.cpp
++++ b/src/deletes/deletion_vector.cpp
+@@ -2,8 +2,10 @@
+ #include "iceberg_multi_file_list.hpp"
+ #include "storage/iceberg_table_information.hpp"
+ 
+-#include "duckdb/storage/caching_file_system.hpp"
++#include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/bswap.hpp"
++#include "duckdb/common/file_system.hpp"
++#include "duckdb/common/vector_operations/unary_executor.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -141,10 +143,9 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergManifestEntry &entry) con
+ 	auto file_path = data_file.file_path;
+ 	D_ASSERT(!data_file.referenced_data_file.empty());
+ 
+-	auto caching_file_system = CachingFileSystem::Get(context);
+-
+-	auto caching_file_handle = caching_file_system.OpenFile(file_path, FileOpenFlags::FILE_FLAGS_READ);
+-	data_ptr_t data = nullptr;
++	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ;
++	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
++	auto file_handle = fs.OpenFile(file_path, flags);
+ 
+ 	D_ASSERT(!data_file.content_offset.IsNull());
+ 	D_ASSERT(!data_file.content_size_in_bytes.IsNull());
+@@ -152,8 +153,8 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergManifestEntry &entry) con
+ 	auto offset = data_file.content_offset.GetValue<int64_t>();
+ 	auto length = data_file.content_size_in_bytes.GetValue<int64_t>();
+ 
+-	auto buf_handle = caching_file_handle->Read(data, length, offset);
+-	auto buffer_data = buf_handle.Ptr();
++	auto local_buffer = Allocator::DefaultAllocator().Allocate(length);
++	fs.Read(*file_handle, local_buffer.get(), length, offset);
+ 
+ 	auto it = positional_delete_data.find(data_file.referenced_data_file);
+ 	if (it != positional_delete_data.end()) {
+@@ -166,7 +167,7 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergManifestEntry &entry) con
+ 	}
+ 	//! NOTE: assign, don't emplace, deletion vectors take priority over any remaining positional delete files
+ 	positional_delete_data[data_file.referenced_data_file] =
+-	    IcebergDeletionVectorData::FromBlob(entry, buffer_data, length);
++	    IcebergDeletionVectorData::FromBlob(entry, local_buffer.get(), length);
+ }
+ 
+ idx_t IcebergDeletionVector::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
 diff --git a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 index 52f39468..4912c730 100644
 --- a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
@@ -190,11 +246,7 @@ index e0b57e41..de141b97 100644
  				           data_file.file_path);
  				//! Skip this file
 diff --git a/src/iceberg_manifest.cpp b/src/iceberg_manifest.cpp
-<<<<<<< HEAD
 index 194dce6d..ad793d8f 100644
-=======
-index 194dce6d..ca1e62d1 100644
->>>>>>> main
 --- a/src/iceberg_manifest.cpp
 +++ b/src/iceberg_manifest.cpp
 @@ -1,10 +1,11 @@
@@ -432,7 +484,6 @@ index 33fd9319..d125294a 100644
  namespace duckdb {
  
 diff --git a/src/storage/create_table/iceberg_create_table_request.cpp b/src/storage/create_table/iceberg_create_table_request.cpp
-<<<<<<< HEAD
 index 88f05f25..235e8809 100644
 --- a/src/storage/create_table/iceberg_create_table_request.cpp
 +++ b/src/storage/create_table/iceberg_create_table_request.cpp
@@ -442,12 +493,6 @@ index 88f05f25..235e8809 100644
  #include "duckdb/storage/buffer_manager.hpp"
 -#include "duckdb/storage/caching_file_system.hpp"
 +#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
-=======
-index 88f05f25..a56feb4f 100644
---- a/src/storage/create_table/iceberg_create_table_request.cpp
-+++ b/src/storage/create_table/iceberg_create_table_request.cpp
-@@ -16,6 +16,7 @@
->>>>>>> main
  #include "duckdb/common/types/blob.hpp"
  #include "duckdb/planner/expression_binder/constant_binder.hpp"
  #include "duckdb/planner/binder.hpp"
