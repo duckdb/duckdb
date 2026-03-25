@@ -60,6 +60,7 @@ jobs:
       runner_windows_2022_x64: ${{ steps.select_runner.outputs.runner_windows_2022_x64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
       runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.build_runners.outputs.runners }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
     env:
@@ -118,6 +119,23 @@ jobs:
           fi
 
           grep runner_ "$GITHUB_OUTPUT"
+
+      - name: Build runners JSON
+        id: build_runners
+        run: |
+          echo "runners<<EOF" >> "$GITHUB_OUTPUT"
+          cat <<EOF >> "$GITHUB_OUTPUT"
+          {
+            "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
+            "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
+            "linux_arm64": "${{ steps.select_runner.outputs.runner_linux_arm64 }}",
+            "windows_2022_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
+            "windows_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
+            "macos_arm64": "${{ steps.select_runner.outputs.runner_macos_arm64 }}",
+            "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
+          }
+          EOF
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Install tools
         run: make format_tools
@@ -244,14 +262,7 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: 'false'
       run_all: 'true'
-      runners: >-
-        {
-          "linux_x64": "${{ needs.prepare.outputs.runner_linux_x64 }}",
-          "linux_22_x64": "${{ needs.prepare.outputs.runner_linux_22_x64 }}",
-          "linux_arm64": "${{ needs.prepare.outputs.runner_linux_arm64 }}",
-          "macos_arm64": "${{ needs.prepare.outputs.runner_macos_arm64 }}",
-          "macos_14_arm64": "${{ needs.prepare.outputs.runner_macos_14_arm64 }}"
-        }
+      runners: ${{ needs.prepare.outputs.runners }}
 
  wasm-eh:
     name: Wasm EH
