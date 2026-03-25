@@ -64,7 +64,7 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
-	const auto states = UnifiedVectorFormat::GetDataNoConst<ApproxDistinctCountState *>(sdata);
+	const auto states = UnifiedVectorFormat::GetData<ApproxDistinctCountState *>(sdata);
 
 	UnifiedVectorFormat hdata;
 	hash_vec.ToUnifiedFormat(count, hdata);

@@ -29,7 +29,7 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	// unify the MAP vector, which is a physical LIST vector
 	UnifiedVectorFormat map_data;
 	map.ToUnifiedFormat(count, map_data);
-	auto map_entries = UnifiedVectorFormat::GetDataNoConst<list_entry_t>(map_data);
+	auto map_entries = UnifiedVectorFormat::GetData<list_entry_t>(map_data);
 	auto maps_length = ListVector::GetListSize(map);
 
 	// unify the child vector containing the keys
