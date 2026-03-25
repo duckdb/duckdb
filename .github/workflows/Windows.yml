@@ -136,7 +136,7 @@ jobs:
     name: Windows (32 Bit)
     needs:
       - win-release-64
-    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
 
     steps:
@@ -170,7 +170,7 @@ jobs:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
    runs-on: windows-latest
 
    steps:
