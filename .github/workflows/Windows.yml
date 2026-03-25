@@ -10,6 +10,8 @@ on:
         type: string
       run_all:
         type: string
+      runner_windows_2022_x64:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -19,6 +21,8 @@ on:
       skip_tests:
         type: string
       run_all:
+        type: string
+      runner_windows_2022_x64:
         type: string
 
 concurrency:
@@ -36,7 +40,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: windows-latest
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
     steps:
     - uses: actions/checkout@v6
       with:
@@ -53,8 +57,7 @@ jobs:
       shell: bash
       run: |
         python scripts/ci/retry.py -- python scripts/windows_ci.py
-        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- make windows_release
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh

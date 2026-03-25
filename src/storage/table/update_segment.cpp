@@ -1301,7 +1301,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		auto update_data = FlatVector::GetData<string_t>(update_p);
 		auto &validity = FlatVector::Validity(update_p);
 		for (idx_t i = 0; i < count; i++) {
-			if (validity.RowIsValid(i)) {
+			if (validity.RowIsValid(i) && !update_data[i].IsInlined()) {
 				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
 			}
 		}
