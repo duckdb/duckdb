@@ -1010,7 +1010,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
 			}
-			if (UseDescribeRenderMode(*statement, describe_table_name)) {
+			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
