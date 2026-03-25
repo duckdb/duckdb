@@ -125,8 +125,8 @@ jobs:
 
       - name: Merge into single repository
         run: |
-          mkdir /tmp/merged_repository
-          cp -r  /tmp/repository_generation/*/*/* /tmp/merged_repository
+          mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}
+          cp -r /tmp/repository_generation/*/*/*/* /tmp/merged_repository/${{ inputs.duckdb_ref }}
           tree /tmp/merged_repository
 
       - name: Remove all non-target extensions

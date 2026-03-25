@@ -280,7 +280,7 @@ jobs:
       - name: Merge into single repository
         run: |
           mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}
-          cp -r /tmp/repository_generation/*/*/* /tmp/merged_repository/${{ inputs.git_ref }}
+          cp -r /tmp/repository_generation/*/*/*/* /tmp/merged_repository/${{ inputs.git_ref }}
           tree /tmp/merged_repository
 
       - uses: actions/upload-artifact@v7
