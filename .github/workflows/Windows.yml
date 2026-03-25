@@ -228,68 +228,68 @@ jobs:
            libduckdb-windows-arm64.zip
            duckdb_cli-windows-arm64.zip
 
-# mingw:
-#     name: MinGW (64 Bit)
-#     needs:
-#      - win-release-64
-#     if: ${{ inputs.skip_tests != 'true' }}
-#     runs-on: windows-latest
-#     env:
-#       GEN: ninja
-#       ENABLE_EXTENSION_AUTOLOADING: 1
-#       ENABLE_EXTENSION_AUTOINSTALL: 1
-#     steps:
-#       - uses: actions/checkout@v6
-#         with:
-#           ref: ${{ inputs.git_ref }}
-#
-#       - uses: actions/setup-python@v6
-#         with:
-#           python-version: '3.12'
-#
-#       - name: Dependencies
-#         shell: bash
-#         run: |
-#           choco install \
-#             ccache \
-#             make \
-#             ninja \
-#             --no-progress
-#           choco install \
-#             mingw --version 14.2.0 \
-#             --no-progress
-#
-#       - uses: ./.github/actions/ccache-action
-#
-#       - name: Build Environment
-#         shell: bash
-#         run: |
-#           # bash from Git
-#           echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
-#           # make, ninja and ccache from Chocolatey
-#           echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
-#           # g++ from Chocolatey
-#           echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
-#
-#       - name: Build Environment Check
-#         shell: bash
-#         run: |
-#           where bash
-#           bash --version
-#           where make
-#           make --version
-#           where ninja
-#           ninja --version
-#           where ccache
-#           ccache --version
-#           where g++
-#           g++ --version
-#           echo %PATH%
-#
-#       - name: Build and test
-#         shell: bash
-#         run: |
-#           make unittest_release
+ mingw:
+     name: MinGW (64 Bit)
+     needs:
+      - win-release-64
+     if: ${{ inputs.skip_tests != 'true' }}
+     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+     env:
+       GEN: ninja
+       ENABLE_EXTENSION_AUTOLOADING: 1
+       ENABLE_EXTENSION_AUTOINSTALL: 1
+     steps:
+       - uses: actions/checkout@v6
+         with:
+           ref: ${{ inputs.git_ref }}
+
+       - uses: actions/setup-python@v6
+         with:
+           python-version: '3.12'
+
+       - name: Dependencies
+         shell: bash
+         run: |
+           choco install \
+             ccache \
+             make \
+             ninja \
+             --no-progress
+           choco install \
+             mingw --version 14.2.0 \
+             --no-progress
+
+       - uses: ./.github/actions/ccache-action
+
+       - name: Build Environment
+         shell: bash
+         run: |
+           # bash from Git
+           echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
+           # make, ninja and ccache from Chocolatey
+           echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
+           # g++ from Chocolatey
+           echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
+
+       - name: Build Environment Check
+         shell: bash
+         run: |
+           where bash
+           bash --version
+           where make
+           make --version
+           where ninja
+           ninja --version
+           where ccache
+           ccache --version
+           where g++
+           g++ --version
+           echo %PATH%
+
+       - name: Build and test
+         shell: bash
+         run: |
+           make unittest_release
 
  win-packaged-upload:
    runs-on: windows-latest
