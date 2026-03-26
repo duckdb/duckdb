@@ -25,6 +25,18 @@ unique_ptr<LogicalOperator> CTEInlining::Optimize(unique_ptr<LogicalOperator> op
 	return op;
 }
 
+static idx_t CountBaseTableReferences(const LogicalOperator &op) {
+	idx_t number_of_references = 0;
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		number_of_references++;
+	}
+	for (auto &child : op.children) {
+		number_of_references += CountBaseTableReferences(*child);
+	}
+
+	return number_of_references;
+}
+
 static idx_t CountCTEReferences(const LogicalOperator &op, idx_t cte_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cte = op.Cast<LogicalCTERef>();
@@ -130,6 +142,13 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// Prevent inlining if the CTE ends in an aggregate or distinct operator
 			// This mimics the behavior of the CTE materialization in the binder
 			if (EndsInAggregateOrDistinct(*op->children[0])) {
+				return;
+			}
+
+			// Check how many base table references the CTE has
+			auto base_table_references = CountBaseTableReferences(*op->children[0]);
+
+			if (base_table_references > 2 && base_table_references * ref_count > 10) {
 				return;
 			}
 

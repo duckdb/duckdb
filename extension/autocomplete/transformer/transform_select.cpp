@@ -300,7 +300,11 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectClause(PEGTransform
 			result->modifiers.push_back(std::move(distinct_modifier));
 		}
 	}
-	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto opt_target_list = list_pr.Child<OptionalParseResult>(2);
+	if (!opt_target_list.HasResult()) {
+		throw ParserException("SELECT clause without selection list");
+	}
+	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_target_list.optional_result);
 	for (auto &expr_ptr : target_list) {
 		result->select_list.push_back(std::move(expr_ptr));
 	}
@@ -358,7 +362,7 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	MacroParameter parameter;
 	parameter.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
-	parameter.name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	parameter.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	parameter.is_default = true;
 	transformer.TransformOptional<LogicalType>(list_pr, 1, parameter.type);
 	return parameter;
@@ -1104,7 +1108,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 		subquery->column_name_alias = table_alias.column_name_alias;
 	}
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 3, subquery->sample);
-	return subquery;
+	return std::move(subquery);
 }
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &transformer,
@@ -1482,7 +1486,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		auto type_str = transformer.Transform<string>(group_by_list.Child<ListParseResult>(0));
 		auto extract_parens = ExtractResultFromParens(group_by_list.Child<ListParseResult>(1));
 		if (!extract_parens->Cast<OptionalParseResult>().HasResult()) {
-			throw ParserException("CUBE or ROLLUP column list cannot be emptied");
+			throw ParserException("CUBE or ROLLUP column list cannot be empty");
 		}
 		auto expr_list = ExtractParseResultsFromList(extract_parens->Cast<OptionalParseResult>().optional_result);
 
@@ -1645,6 +1649,21 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, optio
 	return make_pair(cte_name, std::move(result));
 }
 
+unique_ptr<TableRef> PEGTransformerFactory::TransformCTEBody(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// CTEBody <- Parens(CTEBodyContent)
+	auto inner = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	// CTEBodyContent <- SelectStatementInternal / Statement
+	auto &content_list = inner->Cast<ListParseResult>();
+	auto &body_choice = content_list.Child<ChoiceParseResult>(0);
+	if (body_choice.result->name != "SelectStatementInternal") {
+		throw ParserException("A CTE needs a SELECT");
+	}
+	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(body_choice.result);
+	return make_uniq<SubqueryRef>(std::move(select_statement));
+}
+
 bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto not_opt = list_pr.Child<OptionalParseResult>(0);
@@ -1696,7 +1715,9 @@ PEGTransformerFactory::TransformWindowClause(PEGTransformer &transformer, option
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	transformer.in_window_definition = true;
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
+	transformer.in_window_definition = false;
 	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
 	return std::move(window_function);
 }

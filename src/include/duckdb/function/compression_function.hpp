@@ -329,35 +329,24 @@ public:
 	CompressionValidity validity = CompressionValidity::REQUIRES_VALIDITY;
 };
 
-enum class CompressionFunctionSetLoadResult : uint8_t {
-	ALREADY_LOADED_BEFORE_LOCK,
-	ALREADY_LOADED_AFTER_LOCK,
-	LAZILY_LOADED,
-};
-
 //! The set of compression functions
 struct CompressionFunctionSet {
-	static constexpr idx_t COMPRESSION_TYPE_COUNT = 15;
+	static constexpr idx_t COMPRESSION_TYPE_COUNT = 16;
 	static constexpr idx_t PHYSICAL_TYPE_COUNT = 19;
 
 public:
 	CompressionFunctionSet();
 
 	vector<reference<const CompressionFunction>> GetCompressionFunctions(PhysicalType physical_type);
-	pair<CompressionFunctionSetLoadResult, optional_ptr<const CompressionFunction>>
-	GetCompressionFunction(CompressionType type, PhysicalType physical_type);
+	optional_ptr<const CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType physical_type);
 	void SetDisabledCompressionMethods(const vector<CompressionType> &methods);
 	vector<CompressionType> GetDisabledCompressionMethods() const;
-	string GetDebugInfo() const;
 
 private:
-	mutable mutex lock;
 	atomic<bool> is_disabled[COMPRESSION_TYPE_COUNT];
-	atomic<bool> is_loaded[PHYSICAL_TYPE_COUNT];
 	vector<vector<CompressionFunction>> functions;
 
 private:
-	CompressionFunctionSetLoadResult LoadCompressionFunctions(PhysicalType physical_type);
 	static idx_t GetCompressionIndex(PhysicalType physical_type);
 	static idx_t GetCompressionIndex(CompressionType type);
 	void ResetDisabledMethods();

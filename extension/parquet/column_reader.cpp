@@ -109,7 +109,7 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS_SIZE = sizeof(ParquetDecodeUtil
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
-ColumnReader::ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p)
+ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
       delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
@@ -122,7 +122,7 @@ Allocator &ColumnReader::GetAllocator() {
 	return reader.allocator;
 }
 
-ParquetReader &ColumnReader::Reader() {
+const ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
 
@@ -774,6 +774,10 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	pending_skips = 0;
 
 	auto to_skip = num_values;
+	data_t skip_defines[STANDARD_VECTOR_SIZE] = {};
+	data_t skip_repeats[STANDARD_VECTOR_SIZE];
+	data_ptr_t skip_define_out = HasDefines() ? skip_defines : define_out;
+	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : repeat_out;
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);
 
@@ -785,9 +789,9 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 			to_skip -= skip_now;
 			continue;
 		}
-		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
+		const auto all_valid = PrepareRead(skip_now, skip_define_out, skip_repeat_out, 0);
 
-		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(skip_define_out);
 		switch (encoding) {
 		case ColumnEncoding::DICTIONARY:
 			dictionary_decoder.Skip(define_ptr, skip_now);
@@ -821,7 +825,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(reader, schema);
@@ -836,7 +840,7 @@ static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const
 	}
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<BooleanColumnReader>(reader, schema);

@@ -167,6 +167,26 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
 	}
+
+	//	Even with no ORDER BY, we can still have a non-degenerate frame if we have ROWS framing.
+	switch (w_expr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
+	switch (w_expr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
 	return true;
 }
 
@@ -192,9 +212,15 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		auto &partitions = w_expr0.partitions;
 
 		// --- Transformation ---
-
+		// try to copy the LHS
+		unique_ptr<LogicalOperator> copy_child;
+		try {
+			copy_child = window.children[0]->Copy(optimizer.context);
+		} catch (...) {
+			// failed to copy the LHS - cannot run this optimizer
+			return op;
+		}
 		auto original_child = std::move(window.children[0]);
-		auto copy_child = original_child->Copy(optimizer.context);
 
 		// Rebind copy_child to avoid duplicate table indices
 		WindowSelfJoinTableRebinder rebinder(optimizer);

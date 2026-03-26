@@ -186,7 +186,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	// Get bindings and types from filter to use in top-most operator later
 	const auto topmost_bindings = filter.GetColumnBindings();
-	auto new_bindings = TraverseProjectionBindings(topmost_bindings, child);
+	vector<ColumnBinding> new_bindings;
+	if (!TraverseProjectionBindings(topmost_bindings, child, new_bindings)) {
+		return op;
+	}
 
 	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child.get().Cast<LogicalWindow>();
@@ -223,7 +226,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	UpdateTopmostBindings(window_idx, op, group_projection_idxs, topmost_bindings, new_bindings, replacer);
 	replacer.stop_operator = op.get();
 
-	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
+	RemoveUnusedColumns unused_optimizer(optimizer);
 	unused_optimizer.VisitOperator(*op);
 
 	return unique_ptr<LogicalOperator>(std::move(op));
@@ -647,9 +650,10 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	return aggregate_args;
 }
 
-vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
-                                                                        reference<LogicalOperator> &op) {
-	auto new_bindings = old_bindings;
+bool TopNWindowElimination::TraverseProjectionBindings(const vector<ColumnBinding> &old_bindings,
+                                                       reference<LogicalOperator> &op,
+                                                       vector<ColumnBinding> &new_bindings) {
+	new_bindings = old_bindings;
 
 	// Traverse child projections to retrieve projections on window output
 	while (op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -659,13 +663,17 @@ vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const st
 			auto &new_binding = new_bindings[i];
 			D_ASSERT(new_binding.table_index == projection.table_index);
 			VisitExpression(&projection.expressions[new_binding.column_index]);
+			if (column_references.size() != 1) {
+				column_references.clear();
+				return false;
+			}
 			new_binding = column_references.begin()->first;
 			column_references.clear();
 		}
 		op = *op.get().children[0];
 	}
 
-	return new_bindings;
+	return true;
 }
 
 void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const unique_ptr<LogicalOperator> &op,
@@ -673,7 +681,9 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
                                                   const vector<ColumnBinding> &topmost_bindings,
                                                   vector<ColumnBinding> &new_bindings,
                                                   ColumnBindingReplacer &replacer) {
-	// The top-most operator's column order is [group][aggregate args][row number]. Now, set the new resulting bindings.
+	// The top-most operator's column order is:
+	// [projected groups][aggregate args/value][row number]
+	// Now set the new bindings according to this order and remember replacements in replacer
 	D_ASSERT(topmost_bindings.size() == new_bindings.size());
 	replacer.replacement_bindings.reserve(new_bindings.size());
 	set<idx_t> row_id_binding_idxs;
@@ -682,17 +692,32 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 	const idx_t aggregate_table_idx = GetAggregateIdx(op);
 
 	// Project the group columns
+	const auto compact_group_columns = group_table_idx == aggregate_table_idx;
+	map<idx_t, idx_t> compact_group_projection_idxs;
+	if (compact_group_columns) {
+		set<idx_t> ordered_group_projection_idxs;
+		for (const auto &group_idx : group_idxs) {
+			ordered_group_projection_idxs.insert(group_idx.second);
+		}
+		idx_t compact_idx = 0;
+		for (const auto group_projection_idx : ordered_group_projection_idxs) {
+			compact_group_projection_idxs[group_projection_idx] = compact_idx++;
+		}
+	}
 	idx_t current_column_idx = 0;
 	for (auto group_idx : group_idxs) {
-		const idx_t group_referencing_idx = group_idx.first;
+		const auto group_referencing_idx = group_idx.first;
+		const auto column_idx =
+		    compact_group_columns ? compact_group_projection_idxs[group_idx.second] : group_idx.second;
 		new_bindings[group_referencing_idx].table_index = group_table_idx;
-		new_bindings[group_referencing_idx].column_index = group_idx.second;
+		new_bindings[group_referencing_idx].column_index = column_idx;
+
 		replacer.replacement_bindings.emplace_back(topmost_bindings[group_referencing_idx],
 		                                           new_bindings[group_referencing_idx]);
 		current_column_idx++;
 	}
 
-	if (group_table_idx != aggregate_table_idx) {
+	if (!compact_group_columns) {
 		// If the topmost operator is an aggregate, the table indexes are different, and we start back from 0
 		current_column_idx = 0;
 	}

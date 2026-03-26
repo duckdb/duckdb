@@ -137,10 +137,13 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				break;
 			case 10: {
 				// column_count, LogicalType::BIGINT
-				// if the view is unbound - we return NULL
+				// make sure the view is bound so we know the columns it emits
 				auto columns = view.GetColumnInfo();
-				output.SetValue(c, count,
-				                columns ? Value::BIGINT(NumericCast<int64_t>(columns->types.size())) : Value());
+				Value column_count;
+				if (columns) {
+					column_count = Value::BIGINT(NumericCast<int64_t>(columns->types.size()));
+				}
+				output.SetValue(c, count, column_count);
 				break;
 			}
 			case 11:
@@ -149,7 +152,6 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				break;
 			case 12: {
 				// is_bound, LogicalType::BOOLEAN
-				// whether or not the view is bound
 				auto columns = view.GetColumnInfo();
 				output.SetValue(c, count, Value::BOOLEAN(columns.get()));
 				break;
