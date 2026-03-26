@@ -2,10 +2,7 @@
 #include "duckdb/planner/table_filter_set.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -116,6 +113,12 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundConjunctionExpression &expr) {
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
+	if (expr.function.name == OptionalFilterScalarFun::NAME ||
+	    expr.function.name == SelectivityOptionalFilterScalarFun::NAME ||
+	    expr.function.name == DynamicFilterScalarFun::NAME) {
+		return 0;
+	}
+
 	unordered_map<std::string, idx_t> function_costs = {
 	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
 	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
@@ -225,83 +228,18 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 }
 
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::DYNAMIC_FILTER:
-	case TableFilterType::OPTIONAL_FILTER:
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("ExpressionHeuristics::Cost expected ExpressionFilter, got %s",
+		                        EnumUtil::ToString(filter.filter_type));
+	}
+
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr = *expr_filter.expr;
+	if (ExpressionFilter::IsOptionalExpression(expr)) {
 		return 0;
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_and = filter.Cast<ConjunctionOrFilter>();
-		idx_t cost = 5;
-		for (auto &child_filter : conjunction_and.child_filters) {
-			cost += Cost(*child_filter);
-		}
-		return cost;
 	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		idx_t cost = 5;
-		for (auto &child_filter : conjunction_and.child_filters) {
-			cost += Cost(*child_filter);
-		}
-		return cost;
-	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		return ExpressionCost(constant_filter.constant.type().InternalType(), 1);
-	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		return 5;
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		return Cost(*struct_filter.child_filter);
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		auto &expr = *expr_filter.expr;
-		if (ExpressionFilter::IsOptionalExpression(expr)) {
-			return 0;
-		}
-		// Estimate cost based on the expression type
-		switch (expr.type) {
-		case ExpressionType::OPERATOR_IS_NULL:
-		case ExpressionType::OPERATOR_IS_NOT_NULL:
-			return 5;
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-				auto &comp = expr.Cast<BoundComparisonExpression>();
-				if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
-					auto &constant = comp.right->Cast<BoundConstantExpression>();
-					return ExpressionCost(constant.value.type().InternalType(), 1);
-				}
-			}
-			return 10;
-		}
-		case ExpressionType::COMPARE_IN:
-			return 10;
-		case ExpressionType::CONJUNCTION_AND:
-		case ExpressionType::CONJUNCTION_OR:
-			return 5;
-		default:
-			// Internal functions (bloom filter, dynamic, optional) are cheap
-			if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-				auto &func_expr = expr.Cast<BoundFunctionExpression>();
-				if (func_expr.function.name.find("__internal_tablefilter_optional") != string::npos ||
-				    func_expr.function.name.find("__internal_tablefilter_dynamic") != string::npos) {
-					return 0;
-				}
-			}
-			return 1000;
-		}
-	}
-	default:
-		return 1000;
-	}
+	return Cost(expr);
 }
 
 vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_filters) {

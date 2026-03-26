@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 
 namespace duckdb {
 class ExpressionExecutor;
