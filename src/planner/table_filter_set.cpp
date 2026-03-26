@@ -1,9 +1,21 @@
 #include "duckdb/planner/table_filter_set.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
+
+namespace {
+
+static void VerifyExpressionFilter(const TableFilter &filter, const char *context) {
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("%s expected ExpressionFilter, got %s", context,
+		                        EnumUtil::ToString(filter.filter_type));
+	}
+}
+
+} // namespace
 
 TableFilterSet::ConstTableFilterIteratorEntry::ConstTableFilterIteratorEntry(
     map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator it)
@@ -98,6 +110,7 @@ void TableFilterSet::RemoveFilterByColumnIndex(ProjectionIndex col_idx) {
 }
 
 void TableFilterSet::SetFilterByColumnIndex(ProjectionIndex col_idx, unique_ptr<TableFilter> filter) {
+	VerifyExpressionFilter(*filter, "TableFilterSet::SetFilterByColumnIndex");
 	filters[col_idx] = std::move(filter);
 }
 
@@ -159,27 +172,20 @@ void TableFilterSet::PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter>
 	if (!col_idx.IsValid()) {
 		throw InternalException("Cannot push a filter over an invalid ProjectionIndex");
 	}
+	VerifyExpressionFilter(*filter, "TableFilterSet::PushFilter");
 	auto entry = filters.find(col_idx);
 	if (entry == filters.end()) {
 		// no filter yet: push the filter directly
 		filters[col_idx] = std::move(filter);
 	} else {
 		// there is already a filter: AND it together
-		if (entry->second->filter_type == TableFilterType::EXPRESSION_FILTER &&
-		    filter->filter_type == TableFilterType::EXPRESSION_FILTER) {
-			auto &existing = entry->second->Cast<ExpressionFilter>();
-			auto &new_filter = filter->Cast<ExpressionFilter>();
-			auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-			and_expr->children.push_back(std::move(existing.expr));
-			and_expr->children.push_back(std::move(new_filter.expr));
-			filters[col_idx] = make_uniq<ExpressionFilter>(std::move(and_expr));
-		} else {
-			// legacy path - combine via ConjunctionAndFilter then convert
-			auto conjunction = make_uniq<ConjunctionAndFilter>();
-			conjunction->child_filters.push_back(std::move(entry->second));
-			conjunction->child_filters.push_back(std::move(filter));
-			filters[col_idx] = ExpressionFilter::FromTableFilter(*conjunction);
-		}
+		VerifyExpressionFilter(*entry->second, "TableFilterSet::PushFilter");
+		auto &existing = entry->second->Cast<ExpressionFilter>();
+		auto &new_filter = filter->Cast<ExpressionFilter>();
+		auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+		and_expr->children.push_back(std::move(existing.expr));
+		and_expr->children.push_back(std::move(new_filter.expr));
+		filters[col_idx] = make_uniq<ExpressionFilter>(std::move(and_expr));
 	}
 }
 
