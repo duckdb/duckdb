@@ -7,21 +7,15 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
-#include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include <cstring>
 
@@ -750,95 +744,14 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                      const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                      idx_t &approved_tuple_count) {
-	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &opt_filter = filter.Cast<OptionalFilter>();
-		return opt_filter.FilterSelection(sel, vector, vdata, filter_state, scan_count, approved_tuple_count);
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("ColumnSegment::FilterSelection expected ExpressionFilter");
 	}
-	case TableFilterType::CONJUNCTION_OR: {
-		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
-		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
-		idx_t count_total = 0;
-		SelectionVector result_sel(approved_tuple_count);
-		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
-		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction_or.child_filters[child_idx];
-			SelectionVector temp_sel;
-			temp_sel.Initialize(sel);
-			idx_t temp_tuple_count = approved_tuple_count;
-			idx_t temp_count = FilterSelection(temp_sel, vector, vdata, child_filter, *state.child_states[child_idx],
-			                                   scan_count, temp_tuple_count);
-			// tuples passed, move them into the actual result vector
-			for (idx_t i = 0; i < temp_count; i++) {
-				auto new_idx = temp_sel.get_index(i);
-				bool is_new_idx = true;
-				for (idx_t res_idx = 0; res_idx < count_total; res_idx++) {
-					if (result_sel.get_index(res_idx) == new_idx) {
-						is_new_idx = false;
-						break;
-					}
-				}
-				if (is_new_idx) {
-					result_sel.set_index(count_total++, new_idx);
-				}
-			}
-		}
-		sel.Initialize(result_sel);
-		approved_tuple_count = count_total;
-		return approved_tuple_count;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
-		for (idx_t child_idx = 0; child_idx < conjunction_and.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction_and.child_filters[child_idx];
-			FilterSelection(sel, vector, vdata, child_filter, *state.child_states[child_idx], scan_count,
-			                approved_tuple_count);
-		}
-		return approved_tuple_count;
-	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		return ExecuteConstantComparisonSelection(sel, vector, vdata, constant_filter.constant,
-		                                          constant_filter.comparison_type, approved_tuple_count);
-	}
-	case TableFilterType::IS_NULL: {
-		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
-	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		// Apply the filter on the child vector
-		auto &child_vec = StructVector::GetEntries(vector)[struct_filter.child_idx];
-		UnifiedVectorFormat child_data;
-		child_vec.ToUnifiedFormat(scan_count, child_data);
-		return FilterSelection(sel, child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
-		                       approved_tuple_count);
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		auto &bloom_filter = filter.Cast<BFTableFilter>();
-		auto &state = filter_state.Cast<BFTableFilterState>();
-		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
-	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
-		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
-		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count);
-	}
-	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
-		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
-		return prefix_range_filter.Filter(vector, sel, approved_tuple_count);
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &state = filter_state.Cast<ExpressionFilterState>();
-		auto &expression_filter = filter.Cast<ExpressionFilter>();
-		return ExecuteExpressionFilterSelection(sel, vector, vdata, *expression_filter.expr, state, scan_count,
-		                                        approved_tuple_count);
-	}
-	default:
-		throw InternalException("FIXME: unsupported type for filter selection");
-	}
+	auto &state = filter_state.Cast<ExpressionFilterState>();
+	auto &expression_filter = filter.Cast<ExpressionFilter>();
+	return ExecuteExpressionFilterSelection(sel, vector, vdata, *expression_filter.expr, state, scan_count,
+	                                        approved_tuple_count);
 }
 
 const CompressionFunction &ColumnSegment::GetCompressionFunction() {
