@@ -29,50 +29,42 @@ static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, str
 
 FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
                                                                  TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StatisticsPropagator::PropagateTableFilter");
 
-		// get physical storage index of the filter
-		// since it is a table filter, every storage index is the same
-		idx_t physical_index = DConstants::INVALID_INDEX;
-		string column_alias;
-		GetColumnIndex(expr_filter.expr, physical_index, column_alias);
-		D_ASSERT(physical_index != DConstants::INVALID_INDEX);
+	// get physical storage index of the filter
+	// since it is a table filter, every storage index is the same
+	idx_t physical_index = DConstants::INVALID_INDEX;
+	string column_alias;
+	GetColumnIndex(expr_filter.expr, physical_index, column_alias);
+	D_ASSERT(physical_index != DConstants::INVALID_INDEX);
 
-		// Check statistics BEFORE HandleFilter (CheckStatistics needs pre-update stats)
-		auto check_result = filter.CheckStatistics(stats);
+	// Check statistics BEFORE HandleFilter (CheckStatistics needs pre-update stats)
+	auto check_result = filter.CheckStatistics(stats);
 
-		// Save original expression for stats update (HandleFilter may modify filter_expr)
-		auto original_expr = expr_filter.expr->Copy();
+	// Save original expression for stats update (HandleFilter may modify filter_expr)
+	auto original_expr = expr_filter.expr->Copy();
 
-		auto column_ref = make_uniq<BoundColumnRefExpression>(column_alias, stats.GetType(), stats_binding);
-		auto filter_expr = expr_filter.ToExpression(*column_ref);
-		auto propagate_result = HandleFilter(filter_expr);
-		auto colref = make_uniq<BoundReferenceExpression>(column_alias, stats.GetType(), physical_index);
+	auto column_ref = make_uniq<BoundColumnRefExpression>(column_alias, stats.GetType(), stats_binding);
+	auto filter_expr = expr_filter.ToExpression(*column_ref);
+	auto propagate_result = HandleFilter(filter_expr);
+	auto colref = make_uniq<BoundReferenceExpression>(column_alias, stats.GetType(), physical_index);
 
-		// replace BoundColumnRefs with BoundRefs
-		ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);
-		expr_filter.expr = std::move(filter_expr);
+	// replace BoundColumnRefs with BoundRefs
+	ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);
+	expr_filter.expr = std::move(filter_expr);
 
-		if (propagate_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			// Update stats here because the caller won't call UpdateFilterStatistics for non-default cases
-			UpdateExpressionFilterStatistics(stats, *original_expr);
-			return propagate_result;
-		}
-		// For NO_PRUNING_POSSIBLE, the caller calls UpdateFilterStatistics which handles stats update
-		return check_result;
+	if (propagate_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		// Update stats here because the caller won't call UpdateFilterStatistics for non-default cases
+		UpdateExpressionFilterStatistics(stats, *original_expr);
+		return propagate_result;
 	}
-	return filter.CheckStatistics(stats);
+	// For NO_PRUNING_POSSIBLE, the caller calls UpdateFilterStatistics which handles stats update
+	return check_result;
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter) {
 	// FIXME: update stats...
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("StatisticsPropagator::UpdateFilterStatistics expected ExpressionFilter, got %s",
-		                        EnumUtil::ToString(filter.filter_type));
-	}
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StatisticsPropagator::UpdateFilterStatistics");
 	UpdateExpressionFilterStatistics(input, *expr_filter.expr);
 }
 
@@ -126,10 +118,7 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 }
 
 static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
-	if (table_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return false;
-	}
-	auto &expr_filter = table_filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "IsConstantOrNullFilter");
 	if (expr_filter.expr->type != ExpressionType::BOUND_FUNCTION) {
 		return false;
 	}
@@ -141,8 +130,7 @@ static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
 		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
 	}
-	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	auto &expr_filter = table_filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
 	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
 		for (auto child = ++func.children.begin(); child != func.children.end(); child++) {
