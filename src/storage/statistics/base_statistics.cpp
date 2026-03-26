@@ -506,7 +506,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		// nothing to verify
 		return;
 	}
-	auto validity_entries = vector.ValidityEntries(count);
+	auto validity_entries = vector.ScanValidity(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		bool row_is_valid = validity_entries.IsValid(idx);

@@ -97,9 +97,9 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 
 	QueryContext query_context(context.client);
 
-	for (auto entry : input.data[0].Entries<string_t>(input.size())) {
-		if (entry.value) {
-			auto &blob = *entry.value;
+	for (auto entry : input.data[0].ScanAllValues<string_t>(input.size())) {
+		if (entry.IsValid()) {
+			auto &blob = entry.value;
 			auto blob_len = blob.GetSize();
 			auto blob_ptr = blob.GetDataWriteable();
 			auto blob_end = blob_ptr + blob_len;

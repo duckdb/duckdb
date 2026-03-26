@@ -2485,7 +2485,7 @@ void Geometry::FromSpatialGeometry(const string_t &source, string_t &target, Vec
 }
 
 void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t count, idx_t result_offset) {
-	auto entries = source_vec.Entries<string_t>(count);
+	auto entries = source_vec.ScanAllValues<string_t>(count);
 	const auto target_data = FlatVector::GetData<string_t>(target_vec);
 
 	auto &target_mask = FlatVector::Validity(target_vec);
@@ -2500,7 +2500,7 @@ void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t
 			continue;
 		}
 
-		const auto &source = *entry.value;
+		const auto &source = entry.value;
 		BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
 		const auto required_size = FromLegacyGeometryRequiredSize(reader);
 

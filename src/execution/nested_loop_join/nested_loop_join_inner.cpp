@@ -12,8 +12,8 @@ struct InitialNestedLoopJoin {
 
 		// initialize phase of nested loop join
 		// fill lvector and rvector with matches from the base vectors
-		auto left_entries = left.Entries<T>(left_size);
-		auto right_entries = right.Entries<T>(right_size);
+		auto left_entries = left.ScanAllValues<T>(left_size);
+		auto right_entries = right.ScanAllValues<T>(right_size);
 
 		idx_t result_count = 0;
 		for (; rpos < right_size; rpos++) {
@@ -46,8 +46,8 @@ struct RefineNestedLoopJoin {
 	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
 		using MATCH_OP = ComparisonOperationWrapper<OP>;
 
-		auto left_entries = left.Entries<T>(left_size);
-		auto right_entries = right.Entries<T>(right_size);
+		auto left_entries = left.ScanAllValues<T>(left_size);
+		auto right_entries = right.ScanAllValues<T>(right_size);
 
 		// refine phase of the nested loop join
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions

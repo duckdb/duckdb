@@ -286,10 +286,10 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	not_matched.count = 0;
 	not_matched_by_source.count = 0;
 
-	auto row_id_validity = chunk.data[row_id_index].ValidityEntries(chunk.size());
+	auto row_id_validity = chunk.data[row_id_index].ScanValidity(chunk.size());
 	if (source_marker.IsValid()) {
 		// source marker - check both row id and source marker
-		auto source_marker_validity = chunk.data[source_marker.GetIndex()].ValidityEntries(chunk.size());
+		auto source_marker_validity = chunk.data[source_marker.GetIndex()].ScanValidity(chunk.size());
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (!source_marker_validity.IsValid(i)) {
 				// source marker is NULL - no source match

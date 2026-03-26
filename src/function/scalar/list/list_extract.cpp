@@ -41,8 +41,8 @@ static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int6
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
 
-	auto list_entries = list.Entries<list_entry_t>(count);
-	auto offsets_entries = offsets.Entries<int64_t>(count);
+	auto list_entries = list.ScanAllValues<list_entry_t>(count);
+	auto offsets_entries = offsets.ScanAllValues<int64_t>(count);
 
 	UnifiedVectorFormat child_data;
 	auto &child_vector = ListVector::GetEntry(list);
@@ -62,7 +62,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 			continue;
 		}
 
-		const auto child_offset = TryGetChildOffset(*list_entry.value, *offsets_entry.value);
+		const auto child_offset = TryGetChildOffset(list_entry.value, offsets_entry.value);
 
 		if (!child_offset.IsValid()) {
 			invalid_offsets.push_back(i);

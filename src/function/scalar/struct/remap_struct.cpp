@@ -109,7 +109,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		auto entries = input.Entries<list_entry_t>(result_size);
+		auto entries = input.ScanAllValues<list_entry_t>(result_size);
 		if (entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
@@ -159,7 +159,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		auto entries = input.Entries<list_entry_t>(result_size);
+		auto entries = input.ScanAllValues<list_entry_t>(result_size);
 		if (entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
@@ -201,7 +201,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 			return;
 		}
 	} else {
-		auto validity_entries = input.ValidityEntries(result_size);
+		auto validity_entries = input.ScanValidity(result_size);
 		if (validity_entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {

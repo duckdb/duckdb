@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/optional.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -42,6 +41,9 @@ class Vector {
 
 	template <class T>
 	class VectorIterationHelper;
+
+	template <class T>
+	class VectorScanEntriesHelper;
 
 	class VectorValidityHelper;
 
@@ -197,11 +199,16 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorIterationHelper<T> Entries(idx_t count) const {
+	VectorIterationHelper<T> ScanAllValues(idx_t count) const {
 		return VectorIterationHelper<T>(*this, count);
 	}
 
-	VectorValidityHelper ValidityEntries(idx_t count) const {
+	template <class T>
+	VectorScanEntriesHelper<T> ScanValues(idx_t count) const {
+		return VectorScanEntriesHelper<T>(*this, count);
+	}
+
+	VectorValidityHelper ScanValidity(idx_t count) const {
 		return VectorValidityHelper(*this, count);
 	}
 
@@ -271,10 +278,11 @@ private:
 	private:
 		struct VectorValueEntry {
 			idx_t index;
-			optional<T> value;
+			T value;
+			bool is_valid;
 
 			bool IsValid() const {
-				return value.has_value();
+				return is_valid;
 			}
 		};
 
@@ -307,10 +315,10 @@ private:
 				return *this;
 			}
 			VectorIterator operator+(idx_t n) const {
-				return VectorIterator(format, index + n);
+				return VectorIterator(format, data, index + n);
 			}
 			VectorIterator operator-(idx_t n) const {
-				return VectorIterator(format, index - n);
+				return VectorIterator(format, data, index - n);
 			}
 			int64_t operator-(const VectorIterator &other) const {
 				return static_cast<int64_t>(index) - static_cast<int64_t>(other.index);
@@ -345,7 +353,8 @@ private:
 				VectorValueEntry result;
 				result.index = i;
 				auto sel_idx = format.sel->get_index(i);
-				if (format.validity.RowIsValid(sel_idx)) {
+				result.is_valid = format.validity.RowIsValid(sel_idx);
+				if (result.is_valid) {
 					result.value = data[sel_idx];
 				}
 				return result;
@@ -371,7 +380,8 @@ private:
 			VectorValueEntry result;
 			result.index = i;
 			const auto sel_idx = format.sel->get_index(i);
-			if (format.validity.RowIsValid(sel_idx)) {
+			result.is_valid = format.validity.RowIsValid(sel_idx);
+			if (result.is_valid) {
 				result.value = data[sel_idx];
 			}
 			return result;
@@ -383,6 +393,91 @@ private:
 		bool CanHaveNull() const {
 			return !format.validity.AllValid();
 		}
+	};
+
+	template <class T>
+	class VectorScanEntriesHelper {
+	public:
+		VectorScanEntriesHelper(const Vector &vector, idx_t count) : count(count) {
+			vector.ToUnifiedFormat(count, format);
+			data = UnifiedVectorFormat::GetData<T>(format);
+		}
+
+	public:
+		struct VectorValueEntry {
+			idx_t index;
+			T value;
+		};
+
+	private:
+		class VectorScanIterator {
+		public:
+			explicit VectorScanIterator(UnifiedVectorFormat &format, const T *data, idx_t index, idx_t count)
+			    : format(format), data(data), count(count), can_have_null(!format.validity.AllValid()) {
+				r.index = index;
+				AdvanceToValid();
+			}
+
+		public:
+			VectorScanIterator &operator++() {
+				++r.index;
+				AdvanceToValid();
+				return *this;
+			}
+			VectorScanIterator operator++(int) {
+				auto tmp = *this;
+				++(*this);
+				return tmp;
+			}
+			bool operator!=(const VectorScanIterator &other) const {
+				return r.index != other.r.index;
+			}
+			const VectorValueEntry &operator*() const {
+				return r;
+			}
+
+		private:
+			void AdvanceToValid() {
+				if (!can_have_null) {
+					if (r.index < count) {
+						// we know this value is valid
+						r.value = data[format.sel->get_index(r.index)];
+					}
+					return;
+				}
+				for (; r.index < count; r.index++) {
+					auto idx = format.sel->get_index(r.index);
+					if (format.validity.RowIsValid(idx)) {
+						// found a valid value - stop
+						r.value = data[idx];
+						break;
+					}
+				}
+			}
+
+		private:
+			UnifiedVectorFormat &format;
+			const T *data;
+			VectorValueEntry r;
+			idx_t count;
+			bool can_have_null;
+		};
+
+	public:
+		VectorScanIterator begin() { // NOLINT: match stl API
+			return VectorScanIterator(format, data, 0, count);
+		}
+		VectorScanIterator end() { // NOLINT: match stl API
+			return VectorScanIterator(format, data, count, count);
+		}
+		idx_t size() const {
+			return count;
+		}
+
+	private:
+		UnifiedVectorFormat format;
+		const T *data;
+		idx_t count;
 	};
 };
 

@@ -336,7 +336,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	}
 
 	// Check for nulls in the source rows, and set the list data
-	auto validity_entries = source.ValidityEntries(count);
+	auto validity_entries = source.ScanValidity(count);
 	auto list_data = ListVector::GetData(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity_entries.IsValid(i)) { // is row null?

@@ -33,8 +33,8 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	}
 	// perform generic loop
 	// we use uint8 to avoid load of gunk bools
-	auto left_data = left.Entries<uint8_t>(count);
-	auto right_data = right.Entries<uint8_t>(count);
+	auto left_data = left.ScanAllValues<uint8_t>(count);
+	auto right_data = right.ScanAllValues<uint8_t>(count);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<bool>(result);
@@ -43,7 +43,7 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 		for (idx_t i = 0; i < count; i++) {
 			auto left_entry = left_data[i];
 			auto right_entry = right_data[i];
-			bool is_null = OP::Operation((*left_entry.value) > 0, (*right_entry.value) > 0, !left_entry.IsValid(),
+			bool is_null = OP::Operation(left_entry.value > 0, right_entry.value > 0, !left_entry.IsValid(),
 			                             !right_entry.IsValid(), result_data[i]);
 			result_mask.Set(i, !is_null);
 		}

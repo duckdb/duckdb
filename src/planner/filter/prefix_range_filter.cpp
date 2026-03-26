@@ -77,28 +77,12 @@ public:
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state_p) const override {
 		auto &state = static_cast<NumericBuildState &>(state_p);
-		auto entries = keys.template Entries<T>(count);
-
-		if (!entries.CanHaveNull()) {
-			for (idx_t i = 0; i < count; i++) {
-				const U &key = static_cast<U>(entries.GetValueUnsafe(i));
-				const U y = key - min;
-				// All x are in-range by construction, so range check can be omitted here.
-				const U idx = y >> shift;
-				state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto entry = entries[i];
-				if (!entry.IsValid()) {
-					continue;
-				}
-				const U &key = static_cast<U>(*entry.value);
-				const U y = key - min;
-				// All x are in-range by construction, so range check can be omitted here.
-				const U idx = y >> shift;
-				state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
-			}
+		for (const auto &entry : keys.template ScanValues<T>(count)) {
+			const U &key = static_cast<U>(entry.value);
+			const U y = key - min;
+			// All x are in-range by construction, so range check can be omitted here.
+			const U idx = y >> shift;
+			state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
 		}
 	}
 
@@ -125,27 +109,12 @@ public:
 			return LookupOneValue(keys.GetValue(0)) ? count : 0;
 		}
 
-		auto entries = keys.template Entries<T>(count);
-
 		idx_t found_count = 0;
-		if (!entries.CanHaveNull()) {
-			for (idx_t i = 0; i < count; i++) {
-				result_sel.set_index(found_count, i);
-				const auto &key = entries.GetValueUnsafe(i);
-				found_count += LookupOne(key);
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto entry = entries[i];
-				if (!entry.IsValid()) {
-					continue;
-				}
-				result_sel.set_index(found_count, i);
-				const auto &key = *entry.value;
-				found_count += LookupOne(key);
-			}
+		for (const auto &entry : keys.template ScanValues<T>(count)) {
+			result_sel.set_index(found_count, entry.index);
+			const auto &key = entry.value;
+			found_count += LookupOne(key);
 		}
-
 		return found_count;
 	}
 

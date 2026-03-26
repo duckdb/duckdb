@@ -156,7 +156,7 @@ struct StrpTimeFunction {
 		//	There is a bizarre situation where the format column is foldable but not constant
 		//	(i.e., the statistics tell us it has only one value)
 		//	We have to check whether that value is NULL
-		auto format_entries = args.data[1].ValidityEntries(args.size());
+		auto format_entries = args.data[1].ScanValidity(args.size());
 
 		if (!format_entries.IsValid(0)) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);

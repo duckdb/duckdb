@@ -278,7 +278,7 @@ idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector 
 }
 
 void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, ValidityMask &null_mask) {
-	auto entries = vec.ValidityEntries(count);
+	auto entries = vec.ScanValidity(count);
 	if (!entries.CanHaveNull()) {
 		return;
 	}
@@ -325,8 +325,8 @@ template <class OP>
 idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
                             const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
                             OptionalSelection &false_opt, optional_ptr<ValidityMask> null_mask) {
-	auto ldata = left.ValidityEntries(count);
-	auto rdata = right.ValidityEntries(count);
+	auto ldata = left.ScanValidity(count);
+	auto rdata = right.ScanValidity(count);
 
 	idx_t remaining = 0;
 	if (!ldata.CanHaveNull() && !rdata.CanHaveNull()) {

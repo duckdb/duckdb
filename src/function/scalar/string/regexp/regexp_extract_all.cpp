@@ -125,12 +125,12 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 		result = 0;
 		return true;
 	}
-	auto entries = args.data[2].Entries<int32_t>(args.size());
+	auto entries = args.data[2].ScanAllValues<int32_t>(args.size());
 	auto entry = entries[row];
 	if (!entry.IsValid()) {
 		return false;
 	}
-	result = *entry.value;
+	result = entry.value;
 	return true;
 }
 
@@ -163,8 +163,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &output_child = ListVector::GetEntry(result);
 
-	auto strings_entries = strings.Entries<string_t>(args.size());
-	auto pattern_entries = patterns.Entries<string_t>(args.size());
+	auto strings_entries = strings.ScanAllValues<string_t>(args.size());
+	auto pattern_entries = patterns.ScanAllValues<string_t>(args.size());
 
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
@@ -196,7 +196,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			if (!pattern_entry.IsValid()) {
 				pattern_valid = false;
 			} else {
-				auto &pattern_p = *pattern_entry.value;
+				auto &pattern_p = pattern_entry.value;
 				auto pattern_strpiece = CreateStringPiece(pattern_p);
 				stored_re = make_uniq<duckdb_re2::RE2>(pattern_strpiece, info.options);
 
@@ -224,7 +224,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 		auto &re = GetPattern(info, state, stored_re);
 		auto &groups = GetGroupsBuffer(info, state, non_const_args);
-		auto &string = *string_entry.value;
+		auto &string = string_entry.value;
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
 	}
 
@@ -312,7 +312,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
-	auto strings_entries = strings.Entries<string_t>(args.size());
+	auto strings_entries = strings.ScanAllValues<string_t>(args.size());
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
 
@@ -331,7 +331,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 			list_validity.SetInvalid(row);
 			continue;
 		}
-		auto &string_val = *string_entry.value;
+		auto &string_val = string_entry.value;
 		ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result, row);
 	}
 	if (args.AllConstant()) {

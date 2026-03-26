@@ -22,7 +22,7 @@ static void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<bool>(result);
-		auto entries = input.ValidityEntries(count);
+		auto entries = input.ScanValidity(count);
 		for (idx_t i = 0; i < count; i++) {
 			result_data[i] = INVERSE ? entries.IsValid(i) : !entries.IsValid(i);
 		}
@@ -44,7 +44,7 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return !ConstantVector::IsNull(input);
 	} else {
-		auto entries = input.ValidityEntries(count);
+		auto entries = input.ScanValidity(count);
 		if (!entries.CanHaveNull()) {
 			return true;
 		}
@@ -64,7 +64,7 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return ConstantVector::IsNull(input);
 	} else {
-		auto entries = input.ValidityEntries(count);
+		auto entries = input.ScanValidity(count);
 		if (!entries.CanHaveNull()) {
 			return false;
 		}

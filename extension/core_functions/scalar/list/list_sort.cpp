@@ -123,7 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetEntry(sort_result_vec);
 
 	// get the lists data
-	auto list_entries = sort_result_vec.Entries<list_entry_t>(count);
+	auto list_entries = sort_result_vec.ScanAllValues<list_entry_t>(count);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -154,7 +154,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			continue;
 		}
 
-		const auto &list_entry = *entry.value;
+		const auto &list_entry = entry.value;
 
 		// empty list, no sorting required
 		if (list_entry.length == 0) {

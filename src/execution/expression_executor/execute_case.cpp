@@ -109,12 +109,12 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 			}
 		}
 	} else {
-		auto entries = vector.Entries<T>(count);
+		auto entries = vector.ScanAllValues<T>(count);
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			auto res_idx = sel.get_index(i);
 			if (entry.IsValid()) {
-				res[res_idx] = *entry.value;
+				res[res_idx] = entry.value;
 			} else {
 				result_mask.SetInvalid(res_idx);
 			}
@@ -132,7 +132,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 			}
 		}
 	} else {
-		auto entries = vector.ValidityEntries(count);
+		auto entries = vector.ScanValidity(count);
 		if (!entries.CanHaveNull()) {
 			return;
 		}

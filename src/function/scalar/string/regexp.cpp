@@ -305,12 +305,12 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 
-		for (auto entry : input.Entries<string_t>(count)) {
-			if (!entry.value) {
+		for (auto entry : input.ScanAllValues<string_t>(count)) {
+			if (!entry.IsValid()) {
 				FlatVector::SetNull(result, entry.index, true);
 				continue;
 			}
-			auto str = CreateStringPiece(*entry.value);
+			auto str = CreateStringPiece(entry.value);
 			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
 			                                            UnsafeNumericCast<int>(groups.size()));
 			for (size_t col = 0; col < child_entries.size(); ++col) {

@@ -358,13 +358,13 @@ struct ArrowBool8 {
 		}
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		auto entries = source.Entries<bool>(count);
+		auto entries = source.ScanAllValues<bool>(count);
 		auto &result_validity = FlatVector::Validity(result);
 		auto result_ptr = FlatVector::GetData<int8_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			if (entry.IsValid()) {
-				result_ptr[i] = static_cast<int8_t>(*entry.value);
+				result_ptr[i] = static_cast<int8_t>(entry.value);
 			} else {
 				result_validity.SetInvalid(i);
 			}

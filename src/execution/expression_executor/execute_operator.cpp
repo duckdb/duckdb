@@ -75,7 +75,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 
-			auto entries = vector_to_check.ValidityEntries(remaining_count);
+			auto entries = vector_to_check.ScanValidity(remaining_count);
 			idx_t result_count = 0;
 			next_count = 0;
 			for (idx_t i = 0; i < remaining_count; i++) {

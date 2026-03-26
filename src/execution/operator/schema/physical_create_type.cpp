@@ -45,7 +45,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		gstate.capacity *= 2;
 	}
 
-	auto entries = chunk.data[0].Entries<string_t>(chunk.size());
+	auto entries = chunk.data[0].ScanAllValues<string_t>(chunk.size());
 	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
@@ -53,7 +53,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		if (!vec_entry.IsValid()) {
 			continue;
 		}
-		auto str = *vec_entry.value;
+		auto str = vec_entry.value;
 		auto found = gstate.found_strings.find(str);
 		if (found != gstate.found_strings.end()) {
 			// entry was already found - skip

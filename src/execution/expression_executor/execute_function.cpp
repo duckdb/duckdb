@@ -150,7 +150,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
 	for (auto &arg : args.data) {
-		auto entries = arg.ValidityEntries(count);
+		auto entries = arg.ScanValidity(count);
 		if (!entries.CanHaveNull()) {
 			continue;
 		}

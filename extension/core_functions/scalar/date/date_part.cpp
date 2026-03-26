@@ -2042,7 +2042,7 @@ struct StructDatePart {
 				}
 			}
 		} else {
-			auto entries = input.template Entries<INPUT_TYPE>(count);
+			auto entries = input.template ScanAllValues<INPUT_TYPE>(count);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -2076,8 +2076,8 @@ struct StructDatePart {
 			for (idx_t i = 0; i < count; ++i) {
 				auto entry = entries[i];
 				if (entry.IsValid()) {
-					if (Value::IsFinite(*entry.value)) {
-						DatePart::StructOperator::Operation(bigint_values, double_values, *entry.value, i, part_mask);
+					if (Value::IsFinite(entry.value)) {
+						DatePart::StructOperator::Operation(bigint_values, double_values, entry.value, i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
 							FlatVector::Validity(child_entry).SetInvalid(i);

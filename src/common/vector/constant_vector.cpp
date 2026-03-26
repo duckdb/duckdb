@@ -54,7 +54,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
 		// retrieve the list entry from the source vector
-		auto entries = source.Entries<list_entry_t>(count);
+		auto entries = source.ScanAllValues<list_entry_t>(count);
 		auto entry = entries[position];
 
 		if (!entry.IsValid()) {
@@ -64,7 +64,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 			break;
 		}
 
-		auto list_entry = *entry.value;
+		auto list_entry = entry.value;
 
 		// add the list entry as the first element of "vector"
 		// FIXME: we only need to allocate space for 1 tuple here

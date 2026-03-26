@@ -288,14 +288,14 @@ child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
 void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 
-	auto entries = vector.Entries<string_t>(count);
+	auto entries = vector.ScanAllValues<string_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto entry = entries[idx];
 		if (!entry.IsValid()) {
 			continue;
 		}
-		auto value = *entry.value;
+		auto value = entry.value;
 		auto data = value.GetData();
 		auto len = value.GetSize();
 		// LCOV_EXCL_START

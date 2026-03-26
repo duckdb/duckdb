@@ -15,7 +15,7 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 }
 
 static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
-	auto entries = input.Entries<string_t>(count);
+	auto entries = input.ScanAllValues<string_t>(count);
 
 	// Read the documents
 	for (idx_t i = 0; i < count; i++) {
@@ -23,8 +23,8 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 		if (!entry.IsValid()) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] = yyjson_val_mut_copy(
-			    doc, JSONCommon::ReadDocument(*entry.value, JSONCommon::READ_FLAG, &doc->alc)->root);
+			objs[i] =
+			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(entry.value, JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }
