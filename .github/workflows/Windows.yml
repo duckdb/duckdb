@@ -172,7 +172,7 @@ jobs:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
+   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
    runs-on: windows-latest
 
    steps:
