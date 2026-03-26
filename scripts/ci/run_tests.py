@@ -249,10 +249,6 @@ def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, p
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
         generate_test_list(test_file, unittest_bin, test_flags, patterns)
     result = Path(test_file.name)
-    print(f"test file path: {result!s}")
-    print(f"exists: {result.exists()}")
-    print(f"size: {result.stat().st_size}")
-    print(result.read_text(encoding="utf8"))
     yield result
     result.unlink()
 
@@ -303,47 +299,51 @@ def run_batch(config: TestRunnerConfig, batch):
     message = None
     peak_rss_bytes = 0
 
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as batch_file:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
-        command = build_test_command(config, shlex.quote(batch_file.name))
-        try:
-            proc = subprocess.Popen(
-                shlex.split(command),
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            deadline = time.monotonic() + config.batch_timeout_seconds
+        batch_file_path = Path(batch_file.name)
 
-            while proc.poll() is None:
-                rss_bytes = get_process_rss_bytes(proc.pid)
-                if rss_bytes is not None:
-                    peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
-                if time.monotonic() >= deadline:
-                    proc.kill()
-                    stdout, stderr = proc.communicate()
-                    stdout = normalize_output(stdout)
-                    stderr = normalize_output(stderr)
-                    failed = True
-                    message = f"batch timed out after {config.batch_timeout_seconds} seconds"
-                    break
-                if proc.poll() is None:
-                    time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
+    command = build_test_command(config, shlex.quote(str(batch_file_path)))
+    try:
+        proc = subprocess.Popen(
+            shlex.split(command),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        deadline = time.monotonic() + config.batch_timeout_seconds
 
-            if message is None:
+        while proc.poll() is None:
+            rss_bytes = get_process_rss_bytes(proc.pid)
+            if rss_bytes is not None:
+                peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+            if time.monotonic() >= deadline:
+                proc.kill()
                 stdout, stderr = proc.communicate()
                 stdout = normalize_output(stdout)
                 stderr = normalize_output(stderr)
-                rss_bytes = get_process_rss_bytes(proc.pid)
-                if rss_bytes is not None:
-                    peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
-                failed = proc.returncode != 0
-        except OSError as exc:
-            failed = True
-            stderr = str(exc)
-            message = "failed to launch batch command"
+                failed = True
+                message = f"batch timed out after {config.batch_timeout_seconds} seconds"
+                break
+            if proc.poll() is None:
+                time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
+
+        if message is None:
+            stdout, stderr = proc.communicate()
+            stdout = normalize_output(stdout)
+            stderr = normalize_output(stderr)
+            rss_bytes = get_process_rss_bytes(proc.pid)
+            if rss_bytes is not None:
+                peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+            failed = proc.returncode != 0
+    except OSError as exc:
+        failed = True
+        stderr = str(exc)
+        message = "failed to launch batch command"
+    finally:
+        batch_file_path.unlink(missing_ok=True)
 
     return {
         "failed": failed,
