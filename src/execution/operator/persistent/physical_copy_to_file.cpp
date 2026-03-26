@@ -240,12 +240,19 @@ struct PartitionedCopyTask {
 	idx_t end_idx = 0;
 };
 
+struct PartitionedCopyBatch {
+	PartitionedCopyBatch(const CopyFunctionBatchAnalyzer batch_analyzer_p,
+	                     unique_ptr<PreparedBatchData> prepared_batch_p)
+	    : batch_analyzer(batch_analyzer_p), prepared_batch(std::move(prepared_batch_p)) {
+	}
+	const CopyFunctionBatchAnalyzer batch_analyzer;
+	unique_ptr<PreparedBatchData> prepared_batch;
+};
+
 struct PartitionedCopyBatchState {
 	vector<Value> values;
-	vector<unique_ptr<ColumnDataCollection>> batches;
-	idx_t next_batch_idx = 0;
-
 	unique_ptr<GlobalFileState> file_state;
+	vector<unique_ptr<PartitionedCopyBatch>> batches;
 };
 
 //! Manages a single partitioned COPY hash bin
@@ -327,13 +334,13 @@ public:
 	//! Used to iterate over chunks (during BATCH stage)
 	ColumnDataScanState batch_scan_state DUCKDB_GUARDED_BY(lock);
 	//! The batched data (set during BATCH stage), mapping from partition idx to batches (in order)
-	vector<PartitionedCopyBatchState> batch_states DUCKDB_GUARDED_BY(lock);
+	vector<unique_ptr<PartitionedCopyBatchState>> batch_states DUCKDB_GUARDED_BY(lock);
 	//! Count of batched rows
 	atomic<idx_t> batched;
 
 	//! The current partition index for flushing
 	idx_t flush_partition_idx DUCKDB_GUARDED_BY(lock) = 0;
-	//! Count of prepared rows
+	//! Count of flushed partitions
 	atomic<idx_t> flushed;
 };
 
@@ -453,7 +460,7 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 		}
 		return false;
 	case PartitionedCopyStage::FLUSH:
-		if (flushed == count) {
+		if (flushed == batch_states.size()) {
 			stage = PartitionedCopyStage::DONE;
 			return true;
 		}
@@ -465,21 +472,20 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 }
 
 bool PartitionedCopyHashGroup::TryNextTask(PartitionedCopyTask &task) {
-	// We diverge from the PhysicalWindow parallelism model for these two stages
-	switch (stage.load()) {
-	case PartitionedCopyStage::BATCH:
-		return TryNextBatchTask(task);
-	case PartitionedCopyStage::FLUSH:
-		return TryNextFlushTask(task);
-	default:
-		break;
-	}
-
+	const auto loaded_stage = stage.load();
 	if (next_task >= GetTaskCount()) {
-		return false;
+		// We diverge from the PhysicalWindow parallelism model for these two stages
+		switch (loaded_stage) {
+		case PartitionedCopyStage::BATCH:
+			return TryNextBatchTask(task);
+		case PartitionedCopyStage::FLUSH:
+			return TryNextFlushTask(task);
+		default:
+			return false;
+		}
 	}
 	task.stage = static_cast<PartitionedCopyStage>(next_task / group_threads);
-	if (task.stage != stage.load()) {
+	if (task.stage != loaded_stage) {
 		return false;
 	}
 	task.thread_idx = next_task % group_threads;
@@ -495,9 +501,9 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 		return false;
 	}
 	if (partition_mask.RowIsValidUnsafe(batch_row_idx)) {
-		batch_states.emplace_back();
+		batch_states.push_back(make_uniq<PartitionedCopyBatchState>());
 	}
-	auto &batch_state = batch_states.back();
+	auto &batch_state = *batch_states.back();
 
 	// Reuse these fields
 	task.stage = PartitionedCopyStage::BATCH;
@@ -556,18 +562,8 @@ bool PartitionedCopyHashGroup::TryNextFlushTask(PartitionedCopyTask &task) {
 		return false;
 	}
 
-	auto &batch_state = batch_states[flush_partition_idx];
-
 	task.stage = PartitionedCopyStage::FLUSH;
-	task.hash_bin = flush_partition_idx;
-	task.thread_idx = batch_state.next_batch_idx++;
-	task.begin_idx = 0;
-	task.end_idx = batch_state.batches[task.thread_idx]->Count();
-
-	if (batch_state.next_batch_idx == batch_state.batches.size()) {
-		flush_partition_idx++;
-		batch_state.next_batch_idx = 0;
-	}
+	task.hash_bin = flush_partition_idx++;
 
 	return true;
 }
@@ -682,17 +678,25 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 		collection->Scan(scan_state, scan_chunk);
 	}
 
-	// Move the batch into the global state (under lock)
-	// TODO: if this batch is an entire partition, we can immediately write it without moving it in here
+	// Get pointer to batch state and initialize file if needed (under lock)
+	optional_ptr<PartitionedCopyBatchState> batch_state;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		auto &batch_state = batch_states[task.hash_bin];
-		D_ASSERT(batch_state.values.empty() || batch_state.values == values);
-		if (batch_state.values.empty()) {
-			batch_state.values = std::move(values);
+		batch_state = batch_states[task.hash_bin];
+		D_ASSERT(batch_state->values.empty() || batch_state->values == values);
+		if (batch_state->values.empty()) {
+			batch_state->values = std::move(values);
+			batch_state->file_state = partitioned_copy.CreatePartitionFileState(batch_state->values);
 		}
-		batch_state.batches[task.thread_idx] = std::move(batch);
 	}
+
+	// Prepare the batch (lock-free)
+	const CopyFunctionBatchAnalyzer batch_analyzer(*batch, op.batch_size, op.batch_size_bytes);
+	auto prepared_batch = op.function.prepare_batch(partitioned_copy.context, *op.bind_data,
+	                                                *batch_state->file_state->data, std::move(batch));
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	batch_state->batches[task.thread_idx] = make_uniq<PartitionedCopyBatch>(batch_analyzer, std::move(prepared_batch));
+	// TODO: if this batch is an entire partition, we could immediately write it without moving it
 
 	batched += (task.end_idx - task.begin_idx);
 }
@@ -704,18 +708,23 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, const 
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		batch_state = batch_states[task.hash_bin];
-		if (!batch_state->file_state) {
-			batch_state->file_state = partitioned_copy.CreatePartitionFileState(batch_state->values);
-		}
 	}
 
-	auto local_copy_state =
-	    partitioned_copy.op.function.copy_to_initialize_local(execution_context, *partitioned_copy.op.bind_data);
-	auto &batch = batch_state->batches[task.thread_idx];
-	partitioned_copy.op.FlushBatch(partitioned_copy.context, partitioned_copy.copy_gstate, batch_state->file_state,
-	                               nullptr, local_copy_state, std::move(batch), PhysicalCopyToFilePhase::COMBINE);
+	auto &op = partitioned_copy.op;
+	auto &file_state = *batch_state->file_state;
+	for (auto &batch : batch_state->batches) {
+		file_state.num_batches++;
+		DUCKDB_LOG(execution_context.client, PhysicalOperatorLogType, op, "PhysicalCopyToFile", "FlushBatch",
+		           {{"file", file_state.path},
+		            {"rows", to_string(batch->batch_analyzer.current_batch_size)},
+		            {"size", to_string(batch->batch_analyzer.current_batch_size_bytes)},
+		            {"reason", EnumUtil::ToString(batch->batch_analyzer.ToReason())}});
+		op.function.flush_batch(execution_context.client, *op.bind_data, *file_state.data, *batch->prepared_batch);
+	}
 
-	flushed += (task.begin_idx - task.end_idx);
+	op.function.copy_to_finalize(execution_context.client, *op.bind_data, *file_state.data);
+
+	flushed++;
 }
 
 PartitionedCopyState::PartitionedCopyState(PartitionedCopy &partitioned_copy_p,
