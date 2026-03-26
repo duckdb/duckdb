@@ -20,6 +20,18 @@ ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
     : TableFilter(TableFilterType::EXPRESSION_FILTER), expr(std::move(expr_p)) {
 }
 
+const ExpressionFilter &ExpressionFilter::GetExpressionFilter(const TableFilter &filter, const char *context) {
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("%s expected ExpressionFilter", context);
+	}
+	return filter.Cast<ExpressionFilter>();
+}
+
+ExpressionFilter &ExpressionFilter::GetExpressionFilter(TableFilter &filter, const char *context) {
+	return const_cast<ExpressionFilter &>(GetExpressionFilter(const_cast<const TableFilter &>(filter), context));
+}
+
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
 	ExpressionExecutor executor(context, *expr);
 	return EvaluateWithConstant(executor, val);
@@ -46,14 +58,6 @@ FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) c
 
 static bool IsDirectColumnRef(const Expression &expr) {
 	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF;
-}
-
-static const ExpressionFilter &GetRuntimeExpressionFilter(const TableFilter &filter) {
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("Expected ExpressionFilter in runtime table filter path");
-	}
-	return filter.Cast<ExpressionFilter>();
 }
 
 static bool IsOptionalInternalFunction(const BoundFunctionExpression &func) {
@@ -440,12 +444,12 @@ bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {
 }
 
 bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
-	auto &expr_filter = GetRuntimeExpressionFilter(filter);
+	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::IsOptionalFilter");
 	return IsOptionalExpression(*expr_filter.expr);
 }
 
 bool ExpressionFilter::IsRootOptionalFilter(const TableFilter &filter) {
-	auto &expr_filter = GetRuntimeExpressionFilter(filter);
+	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::IsRootOptionalFilter");
 	return IsRootOptionalExpression(*expr_filter.expr);
 }
 

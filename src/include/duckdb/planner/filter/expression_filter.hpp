@@ -37,6 +37,9 @@ public:
 	//! Convert a legacy/deserialized TableFilter to an ExpressionFilter using a BoundReferenceExpression(0)
 	//! as the column placeholder. The actual column type must be provided by the caller.
 	static unique_ptr<ExpressionFilter> FromTableFilter(const TableFilter &filter, const LogicalType &col_type);
+	//! Access a runtime ExpressionFilter, failing fast if a legacy filter somehow reached an active code path.
+	static const ExpressionFilter &GetExpressionFilter(const TableFilter &filter, const char *context);
+	static ExpressionFilter &GetExpressionFilter(TableFilter &filter, const char *context);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);
