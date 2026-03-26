@@ -9,18 +9,21 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/scalar/tablefilter_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 class BaseStatistics;
 class PerfectHashJoinExecutor;
-class PrefixRangeFilter;
 
 class BloomFilter {
 public:
@@ -44,6 +47,26 @@ private:
 	bool initialized = false;
 	AllocatedData buf_;
 	uint64_t *bf;
+};
+
+class PrefixRangeFilter {
+public:
+	struct BuildState {
+		virtual ~BuildState() = default;
+	};
+
+	virtual ~PrefixRangeFilter() = default;
+	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max) = 0;
+	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
+	virtual void InsertKeys(Vector &keys, idx_t count, BuildState &state) const = 0;
+	virtual void MergeBuildState(BuildState &state) = 0;
+	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
+	virtual bool LookupOneValue(const Value &key) const = 0;
+	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
+	virtual bool IsInitialized() const = 0;
+	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
+	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
+	static bool SupportedType(const LogicalType &type);
 };
 
 struct DynamicFilterData {

@@ -270,7 +270,7 @@ bool PrefixRangeFilter::TryComputeSpan(const Value &lower_bound, const Value &up
 	}
 }
 
-bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
+bool PrefixRangeFilter::SupportedType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
@@ -286,6 +286,10 @@ bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
+	return PrefixRangeFilter::SupportedType(type);
 }
 
 PrefixRangeTableFilter::PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p,

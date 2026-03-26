@@ -4,6 +4,7 @@
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -28,7 +29,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -1007,7 +1007,7 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 		return false;
 	}
 
-	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
+	return PrefixRangeFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
 }
 
 static unique_ptr<Expression> WrapSelectivityOptionalFilter(unique_ptr<Expression> child_expr, const LogicalType &type,
