@@ -929,36 +929,31 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	return file_metadata;
 }
 
-static string GetWindowsVersionTag(uint64_t file_size, uint64_t creation_time, uint64_t last_write_time) {
-	uint64_t version_tag[3];
-	Store(file_size, data_ptr_cast(&version_tag[0]));
-	Store(creation_time, data_ptr_cast(&version_tag[1]));
-	Store(last_write_time, data_ptr_cast(&version_tag[2]));
-	return string(char_ptr_cast(version_tag), sizeof(version_tag));
-}
-
 static string GetWindowsVersionTag(const BY_HANDLE_FILE_INFORMATION &file_info) {
-	const uint64_t file_size =
-	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
-	ULARGE_INTEGER creation_time;
-	creation_time.LowPart = file_info.ftCreationTime.dwLowDateTime;
-	creation_time.HighPart = file_info.ftCreationTime.dwHighDateTime;
 	ULARGE_INTEGER last_write_time;
 	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
 	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
-	return GetWindowsVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
+
+	const uint64_t file_size =
+	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
+	const uint64_t file_index =
+	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
+
+	// volume serial + file index identify the file; size + last write time protect against in-place rewrites
+	uint64_t version_tag[4];
+	Store(static_cast<uint64_t>(file_info.dwVolumeSerialNumber), data_ptr_cast(&version_tag[0]));
+	Store(file_index, data_ptr_cast(&version_tag[1]));
+	Store(file_size, data_ptr_cast(&version_tag[2]));
+	Store(last_write_time.QuadPart, data_ptr_cast(&version_tag[3]));
 }
 
-static string GetWindowsVersionTag(const WIN32_FIND_DATAW &ffd) {
-	const uint64_t file_size =
-	    (static_cast<uint64_t>(ffd.nFileSizeHigh) << 32) | static_cast<uint64_t>(ffd.nFileSizeLow);
-	ULARGE_INTEGER creation_time;
-	creation_time.LowPart = ffd.ftCreationTime.dwLowDateTime;
-	creation_time.HighPart = ffd.ftCreationTime.dwHighDateTime;
-	ULARGE_INTEGER last_write_time;
-	last_write_time.LowPart = ffd.ftLastWriteTime.dwLowDateTime;
-	last_write_time.HighPart = ffd.ftLastWriteTime.dwHighDateTime;
-	return GetWindowsVersionTag(file_size, creation_time.QuadPart, last_write_time.QuadPart);
+static string GetWindowsVersionTag(const FILE_ID_BOTH_DIR_INFO &entry, DWORD volume_serial_number) {
+	uint64_t version_tag[4];
+	Store(static_cast<uint64_t>(volume_serial_number), data_ptr_cast(&version_tag[0]));
+	Store(static_cast<uint64_t>(entry.FileId.QuadPart), data_ptr_cast(&version_tag[1]));
+	Store(static_cast<uint64_t>(entry.CreationTime.QuadPart), data_ptr_cast(&version_tag[2]));
+	Store(static_cast<uint64_t>(entry.LastWriteTime.QuadPart), data_ptr_cast(&version_tag[3]));
+	return string(char_ptr_cast(version_tag), sizeof(version_tag));
 }
 
 struct WindowsFileHandle : public FileHandle {
@@ -1320,48 +1315,73 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
-	string search_dir = JoinPath(directory, "*");
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, search_dir, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
 
-	WIN32_FIND_DATAW ffd;
-	HANDLE hFind = FindFirstFileW(unicode_path.c_str(), &ffd);
-	if (hFind == INVALID_HANDLE_VALUE) {
+	// Open a handle to the directory itself so we can use GetFileInformationByHandleEx,
+	// which returns FILE_ID_BOTH_DIR_INFO entries that include the per-file FileId
+	// (equivalent to inode number) without requiring a separate handle per file.
+	HANDLE hDir =
+	    CreateFileW(unicode_path.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (hDir == INVALID_HANDLE_VALUE) {
 		return false;
 	}
-	do {
-		OpenFileInfo info(WindowsUtil::UnicodeToUTF8(ffd.cFileName));
-		auto &name = info.path;
-		if (name == "." || name == "..") {
-			continue;
+
+	DWORD volume_serial_number = 0;
+	if (!GetVolumeInformationByHandleW(hDir, NULL, 0, &volume_serial_number, NULL, NULL, NULL, 0)) {
+		CloseHandle(hDir);
+		throw IOException("Failed to get volume serial number from directory \"%s\": %s", directory, error);
+	}
+
+	static constexpr DWORD BUFFER_SIZE = 65536;
+	auto buffer = unique_ptr<char[]>(new char[BUFFER_SIZE]);
+
+	FILE_INFORMATION_CLASS info_class = FileIdBothDirectoryRestartInfo;
+	while (true) {
+		if (!GetFileInformationByHandleEx(hDir, info_class, buffer.get(), BUFFER_SIZE)) {
+			CloseHandle(hDir);
+			if (GetLastError() == ERROR_NO_MORE_FILES) {
+				// success - listed all files in the directory
+				return true;
+			}
+			auto error = LocalFileSystem::GetLastErrorAsString();
+			throw IOException("Failed to list directory \"%s\": %s", directory, error);
 		}
-		// create extended info
-		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-		auto &options = info.extended_info->options;
-		// file type
-		Value file_type(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
-		options.emplace("type", std::move(file_type));
-		// file size
-		int64_t file_size_bytes =
-		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
-		options.emplace("file_size", Value::BIGINT(file_size_bytes));
-		// last modified time
-		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
-		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
-		// etag
-		options.emplace("etag", Value::BLOB_RAW(GetWindowsVersionTag(ffd)));
 
-		// callback
-		callback(info);
-	} while (FindNextFileW(hFind, &ffd) != 0);
+		auto *entry = reinterpret_cast<FILE_ID_BOTH_DIR_INFO *>(buffer.get());
+		while (true) {
+			// FileName is not null-terminated; use FileNameLength (in bytes) to construct the string.
+			wstring wname(entry->FileName, entry->FileNameLength / sizeof(WCHAR));
+			string name = WindowsUtil::UnicodeToUTF8(wname.c_str());
 
-	DWORD dwError = GetLastError();
-	if (dwError != ERROR_NO_MORE_FILES) {
-		FindClose(hFind);
-		return false;
+			if (name != "." && name != "..") {
+				OpenFileInfo info(name);
+				info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+				auto &options = info.extended_info->options;
+				// file type
+				Value file_type(entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
+				options.emplace("type", std::move(file_type));
+				// file size
+				options.emplace("file_size", Value::BIGINT(entry->EndOfFile.QuadPart));
+				// last modified time
+				FILETIME ft;
+				ft.dwLowDateTime = entry->LastWriteTime.LowPart;
+				ft.dwHighDateTime = entry->LastWriteTime.HighPart;
+				options.emplace("last_modified", Value::TIMESTAMP(FiletimeToTimeStamp(ft)));
+				// etag: includes FileId (file reference number) in addition to size and timestamps
+				options.emplace("etag", Value::BLOB_RAW(GetWindowsVersionTag(*entry, volume_serial_number)));
+
+				callback(info);
+			}
+
+			if (entry->NextEntryOffset == 0) {
+				break;
+			}
+			entry = reinterpret_cast<FILE_ID_BOTH_DIR_INFO *>(reinterpret_cast<char *>(entry) + entry->NextEntryOffset);
+		}
+		// next iteration -
+		info_class = FileIdBothDirectoryInfo;
 	}
-
-	FindClose(hFind);
-	return true;
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
