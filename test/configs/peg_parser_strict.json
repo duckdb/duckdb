@@ -7,7 +7,9 @@
     {
       "reason": "Strict mode is currently not compatible with loadable parser override extensions. Requires redesign of the parser selection setting.",
       "paths": [
-        "test/extension/loadable_parser_override.test"
+        "test/extension/loadable_parser_override.test",
+        "test/extension/consistent_semicolon_extension_parse.test",
+        "test/extension/load_extension.test"
       ]
     }
   ]

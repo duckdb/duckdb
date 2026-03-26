@@ -24,7 +24,7 @@ true	foo	3
 statement error
 COPY (select 'foo'::BLOB) TO '__TEST_DIR__/test.blob.gz' (FORMAT BLOB, ASDFGH);
 ----
-Binder Error: Unrecognized option for COPY (FORMAT BLOB): "ASDFGH"
+<REGEX>:.*Unrecognized option for COPY.*: "(ASDFGH|asdfgh)".*
 
 # With compression
 statement ok

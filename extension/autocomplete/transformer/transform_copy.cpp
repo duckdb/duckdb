@@ -47,12 +47,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 			if (option.children.empty()) {
 				info->parsed_options[option.name] = std::move(option.expression);
 			} else {
-				if (option.children[0].IsNull()) {
-					info->parsed_options[option.name] = make_uniq<ConstantExpression>(Value());
-				} else {
-					throw InvalidInputException("Unexpected argument %s for %s", option.children[0].ToString(),
-					                            option.name);
-				}
+				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
 			}
 		} else {
 			if (option.expression) {
