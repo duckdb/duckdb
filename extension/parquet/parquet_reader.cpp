@@ -26,11 +26,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -1095,63 +1091,43 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
                                                       const TableFilter &filter) {
 	switch (filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
-		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		for (auto &child_filter : conjunction_filter.child_filters) {
-			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, *child_filter);
-			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto &expr = *expr_filter.expr;
+
+		// Handle AND conjunctions
+		if (expr.type == ExpressionType::CONJUNCTION_AND) {
+			auto &conjunction_filter = expr.Cast<BoundConjunctionExpression>();
+			auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+			for (auto &child : conjunction_filter.children) {
+				auto child_filter = ExpressionFilter(child->Copy());
+				auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, child_filter);
+				if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+					return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+				}
+				if (child_prune_result != and_result) {
+					and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				}
 			}
-			if (child_prune_result != and_result) {
-				and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			return and_result;
+		}
+
+		// Handle comparison expressions (from ConstantFilter conversion)
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto &comp = expr.Cast<BoundComparisonExpression>();
+			if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+				auto &constant = comp.right->Cast<BoundConstantExpression>();
+				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
+					auto &min_value = pq_col_stats.min_value;
+					auto &max_value = pq_col_stats.max_value;
+					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+					                                 comp.type, StringValue::Get(constant.value));
+				}
 			}
 		}
-		return and_result;
-	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		auto &min_value = pq_col_stats.min_value;
-		auto &max_value = pq_col_stats.max_value;
-		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
 	}
 	default:
-		if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-			auto &expr_filter = filter.Cast<ExpressionFilter>();
-			auto &expr = *expr_filter.expr;
-			// Handle comparison expressions (from ConstantFilter conversion)
-			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-				auto &comp = expr.Cast<BoundComparisonExpression>();
-				if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
-					auto &constant = comp.right->Cast<BoundConstantExpression>();
-					if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
-						auto &min_value = pq_col_stats.min_value;
-						auto &max_value = pq_col_stats.max_value;
-						return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-						                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-						                                 comp.type, StringValue::Get(constant.value));
-					}
-				}
-			}
-			// Handle AND conjunctions
-			if (expr.type == ExpressionType::CONJUNCTION_AND) {
-				auto &conj = expr.Cast<BoundConjunctionExpression>();
-				auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-				for (auto &child : conj.children) {
-					auto child_filter = ExpressionFilter(child->Copy());
-					auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, child_filter);
-					if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-						return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-					}
-					if (child_prune_result != and_result) {
-						and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-					}
-				}
-				return and_result;
-			}
-		}
 		return filter.CheckStatistics(stats);
 	}
 }
