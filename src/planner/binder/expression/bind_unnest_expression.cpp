@@ -173,11 +173,15 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {
-		// perform all LIST unnests
+		// perform all LIST/ARRAY unnests
 		auto type = child_type;
 		list_unnests = 0;
-		while (type.id() == LogicalTypeId::LIST) {
-			type = ListType::GetChildType(type);
+		while (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
+			if (type.id() == LogicalTypeId::LIST) {
+				type = ListType::GetChildType(type);
+			} else {
+				type = ArrayType::GetChildType(type);
+			}
 			list_unnests++;
 			if (list_unnests >= max_depth) {
 				break;
@@ -198,7 +202,14 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	for (idx_t current_depth = 0; current_depth < list_unnests; current_depth++) {
 		if (return_type.id() == LogicalTypeId::LIST) {
 			return_type = ListType::GetChildType(return_type);
+		} else if (return_type.id() == LogicalTypeId::ARRAY) {
+			return_type = ArrayType::GetChildType(return_type);
 		}
+
+		if (unnest_expr->return_type.id() == LogicalTypeId::ARRAY) {
+			unnest_expr = BoundCastExpression::AddArrayCastToList(context, std::move(unnest_expr));
+		}
+
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->child = std::move(unnest_expr);
 		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias();
