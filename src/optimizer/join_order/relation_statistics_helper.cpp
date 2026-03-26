@@ -447,13 +447,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
 
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("RelationStatisticsHelper::InspectTableFilter expected ExpressionFilter, got %s",
-		                        EnumUtil::ToString(filter.filter_type));
-	}
-
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RelationStatisticsHelper::InspectTableFilter");
 	auto &expr = *expr_filter.expr;
 	// Handle AND conjunctions
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
