@@ -78,10 +78,21 @@ jobs:
         uses: tj-actions/changed-files@v47
         with:
           files_yaml: |
+            github:
+              - .github/**
             extensions:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+
+      - name: Check workflow files
+        if: steps.changed.outputs.github_any_changed == 'true'
+        run: |
+          echo "::add-matcher::.github/actionlint-matcher.json"
+          shellcheck --version
+          bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+        shell: bash
 
       - name: Configure extensions
         id: extensions
