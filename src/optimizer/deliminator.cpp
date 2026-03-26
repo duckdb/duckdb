@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
@@ -118,7 +119,10 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
 		for (const auto &entry : get.table_filters) {
-			if (entry.Filter().filter_type != TableFilterType::IS_NOT_NULL) {
+			auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "Deliminator::HasSelection");
+			auto &expr = *expr_filter.expr;
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+			    expr.type != ExpressionType::OPERATOR_IS_NOT_NULL) {
 				return true;
 			}
 		}
