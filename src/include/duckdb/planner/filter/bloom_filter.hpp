@@ -14,33 +14,10 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-class BloomFilter {
-public:
-	BloomFilter() = default;
-	void Initialize(ClientContext &context_p, idx_t number_of_rows);
-
-	void InsertHashes(const Vector &hashes_v, idx_t count) const;
-	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
-
-	void InsertOne(hash_t hash) const;
-	bool LookupOne(hash_t hash) const;
-
-	bool IsInitialized() const {
-		return initialized;
-	}
-
-private:
-	idx_t num_sectors;
-	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
-
-	bool initialized = false;
-	AllocatedData buf_;
-	uint64_t *bf;
-};
+class BloomFilter;
 
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class BFTableFilter final : public TableFilter {
@@ -81,9 +58,6 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 
 private:
-	static void HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-	                         BFTableFilterState &state);
-
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;

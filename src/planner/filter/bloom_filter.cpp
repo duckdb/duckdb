@@ -1,8 +1,6 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -85,16 +83,6 @@ string BFTableFilter::ToString(const string &column_name) const {
 	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
-void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-                                 BFTableFilterState &state) {
-	if (sel.IsSet()) {
-		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
-		VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
-	} else {
-		VectorOperations::Hash(keys_v, state.hashes_v, approved_count);
-	}
-}
-
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                             BFTableFilterState &state) const {
 	TableFilter::ThrowDeprecated("BFTableFilter");
@@ -102,40 +90,6 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 
 bool BFTableFilter::FilterValue(const Value &value) const {
 	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-
-template <class T>
-static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, const BaseStatistics &stats) {
-	if (!NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	const auto min = NumericStats::GetMin<T>(stats);
-	const auto max = NumericStats::GetMax<T>(stats);
-	if (min > max) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
-	}
-	T range_typed;
-	idx_t range;
-	if (!TrySubtractOperator::Operation(max, min, range_typed) || !TryCast::Operation(range_typed, range) ||
-	    range >= DEFAULT_STANDARD_VECTOR_SIZE) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
-	}
-
-	T val = min;
-	idx_t hits = 0;
-	for (idx_t i = 0; i <= range; i++) {
-		hits += bf.LookupOne(Hash(val));
-		val += i < range; // Avoids potential signed integer overflow on the last iteration
-	}
-
-	if (hits == 0) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	if (hits == range + 1) {
-		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
