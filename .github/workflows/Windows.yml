@@ -160,7 +160,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
