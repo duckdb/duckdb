@@ -15,6 +15,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/double_na_equal.hpp"
+#include "duckdb/common/ubigint.hpp"
 
 namespace duckdb {
 struct bignum_t;
@@ -40,7 +41,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT16;
 	} else if (std::is_same<TYPE, uint32_t>()) {
 		return PhysicalType::UINT32;
-	} else if (std::is_same<TYPE, uint64_t>()) {
+	} else if (std::is_same<TYPE, uint64_t>() || std::is_same<TYPE, ubigint_t>()) {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<TYPE, idx_t>() || std::is_same<TYPE, const idx_t>()) {
 		return PhysicalType::UINT64;
