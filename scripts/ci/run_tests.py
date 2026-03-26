@@ -249,6 +249,10 @@ def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, p
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
         generate_test_list(test_file, unittest_bin, test_flags, patterns)
     result = Path(test_file.name)
+    print(f"test file path: {result!s}")
+    print(f"exists: {result.exists()}")
+    print(f"size: {result.stat().st_size}")
+    print(result.read_text(encoding="utf8"))
     yield result
     result.unlink()
 
