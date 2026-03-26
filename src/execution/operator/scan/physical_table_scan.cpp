@@ -260,7 +260,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 
 	if (function.function) {
-		while (true) {
+		do {
 			data.async_result = AsyncResultType::IMPLICIT;
 
 			const auto initial_async_result = data.async_result.GetResultType();
@@ -329,10 +329,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 					chunk.Reset();
 				}
 			}
-			if (chunk.size() > 0) {
-				return SourceResultType::HAVE_MORE_OUTPUT;
-			}
-		}
+		} while (chunk.size() == 0);
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	if (g_state.in_out_final) {
