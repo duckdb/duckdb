@@ -113,7 +113,7 @@ CCCC
 query II
 EXPLAIN SELECT * FROM strings WHERE s!='BBBB' or s>'BBBB'
 ----
-physical_plan	<REGEX>:.*s !=.*'BBBB'.*OR.*s >.*'BBBB'.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*s !=.*'BBBB'.*OR.*s >.*'BBBB'.*
 
 
 query I
