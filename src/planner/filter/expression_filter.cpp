@@ -10,11 +10,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
@@ -51,6 +46,39 @@ FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) c
 
 static bool IsDirectColumnRef(const Expression &expr) {
 	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF;
+}
+
+static const ExpressionFilter &GetRuntimeExpressionFilter(const TableFilter &filter) {
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("Expected ExpressionFilter in runtime table filter path");
+	}
+	return filter.Cast<ExpressionFilter>();
+}
+
+static bool IsOptionalInternalFunction(const BoundFunctionExpression &func) {
+	return func.function.name == OptionalFilterScalarFun::NAME ||
+	       func.function.name == SelectivityOptionalFilterScalarFun::NAME;
+}
+
+static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_through_and) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		return IsOptionalInternalFunction(expr.Cast<BoundFunctionExpression>());
+	}
+	if (!recurse_through_and || expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
+	    expr.type != ExpressionType::CONJUNCTION_AND) {
+		return false;
+	}
+	auto &conj = expr.Cast<BoundConjunctionExpression>();
+	if (conj.children.empty()) {
+		return false;
+	}
+	for (auto &child : conj.children) {
+		if (!IsOptionalExpressionInternal(*child, true)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats) {
@@ -218,65 +246,16 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expressi
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-static LogicalType InferFilterColumnType(const TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		return constant_filter.constant.type();
-	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
-		if (!in_filter.values.empty()) {
-			return in_filter.values[0].type();
-		}
-		return LogicalType::ANY;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conj = filter.Cast<ConjunctionAndFilter>();
-		for (auto &child : conj.child_filters) {
-			auto child_type = InferFilterColumnType(*child);
-			if (child_type != LogicalType::ANY) {
-				return child_type;
-			}
-		}
-		return LogicalType::ANY;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conj = filter.Cast<ConjunctionOrFilter>();
-		for (auto &child : conj.child_filters) {
-			auto child_type = InferFilterColumnType(*child);
-			if (child_type != LogicalType::ANY) {
-				return child_type;
-			}
-		}
-		return LogicalType::ANY;
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &opt = filter.Cast<OptionalFilter>();
-		if (opt.child_filter) {
-			return InferFilterColumnType(*opt.child_filter);
-		}
-		return LogicalType::ANY;
-	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		// StructFilter needs the root struct column type, which can't be inferred from the leaf filter
-		// Callers must pass the column type explicitly
-		return LogicalType::ANY;
-	}
-	default:
-		return LogicalType::ANY;
-	}
-}
-
 unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter &filter, const LogicalType &col_type) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		return make_uniq<ExpressionFilter>(expr_filter.expr->Copy());
 	}
-	auto inferred_type = InferFilterColumnType(filter);
-	auto &effective_type = (inferred_type != LogicalType::ANY) ? inferred_type : col_type;
+	if (col_type == LogicalType::ANY) {
+		throw InternalException("ExpressionFilter::FromTableFilter requires the actual column type");
+	}
 	storage_t col_idx = 0;
-	auto col_ref = make_uniq<BoundReferenceExpression>(effective_type, col_idx);
+	auto col_ref = make_uniq<BoundReferenceExpression>(col_type, col_idx);
 	auto expr = filter.ToExpression(*col_ref);
 	return make_uniq<ExpressionFilter>(std::move(expr));
 }
@@ -453,55 +432,20 @@ bool ExpressionFilter::ContainsInternalFunction(Expression &expr, const string &
 }
 
 bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		return func.function.name == OptionalFilterScalarFun::NAME ||
-		       func.function.name == SelectivityOptionalFilterScalarFun::NAME;
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expr.type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		if (conj.children.empty()) {
-			return false;
-		}
-		for (auto &child : conj.children) {
-			if (!IsOptionalExpression(*child)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	return false;
+	return IsOptionalExpressionInternal(expr, true);
 }
 
 bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return false;
-	}
-	auto &func = expr.Cast<BoundFunctionExpression>();
-	return func.function.name == OptionalFilterScalarFun::NAME ||
-	       func.function.name == SelectivityOptionalFilterScalarFun::NAME;
+	return IsOptionalExpressionInternal(expr, false);
 }
 
 bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
-		return true;
-	}
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return false;
-	}
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = GetRuntimeExpressionFilter(filter);
 	return IsOptionalExpression(*expr_filter.expr);
 }
 
 bool ExpressionFilter::IsRootOptionalFilter(const TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
-		return true;
-	}
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return false;
-	}
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = GetRuntimeExpressionFilter(filter);
 	return IsRootOptionalExpression(*expr_filter.expr);
 }
 

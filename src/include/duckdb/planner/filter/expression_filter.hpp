@@ -17,13 +17,6 @@
 
 namespace duckdb {
 class ExpressionExecutor;
-class ConstantFilter;
-class IsNullFilter;
-class IsNotNullFilter;
-class InFilter;
-class ConjunctionAndFilter;
-class ConjunctionOrFilter;
-class StructFilter;
 
 class BoundFunctionExpression;
 
@@ -41,10 +34,9 @@ public:
 	bool EvaluateWithConstant(ClientContext &context, const Value &val) const;
 	bool EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const;
 
-	//! Convert any TableFilter to an ExpressionFilter using a BoundReferenceExpression(0) as column placeholder
-	//! col_type should be specified for filters that don't contain constants (IsNull, IsNotNull)
-	static unique_ptr<ExpressionFilter> FromTableFilter(const TableFilter &filter,
-	                                                    const LogicalType &col_type = LogicalType::ANY);
+	//! Convert a legacy/deserialized TableFilter to an ExpressionFilter using a BoundReferenceExpression(0)
+	//! as the column placeholder. The actual column type must be provided by the caller.
+	static unique_ptr<ExpressionFilter> FromTableFilter(const TableFilter &filter, const LogicalType &col_type);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);
@@ -64,9 +56,9 @@ public:
 	static bool IsOptionalExpression(const Expression &expr);
 	//! Check if the root of an expression tree is an optional filter wrapper
 	static bool IsRootOptionalExpression(const Expression &expr);
-	//! Check if a table filter is an optional filter, including expression-backed optional filters
+	//! Check if a runtime expression-backed table filter is optional
 	static bool IsOptionalFilter(const TableFilter &filter);
-	//! Check if a table filter root is optional, matching legacy OPTIONAL_FILTER behavior
+	//! Check if the root of a runtime expression-backed table filter is optional
 	static bool IsRootOptionalFilter(const TableFilter &filter);
 
 private:
