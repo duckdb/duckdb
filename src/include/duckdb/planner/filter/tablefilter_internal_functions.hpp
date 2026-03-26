@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/function/scalar/tablefilter_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
@@ -106,85 +107,49 @@ struct SelectivityOptionalFilterFunctionData : public FunctionData {
 };
 
 //! Factory for bloom filter internal function
-struct BloomFilterScalarFun {
-	static constexpr const char *NAME = "__internal_tablefilter_bloom_filter";
-	static constexpr const char *Name = "__internal_tablefilter_bloom_filter";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
+struct BloomFilterScalarFun : public InternalTableFilterBloomFilterFun {
+	using InternalTableFilterBloomFilterFun::GetFunction;
+	static constexpr const char *NAME = InternalTableFilterBloomFilterFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 };
 
 //! Factory for perfect hash join internal function
-struct PerfectHashJoinScalarFun {
-	static constexpr const char *NAME = "__internal_tablefilter_perfect_hash_join";
-	static constexpr const char *Name = "__internal_tablefilter_perfect_hash_join";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
+struct PerfectHashJoinScalarFun : public InternalTableFilterPerfectHashJoinFun {
+	using InternalTableFilterPerfectHashJoinFun::GetFunction;
+	static constexpr const char *NAME = InternalTableFilterPerfectHashJoinFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 };
 
 //! Factory for prefix range internal function
-struct PrefixRangeScalarFun {
-	static constexpr const char *NAME = "__internal_tablefilter_prefix_range";
-	static constexpr const char *Name = "__internal_tablefilter_prefix_range";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
+struct PrefixRangeScalarFun : public InternalTableFilterPrefixRangeFun {
+	using InternalTableFilterPrefixRangeFun::GetFunction;
+	static constexpr const char *NAME = InternalTableFilterPrefixRangeFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 };
 
 //! Factory for dynamic filter internal function
-struct DynamicFilterScalarFun {
-	static constexpr const char *NAME = "__internal_tablefilter_dynamic";
-	static constexpr const char *Name = "__internal_tablefilter_dynamic";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
+struct DynamicFilterScalarFun : public InternalTableFilterDynamicFun {
+	using InternalTableFilterDynamicFun::GetFunction;
+	static constexpr const char *NAME = InternalTableFilterDynamicFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 };
 
 //! Factory for optional filter internal function (always returns TRUE)
-struct OptionalFilterScalarFun {
-	static constexpr const char *NAME = "__internal_tablefilter_optional";
-	static constexpr const char *Name = "__internal_tablefilter_optional";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
+struct OptionalFilterScalarFun : public InternalTableFilterOptionalFun {
+	using InternalTableFilterOptionalFun::GetFunction;
+	static constexpr const char *NAME = InternalTableFilterOptionalFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 };
 
 //! Factory for selectivity-optional filter internal function
-struct SelectivityOptionalFilterScalarFun {
-	static constexpr const char *NAME = "__internal_tablefilter_selectivity_optional";
-	static constexpr const char *Name = "__internal_tablefilter_selectivity_optional";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
+struct SelectivityOptionalFilterScalarFun : public InternalTableFilterSelectivityOptionalFun {
+	using InternalTableFilterSelectivityOptionalFun::GetFunction;
+	static constexpr const char *NAME = InternalTableFilterSelectivityOptionalFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 };

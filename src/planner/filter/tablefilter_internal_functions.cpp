@@ -389,10 +389,6 @@ static FilterPropagateResult TemplatedBloomFilterPrune(const BloomFilter &bf, co
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-ScalarFunction BloomFilterScalarFun::GetFunction() {
-	return GetFunction(LogicalType::ANY);
-}
-
 ScalarFunction BloomFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, BloomFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
@@ -532,10 +528,6 @@ static FilterPropagateResult TemplatedPerfectHashJoinPrune(const PerfectHashJoin
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-ScalarFunction PerfectHashJoinScalarFun::GetFunction() {
-	return GetFunction(LogicalType::ANY);
-}
-
 ScalarFunction PerfectHashJoinScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, PerfectHashJoinFunction,
 	                    TableFilterInternalFunctions::Bind);
@@ -632,10 +624,6 @@ static void PrefixRangeFunction(DataChunk &args, ExpressionState &state, Vector 
 	}
 }
 
-ScalarFunction PrefixRangeScalarFun::GetFunction() {
-	return GetFunction(LogicalType::ANY);
-}
-
 ScalarFunction PrefixRangeScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, PrefixRangeFunction,
 	                    TableFilterInternalFunctions::Bind);
@@ -713,10 +701,6 @@ static void DynamicFilterFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 }
 
-ScalarFunction DynamicFilterScalarFun::GetFunction() {
-	return GetFunction(LogicalType::ANY);
-}
-
 ScalarFunction DynamicFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, DynamicFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
@@ -750,10 +734,6 @@ static void OptionalFilterFunction(DataChunk &args, ExpressionState &state, Vect
 	// Optional filter always returns TRUE - the filter is for statistics pruning only
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<bool>(result)[0] = true;
-}
-
-ScalarFunction OptionalFilterScalarFun::GetFunction() {
-	return GetFunction(LogicalType::ANY);
 }
 
 ScalarFunction OptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
@@ -833,10 +813,6 @@ static void SelectivityOptionalFilterFunction(DataChunk &args, ExpressionState &
 	local_state.stats.Update(approved_count, count);
 }
 
-ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction() {
-	return GetFunction(LogicalType::ANY);
-}
-
 ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, SelectivityOptionalFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
@@ -859,27 +835,27 @@ FilterPropagateResult SelectivityOptionalFilterScalarFun::FilterPrune(const Func
 }
 
 ScalarFunction InternalTableFilterBloomFilterFun::GetFunction() {
-	return BloomFilterScalarFun::GetFunction();
+	return BloomFilterScalarFun::GetFunction(LogicalType::ANY);
 }
 
 ScalarFunction InternalTableFilterDynamicFun::GetFunction() {
-	return DynamicFilterScalarFun::GetFunction();
+	return DynamicFilterScalarFun::GetFunction(LogicalType::ANY);
 }
 
 ScalarFunction InternalTableFilterOptionalFun::GetFunction() {
-	return OptionalFilterScalarFun::GetFunction();
+	return OptionalFilterScalarFun::GetFunction(LogicalType::ANY);
 }
 
 ScalarFunction InternalTableFilterPerfectHashJoinFun::GetFunction() {
-	return PerfectHashJoinScalarFun::GetFunction();
+	return PerfectHashJoinScalarFun::GetFunction(LogicalType::ANY);
 }
 
 ScalarFunction InternalTableFilterPrefixRangeFun::GetFunction() {
-	return PrefixRangeScalarFun::GetFunction();
+	return PrefixRangeScalarFun::GetFunction(LogicalType::ANY);
 }
 
 ScalarFunction InternalTableFilterSelectivityOptionalFun::GetFunction() {
-	return SelectivityOptionalFilterScalarFun::GetFunction();
+	return SelectivityOptionalFilterScalarFun::GetFunction(LogicalType::ANY);
 }
 
 } // namespace duckdb

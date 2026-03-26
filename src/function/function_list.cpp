@@ -3,7 +3,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/tablefilter_functions.hpp"
-#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/geometry_functions.hpp"
