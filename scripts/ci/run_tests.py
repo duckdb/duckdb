@@ -234,11 +234,8 @@ def generate_test_list(test_file, unittest_bin: str, test_flags: str, patterns: 
         stderr=subprocess.PIPE,
     )
     if proc.returncode != 0 and not proc.stdout:
-        if proc.stdout:
-            print(proc.stdout, end="")
-        if proc.stderr:
-            print(proc.stderr, end="", file=sys.stderr)
-        raise RuntimeError(f"failed to generate test list from {unittest_bin}")
+        print("Stderr:", proc.stderr, end="", file=sys.stderr, flush=True)
+        raise RuntimeError(f"failed to generate test list from {unittest_bin} (exit: {proc.returncode})")
     test_file.write(proc.stdout)
     test_file.flush()
 
@@ -302,47 +299,51 @@ def run_batch(config: TestRunnerConfig, batch):
     message = None
     peak_rss_bytes = 0
 
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as batch_file:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
-        command = build_test_command(config, shlex.quote(batch_file.name))
-        try:
-            proc = subprocess.Popen(
-                shlex.split(command),
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            deadline = time.monotonic() + config.batch_timeout_seconds
+        batch_file_path = Path(batch_file.name)
 
-            while proc.poll() is None:
-                rss_bytes = get_process_rss_bytes(proc.pid)
-                if rss_bytes is not None:
-                    peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
-                if time.monotonic() >= deadline:
-                    proc.kill()
-                    stdout, stderr = proc.communicate()
-                    stdout = normalize_output(stdout)
-                    stderr = normalize_output(stderr)
-                    failed = True
-                    message = f"batch timed out after {config.batch_timeout_seconds} seconds"
-                    break
-                if proc.poll() is None:
-                    time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
+    command = build_test_command(config, shlex.quote(str(batch_file_path)))
+    try:
+        proc = subprocess.Popen(
+            shlex.split(command),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        deadline = time.monotonic() + config.batch_timeout_seconds
 
-            if message is None:
+        while proc.poll() is None:
+            rss_bytes = get_process_rss_bytes(proc.pid)
+            if rss_bytes is not None:
+                peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+            if time.monotonic() >= deadline:
+                proc.kill()
                 stdout, stderr = proc.communicate()
                 stdout = normalize_output(stdout)
                 stderr = normalize_output(stderr)
-                rss_bytes = get_process_rss_bytes(proc.pid)
-                if rss_bytes is not None:
-                    peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
-                failed = proc.returncode != 0
-        except OSError as exc:
-            failed = True
-            stderr = str(exc)
-            message = "failed to launch batch command"
+                failed = True
+                message = f"batch timed out after {config.batch_timeout_seconds} seconds"
+                break
+            if proc.poll() is None:
+                time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
+
+        if message is None:
+            stdout, stderr = proc.communicate()
+            stdout = normalize_output(stdout)
+            stderr = normalize_output(stderr)
+            rss_bytes = get_process_rss_bytes(proc.pid)
+            if rss_bytes is not None:
+                peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+            failed = proc.returncode != 0
+    except OSError as exc:
+        failed = True
+        stderr = str(exc)
+        message = "failed to launch batch command"
+    finally:
+        batch_file_path.unlink(missing_ok=True)
 
     return {
         "failed": failed,
@@ -488,15 +489,18 @@ def main():
         print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
+    unittest_bin = args.unittest_bin
+    if os.name == "nt":
+        unittest_bin = unittest_bin.replace("/", "\\")
     if args.track_runtime is not None:
         print("enabling runtime tracking forces batch_size=1")
         batch_size = 1
     else:
         batch_size = args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, test_flags, args.patterns) as test_file:
+    with open_test_list(args.test_list, unittest_bin, test_flags, args.patterns) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
-            unittest_bin=args.unittest_bin,
+            unittest_bin=unittest_bin,
             test_flags=test_flags,
             patterns=args.patterns,
             test_command=args.test_command,
