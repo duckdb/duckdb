@@ -29,7 +29,7 @@ struct UnifiedVectorFormat {
 	DUCKDB_API UnifiedVectorFormat &operator=(UnifiedVectorFormat &&) noexcept;
 
 	const SelectionVector *sel;
-	data_ptr_t data;
+	const_data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
 	PhysicalType physical_type;
