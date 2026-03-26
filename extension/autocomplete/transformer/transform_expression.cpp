@@ -260,6 +260,11 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		if (transformer.in_window_definition) {
 			throw ParserException("window functions are not allowed in window definitions");
 		}
+		//	We map first/last OVER() to first_value/last_value.
+		//	Not sure the semantics match, but we are stuck with it.
+		if (lowercase_name == "first" || lowercase_name == "last") {
+			lowercase_name += "_value";
+		}
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
@@ -660,6 +665,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	if (alias[0] >= '0' && alias[0] <= '9') {
+		throw ParserException("syntax error at or near \"%s\"", alias);
+	}
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
 	return expr;
@@ -1253,6 +1261,9 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(term), std::move(term_children));
 		func_expr->is_operator = true;
+		if (inner_list_pr.offset.IsValid()) {
+			transformer.SetQueryLocation(*func_expr, inner_list_pr.offset);
+		}
 		expr = std::move(func_expr);
 	}
 	return expr;

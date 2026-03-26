@@ -94,7 +94,8 @@ public:
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
 	      dlba_encoder(total_value_count, total_string_size), bss_initialized(false),
 	      bss_encoder(total_value_count, sizeof(TGT)), dictionary(dictionary_p), dict_written_value(false),
-	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.GetSize())), dict_encoder(dict_bit_width) {
+	      dict_bit_width(RleBpDecoder::ComputeBitWidthFromValueCount(dictionary.GetSize())),
+	      dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
 
@@ -257,7 +258,7 @@ public:
 				}
 			}
 		} else {
-			state.key_bit_width = RleBpDecoder::ComputeBitWidth(state.dictionary.GetSize());
+			state.key_bit_width = RleBpDecoder::ComputeBitWidthFromValueCount(state.dictionary.GetSize());
 		}
 	}
 

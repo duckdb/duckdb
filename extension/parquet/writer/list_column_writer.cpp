@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "writer/list_column_writer.hpp"
 
 namespace duckdb {
@@ -115,7 +116,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	state.parent_index += vcount;
 
 	auto &list_child = ListVector::GetEntry(vector);
-	Vector child_list(list_child);
+	Vector child_list(Vector::Ref(list_child));
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	// The elements of a single list should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
@@ -131,7 +132,7 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto &list_child = ListVector::GetEntry(vector);
-	Vector child_list(list_child);
+	Vector child_list(Vector::Ref(list_child));
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	GetChildWriter().Write(*state.child_state, child_list, child_length);
 }

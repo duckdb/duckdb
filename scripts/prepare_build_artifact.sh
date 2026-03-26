@@ -37,7 +37,18 @@ else
 	echo "No $BUILD_DIR/src/libduckdb.so* files found"
 fi
 
-# Required by extension tests using __BUILD_DIRECTORY__/test/extension/*.duckdb_extension.
+# Required by regression jobs that run the prebuilt benchmark runner.
+if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
+	mkdir -p "$ARTIFACT_DIR"/benchmark "$ARTIFACT_DIR"/scripts
+	mkdir -p "$ARTIFACT_DIR"/test/sql/storage_version
+	cp -av "$BUILD_DIR/benchmark/benchmark_runner" "$ARTIFACT_DIR"/benchmark/
+	cp -av scripts/generate_storage_version.py "$ARTIFACT_DIR"/scripts/
+	cp -av test/sql/storage_version/. "$ARTIFACT_DIR"/test/sql/storage_version/
+else
+	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"
+fi
+
+# Required by extension tests using build/<type>/test/extension/*.duckdb_extension.
 extension_files=("$BUILD_DIR"/test/extension/*.duckdb_extension)
 if ((${#extension_files[@]} > 0)); then
 	for extension in "${extension_files[@]}"; do
@@ -45,6 +56,18 @@ if ((${#extension_files[@]} > 0)); then
 	done
 else
 	echo "No $BUILD_DIR/test/extension/*.duckdb_extension files found"
+fi
+
+# Required by regression tests using build/<type>/extension/*.duckdb_extension.
+extension_files=("$BUILD_DIR"/extension/*/*.duckdb_extension)
+if ((${#extension_files[@]} > 0)); then
+	for extension in "${extension_files[@]}"; do
+		relative_path="${extension#"$BUILD_DIR"/}"
+		mkdir -p "$ARTIFACT_DIR/$(dirname "$relative_path")"
+		cp -av "$extension" "$ARTIFACT_DIR/$relative_path"
+	done
+else
+	echo "No $BUILD_DIR/extension/*/*.duckdb_extension files found"
 fi
 
 # Required by tests that use the local extension repository under the build directory.
@@ -63,6 +86,12 @@ set -x
 
 # Use a tarball so executable bits are preserved when passing build artifacts between jobs.
 # Use -4 to balance compression ratio (small enough output size) with compression time (a few sec).
-tar -C "$ARTIFACT_ROOT" -cf - "$BUILD_TYPE" | gzip -4 > "$ARTIFACT_TARBALL"
+if command -v pigz >/dev/null 2>&1; then
+	COMPRESSOR=(pigz -4)
+else
+	COMPRESSOR=(gzip -4)
+fi
+
+tar -C "$ARTIFACT_ROOT" -cf - "$BUILD_TYPE" | "${COMPRESSOR[@]}" > "$ARTIFACT_TARBALL"
 
 ls -lh "$ARTIFACT_TARBALL"

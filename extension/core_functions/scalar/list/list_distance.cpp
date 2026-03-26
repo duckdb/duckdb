@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "core_functions/array_kernels.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

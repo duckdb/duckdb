@@ -644,7 +644,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
-					Vector left(state.lhs_local_table->keys.data[cmp_idx]);
+					Vector left(Vector::Ref(state.lhs_local_table->keys.data[cmp_idx]));
 					left.Slice(left_info.lhs, result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];

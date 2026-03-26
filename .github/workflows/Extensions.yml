@@ -10,6 +10,10 @@ on:
         type: string
       git_ref:
         type: string
+      extra_exclude_archs:
+        type: string
+        required: false
+        default: ''
       skip_tests:
         type: string
       run_all:
@@ -23,6 +27,9 @@ on:
         type: string
         required: false
         default: ''
+      runners:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -57,6 +64,11 @@ on:
         type: boolean
         required: false
         default: true
+      runners:
+        description: 'JSON object with runner labels, e.g. {"linux_x64":"ubuntu-latest","linux_22_x64":"ubuntu-22.04","linux_arm64":"ubuntu-24.04-arm"}'
+        type: string
+        required: false
+        default: '{}'
 
 concurrency:
   group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -67,27 +79,10 @@ env:
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
-  check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
-
-  vars:
-    runs-on: ubuntu-24.04
-    needs: check-draft
-    outputs:
-      BRANCHES_TO_BE_CACHED: ${{ env.BRANCHES_TO_BE_CACHED }}
-    steps:
-      - run: echo "Exposing env vars"
-
   # This first step loads the various extension configs from the ~/.github/config directory storing them to drive the build jobs
   load-extension-configs:
     name: Load Extension Configs
-    runs-on: ubuntu-latest
-    needs: check-draft
+    runs-on: ubuntu-slim
     outputs:
       # NOTE: on PRs we exclude some archs to speed things up
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'enabled' || 'disabled' }}
@@ -96,16 +91,17 @@ jobs:
       main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
       rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
-      external_extensions_config: ${{ steps.set-external-extensions.outputs.extension_config }}
-      external_extensions_exclude_archs: ${{ steps.set-external-extensions.outputs.exclude_archs }}
+      external_extensions_config: ${{ steps.set-external-extensions1.outputs.extension_config }}
+      external_extensions2_config: ${{ steps.set-external-extensions2.outputs.extension_config }}
+      external_extensions_exclude_archs: ${{ steps.set-external-extensions1.outputs.exclude_archs }}
+      external_extensions2_exclude_archs: ${{ steps.set-external-extensions2.outputs.exclude_archs }}
 
     env:
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
       OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
       - id: set-main-extensions
@@ -140,8 +136,8 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
 
-      - id: set-external-extensions
-        name: Configure External extensions
+      - id: set-external-extensions1
+        name: Configure External extensions (batch 1)
         env:
           CONFIG_FILE: .github/config/external_extensions.cmake
           DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
@@ -153,12 +149,24 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
 
+      - id: set-external-extensions2
+        name: Configure External extensions (batch 2)
+        env:
+          CONFIG_FILE: .github/config/external_extensions2.cmake
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
+        run: |
+          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS;osx_amd64" >> $GITHUB_OUTPUT
+          external_extensions="`cat .github/config/external_extensions2.cmake`"
+          echo "extension_config<<EOF" >> $GITHUB_OUTPUT
+          echo "$external_extensions" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+
   # Build the extensions from .github/config/{in_tree,rust_based,external}_extensions.cmake
   extensions-build:
     name: ${{ matrix.name }}
     needs:
       - load-extension-configs
-      - vars
     strategy:
       fail-fast: false
       matrix:
@@ -200,52 +208,88 @@ jobs:
       use_merged_vcpkg_manifest: '1'
       duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
-      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
       extensions_test_selection: 'complete'
       extra_extension_config: ${{ matrix.extension_config }}
+      runners: ${{ inputs.runners }}
+
+  # Build the extensions from .github/config/external_extensions2.cmake
+  external-extensions2:
+    name: External Extensions (2nd batch)
+    needs:
+      - load-extension-configs
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    with:
+      # We piggy-back extension-template to build the extensions in extension_config
+      override_repository: duckdb/extension-template
+      override_ref: main
+      upload_all_extensions: true
+      extension_name: external-extensions2
+      set_caller_as_duckdb: true
+      duckdb_version: ${{ inputs.git_ref }}
+      override_ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
+      exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions2_exclude_archs }}
+      extra_toolchains: 'rust'
+      use_merged_vcpkg_manifest: '1'
+      duckdb_tag: ${{ inputs.override_git_describe }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
+      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
+      extensions_test_selection: 'complete'
+      extra_extension_config: ${{ needs.load-extension-configs.outputs.external_extensions2_config }}
+      runners: ${{ inputs.runners }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
     name: Create Extension Repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     needs:
       - extensions-build
+      - external-extensions2
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v6
 
-      - uses: ./.github/actions/cleanup_runner
-
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download main extensions
         with:
           pattern: main-extensions*
           path: /tmp/repository_generation/main-extensions
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download rust-based extensions
         with:
           pattern: rust-based-extensions*
           path: /tmp/repository_generation/rust-based-extensions
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download external extensions
         with:
-          pattern: external-extensions*
-          path: /tmp/repository_generation/external-extensions
+          pattern: external-extensions1*
+          path: /tmp/repository_generation/external-extensions1
+
+      - uses: actions/download-artifact@v5
+        name: Download external extensions (2nd batch)
+        with:
+          pattern: external-extensions2*
+          path: /tmp/repository_generation/external-extensions2
 
       - name: Print all extensions
         run: |
           tree /tmp/repository_generation
 
       - name: Merge into single repository
+        shell: bash
         run: |
-          mkdir /tmp/merged_repository
-          cp -r  /tmp/repository_generation/*/*/* /tmp/merged_repository
+          mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}
+          shopt -s nullglob
+          for platform_dir in /tmp/repository_generation/*/*/*; do
+            platform="$(basename "$platform_dir")"
+            mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}/"$platform"
+            cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.git_ref }}/"$platform"
+          done
           tree /tmp/merged_repository
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: extension-repository
@@ -254,27 +298,20 @@ jobs:
 
   upload-extensions:
     name: Upload Extensions
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runners).linux_x64 || 'ubuntu-latest' }}
     needs:
         - create-extension-repository
 
     steps:
+      - uses: actions/checkout@v6
 
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v5
         with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: extension-repository
-          path: /tmp
+          name: extension-repository
+          path: /tmp/extension-repository
 
       - name: List extensions to deploy
-        shell: bash
-        run: |
-          tree /tmp/extension-repository
+        run: tree /tmp/extension-repository
 
       - name: Deploy extensions
         shell: bash
@@ -285,36 +322,35 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          pip install awscli
-          ./scripts/extension-upload-repository.sh /tmp/extension-repository
+          pip install --break-system-packages awscli
+          make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository
 
   autoload-tests:
     name: Extension Autoloading Tests
     if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-latest
-    needs: create-extension-repository
+    runs-on: ${{ fromJSON(inputs.runners).linux_x64 || 'ubuntu-latest' }}
+    needs:
+      - create-extension-repository
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
       - name: Setup Build Environment
         run: |
-          make toolsci
+          python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
-          pattern: extension-repository
-          path: /tmp
+          name: extension-repository
+          path: /tmp/extension-repository
 
       - name: List extensions to test with
-        shell: bash
-        run: |
-          tree /tmp/extension-repository
+        run: tree /tmp/extension-repository
 
       - name: Build DuckDB
         env:
@@ -326,7 +362,7 @@ jobs:
           ENABLE_EXTENSION_AUTOLOADING: 1
           ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
-          make release
+          python3 scripts/ci/retry.py -- make release
 
       - name: Run Tests
         env:
@@ -338,26 +374,27 @@ jobs:
   check-load-install-extensions:
     name: Checks extension entries
     if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-22.04
-    needs: create-extension-repository
+    runs-on: ${{ fromJSON(inputs.runners).linux_22_x64 || 'ubuntu-22.04' }}
+    needs:
+      - create-extension-repository
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.9'
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -367,13 +404,13 @@ jobs:
           GENERATE_EXTENSION_ENTRIES: 1
           LOCAL_EXTENSION_REPO: build/release/repository_other
         run: |
-          make
+          python3 scripts/ci/retry.py -- make
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download extension repository artifact
         with:
-          pattern: extension-repository
-          path: /tmp
+          name: extension-repository
+          path: /tmp/extension-repository
 
       - name: Copy over local extension repository
         shell: bash
@@ -395,7 +432,7 @@ jobs:
           pip install "clang_format==11.0.1"
           make format-fix
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extension_entries.hpp
           path: |

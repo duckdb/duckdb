@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 #include "duckdb/common/limits.hpp"
@@ -6,7 +8,9 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -552,8 +556,8 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		// Apply the filter on the child vector
 		auto &child_vec = StructVector::GetEntries(vector)[struct_filter.child_idx];
 		UnifiedVectorFormat child_data;
-		child_vec->ToUnifiedFormat(scan_count, child_data);
-		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
+		child_vec.ToUnifiedFormat(scan_count, child_data);
+		return FilterSelection(sel, child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
 		                       approved_tuple_count);
 	}
 	case TableFilterType::BLOOM_FILTER: {
@@ -564,6 +568,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
 		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
 		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count);
+	}
+	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
+		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
+		return prefix_range_filter.Filter(vector, sel, approved_tuple_count);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();
@@ -614,7 +622,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		} else {
 			// standard case: we can handle everything at once - run the expression once
 			DataChunk chunk;
-			chunk.data.emplace_back(vector);
+			chunk.data.emplace_back(Vector::Ref(vector));
 			chunk.SetCardinality(scan_count);
 			approved_tuple_count = state.executor.SelectExpression(chunk, result_sel, sel, approved_tuple_count);
 		}

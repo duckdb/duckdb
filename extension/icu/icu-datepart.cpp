@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datefunc.hpp"
 
@@ -393,18 +397,18 @@ struct ICUDatePart : public ICUDateFunc {
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
-						ConstantVector::SetNull(*child_entry, false);
+						ConstantVector::SetNull(child_entry, false);
 						if (IsBigintDatepart(info.part_codes[col])) {
-							auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
+							auto pdata = ConstantVector::GetData<int64_t>(child_entry);
 							auto adapter = info.bigints[col];
 							pdata[0] = adapter(calendar, micros);
 						} else {
-							auto pdata = ConstantVector::GetData<double>(*child_entry);
+							auto pdata = ConstantVector::GetData<double>(child_entry);
 							auto adapter = info.doubles[col];
 							pdata[0] = adapter(calendar, micros);
 						}
 					} else {
-						ConstantVector::SetNull(*child_entry, true);
+						ConstantVector::SetNull(child_entry, true);
 					}
 				}
 			}
@@ -418,7 +422,7 @@ struct ICUDatePart : public ICUDateFunc {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto &child_entries = StructVector::GetEntries(result);
 			for (auto &child_entry : child_entries) {
-				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 			}
 
 			auto &res_valid = FlatVector::Validity(result);
@@ -431,24 +435,24 @@ struct ICUDatePart : public ICUDateFunc {
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
-							FlatVector::Validity(*child_entry).SetValid(i);
+							FlatVector::Validity(child_entry).SetValid(i);
 							if (IsBigintDatepart(info.part_codes[col])) {
-								auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
+								auto pdata = ConstantVector::GetData<int64_t>(child_entry);
 								auto adapter = info.bigints[col];
 								pdata[i] = adapter(calendar, micros);
 							} else {
-								auto pdata = ConstantVector::GetData<double>(*child_entry);
+								auto pdata = ConstantVector::GetData<double>(child_entry);
 								auto adapter = info.doubles[col];
 								pdata[i] = adapter(calendar, micros);
 							}
 						} else {
-							FlatVector::Validity(*child_entry).SetInvalid(i);
+							FlatVector::Validity(child_entry).SetInvalid(i);
 						}
 					}
 				} else {
 					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(*child_entry).SetInvalid(i);
+						FlatVector::Validity(child_entry).SetInvalid(i);
 					}
 				}
 			}

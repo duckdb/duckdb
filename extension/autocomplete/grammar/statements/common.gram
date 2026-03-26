@@ -137,7 +137,7 @@ MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / 'ARRAY'
 ArrayKeyword <- 'ARRAY'
-SquareBracketsArray <- '[' NumberLiteral? ']'
+SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
 TimeTypeId <- 'TIME'

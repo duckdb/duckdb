@@ -78,6 +78,9 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
+	if (!column_stats) {
+		return false;
+	}
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
 		return false;
 	}
@@ -194,9 +197,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (get.table_filters.HasFilters()) {
 		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
 		for (auto &entry : get.table_filters) {
-			auto col_idx = entry.ColumnIndex();
+			auto filter_idx = entry.GetIndex();
 			auto &filter = entry.Filter();
-			auto column_index = ColumnIndex(col_idx);
+			auto &column_index = get.GetColumnIndex(filter_idx);
 			StorageIndex storage_index;
 			if (!get.TryGetStorageIndex(column_index, storage_index)) {
 				return;

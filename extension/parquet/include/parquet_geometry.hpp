@@ -23,7 +23,7 @@ class ColumnReader;
 class ClientContext;
 
 struct GeometryColumnReader {
-	static unique_ptr<ColumnReader> Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+	static unique_ptr<ColumnReader> Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                                       ClientContext &context);
 };
 

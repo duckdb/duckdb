@@ -10,7 +10,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Basic appender tests", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
@@ -824,7 +823,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	atomic<bool> flush_started {false};
 
-	thread t([&]() {
+	std::thread t([&]() {
 		flush_started.store(true);
 		try {
 			app.Flush();
@@ -836,7 +835,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	// Wait until the flush thread starts, then interrupt
 	while (!flush_started.load()) {
-		this_thread::yield();
+		std::this_thread::yield();
 	}
 	// Give the flush a tiny moment to get into execution before interrupting
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));

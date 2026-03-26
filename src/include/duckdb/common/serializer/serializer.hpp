@@ -375,7 +375,7 @@ protected:
 		WriteValue(value.index);
 	}
 	void WriteValue(ProjectionIndex value) {
-		WriteValue(value.index);
+		WriteValue(value.GetIndexUnsafe());
 	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);

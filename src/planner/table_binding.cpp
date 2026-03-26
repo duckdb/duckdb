@@ -246,7 +246,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 		}
 	}
 	// If it wasn't found, add it
-	if (binding.column_index.index == column_ids.size()) {
+	if (binding.column_index == column_ids.size()) {
 		column_ids.emplace_back(column_index);
 	}
 
