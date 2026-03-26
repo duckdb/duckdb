@@ -774,12 +774,8 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMa
 }
 
 bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("MultiFileColumnMapper::EvaluateFilterAgainstConstant expected ExpressionFilter, got %s",
-		                        EnumUtil::ToString(filter.filter_type));
-	}
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter =
+	    ExpressionFilter::GetExpressionFilter(filter, "MultiFileColumnMapper::EvaluateFilterAgainstConstant");
 	return expr_filter.EvaluateWithConstant(context, constant);
 }
 
@@ -1087,12 +1083,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 
 static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filter, MultiFileIndexMapping &mapping,
                                                   const LogicalType &target_type) {
-	D_ASSERT(global_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (global_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("TryCastTableFilter expected ExpressionFilter, got %s",
-		                        EnumUtil::ToString(global_filter.filter_type));
-	}
-	auto &expr_filter = global_filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(global_filter, "TryCastTableFilter");
 	auto rewritten_expr = TryCastFilterExpression(*expr_filter.expr, mapping, target_type);
 	if (!rewritten_expr) {
 		return nullptr;
