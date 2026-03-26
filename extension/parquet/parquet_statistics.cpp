@@ -621,10 +621,7 @@ static bool HasFilterConstants(const Expression &expr) {
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter) {
-	if (duckdb_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return false;
-	}
-	auto &expr_filter = duckdb_filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
 	return HasFilterConstants(*expr_filter.expr);
 }
 
@@ -701,10 +698,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 }
 
 static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
-	if (duckdb_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return false;
-	}
-	auto &expr_filter = duckdb_filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
 	return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
 }
 
