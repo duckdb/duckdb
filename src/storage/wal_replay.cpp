@@ -33,6 +33,7 @@
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+enum class WALReplayState { MAIN_WAL, CHECKPOINT_WAL };
 
 class ReplayState {
 public:
@@ -269,9 +270,38 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
+struct WriteAheadLogReplayer {
+public:
+	WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager, const string &wal_path);
+
+	unique_ptr<WriteAheadLog> Replay();
+
+private:
+	unique_ptr<WriteAheadLog> ReplayLog(unique_ptr<FileHandle> handle,
+	                                    WALReplayState replay_state = WALReplayState::MAIN_WAL);
+	void CopyOverWAL(BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer, idx_t buffer_size,
+	                 idx_t copy_end);
+
+private:
+	QueryContext context;
+	StorageManager &storage_manager;
+	const string &wal_path;
+	FileSystem &fs;
+};
+
 unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageManager &storage_manager,
                                                 const string &wal_path) {
-	auto &fs = FileSystem::Get(storage_manager.GetAttached());
+	WriteAheadLogReplayer wal_replay(context, storage_manager, wal_path);
+	return wal_replay.Replay();
+}
+
+WriteAheadLogReplayer::WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager,
+                                             const string &wal_path)
+    : context(context), storage_manager(storage_manager), wal_path(wal_path),
+      fs(FileSystem::Get(storage_manager.GetAttached())) {
+}
+
+unique_ptr<WriteAheadLog> WriteAheadLogReplayer::Replay() {
 	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		// WAL does not exist - instantiate an empty WAL
@@ -279,7 +309,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageMan
 	}
 
 	// context is passed for metric collection purposes only!!
-	auto wal_handle = ReplayInternal(context, storage_manager, std::move(handle));
+	auto wal_handle = ReplayLog(std::move(handle));
 	if (wal_handle) {
 		return wal_handle;
 	}
@@ -290,8 +320,8 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageMan
 	return make_uniq<WriteAheadLog>(storage_manager, wal_path);
 }
 
-static void CopyOverWAL(QueryContext context, BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer,
-                        idx_t buffer_size, idx_t copy_end) {
+void WriteAheadLogReplayer::CopyOverWAL(BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer,
+                                        idx_t buffer_size, idx_t copy_end) {
 	while (!reader.Finished()) {
 		idx_t read_count = MinValue<idx_t>(buffer_size, copy_end - reader.CurrentOffset());
 		if (read_count == 0) {
@@ -303,8 +333,7 @@ static void CopyOverWAL(QueryContext context, BufferedFileReader &reader, FileHa
 	}
 }
 
-unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, StorageManager &storage_manager,
-                                                        unique_ptr<FileHandle> handle, WALReplayState replay_state) {
+unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle> handle, WALReplayState replay_state) {
 	auto &database = storage_manager.GetAttached();
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
@@ -378,8 +407,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 				// the main WAL is no longer needed, we only need to replay the checkpoint WAL
 				// if this is a read-only connection then replay the checkpoint WAL directly
 				if (storage_manager.GetAttached().IsReadOnly()) {
-					return ReplayInternal(context, storage_manager, std::move(checkpoint_handle),
-					                      WALReplayState::CHECKPOINT_WAL);
+					return ReplayLog(std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
 				}
 				// if this is not a read-only connection we need to finish the checkpoint
 				// overwrite the current WAL with the checkpoint WAL
@@ -390,8 +418,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 				// now open the handle again and replay the checkpoint WAL
 				checkpoint_handle =
 				    fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
-				return ReplayInternal(context, storage_manager, std::move(checkpoint_handle),
-				                      WALReplayState::CHECKPOINT_WAL);
+				return ReplayLog(std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
 			}
 			// the checkpoint was unsuccessful
 			// this means we need to replay both this WAL and the checkpoint WAL
@@ -409,7 +436,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 				// first copy over the main WAL contents
 				auto copy_end = checkpoint_state.checkpoint_position.GetIndex();
 				reader.Reset();
-				CopyOverWAL(context, reader, *recovery_handle, buffer.get(), BATCH_SIZE, copy_end);
+				CopyOverWAL(reader, *recovery_handle, buffer.get(), BATCH_SIZE, copy_end);
 
 				// now copy over the checkpoint WAL
 				{
@@ -427,7 +454,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 						                            wal_path);
 					}
 
-					CopyOverWAL(context, checkpoint_reader, *recovery_handle, buffer.get(), BATCH_SIZE,
+					CopyOverWAL(checkpoint_reader, *recovery_handle, buffer.get(), BATCH_SIZE,
 					            checkpoint_reader.FileSize());
 				}
 
@@ -454,7 +481,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 
 				// replay the (combined) recovery WAL
 				auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
-				return ReplayInternal(context, storage_manager, std::move(main_handle), WALReplayState::CHECKPOINT_WAL);
+				return ReplayLog(std::move(main_handle), WALReplayState::CHECKPOINT_WAL);
 			}
 		}
 	}
@@ -518,7 +545,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 		// we have successfully replayed the main WAL - but there is still a checkpoint WAL remaining
 		// this can only happen in read-only mode
 		// replay the checkpoint WAL and return
-		return ReplayInternal(context, storage_manager, std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
+		return ReplayLog(std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
 	}
 	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
 	return make_uniq<WriteAheadLog>(storage_manager, wal_path, successful_offset, init_state);
