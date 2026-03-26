@@ -447,29 +447,27 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
 
 		                   // The input index has probably been sliced.
-		                   UnifiedVectorFormat input_format;
-		                   curr.data.back().ToUnifiedFormat(count, input_format);
-		                   auto input_idx = UnifiedVectorFormat::GetData<idx_t>(input_format);
+		                   auto input_idx = curr.data.back().ScanAllValues<idx_t>(count);
 
 		                   const auto nmatch = count - ndistinct;
 		                   //	9:	if sorted[i].first == sorted[i-1].first then
 		                   //	10:		prevIdcs[i] ← sorted[i-1].second
 		                   for (idx_t j = 0; j < nmatch; ++j) {
 			                   auto scan_idx = matching.get_index(j);
-			                   auto i = input_idx[input_format.sel->get_index(scan_idx)];
-			                   auto second = scan_idx ? input_idx[input_format.sel->get_index(scan_idx - 1)] : prev_i;
+			                   auto i = input_idx[scan_idx].value;
+			                   auto second = scan_idx ? input_idx[scan_idx - 1].value : prev_i;
 			                   prev_idcs[i] = ZippedTuple(second + 1, i);
 		                   }
 		                   //	11:	else
 		                   //	12:		prevIdcs[i] ← “-”
 		                   for (idx_t j = 0; j < ndistinct; ++j) {
 			                   auto scan_idx = distinct.get_index(j);
-			                   auto i = input_idx[input_format.sel->get_index(scan_idx)];
+			                   auto i = input_idx[scan_idx].value;
 			                   prev_idcs[i] = ZippedTuple(0, i);
 		                   }
 
 		                   //	Remember the last input_idx of this chunk.
-		                   prev_i = input_idx[input_format.sel->get_index(count - 1)];
+		                   prev_i = input_idx[count - 1].value;
 	                   });
 
 	//	13:	return prevIdcs
