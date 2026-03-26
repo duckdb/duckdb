@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -21,16 +22,12 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -532,7 +529,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	return false;
 }
 
-//! Check if a value qualifies against all comparison conditions (mirrors ConstantFilter::Compare)
+//! Check if a value qualifies against all extracted comparison conditions.
 static bool ValueQualifies(const Value &value, const vector<ComparisonCondition> &comparisons) {
 	for (auto &comp : comparisons) {
 		bool passes;
@@ -585,129 +582,6 @@ static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &val
 	return !values.empty();
 }
 
-//! Helper for ExpressionFilter: recursively extract information from expressions
-static bool ExtractComparisonsAndInFiltersFromExpression(const Expression &expr,
-                                                         vector<const_reference<ConstantFilter>> &comparisons,
-                                                         vector<const_reference<InFilter>> &in_filters) {
-	// Handle internal optional filter: unwrap to child expression in bind data
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == OptionalFilterScalarFun::NAME) {
-			if (func.bind_info) {
-				auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-				if (data.child_filter_expr) {
-					return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons,
-					                                                    in_filters);
-				}
-			}
-			return true;
-		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
-			if (func.bind_info) {
-				auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-				if (data.child_filter_expr) {
-					return ExtractComparisonsAndInFiltersFromExpression(*data.child_filter_expr, comparisons,
-					                                                    in_filters);
-				}
-			}
-			return true;
-		}
-		// Bloom, PHJ, prefix_range, dynamic: ignore but don't block
-		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
-			return true;
-		}
-	}
-	// Handle AND conjunctions
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expr.type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj.children) {
-			if (!ExtractComparisonsAndInFiltersFromExpression(*child, comparisons, in_filters)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	// For expressions we can't decompose into ConstantFilter/InFilter references,
-	// return false so the caller uses the fallback expression path
-	return false;
-}
-
-bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_reference<ConstantFilter>> &comparisons,
-                                    vector<const_reference<InFilter>> &in_filters) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &comparison = filter.Cast<ConstantFilter>();
-		comparisons.push_back(comparison);
-		return true;
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = filter.Cast<OptionalFilter>();
-		if (!optional_filter.child_filter) {
-			return true; // No child filters, always OK
-		}
-		return ExtractComparisonsAndInFilters(*optional_filter.child_filter, comparisons, in_filters);
-	}
-	case TableFilterType::IN_FILTER: {
-		in_filters.push_back(filter.Cast<InFilter>());
-		return true;
-	}
-	case TableFilterType::BLOOM_FILTER:
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
-	case TableFilterType::PREFIX_RANGE_FILTER: {
-		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		for (idx_t i = 0; i < conjunction_and.child_filters.size(); i++) {
-			if (!ExtractComparisonsAndInFilters(*conjunction_and.child_filters[i], comparisons, in_filters)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return ExtractComparisonsAndInFiltersFromExpression(*expr_filter.expr, comparisons, in_filters);
-	}
-	default:
-		return false;
-	}
-}
-
-value_set_t GetUniqueValues(const vector<const_reference<ConstantFilter>> &comparisons,
-                            const vector<const_reference<InFilter>> &in_filters) {
-	// Get the combined unique values of the IN filters.
-	value_set_t unique_values;
-	for (idx_t filter_idx = 0; filter_idx < in_filters.size(); filter_idx++) {
-		auto &in_filter = in_filters[filter_idx].get();
-		for (idx_t value_idx = 0; value_idx < in_filter.values.size(); value_idx++) {
-			auto &value = in_filter.values[value_idx];
-			if (unique_values.find(value) != unique_values.end()) {
-				continue;
-			}
-			unique_values.insert(value);
-		}
-	}
-
-	// Extract all qualifying values.
-	for (auto value_it = unique_values.begin(); value_it != unique_values.end();) {
-		bool qualifies = true;
-		for (idx_t comp_idx = 0; comp_idx < comparisons.size(); comp_idx++) {
-			if (!comparisons[comp_idx].get().Compare(*value_it)) {
-				qualifies = false;
-				value_it = unique_values.erase(value_it);
-				break;
-			}
-		}
-		if (qualifies) {
-			value_it++;
-		}
-	}
-
-	return unique_values;
-}
-
 void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnRefExpression &bound_ref,
                                   vector<unique_ptr<Expression>> &expressions) {
 	for (const auto &value : unique_values) {
@@ -720,31 +594,23 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 
 vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
                                                         idx_t storage_idx) {
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("ExtractFilterExpressions expected ExpressionFilter, got %s",
+		                        EnumUtil::ToString(filter.filter_type));
+	}
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
 	ColumnBinding binding(TableIndex(0), ProjectionIndex(storage_idx));
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 
-	// Extract all comparisons and IN filters from nested filters
+	// Extract all exact values we can derive from the expression.
 	vector<unique_ptr<Expression>> expressions;
-	vector<const_reference<ConstantFilter>> comparisons;
-	vector<const_reference<InFilter>> in_filters;
-	if (ExtractComparisonsAndInFilters(filter, comparisons, in_filters)) {
-		// Deduplicate/deal with conflicting filters, then convert to expressions
-		ExtractExpressionsFromValues(GetUniqueValues(comparisons, in_filters), *bound_ref, expressions);
-	}
-
-	// Attempt matching the top-level filter to the index expression.
-	if (expressions.empty()) {
-		// For ExpressionFilter, try to extract values directly from the expression
-		if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-			auto &expr_filter = filter.Cast<ExpressionFilter>();
-			value_set_t values;
-			if (ExtractValuesFromExpression(*expr_filter.expr, values) && !values.empty()) {
-				ExtractExpressionsFromValues(values, *bound_ref, expressions);
-			}
-		}
+	value_set_t values;
+	if (ExtractValuesFromExpression(*expr_filter.expr, values) && !values.empty()) {
+		ExtractExpressionsFromValues(values, *bound_ref, expressions);
 	}
 	if (expressions.empty()) {
-		auto filter_expr = filter.ToExpression(*bound_ref);
+		auto filter_expr = expr_filter.ToExpression(*bound_ref);
 		expressions.push_back(std::move(filter_expr));
 	}
 
