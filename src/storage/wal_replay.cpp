@@ -281,31 +281,34 @@ private:
 	                                    WALReplayState replay_state = WALReplayState::MAIN_WAL);
 	void CopyOverWAL(BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer, idx_t buffer_size,
 	                 idx_t copy_end);
+	void MergeIntoRecoveryWAL(Connection &con, const ReplayState &checkpoint_state, BufferedFileReader &main_wal_reader,
+	                          const string &recovery_path, unique_ptr<FileHandle> checkpoint_handle);
 
 private:
 	QueryContext context;
 	StorageManager &storage_manager;
-	const string &wal_path;
+	AttachedDatabase &database;
+	const string &main_wal_path;
 	FileSystem &fs;
 };
 
 unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageManager &storage_manager,
-                                                const string &wal_path) {
-	WriteAheadLogReplayer wal_replay(context, storage_manager, wal_path);
+                                                const string &main_wal_path) {
+	WriteAheadLogReplayer wal_replay(context, storage_manager, main_wal_path);
 	return wal_replay.Replay();
 }
 
 WriteAheadLogReplayer::WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager,
-                                             const string &wal_path)
-    : context(context), storage_manager(storage_manager), wal_path(wal_path),
-      fs(FileSystem::Get(storage_manager.GetAttached())) {
+                                             const string &main_wal_path)
+    : context(context), storage_manager(storage_manager), database(storage_manager.GetAttached()),
+      main_wal_path(main_wal_path), fs(FileSystem::Get(storage_manager.GetAttached())) {
 }
 
 unique_ptr<WriteAheadLog> WriteAheadLogReplayer::Replay() {
-	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+	auto handle = fs.OpenFile(main_wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		// WAL does not exist - instantiate an empty WAL
-		return make_uniq<WriteAheadLog>(storage_manager, wal_path);
+		return make_uniq<WriteAheadLog>(storage_manager, main_wal_path);
 	}
 
 	// context is passed for metric collection purposes only!!
@@ -315,9 +318,9 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::Replay() {
 	}
 	// replay returning NULL indicates we can nuke the WAL entirely - but only if this is not a read-only connection
 	if (!storage_manager.GetAttached().IsReadOnly()) {
-		fs.TryRemoveFile(wal_path);
+		fs.TryRemoveFile(main_wal_path);
 	}
-	return make_uniq<WriteAheadLog>(storage_manager, wal_path);
+	return make_uniq<WriteAheadLog>(storage_manager, main_wal_path);
 }
 
 void WriteAheadLogReplayer::CopyOverWAL(BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer,
@@ -331,6 +334,64 @@ void WriteAheadLogReplayer::CopyOverWAL(BufferedFileReader &reader, FileHandle &
 
 		target.Write(buffer, read_count);
 	}
+}
+
+void WriteAheadLogReplayer::MergeIntoRecoveryWAL(Connection &con, const ReplayState &checkpoint_state,
+                                                 BufferedFileReader &main_wal_reader, const string &recovery_path,
+                                                 unique_ptr<FileHandle> checkpoint_handle) {
+	auto recovery_handle =
+	    fs.OpenFile(recovery_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+
+	static constexpr idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
+	auto buffer = make_uniq_array<data_t>(BATCH_SIZE);
+
+	// first copy over the main WAL contents
+	auto copy_end = checkpoint_state.checkpoint_position.GetIndex();
+	main_wal_reader.Reset();
+	CopyOverWAL(main_wal_reader, *recovery_handle, buffer.get(), BATCH_SIZE, copy_end);
+
+	auto checkpoint_wal_path = checkpoint_handle->GetPath();
+	// now copy over the checkpoint WAL
+	{
+		BufferedFileReader checkpoint_reader(fs, std::move(checkpoint_handle));
+
+		if (checkpoint_reader.FileSize() != 0) {
+			// skip over the version entry
+			ReplayState checkpoint_replay_state(database, *con.context, WALReplayState::CHECKPOINT_WAL);
+
+			auto deserializer =
+			    WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_replay_state, checkpoint_reader, true);
+			deserializer.ReplayEntry();
+
+			if (checkpoint_replay_state.wal_version != checkpoint_state.wal_version) {
+				throw InvalidInputException("Failure while replaying checkpoint WAL file \"%s\": checkpoint "
+				                            "WAL version is different from main WAL version",
+				                            checkpoint_wal_path);
+			}
+
+			CopyOverWAL(checkpoint_reader, *recovery_handle, buffer.get(), BATCH_SIZE, checkpoint_reader.FileSize());
+		}
+	}
+
+	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
+
+	// move over the recovery WAL over the main WAL
+	recovery_handle->Sync();
+	recovery_handle.reset();
+
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
+		throw FatalException("Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
+	}
+
+	fs.MoveFile(recovery_path, main_wal_path);
+
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL) {
+		throw FatalException(
+		    "Checkpoint aborted before deleting checkpoint file because of PRAGMA checkpoint_abort flag");
+	}
+
+	// delete the checkpoint WAL
+	fs.RemoveFile(checkpoint_wal_path);
 }
 
 unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle> handle, WALReplayState replay_state) {
@@ -389,7 +450,6 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		// we need to reconcile this with what is in the data file
 		// first check if there is a checkpoint WAL
 		auto &manager = database.GetStorageManager();
-		auto &fs = FileSystem::Get(storage_manager.GetAttached());
 		auto checkpoint_wal = manager.GetCheckpointWALPath();
 		checkpoint_handle =
 		    fs.OpenFile(checkpoint_wal, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
@@ -427,57 +487,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				// if this is not a read-only connection, then merge the two WALs and replay the merged WAL
 				// we merge into the recovery WAL path
 				auto recovery_path = manager.GetRecoveryWALPath();
-				auto recovery_handle =
-				    fs.OpenFile(recovery_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-
-				static constexpr idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
-				auto buffer = make_uniq_array<data_t>(BATCH_SIZE);
-
-				// first copy over the main WAL contents
-				auto copy_end = checkpoint_state.checkpoint_position.GetIndex();
-				reader.Reset();
-				CopyOverWAL(reader, *recovery_handle, buffer.get(), BATCH_SIZE, copy_end);
-
-				// now copy over the checkpoint WAL
-				{
-					BufferedFileReader checkpoint_reader(FileSystem::Get(database), std::move(checkpoint_handle));
-
-					// skip over the version entry
-					ReplayState checkpoint_replay_state(database, *con.context, WALReplayState::CHECKPOINT_WAL);
-					auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_replay_state,
-					                                                                    checkpoint_reader, true);
-					deserializer.ReplayEntry();
-
-					if (checkpoint_replay_state.wal_version != checkpoint_state.wal_version) {
-						throw InvalidInputException("Failure while replaying checkpoint WAL file \"%s\": checkpoint "
-						                            "WAL version is different from main WAL version",
-						                            wal_path);
-					}
-
-					CopyOverWAL(checkpoint_reader, *recovery_handle, buffer.get(), BATCH_SIZE,
-					            checkpoint_reader.FileSize());
-				}
-
-				auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
-
-				// move over the recovery WAL over the main WAL
-				recovery_handle->Sync();
-				recovery_handle.reset();
-
-				if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
-					throw FatalException(
-					    "Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
-				}
-
-				fs.MoveFile(recovery_path, wal_path);
-
-				if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL) {
-					throw FatalException(
-					    "Checkpoint aborted before deleting checkpoint file because of PRAGMA checkpoint_abort flag");
-				}
-
-				// delete the checkpoint WAL
-				fs.RemoveFile(checkpoint_wal);
+				MergeIntoRecoveryWAL(con, checkpoint_state, reader, recovery_path, std::move(checkpoint_handle));
 
 				// replay the (combined) recovery WAL
 				auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
