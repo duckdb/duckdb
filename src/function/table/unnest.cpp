@@ -2,6 +2,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/operator/projection/physical_unnest.hpp"
 
 namespace duckdb {
@@ -43,12 +44,18 @@ struct UnnestLocalState : public LocalTableFunctionState {
 
 static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunctionBindInput &input,
                                            vector<LogicalType> &return_types, vector<string> &names) {
-	if (input.input_table_types.size() != 1 || input.input_table_types[0].id() != LogicalTypeId::LIST) {
-		throw BinderException("UNNEST requires a single list as input");
+	if (input.input_table_types.size() != 1 || (input.input_table_types[0].id() != LogicalTypeId::LIST &&
+	                                            input.input_table_types[0].id() != LogicalTypeId::ARRAY)) {
+		throw BinderException("UNNEST requires a single list or array as input");
 	}
-	return_types.push_back(ListType::GetChildType(input.input_table_types[0]));
+	auto &input_type = input.input_table_types[0];
+	if (input_type.id() == LogicalTypeId::LIST) {
+		return_types.push_back(ListType::GetChildType(input_type));
+	} else {
+		return_types.push_back(ArrayType::GetChildType(input_type));
+	}
 	names.push_back("unnest");
-	return make_uniq<UnnestBindData>(input.input_table_types[0]);
+	return make_uniq<UnnestBindData>(input_type);
 }
 
 static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
@@ -63,9 +70,14 @@ static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &con
 static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<UnnestBindData>();
 	auto result = make_uniq<UnnestGlobalState>();
-	auto ref = make_uniq<BoundReferenceExpression>(bind_data.input_type, 0U);
-	auto bound_unnest = make_uniq<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
-	bound_unnest->child = std::move(ref);
+
+	unique_ptr<Expression> child = make_uniq<BoundReferenceExpression>(bind_data.input_type, 0U);
+	if (child->return_type.id() == LogicalTypeId::ARRAY) {
+		child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
+	}
+
+	auto bound_unnest = make_uniq<BoundUnnestExpression>(ListType::GetChildType(child->return_type));
+	bound_unnest->child = std::move(child);
 	result->select_list.push_back(std::move(bound_unnest));
 	return std::move(result);
 }
