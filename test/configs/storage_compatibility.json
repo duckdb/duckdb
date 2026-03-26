@@ -188,7 +188,8 @@
       "reason": "Triggers are a new catalog type not present in old storage files.",
       "paths": [
         "test/sql/trigger/create_trigger_catalog.test",
-        "test/sql/trigger/create_trigger_parse.test"
+        "test/sql/trigger/create_trigger_parse.test",
+        "test/sql/trigger/create_trigger_wal.test"
       ]
     }
   ]
