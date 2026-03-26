@@ -167,6 +167,26 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
 	}
+
+	//	Even with no ORDER BY, we can still have a non-degenerate frame if we have ROWS framing.
+	switch (w_expr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
+	switch (w_expr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
 	return true;
 }
 
