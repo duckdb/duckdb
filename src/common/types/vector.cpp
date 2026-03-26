@@ -1093,7 +1093,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 	}
 }
 
-void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
+void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -1136,7 +1136,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 	}
 }
 
-void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
+void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
 	input.ToUnifiedFormat(count, data.unified);
 	data.logical_type = input.GetType();
 

@@ -78,10 +78,21 @@ jobs:
         uses: tj-actions/changed-files@v47
         with:
           files_yaml: |
+            github:
+              - .github/**
             extensions:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+
+      - name: Check workflow files
+        if: steps.changed.outputs.github_any_changed == 'true'
+        run: |
+          echo "::add-matcher::.github/actionlint-matcher.json"
+          shellcheck --version
+          bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+        shell: bash
 
       - name: Configure extensions
         id: extensions
@@ -123,8 +134,9 @@ jobs:
       - name: Build runners JSON
         id: build_runners
         run: |
-          echo "runners<<EOF" >> "$GITHUB_OUTPUT"
-          cat <<EOF >> "$GITHUB_OUTPUT"
+          {
+            echo "runners<<EOF"
+            cat <<EOF
           {
             "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
             "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
@@ -135,7 +147,8 @@ jobs:
             "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
           }
           EOF
-          echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build Linux CLI matrices
         id: build_linux_cli_matrices
@@ -254,10 +267,10 @@ jobs:
         ls -lh build/relassert/test/unittest
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+      run: echo "DUCKDB_INSTALL_LIB=$(find "$PWD" -name 'libduck*.so' | head -n 1)" >> "$GITHUB_ENV"
 
     - name: Test DUCKDB_INSTALL_LIB variable
-      run: echo $DUCKDB_INSTALL_LIB
+      run: echo "$DUCKDB_INSTALL_LIB"
 
     - name: Test
       run: make unittest_relassert
@@ -270,7 +283,7 @@ jobs:
       - linux-debug
       - linux-release
     with:
-      build_current_release: 'false'
+      build_current_release: false
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
@@ -288,8 +301,8 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
-      skip_tests: 'false'
-      run_all: 'true'
+      skip_tests: false
+      run_all: true
       runners: ${{ needs.prepare.outputs.runners }}
 
  wasm-eh:
@@ -431,13 +444,12 @@ jobs:
 
     - name: Build
       run: |
-        export PWD=`pwd`
         docker run                                                             \
-        -v$PWD:$PWD                                                            \
+        -v"$PWD:$PWD"                                                          \
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CXX='ccache g++'                                                    \
-        -e CCACHE_DIR=$PWD/.ccache                                             \
+        -e CCACHE_DIR="$PWD/.ccache"                                           \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
@@ -451,8 +463,8 @@ jobs:
             ccache       \
             ninja-build  \
             perl-IPC-Cmd
-          git config --global --add safe.directory $PWD
-          make -C $PWD
+          git config --global --add safe.directory \"$PWD\"
+          make -C \"$PWD\"
         "
 
     - name: Print platform
@@ -516,13 +528,12 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        export PWD=`pwd`
         docker run                                                          \
-        -v$PWD:$PWD                                                         \
+        -v"$PWD:$PWD"                                                       \
         -e GEN=ninja                                                        \
         -e CC='ccache gcc'                                                  \
         -e CXX='ccache g++'                                                 \
-        -e CCACHE_DIR=$PWD/.ccache                                          \
+        -e CCACHE_DIR="$PWD/.ccache"                                        \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
@@ -539,8 +550,8 @@ jobs:
             git     \
             make    \
             samurai
-          git config --global --add safe.directory $PWD
-          make -C $PWD
+          git config --global --add safe.directory \"$PWD\"
+          make -C \"$PWD\"
         "
 
     - name: Deploy
@@ -567,9 +578,8 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        export PWD=`pwd`
         docker run   \
-        -v$PWD:$PWD  \
+        -v"$PWD:$PWD" \
         -e CI=1      \
         alpine:3.22                                                         \
         sh -c "
@@ -579,7 +589,7 @@ jobs:
             make       \
             python3    \
             py3-pytest
-          cd $PWD
+          cd \"$PWD\"
           echo Tests
           make allunit
           echo Release specific tests
@@ -690,8 +700,8 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
-      skip_tests: 'false'
-      run_all: 'true'
+      skip_tests: false
+      run_all: true
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks

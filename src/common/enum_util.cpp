@@ -183,6 +183,7 @@
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block_state.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
@@ -938,6 +939,26 @@ const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value) {
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	return static_cast<CTEMaterialize>(StringUtil::StringToEnum(GetCTEMaterializeValues(), 3, "CTEMaterialize", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCacheBlockStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CacheBlockState::EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(CacheBlockState::LOADING), "LOADING" },
+		{ static_cast<uint32_t>(CacheBlockState::LOADED), "LOADED" },
+		{ static_cast<uint32_t>(CacheBlockState::IO_ERROR), "IO_ERROR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CacheBlockState>(CacheBlockState value) {
+	return StringUtil::EnumToString(GetCacheBlockStateValues(), 4, "CacheBlockState", static_cast<uint32_t>(value));
+}
+
+template<>
+CacheBlockState EnumUtil::FromString<CacheBlockState>(const char *value) {
+	return static_cast<CacheBlockState>(StringUtil::StringToEnum(GetCacheBlockStateValues(), 4, "CacheBlockState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCacheValidationModeValues() {

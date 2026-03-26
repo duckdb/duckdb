@@ -5,8 +5,8 @@ on:
       base_hash:
         type: string
       build_current_release:
-        default: 'false'
-        type: string
+        default: false
+        type: boolean
       runner_linux_x64:
         default: ubuntu-latest
         type: string
@@ -20,8 +20,8 @@ on:
         type: string
       build_current_release:
         description: 'Build and upload linux-release-build in this workflow'
-        default: 'true'
-        type: string
+        default: true
+        type: boolean
       runner_linux_x64:
         description: 'Optional x64 runner label override'
         default: ubuntu-latest
@@ -59,7 +59,7 @@ jobs:
       - uses: ./.github/actions/ccache-action
 
       - name: Build current release
-        if: ${{ inputs.build_current_release != 'false' }}
+        if: ${{ inputs.build_current_release }}
         uses: ./.github/actions/linux_release_build
         with:
           artifact_name: linux-release-build

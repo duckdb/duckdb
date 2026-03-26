@@ -1,8 +1,14 @@
+commit 050598e885ea6ec14fc8e3cfffab403f5ad588da
+Author: dentiny <dentinyhao@gmail.com>
+Date:   Sun Mar 22 21:21:13 2026 +0000
+
+    Sync DuckDB core
+
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
-index 5317c43..28d6a31 100644
+index 5317c43..cbe887b 100644
 --- a/src/avro_reader.cpp
 +++ b/src/avro_reader.cpp
-@@ -1,3 +1,9 @@
+@@ -1,6 +1,11 @@
 +#include "duckdb/common/vector/flat_vector.hpp"
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
@@ -11,8 +17,38 @@ index 5317c43..28d6a31 100644
 +#include "duckdb/common/vector/union_vector.hpp"
  #include "avro_reader.hpp"
  #include "utf8proc_wrapper.hpp"
- #include "duckdb/storage/caching_file_system.hpp"
-@@ -254,7 +260,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+-#include "duckdb/storage/caching_file_system.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+ 
+@@ -119,18 +124,15 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ }
+ 
+ AvroReader::AvroReader(ClientContext &context, OpenFileInfo file) : BaseFileReader(file) {
+-	auto caching_file_system = CachingFileSystem::Get(context);
++	auto &fs = FileSystem::GetFileSystem(context);
++	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ;
++	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
++	auto file_handle = fs.OpenFile(this->file.path, flags);
++	auto total_size = fs.GetFileSize(*file_handle);
+ 
+-	auto caching_file_handle = caching_file_system.OpenFile(this->file, FileOpenFlags::FILE_FLAGS_READ);
+-	auto total_size = caching_file_handle->GetFileSize();
+-	data_ptr_t data = nullptr;
+-
+-	buf_handle = caching_file_handle->Read(data, total_size);
+-	auto buffer_data = buf_handle.Ptr();
+-
+-	D_ASSERT(buf_handle.IsValid());
+-	D_ASSERT(buffer_data == data);
+-	auto avro_reader = avro_reader_memory(const_char_ptr_cast(buffer_data), total_size);
++	buf_data = Allocator::DefaultAllocator().Allocate(total_size);
++	fs.Read(*file_handle, buf_data.get(), total_size, 0);
++	auto avro_reader = avro_reader_memory(const_char_ptr_cast(buf_data.get()), total_size);
+ 
+ 	if (avro_reader_reader(avro_reader, &reader)) {
+ 		throw InvalidInputException(avro_strerror());
+@@ -254,7 +256,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
  				throw InvalidInputException(avro_strerror());
  			}
  			TransformValue(&child_value, avro_type.children[child_idx].second,
@@ -21,7 +57,7 @@ index 5317c43..28d6a31 100644
  		}
  		break;
  	}
-@@ -284,7 +290,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+@@ -284,7 +286,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
  			// orrrrrrrrrrrrr
  			for (idx_t child_idx = 1; child_idx < StructVector::GetEntries(target).size(); child_idx++) {
  				if (child_idx != duckdb_child_index + 1) { // duckdb child index is bigger because of the tag
@@ -30,7 +66,7 @@ index 5317c43..28d6a31 100644
  				}
  			}
  
-@@ -391,7 +397,7 @@ void AvroReader::Read(DataChunk &output) {
+@@ -391,7 +393,7 @@ void AvroReader::Read(DataChunk &output) {
  				continue; // to be filled in later
  			}
  			output.data[col_idx].Reference(
@@ -39,3 +75,42 @@ index 5317c43..28d6a31 100644
  		}
  	} else {
  		output.data[column_indexes[0].GetPrimaryIndex()].Reference(*read_vec);
+diff --git a/src/include/avro_reader.hpp b/src/include/avro_reader.hpp
+index ebb941a..436fd81 100644
+--- a/src/include/avro_reader.hpp
++++ b/src/include/avro_reader.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "avro_type.hpp"
+ #include "duckdb/common/multi_file/base_file_reader.hpp"
+@@ -32,7 +33,7 @@ public:
+ 	avro_value_t value;
+ 	unique_ptr<Vector> read_vec;
+ 
+-	BufferHandle buf_handle;
++	AllocatedData buf_data;
+ 	AvroType avro_type;
+ 	LogicalType duckdb_type;
+ };
+diff --git a/test/sql/external_file_cache.test b/test/sql/external_file_cache.test
+index 1d4a43a..440574a 100644
+--- a/test/sql/external_file_cache.test
++++ b/test/sql/external_file_cache.test
+@@ -31,8 +31,8 @@ FROM read_avro('test/bigdata.avro') ORDER BY c1 LIMIT 10
+ statement ok
+ from read_avro('test/userdata1.avro');
+ 
+-query IIII
+-from duckdb_external_file_cache() order by path;
++query II
++select path, sum(nr_bytes) from duckdb_external_file_cache() group by path order by path;
+ ----
+-test/bigdata.avro	17647257	0	true
+-test/userdata1.avro	93561	0	true
+\ No newline at end of file
++test/bigdata.avro	17647257
++test/userdata1.avro	93561
+\ No newline at end of file

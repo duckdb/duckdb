@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/storage/external_file_cache_util.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/open_file_info.hpp"
