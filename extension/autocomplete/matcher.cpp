@@ -735,6 +735,10 @@ private:
 		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
+		// A lone '.' is a dot operator, not a number literal (e.g., '?.method()' should not consume '.')
+		if (token_text.size() == 1 && token_text[0] == '.') {
+			return false;
+		}
 		bool scientific_notation = false;
 		for (idx_t i = 1; i < token_text.size(); i++) {
 			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
