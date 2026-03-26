@@ -945,6 +945,7 @@ static string GetWindowsVersionTag(const BY_HANDLE_FILE_INFORMATION &file_info) 
 	Store(file_index, data_ptr_cast(&version_tag[1]));
 	Store(file_size, data_ptr_cast(&version_tag[2]));
 	Store(last_write_time.QuadPart, data_ptr_cast(&version_tag[3]));
+	return string(char_ptr_cast(version_tag), sizeof(version_tag));
 }
 
 static string GetWindowsVersionTag(const FILE_ID_BOTH_DIR_INFO &entry, DWORD volume_serial_number) {
