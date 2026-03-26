@@ -775,118 +775,14 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMa
 	}
 }
 
-bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant) {
-	const auto type = filter.filter_type;
-
-	switch (type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		if (constant.IsNull()) {
-			return false;
-		}
-		return constant_filter.Compare(constant);
+bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("MultiFileColumnMapper::EvaluateFilterAgainstConstant expected ExpressionFilter, got %s",
+		                        EnumUtil::ToString(filter.filter_type));
 	}
-	case TableFilterType::IS_NULL: {
-		return constant.IsNull();
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return !constant.IsNull();
-	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
-		for (auto &val : in_filter.values) {
-			if (!constant.IsNull() && val == constant) {
-				return true;
-			}
-		}
-		return false;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
-		for (auto &it : or_filter.child_filters) {
-			if (EvaluateFilterAgainstConstant(*it, constant)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-		for (auto &it : and_filter.child_filters) {
-			if (!EvaluateFilterAgainstConstant(*it, constant)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		auto &child_filter = struct_filter.child_filter;
-
-		if (constant.IsNull()) {
-			// NULL struct - filter cannot match (NULL propagation)
-			return false;
-		}
-		if (constant.type().id() != LogicalTypeId::STRUCT) {
-			throw InternalException(
-			    "Constant for this column is not of type struct, but used in a STRUCT_EXTRACT TableFilter");
-		}
-		auto &struct_fields = StructValue::GetChildren(constant);
-		auto field_index = struct_filter.child_idx;
-		if (field_index >= struct_fields.size()) {
-			throw InternalException("STRUCT_EXTRACT looks for child_idx %d, but constant only has %d children",
-			                        field_index, struct_fields.size());
-		}
-		auto &field_name = StructType::GetChildName(constant.type(), field_index);
-		if (!StringUtil::CIEquals(field_name, struct_filter.child_name)) {
-			throw InternalException("STRUCT_EXTRACT looks for a child with name '%s' at index %d, but constant has a "
-			                        "field with '%s' as the name for that index",
-			                        struct_filter.child_name, field_index, field_name);
-		}
-		auto &child_constant = struct_fields[field_index];
-		return EvaluateFilterAgainstConstant(*child_filter, child_constant);
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = filter.Cast<OptionalFilter>();
-		if (optional_filter.child_filter) {
-			return EvaluateFilterAgainstConstant(*optional_filter.child_filter, constant);
-		}
-		return true;
-	}
-	case TableFilterType::DYNAMIC_FILTER: {
-		auto &dynamic_filter = filter.Cast<DynamicFilter>();
-		if (!dynamic_filter.filter_data) {
-			//! No filter_data assigned (does this mean the DynamicFilter is broken??)
-			return true;
-		}
-		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
-		if (!dynamic_filter.filter_data->initialized) {
-			//! Not initialized
-			return true;
-		}
-		return DynamicFilterData::CompareValue(dynamic_filter.filter_data->comparison_type,
-		                                       dynamic_filter.filter_data->constant, constant);
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return expr_filter.EvaluateWithConstant(context, constant);
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		auto &bloom_filter = filter.Cast<BFTableFilter>();
-		return bloom_filter.FilterValue(constant);
-	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
-		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
-		return perfect_hash_join_filter.FilterValue(constant);
-	}
-	case TableFilterType::PREFIX_RANGE_FILTER: {
-		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
-		return prefix_range_filter.FilterValue(constant);
-	}
-	default:
-		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
-		                              EnumUtil::ToString(type));
-	}
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	return expr_filter.EvaluateWithConstant(context, constant);
 }
 
 Value MultiFileColumnMapper::GetConstantValue(MultiFileGlobalIndex global_index) {
