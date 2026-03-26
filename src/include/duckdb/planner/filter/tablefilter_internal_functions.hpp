@@ -8,16 +8,37 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/function/scalar/tablefilter_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
+class BaseStatistics;
 class BloomFilter;
 class PerfectHashJoinExecutor;
 class PrefixRangeFilter;
-struct DynamicFilterData;
+
+struct DynamicFilterData {
+	DynamicFilterData() : comparison_type(ExpressionType::INVALID) {
+	}
+	DynamicFilterData(ExpressionType comparison_type_p, Value constant_p);
+
+	mutex lock;
+	ExpressionType comparison_type;
+	Value constant;
+	atomic<bool> initialized = {false};
+
+	void SetValue(Value val);
+	void Reset();
+	static bool CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value);
+	static FilterPropagateResult CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+	                                             const Value &constant);
+};
 
 //! Bind function that prevents user access to internal tablefilter functions
 struct TableFilterInternalFunctions {

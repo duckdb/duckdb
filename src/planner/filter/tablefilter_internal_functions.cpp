@@ -9,19 +9,23 @@
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/function/scalar/tablefilter_functions.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -216,6 +220,37 @@ bool PrefixRangeFunctionData::Equals(const FunctionData &other_p) const {
 // DynamicFilterFunctionData
 //===----------------------------------------------------------------------===//
 
+DynamicFilterData::DynamicFilterData(ExpressionType comparison_type_p, Value constant_p)
+    : comparison_type(comparison_type_p), constant(std::move(constant_p)) {
+}
+
+bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return ValueOperations::Equals(value, constant);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return ValueOperations::NotEquals(value, constant);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return ValueOperations::GreaterThan(value, constant);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return ValueOperations::GreaterThanEquals(value, constant);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return ValueOperations::LessThan(value, constant);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return ValueOperations::LessThanEquals(value, constant);
+	default:
+		throw InternalException("unknown comparison type for DynamicFilter: " + EnumUtil::ToString(comparison_type));
+	}
+}
+
+FilterPropagateResult DynamicFilterData::CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+                                                         const Value &constant) {
+	auto col_ref = make_uniq<BoundReferenceExpression>(stats.GetType(), 0);
+	auto bound_constant = make_uniq<BoundConstantExpression>(constant);
+	auto expr = make_uniq<BoundComparisonExpression>(comparison_type, std::move(col_ref), std::move(bound_constant));
+	return ExpressionFilter::CheckExpressionStatistics(*expr, stats);
+}
+
 DynamicFilterFunctionData::DynamicFilterFunctionData(shared_ptr<DynamicFilterData> filter_data_p)
     : filter_data(std::move(filter_data_p)) {
 }
@@ -227,6 +262,20 @@ unique_ptr<FunctionData> DynamicFilterFunctionData::Copy() const {
 bool DynamicFilterFunctionData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<DynamicFilterFunctionData>();
 	return filter_data.get() == other.filter_data.get();
+}
+
+void DynamicFilterData::SetValue(Value val) {
+	if (val.IsNull()) {
+		return;
+	}
+	lock_guard<mutex> l(lock);
+	constant = std::move(val);
+	initialized = true;
+}
+
+void DynamicFilterData::Reset() {
+	lock_guard<mutex> l(lock);
+	initialized = false;
 }
 
 //===----------------------------------------------------------------------===//
