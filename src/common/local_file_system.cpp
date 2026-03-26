@@ -63,6 +63,7 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #endif
 
 namespace duckdb {
+
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
@@ -166,16 +167,12 @@ public:
 	};
 };
 
-static FileMetadata StatsInternal(int fd, const string &path) {
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s", path,
-		                  strerror(errno));
-	}
-
+static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
 	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+	file_metadata.device_id = static_cast<idx_t>(s.st_dev);
+	file_metadata.file_id = static_cast<idx_t>(s.st_ino);
 
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
@@ -205,6 +202,15 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	}
 
 	return file_metadata;
+}
+
+static FileMetadata StatsInternal(int fd, const string &path) {
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s", path,
+		                  strerror(errno));
+	}
+	return StatsFromStruct(s);
 } // LCOV_EXCL_STOP
 
 #if __APPLE__ && !TARGET_OS_IPHONE
@@ -705,17 +711,6 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-string GetPosixVersionTag(struct stat s) {
-	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
-	uint64_t version_tag[4];
-	Store(UnsafeNumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
-	Store(UnsafeNumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
-	Store(UnsafeNumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
-	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
-
-	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
-}
-
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
@@ -753,13 +748,10 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		auto &options = info.extended_info->options;
 		// file type
 		Value file_type(S_ISDIR(status.st_mode) ? "directory" : "file");
+		auto file_metadata = StatsFromStruct(status);
 		options.emplace("type", std::move(file_type));
-		// file size
-		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
-		// last modified time
-		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(status.st_mtime)));
-		// version tag
-		options.emplace("etag", Value::BLOB_RAW(GetPosixVersionTag(status)));
+
+		FillFileOptions(file_metadata, options);
 
 		// invoke callback
 		callback(info);
@@ -906,6 +898,9 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	// Get file size from high and low parts.
 	file_metadata.file_size =
 	    (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | static_cast<int64_t>(file_info.nFileSizeLow);
+	file_metadata.device_id = static_cast<uint64_t>(file_info.dwVolumeSerialNumber);
+	file_metadata.file_id =
+	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
 
 	// Get last modification time
 	file_metadata.last_modification_time = FiletimeToTimeStamp(file_info.ftLastWriteTime);
@@ -929,31 +924,17 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	return file_metadata;
 }
 
-static string GetWindowsVersionTag(const BY_HANDLE_FILE_INFORMATION &file_info) {
-	ULARGE_INTEGER last_write_time;
-	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
-	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
+static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
+	FileMetadata result;
+	result.file_size = static_cast<idx_t>(entry->EndOfFile.QuadPart);
 
-	const uint64_t file_size =
-	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
-	const uint64_t file_index =
-	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
+	FILETIME ft;
+	ft.dwLowDateTime = entry->LastWriteTime.LowPart;
+	ft.dwHighDateTime = entry->LastWriteTime.HighPart;
+	result.file_size = FiletimeToTimeStamp(ft);
 
-	// volume serial + file index identify the file; size + last write time protect against in-place rewrites
-	uint64_t version_tag[4];
-	Store(static_cast<uint64_t>(file_info.dwVolumeSerialNumber), data_ptr_cast(&version_tag[0]));
-	Store(file_index, data_ptr_cast(&version_tag[1]));
-	Store(file_size, data_ptr_cast(&version_tag[2]));
-	Store(last_write_time.QuadPart, data_ptr_cast(&version_tag[3]));
-}
-
-static string GetWindowsVersionTag(const FILE_ID_BOTH_DIR_INFO &entry, DWORD volume_serial_number) {
-	uint64_t version_tag[4];
-	Store(static_cast<uint64_t>(volume_serial_number), data_ptr_cast(&version_tag[0]));
-	Store(static_cast<uint64_t>(entry.FileId.QuadPart), data_ptr_cast(&version_tag[1]));
-	Store(static_cast<uint64_t>(entry.CreationTime.QuadPart), data_ptr_cast(&version_tag[2]));
-	Store(static_cast<uint64_t>(entry.LastWriteTime.QuadPart), data_ptr_cast(&version_tag[3]));
-	return string(char_ptr_cast(version_tag), sizeof(version_tag));
+	result.file_id = entry.FileId.QuadPart;
+	return result;
 }
 
 struct WindowsFileHandle : public FileHandle {
@@ -1362,15 +1343,10 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 				// file type
 				Value file_type(entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
 				options.emplace("type", std::move(file_type));
-				// file size
-				options.emplace("file_size", Value::BIGINT(entry->EndOfFile.QuadPart));
-				// last modified time
-				FILETIME ft;
-				ft.dwLowDateTime = entry->LastWriteTime.LowPart;
-				ft.dwHighDateTime = entry->LastWriteTime.HighPart;
-				options.emplace("last_modified", Value::TIMESTAMP(FiletimeToTimeStamp(ft)));
-				// etag: includes FileId (file reference number) in addition to size and timestamps
-				options.emplace("etag", Value::BLOB_RAW(GetWindowsVersionTag(*entry, volume_serial_number)));
+
+				auto metadata = StatsFromDirInfo(*entry);
+				metadata.device_id = volume_serial_number;
+				FillFileOptions(options, metadata);
 
 				callback(info);
 			}
@@ -1556,24 +1532,27 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 	return FileSystem::CanonicalizePath(path);
 }
 
+string LocalFileSystem::VersionTagFromMetadata(const FileMetadata &stats) {
+	uint64_t version_tag[4];
+	Store(stats.device_id.IsValid() ? stats.device_id.GetIndex() : 0, data_ptr_cast(&version_tag[0]));
+	Store(stats.file_id.IsValid() ? stats.file_id.GetIndex() : 0, data_ptr_cast(&version_tag[1]));
+	Store(stats.file_size, data_ptr_cast(&version_tag[2]));
+	Store(stats.last_modification_time.value, data_ptr_cast(&version_tag[3]));
+	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+}
+
+void LocalFileSystem::FillFileOptions(const FileMetadata &file_metadata, unordered_map<string, Value> &options) {
+	// file size
+	options.emplace("file_size", Value::BIGINT(file_metadata.file_size));
+	// last modified time
+	options.emplace("last_modified", Value::TIMESTAMP(file_metadata.last_modification_time));
+	// version tag
+	options.emplace("etag", Value::BLOB_RAW(VersionTagFromMetadata(file_metadata)));
+}
+
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
-	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
-#ifdef _WIN32
-	auto &whandle = handle.Cast<WindowsFileHandle>();
-	BY_HANDLE_FILE_INFORMATION file_info;
-	if (!GetFileInformationByHandle(whandle.fd, &file_info)) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get version tag for file \"%s\": %s", handle.path, error);
-	}
-	return GetWindowsVersionTag(file_info);
-#else
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
-	}
-	return GetPosixVersionTag(s);
-#endif
+	auto stats = handle.Stats();
+	return VersionTagFromMetadata(stats);
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {
