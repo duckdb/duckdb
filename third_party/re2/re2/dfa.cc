@@ -52,6 +52,7 @@
 #endif
 
 namespace duckdb_re2 {
+// NOLINTBEGIN(readability-braces-around-statements,modernize-use-nullptr,cppcoreguidelines-avoid-non-const-global-variables,bugprone-narrowing-conversions,bugprone-assignment-in-if-condition)
 
 // Controls whether the DFA should bail out early if the NFA would be faster.
 static bool dfa_should_bail_when_slow = true;
@@ -2069,4 +2070,5 @@ bool Prog::PossibleMatchRange(std::string* min, std::string* max, int maxlen) {
   return GetDFA(kLongestMatch)->PossibleMatchRange(min, max, maxlen);
 }
 
+// NOLINTEND(readability-braces-around-statements,modernize-use-nullptr,cppcoreguidelines-avoid-non-const-global-variables,bugprone-narrowing-conversions,bugprone-assignment-in-if-condition)
 }  // namespace re2

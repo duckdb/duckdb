@@ -5,6 +5,7 @@
 
 namespace duckdb_fastpforlib {
 namespace internal {
+// NOLINTBEGIN(readability-braces-around-statements,bugprone-implicit-widening-of-multiplication-result)
 
 // Used for uint8_t, uint16_t and uint32_t
 template <uint8_t DELTA, uint8_t SHR, class TYPE, uint8_t TYPE_SIZE = sizeof(TYPE) * 8>
@@ -1280,5 +1281,6 @@ void __fastpack64(const uint64_t *__restrict in, uint32_t *__restrict out) {
 		out[2 * i + 1] = in[i] >> 32;
 	}
 }
+// NOLINTEND(readability-braces-around-statements,bugprone-implicit-widening-of-multiplication-result)
 } // namespace internal
 } // namespace duckdb_fastpforlib
