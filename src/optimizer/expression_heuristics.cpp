@@ -228,13 +228,7 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 }
 
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("ExpressionHeuristics::Cost expected ExpressionFilter, got %s",
-		                        EnumUtil::ToString(filter.filter_type));
-	}
-
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
 	auto &expr = *expr_filter.expr;
 	if (ExpressionFilter::IsOptionalExpression(expr)) {
 		return 0;
