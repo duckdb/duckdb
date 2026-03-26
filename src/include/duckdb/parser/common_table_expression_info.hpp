@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+class QueryNode;
 class SelectStatement;
 
 struct CommonTableExpressionInfo {
@@ -22,7 +23,8 @@ struct CommonTableExpressionInfo {
 	vector<unique_ptr<ParsedExpression>> key_targets;
 	vector<unique_ptr<ParsedExpression>> payload_aggregates;
 
-	unique_ptr<SelectStatement> query;
+	//! The root QueryNode for this CTE (SELECT, INSERT, UPDATE, or DELETE)
+	unique_ptr<QueryNode> query_node;
 	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 
 public:
@@ -32,6 +34,7 @@ public:
 
 private:
 	CTEMaterialize GetMaterializedForSerialization(Serializer &serializer) const;
+	unique_ptr<SelectStatement> GetQueryForSerialization(Serializer &serializer) const;
 };
 
 } // namespace duckdb

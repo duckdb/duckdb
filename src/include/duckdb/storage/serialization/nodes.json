@@ -4,6 +4,7 @@
     "includes": [
       "duckdb/parser/common_table_expression_info.hpp"
     ],
+    "custom_implementation": true,
     "members": [
       {
         "id": 100,
@@ -13,7 +14,9 @@
       {
         "id": 101,
         "name": "query",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "version": "v2.0.0",
+        "status": "deleted"
       },
       {
         "id": 102,
@@ -30,6 +33,19 @@
         "id": 104,
         "name": "payload_aggregates",
         "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 105,
+        "name": "dml_query",
+        "type": "QueryNode*",
+        "version": "v2.0.0",
+        "status": "deleted"
+      },
+      {
+        "id": 106,
+        "name": "query_node",
+        "type": "QueryNode*",
+        "version": "v2.0.0"
       }
     ]
   },

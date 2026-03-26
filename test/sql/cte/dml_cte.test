@@ -1,0 +1,478 @@
+# name: test/sql/cte/dml_cte.test
+# description: Test DML statements (INSERT/UPDATE/DELETE) as CTE bodies, including RETURNING, unreferenced CTEs, side-effect semantics, snapshot isolation, nested WITH, transactions, prepared statements, and rejection of DML CTEs inside views
+# group: [cte]
+
+statement ok
+CREATE TABLE t (i INTEGER, j INTEGER);
+
+# Basic INSERT CTE with RETURNING
+query I rowsort
+WITH ins AS (
+    INSERT INTO t VALUES (1, 10), (2, 20) RETURNING i
+)
+SELECT * FROM ins;
+----
+1
+2
+
+query II rowsort
+SELECT * FROM t;
+----
+1	10
+2	20
+
+# DELETE CTE with RETURNING
+query I
+WITH del AS (
+    DELETE FROM t WHERE i = 1 RETURNING i
+)
+SELECT * FROM del;
+----
+1
+
+query II rowsort
+SELECT * FROM t;
+----
+2	20
+
+# UPDATE CTE with RETURNING
+query II rowsort
+WITH upd AS (
+    UPDATE t SET j = 99 WHERE i = 2 RETURNING i, j
+)
+SELECT * FROM upd;
+----
+2	99
+
+query II rowsort
+SELECT * FROM t;
+----
+2	99
+
+# Unreferenced INSERT CTE - side effect executes even though ins is not referenced by the outer SELECT
+statement ok
+TRUNCATE t;
+
+statement ok
+INSERT INTO t VALUES (10, 100);
+
+query II rowsort
+WITH ins AS (
+    INSERT INTO t VALUES (20, 200) RETURNING i, j
+)
+SELECT t.i, t.j FROM t;
+----
+10	100
+20	200
+
+# Multiple CTEs where one is DML and one is SELECT
+# The DELETE side effect always executes; verify via post-query state
+statement ok
+TRUNCATE t;
+
+statement ok
+INSERT INTO t VALUES (1, 1), (2, 2), (3, 3);
+
+statement ok
+WITH
+    del AS (DELETE FROM t WHERE i = 1 RETURNING i),
+    remaining AS (SELECT i FROM t)
+SELECT * FROM remaining;
+
+query II rowsort
+SELECT * FROM t;
+----
+2	2
+3	3
+
+# DML CTE that is not referenced - side effect still executes (RETURNING used by outer)
+statement ok
+TRUNCATE t;
+
+query I
+WITH ins AS (
+    INSERT INTO t VALUES (42, 42) RETURNING i
+)
+SELECT * FROM ins;
+----
+42
+
+query II rowsort
+SELECT * FROM t;
+----
+42	42
+
+# Unreferenced DML CTE without RETURNING - side effect must still execute
+# This exercises the ref_count == 0 path in the CTE inlining optimizer
+statement ok
+TRUNCATE t;
+
+statement ok
+WITH ins AS (INSERT INTO t VALUES (99, 99))
+SELECT 1;
+
+query II
+SELECT * FROM t WHERE i = 99;
+----
+99	99
+
+# Unreferenced DELETE CTE without RETURNING - side effect must still execute
+statement ok
+INSERT INTO t VALUES (77, 77);
+
+statement ok
+WITH del AS (DELETE FROM t WHERE i = 77)
+SELECT 1;
+
+query I
+SELECT count(*) FROM t WHERE i = 77;
+----
+0
+
+# Referenced DML CTE without RETURNING - exposes 0 columns but 1 row per affected row
+# The outer query can join against it but cannot project any of its columns.
+statement ok
+TRUNCATE t;
+
+query I
+WITH ins AS (INSERT INTO t VALUES (55, 55))
+SELECT 1 AS x FROM ins;
+----
+1
+
+query II
+SELECT * FROM t WHERE i = 55;
+----
+55	55
+
+# DML CTE inside an UPDATE statement
+statement ok
+TRUNCATE t;
+
+statement ok
+INSERT INTO t VALUES (1, 1), (2, 2), (3, 3);
+
+statement ok
+CREATE TABLE multiplier (k INTEGER);
+
+statement ok
+INSERT INTO multiplier VALUES (10);
+
+query II rowsort
+WITH m AS (INSERT INTO multiplier VALUES (20) RETURNING k)
+UPDATE t SET j = t.i * m.k FROM m WHERE t.i <= 2
+RETURNING i, j;
+----
+1	20
+2	40
+
+query I rowsort
+SELECT * FROM multiplier;
+----
+10
+20
+
+# DML CTE inside a DELETE statement
+statement ok
+TRUNCATE t;
+
+statement ok
+INSERT INTO t VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE to_delete (v INTEGER);
+
+statement ok
+INSERT INTO to_delete VALUES (2);
+
+query I rowsort
+WITH extra AS (INSERT INTO to_delete VALUES (3) RETURNING v)
+DELETE FROM t WHERE i IN (SELECT v FROM extra)
+RETURNING i;
+----
+3
+
+query II rowsort
+SELECT * FROM t;
+----
+1	10
+2	20
+
+# Prepared statement with a parameterized DML CTE
+statement ok
+TRUNCATE t;
+
+statement ok
+PREPARE dml_prepared AS
+    WITH ins AS (INSERT INTO t VALUES ($1, $2) RETURNING i)
+    SELECT * FROM ins;
+
+query I
+EXECUTE dml_prepared(7, 77);
+----
+7
+
+query II
+SELECT * FROM t WHERE i = 7;
+----
+7	77
+
+# INSERT CTE from a subquery
+statement ok
+CREATE TABLE src (v INTEGER);
+
+statement ok
+INSERT INTO src VALUES (100), (200);
+
+statement ok
+TRUNCATE t;
+
+query I rowsort
+WITH ins AS (
+    INSERT INTO t SELECT v, v * 2 FROM src RETURNING i
+)
+SELECT * FROM ins;
+----
+100
+200
+
+query II rowsort
+SELECT * FROM t;
+----
+100	200
+200	400
+
+# Error cases: statements not allowed as CTE bodies
+
+# DDL (CREATE TABLE, DROP TABLE, ALTER TABLE) is rejected by the parser grammar or transformer
+statement error
+WITH cte AS (CREATE TABLE forbidden (i INT)) SELECT 1;
+----
+<REGEX>:.*(syntax error|A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement).*
+
+statement error
+WITH cte AS (DROP TABLE forbidden) SELECT 1;
+----
+<REGEX>:.*(syntax error|A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement).*
+
+statement error
+WITH cte AS (ALTER TABLE t ADD COLUMN x INT) SELECT 1;
+----
+<REGEX>:.*(syntax error|A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement).*
+
+# COPY is parsed by the grammar but rejected as an invalid CTE body type
+statement error
+WITH cte AS (COPY t TO 'x.csv') SELECT 1;
+----
+<REGEX>:.*A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement.*
+
+# Recursive CTEs with DML bodies are not supported
+statement error
+WITH RECURSIVE ins AS (INSERT INTO t VALUES (1, 2) RETURNING i) SELECT * FROM ins;
+----
+<REGEX>:.*Recursive CTEs with DML statements are not supported.*
+
+statement error
+WITH RECURSIVE upd AS (UPDATE t SET j = 0 RETURNING i) SELECT * FROM upd;
+----
+<REGEX>:.*Recursive CTEs with DML statements are not supported.*
+
+statement error
+WITH RECURSIVE del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
+----
+<REGEX>:.*Recursive CTEs with DML statements are not supported.*
+
+# Multiple DML CTEs in one WITH clause are not supported
+statement error
+WITH ins AS (INSERT INTO t VALUES (1, 2)), del AS (DELETE FROM t WHERE i = 1) SELECT 1;
+----
+<REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
+
+statement error
+WITH ins AS (INSERT INTO t VALUES (1, 2) RETURNING i), upd AS (UPDATE t SET j = 0 RETURNING i) SELECT * FROM ins;
+----
+<REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
+
+statement error
+WITH upd AS (UPDATE t SET j = 0 RETURNING i), del AS (DELETE FROM t WHERE i = 1 RETURNING i) SELECT * FROM upd;
+----
+<REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
+
+# Self-referential INSERT + SELECT from the same table.
+# The INSERT CTE always executes (side effect), so after the query t2 has rows.
+# Whether sel sees the inserted rows depends on execution order, which is not
+# guaranteed — so we only verify the post-query state of t2.
+statement ok
+CREATE TABLE t2 (i INTEGER, j INTEGER);
+
+statement ok
+WITH ins AS MATERIALIZED (
+    INSERT INTO t2 VALUES (1, 10), (2, 20) RETURNING i, j
+), sel AS MATERIALIZED (SELECT * FROM t2)
+SELECT ins.i, sel.i FROM ins, sel;
+
+# After the query, t2 has the inserted rows
+query II rowsort
+SELECT * FROM t2;
+----
+1	10
+2	20
+
+# DML CTE with a view
+statement ok
+CREATE TABLE base (i INTEGER);
+
+statement ok
+INSERT INTO base VALUES (10), (20), (30);
+
+statement ok
+CREATE VIEW base_view AS SELECT * FROM base WHERE i >= 20;
+
+# INSERT via a view-filtered subquery in CTE
+query I rowsort
+WITH ins AS (
+    INSERT INTO base SELECT i + 1 FROM base_view RETURNING i
+)
+SELECT * FROM ins;
+----
+21
+31
+
+query I rowsort
+SELECT * FROM base;
+----
+10
+20
+21
+30
+31
+
+# UPDATE via CTE referencing a view
+query II rowsort
+WITH upd AS (
+    UPDATE base SET i = i * 2 WHERE i IN (SELECT i FROM base_view) RETURNING i, i / 2
+)
+SELECT * FROM upd;
+----
+40	20
+42	21
+60	30
+62	31
+
+# DELETE via CTE using a view
+statement ok
+TRUNCATE base;
+
+statement ok
+INSERT INTO base VALUES (1), (2), (3), (4), (5);
+
+statement ok
+CREATE VIEW small_base AS SELECT * FROM base WHERE i <= 3;
+
+query I rowsort
+WITH del AS (
+    DELETE FROM base WHERE i IN (SELECT i FROM small_base) RETURNING i
+)
+SELECT * FROM del;
+----
+1
+2
+3
+
+query I rowsort
+SELECT * FROM base;
+----
+4
+5
+
+# Nested WITH clauses: a DML CTE inside a subquery's WITH is a separate clause,
+# so it does not count against the outer WITH clause's single-DML limit.
+# Both the outer DML CTE and the nested one execute.
+statement ok
+TRUNCATE t;
+
+statement ok
+INSERT INTO t VALUES (1, 1), (2, 2), (3, 3);
+
+query I rowsort
+WITH outer_del AS (
+    DELETE FROM t WHERE i = 1 RETURNING i
+)
+SELECT * FROM (
+    WITH inner_ins AS (INSERT INTO t VALUES (99, 99) RETURNING i)
+    SELECT * FROM inner_ins
+) sub;
+----
+99
+
+query II rowsort
+SELECT * FROM t;
+----
+2	2
+3	3
+99	99
+
+# Transaction rollback: DML CTE side effects roll back with the transaction
+statement ok
+TRUNCATE t;
+
+statement ok
+INSERT INTO t VALUES (1, 1);
+
+statement ok
+BEGIN;
+
+statement ok
+WITH ins AS (INSERT INTO t VALUES (42, 42) RETURNING i)
+SELECT * FROM ins;
+
+statement ok
+ROLLBACK;
+
+query II
+SELECT * FROM t;
+----
+1	1
+
+# DML CTEs are not allowed as CTE bodies inside a VIEW
+statement error
+CREATE VIEW v_bad AS WITH ins AS (INSERT INTO t VALUES (1, 2) RETURNING i) SELECT * FROM ins;
+----
+<REGEX>:.*DML statements.*are not allowed.*VIEW.*
+
+statement error
+CREATE VIEW v_bad AS WITH upd AS (UPDATE t SET j = 0 RETURNING i) SELECT * FROM upd;
+----
+<REGEX>:.*DML statements.*are not allowed.*VIEW.*
+
+statement error
+CREATE VIEW v_bad AS WITH del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
+----
+<REGEX>:.*DML statements.*are not allowed.*VIEW.*
+
+# Serialization: verify that views containing SELECT CTEs survive a DB restart
+# (exercises the v8 query_node field serialization path)
+load __TEST_DIR__/dml_cte_storage.db
+
+statement ok
+CREATE TABLE persist_t (i INTEGER);
+
+statement ok
+INSERT INTO persist_t VALUES (1), (2), (3);
+
+statement ok
+CREATE VIEW persist_v AS WITH cte AS (SELECT i * 10 AS j FROM persist_t) SELECT j FROM cte WHERE j > 10;
+
+query I rowsort
+FROM persist_v;
+----
+20
+30
+
+restart
+
+query I rowsort
+FROM persist_v;
+----
+20
+30
