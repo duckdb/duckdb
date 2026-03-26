@@ -175,7 +175,8 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 			initialize_executor();
 			return;
 		}
-		if (function.function.name == DynamicFilterScalarFun::NAME && function.bind_info && function.children.size() == 1) {
+		if (function.function.name == DynamicFilterScalarFun::NAME && function.bind_info &&
+		    function.children.size() == 1) {
 			auto &bind_data = function.bind_info->Cast<DynamicFilterFunctionData>();
 			if (!bind_data.filter_data || !HasSupportedFastPathComparisonType(bind_data.filter_data->comparison_type) ||
 			    !HasSupportedFastPathPhysicalType(function.children[0]->return_type)) {

@@ -834,8 +834,8 @@ static unique_ptr<Expression> CreateComparisonFilterExpression(ExpressionType co
 	return make_uniq<BoundComparisonExpression>(comparison_type, std::move(lhs), std::move(rhs));
 }
 
-static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expression> source_expr, const LogicalType &source_type,
-                                                            idx_t child_idx) {
+static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expression> source_expr,
+                                                            const LogicalType &source_type, idx_t child_idx) {
 	auto &child_type = StructType::GetChildType(source_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(source_expr));
@@ -859,8 +859,8 @@ static unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_p
                                                                         float selectivity_threshold,
                                                                         idx_t n_vectors_to_check) {
 	auto func = SelectivityOptionalFilterScalarFun::GetFunction(target_type);
-	auto bind_data =
-	    make_uniq<SelectivityOptionalFilterFunctionData>(std::move(child_expr), selectivity_threshold, n_vectors_to_check);
+	auto bind_data = make_uniq<SelectivityOptionalFilterFunctionData>(std::move(child_expr), selectivity_threshold,
+	                                                                  n_vectors_to_check);
 	vector<unique_ptr<Expression>> args;
 	args.push_back(CreateReferenceExpression(target_type));
 	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
@@ -913,8 +913,9 @@ static bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, i
 	return true;
 }
 
-static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &expr, const MultiFileIndexMapping &mapping,
-                                                             const LogicalType &target_type) {
+static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &expr,
+                                                              const MultiFileIndexMapping &mapping,
+                                                              const LogicalType &target_type) {
 	RewrittenMappedExpression result;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
@@ -1045,8 +1046,9 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 				return CreateOptionalFilterExpression(nullptr, target_type);
 			}
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-			auto child_expr = data.child_filter_expr ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
-			                                         : nullptr;
+			auto child_expr = data.child_filter_expr
+			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
+			                      : nullptr;
 			if (data.child_filter_expr && !child_expr) {
 				return nullptr;
 			}
@@ -1057,13 +1059,14 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
 			}
 			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-			auto child_expr = data.child_filter_expr ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
-			                                         : nullptr;
+			auto child_expr = data.child_filter_expr
+			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
+			                      : nullptr;
 			if (data.child_filter_expr && !child_expr) {
 				return nullptr;
 			}
-			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type, data.selectivity_threshold,
-			                                                 data.n_vectors_to_check);
+			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
+			                                                 data.selectivity_threshold, data.n_vectors_to_check);
 		}
 		if (func.function.name == DynamicFilterScalarFun::NAME) {
 			if (!func.bind_info) {
