@@ -36,16 +36,6 @@ public:
 	}
 };
 
-struct ConjunctionAndFilterState : public TableFilterState {
-public:
-	vector<unique_ptr<TableFilterState>> child_states;
-};
-
-struct ConjunctionOrFilterState : public TableFilterState {
-public:
-	vector<unique_ptr<TableFilterState>> child_states;
-};
-
 enum class ExpressionFilterFastPath : uint8_t {
 	NONE,
 	OPTIONAL,
