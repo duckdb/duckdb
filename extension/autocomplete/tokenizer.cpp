@@ -300,8 +300,12 @@ bool BaseTokenizer::TokenizeInput() {
 			break;
 		case TokenizeState::NUMERIC:
 			// Check for "always allowed" numeric characters
-			if (CharacterIsInitialNumber(c) || c == '_') {
+			if (CharacterIsInitialNumber(c)) {
 				break; // Continue tokenizing
+			}
+			// Allow underscore only when immediately followed by a digit (no consecutive underscores)
+			if (c == '_' && i + 1 < sql.size() && CharacterIsInitialNumber(sql[i + 1])) {
+				break;
 			}
 
 			// Check for scientific notation marker
