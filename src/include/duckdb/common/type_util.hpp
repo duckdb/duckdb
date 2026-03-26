@@ -15,10 +15,10 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/double_na_equal.hpp"
-#include "duckdb/common/ubigint.hpp"
 
 namespace duckdb {
 struct bignum_t;
+struct ubigint_t;
 
 //! Returns the PhysicalType for the given type
 template <class T>
