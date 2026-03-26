@@ -215,12 +215,7 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 	filters_nulls = false;
 	filters_valid_values = false;
 
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("ConstantFun::FiltersNullValues expected ExpressionFilter");
-	}
-
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ConstantFun::FiltersNullValues");
 	auto &state = filter_state.Cast<ExpressionFilterState>();
 	if (!TryExpressionFiltersNullValues(*expr_filter.expr, state, filters_nulls, filters_valid_values)) {
 		Value val(type);
