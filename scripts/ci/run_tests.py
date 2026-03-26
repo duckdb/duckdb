@@ -234,9 +234,8 @@ def generate_test_list(test_file, unittest_bin: str, test_flags: str, patterns: 
         stderr=subprocess.PIPE,
     )
     if proc.returncode != 0 and not proc.stdout:
-        if proc.stderr:
-            print(proc.stderr, end="", file=sys.stderr, flush=True)
-        raise RuntimeError(f"failed to generate test list from {unittest_bin}")
+        print("Stderr:", proc.stderr, end="", file=sys.stderr, flush=True)
+        raise RuntimeError(f"failed to generate test list from {unittest_bin} (exit: {proc.returncode})")
     test_file.write(proc.stdout)
     test_file.flush()
 
