@@ -55,7 +55,7 @@ public:
 	static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
 	                                       ExpressionType replace_type = ExpressionType::BOUND_REF);
 	//! Check if an expression tree contains an internal function with the given name
-	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
+	static bool ContainsInternalFunction(Expression &expr, const string &func_name);
 	//! Check if an expression tree is entirely optional filter semantics
 	static bool IsOptionalExpression(const Expression &expr);
 	//! Check if the root of an expression tree is an optional filter wrapper

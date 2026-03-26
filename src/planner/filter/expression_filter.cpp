@@ -275,7 +275,8 @@ unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter
 	}
 	auto inferred_type = InferFilterColumnType(filter);
 	auto &effective_type = (inferred_type != LogicalType::ANY) ? inferred_type : col_type;
-	auto col_ref = make_uniq<BoundReferenceExpression>(effective_type, 0);
+	storage_t col_idx = 0;
+	auto col_ref = make_uniq<BoundReferenceExpression>(effective_type, col_idx);
 	auto expr = filter.ToExpression(*col_ref);
 	return make_uniq<ExpressionFilter>(std::move(expr));
 }
@@ -418,7 +419,7 @@ void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, 
 	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column, replace_type); });
 }
 
-bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const string &func_name) {
+bool ExpressionFilter::ContainsInternalFunction(Expression &expr, const string &func_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (func.function.name == func_name) {
@@ -443,7 +444,7 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 		}
 	}
 	bool found = false;
-	ExpressionIterator::EnumerateChildren(const_cast<Expression &>(expr), [&](unique_ptr<Expression> &child) {
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
 		if (!found && child) {
 			found = ContainsInternalFunction(*child, func_name);
 		}
