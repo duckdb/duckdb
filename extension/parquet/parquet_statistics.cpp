@@ -225,7 +225,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return Value::TIME_NS(ParquetMsIntToTimeNs(val));
+			return Value::TIME_NS(ParquetMsIntToTimeNs(NumericCast<int32_t>(val)));
 		case ParquetExtraTypeInfo::UNIT_NS:
 			return Value::TIME_NS(ParquetIntToTimeNs(val));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
