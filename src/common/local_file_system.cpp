@@ -1330,13 +1330,14 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 	DWORD volume_serial_number = 0;
 	if (!GetVolumeInformationByHandleW(hDir, NULL, 0, &volume_serial_number, NULL, NULL, NULL, 0)) {
 		CloseHandle(hDir);
-		throw IOException("Failed to get volume serial number from directory \"%s\": %s", directory, error);
+		throw IOException("Failed to get volume serial number from directory \"%s\": %s", directory,
+		                  GetLastErrorAsString());
 	}
 
 	static constexpr DWORD BUFFER_SIZE = 65536;
 	auto buffer = unique_ptr<char[]>(new char[BUFFER_SIZE]);
 
-	FILE_INFORMATION_CLASS info_class = FileIdBothDirectoryRestartInfo;
+	FILE_INFO_BY_HANDLE_CLASS info_class = FileIdBothDirectoryRestartInfo;
 	while (true) {
 		if (!GetFileInformationByHandleEx(hDir, info_class, buffer.get(), BUFFER_SIZE)) {
 			CloseHandle(hDir);
@@ -1351,7 +1352,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		auto *entry = reinterpret_cast<FILE_ID_BOTH_DIR_INFO *>(buffer.get());
 		while (true) {
 			// FileName is not null-terminated; use FileNameLength (in bytes) to construct the string.
-			wstring wname(entry->FileName, entry->FileNameLength / sizeof(WCHAR));
+			std::wstring wname(entry->FileName, entry->FileNameLength / sizeof(WCHAR));
 			string name = WindowsUtil::UnicodeToUTF8(wname.c_str());
 
 			if (name != "." && name != "..") {
