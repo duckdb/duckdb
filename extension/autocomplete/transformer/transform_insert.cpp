@@ -2,6 +2,7 @@
 #include "ast/on_conflict_expression_target.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 
 namespace duckdb {
 
@@ -9,28 +10,29 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<InsertStatement>();
+	auto &node = *result->node;
 	auto with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
-		result->cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
+		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
 	}
 	auto or_action_opt = list_pr.Child<OptionalParseResult>(2);
 	auto insert_target = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
 	// TODO(Dtenwolde) What about the insert alias?
-	result->catalog = insert_target->catalog_name;
-	result->schema = insert_target->schema_name;
-	result->table = insert_target->table_name;
-	transformer.TransformOptional<InsertColumnOrder>(list_pr, 5, result->column_order);
-	transformer.TransformOptional<vector<string>>(list_pr, 6, result->columns);
+	node.catalog = insert_target->catalog_name;
+	node.schema = insert_target->schema_name;
+	node.table = insert_target->table_name;
+	transformer.TransformOptional<InsertColumnOrder>(list_pr, 5, node.column_order);
+	transformer.TransformOptional<vector<string>>(list_pr, 6, node.columns);
 	auto insert_values = transformer.Transform<InsertValues>(list_pr.Child<ListParseResult>(7));
-	if (!result->columns.empty() && insert_values.default_values) {
+	if (!node.columns.empty() && insert_values.default_values) {
 		throw ParserException(
 		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
 	}
 	if (insert_values.default_values) {
-		result->default_values = true;
+		node.default_values = true;
 	}
 	if (insert_values.select_statement) {
-		result->select_statement = std::move(insert_values.select_statement);
+		node.select_statement = std::move(insert_values.select_statement);
 	}
 	auto on_conflict_info = make_uniq<OnConflictInfo>();
 	auto on_conflict_clause = list_pr.Child<OptionalParseResult>(8);
@@ -41,14 +43,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 			                      "the first if you want to have more granual control");
 		}
 		on_conflict_info = transformer.Transform<unique_ptr<OnConflictInfo>>(on_conflict_clause.optional_result);
-		result->on_conflict_info = std::move(on_conflict_info);
-		result->table_ref = std::move(insert_target);
+		node.on_conflict_info = std::move(on_conflict_info);
+		node.table_ref = std::move(insert_target);
 	} else if (or_action_opt.HasResult()) {
 		on_conflict_info->action_type = transformer.Transform<OnConflictAction>(or_action_opt.optional_result);
-		result->on_conflict_info = std::move(on_conflict_info);
-		result->table_ref = std::move(insert_target);
+		node.on_conflict_info = std::move(on_conflict_info);
+		node.table_ref = std::move(insert_target);
 	}
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 9, result->returning_list);
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 9, node.returning_list);
 	return std::move(result);
 }
 

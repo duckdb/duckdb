@@ -17,6 +17,7 @@ public:
 		case PhysicalType::LIST: {
 			// memory for the list offsets
 			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
+			data_ptr = owned_data.get();
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, capacity));
@@ -43,6 +44,7 @@ public:
 		}
 		default:
 			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
+			data_ptr = owned_data.get();
 			break;
 		}
 	}
@@ -55,7 +57,7 @@ public:
 		result.validity.Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			result.data = owned_data.get();
+			result.buffer->SetData(owned_data.get());
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
@@ -70,8 +72,6 @@ public:
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			// fixed size list does not have own data
-			result.data = nullptr;
 			// reinitialize the VectorArrayBuffer
 			// auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
@@ -83,8 +83,6 @@ public:
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			// struct does not have data
-			result.data = nullptr;
 			// reinitialize the VectorStructBuffer
 			auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
@@ -98,7 +96,7 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.data = owned_data.get();
+			result.buffer->SetData(owned_data.get());
 			result.auxiliary.reset();
 			break;
 		}

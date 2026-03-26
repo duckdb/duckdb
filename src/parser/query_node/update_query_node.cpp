@@ -39,11 +39,11 @@ string UpdateQueryNode::ToString() const {
 }
 
 bool UpdateQueryNode::Equals(const QueryNode *other_p) const {
-	if (!QueryNode::Equals(other_p)) {
-		return false;
-	}
 	if (this == other_p) {
 		return true;
+	}
+	if (!QueryNode::Equals(other_p)) {
+		return false;
 	}
 	auto &other = other_p->Cast<UpdateQueryNode>();
 	if (!TableRef::Equals(table, other.table)) {

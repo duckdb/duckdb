@@ -1504,7 +1504,30 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
 	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
 #ifdef _WIN32
-	return "";
+	auto &whandle = handle.Cast<WindowsFileHandle>();
+	BY_HANDLE_FILE_INFORMATION file_info;
+	if (!GetFileInformationByHandle(whandle.fd, &file_info)) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get version tag for file \"%s\": %s", handle.path, error);
+	}
+
+	ULARGE_INTEGER last_write_time;
+	last_write_time.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
+	last_write_time.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
+
+	const uint64_t file_size =
+	    (static_cast<uint64_t>(file_info.nFileSizeHigh) << 32) | static_cast<uint64_t>(file_info.nFileSizeLow);
+	const uint64_t file_index =
+	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
+
+	// volume serial + file index identify the file; size + last write time protect against in-place rewrites
+	uint64_t version_tag[4];
+	Store(static_cast<uint64_t>(file_info.dwVolumeSerialNumber), data_ptr_cast(&version_tag[0]));
+	Store(file_index, data_ptr_cast(&version_tag[1]));
+	Store(file_size, data_ptr_cast(&version_tag[2]));
+	Store(last_write_time.QuadPart, data_ptr_cast(&version_tag[3]));
+
+	return string(char_ptr_cast(version_tag), sizeof(version_tag));
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;

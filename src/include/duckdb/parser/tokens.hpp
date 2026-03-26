@@ -55,6 +55,8 @@ class RecursiveCTENode;
 class CTENode;
 class StatementNode;
 class UpdateQueryNode;
+class DeleteQueryNode;
+class InsertQueryNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

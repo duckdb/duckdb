@@ -14,6 +14,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
@@ -403,10 +404,11 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	// COPY FROM a file
 	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;
-	insert.table = stmt.info->table;
-	insert.schema = stmt.info->schema;
-	insert.catalog = stmt.info->catalog;
-	insert.columns = stmt.info->select_list;
+	auto &insert_node = *insert.node;
+	insert_node.table = stmt.info->table;
+	insert_node.schema = stmt.info->schema;
+	insert_node.catalog = stmt.info->catalog;
+	insert_node.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);

@@ -67,7 +67,7 @@ void FSSTVector::SetCount(Vector &vector, idx_t count) {
 	fsst_string_buffer.SetCount(count);
 }
 
-idx_t FSSTVector::GetCount(Vector &vector) {
+idx_t FSSTVector::GetCount(const Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (!vector.auxiliary) {
@@ -84,7 +84,7 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 	D_ASSERT(src.GetVectorType() == VectorType::FSST_VECTOR);
 	D_ASSERT(dst.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto dst_mask = FlatVector::Validity(dst);
-	auto ldata = FSSTVector::GetCompressedData<string_t>(src);
+	auto ldata = FSSTVector::GetCompressedData(src);
 	auto tdata = FlatVector::GetData<string_t>(dst);
 	auto &str_buffer = StringVector::GetStringBuffer(dst);
 	for (idx_t i = 0; i < copy_count; i++) {

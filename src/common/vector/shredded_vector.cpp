@@ -24,14 +24,14 @@ Vector &ShreddedVector::GetShreddedVector(Vector &vec) {
 	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
 }
 
-void ShreddedVector::Unshred(Vector &vec, idx_t count) {
+void ShreddedVector::Unshred(const Vector &vec, idx_t count) {
 	Vector unshredded_vector(LogicalType::VARIANT(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
 	VariantUtils::UnshredVariantData(shredded_buffer.GetChild(), unshredded_vector, count);
-	vec.Reference(unshredded_vector);
+	vec.ConstReference(unshredded_vector);
 }
 
-void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t count) {
+void ShreddedVector::Unshred(const Vector &vec, const SelectionVector &sel, idx_t count) {
 	VerifyShreddedVector(vec);
 	// slice the underlying shredded buffer
 	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
@@ -39,7 +39,7 @@ void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t coun
 	// unshred the vector
 	Vector unshredded_vector(LogicalType::VARIANT());
 	VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
-	vec.Reference(unshredded_vector);
+	vec.ConstReference(unshredded_vector);
 }
 
 bool ShreddedVector::IsFullyShredded(Vector &vec) {

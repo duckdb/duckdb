@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,13 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 		sel = &owned_sel;
 	}
 	return *this;
+}
+
+ResizeInfo::ResizeInfo(Vector &vec, optional_ptr<VectorBuffer> buffer, const idx_t multiplier)
+    : vec(vec), data(nullptr), buffer(buffer), multiplier(multiplier) {
+	if (buffer) {
+		data = buffer->GetData();
+	}
 }
 
 } // namespace duckdb

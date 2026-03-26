@@ -94,7 +94,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 	DataChunk chunk;
 	for (idx_t c = 0; c < input_count; c++) {
 		inputs[c].Flatten(count);
-		chunk.data.emplace_back(inputs[c]);
+		chunk.data.emplace_back(Vector::Ref(inputs[c]));
 	}
 	chunk.SetCardinality(count);
 

@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class DeleteQueryNode;
+
 class DeleteStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::DELETE_STATEMENT;
@@ -22,12 +24,7 @@ public:
 public:
 	DeleteStatement();
 
-	unique_ptr<ParsedExpression> condition;
-	unique_ptr<TableRef> table;
-	vector<unique_ptr<TableRef>> using_clauses;
-	vector<unique_ptr<ParsedExpression>> returning_list;
-	//! CTEs
-	CommonTableExpressionMap cte_map;
+	unique_ptr<DeleteQueryNode> node;
 
 protected:
 	DeleteStatement(const DeleteStatement &other);

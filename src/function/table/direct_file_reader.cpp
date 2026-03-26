@@ -4,7 +4,7 @@
 
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/function/table/read_file.hpp"
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 
 namespace duckdb {

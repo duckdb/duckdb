@@ -22,7 +22,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	auto count = args.size();
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	auto child = get_child_vector(map);
+	auto &child = get_child_vector(map);
 
 	auto &entries = ListVector::GetEntry(result);
 	entries.Reference(child);

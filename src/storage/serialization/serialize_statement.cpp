@@ -7,8 +7,25 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
+
+void OnConflictInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<OnConflictAction>(100, "action_type", action_type);
+	serializer.WritePropertyWithDefault<vector<string>>(101, "indexed_columns", indexed_columns);
+	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "set_info", set_info);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(103, "condition", condition);
+}
+
+unique_ptr<OnConflictInfo> OnConflictInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<OnConflictInfo>(new OnConflictInfo());
+	deserializer.ReadProperty<OnConflictAction>(100, "action_type", result->action_type);
+	deserializer.ReadPropertyWithDefault<vector<string>>(101, "indexed_columns", result->indexed_columns);
+	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "set_info", result->set_info);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(103, "condition", result->condition);
+	return result;
+}
 
 void SelectStatement::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);

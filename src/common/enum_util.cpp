@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
+#include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -182,6 +183,7 @@
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block_state.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
@@ -939,6 +941,26 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	return static_cast<CTEMaterialize>(StringUtil::StringToEnum(GetCTEMaterializeValues(), 3, "CTEMaterialize", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCacheBlockStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CacheBlockState::EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(CacheBlockState::LOADING), "LOADING" },
+		{ static_cast<uint32_t>(CacheBlockState::LOADED), "LOADED" },
+		{ static_cast<uint32_t>(CacheBlockState::IO_ERROR), "IO_ERROR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CacheBlockState>(CacheBlockState value) {
+	return StringUtil::EnumToString(GetCacheBlockStateValues(), 4, "CacheBlockState", static_cast<uint32_t>(value));
+}
+
+template<>
+CacheBlockState EnumUtil::FromString<CacheBlockState>(const char *value) {
+	return static_cast<CacheBlockState>(StringUtil::StringToEnum(GetCacheBlockStateValues(), 4, "CacheBlockState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCacheValidationModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CacheValidationMode::VALIDATE_ALL), "VALIDATE_ALL" },
@@ -1059,6 +1081,25 @@ const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value) {
 template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value) {
 	return static_cast<CheckpointAbort>(StringUtil::StringToEnum(GetCheckpointAbortValues(), 7, "CheckpointAbort", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCheckpointOnDetachValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CheckpointOnDetach::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(CheckpointOnDetach::ENABLED), "ENABLED" },
+		{ static_cast<uint32_t>(CheckpointOnDetach::DISABLED), "DISABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value) {
+	return StringUtil::EnumToString(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", static_cast<uint32_t>(value));
+}
+
+template<>
+CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value) {
+	return static_cast<CheckpointOnDetach>(StringUtil::StringToEnum(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", value));
 }
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {
@@ -4096,19 +4137,21 @@ const StringUtil::EnumStringLiteral *GetQueryNodeTypeValues() {
 		{ static_cast<uint32_t>(QueryNodeType::RECURSIVE_CTE_NODE), "RECURSIVE_CTE_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::CTE_NODE), "CTE_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::STATEMENT_NODE), "STATEMENT_NODE" },
-		{ static_cast<uint32_t>(QueryNodeType::UPDATE_QUERY_NODE), "UPDATE_QUERY_NODE" }
+		{ static_cast<uint32_t>(QueryNodeType::UPDATE_QUERY_NODE), "UPDATE_QUERY_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::DELETE_QUERY_NODE), "DELETE_QUERY_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::INSERT_QUERY_NODE), "INSERT_QUERY_NODE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
-	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 7, "QueryNodeType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 9, "QueryNodeType", static_cast<uint32_t>(value));
 }
 
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
-	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 7, "QueryNodeType", value));
+	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 9, "QueryNodeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
