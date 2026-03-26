@@ -87,7 +87,16 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 	case ExpressionFilterFastPath::IS_NOT_NULL:
 		filters_nulls = true;
 		return true;
+	case ExpressionFilterFastPath::BLOOM_FILTER:
+		if (!state.IsSelectivityActive() || !state.bloom_filter) {
+			return true;
+		}
+		filters_nulls = state.bloom_filters_null_values;
+		return true;
 	case ExpressionFilterFastPath::SELECTIVITY_OPTIONAL: {
+		if (!state.IsSelectivityActive()) {
+			return true;
+		}
 		if (!state.selectivity_child_state) {
 			return false;
 		}
@@ -105,6 +114,15 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 	}
 	case ExpressionFilterFastPath::PERFECT_HASH_JOIN:
 	case ExpressionFilterFastPath::PREFIX_RANGE:
+		if (!state.IsSelectivityActive()) {
+			return true;
+		}
+		filters_nulls = true;
+		return true;
+	case ExpressionFilterFastPath::DYNAMIC_FILTER:
+		if (!state.dynamic_filter_data || !state.dynamic_filter_data->initialized.load()) {
+			return true;
+		}
 		filters_nulls = true;
 		return true;
 	default:

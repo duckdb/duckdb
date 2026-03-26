@@ -123,6 +123,17 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 	}
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function = expression.Cast<BoundFunctionExpression>();
+		if (function.function.name == BloomFilterScalarFun::NAME && function.bind_info) {
+			auto &bind_data = function.bind_info->Cast<BloomFilterFunctionData>();
+			fast_path = ExpressionFilterFastPath::BLOOM_FILTER;
+			bloom_filter = bind_data.filter;
+			bloom_filters_null_values = bind_data.filters_null_values;
+			if (bind_data.filter && bind_data.n_vectors_to_check != 0) {
+				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+			}
+			initialize_executor();
+			return;
+		}
 		if (function.function.name == SelectivityOptionalFilterScalarFun::NAME && function.bind_info) {
 			auto &bind_data = function.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 			if (bind_data.child_filter_expr) {
@@ -161,6 +172,18 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 			if (bind_data.n_vectors_to_check != 0) {
 				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
 			}
+			initialize_executor();
+			return;
+		}
+		if (function.function.name == DynamicFilterScalarFun::NAME && function.bind_info && function.children.size() == 1) {
+			auto &bind_data = function.bind_info->Cast<DynamicFilterFunctionData>();
+			if (!bind_data.filter_data || !HasSupportedFastPathComparisonType(bind_data.filter_data->comparison_type) ||
+			    !HasSupportedFastPathPhysicalType(function.children[0]->return_type)) {
+				initialize_executor();
+				return;
+			}
+			fast_path = ExpressionFilterFastPath::DYNAMIC_FILTER;
+			dynamic_filter_data = bind_data.filter_data;
 			initialize_executor();
 			return;
 		}

@@ -545,6 +545,50 @@ static idx_t ExecuteConstantComparisonSelection(SelectionVector &sel, Vector &ve
 	return approved_tuple_count;
 }
 
+static idx_t ExecuteBloomFilterSelection(SelectionVector &sel, Vector &vector, const ExpressionFilterState &state,
+                                         idx_t &approved_tuple_count) {
+	if (!state.bloom_filter) {
+		return approved_tuple_count;
+	}
+
+	const auto approved_before = approved_tuple_count;
+	Vector keys_sliced(vector, sel, approved_before);
+	Vector hashes(LogicalType::HASH, approved_before);
+	VectorOperations::Hash(keys_sliced, hashes, approved_before);
+	hashes.Flatten(approved_before);
+
+	UnifiedVectorFormat sliced_data;
+	keys_sliced.ToUnifiedFormat(approved_before, sliced_data);
+
+	SelectionVector bloom_sel(approved_before);
+	const auto bloom_count = state.bloom_filter->LookupHashes(hashes, bloom_sel, approved_before);
+	SelectionVector result_sel(approved_before);
+	idx_t result_count = 0;
+	idx_t bloom_idx = 0;
+	for (idx_t idx = 0; idx < approved_before; idx++) {
+		const auto matched = bloom_idx < bloom_count && bloom_sel.get_index_unsafe(bloom_idx) == idx;
+		if (matched) {
+			bloom_idx++;
+		}
+		const auto sliced_idx = sliced_data.sel->get_index(idx);
+		bool passed;
+		if (!sliced_data.validity.RowIsValid(sliced_idx)) {
+			passed = !state.bloom_filters_null_values;
+		} else {
+			passed = matched;
+		}
+		if (!passed) {
+			continue;
+		}
+		result_sel.set_index(result_count++, sel.IsSet() ? sel.get_index_unsafe(idx) : idx);
+	}
+	if (result_count != approved_before) {
+		sel.Initialize(result_sel);
+	}
+	approved_tuple_count = result_count;
+	return approved_tuple_count;
+}
+
 static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                               const Expression &expression, ExpressionFilterState &state,
                                               idx_t scan_count, idx_t &approved_tuple_count) {
@@ -587,6 +631,16 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
 		case ExpressionFilterFastPath::IS_NOT_NULL:
 			return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
+		case ExpressionFilterFastPath::BLOOM_FILTER: {
+			if (!state.IsSelectivityActive()) {
+				state.UpdateSelectivity(0, 0);
+				return approved_tuple_count;
+			}
+			const auto approved_before = approved_tuple_count;
+			ExecuteBloomFilterSelection(sel, vector, state, approved_tuple_count);
+			state.UpdateSelectivity(approved_tuple_count, approved_before);
+			return approved_tuple_count;
+		}
 		case ExpressionFilterFastPath::SELECTIVITY_OPTIONAL: {
 			if (!state.IsSelectivityActive()) {
 				state.UpdateSelectivity(0, 0);
@@ -680,6 +734,23 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			}
 			state.UpdateSelectivity(approved_tuple_count, approved_before);
 			return approved_tuple_count;
+		}
+		case ExpressionFilterFastPath::DYNAMIC_FILTER: {
+			if (!state.dynamic_filter_data || !state.dynamic_filter_data->initialized.load()) {
+				return approved_tuple_count;
+			}
+			ExpressionType comparison_type;
+			Value constant;
+			{
+				lock_guard<mutex> l(state.dynamic_filter_data->lock);
+				if (!state.dynamic_filter_data->initialized) {
+					return approved_tuple_count;
+				}
+				comparison_type = state.dynamic_filter_data->comparison_type;
+				constant = state.dynamic_filter_data->constant;
+			}
+			return ExecuteConstantComparisonSelection(sel, vector, vdata, constant, comparison_type,
+			                                          approved_tuple_count);
 		}
 		default:
 			break;

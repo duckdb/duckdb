@@ -42,9 +42,11 @@ enum class ExpressionFilterFastPath : uint8_t {
 	CONSTANT_COMPARISON,
 	IS_NULL,
 	IS_NOT_NULL,
+	BLOOM_FILTER,
 	SELECTIVITY_OPTIONAL,
 	PERFECT_HASH_JOIN,
-	PREFIX_RANGE
+	PREFIX_RANGE,
+	DYNAMIC_FILTER
 };
 enum class ExpressionFilterSelectivityStatus : uint8_t { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };
 
@@ -112,6 +114,9 @@ public:
 	ExpressionFilterFastPath fast_path = ExpressionFilterFastPath::NONE;
 	ExpressionType comparison_type = ExpressionType::INVALID;
 	Value constant;
+	optional_ptr<BloomFilter> bloom_filter;
+	bool bloom_filters_null_values = false;
+	shared_ptr<DynamicFilterData> dynamic_filter_data;
 	float selectivity_threshold = 0;
 	idx_t n_vectors_to_check = 0;
 	idx_t tuples_accepted = 0;
