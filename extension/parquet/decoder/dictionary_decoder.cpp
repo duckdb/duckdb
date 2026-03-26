@@ -133,12 +133,8 @@ void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 }
 
 bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, TableFilterState &filter_state) {
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("DictionaryDecoder::DictionarySupportsFilter expected ExpressionFilter");
-	}
 	// expression filters can only be pushed into the dictionary if they filter out NULL values
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "DictionaryDecoder::DictionarySupportsFilter");
 	auto &state = filter_state.Cast<ExpressionFilterState>();
 	auto emits_nulls = state.executor ? expr_filter.EvaluateWithConstant(*state.executor, Value(reader.Type()))
 	                                  : expr_filter.EvaluateWithConstant(state.GetContext(), Value(reader.Type()));
