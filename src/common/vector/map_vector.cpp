@@ -27,36 +27,31 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	// unify the MAP vector, which is a physical LIST vector
-	UnifiedVectorFormat map_data;
-	map.ToUnifiedFormat(count, map_data);
-	auto map_entries = UnifiedVectorFormat::GetData<list_entry_t>(map_data);
+	auto map_entries = map.ScanAllValues<list_entry_t>(count);
 	auto maps_length = ListVector::GetListSize(map);
 
 	// unify the child vector containing the keys
 	auto &keys = MapVector::GetKeys(map);
-	UnifiedVectorFormat key_data;
-	keys.ToUnifiedFormat(maps_length, key_data);
 
+	auto key_validity = keys.ScanValidity(maps_length);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto mapped_row = sel.get_index(row_idx);
-		auto map_idx = map_data.sel->get_index(mapped_row);
-
-		if (!map_data.validity.RowIsValid(map_idx)) {
+		auto map_entry = map_entries[mapped_row];
+		if (!map_entry.is_valid) {
 			continue;
 		}
+		auto &map_list = map_entry.value;
 
 		value_set_t unique_keys;
-		auto length = map_entries[map_idx].length;
-		auto offset = map_entries[map_idx].offset;
+		auto length = map_list.length;
+		auto offset = map_list.offset;
 
 		for (idx_t child_idx = 0; child_idx < length; child_idx++) {
-			auto key_idx = key_data.sel->get_index(offset + child_idx);
-
-			if (!key_data.validity.RowIsValid(key_idx)) {
+			if (!key_validity.IsValid(offset + child_idx)) {
 				return MapInvalidReason::NULL_KEY;
 			}
 
-			auto value = keys.GetValue(key_idx);
+			auto value = keys.GetValue(offset + child_idx);
 			auto unique = unique_keys.insert(value).second;
 			if (!unique) {
 				return MapInvalidReason::DUPLICATE_KEY;
