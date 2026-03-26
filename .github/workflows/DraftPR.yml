@@ -38,7 +38,7 @@ jobs:
       - name: 'Extract PR node id'
         shell: bash
         run: |
-          (echo -n "PR_NUMBER=" | cat - pr_number) >> $GITHUB_ENV
+          (echo -n "PR_NUMBER=" | cat - pr_number) >> "$GITHUB_ENV"
 
       - name: 'Actually move to draft'
         shell: bash
@@ -46,9 +46,9 @@ jobs:
           MOVE_PR_TO_DRAFT_TOKEN_ENV: ${{ secrets.MOVE_PR_TO_DRAFT_TOKEN }}
         if: ${{ env.MOVE_PR_TO_DRAFT_TOKEN_ENV != '' }}
         run: |
-          echo ${{ env.MOVE_PR_TO_DRAFT_TOKEN_ENV }} | gh auth login --with-token
-          gh api graphql -F id=${{ env.PR_NUMBER }} -f query='
-            mutation($id: ID!) {
+          echo "${{ env.MOVE_PR_TO_DRAFT_TOKEN_ENV }}" | gh auth login --with-token
+          gh api graphql -F "id=${{ env.PR_NUMBER }}" -f query="
+            mutation(\$id: ID!) {
               convertPullRequestToDraft(input: { pullRequestId: $id }) {
                 pullRequest {
                   id
@@ -57,4 +57,4 @@ jobs:
                 }
               }
             }
-          '
+          "
