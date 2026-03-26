@@ -435,7 +435,10 @@ unittest: debug
 unittest_reldebug:
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/$(UNITTEST_BINARY) $(T)
 
+ifneq ($(SKIP_BUILD),1)
 unittest_release: release
+endif
+unittest_release:
 	$(PYTHON) scripts/ci/run_tests.py build/release/$(UNITTEST_BINARY) $(T)
 
 unittest_release_tag:
