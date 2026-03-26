@@ -204,13 +204,12 @@ struct ApproxTopKOperation {
 		if (state.values.empty()) {
 			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
-			UnifiedVectorFormat kdata;
-			top_k_vector.ToUnifiedFormat(count, kdata);
-			auto kidx = kdata.sel->get_index(offset);
-			if (!kdata.validity.RowIsValid(kidx)) {
+			auto top_k_format = top_k_vector.ScanAllValues<int64_t>(count);
+			auto top_k_entry = top_k_format[offset];
+			if (!top_k_entry.is_valid) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value cannot be NULL");
 			}
-			auto kval = UnifiedVectorFormat::GetData<int64_t>(kdata)[kidx];
+			auto kval = top_k_entry.value;
 			if (kval <= 0) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value must be > 0");
 			}
