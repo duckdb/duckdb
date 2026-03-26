@@ -162,12 +162,10 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	}
 
 	// Default is that if any of the arguments are NULL, the result is also NULL
-	UnifiedVectorFormat result_data;
-	result.ToUnifiedFormat(count, result_data);
+	auto result_validity = result.ScanValidity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i)) {
-			auto idx = result_data.sel->get_index(i);
-			D_ASSERT(!result_data.validity.RowIsValid(idx));
+			D_ASSERT(!result_validity.IsValid(i));
 		}
 	}
 #endif
