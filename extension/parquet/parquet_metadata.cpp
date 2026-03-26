@@ -9,12 +9,14 @@
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -821,10 +823,11 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
-	auto temp_filter =
-	    ConstantFilter(ExpressionType::COMPARE_EQUAL,
-	                   probe_constant.CastAs(context, reader.GetColumns()[probe_column_idx.GetIndex()].type));
-	filter = ExpressionFilter::FromTableFilter(temp_filter);
+	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
+	auto comparison = make_uniq<BoundComparisonExpression>(
+	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(probe_column_name, column_type, 0),
+	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
+	filter = make_uniq<ExpressionFilter>(std::move(comparison));
 }
 
 idx_t ParquetBloomProbeProcessor::TotalRowCount(ParquetReader &reader) {
