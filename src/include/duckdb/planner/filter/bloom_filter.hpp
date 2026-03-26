@@ -38,22 +38,7 @@ public:
 	      key_column_name(key_column_name_p), key_type(key_type_p) {
 	}
 
-	//! If the join condition is e.g. "A = B", the bf will filter null values.
-	//! If the condition is "A is B" the filter will let nulls pass
-	bool FiltersNullValues() const {
-		return filters_null_values;
-	}
-
-	LogicalType GetKeyType() const {
-		return key_type;
-	}
-
 	string ToString(const string &column_name) const override;
-
-	// Filters by first hashing and then probing the bloom filter. The &sel will hold
-	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count, BFTableFilterState &state) const;
-	bool FilterValue(const Value &value) const;
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 

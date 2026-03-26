@@ -83,15 +83,6 @@ string BFTableFilter::ToString(const string &column_name) const {
 	TableFilter::ThrowDeprecated("BFTableFilter");
 }
 
-idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
-                            BFTableFilterState &state) const {
-	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-
-bool BFTableFilter::FilterValue(const Value &value) const {
-	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-
 FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
 	TableFilter::ThrowDeprecated("BFTableFilter");
 }
