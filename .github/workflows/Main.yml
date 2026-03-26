@@ -198,6 +198,9 @@ jobs:
           make generate-files
           git diff --exit-code
 
+      - name: Test CI scripts
+        run: make test_ci
+
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers

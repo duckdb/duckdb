@@ -39,7 +39,7 @@ class TestRunnerConfig:
     retry: int
     max_retries: int
     batch_size: int
-    batch_timeout_seconds: int
+    batch_timeout_seconds: float
     rss_memory_threshold_mib: int | None
     runtime_threshold_seconds: int | None
     max_failures: int | None
@@ -466,7 +466,7 @@ def parse_args():
     parser.add_argument("--retry", type=int, default=0)
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument("--batch-timeout", type=float, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
     # Accept options interleaved with positional patterns, e.g.:
     #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
     return parser.parse_intermixed_args()
