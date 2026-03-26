@@ -9,10 +9,16 @@
 #pragma once
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 class ClientContext;
 class TableCatalogEntry;
+
+struct TriggerInfo {
+	unique_ptr<QueryNode> body;
+	TriggerForEach for_each;
+};
 
 class TriggerExecutor {
 public:
@@ -20,7 +26,8 @@ public:
 	// Keep depth small enough that stack overflow cannot occur before the guard fires.
 	static constexpr idx_t MAX_TRIGGER_DEPTH = 8;
 
-	static void Fire(ClientContext &context, TableCatalogEntry &table, idx_t row_count, TriggerTiming timing,
-	                 TriggerEventType event_type);
+	//! Fire pre-collected triggers with the given row count.
+	// TODO - probably going to change to receive a chunk to support NEW/OLD and REFERENCING NEW TABLE AS
+	static void Fire(ClientContext &context, const vector<TriggerInfo> &triggers, idx_t row_count);
 };
 } // namespace duckdb

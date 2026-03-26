@@ -1,15 +1,19 @@
 #include "duckdb/execution/trigger_executor.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/planner/planner.hpp"
 
 namespace duckdb {
+
+constexpr idx_t TriggerExecutor::MAX_TRIGGER_DEPTH;
 
 struct TriggerDepthGuard {
 	explicit TriggerDepthGuard(idx_t &depth) : depth(depth) {
@@ -21,16 +25,34 @@ struct TriggerDepthGuard {
 	idx_t &depth;
 };
 
-static void ExecuteTriggerBody(ClientContext &context, const string &sql_body_text) {
-	Parser parser(context.GetParserOptions());
-	parser.ParseQuery(sql_body_text);
-	if (parser.statements.empty()) {
-		return;
+// Planning requires a SQLStatement,
+// but the trigger body is stored as a QueryNode (since SQLStatement is not serializable)
+static unique_ptr<SQLStatement> WrapQueryNode(QueryNode &body) {
+	auto body_copy = body.Copy();
+	switch (body_copy->type) {
+	case QueryNodeType::INSERT_QUERY_NODE: {
+		auto stmt = make_uniq<InsertStatement>();
+		stmt->node = unique_ptr_cast<QueryNode, InsertQueryNode>(std::move(body_copy));
+		return stmt;
 	}
-	D_ASSERT(parser.statements.size() == 1);
+	case QueryNodeType::UPDATE_QUERY_NODE: {
+		auto stmt = make_uniq<UpdateStatement>();
+		stmt->node = unique_ptr_cast<QueryNode, UpdateQueryNode>(std::move(body_copy));
+		return stmt;
+	}
+	case QueryNodeType::DELETE_QUERY_NODE: {
+		auto stmt = make_uniq<DeleteStatement>();
+		stmt->node = unique_ptr_cast<QueryNode, DeleteQueryNode>(std::move(body_copy));
+		return stmt;
+	}
+	default:
+		throw InternalException("Unexpected trigger body query node type");
+	}
+}
 
+static void ExecuteTriggerBody(ClientContext &context, QueryNode &body) {
 	Planner planner(context);
-	planner.CreatePlan(std::move(parser.statements[0]));
+	planner.CreatePlan(WrapQueryNode(body));
 	if (!planner.plan) {
 		return;
 	}
@@ -58,54 +80,24 @@ static void ExecuteTriggerBody(ClientContext &context, const string &sql_body_te
 	}
 }
 
-struct TriggerInfo {
-	string body;
-	TriggerForEach for_each;
-};
-
-static vector<TriggerInfo> CollectTriggers(ClientContext &context, TableCatalogEntry &table, TriggerTiming timing,
-                                           TriggerEventType event_type) {
-	// Collect trigger body strings before executing any of them.
-	// schema.Scan holds catalog_lock for its entire duration.
-	// ExecuteTriggerBody may recursively call Fire, which also tries to acquire catalog_lock => deadlock.
-	// Releasing the lock by letting the scoped Scan complete before executing resolves this.
-	vector<TriggerInfo> triggers;
-	auto &schema = table.ParentSchema();
-	schema.Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
-		auto &trigger = entry.Cast<TriggerCatalogEntry>();
-		if (trigger.timing != timing || trigger.event_type != event_type) {
-			return;
-		}
-		if (trigger.base_table->table_name != table.name) {
-			return;
-		}
-		triggers.push_back({trigger.sql_body_text, trigger.for_each});
-	});
-	return triggers;
-}
-
-static void FireTriggers(ClientContext &context, const vector<TriggerInfo> &triggers, idx_t row_count) {
+void TriggerExecutor::Fire(ClientContext &context, const vector<TriggerInfo> &triggers, idx_t row_count) {
+	if (triggers.empty()) {
+		return;
+	}
+	if (context.trigger_depth >= MAX_TRIGGER_DEPTH) {
+		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded.", MAX_TRIGGER_DEPTH);
+	}
+	TriggerDepthGuard depth_guard(context.trigger_depth);
 	for (auto &trigger : triggers) {
 		if (trigger.for_each == TriggerForEach::ROW) {
 			for (idx_t i = 0; i < row_count; i++) {
-				ExecuteTriggerBody(context, trigger.body);
+				ExecuteTriggerBody(context, *trigger.body);
 			}
 		} else {
 			// FOR EACH STATEMENT: fire once regardless of row count
-			ExecuteTriggerBody(context, trigger.body);
+			ExecuteTriggerBody(context, *trigger.body);
 		}
 	}
-}
-
-void TriggerExecutor::Fire(ClientContext &context, TableCatalogEntry &table, idx_t row_count, TriggerTiming timing,
-                           TriggerEventType event_type) {
-	if (context.trigger_depth >= MAX_TRIGGER_DEPTH) {
-		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded.",
-		                            MAX_TRIGGER_DEPTH);
-	}
-	auto triggers = CollectTriggers(context, table, timing, event_type);
-	TriggerDepthGuard depth_guard(context.trigger_depth);
-	FireTriggers(context, triggers, row_count);
 }
 
 } // namespace duckdb

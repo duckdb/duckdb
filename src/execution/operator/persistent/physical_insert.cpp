@@ -21,7 +21,6 @@
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/execution/trigger_executor.hpp"
 
 namespace duckdb {
 
@@ -721,14 +720,6 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	}
 
 	return SinkCombineResultType::FINISHED;
-}
-
-SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<InsertGlobalState>();
-	TriggerExecutor::Fire(context, gstate.table, gstate.insert_count, TriggerTiming::AFTER,
-	                      TriggerEventType::INSERT_EVENT);
-	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//
