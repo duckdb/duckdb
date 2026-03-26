@@ -1,8 +1,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -10,7 +8,6 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 
 namespace duckdb {
@@ -218,77 +215,22 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 	filters_nulls = false;
 	filters_valid_values = false;
 
-	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &opt_filter = filter.Cast<OptionalFilter>();
-		return opt_filter.FiltersNullValues(type, filters_nulls, filters_valid_values, filter_state);
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("ConstantFun::FiltersNullValues expected ExpressionFilter");
 	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
-		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
-		filters_nulls = true;
-		filters_valid_values = true;
-		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction_or.child_filters[child_idx];
-			auto &child_state = *state.child_states[child_idx];
-			bool child_filters_nulls, child_filters_valid_values;
-			FiltersNullValues(type, child_filter, child_filters_nulls, child_filters_valid_values, child_state);
-			filters_nulls = filters_nulls && child_filters_nulls;
-			filters_valid_values = filters_valid_values && child_filters_valid_values;
+
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &state = filter_state.Cast<ExpressionFilterState>();
+	if (!TryExpressionFiltersNullValues(*expr_filter.expr, state, filters_nulls, filters_valid_values)) {
+		Value val(type);
+		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
+		if (state.executor) {
+			filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
+		} else {
+			filters_nulls = !expr_filter.EvaluateWithConstant(state.GetContext(), val);
 		}
-		break;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
-		filters_nulls = false;
 		filters_valid_values = false;
-		for (idx_t child_idx = 0; child_idx < conjunction_and.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction_and.child_filters[child_idx];
-			auto &child_state = *state.child_states[child_idx];
-			bool child_filters_nulls, child_filters_valid_values;
-			FiltersNullValues(type, child_filter, child_filters_nulls, child_filters_valid_values, child_state);
-			filters_nulls = filters_nulls || child_filters_nulls;
-			filters_valid_values = filters_valid_values || child_filters_valid_values;
-		}
-		break;
-	}
-	case TableFilterType::CONSTANT_COMPARISON:
-		filters_nulls = true;
-		break;
-	case TableFilterType::IS_NULL:
-		filters_valid_values = true;
-		break;
-	case TableFilterType::IS_NOT_NULL:
-		filters_nulls = true;
-		break;
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		auto &state = filter_state.Cast<ExpressionFilterState>();
-		if (!TryExpressionFiltersNullValues(*expr_filter.expr, state, filters_nulls, filters_valid_values)) {
-			Value val(type);
-			//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
-			if (state.executor) {
-				filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
-			} else {
-				filters_nulls = !expr_filter.EvaluateWithConstant(state.GetContext(), val);
-			}
-			filters_valid_values = false;
-		}
-		break;
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		auto &bf = filter.Cast<BFTableFilter>();
-		filters_nulls = bf.FiltersNullValues();
-		break;
-	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
-	case TableFilterType::PREFIX_RANGE_FILTER: {
-		filters_nulls = true;
-		break;
-	}
-	default:
-		throw InternalException("FIXME: unsupported type for filter selection in validity select");
 	}
 }
 
