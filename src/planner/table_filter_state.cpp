@@ -169,11 +169,7 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 }
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("TableFilterState::Initialize expected ExpressionFilter");
-	}
-	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "TableFilterState::Initialize");
 	return make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
 }
 
