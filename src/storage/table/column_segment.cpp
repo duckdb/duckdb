@@ -744,12 +744,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                      const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                      idx_t &approved_tuple_count) {
-	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		throw InternalException("ColumnSegment::FilterSelection expected ExpressionFilter");
-	}
 	auto &state = filter_state.Cast<ExpressionFilterState>();
-	auto &expression_filter = filter.Cast<ExpressionFilter>();
+	auto &expression_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnSegment::FilterSelection");
 	return ExecuteExpressionFilterSelection(sel, vector, vdata, *expression_filter.expr, state, scan_count,
 	                                        approved_tuple_count);
 }
