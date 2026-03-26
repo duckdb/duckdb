@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
@@ -19,12 +18,23 @@
 
 namespace duckdb {
 
-static void InternalFilterSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
-	throw NotImplementedException("Internal table filter functions cannot be serialized");
+static unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
+                                                            const LogicalType &type) {
+	auto dynamic_func = DynamicFilterScalarFun::GetFunction(type);
+	auto dynamic_bind = make_uniq<DynamicFilterFunctionData>(std::move(filter_data));
+	vector<unique_ptr<Expression>> args;
+	args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(dynamic_func), std::move(args),
+	                                          std::move(dynamic_bind));
 }
 
-static unique_ptr<FunctionData> InternalFilterDeserialize(Deserializer &, ScalarFunction &) {
-	throw NotImplementedException("Internal table filter functions cannot be deserialized");
+static unique_ptr<Expression> WrapOptionalFilter(unique_ptr<Expression> child_expr, const LogicalType &type) {
+	auto opt_func = OptionalFilterScalarFun::GetFunction(type);
+	auto opt_bind = make_uniq<OptionalFilterFunctionData>(std::move(child_expr));
+	vector<unique_ptr<Expression>> args;
+	args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(opt_func), std::move(args),
+	                                          std::move(opt_bind));
 }
 
 TopN::TopN(ClientContext &context_p) : context(context_p) {
@@ -125,17 +135,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		D_ASSERT(target.columns.size() == 1);
 		auto col_binding = target.columns[0].probe_column_index;
 
-		// create the actual dynamic filter as an ExpressionFilter with internal function
-		auto dynamic_func = DynamicFilterScalarFun::GetFunction(type);
-		dynamic_func.serialize = InternalFilterSerialize;
-		dynamic_func.deserialize = InternalFilterDeserialize;
-		auto dynamic_bind = make_uniq<DynamicFilterFunctionData>(filter_data);
-		vector<unique_ptr<Expression>> args;
-		args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
-		auto dynamic_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(dynamic_func),
-		                                                       std::move(args), std::move(dynamic_bind));
-
-		unique_ptr<Expression> pushed_expr = std::move(dynamic_expr);
+		unique_ptr<Expression> pushed_expr = CreateDynamicFilterExpression(filter_data, type);
 
 		if (nulls_first) {
 			// Create OR(IS_NULL(col), dynamic_filter(col))
@@ -148,17 +148,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 			pushed_expr = std::move(or_expr);
 		}
 
-		// Wrap in optional function
-		auto opt_func = OptionalFilterScalarFun::GetFunction(type);
-		opt_func.serialize = InternalFilterSerialize;
-		opt_func.deserialize = InternalFilterDeserialize;
-		auto opt_bind = make_uniq<OptionalFilterFunctionData>(std::move(pushed_expr));
-		vector<unique_ptr<Expression>> opt_args;
-		opt_args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
-		auto opt_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(opt_func),
-		                                                   std::move(opt_args), std::move(opt_bind));
-
-		auto expr_filter = make_uniq<ExpressionFilter>(std::move(opt_expr));
+		auto expr_filter = make_uniq<ExpressionFilter>(WrapOptionalFilter(std::move(pushed_expr), type));
 		get.table_filters.PushFilter(col_binding.column_index, std::move(expr_filter));
 	}
 }
