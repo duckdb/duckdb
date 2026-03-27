@@ -3,6 +3,32 @@
 
 namespace duckdb {
 
+//! Fast equality check for non-object JSON values.
+//! Avoids serialization for null, bool, and string (the common cases).
+//! Falls back to serialization only for numbers and arrays.
+static bool LeafValuesEqual(yyjson_mut_val *old_val, yyjson_mut_val *new_val, yyjson_alc *alc) {
+	// Different type or subtype: always different
+	if (yyjson_mut_get_tag(old_val) != yyjson_mut_get_tag(new_val)) {
+		return false;
+	}
+	// Null or bool: tag match is sufficient (subtype encodes true/false)
+	if (unsafe_yyjson_is_null(old_val) || yyjson_mut_is_bool(old_val)) {
+		return true;
+	}
+	// String: compare length then content directly (no serialization)
+	if (yyjson_mut_is_str(old_val)) {
+		auto old_len = unsafe_yyjson_get_len(old_val);
+		if (old_len != unsafe_yyjson_get_len(new_val)) {
+			return false;
+		}
+		return memcmp(unsafe_yyjson_get_str(old_val), unsafe_yyjson_get_str(new_val), old_len) == 0;
+	}
+	// Numbers, arrays: serialize and compare
+	auto old_str = JSONCommon::WriteVal<yyjson_mut_val>(old_val, alc);
+	auto new_str = JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
+	return old_str == new_str;
+}
+
 //! Compute the minimal RFC 7396 merge patch that transforms old_val into new_val.
 //! Returns nullptr when old_val and new_val are equal (no diff).
 static yyjson_mut_val *MergeDiff(yyjson_mut_doc *doc, yyjson_mut_val *old_val, yyjson_mut_val *new_val,
@@ -49,10 +75,8 @@ static yyjson_mut_val *MergeDiff(yyjson_mut_doc *doc, yyjson_mut_val *old_val, y
 		return has_diff ? builder : nullptr;
 	}
 
-	// Not both objects: compare serialized values
-	auto old_str = JSONCommon::WriteVal<yyjson_mut_val>(old_val, alc);
-	auto new_str = JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
-	if (old_str == new_str) {
+	// Not both objects: use fast leaf comparison
+	if (LeafValuesEqual(old_val, new_val, alc)) {
 		return nullptr;
 	}
 	return yyjson_mut_val_mut_copy(doc, new_val);

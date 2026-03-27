@@ -113,6 +113,32 @@ SELECT json_merge_diff('42', '{"a":1}')
 ----
 {"a":1}
 
+# Identical non-objects: return new value (for round-trip correctness)
+query T
+SELECT json_merge_diff('"hello"', '"hello"')
+----
+"hello"
+
+query T
+SELECT json_merge_diff('42', '42')
+----
+42
+
+query T
+SELECT json_merge_diff('true', 'true')
+----
+true
+
+query T
+SELECT json_merge_diff('null', 'null')
+----
+null
+
+query T
+SELECT json_merge_diff('[1,2,3]', '[1,2,3]')
+----
+[1,2,3]
+
 # Type change: object to array
 query T
 SELECT json_merge_diff('{"a":1}', '[1,2]')
