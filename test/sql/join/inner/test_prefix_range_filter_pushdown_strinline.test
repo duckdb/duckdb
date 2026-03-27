@@ -5,6 +5,9 @@
 require strinline
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE OR REPLACE TABLE probe_varchar AS
 SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 11)::INTEGER AS g
 FROM range(0, 100000) t(i);
@@ -64,3 +67,61 @@ JOIN prf_build_string b
  AND p.g >= b.g;
 ----
 analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+statement ok
+ATTACH '__TEST_DIR__/prf_string_nul_stats.db' AS prf_string_nul_stats (ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE OR REPLACE TABLE prf_string_nul_stats.prf_probe_string_nul_stats (
+	id INTEGER NOT NULL,
+	k VARCHAR NOT NULL,
+	g INTEGER NOT NULL
+);
+
+statement ok
+INSERT INTO prf_string_nul_stats.prf_probe_string_nul_stats
+SELECT i AS id,
+	   CASE
+		   WHEN i < 2048 THEN 'aa' || lpad(i::VARCHAR, 8, '0')
+		   ELSE 'ab' || chr(0) || 'd'
+	   END AS k,
+	   CASE
+		   WHEN i < 2048 THEN 0
+		   ELSE 2
+	   END AS g
+FROM range(4096) t(i);
+
+statement ok
+CHECKPOINT prf_string_nul_stats;
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_nul_stats (
+	k VARCHAR,
+	g INTEGER,
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO prf_build_string_nul_stats VALUES
+	('ab' || chr(0) || 'd', 1, 300),
+	('ab' || chr(0) || 'x', 1, 301);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_string_nul_stats.prf_probe_string_nul_stats p
+JOIN prf_build_string_nul_stats b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query I
+SELECT count(*)
+FROM prf_string_nul_stats.prf_probe_string_nul_stats p
+JOIN prf_build_string_nul_stats b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+2048
+

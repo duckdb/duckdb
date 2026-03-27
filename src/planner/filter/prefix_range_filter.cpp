@@ -194,6 +194,22 @@ struct StringPrefixPolicy {
 	}
 };
 
+static uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
+	return string_t(StringStats::Min(stats)).GetPrefixIntegerComparable();
+}
+
+static uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
+	const auto max_string = StringStats::Max(stats);
+	if (max_string.size() >= string_t::PREFIX_BYTES) {
+		return string_t(max_string).GetPrefixIntegerComparable();
+	}
+
+	char padded_prefix[string_t::PREFIX_BYTES];
+	memset(padded_prefix, 0xFF, sizeof(padded_prefix));
+	memcpy(padded_prefix, max_string.data(), max_string.size());
+	return string_t(padded_prefix, string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
+}
+
 template <typename Policy>
 class TemplatedPrefixRangeFilter : public PrefixRangeFilter {
 private:
@@ -277,6 +293,10 @@ public:
 
 	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
 		return bitmap.LookupRange(Policy::ToComparable(lower_bound), Policy::ToComparable(upper_bound));
+	}
+
+	FilterPropagateResult LookupComparableRange(Comparable lower_bound, Comparable upper_bound) const {
+		return bitmap.LookupRange(lower_bound, upper_bound);
 	}
 
 	bool IsInitialized() const override {
@@ -476,21 +496,18 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 	Value min;
 	Value max;
 	if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-		// FIXME: This path should eventually use the raw StringStats min/max bytes directly.
-		// Materializing std::string bounds is conservative for embedded NUL bytes, so it may reduce pruning quality,
-		// but the HasMaxStringLength/CanHaveNoNull guard above ensures the stats are initialized and avoids the unknown
-		// sentinel values that are unsafe to materialize as VARCHAR.
-		if (key_type.id() == LogicalTypeId::BLOB) {
-			min = Value::BLOB_RAW(StringStats::Min(stats));
-			max = Value::BLOB_RAW(StringStats::Max(stats));
-		} else {
-			min = Value(StringStats::Min(stats));
-			max = Value(StringStats::Max(stats));
+		const auto min_comparable = StringStatsMinComparable(stats);
+		const auto max_comparable = StringStatsMaxComparable(stats);
+		auto *string_filter = dynamic_cast<const TemplatedPrefixRangeFilter<StringPrefixPolicy> *>(filter.get());
+		D_ASSERT(string_filter);
+		if (min_comparable > max_comparable) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-	} else {
-		min = NumericStats::Min(stats);
-		max = NumericStats::Max(stats);
+		return string_filter->LookupComparableRange(min_comparable, max_comparable);
 	}
+
+	min = NumericStats::Min(stats);
+	max = NumericStats::Max(stats);
 	if (min > max) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
