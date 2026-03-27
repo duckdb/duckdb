@@ -9,6 +9,7 @@
 #endif
 #include "linenoise.h"
 #include "linenoise.hpp"
+#include "shortcuts.hpp"
 #include "history.hpp"
 #include "highlighting.hpp"
 #include "terminal.hpp"
@@ -1418,6 +1419,54 @@ bool Linenoise::Write(int fd, const char *data, idx_t size) {
  * when ctrl+d is typed.
  *
  * The function returns the length of the current buffer. */
+
+// Shortcut table — kept near the key handler switch so they stay in sync.
+// If you add or change a keybinding in Edit(), update this table too.
+vector<ShortcutEntry> GetShellShortcuts() {
+	const vector<ShortcutEntry> shortcuts = {
+	    // Control
+	    {"Enter / Ctrl+J", "Submit input", "Control"},
+	    {"Ctrl+C", "Cancel current input or interrupt in-flight query", "Control"},
+	    {"Ctrl+D", "Exit shell (when line is empty)", "Control"},
+	    {"Ctrl+G", "Submit input (in multiline mode)", "Control"},
+	    {"Ctrl+L", "Clear screen", "Control"},
+	    {"Ctrl+Z", "Suspend shell", "Control"},
+	    {"Tab", "Auto-complete", "Control"},
+	    {"Ctrl+Q, then click", "Move cursor to mouse click position", "Control"},
+	    // Editing
+	    {"Ctrl+D / Delete", "Delete character under cursor (or exit if line is empty)", "Editing"},
+	    {"Ctrl+H / Backspace", "Delete character before cursor", "Editing"},
+	    {"Ctrl+K", "Delete from cursor to end of line", "Editing"},
+	    {"Ctrl+U", "Delete entire line", "Editing"},
+	    {"Ctrl+W", "Delete previous word", "Editing"},
+	    {"Alt+D", "Delete next word", "Editing"},
+	    {"Alt+Backspace", "Delete previous word", "Editing"},
+	    {"Ctrl+T", "Swap character under cursor with previous", "Editing"},
+	    {"Alt+T", "Swap current word with previous", "Editing"},
+	    {"Alt+C", "Capitalize next word", "Editing"},
+	    {"Alt+L", "Lowercase next word", "Editing"},
+	    {"Alt+U", "Uppercase next word", "Editing"},
+	    {"Alt+R", "Delete entire line", "Editing"},
+	    {"Alt+\\", "Remove spaces around cursor", "Editing"},
+	    {"Ctrl+X", "Insert newline (multiline input)", "Editing"},
+	    // Navigation
+	    {"Ctrl+A / Home", "Go to beginning of line", "Navigation"},
+	    {"Ctrl+E / End", "Go to end of line", "Navigation"},
+	    {"Ctrl+B / Left", "Move cursor left", "Navigation"},
+	    {"Ctrl+F / Right", "Move cursor right", "Navigation"},
+	    {"Alt+B / Alt+Left", "Move cursor one word left", "Navigation"},
+	    {"Alt+F / Alt+Right", "Move cursor one word right", "Navigation"},
+	    // History
+	    {"Ctrl+P / Up", "Previous history entry", "History"},
+	    {"Ctrl+N / Down", "Next history entry", "History"},
+	    {"Ctrl+R", "Reverse search history", "History"},
+	    {"Ctrl+S", "Forward search history", "History"},
+	    {"Ctrl+Up", "Jump to first history entry", "History"},
+	    {"Ctrl+Down", "Jump to last history entry", "History"},
+	};
+	return shortcuts;
+}
+
 int Linenoise::Edit() {
 	/* The latest history entry is always our current buffer, that
 	 * initially is just an empty string. */
