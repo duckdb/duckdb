@@ -1,6 +1,7 @@
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
