@@ -1,0 +1,234 @@
+# name: test/sql/json/scalar/test_json_merge_diff.test
+# description: Test JSON merge diff (compute RFC 7396 merge patch from two documents)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Scalar value change
+query T
+SELECT json_merge_diff('{"a":1}', '{"a":2}')
+----
+{"a":2}
+
+# Added key
+query T
+SELECT json_merge_diff('{"a":1}', '{"a":1,"b":2}')
+----
+{"b":2}
+
+# Removed key (null = remove in RFC 7396)
+query T
+SELECT json_merge_diff('{"a":1,"b":2}', '{"a":1}')
+----
+{"b":null}
+
+# No changes
+query T
+SELECT json_merge_diff('{"a":1}', '{"a":1}')
+----
+{}
+
+# Multiple changes: added, removed, changed, unchanged
+query T
+SELECT json_merge_diff('{"a":1,"b":2,"c":3}', '{"a":1,"b":99,"d":4}')
+----
+{"c":null,"b":99,"d":4}
+
+# Nested object diff (recursive)
+query T
+SELECT json_merge_diff('{"user":{"name":"Alice","age":30}}', '{"user":{"name":"Alice","age":31}}')
+----
+{"user":{"age":31}}
+
+# Nested object: key removed inside nested
+query T
+SELECT json_merge_diff('{"a":{"x":1,"y":2}}', '{"a":{"x":1}}')
+----
+{"a":{"y":null}}
+
+# Nested object: key added inside nested
+query T
+SELECT json_merge_diff('{"a":{"x":1}}', '{"a":{"x":1,"y":2}}')
+----
+{"a":{"y":2}}
+
+# Deeply nested (3 levels)
+query T
+SELECT json_merge_diff('{"a":{"b":{"c":1,"d":2}}}', '{"a":{"b":{"c":1,"d":3}}}')
+----
+{"a":{"b":{"d":3}}}
+
+# Nested object entirely removed
+query T
+SELECT json_merge_diff('{"a":{"x":1},"b":2}', '{"b":2}')
+----
+{"a":null}
+
+# Nested object entirely added
+query T
+SELECT json_merge_diff('{"b":2}', '{"a":{"x":1},"b":2}')
+----
+{"a":{"x":1}}
+
+# Array replaces entirely (RFC 7396 semantics)
+query T
+SELECT json_merge_diff('{"tags":[1,2]}', '{"tags":[3]}')
+----
+{"tags":[3]}
+
+# Identical arrays produce no diff
+query T
+SELECT json_merge_diff('{"tags":[1,2]}', '{"tags":[1,2]}')
+----
+{}
+
+# Non-objects: return new value
+query T
+SELECT json_merge_diff('"hello"', '"world"')
+----
+"world"
+
+query T
+SELECT json_merge_diff('42', '99')
+----
+99
+
+query T
+SELECT json_merge_diff('true', 'false')
+----
+false
+
+# Type change: object to scalar
+query T
+SELECT json_merge_diff('{"a":1}', '42')
+----
+42
+
+# Type change: scalar to object
+query T
+SELECT json_merge_diff('42', '{"a":1}')
+----
+{"a":1}
+
+# Type change: object to array
+query T
+SELECT json_merge_diff('{"a":1}', '[1,2]')
+----
+[1,2]
+
+# NULL handling (SQL NULL)
+query T
+SELECT json_merge_diff(NULL, '{"a":1}')
+----
+{"a":1}
+
+query T
+SELECT json_merge_diff('{"a":1}', NULL)
+----
+NULL
+
+query T
+SELECT json_merge_diff(NULL, NULL)
+----
+NULL
+
+# Empty objects
+query T
+SELECT json_merge_diff('{}', '{}')
+----
+{}
+
+query T
+SELECT json_merge_diff('{}', '{"a":1}')
+----
+{"a":1}
+
+query T
+SELECT json_merge_diff('{"a":1}', '{}')
+----
+{"a":null}
+
+# Value changed from non-null to JSON null
+query T
+SELECT json_merge_diff('{"a":1}', '{"a":null}')
+----
+{"a":null}
+
+# Value changed from JSON null to non-null
+query T
+SELECT json_merge_diff('{"a":null}', '{"a":1}')
+----
+{"a":1}
+
+# Both JSON null (no change)
+query T
+SELECT json_merge_diff('{"a":null}', '{"a":null}')
+----
+{}
+
+# Boolean changes
+query T
+SELECT json_merge_diff('{"active":true}', '{"active":false}')
+----
+{"active":false}
+
+# String value changes
+query T
+SELECT json_merge_diff('{"name":"Alice"}', '{"name":"Bob"}')
+----
+{"name":"Bob"}
+
+# Round-trip property: json_merge_patch(old, json_merge_diff(old, new)) = new
+query T
+SELECT json_merge_patch('{"a":1,"b":2,"c":3}', json_merge_diff('{"a":1,"b":2,"c":3}', '{"a":1,"b":99,"d":4}')) = '{"a":1,"b":99,"d":4}'
+----
+true
+
+# Round-trip with nested objects
+query T
+SELECT json_merge_patch('{"user":{"name":"Alice","age":30}}', json_merge_diff('{"user":{"name":"Alice","age":30}}', '{"user":{"name":"Alice","age":31}}')) = '{"user":{"name":"Alice","age":31}}'
+----
+true
+
+# Round-trip with removals
+query T
+SELECT json_merge_patch('{"a":1,"b":2}', json_merge_diff('{"a":1,"b":2}', '{"a":1}')) = '{"a":1}'
+----
+true
+
+# Constant vector test
+query T
+SELECT json_merge_diff('{"a":1}', '{"a":2}') FROM range(3)
+----
+{"a":2}
+{"a":2}
+{"a":2}
+
+# Table-based test
+statement ok
+CREATE TABLE versions (id INTEGER, old_state JSON, new_state JSON);
+
+statement ok
+INSERT INTO versions VALUES
+    (1, '{"name":"Alice","age":30}', '{"name":"Alice","age":31}'),
+    (2, '{"a":1,"b":2}', '{"a":1}'),
+    (3, NULL, '{"new":true}');
+
+query IT
+SELECT id, json_merge_diff(old_state, new_state) FROM versions ORDER BY id
+----
+1	{"age":31}
+2	{"b":null}
+3	{"new":true}
+
+# Large real-world example
+query T
+SELECT json_merge_diff(
+    '{"name":"Alice","age":30,"city":"NYC","score":100}',
+    '{"name":"Alice","age":31,"city":"SF","verified":true}'
+)
+----
+{"age":31,"city":"SF","score":null,"verified":true}
