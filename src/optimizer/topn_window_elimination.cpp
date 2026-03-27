@@ -790,6 +790,9 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
 	auto extract_single_binding = [&](unique_ptr<Expression> *expr, ColumnBinding &binding) {
+		if ((*expr)->type != ExpressionType::BOUND_COLUMN_REF) {
+			return false;
+		}
 		VisitExpression(expr);
 		if (column_references.size() != 1) {
 			column_references.clear();
