@@ -126,6 +126,22 @@ struct BinaryExecutor {
 	}
 #endif
 
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
+	static void ExecuteConstant(Vector &left, Vector &right, Vector &result, FUNC fun) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
+		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
+		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
+
+		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right)) {
+			ConstantVector::SetNull(result, true);
+			return;
+		}
+		*result_data = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+		    fun, *ldata, *rdata, ConstantVector::Validity(result), 0);
+	}
+
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
@@ -220,8 +236,10 @@ struct BinaryExecutor {
 	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto left_vector_type = left.GetVectorType();
 		auto right_vector_type = right.GetVectorType();
+		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
+			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, fun);
 #ifndef DUCKDB_SMALLER_BINARY
-		if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
+		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(left, right, result,
 			                                                                                  count, fun);
 		} else if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
@@ -230,9 +248,8 @@ struct BinaryExecutor {
 		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(left, right, result,
 			                                                                                   count, fun);
-		} else
 #endif
-		{
+		} else {
 			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 		}
 	}

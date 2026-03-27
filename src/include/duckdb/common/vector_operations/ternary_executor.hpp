@@ -10,7 +10,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
 
@@ -72,17 +72,34 @@ private:
 public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
 	static void ExecuteGeneric(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+		if (a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
+				ConstantVector::SetNull(result, true);
+			} else {
+				auto adata = ConstantVector::GetData<A_TYPE>(a);
+				auto bdata = ConstantVector::GetData<B_TYPE>(b);
+				auto cdata = ConstantVector::GetData<C_TYPE>(c);
+				auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
+				auto &result_validity = ConstantVector::Validity(result);
+				result_data[0] = OPWRAPPER::template Operation<FUN, A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
+				    fun, adata[0], bdata[0], cdata[0], result_validity, 0);
+			}
+		} else {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 
-		UnifiedVectorFormat adata, bdata, cdata;
-		a.ToUnifiedFormat(count, adata);
-		b.ToUnifiedFormat(count, bdata);
-		c.ToUnifiedFormat(count, cdata);
+			UnifiedVectorFormat adata, bdata, cdata;
+			a.ToUnifiedFormat(count, adata);
+			b.ToUnifiedFormat(count, bdata);
+			c.ToUnifiedFormat(count, cdata);
 
-		ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
-		    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
-		    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetData<RESULT_TYPE>(result), count, *adata.sel,
-		    *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity, FlatVector::Validity(result), fun);
+			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetData<RESULT_TYPE>(result), count,
+			    *adata.sel, *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity,
+			    FlatVector::Validity(result), fun);
+		}
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
