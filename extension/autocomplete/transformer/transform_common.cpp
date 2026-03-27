@@ -92,18 +92,23 @@ int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &tran
                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto opt_array_size = list_pr.Child<OptionalParseResult>(1);
-	if (opt_array_size.HasResult()) {
-		auto number = transformer.Transform<unique_ptr<ParsedExpression>>(opt_array_size.optional_result);
-		if (number->GetExpressionClass() == ExpressionClass::CONSTANT) {
-			auto &const_number = number->Cast<ConstantExpression>();
-			if (!const_number.value.type().IsIntegral()) {
-				throw BinderException("Expected an integer as array bound instead of %s",
-				                      const_number.value.ToString());
-			}
-			return const_number.value.GetValue<int64_t>();
-		}
+	if (!opt_array_size.HasResult()) {
+		// Empty array so we return -1 to signify it's a list
+		return -1;
 	}
-	return -1;
+	auto number_expr = transformer.Transform<unique_ptr<ParsedExpression>>(opt_array_size.optional_result);
+	if (number_expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		throw ParserException("Expected a constant number as array size");
+	}
+	auto &const_number = number_expr->Cast<ConstantExpression>();
+	if (!const_number.value.type().IsIntegral()) {
+		throw BinderException("Expected an integer as array bound instead of %s", const_number.value.ToString());
+	}
+	auto number_val = const_number.value.GetValue<int64_t>();
+	if (number_val < 0) {
+		throw ParserException("Array size must be greater than 0");
+	}
+	return number_val;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer,
@@ -411,7 +416,22 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	if (StringUtil::CIEquals(choice_pr.name, "IntervalToInterval")) {
+		return transformer.Transform<DatePartSpecifier>(choice_pr.result);
+	} else {
+		return transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	}
+}
+
+DatePartSpecifier PEGTransformerFactory::TransformIntervalToInterval(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto inner_list = choice_pr.result->Cast<ListParseResult>();
+	auto first_interval = transformer.TransformEnum<DatePartSpecifier>(inner_list.GetChild(0));
+	auto second_interval = transformer.TransformEnum<DatePartSpecifier>(inner_list.GetChild(2));
+	throw ParserException("%s TO %s is not supported", EnumUtil::ToString(first_interval),
+	                      EnumUtil::ToString(second_interval));
 }
 
 bool PEGTransformerFactory::TryNegateValue(Value &val) {

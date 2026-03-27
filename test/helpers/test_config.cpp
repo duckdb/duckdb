@@ -24,6 +24,8 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"max_test_threads", "Max threads to be used by the test runner itself (for e.g. concurrent loop)",
+     LogicalType::BIGINT, nullptr},
     {"base_config", "Config file to load and base initial settings on", LogicalType::VARCHAR,
      TestConfiguration::LoadBaseConfig},
     {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
@@ -246,8 +248,11 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	if (test_name.find('/') == 0) {
 		// Full path specified, strip down to base path so the extension config lookup still works
-		const string stripped_test_name = test_name.c_str() + test_name.find("test/sql");
-		return tests_to_be_skipped.count(stripped_test_name);
+		auto pos = test_name.find("test/sql");
+		if (pos != string::npos) {
+			const string stripped_test_name = test_name.c_str() + pos;
+			return tests_to_be_skipped.count(stripped_test_name);
+		}
 	}
 	return tests_to_be_skipped.count(test_name);
 }
@@ -307,7 +312,15 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
+		// The first of those it's throw as a test of what would happen if a task were to be throwing
+		// It's OK that PositionalTableScanner react re-throwing a different exception, so they need to be removed in
+		// this specific test setup
 		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
+		res.push_back("Unexpected interrupt from table Source in PositionalTableScanner refill");
+#endif
+#endif
 	}
 	return res;
 }
@@ -440,6 +453,10 @@ string TestConfiguration::GetInitialDBPath() {
 
 optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
+}
+
+optional_idx TestConfiguration::GetMaxTestThreads() {
+	return GetOptionOrDefault<optional_idx, idx_t>("max_test_threads", optional_idx());
 }
 
 optional_idx TestConfiguration::GetBlockAllocSize() {

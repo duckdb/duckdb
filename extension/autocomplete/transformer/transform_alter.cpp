@@ -48,8 +48,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
-
-	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
+	auto alter_option_list = ExtractParseResultsFromList(list_pr.GetChild(3));
+	if (alter_option_list.size() > 1) {
+		throw ParserException("Only one ALTER command per statement is supported");
+	}
+	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(alter_option_list[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->catalog = table->catalog_name;
 	result->schema = table->schema_name;
@@ -83,6 +86,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 	result->name = base_table->table_name;
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Altering schemas is not yet supported");
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
@@ -126,15 +134,25 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTr
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto option_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	for (auto option : option_list) {
-		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(option);
+	auto &repeat_pr = list_pr.Child<RepeatParseResult>(0);
+	bool has_owned = false;
+	unique_ptr<AlterInfo> owned_info;
+	for (auto &seq_option_pr : repeat_pr.children) {
+		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option_pr);
 		if (seq_option.first == "owned") {
+			if (has_owned) {
+				throw ParserException("Owned by value should be passed at most once");
+			}
+			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
 			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
-			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
-			                                      owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
+			owned_info =
+			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
+			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
 		}
+	}
+	if (owned_info) {
+		return owned_info;
 	}
 	throw NotImplementedException("ALTER SEQUENCE option not yet supported");
 }
@@ -426,4 +444,39 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTran
 	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
 	return std::move(result);
 }
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetOptions(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// SetOptions <- 'SET' RelOptionList
+	// child 0: 'SET' keyword, child 1: RelOptionList
+	auto options =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	return make_uniq<SetTableOptionsInfo>(AlterEntryData(), std::move(options));
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// ResetOptions <- 'RESET' RelOptionList
+	// child 0: 'RESET' keyword, child 1: RelOptionList
+	auto options_map =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	case_insensitive_set_t option_names;
+	for (auto &opt : options_map) {
+		if (!opt.second) {
+			option_names.insert(opt.first);
+		}
+		if (opt.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
+		}
+		auto &const_expr = opt.second->Cast<ConstantExpression>();
+		if (!const_expr.value.IsNull()) {
+			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
+		}
+		option_names.insert(opt.first);
+	}
+	return make_uniq<ResetTableOptionsInfo>(AlterEntryData(), std::move(option_names));
+}
+
 } // namespace duckdb

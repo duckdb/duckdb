@@ -733,6 +733,9 @@ idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<i
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
 
+	lsel.resize(STANDARD_VECTOR_SIZE);
+	rsel.resize(STANDARD_VECTOR_SIZE);
+
 	// 11. for(i←1 to n) do
 	while (i < n) {
 		// 13. for (j ← pos+eqOff to n) do
@@ -775,6 +778,9 @@ idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<i
 			break;
 		}
 	}
+
+	lsel.resize(result_count);
+	rsel.resize(result_count);
 
 	return result_count;
 }

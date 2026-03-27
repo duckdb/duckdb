@@ -39,11 +39,11 @@ public:
 	virtual CheckpointOptions GetCheckpointOptions() const = 0;
 	virtual void FlushPartialBlocks() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
-	bool CanOverrideBaseStats() const {
-		return override_base_stats;
+	optional_idx GetRowGroupCount() {
+		return row_group_count;
 	}
-	void SetCannotOverrideStats() {
-		override_base_stats = false;
+	void SetRowGroupCount(optional_idx row_group_count_p) {
+		row_group_count = row_group_count_p;
 	}
 
 	DatabaseInstance &GetDatabase();
@@ -54,7 +54,8 @@ protected:
 	optional_ptr<ClientContext> context;
 	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
-	bool override_base_stats = true;
+
+	optional_idx row_group_count;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {

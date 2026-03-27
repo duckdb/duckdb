@@ -30,8 +30,29 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool UncompressedFun::TypeIsSupported(const PhysicalType) {
-	return true;
+bool UncompressedFun::TypeIsSupported(const PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::LIST:
+	case PhysicalType::INTERVAL:
+	case PhysicalType::BIT:
+	case PhysicalType::VARCHAR:
+		return true;
+	default:
+		return false;
+	}
 }
 
 } // namespace duckdb

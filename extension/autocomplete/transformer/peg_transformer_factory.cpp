@@ -54,7 +54,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		auto error_message = "Syntax error at or near \"" + error_token.text + "\"";
+		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
 	match_result->name = "Statement";
@@ -84,6 +84,7 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterOptions);
 	REGISTER_TRANSFORM(TransformAlterTableStmt);
 	REGISTER_TRANSFORM(TransformAlterViewStmt);
+	REGISTER_TRANSFORM(TransformAlterSchemaStmt);
 	REGISTER_TRANSFORM(TransformAlterDatabaseStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceOptions);
@@ -110,6 +111,8 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformSequenceName);
 	REGISTER_TRANSFORM(TransformSetSortedBy);
 	REGISTER_TRANSFORM(TransformResetSortedBy);
+	REGISTER_TRANSFORM(TransformSetOptions);
+	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
 void PEGTransformerFactory::RegisterAttach() {
@@ -178,6 +181,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalType);
 	REGISTER_TRANSFORM(TransformIntervalInterval);
 	REGISTER_TRANSFORM(TransformInterval);
+	REGISTER_TRANSFORM(TransformIntervalToInterval);
 	REGISTER_TRANSFORM(TransformSetofType);
 	Register("NumericModType", &TransformDecimalType);
 	Register("DecType", &TransformDecimalType);
@@ -217,6 +221,8 @@ void PEGTransformerFactory::RegisterCreateIndex() {
 	REGISTER_TRANSFORM(TransformRelOptionOrOids);
 	REGISTER_TRANSFORM(TransformRelOptionList);
 	REGISTER_TRANSFORM(TransformOids);
+	REGISTER_TRANSFORM(TransformRelOptionName);
+	REGISTER_TRANSFORM(TransformRelOptionArgumentOpt);
 	REGISTER_TRANSFORM(TransformRelOption);
 	REGISTER_TRANSFORM(TransformIndexName);
 }
@@ -265,6 +271,11 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformIdentifierList);
 	REGISTER_TRANSFORM(TransformCreateColumnList);
 	REGISTER_TRANSFORM(TransformCreateTableColumnList);
+	REGISTER_TRANSFORM(TransformPartitionSortedOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptSortedOptions);
+	REGISTER_TRANSFORM(TransformSortedOptPartitionOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptions);
+	REGISTER_TRANSFORM(TransformSortedOptions);
 	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
@@ -570,6 +581,7 @@ void PEGTransformerFactory::RegisterInsert() {
 	REGISTER_TRANSFORM(TransformOnConflictClause);
 	REGISTER_TRANSFORM(TransformOnConflictTarget);
 	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
+	REGISTER_TRANSFORM(TransformOnConflictIndexTarget);
 	REGISTER_TRANSFORM(TransformOnConflictAction);
 	REGISTER_TRANSFORM(TransformOnConflictUpdate);
 	REGISTER_TRANSFORM(TransformOnConflictNothing);
@@ -584,6 +596,7 @@ void PEGTransformerFactory::RegisterLoad() {
 	// load.gram
 	REGISTER_TRANSFORM(TransformLoadStatement);
 	REGISTER_TRANSFORM(TransformInstallStatement);
+	REGISTER_TRANSFORM(TransformUpdateExtensionsStatement);
 	REGISTER_TRANSFORM(TransformFromSource);
 	REGISTER_TRANSFORM(TransformVersionNumber);
 }
@@ -762,6 +775,7 @@ void PEGTransformerFactory::RegisterSelect() {
 
 	REGISTER_TRANSFORM(TransformWithClause);
 	REGISTER_TRANSFORM(TransformWithStatement);
+	REGISTER_TRANSFORM(TransformCTEBody);
 	REGISTER_TRANSFORM(TransformMaterialized);
 	REGISTER_TRANSFORM(TransformHavingClause);
 	REGISTER_TRANSFORM(TransformOffsetValue);
@@ -787,6 +801,7 @@ void PEGTransformerFactory::RegisterUse() {
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
 	REGISTER_TRANSFORM(TransformUseTarget);
+	REGISTER_TRANSFORM(TransformUseTargetCatalogSchema);
 }
 
 void PEGTransformerFactory::RegisterSet() {
@@ -822,6 +837,7 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetTuple);
 	REGISTER_TRANSFORM(TransformUpdateSetElementList);
 	REGISTER_TRANSFORM(TransformUpdateSetElement);
+	REGISTER_TRANSFORM(TransformUpdateSetColumnTarget);
 }
 
 void PEGTransformerFactory::RegisterVacuum() {
@@ -1086,7 +1102,7 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 		result.schema = input[1];
 		result.name = input[2];
 	} else {
-		throw ParserException("Too many dots found.");
+		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
 	return result;
 }

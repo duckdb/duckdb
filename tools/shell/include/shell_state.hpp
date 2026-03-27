@@ -150,6 +150,8 @@ struct ShellTableInfo {
 	vector<ShellColumnInfo> columns;
 };
 
+enum class BailOnError { AUTOMATIC, BAIL_ON_ERROR, DONT_BAIL_ON_ERROR };
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -201,9 +203,10 @@ public:
 	idx_t total_changes = 0;
 	bool readStdin = true;
 	string initFile;
+	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	//! If the following flag is set, then command execution stops at an error
-	bool bail_on_error = false;
+	BailOnError bail = BailOnError::AUTOMATIC;
 	//! Table name when rendering a DESCRIBE statement
 	string describe_table_name;
 
@@ -277,13 +280,12 @@ public:
 	//! Shell highlighting mode
 	HighlightMode highlight_mode = HighlightMode::AUTOMATIC;
 
-#if defined(_WIN32) || defined(WIN32)
-	//! When enabled, sets the console page to UTF8 and renders using that code page
-	bool win_utf8_mode = false;
-#endif
-
 public:
+	ShellState();
+	~ShellState();
+
 	static ShellState &Get();
+	static ShellState *&GetReference();
 
 	void Initialize();
 	void Destroy();
@@ -304,6 +306,7 @@ public:
 	void ShowConfiguration();
 	void ClearInterrupt();
 
+	static void Exit(int exit_code);
 	static idx_t RenderLength(const char *str, idx_t str_len);
 	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
@@ -312,6 +315,7 @@ public:
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
+	static void StaticPrint(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str);
 	void Print(PrintOutput output, duckdb::string_t str);
@@ -380,8 +384,9 @@ public:
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
 	bool ProcessDuckDBRC(const char *file);
-	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
+	bool ProcessFile(const string &file, InputMode input_mode = InputMode::FILE, bool default_duckdb_rc = false);
 	int ProcessInput(InputMode mode);
+	bool GetBailOnError(InputMode mode);
 	static bool SQLIsComplete(const char *zSql);
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);
@@ -395,6 +400,8 @@ public:
 	void DetectDarkLightMode();
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
+	static std::wstring Win32Utf8ToUnicode(const char *) = delete;
+	static std::wstring Win32Utf8ToUnicode(char *) = delete;
 	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
 	static string Win32MbcsToUtf8(const string &zText, bool useAnsi);
 	static string Win32Utf8ToMbcs(const string &zText, bool useAnsi);
@@ -427,24 +434,16 @@ public:
 	FILE *OpenOutputFile(const char *zFile, int bTextMode);
 	static void SetPrompt(char prompt[], const string &new_value);
 	static string ModeToString(RenderMode mode);
-
-private:
-	ShellState();
-	~ShellState();
 };
 
 struct PagerState {
-	explicit PagerState(ShellState &state) : state(state) {
+	explicit PagerState(ShellState &state, uint32_t win_console_cp_before_pager_p = 0)
+	    : state(state), win_console_cp_before_pager(win_console_cp_before_pager_p) {
 	}
-	~PagerState() {
-		if (state) {
-			state->ResetOutput();
-			ShellState::FinishPagerDisplay();
-			state = nullptr;
-		}
-	}
+	~PagerState();
 
 	optional_ptr<ShellState> state;
+	uint32_t win_console_cp_before_pager = 0;
 };
 
 } // namespace duckdb_shell

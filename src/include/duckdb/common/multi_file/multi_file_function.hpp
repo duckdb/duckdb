@@ -53,7 +53,13 @@ struct MultiFileReaderInterface {
 	                                                const MultiFileOptions &file_options);
 	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                           LocalTableFunctionState &local_state);
-	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
+	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
+		return nullptr;
+	}
+	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context, const MultiFileBindData &bind_data,
+	                                                  idx_t file_count) {
+		return GetCardinality(bind_data, file_count);
+	}
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
 	virtual FileGlobInput GetGlobInput();
@@ -355,7 +361,6 @@ public:
 
 	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
 	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.reader = reader_data.reader;
 		lstate.reader_data = reader_data;
 		auto &reader = *lstate.reader;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
@@ -413,13 +418,16 @@ public:
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
 				                                                  *scan_data.local_state)) {
-					if (!current_reader_data.reader) {
+					scan_data.reader = current_reader_data.reader;
+					if (!scan_data.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
 					scan_data.batch_index = gstate.batch_index++;
 					auto old_file_index = scan_data.file_index;
 					scan_data.file_index = gstate.file_index;
+					parallel_lock.unlock();
+					scan_data.reader->PrepareScan(context, *gstate.global_state, *scan_data.local_state);
 					if (old_file_index != scan_data.file_index) {
 						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
@@ -769,6 +777,22 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
+		if (data.file_options.union_by_name) {
+			// for UNION BY NAME - check if we can get a cardinality estimate from the (already opened) union readers
+			bool has_exact_cardinality = true;
+			idx_t cardinality = 0;
+			for (auto &union_data : data.union_readers) {
+				auto file_cardinality = union_data->TryGetCardinalityEstimate();
+				if (!file_cardinality.IsValid()) {
+					has_exact_cardinality = false;
+					break;
+				}
+				cardinality += file_cardinality.GetIndex();
+			}
+			if (has_exact_cardinality) {
+				return make_uniq<NodeStatistics>(cardinality);
+			}
+		}
 		// get the file count - for >500 files we allow an estimate
 		auto count_info = data.file_list->GetFileCount(500);
 		idx_t estimated_file_count = count_info.count;
@@ -776,7 +800,7 @@ public:
 			// not all files have been expanded - it's probably twice as many files
 			estimated_file_count *= 2;
 		}
-		return data.interface->GetCardinality(data, estimated_file_count);
+		return data.interface->GetCardinality(context, data, estimated_file_count);
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,

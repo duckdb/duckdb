@@ -32,7 +32,7 @@ public:
 	vector<string> names;
 
 public:
-	static PhysicalOperator &GetResultCollector(ClientContext &context, PreparedStatementData &data);
+	static unique_ptr<PhysicalOperator> GetResultCollector(ClientContext &context, PreparedStatementData &data);
 
 public:
 	//! The final method used to fetch the query result from this operator
