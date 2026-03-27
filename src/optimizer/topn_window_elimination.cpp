@@ -795,7 +795,7 @@ bool TopNWindowElimination::ExtractSingleBinding(unique_ptr<Expression> *expr, C
 	binding = column_references.begin()->first;
 	column_references.clear();
 	return true;
-};
+}
 
 bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
                                                       vector<idx_t> &lhs_projections,
