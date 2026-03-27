@@ -68,7 +68,7 @@ enum class TimeStampIsAdjustedToUTC : uint8_t {
 
 class ParquetWriteTransformData {
 public:
-	ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
+	ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
 	                          vector<unique_ptr<Expression>> expressions);
 
 public:
