@@ -114,35 +114,17 @@ bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &resu
 }
 
 //! Raw selection vector passed in (not merged with any other selection vectors)
-UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count, const SelectionVector &sel_p) {
-	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::UNION);
+UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, const SelectionVector &sel) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
 
-	// Will contain the (possibly) merged selection vector
-	const_reference<SelectionVector> sel(sel_p);
-	SelectionVector owned_sel;
-	reference<Vector> vector(vector_p);
-	if (vector.get().GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// In the case of a dictionary vector, unwrap the Vector, and merge the selection vectors.
-		auto &child = DictionaryVector::Child(vector.get());
-		D_ASSERT(child.GetVectorType() != VectorType::DICTIONARY_VECTOR);
-		auto &dict_sel = DictionaryVector::SelVector(vector.get());
-		// merge the selection vectors and verify the child
-		auto new_buffer = dict_sel.Slice(sel.get(), count);
-		owned_sel.Initialize(new_buffer);
-		sel = owned_sel;
-		vector = child;
-	} else if (vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		sel = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-
-	auto member_count = UnionType::GetMemberCount(vector_p.GetType());
+	auto member_count = UnionType::GetMemberCount(vector.GetType());
 	if (member_count == 0) {
 		return UnionInvalidReason::NO_MEMBERS;
 	}
 
-	auto vector_validity = vector_p.Validity(count);
+	auto vector_validity = vector.Validity(count);
 
-	auto &entries = StructVector::GetEntries(vector_p);
+	auto &entries = StructVector::GetEntries(vector);
 	duckdb::vector<VectorValidityIterator> child_validity;
 	for (idx_t entry_idx = 1; entry_idx < entries.size(); entry_idx++) {
 		auto &child = entries[entry_idx];
@@ -151,7 +133,7 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 	auto tag_data = entries[0].Values<union_tag_t>(count);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto mapped_idx = sel.get().get_index(row_idx);
+		auto mapped_idx = sel.get_index(row_idx);
 
 		if (!vector_validity.IsValid(mapped_idx)) {
 			continue;
