@@ -18,9 +18,7 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
-	if (sql_body) {
-		result->sql_body = sql_body->Copy();
-	}
+	result->trigger_action = trigger_action->Copy();
 	return std::move(result);
 }
 
@@ -54,9 +52,7 @@ string CreateTriggerInfo::ToString() const {
 	ss << " ON ";
 	ss << base_table->ToString();
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
-	if (sql_body) {
-		ss << " " << sql_body->ToString();
-	}
+	ss << " " << trigger_action->ToString();
 	ss << ";";
 	return ss.str();
 }

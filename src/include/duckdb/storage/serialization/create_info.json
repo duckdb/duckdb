@@ -369,7 +369,7 @@
       },
       {
         "id": 208,
-        "name": "sql_body",
+        "name": "trigger_action",
         "type": "QueryNode*"
       }
     ]

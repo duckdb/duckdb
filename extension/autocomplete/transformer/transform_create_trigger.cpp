@@ -38,7 +38,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	if (for_each_opt.HasResult()) {
 		for_each = transformer.Transform<TriggerForEach>(for_each_opt.optional_result);
 	}
-	auto sql_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
+	auto trigger_action = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
@@ -51,7 +51,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	info->columns = std::move(trigger_event.columns);
 	info->base_table = std::move(base_table);
 	info->for_each = for_each;
-	info->sql_body = ExtractQueryNode(std::move(sql_body));
+	info->trigger_action = ExtractQueryNode(std::move(trigger_action));
 	result->info = std::move(info);
 	return result;
 }

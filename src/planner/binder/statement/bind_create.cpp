@@ -495,10 +495,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 
 	// Bind a copy of the trigger body to validate it (keep original unbound for serialization)
-	if (create_trigger_info.sql_body) {
-		auto body_copy = create_trigger_info.sql_body->Copy();
-		Bind(*body_copy);
-	}
+	auto body_copy = create_trigger_info.trigger_action->Copy();
+	Bind(*body_copy);
 
 	// Add table dependency
 	create_trigger_info.dependencies.AddDependency(table);
