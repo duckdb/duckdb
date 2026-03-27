@@ -358,7 +358,7 @@ struct ArrowBool8 {
 		}
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		auto entries = source.ScanAllValues<bool>(count);
+		auto entries = source.Values<bool>(count);
 		auto &result_validity = FlatVector::Validity(result);
 		auto result_ptr = FlatVector::GetData<int8_t>(result);
 		for (idx_t i = 0; i < count; i++) {

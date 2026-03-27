@@ -273,7 +273,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		}
 
 		// We assume that a union tag vector validity matches the union vector validity.
-		auto source_tag_entries = source_tag_vector.ScanAllValues<union_tag_t>(count);
+		auto source_tag_entries = source_tag_vector.Values<union_tag_t>(count);
 
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			auto entry = source_tag_entries[row_idx];
@@ -306,7 +306,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	// now construct the actual varchar vector
 	// varchar_union.Flatten(count);
 	auto &tag_vector = UnionVector::GetTags(varchar_union);
-	auto tag_entries = tag_vector.ScanAllValues<union_tag_t>(count);
+	auto tag_entries = tag_vector.Values<union_tag_t>(count);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 
@@ -319,7 +319,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 		auto tag = tag_entry.value;
 		auto &member = UnionVector::GetMember(varchar_union, tag);
-		auto member_entries = member.ScanAllValues<string_t>(count);
+		auto member_entries = member.Values<string_t>(count);
 		auto member_entry = member_entries[i];
 		if (member_entry.IsValid()) {
 			result_data[i] = StringVector::AddString(result, member_entry.value);

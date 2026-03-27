@@ -112,7 +112,7 @@ void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
 		}
 
 		// Column was valid, make sure it still is.
-		auto validity_entries = chunk.data[col_idx].ScanValidity(chunk.size());
+		auto validity_entries = chunk.data[col_idx].Validity(chunk.size());
 		if (validity_entries.CanHaveNull()) {
 			collection.all_valids[col_idx] = false;
 		}

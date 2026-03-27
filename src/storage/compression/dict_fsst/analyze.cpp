@@ -7,7 +7,7 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info) : Analyz
 }
 
 bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
-	for (auto entry : input.ScanAllValues<string_t>(count)) {
+	for (auto entry : input.Values<string_t>(count)) {
 		if (!entry.is_valid) {
 			contains_nulls = true;
 			continue;

@@ -107,7 +107,7 @@ struct ListFilterFunctor {
 		SelectionVector sel(elem_cnt);
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (auto entry : lambda_vector.ScanAllValues<bool>(elem_cnt)) {
+		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;

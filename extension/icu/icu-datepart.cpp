@@ -413,7 +413,7 @@ struct ICUDatePart : public ICUDateFunc {
 				}
 			}
 		} else {
-			auto entries = input.template ScanAllValues<INPUT_TYPE>(count);
+			auto entries = input.template Values<INPUT_TYPE>(count);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto &child_entries = StructVector::GetEntries(result);

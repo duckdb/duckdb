@@ -181,8 +181,8 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	    cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
 	    vector_cast_data.all_converted;
 	if (!all_converted && parameters.nullify_parent) {
-		auto result_child_validity = result_child.ScanValidity(total_list_size);
-		auto varchar_vector_validity = varchar_vector.ScanValidity(total_list_size);
+		auto result_child_validity = result_child.Validity(total_list_size);
+		auto varchar_vector_validity = varchar_vector.Validity(total_list_size);
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {

@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-class VectorValidityHelper {
+class VectorValidityIterator {
 public:
-	VectorValidityHelper(const Vector &vector, idx_t count) : count(count) {
+	VectorValidityIterator(const Vector &vector, idx_t count) : count(count) {
 		vector.ToUnifiedFormat(count, format);
 	}
 
@@ -34,9 +34,9 @@ private:
 };
 
 template <class T>
-class VectorIterationHelper {
+class VectorValueIterator {
 public:
-	VectorIterationHelper(const Vector &vector, idx_t count) : count(count) {
+	VectorValueIterator(const Vector &vector, idx_t count) : count(count) {
 		vector.ToUnifiedFormat(count, format);
 		data = UnifiedVectorFormat::GetData<T>(format);
 	}
@@ -168,9 +168,9 @@ private:
 };
 
 template <class T>
-class VectorScanEntriesHelper {
+class VectorValidValueIterator {
 public:
-	VectorScanEntriesHelper(const Vector &vector, idx_t count) : count(count) {
+	VectorValidValueIterator(const Vector &vector, idx_t count) : count(count) {
 		vector.ToUnifiedFormat(count, format);
 		data = UnifiedVectorFormat::GetData<T>(format);
 	}
@@ -253,17 +253,17 @@ private:
 };
 
 template <class T>
-inline VectorIterationHelper<T> Vector::ScanAllValues(idx_t count) const {
-	return VectorIterationHelper<T>(*this, count);
+inline VectorValueIterator<T> Vector::Values(idx_t count) const {
+	return VectorValueIterator<T>(*this, count);
 }
 
 template <class T>
-inline VectorScanEntriesHelper<T> Vector::ScanValues(idx_t count) const {
-	return VectorScanEntriesHelper<T>(*this, count);
+inline VectorValidValueIterator<T> Vector::ValidValues(idx_t count) const {
+	return VectorValidValueIterator<T>(*this, count);
 }
 
-inline VectorValidityHelper Vector::ScanValidity(idx_t count) const {
-	return VectorValidityHelper(*this, count);
+inline VectorValidityIterator Vector::Validity(idx_t count) const {
+	return VectorValidityIterator(*this, count);
 }
 
 } // namespace duckdb

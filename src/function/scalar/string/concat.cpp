@@ -55,7 +55,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			// non-constant vector: set the result type to a flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			// now get the lengths of each of the input elements
-			for (auto entry : input.ScanAllValues<string_t>(args.size())) {
+			for (auto entry : input.Values<string_t>(args.size())) {
 				if (!entry.IsValid()) {
 					continue;
 				}
@@ -94,7 +94,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				result_lengths[i] += input_len;
 			}
 		} else {
-			for (auto entry : input.ScanAllValues<string_t>(args.size())) {
+			for (auto entry : input.Values<string_t>(args.size())) {
 				if (!entry.IsValid()) {
 					continue;
 				}

@@ -54,7 +54,7 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
 
-	auto input_validity = input.ScanValidity(count);
+	auto input_validity = input.Validity(count);
 
 	if (count > STANDARD_VECTOR_SIZE) {
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
@@ -62,8 +62,8 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hash_vec, count);
 
-	auto states = state_vector.ScanAllValues<ApproxDistinctCountState *>(count);
-	auto hashes = hash_vec.ScanAllValues<hash_t>(count);
+	auto states = state_vector.Values<ApproxDistinctCountState *>(count);
+	auto hashes = hash_vec.Values<hash_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!input_validity.IsValid(i)) {
 			continue;

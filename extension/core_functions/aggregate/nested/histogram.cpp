@@ -72,7 +72,7 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = state_vector.ScanAllValues<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(count);
+	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(count);
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -92,7 +92,7 @@ template <class OP, class T, class MAP_TYPE>
 void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
-	auto states = state_vector.ScanAllValues<HIST_STATE *>(count);
+	auto states = state_vector.Values<HIST_STATE *>(count);
 
 	auto &mask = FlatVector::Validity(result);
 	auto old_len = ListVector::GetListSize(result);

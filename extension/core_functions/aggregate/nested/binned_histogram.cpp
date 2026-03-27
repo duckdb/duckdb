@@ -45,7 +45,7 @@ struct HistogramBinState {
 	void InitializeBins(Vector &bin_vector, idx_t count, idx_t pos, AggregateInputData &aggr_input) {
 		bin_boundaries = new unsafe_vector<T>();
 		counts = new unsafe_vector<idx_t>();
-		auto bin_counts = bin_vector.ScanAllValues<list_entry_t>(count);
+		auto bin_counts = bin_vector.Values<list_entry_t>(count);
 		auto bin_entry = bin_counts[pos];
 		if (!bin_entry.is_valid) {
 			throw BinderException("Histogram bin list cannot be NULL");
@@ -159,7 +159,7 @@ void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input,
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = state_vector.ScanAllValues<HistogramBinState<T> *>(count);
+	auto states = state_vector.Values<HistogramBinState<T> *>(count);
 	auto data = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -269,7 +269,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 template <class OP, class T>
 void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
                                   idx_t offset) {
-	auto states = state_vector.ScanAllValues<HistogramBinState<T> *>(count);
+	auto states = state_vector.Values<HistogramBinState<T> *>(count);
 
 	auto &mask = FlatVector::Validity(result);
 	auto old_len = ListVector::GetListSize(result);

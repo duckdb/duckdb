@@ -236,7 +236,7 @@ static inline Value GetHiveKeyNullValue(const LogicalType &type) {
 template <class T>
 static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
                                             const idx_t count) {
-	auto entries = input.ScanAllValues<T>(count);
+	auto entries = input.Values<T>(count);
 	const auto &type = input.GetType();
 
 	for (idx_t i = 0; i < count; i++) {

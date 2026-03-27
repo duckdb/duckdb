@@ -381,7 +381,7 @@ static SelectionVector DuckSVFromDeltaSV(const ffi::KernelBoolSlice &dv, Vector 
                                          idx_t &select_count) {
 	D_ASSERT(row_id_column.GetType() == LogicalType::BIGINT);
 
-	auto entries = row_id_column.ScanAllValues<int64_t>(count);
+	auto entries = row_id_column.Values<int64_t>(count);
 
 	SelectionVector result {count};
 	idx_t current_select = 0;

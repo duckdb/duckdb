@@ -125,7 +125,7 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 		result = 0;
 		return true;
 	}
-	auto entries = args.data[2].ScanAllValues<int32_t>(args.size());
+	auto entries = args.data[2].Values<int32_t>(args.size());
 	auto entry = entries[row];
 	if (!entry.IsValid()) {
 		return false;
@@ -163,8 +163,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &output_child = ListVector::GetEntry(result);
 
-	auto strings_entries = strings.ScanAllValues<string_t>(args.size());
-	auto pattern_entries = patterns.ScanAllValues<string_t>(args.size());
+	auto strings_entries = strings.Values<string_t>(args.size());
+	auto pattern_entries = patterns.Values<string_t>(args.size());
 
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
@@ -312,7 +312,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
-	auto strings_entries = strings.ScanAllValues<string_t>(args.size());
+	auto strings_entries = strings.Values<string_t>(args.size());
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
 

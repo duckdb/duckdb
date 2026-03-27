@@ -559,7 +559,7 @@ child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
 template <class T>
 void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel,
                                    idx_t count) {
-	auto entries = vector.ScanAllValues<T>(count);
+	auto entries = vector.Values<T>(count);
 	auto min_value = NumericStats::MinOrNull(stats);
 	auto max_value = NumericStats::MaxOrNull(stats);
 	for (idx_t i = 0; i < count; i++) {

@@ -140,15 +140,15 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 		return UnionInvalidReason::NO_MEMBERS;
 	}
 
-	auto vector_validity = vector_p.ScanValidity(count);
+	auto vector_validity = vector_p.Validity(count);
 
 	auto &entries = StructVector::GetEntries(vector_p);
-	duckdb::vector<VectorValidityHelper> child_validity;
+	duckdb::vector<VectorValidityIterator> child_validity;
 	for (idx_t entry_idx = 1; entry_idx < entries.size(); entry_idx++) {
 		auto &child = entries[entry_idx];
-		child_validity.push_back(child.ScanValidity(count));
+		child_validity.push_back(child.Validity(count));
 	}
-	auto tag_data = entries[0].ScanAllValues<union_tag_t>(count);
+	auto tag_data = entries[0].Values<union_tag_t>(count);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto mapped_idx = sel.get().get_index(row_idx);

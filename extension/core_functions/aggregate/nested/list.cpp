@@ -54,7 +54,7 @@ void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, id
 	RecursiveUnifiedVectorFormat input_data;
 	Vector::RecursiveToUnifiedFormat(input, count, input_data);
 
-	auto states = state_vector.ScanAllValues<ListAggState *>(count);
+	auto states = state_vector.Values<ListAggState *>(count);
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
@@ -67,7 +67,7 @@ void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, id
 void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
 
-	auto states = states_vector.ScanAllValues<ListAggState *>(count);
+	auto states = states_vector.Values<ListAggState *>(count);
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].value;
@@ -92,7 +92,7 @@ void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputD
 
 void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                   idx_t offset) {
-	auto states = states_vector.ScanAllValues<ListAggState *>(count);
+	auto states = states_vector.Values<ListAggState *>(count);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
@@ -143,7 +143,7 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 		return;
 	}
 
-	auto states = states_vector.ScanAllValues<ListAggState *>(count);
+	auto states = states_vector.Values<ListAggState *>(count);
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();

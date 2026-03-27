@@ -94,7 +94,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 	}
 
 	//! Then compose the OBJECT value by combining all the children
-	auto validity = typed_value.ScanValidity(count);
+	auto validity = typed_value.Validity(count);
 	for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 		auto &child_name = child_types[child_idx].first;
 		auto &values = child_values[child_idx];
@@ -126,7 +126,7 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 
 	D_ASSERT(typed_value.GetType().id() == LogicalTypeId::LIST);
 
-	auto list_data = typed_value.ScanAllValues<list_entry_t>(count);
+	auto list_data = typed_value.Values<list_entry_t>(count);
 	idx_t child_size = 0;
 	for (uint32_t i = 0; i < count; i++) {
 		auto entry = list_data[i];
@@ -211,7 +211,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 		return res;
 	}
 	// if we have any untyped values - unshred them
-	auto untyped_data = untyped_value_index->ScanAllValues<uint32_t>(count);
+	auto untyped_data = untyped_value_index->Values<uint32_t>(count);
 	for (uint32_t i = 0; i < count; i++) {
 		auto entry = untyped_data[i];
 		if (!entry.is_valid) {

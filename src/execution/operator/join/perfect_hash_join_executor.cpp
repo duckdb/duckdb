@@ -221,7 +221,7 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	}
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
-	auto entries = source.ScanAllValues<T>(count);
+	auto entries = source.Values<T>(count);
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		auto input_value = entries.GetValueUnsafe(i);
@@ -369,7 +369,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	const auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	const auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
-	auto entries = source.ScanAllValues<T>(count);
+	auto entries = source.Values<T>(count);
 	// build selection vector for non-dense build
 	for (idx_t i = 0; i < count; ++i) {
 		auto entry = entries[i];

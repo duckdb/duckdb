@@ -60,7 +60,7 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 }
 
 static void UpdateNullMask(Vector &vec, optional_ptr<const SelectionVector> sel, idx_t count, ValidityMask &null_mask) {
-	auto entries = vec.ScanValidity(count);
+	auto entries = vec.Validity(count);
 	if (!entries.CanHaveNull()) {
 		return;
 	}
@@ -214,8 +214,8 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
                                   SelectionVector &maybe_vec, OptionalSelection &false_opt,
                                   optional_ptr<ValidityMask> null_mask) {
-	auto ldata = left.ScanValidity(count);
-	auto rdata = right.ScanValidity(count);
+	auto ldata = left.Validity(count);
+	auto rdata = right.Validity(count);
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULLs

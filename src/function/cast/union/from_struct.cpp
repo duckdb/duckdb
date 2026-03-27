@@ -77,8 +77,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	} else {
 		// if the tag is NULL, the union should be NULL
 		auto &tag_vec = target_children[0];
-		auto source_validity = source.ScanValidity(count);
-		auto tag_validity = tag_vec.ScanValidity(count);
+		auto source_validity = source.Validity(count);
+		auto tag_validity = tag_vec.Validity(count);
 
 		for (idx_t i = 0; i < count; i++) {
 			if (!source_validity.IsValid(i) || !tag_validity.IsValid(i)) {

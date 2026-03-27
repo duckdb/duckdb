@@ -323,7 +323,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
-	for (auto entry : input.ScanAllValues<T>(count)) {
+	for (auto entry : input.Values<T>(count)) {
 		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry.value, entry.is_valid)) {
 			return false;
 		}

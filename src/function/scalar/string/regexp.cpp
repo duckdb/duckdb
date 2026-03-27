@@ -305,7 +305,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 
-		for (auto entry : input.ScanAllValues<string_t>(count)) {
+		for (auto entry : input.Values<string_t>(count)) {
 			if (!entry.IsValid()) {
 				FlatVector::SetNull(result, entry.index, true);
 				continue;

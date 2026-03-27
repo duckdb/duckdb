@@ -15,7 +15,7 @@ void ArrowBoolData::Append(ArrowAppendData &append_data, Vector &input, idx_t fr
 	// we initialize both the validity and the bit set to 1's
 	ArrowAppendData::ResizeValidity(validity_buffer, append_data.row_count + size);
 	ArrowAppendData::ResizeValidity(main_buffer, append_data.row_count + size);
-	auto data = input.ScanAllValues<bool>(input_size);
+	auto data = input.Values<bool>(input_size);
 
 	auto result_data = main_buffer.GetData<uint8_t>();
 	auto validity_data = validity_buffer.GetData<uint8_t>();

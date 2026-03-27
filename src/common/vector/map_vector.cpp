@@ -27,13 +27,13 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	// unify the MAP vector, which is a physical LIST vector
-	auto map_entries = map.ScanAllValues<list_entry_t>(count);
+	auto map_entries = map.Values<list_entry_t>(count);
 	auto maps_length = ListVector::GetListSize(map);
 
 	// unify the child vector containing the keys
 	auto &keys = MapVector::GetKeys(map);
 
-	auto key_validity = keys.ScanValidity(maps_length);
+	auto key_validity = keys.Validity(maps_length);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto mapped_row = sel.get_index(row_idx);
 		auto map_entry = map_entries[mapped_row];

@@ -23,10 +23,10 @@ struct SelCache;
 enum class VectorConstructorAction;
 
 template <class T>
-class VectorIterationHelper;
+class VectorValueIterator;
 template <class T>
-class VectorScanEntriesHelper;
-class VectorValidityHelper;
+class VectorValidValueIterator;
+class VectorValidityIterator;
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
@@ -197,12 +197,12 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorIterationHelper<T> ScanAllValues(idx_t count) const;
+	VectorValueIterator<T> Values(idx_t count) const;
 
 	template <class T>
-	VectorScanEntriesHelper<T> ScanValues(idx_t count) const;
+	VectorValidValueIterator<T> ValidValues(idx_t count) const;
 
-	VectorValidityHelper ScanValidity(idx_t count) const;
+	VectorValidityIterator Validity(idx_t count) const;
 
 private:
 	//! Returns the [index] element of the Vector as a Value.

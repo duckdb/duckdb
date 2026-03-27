@@ -2042,7 +2042,7 @@ struct StructDatePart {
 				}
 			}
 		} else {
-			auto entries = input.template ScanAllValues<INPUT_TYPE>(count);
+			auto entries = input.template Values<INPUT_TYPE>(count);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);

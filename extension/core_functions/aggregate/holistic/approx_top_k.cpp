@@ -204,7 +204,7 @@ struct ApproxTopKOperation {
 		if (state.values.empty()) {
 			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
-			auto top_k_format = top_k_vector.ScanAllValues<int64_t>(count);
+			auto top_k_format = top_k_vector.Values<int64_t>(count);
 			auto top_k_entry = top_k_format[offset];
 			if (!top_k_entry.is_valid) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value cannot be NULL");
@@ -327,7 +327,7 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = state_vector.ScanAllValues<STATE *>(count);
+	auto states = state_vector.Values<STATE *>(count);
 	auto data = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -341,7 +341,7 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 
 template <class OP = HistogramGenericFunctor>
 void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
-	auto states = state_vector.ScanAllValues<ApproxTopKState *>(count);
+	auto states = state_vector.Values<ApproxTopKState *>(count);
 
 	auto &mask = FlatVector::Validity(result);
 	auto old_len = ListVector::GetListSize(result);

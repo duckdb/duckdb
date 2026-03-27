@@ -108,7 +108,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(scan_count > 0);
 	validity->ScanCount(state.child_states[0], result, count);
 
-	auto data = offset_vector.ScanAllValues<uint64_t>(scan_count);
+	auto data = offset_vector.Values<uint64_t>(scan_count);
 	auto last_entry = data[scan_count - 1].value;
 
 	// shift all offsets so they are 0 at the first entry
@@ -185,7 +185,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	D_ASSERT(count > 0);
 
 	// construct the list_entry_t entries to append to the column data
-	auto input_offsets = vector.ScanAllValues<list_entry_t>(count);
+	auto input_offsets = vector.Values<list_entry_t>(count);
 	auto start_offset = child_column->GetMaxEntry();
 	idx_t child_count = 0;
 

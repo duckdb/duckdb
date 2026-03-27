@@ -2485,7 +2485,7 @@ void Geometry::FromSpatialGeometry(const string_t &source, string_t &target, Vec
 }
 
 void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t count, idx_t result_offset) {
-	auto entries = source_vec.ScanAllValues<string_t>(count);
+	auto entries = source_vec.Values<string_t>(count);
 	const auto target_data = FlatVector::GetData<string_t>(target_vec);
 
 	auto &target_mask = FlatVector::Validity(target_vec);

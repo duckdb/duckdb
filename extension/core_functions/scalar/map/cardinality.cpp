@@ -9,7 +9,7 @@ namespace duckdb {
 
 static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &map = args.data[0];
-	auto entries = map.ScanAllValues<list_entry_t>(args.size());
+	auto entries = map.Values<list_entry_t>(args.size());
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<uint64_t>(result);
 	auto &result_validity = FlatVector::Validity(result);

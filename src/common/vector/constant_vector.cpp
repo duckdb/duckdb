@@ -54,7 +54,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
 		// retrieve the list entry from the source vector
-		auto entries = source.ScanAllValues<list_entry_t>(count);
+		auto entries = source.Values<list_entry_t>(count);
 		auto entry = entries[position];
 
 		if (!entry.IsValid()) {

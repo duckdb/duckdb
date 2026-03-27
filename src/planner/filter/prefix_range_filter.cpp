@@ -77,7 +77,7 @@ public:
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state_p) const override {
 		auto &state = static_cast<NumericBuildState &>(state_p);
-		for (const auto &entry : keys.template ScanValues<T>(count)) {
+		for (const auto &entry : keys.template ValidValues<T>(count)) {
 			const U &key = static_cast<U>(entry.value);
 			const U y = key - min;
 			// All x are in-range by construction, so range check can be omitted here.
@@ -110,7 +110,7 @@ public:
 		}
 
 		idx_t found_count = 0;
-		for (const auto &entry : keys.template ScanValues<T>(count)) {
+		for (const auto &entry : keys.template ValidValues<T>(count)) {
 			result_sel.set_index(found_count, entry.index);
 			const auto &key = entry.value;
 			found_count += LookupOne(key);

@@ -150,7 +150,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
 	for (auto &arg : args.data) {
-		auto entries = arg.ScanValidity(count);
+		auto entries = arg.Validity(count);
 		if (!entries.CanHaveNull()) {
 			continue;
 		}
@@ -162,7 +162,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	}
 
 	// Default is that if any of the arguments are NULL, the result is also NULL
-	auto result_validity = result.ScanValidity(count);
+	auto result_validity = result.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i)) {
 			D_ASSERT(!result_validity.IsValid(i));
