@@ -196,7 +196,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 					if (!completion_idx.IsValid()) {
 						// pressing shift-tab when we don't have a selected completion means we abort searching
 						RefreshLine();
-						next_key.action = ENTER;
+						next_key.action = KEY_NULL;
 						stop = true;
 					} else if (completion_idx.GetIndex() == 0) {
 						completion_idx = optional_idx();
@@ -240,10 +240,6 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 	// no longer completing - clear list of completions
 	completion_list.completions.clear();
 	completion_idx = optional_idx();
-	if (next_key.action == ENTER) {
-		// if we accepted the completion by pressing ENTER
-		next_key.action = KEY_NULL;
-	}
 	return true; /* Return last read character */
 }
 
