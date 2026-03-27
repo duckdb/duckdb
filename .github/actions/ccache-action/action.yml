@@ -37,7 +37,7 @@ runs:
 
          debug_path='${{ inputs.debug_path }}'
          if [[ -z "$debug_path" ]]; then
-           debug_path="$GITHUB_WORKSPACE/build/ccache-debug/${{ github.job }}"
+           debug_path="$GITHUB_WORKSPACE/.ccache-debug/${{ github.job }}"
          fi
 
          {

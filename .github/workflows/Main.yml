@@ -241,13 +241,13 @@ jobs:
         key: ccache-probe-linux-debug-${{ github.run_id }}
         save: 'true'
         enable_debug: 'true'
-        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-debug-initial
+        debug_path: ${{ github.workspace }}/.ccache-debug/linux-debug-initial
 
     - name: Show ccache stats before build
       if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-initial"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/stats-before.txt"
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-debug-initial"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-debug-initial/stats-before.txt"
 
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
@@ -255,11 +255,11 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-initial"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/stats-after.txt"
-        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/ccache.log" ]]; then
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-debug-initial"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-debug-initial/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/.ccache-debug/linux-debug-initial/ccache.log" ]]; then
           echo "::group::ccache debug log"
-          cat "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/ccache.log"
+          cat "${{ github.workspace }}/.ccache-debug/linux-debug-initial/ccache.log"
           echo "::endgroup::"
         fi
 
@@ -286,7 +286,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: linux-debug-ccache-initial
-        path: build/ccache-debug/linux-debug-initial
+        path: .ccache-debug/linux-debug-initial
         if-no-files-found: error
 
  linux-debug-ccache-probe:
@@ -318,12 +318,12 @@ jobs:
         key: ccache-probe-linux-debug-${{ github.run_id }}
         save: 'false'
         enable_debug: 'true'
-        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-debug-probe
+        debug_path: ${{ github.workspace }}/.ccache-debug/linux-debug-probe
 
     - name: Show ccache stats before build
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-probe"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/stats-before.txt"
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-debug-probe"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-debug-probe/stats-before.txt"
 
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
@@ -331,11 +331,11 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() }}
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-probe"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/stats-after.txt"
-        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/ccache.log" ]]; then
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-debug-probe"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-debug-probe/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/.ccache-debug/linux-debug-probe/ccache.log" ]]; then
           echo "::group::ccache debug log"
-          cat "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/ccache.log"
+          cat "${{ github.workspace }}/.ccache-debug/linux-debug-probe/ccache.log"
           echo "::endgroup::"
         fi
 
@@ -344,7 +344,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: linux-debug-ccache-probe
-        path: build/ccache-debug/linux-debug-probe
+        path: .ccache-debug/linux-debug-probe
         if-no-files-found: error
 
  linux-debug-tests:
@@ -457,13 +457,13 @@ jobs:
         key: ccache-probe-linux-release-${{ github.run_id }}
         save: 'true'
         enable_debug: 'true'
-        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-release-initial
+        debug_path: ${{ github.workspace }}/.ccache-debug/linux-release-initial
 
     - name: Show ccache stats before build
       if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-initial"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-initial/stats-before.txt"
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-release-initial"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-release-initial/stats-before.txt"
 
     - uses: ./.github/actions/linux_release_build
       with:
@@ -476,11 +476,11 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-initial"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-initial/stats-after.txt"
-        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-release-initial/ccache.log" ]]; then
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-release-initial"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-release-initial/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/.ccache-debug/linux-release-initial/ccache.log" ]]; then
           echo "::group::ccache debug log"
-          cat "${{ github.workspace }}/build/ccache-debug/linux-release-initial/ccache.log"
+          cat "${{ github.workspace }}/.ccache-debug/linux-release-initial/ccache.log"
           echo "::endgroup::"
         fi
 
@@ -503,7 +503,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: linux-release-ccache-initial
-        path: build/ccache-debug/linux-release-initial
+        path: .ccache-debug/linux-release-initial
         if-no-files-found: error
 
  linux-release-ccache-probe:
@@ -527,12 +527,12 @@ jobs:
         key: ccache-probe-linux-release-${{ github.run_id }}
         save: 'false'
         enable_debug: 'true'
-        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-release-probe
+        debug_path: ${{ github.workspace }}/.ccache-debug/linux-release-probe
 
     - name: Show ccache stats before build
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-probe"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-probe/stats-before.txt"
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-release-probe"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-release-probe/stats-before.txt"
 
     - uses: ./.github/actions/linux_release_build
       with:
@@ -545,11 +545,11 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() }}
       run: |
-        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-probe"
-        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-probe/stats-after.txt"
-        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-release-probe/ccache.log" ]]; then
+        mkdir -p "${{ github.workspace }}/.ccache-debug/linux-release-probe"
+        ccache -sv | tee "${{ github.workspace }}/.ccache-debug/linux-release-probe/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/.ccache-debug/linux-release-probe/ccache.log" ]]; then
           echo "::group::ccache debug log"
-          cat "${{ github.workspace }}/build/ccache-debug/linux-release-probe/ccache.log"
+          cat "${{ github.workspace }}/.ccache-debug/linux-release-probe/ccache.log"
           echo "::endgroup::"
         fi
 
@@ -558,7 +558,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: linux-release-ccache-probe
-        path: build/ccache-debug/linux-release-probe
+        path: .ccache-debug/linux-release-probe
         if-no-files-found: error
 
  linux-release-tests:
