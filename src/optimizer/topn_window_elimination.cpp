@@ -297,18 +297,16 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	aggregate->ResolveOperatorTypes();
 
 	// Add group statistics to allow for perfect hash aggregation if applicable
-	if (stats) {
-		aggregate->group_stats.resize(aggregate->groups.size());
-		for (idx_t i = 0; i < aggregate->groups.size(); i++) {
-			auto &group = aggregate->groups[i];
-			if (group->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &column_ref = group->Cast<BoundColumnRefExpression>();
-				auto group_stats = stats->find(column_ref.binding);
-				if (group_stats == stats->end()) {
-					continue;
-				}
-				aggregate->group_stats[i] = group_stats->second->ToUnique();
+	aggregate->group_stats.resize(aggregate->groups.size());
+	for (idx_t i = 0; i < aggregate->groups.size(); i++) {
+		auto &group = aggregate->groups[i];
+		if (group->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &column_ref = group->Cast<BoundColumnRefExpression>();
+			auto group_stats = stats->find(column_ref.binding);
+			if (group_stats == stats->end()) {
+				continue;
 			}
+			aggregate->group_stats[i] = group_stats->second->ToUnique();
 		}
 	}
 
@@ -771,12 +769,11 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
 		VisitExpression(&aggregate_payload[0]);
 	}
-	if (stats) {
-		for (const auto &column_ref : column_references) {
-			const auto &column_stats = stats->find(column_ref.first);
-			if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-				params.can_be_null = true;
-			}
+	for (const auto &column_ref : column_references) {
+		const auto &column_stats = stats->find(column_ref.first);
+		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
+			params.can_be_null = true;
+			break;
 		}
 	}
 	column_references.clear();
