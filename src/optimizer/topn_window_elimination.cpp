@@ -139,6 +139,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer,
                                              optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats_p)
     : context(context_p), optimizer(optimizer), stats(stats_p) {
+	D_ASSERT(stats);
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
