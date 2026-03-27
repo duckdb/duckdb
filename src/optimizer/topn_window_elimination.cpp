@@ -787,8 +787,9 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
                                                       vector<reference<LogicalOperator>> &stack) {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
-	auto extract_single_binding = [&](unique_ptr<Expression> *expr, ColumnBinding &binding) {
-		if ((*expr)->type != ExpressionType::BOUND_COLUMN_REF) {
+	auto extract_single_binding = [&](unique_ptr<Expression> *expr, ColumnBinding &binding,
+	                                  const bool require_direct_column_ref) {
+		if (require_direct_column_ref && expr->get()->type != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
 		}
 		VisitExpression(expr);
@@ -804,13 +805,13 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	// Build a projection list for an LHS table scan to recreate the column order of an aggregate with struct packing
 	for (idx_t i = 0; i < window_expr.partitions.size(); i++) {
 		auto &partition = window_expr.partitions[i];
-		if (!extract_single_binding(&partition, projections[i])) {
+		if (!extract_single_binding(&partition, projections[i], false)) {
 			return false;
 		}
 	}
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto &arg = args[i];
-		if (!extract_single_binding(&arg, projections[window_expr.partitions.size() + i])) {
+		if (!extract_single_binding(&arg, projections[window_expr.partitions.size() + i], false)) {
 			return false;
 		}
 	}
@@ -831,7 +832,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				if (projection_idx >= projection.expressions.size()) {
 					return false;
 				}
-				if (!extract_single_binding(&projection.expressions[projection_idx], projections[i])) {
+				if (!extract_single_binding(&projection.expressions[projection_idx], projections[i], false)) {
 					return false;
 				}
 			}
@@ -857,11 +858,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 					return false;
 				}
 				ColumnBinding left_binding;
-				if (!extract_single_binding(&condition.left, left_binding)) {
+				if (!extract_single_binding(&condition.left, left_binding, true)) {
 					return false;
 				}
 				ColumnBinding right_binding;
-				if (!extract_single_binding(&condition.right, right_binding)) {
+				if (!extract_single_binding(&condition.right, right_binding, true)) {
 					return false;
 				}
 
