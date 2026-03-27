@@ -1376,20 +1376,16 @@ bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	DWORD len = GetFinalPathNameByHandleW(handle, resolved, MAX_PATH, FILE_NAME_NORMALIZED);
 	CloseHandle(handle);
 
-	if (len < 0) {
+	if (len == 0 || len >= MAX_PATH) {
 		return false;
 	}
 
 	std::wstring resolved_wstr(resolved, static_cast<size_t>(len));
 
-	if (resolved_wstr.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0) {
+	if (resolved_wstr.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
+		resolved_wstr = L"\\\\" + resolved_wstr.substr(WINDOWS_UNC_LONG_PATH_PREFIX.length());
+	} else if (resolved_wstr.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0) {
 		resolved_wstr = resolved_wstr.substr(WINDOWS_LOCAL_LONG_PATH_PREFIX.length());
-	} else if (resolved_wstr.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
-		resolved_wstr = resolved_wstr.substr(WINDOWS_UNC_LONG_PATH_PREFIX.length());
-	}
-
-	if (resolved_wstr.length() >= MAX_PATH) {
-		return false;
 	}
 
 	input = WindowsUtil::UnicodeToUTF8(resolved_wstr.c_str());
