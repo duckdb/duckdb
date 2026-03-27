@@ -19,7 +19,6 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	auto all_constant = args.AllConstant();
 	auto count = args.size();
 	map.Flatten(count);
 
@@ -33,9 +32,6 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	FlatVector::SetValidity(result, FlatVector::Validity(map));
 	auto list_size = ListVector::GetListSize(map);
 	ListVector::SetListSize(result, list_size);
-	if (all_constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 	result.Verify(count);
 }
 

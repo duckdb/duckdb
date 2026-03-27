@@ -188,10 +188,6 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 		offset += result_entry.length;
 	}
 	ListVector::SetListSize(result, offset);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {

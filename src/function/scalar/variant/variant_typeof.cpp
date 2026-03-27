@@ -54,10 +54,6 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 		}
 		result_data[i] = StringVector::AddString(result, type_str.c_str());
 	}
-
-	if (input.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunction VariantTypeofFun::GetFunction() {

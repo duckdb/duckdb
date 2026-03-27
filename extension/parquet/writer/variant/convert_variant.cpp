@@ -870,10 +870,6 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 
 	ParquetVariantShredding shredding;
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
-
-	if (input.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {

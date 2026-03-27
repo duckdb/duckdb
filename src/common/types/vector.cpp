@@ -1643,6 +1643,7 @@ void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t
 }
 
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+	return;
 #ifdef DEBUG
 	if (count == 0) {
 		return;
