@@ -159,6 +159,10 @@ private:
 class ViewColumnHelper : public ColumnHelper {
 public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
+		if (entry.internal) {
+			// bind internal views
+			entry.BindView(context);
+		}
 		auto view_columns = entry.GetColumnInfo();
 		if (view_columns) {
 			column_names = view_columns->names;
