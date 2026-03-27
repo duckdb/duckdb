@@ -231,4 +231,4 @@ SELECT json_merge_diff(
     '{"name":"Alice","age":31,"city":"SF","verified":true}'
 )
 ----
-{"age":31,"city":"SF","score":null,"verified":true}
+{"score":null,"age":31,"city":"SF","verified":true}
