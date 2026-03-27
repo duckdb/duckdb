@@ -220,7 +220,7 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
 #ifdef HAVE_LINENOISE
 		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
-			auto &shortcuts = duckdb::GetShellShortcuts();
+			auto shortcuts = duckdb::GetShellShortcuts();
 			const char *current_category = nullptr;
 			for (auto &entry : shortcuts) {
 				if (!current_category || strcmp(current_category, entry.category) != 0) {

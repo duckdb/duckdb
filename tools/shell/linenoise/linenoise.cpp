@@ -1422,8 +1422,8 @@ bool Linenoise::Write(int fd, const char *data, idx_t size) {
 
 // Shortcut table — kept near the key handler switch so they stay in sync.
 // If you add or change a keybinding in Edit(), update this table too.
-const vector<ShortcutEntry> &GetShellShortcuts() {
-	static const vector<ShortcutEntry> shortcuts = {
+vector<ShortcutEntry> GetShellShortcuts() {
+	const vector<ShortcutEntry> shortcuts = {
 	    // Control
 	    {"Enter / Ctrl+J", "Submit input", "Control"},
 	    {"Ctrl+C", "Cancel current input or interrupt in-flight query", "Control"},

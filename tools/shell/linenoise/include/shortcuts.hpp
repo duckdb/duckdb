@@ -19,6 +19,6 @@ struct ShortcutEntry {
 };
 
 //! Returns the list of keyboard shortcuts (for .help shortcuts)
-const vector<ShortcutEntry> &GetShellShortcuts();
+vector<ShortcutEntry> GetShellShortcuts();
 
 } // namespace duckdb
