@@ -257,7 +257,7 @@ static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_appen
 	code_t code;
 
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
-		if (count % 1000 == 0 && context.interrupted) {
+		if (count % 1000 == 0 && context.IsInterrupted()) {
 			return;
 		}
 		row_start(tnum, dbgen_ctx);
@@ -520,7 +520,7 @@ public:
 				} else {
 					rowcnt = dbgen_ctx.tdefs[i].base;
 				}
-				if (context.interrupted) {
+				if (context.IsInterrupted()) {
 					return;
 				}
 				if (children > 1 && current_step != -1) {

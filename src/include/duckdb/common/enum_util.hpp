@@ -122,6 +122,8 @@ enum class CheckpointOnDetach : uint8_t;
 
 enum class ChunkInfoType : uint8_t;
 
+enum class ClientInterruptState : uint8_t;
+
 enum class ColumnDataAllocatorType : uint8_t;
 
 enum class ColumnDataScanProperties : uint8_t;
@@ -653,6 +655,9 @@ const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value);
 
 template<>
 const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ClientInterruptState>(ClientInterruptState value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
@@ -1383,6 +1388,9 @@ CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value);
 
 template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value);
+
+template<>
+ClientInterruptState EnumUtil::FromString<ClientInterruptState>(const char *value);
 
 template<>
 ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char *value);
