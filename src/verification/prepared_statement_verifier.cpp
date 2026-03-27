@@ -104,7 +104,7 @@ bool PreparedStatementVerifier::Run(
 		failed = true;
 	}
 	run(string(), std::move(dealloc_statement), parameters);
-	context.interrupted = false;
+	context.interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 
 	return failed;
 }

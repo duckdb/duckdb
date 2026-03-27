@@ -99,3 +99,13 @@ def test_mode_json_escapes(shell):
 
     result = test.run()
     result.check_stdout('{"name":"test","a":[4,5,6],"s":{"key":7}}')
+
+def test_mode_json_empty_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT 42 AS x WHERE 1=0;")
+    )
+
+    result = test.run()
+    result.check_stdout("[]")

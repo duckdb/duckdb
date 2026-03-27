@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include "duckdb/common/printer.hpp"
@@ -361,10 +368,10 @@ struct BaseValueCopy {
 	}
 
 	template <class OP>
-	static void Assign(ColumnDataMetaData &meta_data, data_ptr_t target, data_ptr_t source, idx_t target_idx,
+	static void Assign(ColumnDataMetaData &meta_data, data_ptr_t target, const_data_ptr_t source, idx_t target_idx,
 	                   idx_t source_idx) {
 		auto result_data = (T *)target;
-		auto source_data = (T *)source;
+		auto source_data = (const T *)source;
 		result_data[target_idx] = OP::Operation(meta_data, source_data[source_idx]);
 	}
 };
@@ -407,7 +414,7 @@ struct StructValueCopy {
 	}
 
 	template <class OP>
-	static void Assign(ColumnDataMetaData &meta_data, data_ptr_t target, data_ptr_t source, idx_t target_idx,
+	static void Assign(ColumnDataMetaData &meta_data, data_ptr_t target, const_data_ptr_t source, idx_t target_idx,
 	                   idx_t source_idx) {
 	}
 };
@@ -821,9 +828,9 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
 		UnifiedVectorFormat child_data;
-		child_vectors[child_idx]->ToUnifiedFormat(copy_count, child_data);
+		child_vectors[child_idx].ToUnifiedFormat(copy_count, child_data);
 
-		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], offset, copy_count);
+		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
 	}
 }
 

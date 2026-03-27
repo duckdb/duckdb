@@ -109,7 +109,7 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS_SIZE = sizeof(ParquetDecodeUtil
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
-ColumnReader::ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p)
+ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
       delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
@@ -122,7 +122,7 @@ Allocator &ColumnReader::GetAllocator() {
 	return reader.allocator;
 }
 
-ParquetReader &ColumnReader::Reader() {
+const ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
 
@@ -502,7 +502,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasRepeats()) {
 		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
-		repeated_decoder = make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidth(MaxRepeat()));
+		repeated_decoder =
+		    make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidthFromMaxValue(MaxRepeat()));
 		block->inc(rep_length);
 	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
 		block->inc(v2_header.repetition_levels_byte_length);
@@ -511,7 +512,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasDefines()) {
 		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
-		defined_decoder = make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidth(MaxDefine()));
+		defined_decoder =
+		    make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidthFromMaxValue(MaxDefine()));
 		block->inc(def_length);
 	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
 		block->inc(v2_header.definition_levels_byte_length);
@@ -825,7 +827,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(reader, schema);
@@ -840,7 +842,7 @@ static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const
 	}
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<BooleanColumnReader>(reader, schema);

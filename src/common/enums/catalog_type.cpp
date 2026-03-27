@@ -25,6 +25,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Scalar Function";
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		return "Aggregate Function";
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
+		return "Window Function";
 	case CatalogType::COPY_FUNCTION_ENTRY:
 		return "Copy Function";
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:

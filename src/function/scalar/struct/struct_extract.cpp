@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
@@ -20,7 +22,7 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &children = StructVector::GetEntries(vec);
 	D_ASSERT(info.index < children.size());
 	auto &struct_child = children[info.index];
-	result.Reference(*struct_child);
+	result.Reference(struct_child);
 	result.Verify(args.size());
 }
 

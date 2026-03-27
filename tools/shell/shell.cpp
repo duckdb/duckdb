@@ -3119,14 +3119,6 @@ void ShellState::Initialize() {
 #endif
 }
 
-#ifndef SQLITE_SHELL_IS_UTF8
-#if (defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER)
-#define SQLITE_SHELL_IS_UTF8 (0)
-#else
-#define SQLITE_SHELL_IS_UTF8 (1)
-#endif
-#endif
-
 void ShellState::DetectDarkLightMode() {
 #ifdef HAVE_LINENOISE
 	ShellHighlight highlight(*this);
@@ -3359,16 +3351,18 @@ int RunShell(int argc, const char **argv) {
 	return rc;
 }
 
-#if SQLITE_SHELL_IS_UTF8
+#if !((defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER))
 int main(int argc, const char **argv) {
 #else
 int wmain(int argc, wchar_t **wargv) {
-	const char **argv;
 	vector<string> utf8_args;
 	utf8_args.resize(argc);
-	for (i = 0; i < argc; i++) {
+	vector<const char *> utf8_args_ptrs;
+	utf8_args_ptrs.resize(argc);
+	const char **argv = utf8_args_ptrs.data();
+	for (int i = 0; i < argc; i++) {
 		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		argv[i] = utf8_args[i].c_str();
+		utf8_args_ptrs[i] = utf8_args[i].c_str();
 	}
 #endif
 

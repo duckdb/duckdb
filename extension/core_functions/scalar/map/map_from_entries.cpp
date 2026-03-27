@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,11 +11,13 @@ namespace duckdb {
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
+	auto all_constant = args.AllConstant();
+
 	MapUtil::ReinterpretMap(result, args.data[0], count);
 	MapVector::MapConversionVerify(result, count);
 	result.Verify(count);
 
-	if (args.AllConstant()) {
+	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

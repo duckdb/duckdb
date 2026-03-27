@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"

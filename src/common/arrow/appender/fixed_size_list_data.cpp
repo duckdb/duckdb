@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/fixed_size_list_data.hpp"
 

@@ -554,9 +554,12 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 			continue;
 		}
 
-		// Resolve the table reference.
+		// Resolve the table reference in the same catalog/schema as the table being
+		// created, so FK references work for external catalogs (not just the default).
+		string fk_catalog = fk.info.schema.empty() ? schema.ParentCatalog().GetName() : INVALID_CATALOG;
+		string fk_schema = fk.info.schema.empty() ? schema.name : fk.info.schema;
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(INVALID_CATALOG, fk.info.schema, table_lookup);
+		auto table_entry = entry_retriever.GetEntry(fk_catalog, fk_schema, table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}

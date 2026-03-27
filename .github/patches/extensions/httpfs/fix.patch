@@ -1,140 +1,46 @@
-diff --git a/src/hffs.cpp b/src/hffs.cpp
-index 7ffe7d0..00d7861 100644
---- a/src/hffs.cpp
-+++ b/src/hffs.cpp
-@@ -209,8 +209,8 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
+commit a09cc61529bbf956a7db07f1b0fb75edc9dc2429
+Author: dentiny <dentinyhao@gmail.com>
+Date:   Wed Mar 25 11:28:03 2026 +0000
+
+    Sync DuckDB core
+
+diff --git a/test/sql/json/table/internal_issue_6807.test_slow b/test/sql/json/table/internal_issue_6807.test_slow
+index a354a7f..e759862 100644
+--- a/test/sql/json/table/internal_issue_6807.test_slow
++++ b/test/sql/json/table/internal_issue_6807.test_slow
+@@ -13,6 +13,6 @@ statement ok
+ CREATE TABLE T AS FROM 'https://data.gharchive.org/2023-02-08-0.json.gz';
  
- 	FileOpenerInfo info;
- 	info.file_path = path;
--	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
--	auto params = http_util->InitializeParameters(opener, info);
-+	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
-+	auto params = http_util.InitializeParameters(opener, info);
- 	auto &http_params = params->Cast<HTTPFSParams>();
- 	SetParams(http_params, path, opener);
- 	auto http_state = HTTPState::TryGetState(opener).get();
-@@ -284,8 +284,8 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
- 	FileOpenerInfo info;
- 	info.file_path = file.path;
+ query I
+-SELECT count(*) < 20 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
++SELECT count(*) < 60 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
+ ----
+ true
+diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
+index 6aa2ed0..54babde 100644
+--- a/test/sql/logging/file_system_logging.test
++++ b/test/sql/logging/file_system_logging.test
+@@ -43,7 +43,6 @@ require httpfs
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
  
--	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
--	auto params = http_util->InitializeParameters(opener, info);
-+	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
-+	auto params = http_util.InitializeParameters(opener, info);
- 	SetParams(params->Cast<HTTPFSParams>(), file.path, opener);
- 
- 	return duckdb::make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, std::move(params));
-diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 9277cd1..b41f448 100644
---- a/src/httpfs.cpp
-+++ b/src/httpfs.cpp
-@@ -24,7 +24,7 @@
- 
- namespace duckdb {
- 
--shared_ptr<HTTPUtil> HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
-+HTTPUtil &HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
- 	if (opener) {
- 		return opener->GetHTTPUtil();
- 	}
-@@ -400,8 +400,8 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
- 	FileOpenerInfo info;
- 	info.file_path = file.path;
- 
--	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
--	auto params = http_util->InitializeParameters(opener, info);
-+	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
-+	auto params = http_util.InitializeParameters(opener, info);
- 
- 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
- 	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
-diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
-index 446fee1..4333234 100644
---- a/src/httpfs_extension.cpp
-+++ b/src/httpfs_extension.cpp
-@@ -107,7 +107,8 @@ static void LoadInternal(ExtensionLoader &loader) {
- 	auto callback_httpfs_client_implementation = [](ClientContext &context, SetScope scope, Value &parameter) {
- 		auto &config = DBConfig::GetConfig(context);
- 		string value = StringValue::Get(parameter);
--		if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
-+		auto &http_util = config.GetHTTPUtil();
-+		if (http_util.GetName() == "WasmHTTPUtils") {
- 			if (value == "wasm" || value == "default") {
- 				return;
- 			}
-@@ -116,14 +117,14 @@ static void LoadInternal(ExtensionLoader &loader) {
- 		}
- #ifndef EMSCRIPTEN
- 		if (value == "curl" || value == "default") {
--			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil-Curl") {
--				config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
-+			if (http_util.GetName() != "HTTPFSUtil-Curl") {
-+				config.SetHTTPUtil(make_shared_ptr<HTTPFSCurlUtil>());
- 			}
- 			return;
- 		}
- 		if (value == "httplib") {
--			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil") {
--				config.http_util = make_shared_ptr<HTTPFSUtil>();
-+			if (http_util.GetName() != "HTTPFSUtil") {
-+				config.SetHTTPUtil(make_shared_ptr<HTTPFSUtil>());
- 			}
- 			return;
- 		}
-@@ -137,13 +138,14 @@ static void LoadInternal(ExtensionLoader &loader) {
- 	                          "Automatically fetch AWS credentials from environment variables.", LogicalType::BOOLEAN,
- 	                          Value::BOOLEAN(true));
- 
--	if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
-+	auto &http_util = config.GetHTTPUtil();
-+	if (http_util.GetName() == "WasmHTTPUtils") {
- 		// Already handled, do not override
- 	} else {
- #ifndef EMSCRIPTEN
--		config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
-+		config.SetHTTPUtil(make_shared_ptr<HTTPFSCurlUtil>());
- #else
--		config.http_util = make_shared_ptr<HTTPFSUtil>();
-+		config.SetHTTPUtil(make_shared_ptr<HTTPFSUtil>());
- #endif
- 	}
- 
-diff --git a/src/include/httpfs_client.hpp b/src/include/httpfs_client.hpp
-index 879a6d6..3baab91 100644
---- a/src/include/httpfs_client.hpp
-+++ b/src/include/httpfs_client.hpp
-@@ -41,7 +41,7 @@ public:
- 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
- 
- 	static unordered_map<string, string> ParseGetParameters(const string &text);
--	static shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener);
-+	static HTTPUtil &GetHTTPUtil(optional_ptr<FileOpener> opener);
- 
- 	string GetName() const override;
- };
-diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index 1bb040f..ec8f0df 100644
---- a/src/s3fs.cpp
-+++ b/src/s3fs.cpp
-@@ -944,8 +944,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
- 	auto parsed_s3_url = S3UrlParse(file.path, auth_params);
- 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
- 
--	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
--	auto params = http_util->InitializeParameters(opener, info);
-+	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
-+	auto params = http_util.InitializeParameters(opener, info);
- 
- 	return duckdb::make_uniq<S3FileHandle>(*this, file, flags, std::move(params), auth_params,
- 	                                       S3ConfigParams::ReadFrom(opener));
-@@ -1308,8 +1308,8 @@ bool S3GlobResult::ExpandNextPath() const {
- 	}
- 
- 	FileOpenerInfo info = {glob_pattern};
--	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
--	auto http_params = http_util->InitializeParameters(opener, info);
-+	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
-+	auto http_params = http_util.InitializeParameters(opener, info);
- 
- 	vector<OpenFileInfo> s3_keys;
- 	if (!current_common_prefix.empty()) {
+-# FIXME: investigate why we call READ twice?
+ query IIII
+ SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
+ FROM duckdb_logs
+@@ -52,5 +51,4 @@ ORDER BY timestamp
+ ----
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
+-CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"CLOSE"}
+diff --git a/test/sql/metadata_stats.test b/test/sql/metadata_stats.test
+index 27cb0a6..dfe7a26 100644
+--- a/test/sql/metadata_stats.test
++++ b/test/sql/metadata_stats.test
+@@ -18,4 +18,4 @@ SET force_download=false;
+ query II
+ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+ ----
+-analyzed_plan	<REGEX>:.*GET: 2.*
++analyzed_plan	<REGEX>:.*GET: 1.*

@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"

@@ -119,6 +119,9 @@ protected:
 
 	bool TryCanonicalizeExistingPath(string &path_p);
 
+	string VersionTagFromMetadata(const FileMetadata &file_metadata);
+	void FillFileOptions(const FileMetadata &file_metadata, unordered_map<string, Value> &options);
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

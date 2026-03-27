@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
@@ -57,7 +62,7 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 			reference<Vector> child_default = default_vector;
 			if (remap.default_index.IsValid()) {
 				auto &defaults = StructVector::GetEntries(default_vector);
-				child_default = *defaults[remap.default_index.GetIndex()];
+				child_default = defaults[remap.default_index.GetIndex()];
 			}
 			RemapNested(input_vector, child_default.get(), result_vectors[i], count, remap.child_remap_info);
 			continue;
@@ -65,7 +70,7 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 		// primitive type remap
 		if (remap.default_index.IsValid()) {
 			auto &defaults = StructVector::GetEntries(default_vector);
-			result_vectors[i].get().Reference(*defaults[remap.default_index.GetIndex()]);
+			result_vectors[i].get().Reference(defaults[remap.default_index.GetIndex()]);
 			if (result_vectors[i].get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				throw InternalException("Default value in remap struct must be a constant");
 			}
@@ -104,22 +109,19 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(result_size, format);
-		if (!format.validity.AllValid()) {
+		auto entries = input.Values<list_entry_t>(result_size);
+		if (entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
-				auto input_idx = format.sel->get_index(i);
-				if (!format.validity.RowIsValid(input_idx)) {
+				if (!entries[i].IsValid()) {
 					result_validity.SetInvalid(i);
 				}
 			}
 			has_top_level_null = !result_validity.AllValid();
 		}
-		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = list_data[format.sel->get_index(i)];
+			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 	// set up the correct vector references
@@ -157,22 +159,19 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(result_size, format);
-		if (!format.validity.AllValid()) {
+		auto entries = input.Values<list_entry_t>(result_size);
+		if (entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
-				auto input_idx = format.sel->get_index(i);
-				if (!format.validity.RowIsValid(input_idx)) {
+				if (!entries[i].IsValid()) {
 					result_validity.SetInvalid(i);
 				}
 			}
 			has_top_level_null = !result_validity.AllValid();
 		}
-		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = list_data[format.sel->get_index(i)];
+			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 
@@ -202,13 +201,11 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 			return;
 		}
 	} else {
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(result_size, format);
-		if (!format.validity.AllValid()) {
+		auto validity_entries = input.Validity(result_size);
+		if (validity_entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::Validity(result);
 			for (idx_t i = 0; i < result_size; i++) {
-				auto input_idx = format.sel->get_index(i);
-				if (!format.validity.RowIsValid(input_idx)) {
+				if (!validity_entries.IsValid(i)) {
 					result_validity.SetInvalid(i);
 				}
 			}
@@ -219,12 +216,12 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 	//! Build up the input for remapping the children of the struct
 	vector<reference<Vector>> input_vectors;
 	for (auto &child : input_child_vectors) {
-		input_vectors.emplace_back(*child);
+		input_vectors.emplace_back(child);
 	}
 
 	vector<reference<Vector>> result_vectors;
 	for (auto &child : result_child_vectors) {
-		result_vectors.emplace_back(*child);
+		result_vectors.emplace_back(child);
 	}
 
 	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null,

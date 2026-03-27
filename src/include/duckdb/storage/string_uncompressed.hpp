@@ -192,6 +192,31 @@ public:
 		return count;
 	}
 
+	static void StringRevertAppend(ColumnSegment &segment, idx_t new_count) {
+		if (new_count >= segment.count) {
+			return;
+		}
+		// we need to decrement the dictionary size by all of the strings we are erasing
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto handle = buffer_manager.Pin(segment.block);
+		auto handle_ptr = handle.Ptr();
+		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
+		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
+		uint32_t new_dictionary_size;
+		if (new_count == 0) {
+			new_dictionary_size = 0;
+		} else {
+			auto entry_offset = result_data[new_count - 1];
+			if (entry_offset < 0) {
+				// overflow strings store the dict offset negatively - invert size
+				new_dictionary_size = -entry_offset;
+			} else {
+				new_dictionary_size = entry_offset;
+			}
+		}
+		*dictionary_size = new_dictionary_size;
+	}
+
 	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
 
 public:

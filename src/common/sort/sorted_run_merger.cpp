@@ -296,11 +296,10 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
 		case BlockIteratorStateType::IN_MEMORY:
-			in_memory_states.push_back(BlockIteratorState<BlockIteratorStateType::IN_MEMORY>(key_data));
+			in_memory_states.emplace_back(key_data);
 			break;
 		case BlockIteratorStateType::EXTERNAL:
-			external_states.push_back(
-			    BlockIteratorState<BlockIteratorStateType::EXTERNAL>(key_data, run->payload_data.get()));
+			external_states.emplace_back(key_data, run->payload_data.get());
 			break;
 		default:
 			throw NotImplementedException("SortedRunMergerLocalState::SortedRunMergerLocalState for %s",

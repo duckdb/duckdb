@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -18,26 +19,21 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-
+	auto all_constant = args.AllConstant();
 	auto count = args.size();
+	map.Flatten(count);
+
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	auto child = get_child_vector(map);
+	auto &child = get_child_vector(map);
 
 	auto &entries = ListVector::GetEntry(result);
 	entries.Reference(child);
 
-	UnifiedVectorFormat map_data;
-	map.ToUnifiedFormat(count, map_data);
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, map_data.data);
-	FlatVector::SetValidity(result, map_data.validity);
+	FlatVector::SetData(result, FlatVector::GetData(map));
+	FlatVector::SetValidity(result, FlatVector::Validity(map));
 	auto list_size = ListVector::GetListSize(map);
 	ListVector::SetListSize(result, list_size);
-	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		result.Slice(*map_data.sel, count);
-	}
-	if (args.AllConstant()) {
+	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	result.Verify(count);

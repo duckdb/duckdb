@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/vector.hpp"
 

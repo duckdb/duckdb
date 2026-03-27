@@ -16,8 +16,7 @@
 
 namespace duckdb {
 
-TimeStampComparison::TimeStampComparison(ClientContext &context, ExpressionRewriter &rewriter)
-    : Rule(rewriter), context(context) {
+TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(rewriter), context(rewriter.context) {
 	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 	op->policy = SetMatcher::Policy::UNORDERED;

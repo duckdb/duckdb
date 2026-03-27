@@ -12,13 +12,14 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
 
 template <class T>
 class FunctionSet {
 public:
-	explicit FunctionSet(string name) : name(std::move(name)) {
+	explicit FunctionSet(string name) : name(std::move(name)) { // NOLINT
 	}
 
 	//! The name of the function set
@@ -83,6 +84,13 @@ public:
 	DUCKDB_API explicit AggregateFunctionSet(AggregateFunction fun);
 
 	DUCKDB_API AggregateFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
+};
+
+class WindowFunctionSet : public FunctionSet<WindowFunction> {
+public:
+	DUCKDB_API explicit WindowFunctionSet();
+	DUCKDB_API explicit WindowFunctionSet(string name);
+	DUCKDB_API explicit WindowFunctionSet(WindowFunction fun);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {

@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/exception.hpp"
@@ -108,13 +111,8 @@ struct StringSplitter {
 
 template <class OP>
 void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
-	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(args.size(), input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
-
-	UnifiedVectorFormat delim_data;
-	args.data[1].ToUnifiedFormat(args.size(), delim_data);
-	auto delims = UnifiedVectorFormat::GetData<string_t>(delim_data);
+	auto input_entries = args.data[0].Values<string_t>(args.size());
+	auto delim_entries = args.data[1].Values<string_t>(args.size());
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
@@ -128,22 +126,22 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	auto &result_mask = FlatVector::Validity(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto input_idx = input_data.sel->get_index(i);
-		auto delim_idx = delim_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(input_idx)) {
+		auto input_entry = input_entries[i];
+		auto delim_entry = delim_entries[i];
+		if (!input_entry.IsValid()) {
 			result_mask.SetInvalid(i);
 			continue;
 		}
 		StringSplitInput split_input(result, child_entry, total_splits);
-		if (!delim_data.validity.RowIsValid(delim_idx)) {
+		if (!delim_entry.IsValid()) {
 			// delim is NULL: copy the complete entry
-			split_input.AddSplit(inputs[input_idx].GetData(), inputs[input_idx].GetSize(), 0);
+			split_input.AddSplit(input_entry.value.GetData(), input_entry.value.GetSize(), 0);
 			list_struct_data[i].length = 1;
 			list_struct_data[i].offset = total_splits;
 			total_splits++;
 			continue;
 		}
-		auto list_length = StringSplitter::Split<OP>(inputs[input_idx], delims[delim_idx], split_input, data);
+		auto list_length = StringSplitter::Split<OP>(input_entry.value, delim_entry.value, split_input, data);
 		list_struct_data[i].length = list_length;
 		list_struct_data[i].offset = total_splits;
 		total_splits += list_length;

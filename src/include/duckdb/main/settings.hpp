@@ -200,6 +200,17 @@ struct AllowUnsignedExtensionsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct AllowedConfigsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "allowed_configs";
+	static constexpr const char *Description =
+	    "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllowedDirectoriesSetting {
 	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "allowed_directories";
@@ -354,6 +365,19 @@ struct CatalogErrorMaxSchemasSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct CheckpointOnDetachSetting {
+	using RETURN_TYPE = CheckpointOnDetach;
+	static constexpr const char *Name = "checkpoint_on_detach";
+	static constexpr const char *Description =
+	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
+	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct CheckpointThresholdSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "checkpoint_threshold";
@@ -373,6 +397,18 @@ struct ConfigureProfilingSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct CurrentTransactionInvalidationPolicySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "current_transaction_invalidation_policy";
+	static constexpr const char *Description =
+	    "Which types of exceptions invalidate the database for the current transaction";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "STANDARD_POLICY";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct CustomExtensionRepositorySetting {
@@ -1080,7 +1116,7 @@ struct LateMaterializationMaxRowsSetting {
 struct LockConfigurationSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "lock_configuration";
-	static constexpr const char *Description = "Whether or not the configuration can be altered";
+	static constexpr const char *Description = "Whether or not configurations can be altered";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;

@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -218,7 +225,7 @@ duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) 
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(duckdb::StructVector::GetEntries(*v)[index].get());
+	return reinterpret_cast<duckdb_vector>(&duckdb::StructVector::GetEntries(*v)[index]);
 }
 
 duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {

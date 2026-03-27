@@ -144,7 +144,7 @@ void PrimitiveColumnWriter::WriteLevels(Allocator &allocator, WriteStream &temp_
 	}
 
 	// write the levels using the RLE-BP encoding
-	const auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
+	const auto bit_width = RleBpDecoder::ComputeBitWidthFromMaxValue(max_value);
 	RleBpEncoder rle_encoder(bit_width);
 
 	// have to write to an intermediate stream first because we need to know the size
@@ -451,7 +451,7 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	schema_element.name = name;
 	if (field_id.IsValid()) {
 		schema_element.__isset.field_id = true;
-		schema_element.field_id = field_id.GetIndex();
+		schema_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
 	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());

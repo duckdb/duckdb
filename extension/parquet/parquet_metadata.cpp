@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "parquet_metadata.hpp"
 
 #include "parquet_statistics.hpp"
@@ -108,7 +111,8 @@ struct ParquetMetadataGlobalState : public GlobalTableFunctionState {
 	double GetProgress() const {
 		// Not the most accurate, instantly assumes all files are done and equal
 		unique_lock<mutex> lock(file_paths->file_lock);
-		return static_cast<double>(file_paths->scan_data.current_file_idx) / file_paths->file_list->GetTotalFileCount();
+		return static_cast<double>(file_paths->scan_data.current_file_idx) /
+		       static_cast<double>(file_paths->file_list->GetTotalFileCount());
 	}
 
 	unique_ptr<ParquetMetadataFilePaths> file_paths;
@@ -882,9 +886,9 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 
 	vector<reference<Vector>> vectors;
 	for (auto &entry : result_struct_entries) {
-		vectors.push_back(std::ref(*entry.get()));
-		entry->SetVectorType(VectorType::FLAT_VECTOR);
-		auto &validity = FlatVector::Validity(*entry);
+		vectors.push_back(std::ref(entry));
+		entry.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &validity = FlatVector::Validity(entry);
 		validity.Initialize(count);
 	}
 	for (idx_t i = 0; i < count; i++) {
