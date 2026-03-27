@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adds the make format-fix pre-commit hook to .git/hooks/pre-commit."""
+"""Adds `make format-fix` functionality to .git/hooks/pre-commit."""
 
 import os
 
@@ -7,7 +7,9 @@ HOOK_MARKER = '# make format-fix hook #'
 HOOK_PATH = '.git/hooks/pre-commit'
 
 
-FORMAT_SCRIPT = 'duckdb/scripts/format.py' if os.path.isfile('duckdb/scripts/format.py') else 'scripts/format.py' # this is to support extension repos
+FORMAT_SCRIPT = (
+    'duckdb/scripts/format.py' if os.path.isfile('duckdb/scripts/format.py') else 'scripts/format.py'
+)  # this is to support extension repos
 FORMAT_CMD = f'python3 {FORMAT_SCRIPT} {{}} --fix --noconfirm'
 
 HOOK_BODY = f"""\
@@ -35,7 +37,9 @@ def main():
         if HOOK_MARKER in content:
             print("Hook already exists, no action needed. exiting.")
         else:
-            print(".git/hooks/pre-commit file exists but does not contain make `make format-fix` functionality for staged files")
+            print(
+                ".git/hooks/pre-commit file exists but does not contain make `make format-fix` functionality for staged files"
+            )
             print("Adding `make format-fix` functionality for staged files")
             with open(HOOK_PATH, 'a') as f:
                 f.write(HOOK_BODY)

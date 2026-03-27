@@ -681,6 +681,3 @@ cleanup-vcpkg:
 
 test-utils:
 	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
-
-add-git-pre-commit-hooks:
-	@python3 scripts/add_git_hooks.py
