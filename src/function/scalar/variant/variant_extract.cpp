@@ -211,7 +211,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			if (!validity.RowIsValid(j)) {
 				continue;
 			}
-			if (!lookup_validity.AllValid() && !lookup_validity.RowIsValid(j)) {
+			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
 				//! No child could be extracted, set to NULL
 				validity.SetInvalid(j);
 				continue;
@@ -273,7 +273,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
 	                              values_list_size);
 
-	if (!validity.AllValid()) {
+	if (validity.CanHaveNull()) {
 		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data
 		//! Which is a problem if we're still sharing the memory with 'input'
 		Vector other(result.GetType(), count);

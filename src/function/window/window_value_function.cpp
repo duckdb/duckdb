@@ -407,7 +407,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
 	// or if we are using framing (the frame may change on each row)
 	auto &ignore_nulls = glstate.ignore_nulls;
-	bool can_shift = ignore_nulls->AllValid() && !glstate.use_framing;
+	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
 	if (wexpr.offset_expr) {
 		can_shift = can_shift && wexpr.offset_expr->IsFoldable();
 	}

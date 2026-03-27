@@ -22,7 +22,7 @@ public:
 		return format.validity.RowIsValid(format.sel->get_index(i));
 	}
 	bool CanHaveNull() const {
-		return !format.validity.AllValid();
+		return format.validity.CanHaveNull();
 	}
 	idx_t size() const {
 		return count;
@@ -158,7 +158,7 @@ public:
 		return data[format.sel->get_index(i)];
 	}
 	bool CanHaveNull() const {
-		return !format.validity.AllValid();
+		return format.validity.CanHaveNull();
 	}
 
 private:
@@ -185,7 +185,7 @@ private:
 	class VectorScanIterator {
 	public:
 		explicit VectorScanIterator(UnifiedVectorFormat &format, const T *data, idx_t index, idx_t count)
-		    : format(format), data(data), count(count), can_have_null(!format.validity.AllValid()) {
+		    : format(format), data(data), count(count), can_have_null(format.validity.CanHaveNull()) {
 			r.index = index;
 			AdvanceToValid();
 		}

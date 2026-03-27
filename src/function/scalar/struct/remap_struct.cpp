@@ -117,7 +117,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 					result_validity.SetInvalid(i);
 				}
 			}
-			has_top_level_null = !result_validity.AllValid();
+			has_top_level_null = result_validity.CanHaveNull();
 		}
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
@@ -167,7 +167,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 					result_validity.SetInvalid(i);
 				}
 			}
-			has_top_level_null = !result_validity.AllValid();
+			has_top_level_null = result_validity.CanHaveNull();
 		}
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
@@ -209,7 +209,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 					result_validity.SetInvalid(i);
 				}
 			}
-			has_top_level_null = !result_validity.AllValid();
+			has_top_level_null = result_validity.CanHaveNull();
 		}
 	}
 

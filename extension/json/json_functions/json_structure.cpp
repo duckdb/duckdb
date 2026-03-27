@@ -293,7 +293,7 @@ bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) 
 
 	T result;
 	string error_message;
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!OP::template Operation<T>(format, strings[i], result, error_message)) {
 				return false;

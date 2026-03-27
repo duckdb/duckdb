@@ -522,7 +522,7 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chun
 	if (chunk.start == chunk.end) {
 		return;
 	}
-	if (vector_data.format.validity.AllValid()) {
+	if (vector_data.format.validity.CannotHaveNull()) {
 		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
 			TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
 		} else {
@@ -1185,7 +1185,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	UnifiedVectorFormat sort_key_vec_format;
 	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
 
-	// When doing aggressive vector verification, the "sort_key_vec_format.validity.AllValid()" is not always true
+	// When doing aggressive vector verification, the "sort_key_vec_format.validity.CannotHaveNull()" is not always true
 	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode

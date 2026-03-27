@@ -46,7 +46,7 @@ private:
 	                               const SelectionVector &asel, const SelectionVector &bsel,
 	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
 	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
-		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
+		if (avalidity.CanHaveNull() || bvalidity.CanHaveNull() || cvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
@@ -180,7 +180,7 @@ private:
 	static inline idx_t SelectLoopSwitch(UnifiedVectorFormat &adata, UnifiedVectorFormat &bdata,
 	                                     UnifiedVectorFormat &cdata, const SelectionVector *sel, idx_t count,
 	                                     SelectionVector *true_sel, SelectionVector *false_sel) {
-		if (!adata.validity.AllValid() || !bdata.validity.AllValid() || !cdata.validity.AllValid()) {
+		if (adata.validity.CanHaveNull() || bdata.validity.CanHaveNull() || cdata.validity.CanHaveNull()) {
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
 			                                                              false_sel);
 		} else {

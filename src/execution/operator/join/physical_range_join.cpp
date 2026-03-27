@@ -412,7 +412,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			UnifiedVectorFormat vdata;
 			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
-			if (vvalidity.AllValid()) {
+			if (vvalidity.CannotHaveNull()) {
 				continue;
 			}
 			pvalidity.EnsureWritable();

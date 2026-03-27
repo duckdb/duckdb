@@ -145,7 +145,7 @@ idx_t DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const R
                                       const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                       ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
 #ifndef DUCKDB_SMALLER_BINARY
-	if (!lmask.AllValid() || !rmask.AllValid()) {
+	if (lmask.CanHaveNull() || rmask.CanHaveNull()) {
 		return DistinctSelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
 	} else {
