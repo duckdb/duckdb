@@ -926,12 +926,12 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 
 static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
 	FileMetadata result;
-	result.file_size = static_cast<idx_t>(entry->EndOfFile.QuadPart);
+	result.file_size = static_cast<idx_t>(entry.EndOfFile.QuadPart);
 
 	FILETIME ft;
-	ft.dwLowDateTime = entry->LastWriteTime.LowPart;
-	ft.dwHighDateTime = entry->LastWriteTime.HighPart;
-	result.file_size = FiletimeToTimeStamp(ft);
+	ft.dwLowDateTime = entry.LastWriteTime.LowPart;
+	ft.dwHighDateTime = entry.LastWriteTime.HighPart;
+	result.last_modification_time = FiletimeToTimeStamp(ft);
 
 	result.file_id = entry.FileId.QuadPart;
 	return result;
@@ -1346,7 +1346,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 
 				auto metadata = StatsFromDirInfo(*entry);
 				metadata.device_id = volume_serial_number;
-				FillFileOptions(options, metadata);
+				FillFileOptions(metadata, options);
 
 				callback(info);
 			}
