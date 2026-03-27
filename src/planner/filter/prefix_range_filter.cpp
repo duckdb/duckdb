@@ -204,10 +204,12 @@ static uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
 		return string_t(max_string).GetPrefixIntegerComparable();
 	}
 
-	char padded_prefix[string_t::PREFIX_BYTES];
-	memset(padded_prefix, 0xFF, sizeof(padded_prefix));
-	memcpy(padded_prefix, max_string.data(), max_string.size());
-	return string_t(padded_prefix, string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
+	array<char, string_t::PREFIX_BYTES> padded_prefix;
+	padded_prefix.fill(char(0xFF));
+	for (idx_t i = 0; i < max_string.size(); i++) {
+		padded_prefix[i] = max_string[i];
+	}
+	return string_t(padded_prefix.data(), string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
 }
 
 template <typename Policy>
