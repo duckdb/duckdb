@@ -202,7 +202,7 @@ def test_format_stdin_multi_statement(shell):
     """Multiple statements are formatted correctly via stdin."""
     result = run_format_stdin(shell, "select a from t; select b from u")
     assert result.status_code == 0
-    assert "SELECT a\nFROM t;\nSELECT b\nFROM u" in result.stdout
+    assert "SELECT a\nFROM t;\nSELECT b\nFROM u" in result.stdout.replace("\r\n", "\n")
 
 
 def test_format_stdin_join(shell):
@@ -251,9 +251,10 @@ def test_format_subquery_select_list_multiline(shell):
     result = run_format_stdin(shell, sql)
     assert result.status_code == 0
     # Each column in the subquery's SELECT list should be on its own line
-    assert "avg(a.address_valuation) AS avg_val,\n" in result.stdout
-    assert "sum(a.address_zone) AS sum_zone,\n" in result.stdout
-    assert "count(a.address_zone) AS cnt_zone\n" in result.stdout
+    normalized = result.stdout.replace("\r\n", "\n")
+    assert "avg(a.address_valuation) AS avg_val,\n" in normalized
+    assert "sum(a.address_zone) AS sum_zone,\n" in normalized
+    assert "count(a.address_zone) AS cnt_zone\n" in normalized
     # Columns must NOT all run together on one line
     assert "avg_val, sum(" not in result.stdout
 
