@@ -63,6 +63,7 @@ jobs:
       linux_musl_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
+      ccache_probe_only: ${{ steps.ccache_probe.outputs.enabled }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -101,6 +102,16 @@ jobs:
             echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
           else
             echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure ccache probe workflow
+        id: ccache_probe
+        shell: bash
+        run: |
+          if [[ "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" == "ccache-linux-jobs" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Select CI runner
@@ -222,9 +233,33 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
+
+    - uses: ./.github/actions/ccache-action
+      if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
+      with:
+        key: ccache-probe-linux-debug-${{ github.run_id }}
+        save: 'true'
+        enable_debug: 'true'
+        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-debug-initial
+
+    - name: Show ccache stats before build
+      if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/stats-before.txt"
 
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
+
+    - name: Show ccache stats after build
+      if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/ccache.log" ]]; then
+          echo "::group::ccache debug log"
+          cat "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/ccache.log"
+          echo "::endgroup::"
+        fi
 
     - name: Smoke tests
       run: make smoke
@@ -233,17 +268,84 @@ jobs:
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Prepare relassert artifact
+      if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
       run: make relassert-artifact
 
     - name: Upload relassert build artifact
+      if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
       uses: actions/upload-artifact@v7
       with:
         name: linux-debug-relassert-build
         path: build/relassert-artifact.tar.gz
         if-no-files-found: error
 
+    - name: Upload ccache debug artifact
+      if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-debug-ccache-initial
+        path: build/ccache-debug/linux-debug-initial
+        if-no-files-found: error
+
+ linux-debug-ccache-probe:
+    name: Linux Debug Ccache Probe
+    if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      CC: gcc
+      CXX: g++
+      TREAT_WARNINGS_AS_ERRORS: 1
+      GEN: ninja
+      CRASH_ON_ASSERT: 1
+      FORCE_DEBUG: 1
+      FORCE_ASSERT: 1
+      REDUCE_SYMBOLS: 1
+      EXTENSIONS_STATIC_BUILD: 0
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - uses: ./.github/actions/ccache-action
+      with:
+        key: ccache-probe-linux-debug-${{ github.run_id }}
+        save: 'false'
+        enable_debug: 'true'
+        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-debug-probe
+
+    - name: Show ccache stats before build
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/stats-before.txt"
+
+    - name: Build
+      run: python3 scripts/ci/retry.py -- make relassert
+
+    - name: Show ccache stats after build
+      if: ${{ always() }}
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/ccache.log" ]]; then
+          echo "::group::ccache debug log"
+          cat "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/ccache.log"
+          echo "::endgroup::"
+        fi
+
+    - name: Upload ccache debug artifact
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-debug-ccache-probe
+        path: build/ccache-debug/linux-debug-probe
+        if-no-files-found: error
+
  linux-debug-tests:
     name: Linux Debug Tests
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     needs:
       - prepare
       - linux-debug
@@ -276,6 +378,7 @@ jobs:
       run: make unittest_relassert
 
  regression:
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
     needs:
@@ -288,11 +391,13 @@ jobs:
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     uses: ./.github/workflows/CodeQuality.yml
     secrets: inherit
     needs: prepare
 
  extensions:
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
     needs:
@@ -307,6 +412,7 @@ jobs:
 
  wasm-eh:
     name: Wasm EH
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     needs:
       - prepare
       - linux-debug
@@ -339,28 +445,117 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
+
+    - uses: ./.github/actions/ccache-action
+      if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
+      with:
+        key: ccache-probe-linux-release-${{ github.run_id }}
+        save: 'true'
+        enable_debug: 'true'
+        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-release-initial
+
+    - name: Show ccache stats before build
+      if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-initial/stats-before.txt"
 
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build
+        upload_artifact: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
 
     - name: Build linux default release
       run: make clean release
 
+    - name: Show ccache stats after build
+      if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-initial/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-release-initial/ccache.log" ]]; then
+          echo "::group::ccache debug log"
+          cat "${{ github.workspace }}/build/ccache-debug/linux-release-initial/ccache.log"
+          echo "::endgroup::"
+        fi
+
     - name: Prepare linux default release artifact
+      if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
       run: |
         make release-artifact
         mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
 
     - name: Upload linux default release artifact
+      if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
       uses: actions/upload-artifact@v7
       with:
         name: linux-default-release-build
         path: build/linux-default-release.tar.gz
         if-no-files-found: error
 
+    - name: Upload ccache debug artifact
+      if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-release-ccache-initial
+        path: build/ccache-debug/linux-release-initial
+        if-no-files-found: error
+
+ linux-release-ccache-probe:
+    name: Linux Release Ccache Probe
+    if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - uses: ./.github/actions/ccache-action
+      with:
+        key: ccache-probe-linux-release-${{ github.run_id }}
+        save: 'false'
+        enable_debug: 'true'
+        debug_path: ${{ github.workspace }}/build/ccache-debug/linux-release-probe
+
+    - name: Show ccache stats before build
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-probe/stats-before.txt"
+
+    - uses: ./.github/actions/linux_release_build
+      with:
+        artifact_name: linux-release-build-probe
+        upload_artifact: 'false'
+
+    - name: Build linux default release
+      run: make clean release
+
+    - name: Show ccache stats after build
+      if: ${{ always() }}
+      run: |
+        ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-probe/stats-after.txt"
+        if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-release-probe/ccache.log" ]]; then
+          echo "::group::ccache debug log"
+          cat "${{ github.workspace }}/build/ccache-debug/linux-release-probe/ccache.log"
+          echo "::endgroup::"
+        fi
+
+    - name: Upload ccache debug artifact
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-release-ccache-probe
+        path: build/ccache-debug/linux-release-probe
+        if-no-files-found: error
+
  linux-release-tests:
     name: Linux Release Tests
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     needs:
       - prepare
       - linux-release
@@ -388,6 +583,7 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     runs-on: ubuntu-24.04
     needs:
       - prepare
@@ -419,6 +615,7 @@ jobs:
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     needs:
       - prepare
       - linux-release-tests
@@ -506,6 +703,7 @@ jobs:
 
  linux-musl-release-cli:
     name: Linux CLI (${{ matrix.config.arch }}-musl)
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     needs:
       - prepare
       - linux-release-tests
@@ -603,8 +801,10 @@ jobs:
 
  main_julia:
     name: Julia ${{ matrix.version }}
-    if: ${{ github.ref_name == 'main' }}
-    needs: linux-release-cli
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' && github.ref_name == 'main' }}
+    needs:
+      - prepare
+      - linux-release-cli
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -662,7 +862,10 @@ jobs:
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
-    needs: linux-release-cli
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
+    needs:
+      - prepare
+      - linux-release-cli
     runs-on: ubuntu-latest
 
     steps:
@@ -683,6 +886,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
     needs:
@@ -692,6 +896,7 @@ jobs:
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
     needs:
@@ -705,6 +910,7 @@ jobs:
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
@@ -736,6 +942,7 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
     needs:
       - prepare
@@ -762,9 +969,11 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' && !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
@@ -798,6 +1007,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     needs:
       - prepare
       - linux-debug
@@ -827,6 +1037,7 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
     needs:
       - prepare
@@ -852,6 +1063,7 @@ jobs:
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
+    if: ${{ needs.prepare.outputs.ccache_probe_only != 'true' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare

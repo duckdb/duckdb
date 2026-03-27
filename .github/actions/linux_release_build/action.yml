@@ -28,6 +28,10 @@ inputs:
     description: Whether to run smoke tests
     required: false
     default: "true"
+  upload_artifact:
+    description: Whether to upload the release artifact
+    required: false
+    default: "true"
 runs:
   using: composite
   steps:
@@ -57,6 +61,7 @@ runs:
       run: make release-artifact
 
     - name: Upload release build artifact
+      if: ${{ inputs.upload_artifact == 'true' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact_name }}

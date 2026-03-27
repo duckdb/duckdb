@@ -1,14 +1,55 @@
 name: 'Setup Ccache'
 description: 'Configure ccache for workflow jobs'
+inputs:
+  key:
+    description: Cache key suffix used by the ccache action
+    required: false
+    default: ''
+  save:
+    description: Whether to save the ccache contents at the end of the job
+    required: false
+    default: ''
+  enable_debug:
+    description: Enable ccache debug logging and debug files
+    required: false
+    default: 'false'
+  debug_path:
+    description: Directory used to store ccache debug files and the aggregate log
+    required: false
+    default: ''
 runs:
   using: "composite"
   steps:
+     - id: resolve_inputs
+       shell: bash
+       run: |
+         key='${{ inputs.key }}'
+         if [[ -z "$key" ]]; then
+           key='${{ github.job }}'
+         fi
+
+         save='${{ inputs.save }}'
+         if [[ -z "$save" ]]; then
+           save='${{ github.repository != ''duckdb/duckdb'' || contains(''["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]'', github.ref) }}'
+         fi
+
+         debug_path='${{ inputs.debug_path }}'
+         if [[ -z "$debug_path" ]]; then
+           debug_path="$GITHUB_WORKSPACE/build/ccache-debug/${{ github.job }}"
+         fi
+
+         {
+           echo "key=$key"
+           echo "save=$save"
+           echo "debug_path=$debug_path"
+         } >> "$GITHUB_OUTPUT"
+
      - name: Setup Ccache
        if: ${{ github.workflow != 'NightlyTests' }}
        uses: hendrikmuhs/ccache-action@main
        with:
-         key: ${{ github.job }}
-         save: ${{ github.repository != 'duckdb/duckdb' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
+         key: ${{ steps.resolve_inputs.outputs.key }}
+         save: ${{ steps.resolve_inputs.outputs.save }}
          # Dump verbose ccache statistics report at end of CI job.
          verbose: 1
          # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.
@@ -18,3 +59,14 @@ runs:
          # Evicts all cache files that were not touched during the job run.
          # Removing cache files from previous runs avoids creating huge caches.
          evict-old-files: 'job'
+
+     - name: Enable ccache debug logging
+       if: ${{ inputs.enable_debug == 'true' }}
+       shell: bash
+       run: |
+         mkdir -p "${{ steps.resolve_inputs.outputs.debug_path }}/files"
+         {
+           echo "CCACHE_DEBUG=1"
+           echo "CCACHE_DEBUGDIR=${{ steps.resolve_inputs.outputs.debug_path }}/files"
+           echo "CCACHE_LOGFILE=${{ steps.resolve_inputs.outputs.debug_path }}/ccache.log"
+         } >> "$GITHUB_ENV"
