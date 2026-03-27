@@ -159,9 +159,10 @@ private:
 class ViewColumnHelper : public ColumnHelper {
 public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
-		if (entry.internal) {
-			// bind internal views
+		try {
+			// try to bind the view if it is not yet bound
 			entry.BindView(context);
+		} catch (std::exception &ex) {
 		}
 		auto view_columns = entry.GetColumnInfo();
 		if (view_columns) {
