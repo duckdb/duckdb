@@ -53,8 +53,8 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
                                        idx_t count) {
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
-	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
+
+	auto input_validity = input.Validity(count);
 
 	if (count > STANDARD_VECTOR_SIZE) {
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
@@ -62,19 +62,15 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hash_vec, count);
 
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	const auto states = UnifiedVectorFormat::GetData<ApproxDistinctCountState *>(sdata);
-
-	UnifiedVectorFormat hdata;
-	hash_vec.ToUnifiedFormat(count, hdata);
-	const auto *hashes = UnifiedVectorFormat::GetData<hash_t>(hdata);
+	auto states = state_vector.Values<ApproxDistinctCountState *>(count);
+	auto hashes = hash_vec.Values<hash_t>(count);
 	for (idx_t i = 0; i < count; i++) {
-		if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
-			auto agg_state = states[sdata.sel->get_index(i)];
-			const auto hash = hashes[hdata.sel->get_index(i)];
-			agg_state->hll.InsertElement(hash);
+		if (!input_validity.IsValid(i)) {
+			continue;
 		}
+		auto agg_state = states[i].value;
+		const auto hash = hashes[i].value;
+		agg_state->hll.InsertElement(hash);
 	}
 }
 

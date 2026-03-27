@@ -54,19 +54,17 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
 		// retrieve the list entry from the source vector
-		UnifiedVectorFormat vdata;
-		source.ToUnifiedFormat(count, vdata);
+		auto entries = source.Values<list_entry_t>(count);
+		auto entry = entries[position];
 
-		auto list_index = vdata.sel->get_index(position);
-		if (!vdata.validity.RowIsValid(list_index)) {
+		if (!entry.IsValid()) {
 			// list is null: create null value
 			Value null_value(source_type);
 			vector.Reference(null_value);
 			break;
 		}
 
-		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
-		auto list_entry = list_data[list_index];
+		auto list_entry = entry.value;
 
 		// add the list entry as the first element of "vector"
 		// FIXME: we only need to allocate space for 1 tuple here

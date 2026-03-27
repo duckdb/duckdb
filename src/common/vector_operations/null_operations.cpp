@@ -20,14 +20,11 @@ static void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 		auto result_data = ConstantVector::GetData<bool>(result);
 		*result_data = INVERSE ? !ConstantVector::IsNull(input) : ConstantVector::IsNull(input);
 	} else {
-		UnifiedVectorFormat data;
-		input.ToUnifiedFormat(count, data);
-
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<bool>(result);
+		auto entries = input.Validity(count);
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = data.sel->get_index(i);
-			result_data[i] = INVERSE ? data.validity.RowIsValid(idx) : !data.validity.RowIsValid(idx);
+			result_data[i] = INVERSE ? entries.IsValid(i) : !entries.IsValid(i);
 		}
 	}
 }
@@ -47,15 +44,12 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return !ConstantVector::IsNull(input);
 	} else {
-		UnifiedVectorFormat data;
-		input.ToUnifiedFormat(count, data);
-
-		if (data.validity.AllValid()) {
+		auto entries = input.Validity(count);
+		if (!entries.CanHaveNull()) {
 			return true;
 		}
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = data.sel->get_index(i);
-			if (data.validity.RowIsValid(idx)) {
+			if (entries.IsValid(i)) {
 				return true;
 			}
 		}
@@ -70,15 +64,12 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return ConstantVector::IsNull(input);
 	} else {
-		UnifiedVectorFormat data;
-		input.ToUnifiedFormat(count, data);
-
-		if (data.validity.AllValid()) {
+		auto entries = input.Validity(count);
+		if (!entries.CanHaveNull()) {
 			return false;
 		}
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = data.sel->get_index(i);
-			if (!data.validity.RowIsValid(idx)) {
+			if (!entries.IsValid(i)) {
 				return true;
 			}
 		}

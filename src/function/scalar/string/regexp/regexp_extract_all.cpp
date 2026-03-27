@@ -125,13 +125,12 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 		result = 0;
 		return true;
 	}
-	UnifiedVectorFormat format;
-	args.data[2].ToUnifiedFormat(args.size(), format);
-	idx_t index = format.sel->get_index(row);
-	if (!format.validity.RowIsValid(index)) {
+	auto entries = args.data[2].Values<int32_t>(args.size());
+	auto entry = entries[row];
+	if (!entry.IsValid()) {
 		return false;
 	}
-	result = UnifiedVectorFormat::GetData<int32_t>(format)[index];
+	result = entry.value;
 	return true;
 }
 
@@ -164,11 +163,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &output_child = ListVector::GetEntry(result);
 
-	UnifiedVectorFormat strings_data;
-	strings.ToUnifiedFormat(args.size(), strings_data);
-
-	UnifiedVectorFormat pattern_data;
-	patterns.ToUnifiedFormat(args.size(), pattern_data);
+	auto strings_entries = strings.Values<string_t>(args.size());
+	auto pattern_entries = patterns.Values<string_t>(args.size());
 
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
@@ -196,11 +192,11 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		if (!info.constant_pattern) {
 			// Check if the pattern is NULL or not,
 			// and compile the pattern if it's not constant
-			auto pattern_idx = pattern_data.sel->get_index(row);
-			if (!pattern_data.validity.RowIsValid(pattern_idx)) {
+			auto pattern_entry = pattern_entries[row];
+			if (!pattern_entry.IsValid()) {
 				pattern_valid = false;
 			} else {
-				auto &pattern_p = UnifiedVectorFormat::GetData<string_t>(pattern_data)[pattern_idx];
+				auto &pattern_p = pattern_entry.value;
 				auto pattern_strpiece = CreateStringPiece(pattern_p);
 				stored_re = make_uniq<duckdb_re2::RE2>(pattern_strpiece, info.options);
 
@@ -213,9 +209,9 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			}
 		}
 
-		auto string_idx = strings_data.sel->get_index(row);
+		auto string_entry = strings_entries[row];
 		int32_t group_index;
-		if (!pattern_valid || !strings_data.validity.RowIsValid(string_idx) || !GetGroupIndex(args, row, group_index)) {
+		if (!pattern_valid || !string_entry.IsValid() || !GetGroupIndex(args, row, group_index)) {
 			// If something is NULL, the result is NULL
 			// FIXME: do we even need 'SPECIAL_HANDLING'?
 			auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -228,7 +224,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 		auto &re = GetPattern(info, state, stored_re);
 		auto &groups = GetGroupsBuffer(info, state, non_const_args);
-		auto &string = UnifiedVectorFormat::GetData<string_t>(strings_data)[string_idx];
+		auto &string = string_entry.value;
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
 	}
 
@@ -316,8 +312,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
-	UnifiedVectorFormat strings_data;
-	strings.ToUnifiedFormat(args.size(), strings_data);
+	auto strings_entries = strings.Values<string_t>(args.size());
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
 
@@ -329,14 +324,14 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 	vector<duckdb_re2::StringPiece> group_spans(group_count + 1);
 
 	for (idx_t row = 0; row < tuple_count; row++) {
-		auto sindex = strings_data.sel->get_index(row);
-		if (!strings_data.validity.RowIsValid(sindex)) {
+		auto string_entry = strings_entries[row];
+		if (!string_entry.IsValid()) {
 			list_entries[row].offset = ListVector::GetListSize(result);
 			list_entries[row].length = 0;
 			list_validity.SetInvalid(row);
 			continue;
 		}
-		auto &string_val = UnifiedVectorFormat::GetData<string_t>(strings_data)[sindex];
+		auto &string_val = string_entry.value;
 		ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result, row);
 	}
 	if (args.AllConstant()) {

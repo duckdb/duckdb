@@ -140,17 +140,15 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			continue;
 		}
 
-		UnifiedVectorFormat vdata;
-		input.data[col_idx].ToUnifiedFormat(input.size(), vdata);
+		auto entries = input.data[col_idx].template Values<T>(input.size());
 
-		auto input_data = UnifiedVectorFormat::GetData<T>(vdata);
-		if (!vdata.validity.AllValid()) {
+		if (entries.CanHaveNull()) {
 			// potential new null entries: have to check the null mask
 			for (idx_t i = 0; i < input.size(); i++) {
-				auto vindex = vdata.sel->get_index(i);
-				if (vdata.validity.RowIsValid(vindex)) {
+				auto entry = entries[i];
+				if (entry.IsValid()) {
 					// not a null entry: perform the operation and add to new set
-					auto ivalue = input_data[vindex];
+					auto ivalue = entry.value;
 					if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 						result_has_value[i] = true;
 						result_data[i] = ivalue;
@@ -160,9 +158,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		} else {
 			// no new null entries: only need to perform the operation
 			for (idx_t i = 0; i < input.size(); i++) {
-				auto vindex = vdata.sel->get_index(i);
-
-				auto ivalue = input_data[vindex];
+				auto ivalue = entries.GetValueUnsafe(i);
 				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 					result_has_value[i] = true;
 					result_data[i] = ivalue;
