@@ -402,6 +402,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_group_object", "json", CatalogType::MACRO_ENTRY},
     {"json_group_structure", "json", CatalogType::MACRO_ENTRY},
     {"json_keys", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_merge_diff", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_merge_patch", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_normalize", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_object", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
