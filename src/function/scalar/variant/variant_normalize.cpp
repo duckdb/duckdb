@@ -248,11 +248,6 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, ListVector::GetListSize(keys));
 	keys_entry.Slice(keys_selvec, ListVector::GetListSize(keys));
-
-	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, Vector &result) {

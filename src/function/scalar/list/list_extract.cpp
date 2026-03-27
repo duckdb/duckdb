@@ -90,13 +90,6 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 	for (const auto &invalid_idx : invalid_offsets) {
 		FlatVector::SetNull(result, invalid_idx, true);
 	}
-
-	if (count == 1 || (list.GetVectorType() == VectorType::CONSTANT_VECTOR &&
-	                   offsets.GetVectorType() == VectorType::CONSTANT_VECTOR)) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(count);
 }
 
 static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {

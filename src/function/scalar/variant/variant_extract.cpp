@@ -286,11 +286,6 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
-
-	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
