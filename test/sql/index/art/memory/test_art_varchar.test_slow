@@ -8,6 +8,10 @@ require vector_size 2048
 
 require ram 16gb
 
+# This test results in a timeout after 600s on Linux CLI musl in CI.
+
+require notmusl
+
 statement ok
 set temp_directory=null;
 
