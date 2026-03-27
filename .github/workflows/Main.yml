@@ -246,6 +246,7 @@ jobs:
     - name: Show ccache stats before build
       if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-initial"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/stats-before.txt"
 
     - name: Build
@@ -254,6 +255,7 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-initial"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/stats-after.txt"
         if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-debug-initial/ccache.log" ]]; then
           echo "::group::ccache debug log"
@@ -320,6 +322,7 @@ jobs:
 
     - name: Show ccache stats before build
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-probe"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/stats-before.txt"
 
     - name: Build
@@ -328,6 +331,7 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() }}
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-debug-probe"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/stats-after.txt"
         if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-debug-probe/ccache.log" ]]; then
           echo "::group::ccache debug log"
@@ -458,6 +462,7 @@ jobs:
     - name: Show ccache stats before build
       if: ${{ needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-initial"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-initial/stats-before.txt"
 
     - uses: ./.github/actions/linux_release_build
@@ -471,6 +476,7 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() && needs.prepare.outputs.ccache_probe_only == 'true' }}
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-initial"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-initial/stats-after.txt"
         if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-release-initial/ccache.log" ]]; then
           echo "::group::ccache debug log"
@@ -525,6 +531,7 @@ jobs:
 
     - name: Show ccache stats before build
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-probe"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-probe/stats-before.txt"
 
     - uses: ./.github/actions/linux_release_build
@@ -538,6 +545,7 @@ jobs:
     - name: Show ccache stats after build
       if: ${{ always() }}
       run: |
+        mkdir -p "${{ github.workspace }}/build/ccache-debug/linux-release-probe"
         ccache -sv | tee "${{ github.workspace }}/build/ccache-debug/linux-release-probe/stats-after.txt"
         if [[ -f "${{ github.workspace }}/build/ccache-debug/linux-release-probe/ccache.log" ]]; then
           echo "::group::ccache debug log"

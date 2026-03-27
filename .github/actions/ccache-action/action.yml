@@ -22,6 +22,8 @@ runs:
   steps:
      - id: resolve_inputs
        shell: bash
+       env:
+         DEFAULT_SAVE: ${{ github.repository != 'duckdb/duckdb' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
        run: |
          key='${{ inputs.key }}'
          if [[ -z "$key" ]]; then
@@ -30,7 +32,7 @@ runs:
 
          save='${{ inputs.save }}'
          if [[ -z "$save" ]]; then
-           save='${{ github.repository != ''duckdb/duckdb'' || contains(''["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]'', github.ref) }}'
+           save="$DEFAULT_SAVE"
          fi
 
          debug_path='${{ inputs.debug_path }}'
