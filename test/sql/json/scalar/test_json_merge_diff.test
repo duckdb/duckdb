@@ -250,6 +250,48 @@ SELECT id, json_merge_diff(old_state, new_state) FROM versions ORDER BY id
 2	{"b":null}
 3	{"new":true}
 
+# Nested type change: object to scalar at nested level
+query T
+SELECT json_merge_diff('{"a":{"x":1}}', '{"a":42}')
+----
+{"a":42}
+
+# Nested type change: scalar to object at nested level
+query T
+SELECT json_merge_diff('{"a":42}', '{"a":{"x":1}}')
+----
+{"a":{"x":1}}
+
+# Deeply nested with no changes (4 levels, nullptr propagation)
+query T
+SELECT json_merge_diff('{"a":{"b":{"c":{"d":1}}}}', '{"a":{"b":{"c":{"d":1}}}}')
+----
+{}
+
+# Array of objects with element changes (whole array replaces)
+query T
+SELECT json_merge_diff('{"items":[{"a":1}]}', '{"items":[{"a":2}]}')
+----
+{"items":[{"a":2}]}
+
+# Same-length array with different last element
+query T
+SELECT json_merge_diff('{"arr":[1,2,3]}', '{"arr":[1,2,4]}')
+----
+{"arr":[1,2,4]}
+
+# Round-trip: complex nested with add+remove+change+nested change
+query T
+SELECT json_merge_patch(
+    '{"a":1,"b":{"x":1,"y":2},"c":3,"d":{"e":5}}',
+    json_merge_diff(
+        '{"a":1,"b":{"x":1,"y":2},"c":3,"d":{"e":5}}',
+        '{"a":1,"b":{"x":1,"z":3},"d":{"e":5,"f":6},"g":7}'
+    )
+) = '{"a":1,"b":{"x":1,"z":3},"d":{"e":5,"f":6},"g":7}'
+----
+true
+
 # Large real-world example
 query T
 SELECT json_merge_diff(
