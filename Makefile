@@ -681,3 +681,20 @@ cleanup-vcpkg:
 
 test-utils:
 	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+
+add-git-pre-commit-hooks:
+	@if [ -f .git/hooks/pre-commit ]; then \
+		echo "pre-commit hook exists"; \
+		if grep -qF '# make format-fix hook #' .git/hooks/pre-commit; then \
+			echo "hook exists and contains make format-fix"; \
+			echo "no action needed. exiting."; \
+		else \
+			echo "hook exists but does not contain make format-fix"; \
+			echo "adding make format-fix"; \
+			printf '\n# make format-fix hook #\n# Get list of staged files\nstaged_files=$$(git diff --cached --name-only)\n# Run formatter on staged files\necho "$$staged_files" | xargs -P 0 -I {} python3 scripts/format.py {} --fix --noconfirm\n# Re-stage files that were:\n# 1. Originally staged\n# 2. Modified by the formatter\necho "$$staged_files" | while read -r file; do\n    if [ -n "$$file" ] && git diff --name-only | grep -Fxq "$$file"; then\n        git add "$$file"\n    fi\ndone\n' >> .git/hooks/pre-commit; \
+		fi \
+	else \
+		echo "pre-commit hook does not exist, creating it with make format-fix"; \
+		printf '#!/bin/sh\n# make format-fix hook #\n# Get list of staged files\nstaged_files=$$(git diff --cached --name-only)\n# Run formatter on staged files\necho "$$staged_files" | xargs -P 0 -I {} python3 scripts/format.py {} --fix --noconfirm\n# Re-stage files that were:\n# 1. Originally staged\n# 2. Modified by the formatter\necho "$$staged_files" | while read -r file; do\n    if [ -n "$$file" ] && git diff --name-only | grep -Fxq "$$file"; then\n        git add "$$file"\n    fi\ndone\n' > .git/hooks/pre-commit; \
+		chmod +x .git/hooks/pre-commit; \
+	fi
