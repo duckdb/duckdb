@@ -6,6 +6,7 @@
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
+#include "shortcuts.hpp"
 #endif
 
 namespace duckdb_shell {
@@ -217,6 +218,25 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
+#ifdef HAVE_LINENOISE
+		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
+			auto &shortcuts = duckdb::GetShellShortcuts();
+			const char *current_category = nullptr;
+			for (auto &entry : shortcuts) {
+				if (!current_category || strcmp(current_category, entry.category) != 0) {
+					if (current_category) {
+						state.PrintF("\n");
+					}
+					current_category = entry.category;
+					duckdb_shell::ShellHighlight highlighter(state);
+					highlighter.PrintText(entry.category, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
+					state.PrintF("\n");
+				}
+				state.PrintF("  %-24s %s\n", entry.key_name, entry.description);
+			}
+			return MetadataResult::SUCCESS;
+		}
+#endif
 		idx_t n = state.PrintHelp(args[1].c_str());
 		if (n == 0) {
 			state.PrintF("Nothing matches '%s'\n", args[1].c_str());
@@ -1044,6 +1064,9 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 	}
 	if (!print_extended) {
 		PrintF("\nRun .help --all for extended information\n");
+#ifdef HAVE_LINENOISE
+		PrintF("Run .help shortcuts for keyboard shortcuts\n");
+#endif
 	}
 	return print_info_list.size();
 }
