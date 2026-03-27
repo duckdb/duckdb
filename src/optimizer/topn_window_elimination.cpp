@@ -122,7 +122,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 
 	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
 		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-		D_ASSERT(op.get()->expressions.size() >= column_id &&
+		D_ASSERT(op.get()->expressions.size() > column_id &&
 		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
 		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
 		column_id = colref.binding.column_index;
@@ -297,12 +297,12 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	aggregate->ResolveOperatorTypes();
 
 	// Add group statistics to allow for perfect hash aggregation if applicable
-	aggregate->group_stats.resize(aggregate->groups.size());
-	for (idx_t i = 0; i < aggregate->groups.size(); i++) {
-		auto &group = aggregate->groups[i];
-		if (group->type == ExpressionType::BOUND_COLUMN_REF) {
-			auto &column_ref = group->Cast<BoundColumnRefExpression>();
-			if (stats) {
+	if (stats) {
+		aggregate->group_stats.resize(aggregate->groups.size());
+		for (idx_t i = 0; i < aggregate->groups.size(); i++) {
+			auto &group = aggregate->groups[i];
+			if (group->type == ExpressionType::BOUND_COLUMN_REF) {
+				auto &column_ref = group->Cast<BoundColumnRefExpression>();
 				auto group_stats = stats->find(column_ref.binding);
 				if (group_stats == stats->end()) {
 					continue;
@@ -771,10 +771,12 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
 		VisitExpression(&aggregate_payload[0]);
 	}
-	for (const auto &column_ref : column_references) {
-		const auto &column_stats = stats->find(column_ref.first);
-		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-			params.can_be_null = true;
+	if (stats) {
+		for (const auto &column_ref : column_references) {
+			const auto &column_stats = stats->find(column_ref.first);
+			if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
+				params.can_be_null = true;
+			}
 		}
 	}
 	column_references.clear();
@@ -1029,10 +1031,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 				auto &join = op.Cast<LogicalComparisonJoin>();
 				auto &op_child = std::prev(stack_it)->get();
 
-				auto &projection_map = join.left_projection_map;
-				if (&op_child != &*join.children[0]) {
-					projection_map = join.right_projection_map;
-				}
+				auto &projection_map =
+				    &op_child == &*join.children[0] ? join.left_projection_map : join.right_projection_map;
 				for (const auto rowid_idx : rhs_rowid_idxs) {
 					projection_map.push_back(rowid_idx);
 				}
