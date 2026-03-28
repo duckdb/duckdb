@@ -31,7 +31,8 @@ enum class VectorBufferType : uint8_t {
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
 	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
 	ARRAY_BUFFER,        // array buffer, holds a single flatvector child
-	SHREDDED_BUFFER      // holds data for a shredded variant vector
+	SHREDDED_BUFFER,     // holds data for a shredded variant vector
+	SEQUENCE_BUFFER      // holds a linear numeric sequence (start, increment)
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {

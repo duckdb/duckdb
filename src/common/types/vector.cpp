@@ -1168,11 +1168,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
-	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 3);
-	auto data = reinterpret_cast<int64_t *>(buffer->GetData());
-	data[0] = start;
-	data[1] = increment;
-	data[2] = int64_t(count);
+	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 	validity.Reset();
 	auxiliary.reset();
 }
