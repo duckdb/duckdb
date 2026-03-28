@@ -21,11 +21,11 @@ DROP TRIGGER IF EXISTS my_trigger ON my_table;
 ----
 DROP TRIGGER is not yet supported
 
-# Schema-qualified trigger name
+# Schema-qualified trigger name is not allowed (triggers inherit schema from the table)
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_table;
 ----
-DROP TRIGGER is not yet supported
+Parser Error: Syntax error at or near "."
 
 # Schema-qualified table name
 statement error
@@ -33,17 +33,17 @@ DROP TRIGGER my_trigger ON my_schema.my_table;
 ----
 DROP TRIGGER is not yet supported
 
-# Both schema-qualified
+# Schema-qualified trigger name with schema-qualified table
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+Parser Error: Syntax error at or near "."
 
-# DROP TRIGGER IF EXISTS with schema-qualified names
+# DROP TRIGGER IF EXISTS with schema-qualified trigger name
 statement error
 DROP TRIGGER IF EXISTS my_schema.my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+Parser Error: Syntax error at or near "."
 
 # CASCADE
 statement error

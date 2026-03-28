@@ -57,11 +57,11 @@ CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON my_table INSERT INTO log
 ----
 Table with name my_table does not exist
 
-# Schema-qualified trigger name - schema checked first
+# Schema-qualified trigger name is not allowed (triggers inherit schema from the table)
 statement error
 CREATE TRIGGER my_schema.my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-Schema with name my_schema does not exist
+Parser Error: Syntax error at or near "."
 
 # Schema-qualified table name - schema may not exist
 statement error

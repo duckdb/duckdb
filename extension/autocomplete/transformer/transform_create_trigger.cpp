@@ -24,11 +24,11 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
-	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName
+	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName
 	// ForEachClause? TriggerBody
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto trigger_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	auto trigger_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
 	auto timing = transformer.Transform<TriggerTiming>(list_pr.Child<ListParseResult>(3));
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr.Child<ListParseResult>(4));
 	// index 5 is 'ON'
@@ -43,9 +43,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = trigger_name.catalog;
-	info->schema = trigger_name.schema;
-	info->trigger_name = trigger_name.name;
+	info->trigger_name = trigger_name;
 	info->timing = timing;
 	info->event_type = trigger_event.event_type;
 	info->columns = std::move(trigger_event.columns);
@@ -61,6 +59,12 @@ TriggerForEach PEGTransformerFactory::TransformForEachClause(PEGTransformer &tra
 	// ForEachClause <- ForEachRow / ForEachStatement
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<TriggerForEach>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+string PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
 TriggerTiming PEGTransformerFactory::TransformTriggerTiming(PEGTransformer &transformer,

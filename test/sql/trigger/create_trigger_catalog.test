@@ -86,3 +86,31 @@ DROP TABLE t1 CASCADE;
 
 statement ok
 DROP TABLE log_table;
+
+# --- Trigger inherits schema from its table ---
+statement ok
+CREATE SCHEMA my_schema;
+
+statement ok
+CREATE TABLE my_schema.t2 (id INTEGER);
+
+statement ok
+CREATE TABLE my_schema.log2 (id INTEGER);
+
+statement ok
+CREATE TRIGGER schema_trigger AFTER INSERT ON my_schema.t2 INSERT INTO my_schema.log2 VALUES (1);
+
+# Verify trigger is in the same schema as the table
+query TTT
+SELECT schema_name, trigger_name, table_name FROM duckdb_triggers() WHERE trigger_name = 'schema_trigger';
+----
+my_schema	schema_trigger	t2
+
+statement ok
+DROP TABLE my_schema.t2 CASCADE;
+
+statement ok
+DROP TABLE my_schema.log2;
+
+statement ok
+DROP SCHEMA my_schema CASCADE;
