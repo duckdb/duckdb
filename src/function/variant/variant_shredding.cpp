@@ -210,7 +210,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity,
 		                              nested_data.get(), all_valid_validity, count);
 
-		if (!lookup_validity.AllValid()) {
+		if (lookup_validity.CanHaveNull()) {
 			optional_ptr<Vector> typed_value_vector;
 			optional_ptr<Vector> untyped_value_vector;
 			if (child_vec.GetType().id() == LogicalTypeId::STRUCT) {

@@ -33,7 +33,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		switch (args.data[idx].GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
 			auto &input_mask = FlatVector::Validity(args.data[idx]);
-			if (!input_mask.AllValid()) {
+			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);

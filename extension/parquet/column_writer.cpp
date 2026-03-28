@@ -225,7 +225,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 	}
 
 	// no parent: set definition levels only from this validity mask
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		state.definition_levels.insert(state.definition_levels.end(), count, define_value);
 	} else {
 		for (idx_t i = 0; i < count; i++) {

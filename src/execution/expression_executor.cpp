@@ -362,7 +362,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();
 	}
-	if (!idata.validity.AllValid()) {
+	if (idata.validity.CanHaveNull()) {
 		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
 	} else {
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);

@@ -315,7 +315,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 	// the inplace loops take the result as the last parameter
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, Equals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
 		} else {
@@ -325,7 +325,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_NOTEQUAL: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, NotEquals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
 		} else {
@@ -335,7 +335,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHAN: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, LessThan, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
 		} else {
@@ -345,7 +345,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHAN: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, GreaterThan, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
 		} else {
@@ -355,7 +355,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count = TemplatedFilterSelection<T, LessThanEquals, false>(vdata, predicate, sel,
 			                                                                          approved_tuple_count, new_sel);
 		} else {
@@ -365,7 +365,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count = TemplatedFilterSelection<T, GreaterThanEquals, false>(vdata, predicate, sel,
 			                                                                             approved_tuple_count, new_sel);
 		} else {
@@ -383,7 +383,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 template <bool IS_NULL>
 static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto &mask = vdata.validity;
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		// no NULL values
 		if (IS_NULL) {
 			approved_tuple_count = 0;

@@ -219,7 +219,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 	auto &list_mask = FlatVector::Validity(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
-		if (!parent_mask->AllValid()) {
+		if (parent_mask->CanHaveNull()) {
 			for (idx_t i = 0; i < size; i++) {
 				if (!parent_mask->RowIsValid(i)) {
 					list_mask.SetInvalid(i);
@@ -277,7 +277,7 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	auto &array_mask = FlatVector::Validity(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
-		if (!parent_mask->AllValid()) {
+		if (parent_mask->CanHaveNull()) {
 			for (idx_t i = 0; i < size; i++) {
 				if (!parent_mask->RowIsValid(i)) {
 					array_mask.SetInvalid(i);
@@ -287,7 +287,7 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 
 	// Broadcast the validity mask to the child vector
-	if (!array_mask.AllValid()) {
+	if (array_mask.CanHaveNull()) {
 		auto &child_validity_mask = FlatVector::Validity(child_vector);
 		for (idx_t i = 0; i < size; i++) {
 			if (!array_mask.RowIsValid(i)) {
@@ -395,7 +395,7 @@ static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
 				throw ConversionException("Could not convert Time to Microsecond");
@@ -420,7 +420,7 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			// dtime_ns_t.micros actually holds nanos (!)
 			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
@@ -446,7 +446,7 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const hugeint_t *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			tgt_ptr[row].lower = static_cast<uint64_t>(BSwapIfLE(src_ptr[row].upper));
 			// flip Upper MSD
@@ -472,7 +472,7 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr =
 	    ArrowBufferData<int64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimestampTZ to Microsecond");
@@ -1167,7 +1167,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 			ArrowToDuckDBConversion::SetValidityMask(child_entry, child_array, chunk_offset, size, array.offset,
 			                                         nested_offset);
-			if (!struct_validity_mask.AllValid()) {
+			if (struct_validity_mask.CanHaveNull()) {
 				auto &child_validity_mark = FlatVector::Validity(child_entry);
 				for (idx_t i = 0; i < size; i++) {
 					if (!struct_validity_mask.RowIsValid(i)) {
@@ -1384,7 +1384,7 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 	if (!parent_mask) {
 		return false;
 	}
-	return !parent_mask->AllValid();
+	return parent_mask->CanHaveNull();
 }
 
 void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
@@ -1437,7 +1437,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 	if (has_nulls) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset));
-		if (parent_mask && !parent_mask->AllValid()) {
+		if (parent_mask && parent_mask->CanHaveNull()) {
 			auto &struct_validity_mask = *parent_mask;
 			for (idx_t i = 0; i < size; i++) {
 				if (!struct_validity_mask.RowIsValid(i)) {

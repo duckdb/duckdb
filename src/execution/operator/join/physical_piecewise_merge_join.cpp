@@ -429,7 +429,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		for (auto &key : lhs_keys.data) {
 			key.Flatten(lhs_keys.size());
 			auto &mask = FlatVector::Validity(key);
-			if (mask.AllValid()) {
+			if (mask.CannotHaveNull()) {
 				continue;
 			}
 			mask.SetAllValid(lhs_not_null);

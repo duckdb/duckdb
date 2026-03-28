@@ -1032,7 +1032,7 @@ void AsOfProbeBuffer::ScanLeft() {
 	}
 
 	// Filter out NULL matches
-	if (!lhs_valid_mask.AllValid()) {
+	if (lhs_valid_mask.CanHaveNull()) {
 		const auto count = lhs_match_count;
 		lhs_match_count = 0;
 		for (idx_t i = 0; i < count; ++i) {

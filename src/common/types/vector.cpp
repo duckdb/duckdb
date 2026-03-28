@@ -1252,7 +1252,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
 	}
 
-	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
+	const bool has_validity_mask = (count > 0) && vdata.validity.CanHaveNull();
 	serializer.WriteProperty(100, "has_validity_mask", has_validity_mask);
 	if (has_validity_mask) {
 		ValidityMask flat_mask(count);

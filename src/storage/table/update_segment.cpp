@@ -672,7 +672,7 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 	auto &update_mask = update.validity;
 	auto tuple_data = update_info.GetData<bool>();
 
-	if (!update_mask.AllValid()) {
+	if (update_mask.CanHaveNull()) {
 		for (idx_t i = 0; i < update_info.N; i++) {
 			auto idx = update.sel->get_index(sel.get_index(i));
 			tuple_data[i] = update_mask.RowIsValidUnsafe(idx);
@@ -686,7 +686,7 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 	auto &base_mask = FlatVector::Validity(base_data);
 	auto base_tuple_data = base_info.GetData<bool>();
 	auto base_tuples = base_info.GetTuples();
-	if (!base_mask.AllValid()) {
+	if (base_mask.CanHaveNull()) {
 		for (idx_t i = 0; i < base_info.N; i++) {
 			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_tuples[i]);
 		}
@@ -999,7 +999,7 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
                                idx_t count, SelectionVector &sel) {
 	auto &mask = update.validity;
 	auto &validity = stats.statistics;
-	if (!mask.AllValid() && !validity.CanHaveNull()) {
+	if (mask.CanHaveNull() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (!mask.RowIsValid(idx)) {
@@ -1021,7 +1021,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 	auto update_data = update.GetData<T>(update);
 	auto &mask = update.validity;
 
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
@@ -1050,7 +1050,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
                              SelectionVector &sel) {
 	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
