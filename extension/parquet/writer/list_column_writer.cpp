@@ -177,7 +177,7 @@ idx_t ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &sc
 	optional_element.name = name;
 	if (field_id.IsValid()) {
 		optional_element.__isset.field_id = true;
-		optional_element.field_id = field_id.GetIndex();
+		optional_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	schemas.push_back(std::move(optional_element));
 

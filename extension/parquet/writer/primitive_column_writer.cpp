@@ -451,7 +451,7 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	schema_element.name = name;
 	if (field_id.IsValid()) {
 		schema_element.__isset.field_id = true;
-		schema_element.field_id = field_id.GetIndex();
+		schema_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
 	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());

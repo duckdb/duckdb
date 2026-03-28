@@ -1,4 +1,5 @@
 name: 'Setup Ccache'
+description: 'Configure ccache for workflow jobs'
 runs:
   using: "composite"
   steps:

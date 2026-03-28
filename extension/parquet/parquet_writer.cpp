@@ -390,7 +390,7 @@ public:
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
 };
 
-ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
+ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
     : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
       executor(context, expressions) {

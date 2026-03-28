@@ -814,3 +814,65 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	// Query result is no longer accessible
 	REQUIRE_THROWS(result->ToString());
 }
+
+TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible operations", "[api]") {
+	// Verify the three-state interrupt mechanism that prevents a completed COMMIT
+	// from being incorrectly reported as failed due to a late Interrupt() call.
+
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+
+	SECTION("Normal interrupt works") {
+		context.Interrupt();
+		REQUIRE(context.IsInterrupted());
+		REQUIRE_THROWS(context.InterruptCheck());
+		context.ClearInterrupt();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+	}
+
+	SECTION("SuppressInterrupts blocks subsequent Interrupt calls") {
+		context.SuppressInterrupts();
+		// Interrupt() uses CAS: NOT_INTERRUPTED -> INTERRUPTED
+		// Since state is SUPPRESSED, CAS fails and interrupt is discarded
+		context.Interrupt();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+		context.ClearInterrupt();
+	}
+
+	SECTION("SuppressInterrupts overrides a pending interrupt") {
+		context.Interrupt();
+		REQUIRE(context.IsInterrupted());
+		// SuppressInterrupts unconditionally stores SUPPRESSED,
+		// overriding the INTERRUPTED state
+		context.SuppressInterrupts();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+		context.ClearInterrupt();
+	}
+
+	SECTION("ClearInterrupt resets from SUPPRESSED to allow future interrupts") {
+		context.SuppressInterrupts();
+		context.ClearInterrupt();
+		// Now back to NOT_INTERRUPTED, Interrupt() should work again
+		context.Interrupt();
+		REQUIRE(context.IsInterrupted());
+		REQUIRE_THROWS(context.InterruptCheck());
+		context.ClearInterrupt();
+	}
+
+	SECTION("End-to-end: COMMIT suppresses interrupts") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE suppress_test (x INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		// After COMMIT, state should be SUPPRESSED — Interrupt() should be discarded
+		context.Interrupt();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+		// Cleanup
+		context.ClearInterrupt();
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE suppress_test"));
+	}
+}

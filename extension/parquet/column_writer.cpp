@@ -189,8 +189,8 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 	if (state.repetition_levels.size() >= parent->repetition_levels.size()) {
 		return;
 	}
-	state.repetition_levels.insert(state.repetition_levels.end(),
-	                               parent->repetition_levels.begin() + state.repetition_levels.size(),
+	auto repetition_offset = NumericCast<ptrdiff_t>(state.repetition_levels.size());
+	state.repetition_levels.insert(state.repetition_levels.end(), parent->repetition_levels.begin() + repetition_offset,
 	                               parent->repetition_levels.end());
 }
 

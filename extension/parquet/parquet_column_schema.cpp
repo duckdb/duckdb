@@ -53,7 +53,7 @@ ParquetColumnSchema ParquetColumnSchema::FromParentSchema(ParquetColumnSchema pa
 	res.schema_index = parent.schema_index;
 	res.column_index = parent.column_index;
 	res.schema_type = schema_type;
-	res.type = result_type;
+	res.type = std::move(result_type);
 	res.children.push_back(std::move(parent));
 	return res;
 }

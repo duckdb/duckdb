@@ -44,7 +44,7 @@ jobs:
         python3 scripts/ci/retry.py -- make
         python3 scripts/ci/retry.py -- git clone https://github.com/duckdb/duckdb.git
         cd duckdb
-        git checkout `git tag --list | tail -n 1`
+        git checkout "$(git tag --list | tail -n 1)"
         python3 ../scripts/ci/retry.py -- make
         cd ..
 
