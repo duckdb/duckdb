@@ -5,7 +5,10 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
@@ -19,7 +22,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include <unordered_set>
 #include <utility>
 
 namespace duckdb {
@@ -261,6 +263,10 @@ public:
 	PhysicalRecursiveCTE::executor_cache_t cached_executors;
 	//! Cached dependency graph for the single-thread inline recursive fast path
 	unique_ptr<RecursiveCTEInlinePlan> inline_plan;
+	//! Cached dependency graph after invariant meta-pipelines have been materialized once
+	unique_ptr<RecursiveCTEInlinePlan> invariant_inline_plan;
+	//! Whether invariant recursive meta-pipelines have already been materialized for this state
+	bool invariant_meta_pipelines_materialized = false;
 };
 
 //===--------------------------------------------------------------------===//
@@ -615,10 +621,14 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 	for (auto &meta_pipeline : meta_pipelines) {
 		for (auto &entry : meta_pipeline->GetDependencies()) {
 			auto pipeline_entry = stage_map.find(entry.first.get());
-			D_ASSERT(pipeline_entry != stage_map.end());
+			if (pipeline_entry == stage_map.end()) {
+				continue;
+			}
 			for (auto &dependency : entry.second) {
 				auto dependency_entry = stage_map.find(dependency.get());
-				D_ASSERT(dependency_entry != stage_map.end());
+				if (dependency_entry == stage_map.end()) {
+					continue;
+				}
 				AddRecursiveInlineDependency(*plan, pipeline_entry->second.execute_stage, dependency_entry->second.execute_stage);
 			}
 		}
@@ -632,7 +642,9 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 				continue;
 			}
 			auto child1_entry = stage_map.find(*child1->GetBasePipeline());
-			D_ASSERT(child1_entry != stage_map.end());
+			if (child1_entry == stage_map.end()) {
+				continue;
+			}
 
 			for (auto &child2 : children) {
 				if (child2->Type() != MetaPipelineType::JOIN_BUILD || child1.get() == child2.get()) {
@@ -642,7 +654,9 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 					continue;
 				}
 				auto child2_entry = stage_map.find(*child2->GetBasePipeline());
-				D_ASSERT(child2_entry != stage_map.end());
+				if (child2_entry == stage_map.end()) {
+					continue;
+				}
 
 				AddRecursiveInlineDependency(*plan, child1_entry->second.prepare_finish_stage,
 				                             child2_entry->second.execute_stage);
@@ -652,6 +666,185 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 		}
 	}
 	return plan;
+}
+
+static bool OperatorDirectlyDependsOnRecursiveInput(const PhysicalOperator &op, TableIndex cte_index) {
+	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
+		return true;
+	}
+	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN ||
+	    op.type == PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
+		auto &scan = op.Cast<PhysicalColumnDataScan>();
+		return scan.cte_index == cte_index;
+	}
+	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
+		auto &delim_join = op.Cast<PhysicalDelimJoin>();
+		for (auto &scan : delim_join.delim_scans) {
+			if (OperatorDirectlyDependsOnRecursiveInput(scan.get(), cte_index)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool PipelineDirectlyDependsOnRecursiveInput(Pipeline &pipeline, TableIndex cte_index) {
+	auto source = pipeline.GetSource();
+	if (source && OperatorDirectlyDependsOnRecursiveInput(*source, cte_index)) {
+		return true;
+	}
+	for (auto &op : pipeline.GetIntermediateOperators()) {
+		if (OperatorDirectlyDependsOnRecursiveInput(op.get(), cte_index)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static reference_set_t<const MetaPipeline>
+FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta_pipelines, TableIndex cte_index) {
+	reference_map_t<const Pipeline, reference<const MetaPipeline>> pipeline_to_meta_pipeline;
+	reference_set_t<const MetaPipeline> variant_meta_pipelines;
+
+	for (auto &meta_pipeline : meta_pipelines) {
+		vector<shared_ptr<Pipeline>> pipelines;
+		meta_pipeline->GetPipelines(pipelines, false);
+		for (auto &pipeline : pipelines) {
+			pipeline_to_meta_pipeline.emplace(*pipeline, *meta_pipeline);
+			if (PipelineDirectlyDependsOnRecursiveInput(*pipeline, cte_index)) {
+				variant_meta_pipelines.insert(*meta_pipeline);
+			}
+		}
+	}
+
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (auto &meta_pipeline : meta_pipelines) {
+			if (variant_meta_pipelines.find(*meta_pipeline) != variant_meta_pipelines.end()) {
+				continue;
+			}
+
+			bool depends_on_variant = false;
+			vector<shared_ptr<Pipeline>> pipelines;
+			meta_pipeline->GetPipelines(pipelines, false);
+			for (auto &pipeline : pipelines) {
+				for (auto &dependency : pipeline->GetDependencies()) {
+					auto dep = dependency.lock();
+					if (!dep) {
+						continue;
+					}
+					auto dep_entry = pipeline_to_meta_pipeline.find(*dep);
+					if (dep_entry == pipeline_to_meta_pipeline.end()) {
+						continue;
+					}
+					if (variant_meta_pipelines.find(dep_entry->second) != variant_meta_pipelines.end()) {
+						depends_on_variant = true;
+						break;
+					}
+				}
+				if (depends_on_variant) {
+					break;
+				}
+			}
+			if (!depends_on_variant) {
+				for (auto &entry : meta_pipeline->GetDependencies()) {
+					for (auto &dependency : entry.second) {
+						auto dep_entry = pipeline_to_meta_pipeline.find(dependency.get());
+						if (dep_entry == pipeline_to_meta_pipeline.end()) {
+							continue;
+						}
+						if (variant_meta_pipelines.find(dep_entry->second) != variant_meta_pipelines.end()) {
+							depends_on_variant = true;
+							break;
+						}
+					}
+					if (depends_on_variant) {
+						break;
+					}
+				}
+			}
+			if (depends_on_variant) {
+				variant_meta_pipelines.insert(*meta_pipeline);
+				changed = true;
+			}
+		}
+	}
+
+	reference_set_t<const MetaPipeline> result;
+	for (auto &meta_pipeline : meta_pipelines) {
+		if (meta_pipeline->Type() != MetaPipelineType::JOIN_BUILD) {
+			continue;
+		}
+		auto sink = meta_pipeline->GetSink();
+		if (!sink) {
+			continue;
+		}
+
+		bool can_cache_build = false;
+		switch (sink->type) {
+		case PhysicalOperatorType::HASH_JOIN: {
+			auto &hash_join = sink->Cast<PhysicalHashJoin>();
+			can_cache_build = !PropagatesBuildSide(hash_join.join_type);
+			break;
+		}
+		case PhysicalOperatorType::NESTED_LOOP_JOIN: {
+			auto &nested_loop_join = sink->Cast<PhysicalNestedLoopJoin>();
+			can_cache_build = !PropagatesBuildSide(nested_loop_join.join_type);
+			break;
+		}
+		case PhysicalOperatorType::BLOCKWISE_NL_JOIN: {
+			auto &blockwise_nl_join = sink->Cast<PhysicalBlockwiseNLJoin>();
+			can_cache_build = !PropagatesBuildSide(blockwise_nl_join.join_type);
+			break;
+		}
+		case PhysicalOperatorType::CROSS_PRODUCT:
+			can_cache_build = true;
+			break;
+		default:
+			break;
+		}
+		if (!can_cache_build) {
+			continue;
+		}
+		if (variant_meta_pipelines.find(*meta_pipeline) == variant_meta_pipelines.end()) {
+			result.insert(*meta_pipeline);
+		}
+	}
+	return result;
+}
+
+static bool IsInvariantRecursiveMetaPipeline(const PhysicalRecursiveCTE &op, const MetaPipeline &meta_pipeline) {
+	return op.invariant_meta_pipelines.find(meta_pipeline) != op.invariant_meta_pipelines.end();
+}
+
+static vector<shared_ptr<MetaPipeline>> GetActiveRecursiveMetaPipelines(const PhysicalRecursiveCTE &op,
+                                                                        RecursiveCTEState &state) {
+	vector<shared_ptr<MetaPipeline>> meta_pipelines;
+	op.recursive_meta_pipeline->GetMetaPipelines(meta_pipelines, true, false);
+	if (!state.allow_executor_reuse || !state.invariant_meta_pipelines_materialized ||
+	    op.invariant_meta_pipelines.empty()) {
+		return meta_pipelines;
+	}
+
+	vector<shared_ptr<MetaPipeline>> active_meta_pipelines;
+	active_meta_pipelines.reserve(meta_pipelines.size());
+	for (auto &meta_pipeline : meta_pipelines) {
+		if (!IsInvariantRecursiveMetaPipeline(op, *meta_pipeline)) {
+			active_meta_pipelines.push_back(meta_pipeline);
+		}
+	}
+	return active_meta_pipelines;
+}
+
+static void ConfigureInvariantRecursiveBuildReuse(const PhysicalRecursiveCTE &op, bool preserve_build) {
+	for (auto &meta_pipeline_ref : op.invariant_meta_pipelines) {
+		auto sink = meta_pipeline_ref.get().GetSink();
+		if (!sink || sink->type != PhysicalOperatorType::HASH_JOIN) {
+			continue;
+		}
+		sink->Cast<PhysicalHashJoin>().SetPreserveBuildForRecursiveReuse(preserve_build);
+	}
 }
 
 static void WaitForRecursiveEvents(Executor &executor, vector<shared_ptr<Event>> &events) {
@@ -802,10 +995,14 @@ static void ScheduleRecursivePipelines(const vector<shared_ptr<MetaPipeline>> &m
 	for (auto &meta_pipeline : meta_pipelines) {
 		for (auto &entry : meta_pipeline->GetDependencies()) {
 			auto pipeline_entry = event_map.find(entry.first.get());
-			D_ASSERT(pipeline_entry != event_map.end());
+			if (pipeline_entry == event_map.end()) {
+				continue;
+			}
 			for (auto &dependency : entry.second) {
 				auto dependency_entry = event_map.find(dependency.get());
-				D_ASSERT(dependency_entry != event_map.end());
+				if (dependency_entry == event_map.end()) {
+					continue;
+				}
 				pipeline_entry->second.pipeline_event->AddDependency(*dependency_entry->second.pipeline_event);
 			}
 		}
@@ -819,7 +1016,9 @@ static void ScheduleRecursivePipelines(const vector<shared_ptr<MetaPipeline>> &m
 				continue;
 			}
 			auto child1_entry = event_map.find(*child1->GetBasePipeline());
-			D_ASSERT(child1_entry != event_map.end());
+			if (child1_entry == event_map.end()) {
+				continue;
+			}
 
 			for (auto &child2 : children) {
 				if (child2->Type() != MetaPipelineType::JOIN_BUILD || child1.get() == child2.get()) {
@@ -829,7 +1028,9 @@ static void ScheduleRecursivePipelines(const vector<shared_ptr<MetaPipeline>> &m
 					continue;
 				}
 				auto child2_entry = event_map.find(*child2->GetBasePipeline());
-				D_ASSERT(child2_entry != event_map.end());
+				if (child2_entry == event_map.end()) {
+					continue;
+				}
 
 				child1_entry->second.pipeline_prepare_finish_event->AddDependency(*child2_entry->second.pipeline_event);
 				child1_entry->second.pipeline_finish_event->AddDependency(
@@ -1120,37 +1321,49 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	auto &gstate = sink_state->Cast<RecursiveCTEState>();
 	auto &executor = recursive_meta_pipeline->GetExecutor();
 	auto allow_reuse = context.client.config.enable_caching_operators;
+	auto active_meta_pipelines = GetActiveRecursiveMetaPipelines(*this, gstate);
+	auto can_cache_invariant_meta_pipelines = allow_reuse && !invariant_meta_pipelines.empty();
 
 	// Reset sink state from the main thread so recursive iterations can reuse or recreate
 	// pipeline-local global sinks without tearing down the rest of the runtime state graph.
-	vector<shared_ptr<Pipeline>> pipelines;
-	recursive_meta_pipeline->GetPipelines(pipelines, true);
-	for (auto &pipeline : pipelines) {
-		auto sink = pipeline->GetSink();
-		if (sink.get() != this) {
-			pipeline->ResetSinkForReschedule();
+	for (auto &meta_pipeline : active_meta_pipelines) {
+		vector<shared_ptr<Pipeline>> pipelines;
+		meta_pipeline->GetPipelines(pipelines, false);
+		for (auto &pipeline : pipelines) {
+			auto sink = pipeline->GetSink();
+			if (sink.get() != this) {
+				pipeline->ResetSinkForReschedule();
+			}
 		}
 	}
+
+	ConfigureInvariantRecursiveBuildReuse(*this, can_cache_invariant_meta_pipelines);
 
 	if (!allow_reuse) {
 		gstate.ClearCachedExecutors();
 	}
 
-	vector<shared_ptr<MetaPipeline>> meta_pipelines;
-	recursive_meta_pipeline->GetMetaPipelines(meta_pipelines, true, false);
 	auto inline_execution = allow_reuse && GetRecursiveThreadLimit(gstate) == 1;
 
 	if (inline_execution) {
-		if (!gstate.inline_plan) {
-			gstate.inline_plan = BuildRecursiveInlinePlan(meta_pipelines);
+		auto &inline_plan =
+		    gstate.invariant_meta_pipelines_materialized ? gstate.invariant_inline_plan : gstate.inline_plan;
+		if (!inline_plan) {
+			inline_plan = BuildRecursiveInlinePlan(active_meta_pipelines);
 		}
-		ExecuteRecursiveInlinePlan(gstate, executor, *gstate.inline_plan);
+		ExecuteRecursiveInlinePlan(gstate, executor, *inline_plan);
+		if (can_cache_invariant_meta_pipelines) {
+			gstate.invariant_meta_pipelines_materialized = true;
+		}
 		return;
 	}
 
 	vector<shared_ptr<Event>> events;
-	ScheduleRecursivePipelines(meta_pipelines, gstate, executor, events, inline_execution);
+	ScheduleRecursivePipelines(active_meta_pipelines, gstate, executor, events, inline_execution);
 	WaitForRecursiveEvents(executor, events);
+	if (can_cache_invariant_meta_pipelines) {
+		gstate.invariant_meta_pipelines_materialized = true;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1168,8 +1381,8 @@ static void GatherColumnDataScans(const PhysicalOperator &op, vector<const_refer
 
 static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_index,
                                          vector<PhysicalColumnDataScan *> &recursive_scans,
-                                         unordered_set<const PhysicalOperator *> &visited) {
-	if (!visited.insert(&op).second) {
+                                         reference_set_t<const PhysicalOperator> &visited) {
+	if (!visited.insert(op).second) {
 		return;
 	}
 	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN) {
@@ -1191,15 +1404,15 @@ static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_in
 
 static void GatherRecursiveScans(PhysicalOperator &op, TableIndex cte_index,
                                  vector<PhysicalColumnDataScan *> &recursive_scans) {
-	unordered_set<const PhysicalOperator *> visited;
+	reference_set_t<const PhysicalOperator> visited;
 	GatherRecursiveScansInternal(op, cte_index, recursive_scans, visited);
 }
 
 static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIndex cte_index,
                                              idx_t &recursive_reference_count,
                                              idx_t &recurring_reference_count,
-                                             unordered_set<const PhysicalOperator *> &visited) {
-	if (!visited.insert(&op).second) {
+                                             reference_set_t<const PhysicalOperator> &visited) {
+	if (!visited.insert(op).second) {
 		return;
 	}
 	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN ||
@@ -1228,7 +1441,7 @@ static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIn
 
 static void CountRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index, idx_t &recursive_reference_count,
                                      idx_t &recurring_reference_count) {
-	unordered_set<const PhysicalOperator *> visited;
+	reference_set_t<const PhysicalOperator> visited;
 	CountRecursiveReferencesInternal(op, cte_index, recursive_reference_count, recurring_reference_count, visited);
 }
 
@@ -1244,6 +1457,7 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	recursive_reference_count = 0;
 	recurring_reference_count = 0;
 	recursive_scans.clear();
+	invariant_meta_pipelines.clear();
 
 	auto &state = meta_pipeline.GetState();
 	state.SetPipelineSource(current, *this);
@@ -1264,6 +1478,18 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 	vector<const_reference<PhysicalOperator>> ops;
 	GatherColumnDataScans(children[1], ops);
+	bool has_delim_scan = false;
+	for (auto op : ops) {
+		if (op.get().type == PhysicalOperatorType::DELIM_SCAN) {
+			has_delim_scan = true;
+			break;
+		}
+	}
+	if (!has_delim_scan) {
+		vector<shared_ptr<MetaPipeline>> recursive_meta_pipelines;
+		recursive_meta_pipeline->GetMetaPipelines(recursive_meta_pipelines, true, false);
+		invariant_meta_pipelines = FindInvariantRecursiveMetaPipelines(recursive_meta_pipelines, table_index);
+	}
 
 	for (auto op : ops) {
 		auto entry = state.cte_dependencies.find(op);

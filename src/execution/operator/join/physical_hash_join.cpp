@@ -372,6 +372,8 @@ public:
 
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
+	//! Preserve the finalized build-side state across recursive CTE iterations
+	bool preserve_build_for_recursive_reuse = false;
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
@@ -506,6 +508,7 @@ bool PhysicalHashJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkSt
 	state.owned_local_hash_tables.clear();
 	state.probe_spill.reset();
 	state.scanned_data = false;
+	state.preserve_build_for_recursive_reuse = false;
 	state.skip_filter_pushdown = false;
 	state.global_filter_state.reset();
 	state.temporary_memory_state->SetZero();
@@ -517,6 +520,17 @@ bool PhysicalHashJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkSt
 		state.global_filter_state = filter_pushdown->GetGlobalState(context, *this);
 	}
 	return true;
+}
+
+void PhysicalHashJoin::SetPreserveBuildForRecursiveReuse(bool preserve) const {
+	if (!sink_state) {
+		return;
+	}
+	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
+	state.preserve_build_for_recursive_reuse = preserve;
+	if (preserve) {
+		state.scanned_data = false;
+	}
 }
 
 bool PhysicalHashJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
@@ -2082,8 +2096,12 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
-			sink.hash_table->Reset();
-			sink.temporary_memory_state->SetZero();
+			if (sink.preserve_build_for_recursive_reuse) {
+				sink.scanned_data = false;
+			} else {
+				sink.hash_table->Reset();
+				sink.temporary_memory_state->SetZero();
+			}
 		}
 		return SourceResultType::FINISHED;
 	}
