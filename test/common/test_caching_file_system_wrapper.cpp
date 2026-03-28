@@ -157,6 +157,30 @@ public:
 	}
 };
 
+// A filesystem that simulates an HTTP endpoint with no Last-Modified header and no ETag.
+class NoMetadataFileSystem : public LocalFileSystem {
+public:
+	string GetName() const override {
+		return "NoMetadataFileSystem";
+	}
+
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
+		return FileMetadata {}.last_modification_time;
+	}
+
+	string GetVersionTag(FileHandle &handle) override {
+		return "";
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, TestDirectoryPath());
+	}
+
+	bool CanSeek() override {
+		return true;
+	}
+};
+
 //===----------------------------------------------------------------------===//
 // CachingFileSystemWrapper Tests
 //===----------------------------------------------------------------------===//
@@ -703,6 +727,22 @@ TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
 
 	REQUIRE_NOTHROW(handle->Read(QueryContext(), &buffer[0], /*nr_bytes=*/0, /*location=*/0));
 	REQUIRE_NOTHROW(handle->Read(QueryContext(), &buffer[0], /*nr_bytes=*/0, /*location=*/10));
+}
+
+TEST_CASE("CachingFileSystemWrapper does not overflow on ninfinity last_modified", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto no_meta_fs = make_uniq<NoMetadataFileSystem>();
+	auto caching_wrapper =
+	    make_shared_ptr<CachingFileSystemWrapper>(*no_meta_fs, db_instance, CachingMode::ALWAYS_CACHE);
+
+	const string test_content = "Test content for ninfinity last_modified overflow reproducer.";
+	TestFileGuard test_file("test_ninfinity_last_modified.txt", test_content);
+
+	auto handle = caching_wrapper->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
+	string buffer(200, '\0');
+	REQUIRE_NOTHROW(handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0));
+	REQUIRE(buffer.substr(0, test_content.size()) == test_content);
 }
 
 //===----------------------------------------------------------------------===//
