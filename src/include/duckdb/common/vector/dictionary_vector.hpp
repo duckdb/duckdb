@@ -12,6 +12,23 @@
 
 namespace duckdb {
 
+//! The VectorChildBuffer holds a child Vector
+class VectorChildBuffer : public VectorBuffer {
+public:
+	explicit VectorChildBuffer(Vector vector)
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
+	}
+
+public:
+	Vector data;
+	//! Optional size/id to uniquely identify re-occurring dictionaries
+	optional_idx size;
+	string id;
+	//! For caching the hashes of a child buffer
+	mutex cached_hashes_lock;
+	unique_ptr<Vector> cached_hashes;
+};
+
 //! The DictionaryBuffer holds a selection vector
 class DictionaryBuffer : public VectorBuffer {
 public:
