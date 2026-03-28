@@ -1234,9 +1234,9 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			return Vector::Serialize(serializer, 1, false); // just serialize one value
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 			serializer.WriteProperty(90, "vector_type", VectorType::SEQUENCE_VECTOR);
-			auto data = reinterpret_cast<int64_t *>(buffer->GetData());
-			serializer.WriteProperty(91, "seq_start", data[0]);
-			serializer.WriteProperty(92, "seq_increment", data[1]);
+			auto &sequence = buffer->Cast<SequenceBuffer>();
+			serializer.WriteProperty(91, "seq_start", sequence.start);
+			serializer.WriteProperty(92, "seq_increment", sequence.increment);
 			return; // for sequence vectors we do not serialize anything else
 		} else {
 			// TODO: other compressed vector types (SHREDDED, FSST)
