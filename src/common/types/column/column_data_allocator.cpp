@@ -194,6 +194,12 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
 	}
 }
 
+void ColumnDataAllocator::Reset() {
+	for (auto &block : blocks) {
+		block.size = 0;
+	}
+}
+
 void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
 	D_ASSERT(other.HasBlocks());
 	blocks.push_back(other.blocks.back());

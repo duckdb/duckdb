@@ -176,6 +176,37 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 	}
 }
 
+idx_t Pipeline::GetMaxThreads() {
+	if (!sink->ParallelSink() || !source->ParallelSource()) {
+		return 1;
+	}
+	if (!source_state) {
+		return 1;
+	}
+	auto max_threads = source_state->MaxThreads();
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		if (!op.ParallelOperator()) {
+			return 1;
+		}
+		if (op.op_state) {
+			max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
+		}
+	}
+	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
+	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
+	}
+	if (sink && sink->sink_state) {
+		max_threads = sink->sink_state->MaxThreads(max_threads);
+	}
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
+	}
+	return max_threads;
+}
+
 bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	// split the scan up into parts and schedule the parts
 	if (max_threads <= 1) {
@@ -204,6 +235,25 @@ void Pipeline::ResetSink() {
 	}
 }
 
+void Pipeline::ResetSinkForReschedule() {
+	if (!sink) {
+		return;
+	}
+	if (!sink->IsSink()) {
+		throw InternalException("Sink of pipeline does not have IsSink set");
+	}
+	lock_guard<mutex> guard(sink->lock);
+	auto &client = GetClientContext();
+	auto allow_reuse = client.config.enable_caching_operators;
+	if (allow_reuse && sink->sink_state && sink->ResetGlobalSinkState(client, *sink->sink_state)) {
+		annotated_lock_guard<annotated_mutex> state_guard(sink->sink_state->lock);
+		sink->sink_state->ResetBlocking();
+		sink->sink_state->state = SinkFinalizeType::READY;
+		return;
+	}
+	sink->sink_state = sink->GetGlobalSinkState(client);
+}
+
 void Pipeline::PrepareFinalize() {
 	if (sink) {
 		if (!sink->IsSink()) {
@@ -229,6 +279,32 @@ void Pipeline::Reset() {
 	ResetSource(false);
 	// we no longer reset source here because this function is no longer guaranteed to be called by the main thread
 	// source reset needs to be called by the main thread because resetting a source may call into clients like R
+	initialized = true;
+}
+
+void Pipeline::ResetForReschedule(bool reset_sink) {
+	if (reset_sink) {
+		ResetSinkForReschedule();
+	}
+	auto &client = GetClientContext();
+	auto allow_reuse = client.config.enable_caching_operators;
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		lock_guard<mutex> guard(op.lock);
+		if (allow_reuse && op.op_state && op.ResetGlobalOperatorState(client, *op.op_state)) {
+			continue;
+		}
+		op.op_state = op.GetGlobalOperatorState(client);
+	}
+	if (source && !source->IsSource()) {
+		throw InternalException("Source of pipeline does not have IsSource set");
+	}
+	if (!allow_reuse || !source_state || !source->ResetGlobalSourceState(client, *source_state)) {
+		source_state = source->GetGlobalSourceState(client);
+	} else {
+		annotated_lock_guard<annotated_mutex> guard(source_state->lock);
+		source_state->ResetBlocking();
+	}
 	initialized = true;
 }
 

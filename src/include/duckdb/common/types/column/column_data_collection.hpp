@@ -118,6 +118,7 @@ public:
 	DUCKDB_API void Print() const;
 
 	DUCKDB_API void Reset();
+	DUCKDB_API void ResetForReuse();
 
 	//! Returns the number of data chunks present in the ColumnDataCollection
 	DUCKDB_API idx_t ChunkCount() const;

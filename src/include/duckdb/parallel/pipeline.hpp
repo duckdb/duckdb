@@ -91,10 +91,16 @@ public:
 	void Ready();
 	void Reset();
 	void ResetSink();
+	void ResetSinkForReschedule();
+	void ResetForReschedule(bool reset_sink);
 	void ResetSource(bool force);
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
 	void PrepareFinalize();
+
+	//! Compute the maximum number of threads for parallel execution of this pipeline
+	//! Returns 1 if the pipeline cannot be parallelized
+	idx_t GetMaxThreads();
 
 	string ToString() const;
 	void Print() const;

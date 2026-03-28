@@ -96,6 +96,14 @@ unique_ptr<GlobalOperatorState> PhysicalOperator::GetGlobalOperatorState(ClientC
 	return make_uniq<GlobalOperatorState>();
 }
 
+bool PhysicalOperator::ResetOperatorState(ExecutionContext &context, OperatorState &state) const {
+	return false;
+}
+
+bool PhysicalOperator::ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const {
+	return false;
+}
+
 OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                              GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");
@@ -122,6 +130,15 @@ unique_ptr<LocalSourceState> PhysicalOperator::GetLocalSourceState(ExecutionCont
 
 unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<GlobalSourceState>();
+}
+
+bool PhysicalOperator::ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
+                                             LocalSourceState &state) const {
+	return false;
+}
+
+bool PhysicalOperator::ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state) const {
+	return false;
 }
 
 // LCOV_EXCL_START
@@ -184,6 +201,15 @@ unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext 
 
 unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<GlobalSinkState>();
+}
+
+bool PhysicalOperator::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate,
+                                           LocalSinkState &state) const {
+	return false;
+}
+
+bool PhysicalOperator::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const {
+	return false;
 }
 
 idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {

@@ -97,6 +97,8 @@ public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
+	virtual bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const;
+	virtual bool ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
@@ -126,6 +128,9 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	virtual bool ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
+	                                   LocalSourceState &state) const;
+	virtual bool ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state) const;
 
 protected:
 	virtual SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -200,6 +205,8 @@ public:
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
+	virtual bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
+	virtual bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const;
 
 	//! The maximum amount of memory the operator should use per thread.
 	static idx_t GetMaxThreadMemory(ClientContext &context);

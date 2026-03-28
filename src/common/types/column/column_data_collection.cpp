@@ -1309,6 +1309,20 @@ void ColumnDataCollection::Reset() {
 	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
 }
 
+void ColumnDataCollection::ResetForReuse() {
+	count = 0;
+	// Reset the first segment in-place to avoid destructor/constructor overhead on its metadata vectors and StringHeap.
+	// Any extra segments (created for large iterations) are dropped.
+	if (!segments.empty()) {
+		segments.front()->Reset();
+		if (segments.size() > 1) {
+			segments.resize(1);
+		}
+	}
+	finished_append = false;
+	allocator->Reset();
+}
+
 struct ValueResultEquals {
 	bool operator()(const Value &a, const Value &b) const {
 		return Value::DefaultValuesAreEqual(a, b);

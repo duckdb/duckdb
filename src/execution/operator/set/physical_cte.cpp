@@ -46,7 +46,7 @@ public:
 	ColumnDataAppendState append_state;
 
 	void Append(DataChunk &input) {
-		lhs_data.Append(input);
+		lhs_data.Append(append_state, input);
 	}
 };
 
@@ -58,6 +58,23 @@ unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &conte
 unique_ptr<LocalSinkState> PhysicalCTE::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<CTELocalState>(context.client, *this);
 	return std::move(state);
+}
+
+bool PhysicalCTE::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
+	(void)context;
+	auto &state = state_p.Cast<CTEGlobalState>();
+	working_table->Reset();
+	state.working_table_ref = working_table.get();
+	return true;
+}
+
+bool PhysicalCTE::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &state_p) const {
+	(void)context;
+	(void)gstate_p;
+	auto &state = state_p.Cast<CTELocalState>();
+	state.lhs_data.Reset();
+	state.lhs_data.InitializeAppend(state.append_state);
+	return true;
 }
 
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
