@@ -14,9 +14,6 @@ set prefetch_all_parquet_files=true;
 statement ok
 copy (select range i from range(100000)) to '__TEST_DIR__/efc_block_size.parquet';
 
-# Wait so that last-modified validation passes.
-sleep 11 seconds
-
 # --- Test 1: Check default setting values ---
 
 query I
@@ -41,11 +38,14 @@ select bool_and(nr_bytes <= 16384) from duckdb_external_file_cache();
 ----
 true
 
-# There should be multiple blocks.
+# There should be multiple blocks. Save the count for later comparison.
 query I
 select count(*) > 1 from duckdb_external_file_cache();
 ----
 true
+
+statement ok
+create table block_count_16k as select count(*) as cnt from duckdb_external_file_cache();
 
 # All locations should be aligned to 16384-byte boundaries.
 query I
@@ -75,7 +75,7 @@ true
 
 # There should be fewer blocks than before (larger block size -> fewer blocks).
 query I
-select count(*) > 1 from duckdb_external_file_cache();
+select (select count(*) from duckdb_external_file_cache()) < (select cnt from block_count_16k);
 ----
 true
 
