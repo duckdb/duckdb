@@ -43,7 +43,7 @@ class Vector {
 	friend struct ShreddedVector;
 
 	friend class DataChunk;
-	friend class VectorCacheBuffer;
+	friend class VectorCacheEntry;
 
 public:
 	//! Create a vector that slices another vector

@@ -87,7 +87,7 @@ public:
 	}
 	virtual ~VectorBuffer() {
 	}
-	VectorBuffer() {
+	VectorBuffer() : data_ptr(nullptr) {
 	}
 
 public:

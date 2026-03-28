@@ -48,7 +48,10 @@ struct FlatVector {
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
 		VerifyFlatVector(vector);
-		vector.buffer->SetData(data);
+		// FIXME: this should probably throw an exception if "buffer" is not set
+		if (vector.buffer) {
+			vector.buffer->SetData(data);
+		}
 	}
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
