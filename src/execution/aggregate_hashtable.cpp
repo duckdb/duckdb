@@ -1028,4 +1028,67 @@ bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk
 		}
 	}
 }
+
+void GroupedAggregateHashTable::ResetForNewIteration(idx_t initial_capacity, idx_t radix_bits_p) {
+	// Save the previous iteration's group count before destroying aggregate states.
+	// This lets us size the pointer table based on actual prior data rather than the
+	// global sink capacity, which is typically much larger than recursive iteration sizes.
+	const auto prev_count = count;
+	Destroy();
+	aggregate_allocator->Reset();
+	stored_allocators.clear();
+
+	const auto reuse_partitioned_data =
+	    partitioned_data && RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) == radix_bits_p;
+	const auto reuse_unpartitioned_data =
+	    radix_bits_p >= UNPARTITIONED_RADIX_BITS_THRESHOLD && unpartitioned_data &&
+	    RadixPartitioning::RadixBitsOfPowerOfTwo(unpartitioned_data->PartitionCount()) == 0;
+
+	radix_bits = radix_bits_p;
+	if (reuse_partitioned_data) {
+		if (partitioned_data->Count() != 0) {
+			partitioned_data->Reset();
+		}
+		partitioned_data->ResetAppendState(
+		    state.partitioned_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	} else {
+		InitializePartitionedData();
+	}
+	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
+		if (reuse_unpartitioned_data) {
+			if (unpartitioned_data->Count() != 0) {
+				unpartitioned_data->Reset();
+			}
+			unpartitioned_data->ResetAppendState(
+			    state.unpartitioned_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+		} else {
+			InitializeUnpartitionedData();
+		}
+	} else {
+		unpartitioned_data.reset();
+	}
+
+	count = 0;
+	sink_count = 0;
+	skip_lookups = false;
+	enable_hll = false;
+	hll = HyperLogLog();
+	state.dict_state.dictionary_id = string();
+
+	// Compute effective capacity based on the previous iteration's actual group count.
+	// This avoids clearing a large pointer table (O(max_capacity)) when prior iterations
+	// processed few rows. The HT will grow during the iteration if more groups are encountered.
+	const auto effective_capacity = GetCapacityForCount(prev_count);
+	if (!hash_map || capacity < effective_capacity) {
+		Resize(effective_capacity);
+	} else {
+		// Logically shrink to effective_capacity: only zero the portion we need.
+		// Entries beyond effective_capacity are unreachable (bitmask limits all accesses),
+		// so leaving them uncleared is safe. The physical buffer is reused in place.
+		capacity = effective_capacity;
+		entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
+		bitmask = capacity - 1;
+		ClearPointerTable();
+	}
+}
 } // namespace duckdb
