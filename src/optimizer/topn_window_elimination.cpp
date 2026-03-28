@@ -1119,6 +1119,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		join->right_projection_map.push_back(rhs->types.size() - 1);
 	}
 
+	// Remove the row_numbers from the LHS projection map
+	for (idx_t i = 0; i < lhs->types.size() - rowid_column_count; ++i) {
+		join->left_projection_map.emplace_back(i);
+	}
+
 	join->children.push_back(std::move(lhs));
 	join->children.push_back(std::move(rhs));
 
