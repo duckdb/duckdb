@@ -223,9 +223,11 @@ public:
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
-	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults,
+	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
 
@@ -333,6 +335,9 @@ public:
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
 
 	void SetSearchPath(Catalog &catalog, const string &schema);
+
+	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
+	                      const string &catalog = "", const string &schema = "");
 
 private:
 	//! The parent binder (if any)
