@@ -76,9 +76,6 @@ void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
 	UnaryExecutor::Execute<list_entry_t, int64_t>(
 	    input, result, args.size(), [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -102,9 +99,6 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
 		}
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
@@ -141,9 +135,6 @@ void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector &result
 		    }
 		    return UnsafeNumericCast<int64_t>(input.length);
 	    });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 struct ArrayLengthBinaryFunctionData : public FunctionData {
@@ -177,10 +168,6 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 		return dimensions[UnsafeNumericCast<idx_t>(dimension - 1)];
 	});
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,

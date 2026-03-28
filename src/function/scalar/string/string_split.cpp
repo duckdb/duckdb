@@ -149,10 +149,6 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	ListVector::SetListSize(result, total_splits);
 	D_ASSERT(ListVector::GetListSize(result) == total_splits);
 
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	StringVector::AddHeapReference(child_entry, args.data[0]);
 }
 

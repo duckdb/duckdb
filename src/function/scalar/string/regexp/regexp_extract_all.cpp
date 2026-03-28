@@ -171,9 +171,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	// for the result, all returned strings are substrings of the originals
 	output_child.SetAuxiliary(strings.GetAuxiliary());
 
-	// Avoid doing extra work if all the inputs are constant
-	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
-
 	unique_ptr<RegexStringPieceArgs> non_const_args;
 	unique_ptr<duckdb_re2::RE2> stored_re;
 	if (!info.constant_pattern) {
@@ -187,7 +184,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	for (idx_t row = 0; row < tuple_count; row++) {
+	for (idx_t row = 0; row < args.size(); row++) {
 		bool pattern_valid = true;
 		if (!info.constant_pattern) {
 			// Check if the pattern is NULL or not,
@@ -226,10 +223,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		auto &groups = GetGroupsBuffer(info, state, non_const_args);
 		auto &string = string_entry.value;
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
@@ -314,7 +307,6 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	auto strings_entries = strings.Values<string_t>(args.size());
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
-	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
 
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
@@ -323,7 +315,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	vector<duckdb_re2::StringPiece> group_spans(group_count + 1);
 
-	for (idx_t row = 0; row < tuple_count; row++) {
+	for (idx_t row = 0; row < args.size(); row++) {
 		auto string_entry = strings_entries[row];
 		if (!string_entry.IsValid()) {
 			list_entries[row].offset = ListVector::GetListSize(result);
@@ -333,9 +325,6 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		}
 		auto &string_val = string_entry.value;
 		ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result, row);
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

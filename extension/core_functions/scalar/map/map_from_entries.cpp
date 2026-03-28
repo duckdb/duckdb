@@ -11,15 +11,8 @@ namespace duckdb {
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
-	auto all_constant = args.AllConstant();
-
 	MapUtil::ReinterpretMap(result, args.data[0], count);
 	MapVector::MapConversionVerify(result, count);
-	result.Verify(count);
-
-	if (all_constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunction MapFromEntriesFun::GetFunction() {

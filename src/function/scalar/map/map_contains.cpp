@@ -13,10 +13,6 @@ static void MapContainsFunction(DataChunk &input, ExpressionState &state, Vector
 	auto &arg_vec = input.data[1];
 
 	ListSearchOp<bool>(map_vec, key_vec, arg_vec, result, count);
-
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunction MapContainsFun::GetFunction() {

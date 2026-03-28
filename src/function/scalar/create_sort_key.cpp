@@ -792,10 +792,6 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
 	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, result, args.size());
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1235,10 +1231,6 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		auto &child_vector = child_vectors[c];
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
 		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

@@ -118,10 +118,6 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 			}
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFunction &bound_function,

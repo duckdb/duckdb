@@ -251,10 +251,6 @@ void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector &result
 	auto &input = args.data[0];
 
 	RemapNested(input, args.data[3], result, args.size(), info.remap_info);
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(args.size());
 }
 struct RemapIndex {
 	idx_t index;

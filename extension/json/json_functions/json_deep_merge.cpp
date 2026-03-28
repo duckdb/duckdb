@@ -105,10 +105,6 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 
