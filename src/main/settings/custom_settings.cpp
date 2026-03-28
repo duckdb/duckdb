@@ -750,6 +750,29 @@ void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &inp
 }
 
 //===----------------------------------------------------------------------===//
+// External File Cache Block Sizes
+//===----------------------------------------------------------------------===//
+void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	const auto bytes = input.GetValue<uint64_t>();
+	if (bytes == 0) {
+		throw ParserException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (info.db) {
+		ExternalFileCache::Get(*info.db).ClearCachedFiles();
+	}
+}
+
+void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	const auto bytes = input.GetValue<uint64_t>();
+	if (bytes == 0) {
+		throw ParserException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (info.db) {
+		ExternalFileCache::Get(*info.db).ClearCachedFiles();
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Logging
 //===----------------------------------------------------------------------===//
 Value EnableLogging::GetSetting(const ClientContext &context) {

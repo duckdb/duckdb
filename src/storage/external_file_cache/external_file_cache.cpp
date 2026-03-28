@@ -3,13 +3,23 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
-idx_t ExternalFileCache::GetCacheBlockSize(const string &path) {
-	return FileSystem::IsRemoteFile(path) ? REMOTE_FILE_CACHE_BLOCK_SIZE : LOCAL_FILE_CACHE_BLOCK_SIZE;
+idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
+	auto &db = buffer_manager.GetDatabase();
+	if (FileSystem::IsRemoteFile(path)) {
+		return Settings::Get<ExternalFileCacheRemoteBlockSizeSetting>(db);
+	}
+	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
+}
+
+void ExternalFileCache::ClearCachedFiles() {
+	lock_guard<mutex> guard(lock);
+	cached_files.clear();
 }
 
 ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
@@ -66,7 +76,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	unique_lock<mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		const idx_t block_size = GetCacheBlockSize(file.first);
+		const idx_t block_size = this->GetCacheBlockSize(file.first);
 		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
 		for (const auto &block_entry : file.second->blocks) {
 			const idx_t block_idx = block_entry.first;

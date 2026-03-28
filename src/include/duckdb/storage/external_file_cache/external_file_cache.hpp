@@ -31,10 +31,12 @@ class BufferManager;
 
 class ExternalFileCache {
 public:
-	static constexpr idx_t REMOTE_FILE_CACHE_BLOCK_SIZE = 2ULL * 1024 * 1024; // 2 MiB
-	static constexpr idx_t LOCAL_FILE_CACHE_BLOCK_SIZE = 16ULL * 1024;        // 16 KiB
+	static constexpr idx_t REMOTE_FILE_CACHE_BLOCK_SIZE = 2ULL * 1024 * 1024; // 2 MiB (default for setting)
+	static constexpr idx_t LOCAL_FILE_CACHE_BLOCK_SIZE = 16ULL * 1024;        // 16 KiB (default for setting)
 
-	DUCKDB_API static idx_t GetCacheBlockSize(const string &path);
+	DUCKDB_API idx_t GetCacheBlockSize(const string &path) const;
+	//! Drop all cached file blocks (e.g. after changing cache block size settings).
+	void ClearCachedFiles();
 
 	//! Cached files
 	struct CachedFile {

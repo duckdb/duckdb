@@ -209,7 +209,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup(std::move(mem_handles));
 	}
 
-	const idx_t block_size = ExternalFileCache::GetCacheBlockSize(cached_file.path);
+	const idx_t block_size = external_file_cache.GetCacheBlockSize(cached_file.path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;

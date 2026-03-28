@@ -1,0 +1,108 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_block_size.test
+# description: Test external_file_cache_local_block_size and external_file_cache_remote_block_size settings
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+set prefetch_all_parquet_files=true;
+
+# Create a test file large enough to span multiple cache blocks at both default and custom block sizes.
+statement ok
+copy (select range i from range(100000)) to '__TEST_DIR__/efc_block_size.parquet';
+
+# Wait so that last-modified validation passes.
+sleep 11 seconds
+
+# --- Test 1: Check default setting values ---
+
+query I
+select current_setting('external_file_cache_local_block_size');
+----
+16384
+
+query I
+select current_setting('external_file_cache_remote_block_size');
+----
+2097152
+
+# --- Test 2: Local file with default 16 KiB block size ---
+
+# Read the file to populate the cache.
+statement ok
+select * from '__TEST_DIR__/efc_block_size.parquet';
+
+# All cached blocks should have nr_bytes <= 16384 (the default local block size).
+query I
+select bool_and(nr_bytes <= 16384) from duckdb_external_file_cache();
+----
+true
+
+# There should be multiple blocks.
+query I
+select count(*) > 1 from duckdb_external_file_cache();
+----
+true
+
+# All locations should be aligned to 16384-byte boundaries.
+query I
+select bool_and(location % 16384 = 0) from duckdb_external_file_cache();
+----
+true
+
+# --- Test 3: Change local block size to 64 KiB and re-read ---
+
+statement ok
+set external_file_cache_local_block_size=65536;
+
+query I
+select current_setting('external_file_cache_local_block_size');
+----
+65536
+
+# The previous SET already cleared the cache, so re-read to populate with new block size.
+statement ok
+select * from '__TEST_DIR__/efc_block_size.parquet';
+
+# All cached blocks should now have nr_bytes <= 65536.
+query I
+select bool_and(nr_bytes <= 65536) from duckdb_external_file_cache();
+----
+true
+
+# There should be fewer blocks than before (larger block size -> fewer blocks).
+query I
+select count(*) > 1 from duckdb_external_file_cache();
+----
+true
+
+# All locations should be aligned to 65536-byte boundaries.
+query I
+select bool_and(location % 65536 = 0) from duckdb_external_file_cache();
+----
+true
+
+# --- Test 4: Invalid block size (zero) should error ---
+
+statement error
+set external_file_cache_local_block_size=0;
+----
+Invalid option
+
+statement error
+set external_file_cache_remote_block_size=0;
+----
+Invalid option
+
+# --- Test 5: Reset to default ---
+
+statement ok
+reset external_file_cache_local_block_size;
+
+query I
+select current_setting('external_file_cache_local_block_size');
+----
+16384
