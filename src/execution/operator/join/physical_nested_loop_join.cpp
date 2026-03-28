@@ -7,6 +7,14 @@
 
 namespace duckdb {
 
+static void ResetCachingOperatorState(CachingOperatorState &state) {
+	state.cached_chunk.reset();
+	state.initialized = false;
+	state.can_cache_chunk = OperatorCachingMode::NONE;
+	state.must_return_continuation_chunk = false;
+	state.cached_result = OperatorResultType::NEED_MORE_INPUT;
+}
+
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
                                                PhysicalOperator &left, PhysicalOperator &right,
                                                vector<JoinCondition> conds, JoinType join_type,
@@ -271,6 +279,36 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionCo
 	return make_uniq<NestedLoopJoinLocalState>(context.client, *this, gstate);
 }
 
+bool PhysicalNestedLoopJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
+	auto &state = state_p.Cast<NestedLoopJoinGlobalState>();
+	state.right_payload_data.Reset();
+	state.right_condition_data.Reset();
+	state.has_null = false;
+	state.right_outer.Reset();
+	if (filter_pushdown) {
+		state.skip_filter_pushdown = filter_pushdown->probe_info.empty();
+		state.global_filter_state = filter_pushdown->GetGlobalState(context, *this);
+	} else {
+		state.skip_filter_pushdown = false;
+		state.global_filter_state.reset();
+	}
+	return true;
+}
+
+bool PhysicalNestedLoopJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
+                                                 LocalSinkState &state_p) const {
+	(void)context;
+	auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalState>();
+	auto &state = state_p.Cast<NestedLoopJoinLocalState>();
+	state.right_condition.Reset();
+	if (filter_pushdown) {
+		state.local_filter_state = filter_pushdown->GetLocalState(*gstate.global_filter_state);
+	} else {
+		state.local_filter_state.reset();
+	}
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
@@ -325,6 +363,23 @@ public:
 
 unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<PhysicalNestedLoopJoinState>(context.client, *this, conditions);
+}
+
+bool PhysicalNestedLoopJoin::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
+	(void)context;
+	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
+	ResetCachingOperatorState(state);
+	state.fetch_next_left = true;
+	state.fetch_next_right = false;
+	state.left_condition.Reset();
+	state.condition_scan_state = ColumnDataScanState();
+	state.payload_scan_state = ColumnDataScanState();
+	state.right_condition.Reset();
+	state.right_payload.Reset();
+	state.left_tuple = 0;
+	state.right_tuple = 0;
+	state.left_outer.Reset();
+	return true;
 }
 
 OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
@@ -521,6 +576,24 @@ unique_ptr<GlobalSourceState> PhysicalNestedLoopJoin::GetGlobalSourceState(Clien
 unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(ExecutionContext &context,
                                                                          GlobalSourceState &gstate) const {
 	return make_uniq<NestedLoopJoinLocalScanState>(*this, gstate.Cast<NestedLoopJoinGlobalScanState>());
+}
+
+bool PhysicalNestedLoopJoin::ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state_p) const {
+	(void)context;
+	auto &state = state_p.Cast<NestedLoopJoinGlobalScanState>();
+	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();
+	sink.right_outer.InitializeScan(sink.right_payload_data, state.scan_state);
+	return true;
+}
+
+bool PhysicalNestedLoopJoin::ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate_p,
+                                                   LocalSourceState &state_p) const {
+	(void)context;
+	auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalScanState>();
+	auto &state = state_p.Cast<NestedLoopJoinLocalScanState>();
+	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();
+	sink.right_outer.InitializeScan(gstate.scan_state, state.scan_state);
+	return true;
 }
 
 SourceResultType PhysicalNestedLoopJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,

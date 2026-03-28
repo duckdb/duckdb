@@ -10,6 +10,22 @@
 
 namespace duckdb {
 
+static void RightDelimResetSinkState(const PhysicalOperator &op, ClientContext &context,
+                                     unique_ptr<GlobalSinkState> &state) {
+	if (state && op.ResetGlobalSinkState(context, *state)) {
+		return;
+	}
+	state = op.GetGlobalSinkState(context);
+}
+
+static void RightDelimResetLocalSinkState(const PhysicalOperator &op, ExecutionContext &context,
+                                          GlobalSinkState &gstate, unique_ptr<LocalSinkState> &state) {
+	if (state && op.ResetLocalSinkState(context, gstate, *state)) {
+		return;
+	}
+	state = op.GetLocalSinkState(context);
+}
+
 PhysicalRightDelimJoin::PhysicalRightDelimJoin(PhysicalPlan &physical_plan, PhysicalPlanGenerator &planner,
                                                vector<LogicalType> types, PhysicalOperator &original_join,
                                                PhysicalOperator &distinct,
@@ -52,6 +68,25 @@ unique_ptr<LocalSinkState> PhysicalRightDelimJoin::GetLocalSinkState(ExecutionCo
 	state->join_state = join.GetLocalSinkState(context);
 	state->distinct_state = distinct.GetLocalSinkState(context);
 	return std::move(state);
+}
+
+bool PhysicalRightDelimJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
+	(void)state_p;
+	RightDelimResetSinkState(join, context, join.sink_state);
+	RightDelimResetSinkState(distinct, context, distinct.sink_state);
+	if (delim_scans.size() > 1) {
+		PhysicalHashAggregate::SetMultiScan(*distinct.sink_state);
+	}
+	return true;
+}
+
+bool PhysicalRightDelimJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
+                                                 LocalSinkState &state_p) const {
+	(void)gstate_p;
+	auto &state = state_p.Cast<RightDelimJoinLocalState>();
+	RightDelimResetLocalSinkState(join, context, *join.sink_state, state.join_state);
+	RightDelimResetLocalSinkState(distinct, context, *distinct.sink_state, state.distinct_state);
+	return true;
 }
 
 SinkResultType PhysicalRightDelimJoin::Sink(ExecutionContext &context, DataChunk &chunk,

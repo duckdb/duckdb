@@ -27,6 +27,8 @@ public:
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
+	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	void PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const override;

@@ -25,6 +25,7 @@ public:
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
+	bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const override;
 
 	OrderPreservationType OperatorOrder() const override {
 		return OrderPreservationType::NO_ORDER;
@@ -40,6 +41,8 @@ protected:
 public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
+	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	bool IsSink() const override {
@@ -62,6 +65,7 @@ public:
 	explicit CrossProductExecutor(ColumnDataCollection &rhs);
 
 	OperatorResultType Execute(const DataChunk &input, DataChunk &output);
+	void Reset();
 
 	// returns if the left side is scanned as a constant vector
 	bool ScanLHS() {

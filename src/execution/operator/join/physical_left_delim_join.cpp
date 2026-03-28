@@ -9,6 +9,27 @@
 
 namespace duckdb {
 
+static void LeftDelimBindScanCollection(const PhysicalLeftDelimJoin &delim_join, ColumnDataCollection &collection) {
+	auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
+	cast_cached_scan.collection = &collection;
+}
+
+static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &context,
+                                    unique_ptr<GlobalSinkState> &state) {
+	if (state && op.ResetGlobalSinkState(context, *state)) {
+		return;
+	}
+	state = op.GetGlobalSinkState(context);
+}
+
+static void LeftDelimResetLocalSinkState(const PhysicalOperator &op, ExecutionContext &context,
+                                         GlobalSinkState &gstate, unique_ptr<LocalSinkState> &state) {
+	if (state && op.ResetLocalSinkState(context, gstate, *state)) {
+		return;
+	}
+	state = op.GetLocalSinkState(context);
+}
+
 PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, PhysicalPlanGenerator &planner,
                                              vector<LogicalType> types, PhysicalOperator &original_join,
                                              PhysicalOperator &distinct,
@@ -40,9 +61,7 @@ public:
 	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
 	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
 		D_ASSERT(!delim_join.delim_scans.empty());
-		// set up the delim join chunk to scan in the original join
-		auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
-		cast_cached_scan.collection = &lhs_data;
+		LeftDelimBindScanCollection(delim_join, lhs_data);
 	}
 
 	ColumnDataCollection lhs_data;
@@ -83,6 +102,27 @@ unique_ptr<LocalSinkState> PhysicalLeftDelimJoin::GetLocalSinkState(ExecutionCon
 	auto state = make_uniq<LeftDelimJoinLocalState>(context.client, *this);
 	state->distinct_state = distinct.GetLocalSinkState(context);
 	return std::move(state);
+}
+
+bool PhysicalLeftDelimJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
+	auto &state = state_p.Cast<LeftDelimJoinGlobalState>();
+	state.lhs_data.Reset();
+	LeftDelimBindScanCollection(*this, state.lhs_data);
+	LeftDelimResetSinkState(distinct, context, distinct.sink_state);
+	if (delim_scans.size() > 1) {
+		PhysicalHashAggregate::SetMultiScan(*distinct.sink_state);
+	}
+	return true;
+}
+
+bool PhysicalLeftDelimJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
+                                                LocalSinkState &state_p) const {
+	(void)gstate_p;
+	auto &state = state_p.Cast<LeftDelimJoinLocalState>();
+	state.lhs_data.Reset();
+	state.lhs_data.InitializeAppend(state.append_state);
+	LeftDelimResetLocalSinkState(distinct, context, *distinct.sink_state, state.distinct_state);
+	return true;
 }
 
 SinkResultType PhysicalLeftDelimJoin::Sink(ExecutionContext &context, DataChunk &chunk,

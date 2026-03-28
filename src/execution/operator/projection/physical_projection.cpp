@@ -36,6 +36,12 @@ unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ExecutionContext 
 	return make_uniq<ProjectionState>(context, select_list);
 }
 
+bool PhysicalProjection::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
+	(void)context;
+	(void)state_p;
+	return true;
+}
+
 InsertionOrderPreservingMap<string> PhysicalProjection::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	string projections;

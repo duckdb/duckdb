@@ -33,6 +33,18 @@ unique_ptr<GlobalSinkState> PhysicalCrossProduct::GetGlobalSinkState(ClientConte
 	return make_uniq<CrossProductGlobalState>(context, *this);
 }
 
+bool PhysicalCrossProduct::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const {
+	auto &gstate = state.Cast<CrossProductGlobalState>();
+	gstate.rhs_materialized.ResetForReuse();
+	gstate.rhs_materialized.InitializeAppend(gstate.append_state);
+	return true;
+}
+
+bool PhysicalCrossProduct::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate,
+                                               LocalSinkState &state) const {
+	return true;
+}
+
 SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &sink = input.global_state.Cast<CrossProductGlobalState>();
 	lock_guard<mutex> client_guard(sink.rhs_lock);
@@ -54,6 +66,15 @@ void CrossProductExecutor::Reset(const DataChunk &input, DataChunk &output) {
 	scan_input_chunk = false;
 	rhs.InitializeScan(scan_state);
 	position_in_chunk = 0;
+	scan_chunk.Reset();
+}
+
+void CrossProductExecutor::Reset() {
+	initialized = false;
+	finished = false;
+	scan_input_chunk = false;
+	position_in_chunk = 0;
+	scan_state = ColumnDataScanState();
 	scan_chunk.Reset();
 }
 
@@ -126,6 +147,17 @@ public:
 unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContext &context) const {
 	auto &sink = sink_state->Cast<CrossProductGlobalState>();
 	return make_uniq<CrossProductOperatorState>(sink.rhs_materialized);
+}
+
+bool PhysicalCrossProduct::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
+	auto &state = state_p.Cast<CrossProductOperatorState>();
+	state.cached_chunk.reset();
+	state.initialized = false;
+	state.can_cache_chunk = OperatorCachingMode::NONE;
+	state.must_return_continuation_chunk = false;
+	state.cached_result = OperatorResultType::NEED_MORE_INPUT;
+	state.executor.Reset();
+	return true;
 }
 
 OperatorResultType PhysicalCrossProduct::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

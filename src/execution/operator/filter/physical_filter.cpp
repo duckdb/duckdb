@@ -4,6 +4,14 @@
 #include "duckdb/parallel/thread_context.hpp"
 namespace duckdb {
 
+static void ResetCachingOperatorState(CachingOperatorState &state) {
+	state.cached_chunk.reset();
+	state.initialized = false;
+	state.can_cache_chunk = OperatorCachingMode::NONE;
+	state.must_return_continuation_chunk = false;
+	state.cached_result = OperatorResultType::NEED_MORE_INPUT;
+}
+
 PhysicalFilter::PhysicalFilter(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
     : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
@@ -38,6 +46,12 @@ public:
 
 unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<FilterState>(context, *expression);
+}
+
+bool PhysicalFilter::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
+	auto &state = state_p.Cast<FilterState>();
+	ResetCachingOperatorState(state);
+	return true;
 }
 
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

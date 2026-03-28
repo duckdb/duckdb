@@ -36,6 +36,9 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	bool ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
+	                           LocalSourceState &state) const override;
+	bool ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
 	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
@@ -68,6 +71,8 @@ public:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
+	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

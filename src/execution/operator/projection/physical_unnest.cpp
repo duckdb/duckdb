@@ -131,6 +131,14 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &con
 	return PhysicalUnnest::GetState(context, select_list);
 }
 
+bool PhysicalUnnest::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
+	(void)context;
+	auto &state = state_p.Cast<UnnestOperatorState>();
+	state.Reset();
+	state.list_data.Reset();
+	return true;
+}
+
 unique_ptr<OperatorState> PhysicalUnnest::GetState(ExecutionContext &context,
                                                    const vector<unique_ptr<Expression>> &select_list) {
 	return make_uniq<UnnestOperatorState>(context.client, select_list);

@@ -28,6 +28,7 @@ public:
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
+	bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;
@@ -43,6 +44,9 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
+	bool ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state) const override;
+	bool ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
+	                           LocalSourceState &state) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
 
@@ -57,6 +61,8 @@ public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
+	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

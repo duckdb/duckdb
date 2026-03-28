@@ -21,6 +21,14 @@ unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionCont
 	return make_uniq<ExpressionScanState>(Allocator::Get(context.client), *this);
 }
 
+bool PhysicalExpressionScan::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
+	(void)context;
+	auto &state = state_p.Cast<ExpressionScanState>();
+	state.expression_index = 0;
+	state.temp_chunk.Reset();
+	return true;
+}
+
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<ExpressionScanState>();
