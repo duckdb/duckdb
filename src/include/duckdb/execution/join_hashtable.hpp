@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
@@ -116,6 +117,7 @@ public:
 		SelectionVector last_sel_vector;
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
+		void Reset();
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		//! Are pointer chains all pointing to NULL?
@@ -522,7 +524,7 @@ public:
 	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
 
 	//! Get total size of HT if all partitions would be built
-	idx_t GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
+	idx_t GetTotalSize(const vector<reference<JoinHashTable>> &local_hts, idx_t &max_partition_size,
 	                   idx_t &max_partition_count) const;
 	idx_t GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
 	                   idx_t &max_partition_size, idx_t &max_partition_count) const;
@@ -544,6 +546,12 @@ public:
 
 	//! Delete blocks that belong to the current partitioned HT
 	void Reset();
+	//! Reset this HT for a fresh build/probe iteration while keeping the object reusable
+	void ResetForNewIteration();
+	//! Like ResetForNewIteration(), but collapses the sink collection to a single partition.
+	//! Used by recursive CTEs to avoid per-iteration overhead of managing many radix partitions
+	//! when only one thread is building the hash table.
+	void ResetForNewIterationSinglePartition();
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
@@ -552,6 +560,7 @@ public:
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
+	const idx_t initial_radix_bits;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 

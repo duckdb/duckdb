@@ -10,6 +10,7 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -42,8 +43,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false),
-      has_null(false), residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
+      vfound(Value::BOOLEAN(false)), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false), has_null(false),
+      residual_predicate(predicate_ptr), initial_radix_bits(initial_radix_bits), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -913,6 +914,14 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
 	}
 }
 
+void ScanStructure::Reset() {
+	count = 0;
+	finished = false;
+	is_null = true;
+	has_null_value_filter = false;
+	last_match_count = 0;
+}
+
 void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	D_ASSERT(keys.size() == probe_data.size());
 
@@ -1744,13 +1753,13 @@ idx_t JoinHashTable::GetTotalSize(const vector<idx_t> &partition_sizes, const ve
 	return total_size + PointerTableSize(total_count);
 }
 
-idx_t JoinHashTable::GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
+idx_t JoinHashTable::GetTotalSize(const vector<reference<JoinHashTable>> &local_hts, idx_t &max_partition_size,
                                   idx_t &max_partition_count) const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	vector<idx_t> partition_sizes(num_partitions, 0);
 	vector<idx_t> partition_counts(num_partitions, 0);
 	for (auto &ht : local_hts) {
-		ht->GetSinkCollection().GetSizesAndCounts(partition_sizes, partition_counts);
+		ht.get().GetSinkCollection().GetSizesAndCounts(partition_sizes, partition_counts);
 	}
 
 	return GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
@@ -1841,9 +1850,81 @@ void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 
 void JoinHashTable::Reset() {
 	data_collection->Reset();
-	hash_map.Reset();
+	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 	current_partitions.SetAllInvalid(RadixPartitioning::NumberOfPartitions(radix_bits));
 	finalized = false;
+}
+
+static void ResetCorrelatedMarkJoinInfo(JoinHashTable &ht) {
+	auto &info = ht.correlated_mark_join_info;
+	if (info.correlated_types.empty()) {
+		return;
+	}
+	vector<BoundAggregateExpression *> correlated_aggregates;
+	vector<LogicalType> payload_types;
+	correlated_aggregates.reserve(info.correlated_aggregates.size());
+	payload_types.reserve(info.correlated_aggregates.size());
+	for (auto &expr : info.correlated_aggregates) {
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
+		correlated_aggregates.push_back(&aggr);
+		payload_types.push_back(aggr.return_type);
+	}
+	auto &allocator = BufferAllocator::Get(ht.context);
+	info.correlated_counts = make_uniq<GroupedAggregateHashTable>(ht.context, allocator, info.correlated_types,
+	                                                              payload_types, correlated_aggregates);
+	info.group_chunk.Reset();
+	info.correlated_payload.Reset();
+	info.result_chunk.Reset();
+}
+
+void JoinHashTable::ResetForNewIteration() {
+	data_collection->Reset();
+	if (radix_bits != initial_radix_bits) {
+		radix_bits = initial_radix_bits;
+		sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
+		                                                       radix_bits, layout_ptr->ColumnCount() - 1);
+	} else {
+		sink_collection->Reset();
+	}
+	InitializePartitionMasks();
+	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
+	capacity = DConstants::INVALID_INDEX;
+	bitmask = DConstants::INVALID_INDEX;
+	finalized = false;
+	has_null = false;
+	chains_longer_than_one = false;
+	total_probe_matches = 0;
+	load_factor = DEFAULT_LOAD_FACTOR;
+	should_build_bloom_filter = false;
+	prefix_range_filter.reset();
+	should_build_prefix_range_filter = false;
+	ResetCorrelatedMarkJoinInfo(*this);
+}
+
+void JoinHashTable::ResetForNewIterationSinglePartition() {
+	data_collection->Reset();
+	// Always use a single partition (radix_bits=0) to avoid per-iteration overhead of resetting
+	// and re-creating many radix partitions when only one thread builds the hash table.
+	if (radix_bits != 0) {
+		radix_bits = 0;
+		sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
+		                                                       idx_t(0), layout_ptr->ColumnCount() - 1);
+	} else {
+		sink_collection->Reset();
+	}
+	InitializePartitionMasks();
+	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
+	capacity = DConstants::INVALID_INDEX;
+	bitmask = DConstants::INVALID_INDEX;
+	finalized = false;
+	has_null = false;
+	chains_longer_than_one = false;
+	total_probe_matches = 0;
+	load_factor = DEFAULT_LOAD_FACTOR;
+	should_build_bloom_filter = false;
+	prefix_range_filter.reset();
+	should_build_prefix_range_filter = false;
+	ResetCorrelatedMarkJoinInfo(*this);
 }
 
 bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
