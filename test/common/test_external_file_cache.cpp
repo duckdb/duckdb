@@ -161,7 +161,7 @@ TEST_CASE("ReindexCachedFiles non-aligned block sizes", "[external_file_cache]")
 
 	const idx_t OLD_BLOCK_SIZE = 7000;
 	const idx_t NEW_BLOCK_SIZE = 3000;
-	const idx_t FILE_SIZE = 21000; // 3 old blocks exactly
+	const idx_t FILE_SIZE = 22000; // not divisible by either block size
 
 	// Set the block size to 7000 before populating the cache.
 	Connection con(db);
@@ -188,7 +188,8 @@ TEST_CASE("ReindexCachedFiles non-aligned block sizes", "[external_file_cache]")
 		REQUIRE(result == content);
 	}
 
-	REQUIRE(cache.GetCachedFileInformation().size() == 3); // 3 x 7000 byte blocks
+	// 4 old blocks: 3 x 7000 + 1 x 1000 (partial)
+	REQUIRE(cache.GetCachedFileInformation().size() == 4);
 
 	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
 
@@ -197,8 +198,8 @@ TEST_CASE("ReindexCachedFiles non-aligned block sizes", "[external_file_cache]")
 	for (auto &info : cached_after) {
 		total_bytes_after += info.nr_bytes;
 	}
-	// 21000 / 3000 = 7 new blocks. All should be present since all old blocks are pinned.
-	REQUIRE(cached_after.size() == 7);
+	// 8 new blocks: 7 x 3000 + 1 x 1000 (partial). All old blocks contiguous and pinned.
+	REQUIRE(cached_after.size() == 8);
 	REQUIRE(total_bytes_after == FILE_SIZE);
 }
 
@@ -209,7 +210,7 @@ TEST_CASE("ReindexCachedFiles non-aligned merge", "[external_file_cache]") {
 
 	const idx_t OLD_BLOCK_SIZE = 3000;
 	const idx_t NEW_BLOCK_SIZE = 7000;
-	const idx_t FILE_SIZE = 21000; // 7 old blocks exactly
+	const idx_t FILE_SIZE = 22000; // not divisible by either block size
 
 	Connection con(db);
 	con.Query("SET external_file_cache_local_block_size=" + to_string(OLD_BLOCK_SIZE));
@@ -235,7 +236,8 @@ TEST_CASE("ReindexCachedFiles non-aligned merge", "[external_file_cache]") {
 		REQUIRE(result == content);
 	}
 
-	REQUIRE(cache.GetCachedFileInformation().size() == 7); // 7 x 3000 byte blocks
+	// 8 old blocks: 7 x 3000 + 1 x 1000 (partial)
+	REQUIRE(cache.GetCachedFileInformation().size() == 8);
 
 	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
 
@@ -244,27 +246,29 @@ TEST_CASE("ReindexCachedFiles non-aligned merge", "[external_file_cache]") {
 	for (auto &info : cached_after) {
 		total_bytes_after += info.nr_bytes;
 	}
-	// 21000 / 7000 = 3 new blocks. Each needs multiple old blocks (e.g., new block 0
-	// needs old blocks 0,1,2 since [0,7000) spans [0,3000),[3000,6000),[6000,9000)).
-	// New block 1 at [7000,14000) spans old blocks 2,3,4 — old block 2 covers [6000,9000),
-	// so it contributes [7000,9000). All old blocks pinned, so all new blocks created.
-	REQUIRE(cached_after.size() == 3);
+	// 4 new blocks: 3 x 7000 + 1 x 1000 (partial). Each full new block merges from
+	// multiple old blocks across boundaries. All old blocks contiguous and pinned.
+	REQUIRE(cached_after.size() == 4);
 	REQUIRE(total_bytes_after == FILE_SIZE);
 }
 
-TEST_CASE("ReindexCachedFiles local vs remote isolation", "[external_file_cache]") {
+TEST_CASE("ReindexCachedFiles with holes in cached content", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
-	const idx_t BLOCK_SIZE = 16384;
-	const idx_t FILE_SIZE = BLOCK_SIZE * 2;
+	const idx_t OLD_BLOCK_SIZE = 4096;
+	const idx_t NEW_BLOCK_SIZE = 16384;
+	const idx_t FILE_SIZE = OLD_BLOCK_SIZE * 8; // 32KiB = 8 old blocks
+
+	Connection con(db);
+	con.Query("SET external_file_cache_local_block_size=" + to_string(OLD_BLOCK_SIZE));
 
 	string content(FILE_SIZE, '\0');
 	for (idx_t i = 0; i < FILE_SIZE; i++) {
 		content[i] = static_cast<char>('A' + (i % 26));
 	}
-	EFCTestFileGuard test_file("test_reindex_isolation.bin", content);
+	EFCTestFileGuard test_file("test_reindex_holes.bin", content);
 
 	CachingFileSystem cfs(*tracking_fs, db_instance);
 	OpenFileInfo file_info(test_file.GetPath());
@@ -274,27 +278,37 @@ TEST_CASE("ReindexCachedFiles local vs remote isolation", "[external_file_cache]
 	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
 	auto &cache = db_instance.GetExternalFileCache();
 
+	// Only read blocks 0-1 and 4-7, skipping blocks 2-3 to create a hole.
+	// Blocks 0-1: [0, 8192)
 	{
-		auto group = handle->Read(FILE_SIZE, 0);
-		string result(FILE_SIZE, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
-		REQUIRE(result == content);
+		auto group = handle->Read(OLD_BLOCK_SIZE * 2, 0);
+		string result(OLD_BLOCK_SIZE * 2, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), OLD_BLOCK_SIZE * 2);
+		REQUIRE(result == content.substr(0, OLD_BLOCK_SIZE * 2));
+	}
+	// Blocks 4-7: [16384, 32768)
+	{
+		auto group = handle->Read(OLD_BLOCK_SIZE * 4, OLD_BLOCK_SIZE * 4);
+		string result(OLD_BLOCK_SIZE * 4, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), OLD_BLOCK_SIZE * 4);
+		REQUIRE(result == content.substr(OLD_BLOCK_SIZE * 4, OLD_BLOCK_SIZE * 4));
 	}
 
-	auto cached_before = cache.GetCachedFileInformation();
-	REQUIRE(cached_before.size() == 2);
+	// 6 cached blocks: 0,1 and 4,5,6,7 (blocks 2,3 are the hole)
+	REQUIRE(cache.GetCachedFileInformation().size() == 6);
 
-	// Re-index for remote files only — local cache should be untouched.
-	cache.ReindexCachedFiles(/*is_remote=*/true, BLOCK_SIZE, 4096);
+	// Merge 4KiB -> 16KiB. Two new blocks possible:
+	// New block 0 [0, 16384): needs old blocks 0,1,2,3 — blocks 2,3 missing → skipped
+	// New block 1 [16384, 32768): needs old blocks 4,5,6,7 — all present → created
+	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
 
 	auto cached_after = cache.GetCachedFileInformation();
-	REQUIRE(cached_after.size() == 2); // local file, unchanged
-
-	// Now re-index for local files — should change.
-	cache.ReindexCachedFiles(/*is_remote=*/false, BLOCK_SIZE, 4096);
-
-	auto cached_local = cache.GetCachedFileInformation();
-	REQUIRE(cached_local.size() == 8); // 2 * (16384/4096) = 8
+	idx_t total_bytes_after = 0;
+	for (auto &info : cached_after) {
+		total_bytes_after += info.nr_bytes;
+	}
+	REQUIRE(cached_after.size() == 1);
+	REQUIRE(total_bytes_after == NEW_BLOCK_SIZE); // only the second 16KiB block
 }
 
 } // namespace duckdb
