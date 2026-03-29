@@ -32,6 +32,16 @@ public:
 		return initialized;
 	}
 
+	//! Get the number of 64-bit sectors in the bloom filter
+	idx_t GetNumSectors() const {
+		return num_sectors;
+	}
+
+	//! Get a read-only pointer to the raw bloom filter bit array
+	const uint64_t *GetData() const {
+		return bf;
+	}
+
 private:
 	idx_t num_sectors;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
@@ -67,6 +77,14 @@ public:
 
 	LogicalType GetKeyType() const {
 		return key_type;
+	}
+
+	const string &GetKeyColumnName() const {
+		return key_column_name;
+	}
+
+	const BloomFilter &GetBloomFilter() const {
+		return filter;
 	}
 
 	string ToString(const string &column_name) const override;
