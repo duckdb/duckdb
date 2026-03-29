@@ -212,13 +212,13 @@ static unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const ui
 	auto type = node.GetType();
 	switch (type) {
 	case NType::NODE_4:
-		return Node4::GetChild(NodePointer::Ref<Node4>(art, node, type), byte, unsafe);
+		return Node4::GetChild(Node::Ref<Node4>(art, node, type), byte, unsafe);
 	case NType::NODE_16:
-		return Node16::GetChild(NodePointer::Ref<Node16>(art, node, type), byte, unsafe);
+		return Node16::GetChild(Node::Ref<Node16>(art, node, type), byte, unsafe);
 	case NType::NODE_48:
-		return Node48::GetChild(NodePointer::Ref<Node48>(art, node, type), byte, unsafe);
+		return Node48::GetChild(Node::Ref<Node48>(art, node, type), byte, unsafe);
 	case NType::NODE_256: {
-		return Node256::GetChild(NodePointer::Ref<Node256>(art, node, type), byte, unsafe);
+		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte, unsafe);
 	}
 	default:
 		throw InternalException("Invalid node type for GetChildInternal: %d.", type);
@@ -276,13 +276,13 @@ unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &by
 	auto type = node.GetType();
 	switch (type) {
 	case NType::NODE_4:
-		return Node4::GetNextChild(NodePointer::Ref<Node4>(art, node, type), byte);
+		return Node4::GetNextChild(Node::Ref<Node4>(art, node, type), byte);
 	case NType::NODE_16:
-		return Node16::GetNextChild(NodePointer::Ref<Node16>(art, node, type), byte);
+		return Node16::GetNextChild(Node::Ref<Node16>(art, node, type), byte);
 	case NType::NODE_48:
-		return Node48::GetNextChild(NodePointer::Ref<Node48>(art, node, type), byte);
+		return Node48::GetNextChild(Node::Ref<Node48>(art, node, type), byte);
 	case NType::NODE_256:
-		return Node256::GetNextChild(NodePointer::Ref<Node256>(art, node, type), byte);
+		return Node256::GetNextChild(Node::Ref<Node256>(art, node, type), byte);
 	default:
 		throw InternalException("Invalid node type for GetNextChildInternal: %d.", type);
 	}

@@ -42,7 +42,7 @@ NodeHandle BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node, c
 	}
 
 	// Free the child and decrease the count.
-	NodePointer::FreeTree(art, n.children[child_pos]);
+	Node::FreeTree(art, n.children[child_pos]);
 	n.count--;
 
 	// Possibly move children backwards.

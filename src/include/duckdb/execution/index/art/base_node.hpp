@@ -33,7 +33,7 @@ private:
 public:
 	//! Get a new BaseNode handle and initialize the base node.
 	static NodeHandle New(ART &art, Node &node) {
-		node = NodePointer::GetAllocator(art, TYPE).New();
+		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
 		NodeHandle handle(art, node);
