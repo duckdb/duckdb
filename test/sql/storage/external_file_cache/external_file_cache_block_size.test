@@ -1,0 +1,135 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_block_size.test
+# description: Test that changing cache block size re-indexes blocks instead of clearing
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+set prefetch_all_parquet_files=true;
+
+# Create a test parquet file
+statement ok
+copy (select range i, range % 100 j from range(10000)) to '__TEST_DIR__/test_block_size.parquet';
+
+# We require that the last modified time is more than 10 seconds in the past
+sleep 11 seconds
+
+# Read the file to populate cache at default 16KiB block size
+statement ok
+select * from '__TEST_DIR__/test_block_size.parquet';
+
+# Verify cache is populated
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Record total cached bytes before block size change
+query I
+select sum(nr_bytes) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Change local block size from 16KiB to 4KiB
+statement ok
+set external_file_cache_local_block_size=4096;
+
+# Cache should still have data (re-indexed, not cleared)
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Verify reads still return correct data after re-indexing
+query II
+select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+----
+10000	49995000
+
+# Change block size back to 16KiB
+statement ok
+set external_file_cache_local_block_size=16384;
+
+# Cache should still have data
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Verify reads are still correct
+query II
+select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+----
+10000	49995000
+
+# Setting to same value should be a no-op
+statement ok
+set external_file_cache_local_block_size=16384;
+
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Record cache state before reset
+query I
+select sum(nr_bytes) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Reset local block size to default — cache should be re-indexed (same size), no data lost
+statement ok
+reset external_file_cache_local_block_size;
+
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Total cached bytes should be unchanged after reset
+query I
+select sum(nr_bytes) > 0 from duckdb_external_file_cache();
+----
+true
+
+# Verify reads are still correct after reset
+query II
+select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+----
+10000	49995000
+
+# Change to a different size, then reset — should re-index back to default
+statement ok
+set external_file_cache_local_block_size=8192;
+
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+statement ok
+reset external_file_cache_local_block_size;
+
+query I
+select count(*) > 0 from duckdb_external_file_cache();
+----
+true
+
+query II
+select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+----
+10000	49995000
+
+# Verify invalid values are rejected
+statement error
+set external_file_cache_local_block_size=0;
+----
+value must be positive
+
+statement error
+set external_file_cache_remote_block_size=0;
+----
+value must be positive

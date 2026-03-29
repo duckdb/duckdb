@@ -758,7 +758,10 @@ void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Va
 		throw ParserException("Invalid option for %s: value must be positive", string(Name));
 	}
 	if (info.db) {
-		ExternalFileCache::Get(*info.db).ClearCachedFiles();
+		const auto old_bs = Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(*info.db);
+		if (old_bs != bytes) {
+			ExternalFileCache::Get(*info.db).ReindexCachedFiles(/*is_remote=*/false, old_bs, bytes);
+		}
 	}
 }
 
@@ -768,7 +771,10 @@ void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, V
 		throw ParserException("Invalid option for %s: value must be positive", string(Name));
 	}
 	if (info.db) {
-		ExternalFileCache::Get(*info.db).ClearCachedFiles();
+		const auto old_bs = Settings::Get<ExternalFileCacheRemoteBlockSizeSetting>(*info.db);
+		if (old_bs != bytes) {
+			ExternalFileCache::Get(*info.db).ReindexCachedFiles(/*is_remote=*/true, old_bs, bytes);
+		}
 	}
 }
 

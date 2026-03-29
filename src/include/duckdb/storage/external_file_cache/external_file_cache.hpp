@@ -37,6 +37,9 @@ public:
 	DUCKDB_API idx_t GetCacheBlockSize(const string &path) const;
 	//! Drop all cached file blocks (e.g. after changing cache block size settings).
 	void ClearCachedFiles();
+	//! Re-index cached blocks from old_block_size to new_block_size, preserving data where possible.
+	//! Only affects files matching the is_remote predicate (local or remote).
+	void ReindexCachedFiles(bool is_remote, idx_t old_block_size, idx_t new_block_size);
 
 	//! Cached files
 	struct CachedFile {
