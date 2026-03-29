@@ -755,7 +755,7 @@ void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &inp
 void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	const auto bytes = input.GetValue<uint64_t>();
 	if (bytes == 0) {
-		throw ParserException("Invalid option for %s: value must be positive", string(Name));
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
 	}
 	if (info.db) {
 		const auto old_bs = Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(*info.db);
@@ -768,7 +768,7 @@ void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Va
 void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	const auto bytes = input.GetValue<uint64_t>();
 	if (bytes == 0) {
-		throw ParserException("Invalid option for %s: value must be positive", string(Name));
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
 	}
 	if (info.db) {
 		const auto old_bs = Settings::Get<ExternalFileCacheRemoteBlockSizeSetting>(*info.db);
