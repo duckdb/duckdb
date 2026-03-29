@@ -1451,7 +1451,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'\n"
 	"AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?\n"
 	"Database <- 'DATABASE'\n"
-	"DatabasePath <- StringLiteral\n"
+	"DatabasePath <- Expression\n"
 	"AttachAlias <- 'AS' ColId\n"
 	"AttachOptions <- GenericCopyOptionList\n"
 	"DetachStatement <- 'DETACH' Database? IfExists? CatalogName\n"
