@@ -110,12 +110,7 @@ CREATE VIEW cv1 AS
 SELECT
     bt.k,
     (k * 2) + 1,
-    CASE
-        WHEN k = 1 THEN 2
-        WHEN k = 2 THEN 3
-        WHEN k = 3 THEN 4
-        ELSE NULL
-    END,
+    CASE WHEN k = 1 THEN 2 WHEN k = 2 THEN 3 WHEN k = 3 THEN 4 ELSE NULL END,
     k BETWEEN 1 AND 2,
     k::VARCHAR COLLATE NOCASE,
     (k = 3 AND k + 1 = 4)
@@ -173,8 +168,7 @@ SELECT
         ORDER BY i DESC NULLS FIRST
     ),
     sum(i) OVER (
-        ORDER BY
-            rowid ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
+        ORDER BY rowid ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
     )
 FROM base_table
 QUALIFY row_number() OVER () != 2

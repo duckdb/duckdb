@@ -57,25 +57,36 @@ CREATE TABLE requires(
     Sensor_id int NOT NULL,
     PRIMARY KEY (Route_id, Sensor_id)
 );
-COPY connectsTo
+COPY
+    connectsTo
 FROM 'benchmark/trainbenchmark/sf1/connectsTo.csv';
-COPY monitoredBy
+COPY
+    monitoredBy
 FROM 'benchmark/trainbenchmark/sf1/monitoredBy.csv';
-COPY Region
+COPY
+    Region
 FROM 'benchmark/trainbenchmark/sf1/Region.csv';
-COPY requires
+COPY
+    requires
 FROM 'benchmark/trainbenchmark/sf1/requires.csv';
-COPY Route
+COPY
+    Route
 FROM 'benchmark/trainbenchmark/sf1/Route.csv';
-COPY Segment
+COPY
+    Segment
 FROM 'benchmark/trainbenchmark/sf1/Segment.csv';
-COPY Semaphore
+COPY
+    Semaphore
 FROM 'benchmark/trainbenchmark/sf1/Semaphore.csv';
-COPY Sensor
+COPY
+    Sensor
 FROM 'benchmark/trainbenchmark/sf1/Sensor.csv';
-COPY Switch
+COPY
+    Switch
 FROM 'benchmark/trainbenchmark/sf1/Switch.csv';
-COPY SwitchPosition
+COPY
+    SwitchPosition
 FROM 'benchmark/trainbenchmark/sf1/SwitchPosition.csv';
-COPY TrackElement
+COPY
+    TrackElement
 FROM 'benchmark/trainbenchmark/sf1/TrackElement.csv';

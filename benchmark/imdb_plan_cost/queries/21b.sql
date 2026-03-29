@@ -1,7 +1,4 @@
-SELECT
-    MIN(cn.name) AS company_name,
-    MIN(lt.link) AS link_type,
-    MIN(t.title) AS german_follow_up
+SELECT MIN(cn.name) AS company_name, MIN(lt.link) AS link_type, MIN(t.title) AS german_follow_up
 FROM
     company_name AS cn,
     company_type AS ct,

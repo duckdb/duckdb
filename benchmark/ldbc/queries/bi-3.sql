@@ -4,13 +4,7 @@ SELECT
     f.f_creationdate AS "forum.creationDate",
     f.f_moderatorid AS "person.id",
     count(DISTINCT p.m_messageid) AS postCount
-FROM
-    tagClass tc,
-    tag t,
-    message_tag pt,
-    message p,
-    forum f,
-    person m -- moderator
+FROM tagClass tc, tag t, message_tag pt, message p, forum f, person m -- moderator
 
 ,
     place ci -- city
@@ -30,10 +24,6 @@ AND tc.tc_tagclassid = t.t_tagclassid
 
 AND tc.tc_name = 'MusicalArtist'
     AND co.pl_name = 'Burma'
-GROUP BY
-    f.f_forumid,
-    f.f_title,
-    f.f_creationdate,
-    f.f_moderatorid
+GROUP BY f.f_forumid, f.f_title, f.f_creationdate, f.f_moderatorid
 ORDER BY postCount DESC, f.f_forumid
 LIMIT 20;

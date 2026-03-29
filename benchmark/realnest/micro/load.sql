@@ -1,30 +1,24 @@
-ATTACH
-    'https://blobs.duckdb.org/data/realnest/cord_10k.duckdb' AS cord(READ_ONLY);
+ATTACH 'https://blobs.duckdb.org/data/realnest/cord_10k.duckdb' AS cord(READ_ONLY);
 CREATE TABLE cord AS
 SELECT *
 FROM cord.cord;
-ATTACH
-    'https://blobs.duckdb.org/data/realnest/open_street_map_524k.duckdb' AS osm(READ_ONLY);
+ATTACH 'https://blobs.duckdb.org/data/realnest/open_street_map_524k.duckdb' AS osm(READ_ONLY);
 CREATE TABLE open_street_map AS
 SELECT *
 FROM osm.open_street_map;
-ATTACH
-    'https://blobs.duckdb.org/data/realnest/pull_131k.duckdb' AS gh_pull(READ_ONLY);
+ATTACH 'https://blobs.duckdb.org/data/realnest/pull_131k.duckdb' AS gh_pull(READ_ONLY);
 CREATE TABLE gh_pull AS
 SELECT *
 FROM gh_pull.gh_pull;
-ATTACH
-    'https://blobs.duckdb.org/data/realnest/issue_131k.duckdb' AS gh_issue(READ_ONLY);
+ATTACH 'https://blobs.duckdb.org/data/realnest/issue_131k.duckdb' AS gh_issue(READ_ONLY);
 CREATE TABLE gh_issue AS
 SELECT *
 FROM gh_issue.gh_issue;
-ATTACH
-    'https://blobs.duckdb.org/data/realnest/twitter_131k.duckdb' AS tw(READ_ONLY);
+ATTACH 'https://blobs.duckdb.org/data/realnest/twitter_131k.duckdb' AS tw(READ_ONLY);
 CREATE TABLE twitter AS
 SELECT *
 FROM tw.twitter;
-ATTACH
-    'https://blobs.duckdb.org/data/realnest/singleMu_524k.duckdb' AS rn_singleMu(READ_ONLY);
+ATTACH 'https://blobs.duckdb.org/data/realnest/singleMu_524k.duckdb' AS rn_singleMu(READ_ONLY);
 CREATE TABLE run2012B_singleMu AS
 SELECT *
 FROM rn_singleMu.run2012B_singleMu;

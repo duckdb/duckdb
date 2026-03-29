@@ -6,12 +6,7 @@ WITH RECURSIVE extended_tags(s_subtagclassid, s_supertagclassid) AS (
         FROM tagclass tc, extended_tags t
         WHERE tc.tc_subclassoftagclassid = t.s_subtagclassid
     )
-SELECT
-    p_personid,
-    p_firstname,
-    p_lastname,
-    array_agg(DISTINCT t_name),
-    count(*)
+SELECT p_personid, p_firstname, p_lastname, array_agg(DISTINCT t_name), count(*)
 FROM
     person,
     message p1,
@@ -24,9 +19,7 @@ FROM
         WHERE (t_tagclassid IN (
                         SELECT DISTINCT s_subtagclassid
                         FROM extended_tags k, tagclass
-                        WHERE
-                            tc_tagclassid = k.s_supertagclassid
-                            AND tc_name = 'OfficeHolder'
+                        WHERE tc_tagclassid = k.s_supertagclassid AND tc_name = 'OfficeHolder'
                     ) -- :tagClassName
 
 )

@@ -13,15 +13,7 @@ FROM lineitem
 WHERE l_shipdate <= CAST('1998-09-02' AS date)
 GROUP BY l_returnflag, l_linestatus
 ORDER BY l_returnflag, l_linestatus;
-SELECT
-    s_acctbal,
-    s_name,
-    n_name,
-    p_partkey,
-    p_mfgr,
-    s_address,
-    s_phone,
-    s_comment
+SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment
 FROM part, supplier, partsupp, nation, region
 WHERE
     p_partkey = ps_partkey
@@ -42,11 +34,7 @@ WHERE
     )
 ORDER BY s_acctbal DESC, n_name, s_name, p_partkey
 LIMIT 100;
-SELECT
-    l_orderkey,
-    sum(l_extendedprice *(1 - l_discount)) AS revenue,
-    o_orderdate,
-    o_shippriority
+SELECT l_orderkey, sum(l_extendedprice *(1 - l_discount)) AS revenue, o_orderdate, o_shippriority
 FROM customer, orders, lineitem
 WHERE c_mktsegment = 'BUILDING'
   AND c_custkey = o_custkey
@@ -64,14 +52,11 @@ WHERE
     AND EXISTS (
         SELECT *
         FROM lineitem
-        WHERE l_orderkey = o_orderkey
-          AND l_commitdate < l_receiptdate
+        WHERE l_orderkey = o_orderkey AND l_commitdate < l_receiptdate
     )
 GROUP BY o_orderpriority
 ORDER BY o_orderpriority;
-SELECT
-    n_name,
-    sum(l_extendedprice *(1 - l_discount)) AS revenue
+SELECT n_name, sum(l_extendedprice *(1 - l_discount)) AS revenue
 FROM customer, orders, lineitem, supplier, nation, region
 WHERE c_custkey = o_custkey
   AND l_orderkey = o_orderkey
@@ -90,11 +75,7 @@ WHERE l_shipdate >= CAST('1994-01-01' AS date)
   AND l_shipdate < CAST('1995-01-01' AS date)
   AND l_discount BETWEEN 0.05 AND 0.07
   AND l_quantity < 24;
-SELECT
-    supp_nation,
-    cust_nation,
-    l_year,
-    sum(volume) AS revenue
+SELECT supp_nation, cust_nation, l_year, sum(volume) AS revenue
 FROM (
         SELECT
             n1.n_name AS supp_nation,
@@ -103,13 +84,7 @@ FROM (
                 FROM l_shipdate
             ) AS l_year,
             l_extendedprice *(1 - l_discount) AS volume
-        FROM
-            supplier,
-            lineitem,
-            orders,
-            customer,
-            nation n1,
-            nation n2
+        FROM supplier, lineitem, orders, customer, nation n1, nation n2
         WHERE s_suppkey = l_suppkey
           AND o_orderkey = l_orderkey
           AND c_custkey = o_custkey
@@ -120,12 +95,7 @@ FROM (
     ) AS shipping
 GROUP BY supp_nation, cust_nation, l_year
 ORDER BY supp_nation, cust_nation, l_year;
-SELECT
-    o_year,
-    sum(CASE
-        WHEN nation = 'BRAZIL' THEN volume
-        ELSE 0
-    END) / sum(volume) AS mkt_share
+SELECT o_year, sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END) / sum(volume) AS mkt_share
 FROM (
         SELECT
             extract(year
@@ -133,15 +103,7 @@ FROM (
             ) AS o_year,
             l_extendedprice *(1 - l_discount) AS volume,
             n2.n_name AS nation
-        FROM
-            part,
-            supplier,
-            lineitem,
-            orders,
-            customer,
-            nation n1,
-            nation n2,
-            region
+        FROM part, supplier, lineitem, orders, customer, nation n1, nation n2, region
         WHERE p_partkey = l_partkey
           AND s_suppkey = l_suppkey
           AND l_orderkey = o_orderkey
@@ -163,13 +125,7 @@ FROM (
                 FROM o_orderdate
             ) AS o_year,
             l_extendedprice *(1 - l_discount) - ps_supplycost * l_quantity AS amount
-        FROM
-            part,
-            supplier,
-            lineitem,
-            partsupp,
-            orders,
-            nation
+        FROM part, supplier, lineitem, partsupp, orders, nation
         WHERE s_suppkey = l_suppkey
           AND ps_suppkey = l_suppkey
           AND ps_partkey = l_partkey
@@ -196,42 +152,24 @@ WHERE c_custkey = o_custkey
   AND o_orderdate < CAST('1994-01-01' AS date)
   AND l_returnflag = 'R'
   AND c_nationkey = n_nationkey
-GROUP BY
-    c_custkey,
-    c_name,
-    c_acctbal,
-    c_phone,
-    n_name,
-    c_address,
-    c_comment
+GROUP BY c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment
 ORDER BY revenue DESC
 LIMIT 20;
 SELECT ps_partkey, sum(ps_supplycost * ps_availqty) AS value
 FROM partsupp, supplier, nation
-WHERE ps_suppkey = s_suppkey
-  AND s_nationkey = n_nationkey
-  AND n_name = 'GERMANY'
+WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY'
 GROUP BY ps_partkey
 HAVING
     sum(ps_supplycost * ps_availqty) >(
-        SELECT
-            sum(ps_supplycost * ps_availqty) * 0.0001000000
+        SELECT sum(ps_supplycost * ps_availqty) * 0.0001000000
         FROM partsupp, supplier, nation
-        WHERE ps_suppkey = s_suppkey
-          AND s_nationkey = n_nationkey
-          AND n_name = 'GERMANY'
+        WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY'
     )
 ORDER BY value DESC;
 SELECT
     l_shipmode,
-    sum(CASE
-        WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1
-        ELSE 0
-    END) AS high_line_count,
-    sum(CASE
-        WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1
-        ELSE 0
-    END) AS low_line_count
+    sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count,
+    sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count
 FROM orders, lineitem
 WHERE o_orderkey = l_orderkey
   AND l_shipmode IN ('MAIL', 'SHIP')
@@ -245,9 +183,7 @@ SELECT c_count, count(*) AS custdist
 FROM (
         SELECT c_custkey, count(o_orderkey)
         FROM customer
-        LEFT OUTER JOIN
-            orders ON c_custkey = o_custkey
-            AND o_comment NOT LIKE '%special%requests%'
+        LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%'
         GROUP BY c_custkey
     ) AS c_orders(c_custkey, c_count)
 GROUP BY c_count
@@ -258,19 +194,14 @@ SELECT
         ELSE 0
     END) / sum(l_extendedprice *(1 - l_discount)) AS promo_revenue
 FROM lineitem, part
-WHERE l_partkey = p_partkey
-  AND l_shipdate >= date '1995-09-01'
-  AND l_shipdate < CAST('1995-10-01' AS date);
+WHERE l_partkey = p_partkey AND l_shipdate >= date '1995-09-01' AND l_shipdate < CAST('1995-10-01' AS date);
 SELECT s_suppkey, s_name, s_address, s_phone, total_revenue
 FROM
     supplier,
     (
-        SELECT
-            l_suppkey AS supplier_no,
-            sum(l_extendedprice *(1 - l_discount)) AS total_revenue
+        SELECT l_suppkey AS supplier_no, sum(l_extendedprice *(1 - l_discount)) AS total_revenue
         FROM lineitem
-        WHERE l_shipdate >= CAST('1996-01-01' AS date)
-          AND l_shipdate < CAST('1996-04-01' AS date)
+        WHERE l_shipdate >= CAST('1996-01-01' AS date) AND l_shipdate < CAST('1996-04-01' AS date)
         GROUP BY supplier_no
     ) revenue0
 WHERE
@@ -278,22 +209,14 @@ WHERE
     AND total_revenue =(
         SELECT max(total_revenue)
         FROM (
-                SELECT
-                    l_suppkey AS supplier_no,
-                    sum(l_extendedprice *(1 - l_discount)) AS total_revenue
+                SELECT l_suppkey AS supplier_no, sum(l_extendedprice *(1 - l_discount)) AS total_revenue
                 FROM lineitem
-                WHERE
-                    l_shipdate >= CAST('1996-01-01' AS date)
-                    AND l_shipdate < CAST('1996-04-01' AS date)
+                WHERE l_shipdate >= CAST('1996-01-01' AS date) AND l_shipdate < CAST('1996-04-01' AS date)
                 GROUP BY supplier_no
             ) revenue1
     )
 ORDER BY s_suppkey;
-SELECT
-    p_brand,
-    p_type,
-    p_size,
-    count(DISTINCT ps_suppkey) AS supplier_cnt
+SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
 FROM partsupp, part
 WHERE
     p_partkey = ps_partkey
@@ -318,13 +241,7 @@ WHERE
         FROM lineitem
         WHERE l_partkey = p_partkey
     );
-SELECT
-    c_name,
-    c_custkey,
-    o_orderkey,
-    o_orderdate,
-    o_totalprice,
-    sum(l_quantity)
+SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity)
 FROM customer, orders, lineitem
 WHERE
     o_orderkey IN (
@@ -335,12 +252,7 @@ WHERE
     )
     AND c_custkey = o_custkey
     AND o_orderkey = l_orderkey
-GROUP BY
-    c_name,
-    c_custkey,
-    o_orderkey,
-    o_orderdate,
-    o_totalprice
+GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice
 ORDER BY o_totalprice DESC, o_orderdate
 LIMIT 100;
 SELECT sum(l_extendedprice *(1 - l_discount)) AS revenue
@@ -397,15 +309,12 @@ WHERE
     AND EXISTS (
         SELECT *
         FROM lineitem l2
-        WHERE l2.l_orderkey = l1.l_orderkey
-          AND l2.l_suppkey <> l1.l_suppkey
+        WHERE l2.l_orderkey = l1.l_orderkey AND l2.l_suppkey <> l1.l_suppkey
     )
     AND NOT EXISTS (
         SELECT *
         FROM lineitem l3
-        WHERE l3.l_orderkey = l1.l_orderkey
-          AND l3.l_suppkey <> l1.l_suppkey
-          AND l3.l_receiptdate > l3.l_commitdate
+        WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate
     )
     AND s_nationkey = n_nationkey
     AND n_name = 'SAUDI ARABIA'

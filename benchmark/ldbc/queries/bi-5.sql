@@ -6,10 +6,8 @@ WITH detail AS (
             count(DISTINCT m.m_messageid) AS messageCount,
             NULL AS score
         FROM tag t, message_tag pt, message m
-        LEFT JOIN
-            message r ON (m.m_messageid = r.m_c_replyof)
-        LEFT JOIN
-            likes l ON (m.m_messageid = l.l_messageid) -- l: likes to m
+        LEFT JOIN message r ON (m.m_messageid = r.m_c_replyof)
+        LEFT JOIN likes l ON (m.m_messageid = l.l_messageid) -- l: likes to m
 
 ,
             person cr -- creator

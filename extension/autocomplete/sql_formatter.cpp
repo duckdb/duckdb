@@ -107,10 +107,10 @@ string SQLFormatter::Format(const string &sql) {
 //! starts a new line in the formatted output.
 bool SQLFormatter::IsClauseKeyword(const string &kw) {
 	static const std::unordered_set<string> clause_keywords = {
-	    "SELECT",    "FROM",    "WHERE", "HAVING", "LIMIT",    "OFFSET",    "JOIN",  "UNION",
-	    "INTERSECT", "EXCEPT",  "WITH",  "INSERT", "UPDATE",   "DELETE",    "SET",   "RETURNING",
-	    "VALUES",    "CREATE",  "DROP",  "ALTER",  "TRUNCATE", "QUALIFY",   "PIVOT", "UNPIVOT",
-	    "REFRESH",   "INSTALL", "LOAD",  "ATTACH", "DETACH",   "CHECKPOINT"};
+	    "SELECT",    "FROM",    "WHERE", "HAVING", "LIMIT",    "OFFSET",     "JOIN",  "UNION",
+	    "INTERSECT", "EXCEPT",  "WITH",  "INSERT", "UPDATE",   "DELETE",     "SET",   "RETURNING",
+	    "VALUES",    "CREATE",  "DROP",  "ALTER",  "TRUNCATE", "QUALIFY",    "PIVOT", "UNPIVOT",
+	    "REFRESH",   "INSTALL", "LOAD",  "ATTACH", "DETACH",   "CHECKPOINT", "FORCE", "COPY"};
 	return clause_keywords.count(kw) > 0;
 }
 
@@ -516,6 +516,38 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			continue;
 		}
 
+		if (tok.type == TokenType::OPERATOR && tok.text == "[") {
+			after_clause = false;
+			prev_was_keyword = false;
+			if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' &&
+			    result.back() != '[' && result.back() != '.') {
+				result += ' ';
+			}
+			result += '[';
+			at_line_start = false;
+			// Brackets are array literals — push a paren level to keep commas inline.
+			int32_t ci = content_indent();
+			paren_stack.push_back({false, ci, ci + indent_size});
+			i++;
+			continue;
+		}
+
+		if (tok.type == TokenType::OPERATOR && tok.text == "]") {
+			after_clause = false;
+			prev_was_keyword = false;
+			if (!paren_stack.empty()) {
+				paren_stack.pop_back();
+			}
+			// Remove trailing space before ']' if present.
+			if (!result.empty() && result.back() == ' ') {
+				result.pop_back();
+			}
+			result += ']';
+			at_line_start = false;
+			i++;
+			continue;
+		}
+
 		if (tok.type == TokenType::OPERATOR && tok.text == ",") {
 			after_clause = false;
 			prev_was_keyword = false;
@@ -700,18 +732,30 @@ string SQLFormatter::MergeShortClauses(const string &formatted) const {
 			}
 
 			if (is_simple && content_end > i + 1) {
-				string flat;
-				for (idx_t k = i + 1; k < content_end; k++) {
-					if (!flat.empty()) {
-						flat += ' ';
+				// A line with a -- comment can only be the last content line
+				// when inlining, because inlining would make the comment
+				// swallow any text that follows it on the merged line.
+				bool has_inner_comment = false;
+				for (idx_t k = i + 1; k + 1 < content_end; k++) {
+					if (lines[k].find("--") != string::npos) {
+						has_inner_comment = true;
+						break;
 					}
-					flat += TrimLeft(lines[k]);
 				}
-				string merged = string(clause_ind, ' ') + trimmed + ' ' + flat;
-				if (Utf8Proc::RenderWidth(merged) <= config.inline_threshold) {
-					out.push_back(std::move(merged));
-					i = content_end;
-					continue;
+				if (!has_inner_comment) {
+					string flat;
+					for (idx_t k = i + 1; k < content_end; k++) {
+						if (!flat.empty()) {
+							flat += ' ';
+						}
+						flat += TrimLeft(lines[k]);
+					}
+					string merged = string(clause_ind, ' ') + trimmed + ' ' + flat;
+					if (Utf8Proc::RenderWidth(merged) <= config.inline_threshold) {
+						out.push_back(std::move(merged));
+						i = content_end;
+						continue;
+					}
 				}
 			}
 		}
@@ -795,6 +839,13 @@ string SQLFormatter::CollapseFirstCondition(const string &formatted) const {
 		}
 
 		const string first_content = TrimLeft(lines[i + 1]);
+		// Don't lift content that contains a -- comment onto the keyword line
+		// if there are more content lines — the comment would swallow them.
+		if (first_content.find("--") != string::npos && content_count > 1) {
+			out.push_back(line);
+			i++;
+			continue;
+		}
 		const string merged_first = string(clause_ind, ' ') + trimmed + ' ' + first_content;
 		if (Utf8Proc::RenderWidth(merged_first) > config.inline_threshold) {
 			out.push_back(line);

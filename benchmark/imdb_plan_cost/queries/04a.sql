@@ -1,12 +1,5 @@
-SELECT
-    MIN(mi_idx.info) AS rating,
-    MIN(t.title) AS movie_title
-FROM
-    info_type AS it,
-    keyword AS k,
-    movie_info_idx AS mi_idx,
-    movie_keyword AS mk,
-    title AS t
+SELECT MIN(mi_idx.info) AS rating, MIN(t.title) AS movie_title
+FROM info_type AS it, keyword AS k, movie_info_idx AS mi_idx, movie_keyword AS mk, title AS t
 WHERE it.info = 'rating'
   AND k.keyword LIKE '%sequel%'
   AND mi_idx.info > '5.0'

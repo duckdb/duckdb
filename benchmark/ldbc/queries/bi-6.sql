@@ -1,10 +1,6 @@
 WITH poster_w_liker AS (
-        SELECT
-            DISTINCT m1.m_creatorid posterPersonid,
-            l2.l_personid AS likerPersonid
-        FROM
-            tag t,
-            message_tag pt -- as an optimization, we use that the set of message1 is the same as message2
+        SELECT DISTINCT m1.m_creatorid posterPersonid, l2.l_personid AS likerPersonid
+        FROM tag t, message_tag pt -- as an optimization, we use that the set of message1 is the same as message2
 
 ,
             message m1
@@ -19,21 +15,16 @@ AND t.t_tagid = pt.mt_tagid
 AND t.t_name = 'Arnold_Schwarzenegger'
     ),
     popularity_score AS (
-        SELECT
-            m3.m_creatorid AS personid,
-            count(*) AS popularityScore
+        SELECT m3.m_creatorid AS personid, count(*) AS popularityScore
         FROM message m3, likes l3
         WHERE 1 = 1 -- join
 
 AND m3.m_messageid = l3.l_messageid
         GROUP BY personId
     )
-SELECT
-    pl.posterPersonid AS "person1.id",
-    sum(coalesce(ps.popularityScore, 0)) AS authorityScore
+SELECT pl.posterPersonid AS "person1.id", sum(coalesce(ps.popularityScore, 0)) AS authorityScore
 FROM poster_w_liker pl
-LEFT JOIN
-    popularity_score ps ON (pl.likerPersonid = ps.personid)
+LEFT JOIN popularity_score ps ON (pl.likerPersonid = ps.personid)
 GROUP BY pl.posterPersonid
 ORDER BY authorityScore DESC, pl.posterPersonid ASC
 LIMIT 100;

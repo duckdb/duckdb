@@ -6,10 +6,7 @@ WITH RECURSIVE friends(startPerson, hopCount, friend) AS (
         SELECT
             f.startPerson,
             f.hopCount + 1,
-            CASE
-                WHEN f.friend = k.k_person1id THEN k.k_person2id
-                ELSE k.k_person1id
-            END
+            CASE WHEN f.friend = k.k_person1id THEN k.k_person2id ELSE k.k_person1id END
         FROM friends f, knows k
         WHERE 1 = 1 -- join
 
@@ -23,18 +20,13 @@ AND f.hopCount < 5
     ),
     friends_shortest AS (-- if a friend is reachable from startPerson using hopCount 2, 3 and 4, its distance from startPerson is 2
 
-        SELECT
-            startPerson,
-            min(hopCount) AS hopCount,
-            friend
+        SELECT startPerson, min(hopCount) AS hopCount, friend
         FROM friends
         GROUP BY startPerson, friend
     ),
     friend_list AS (
         SELECT DISTINCT f.friend AS friendid
-        FROM
-            friends_shortest f,
-            person tf -- the friend's preson record
+        FROM friends_shortest f, person tf -- the friend's preson record
 
 ,
             place ci -- city
@@ -52,15 +44,8 @@ AND f.hopCount BETWEEN 3 AND 5
             AND co.pl_name = 'Pakistan'
     ),
     messages_of_tagclass_by_friends AS (
-        SELECT
-            DISTINCT f.friendid,
-            m.m_messageid AS messageid
-        FROM
-            friend_list f,
-            message m,
-            message_tag pt,
-            tag t,
-            tagclass tc
+        SELECT DISTINCT f.friendid, m.m_messageid AS messageid
+        FROM friend_list f, message m, message_tag pt, tag t, tagclass tc
         WHERE 1 = 1 -- join
 
 AND f.friendid = m.m_creatorid
@@ -70,14 +55,8 @@ AND f.friendid = m.m_creatorid
 
 AND tc.tc_name = 'MusicalArtist'
     )
-SELECT
-    m.friendid AS "person.id",
-    t.t_name AS "tag.name",
-    count(*) AS messageCount
-FROM
-    messages_of_tagclass_by_friends m,
-    message_tag pt,
-    tag t
+SELECT m.friendid AS "person.id", t.t_name AS "tag.name", count(*) AS messageCount
+FROM messages_of_tagclass_by_friends m, message_tag pt, tag t
 WHERE 1 = 1 -- join
 
 AND m.messageid = pt.mt_messageid

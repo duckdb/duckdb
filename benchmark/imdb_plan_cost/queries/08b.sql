@@ -1,14 +1,5 @@
-SELECT
-    MIN(an.name) AS acress_pseudonym,
-    MIN(t.title) AS japanese_anime_movie
-FROM
-    aka_name AS an,
-    cast_info AS ci,
-    company_name AS cn,
-    movie_companies AS mc,
-    name AS n,
-    role_type AS rt,
-    title AS t
+SELECT MIN(an.name) AS acress_pseudonym, MIN(t.title) AS japanese_anime_movie
+FROM aka_name AS an, cast_info AS ci, company_name AS cn, movie_companies AS mc, name AS n, role_type AS rt, title AS t
 WHERE ci.note = '(voice: English version)'
   AND cn.country_code = '[jp]'
   AND mc.note LIKE '%(Japan)%'

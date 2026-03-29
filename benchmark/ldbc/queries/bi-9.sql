@@ -6,8 +6,7 @@ WITH RECURSIVE post_all(psa_threadid, psa_thread_creatorid, psa_messageid, psa_c
             m_creationdate,
             'Post'
         FROM message
-        WHERE 1 = 1
-          AND m_c_replyof IS NULL -- post, not comment
+        WHERE 1 = 1 AND m_c_replyof IS NULL -- post, not comment
 
 AND m_creationdate BETWEEN '2012-06-01T00:00:00' AND '2012-07-01T00:00:00'
         UNION ALL
@@ -18,8 +17,7 @@ AND m_creationdate BETWEEN '2012-06-01T00:00:00' AND '2012-07-01T00:00:00'
             m_creationdate,
             'Comment'
         FROM message p, post_all psa
-        WHERE 1 = 1
-          AND p.m_c_replyof = psa.psa_messageid -- this is a performance optimisation only
+        WHERE 1 = 1 AND p.m_c_replyof = psa.psa_messageid -- this is a performance optimisation only
 
 AND m_creationdate BETWEEN '2012-06-01T00:00:00' AND '2012-07-01T00:00:00'
     )

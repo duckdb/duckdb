@@ -1,7 +1,4 @@
-SELECT
-    MIN(chn.name) AS character_name,
-    MIN(mi_idx.info) AS rating,
-    MIN(t.title) AS complete_hero_movie
+SELECT MIN(chn.name) AS character_name, MIN(mi_idx.info) AS rating, MIN(t.title) AS complete_hero_movie
 FROM
     complete_cast AS cc,
     comp_cast_type AS cct1,

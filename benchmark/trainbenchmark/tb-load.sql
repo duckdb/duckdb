@@ -1,22 +1,33 @@
-COPY connectsTo
+COPY
+    connectsTo
 FROM 'PATHVAR/connectsTo.csv';
-COPY monitoredBy
+COPY
+    monitoredBy
 FROM 'PATHVAR/monitoredBy.csv';
-COPY Region
+COPY
+    Region
 FROM 'PATHVAR/Region.csv';
-COPY requires
+COPY
+    requires
 FROM 'PATHVAR/requires.csv';
-COPY Route
+COPY
+    Route
 FROM 'PATHVAR/Route.csv';
-COPY Segment
+COPY
+    Segment
 FROM 'PATHVAR/Segment.csv';
-COPY Semaphore
+COPY
+    Semaphore
 FROM 'PATHVAR/Semaphore.csv';
-COPY Sensor
+COPY
+    Sensor
 FROM 'PATHVAR/Sensor.csv';
-COPY Switch
+COPY
+    Switch
 FROM 'PATHVAR/Switch.csv';
-COPY SwitchPosition
+COPY
+    SwitchPosition
 FROM 'PATHVAR/SwitchPosition.csv';
-COPY TrackElement
+COPY
+    TrackElement
 FROM 'PATHVAR/TrackElement.csv';

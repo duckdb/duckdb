@@ -18,24 +18,10 @@ FROM
     title AS t
 WHERE cct1.kind IN ('cast', 'crew')
   AND cct2.kind = 'complete+verified'
-  AND ci.note IN (
-      '(writer)',
-      '(head writer)',
-      '(written by)',
-      '(story)',
-      '(story editor)'
-  )
+  AND ci.note IN ('(writer)', '(head writer)', '(written by)', '(story)', '(story editor)')
   AND it1.info = 'genres'
   AND it2.info = 'votes'
-  AND k.keyword IN (
-      'murder',
-      'violence',
-      'blood',
-      'gore',
-      'death',
-      'female-nudity',
-      'hospital'
-  )
+  AND k.keyword IN ('murder', 'violence', 'blood', 'gore', 'death', 'female-nudity', 'hospital')
   AND mi.info IN ('Horror', 'Thriller')
   AND n.gender = 'm'
   AND t.production_year > 2000

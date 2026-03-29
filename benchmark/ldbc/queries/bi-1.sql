@@ -1,8 +1,7 @@
 WITH message_count AS (
         SELECT 0.0 + count(*) AS cnt
         FROM message
-        WHERE 1 = 1
-          AND m_creationdate < '2011-07-21T22:00:00'
+        WHERE 1 = 1 AND m_creationdate < '2011-07-21T22:00:00'
     ),
     message_prep AS (
         SELECT
@@ -21,8 +20,7 @@ ELSE 3 -- long
 END AS lengthCategory,
             m_length
         FROM message
-        WHERE 1 = 1
-          AND m_creationdate < '2011-07-21T22:00:00' --AND m_content IS NOT NULL
+        WHERE 1 = 1 AND m_creationdate < '2011-07-21T22:00:00' --AND m_content IS NOT NULL
 
 AND m_ps_imagefile IS NULL -- FIXME CHECKME: posts w/ m_ps_imagefile IS NOT NULL should have m_content IS NULL
 
@@ -37,7 +35,4 @@ SELECT
     count(*) / mc.cnt AS percentageOfMessages
 FROM message_prep, message_count mc
 GROUP BY messageYear, isComment, lengthCategory, mc.cnt
-ORDER BY
-    messageYear DESC,
-    isComment ASC,
-    lengthCategory ASC;
+ORDER BY messageYear DESC, isComment ASC, lengthCategory ASC;

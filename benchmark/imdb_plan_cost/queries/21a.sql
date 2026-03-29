@@ -1,7 +1,4 @@
-SELECT
-    MIN(cn.name) AS company_name,
-    MIN(lt.link) AS link_type,
-    MIN(t.title) AS western_follow_up
+SELECT MIN(cn.name) AS company_name, MIN(lt.link) AS link_type, MIN(t.title) AS western_follow_up
 FROM
     company_name AS cn,
     company_type AS ct,
@@ -18,16 +15,7 @@ WHERE cn.country_code != '[pl]'
   AND k.keyword = 'sequel'
   AND lt.link LIKE '%follow%'
   AND mc.note IS NULL
-  AND mi.info IN (
-      'Sweden',
-      'Norway',
-      'Germany',
-      'Denmark',
-      'Swedish',
-      'Denish',
-      'Norwegian',
-      'German'
-  )
+  AND mi.info IN ('Sweden', 'Norway', 'Germany', 'Denmark', 'Swedish', 'Denish', 'Norwegian', 'German')
   AND t.production_year BETWEEN 1950 AND 2000
   AND lt.id = ml.link_type_id
   AND ml.movie_id = t.id

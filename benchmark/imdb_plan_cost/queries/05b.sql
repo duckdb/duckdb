@@ -1,10 +1,5 @@
 SELECT MIN(t.title) AS american_vhs_movie
-FROM
-    company_type AS ct,
-    info_type AS it,
-    movie_companies AS mc,
-    movie_info AS mi,
-    title AS t
+FROM company_type AS ct, info_type AS it, movie_companies AS mc, movie_info AS mi, title AS t
 WHERE ct.kind = 'production companies'
   AND mc.note LIKE '%(VHS)%'
   AND mc.note LIKE '%(USA)%'

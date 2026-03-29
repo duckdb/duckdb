@@ -14,12 +14,10 @@ CREATE TABLE Segment(
     length int NOT NULL DEFAULT 1,
     PRIMARY KEY (id)
 );
-CREATE TABLE
-    Sensor(id int NOT NULL, region int NOT NULL, -- inverse of the sensors edge
+CREATE TABLE Sensor(id int NOT NULL, region int NOT NULL, -- inverse of the sensors edge
 
 PRIMARY KEY (id));
-CREATE TABLE
-    Semaphore(id int NOT NULL, segment int NOT NULL, -- inverse of the semaphores edge
+CREATE TABLE Semaphore(id int NOT NULL, segment int NOT NULL, -- inverse of the semaphores edge
 
 signal int NOT NULL, PRIMARY KEY (id));
 CREATE TABLE Switch(
@@ -27,12 +25,10 @@ CREATE TABLE Switch(
     currentPosition int NOT NULL,
     PRIMARY KEY (id)
 );
-CREATE TABLE
-    SwitchPosition(id int NOT NULL, route int, -- inverse of the follows edge
+CREATE TABLE SwitchPosition(id int NOT NULL, route int, -- inverse of the follows edge
 
 target int, position int NOT NULL, PRIMARY KEY (id));
-CREATE TABLE
-    TrackElement(id int NOT NULL, region int NOT NULL, -- inverse of the elements edge
+CREATE TABLE TrackElement(id int NOT NULL, region int NOT NULL, -- inverse of the elements edge
 
 PRIMARY KEY (id));
 --

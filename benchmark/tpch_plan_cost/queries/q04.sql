@@ -6,8 +6,7 @@ WHERE
     AND EXISTS (
         SELECT *
         FROM lineitem
-        WHERE l_orderkey = o_orderkey
-          AND l_commitdate < l_receiptdate
+        WHERE l_orderkey = o_orderkey AND l_commitdate < l_receiptdate
     )
 GROUP BY o_orderpriority
 ORDER BY o_orderpriority;

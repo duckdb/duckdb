@@ -7,12 +7,7 @@ WITH RECURSIVE chain (parent, child) AS (
         FROM message p, chain c
         WHERE p.m_messageid = c.parent
     )
-SELECT
-    f_forumid,
-    f_title,
-    p_personid,
-    p_firstname,
-    p_lastname
+SELECT f_forumid, f_title, p_personid, p_firstname, p_lastname
 FROM message, person, forum
 WHERE
     m_messageid =(

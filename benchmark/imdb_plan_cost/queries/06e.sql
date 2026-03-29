@@ -1,13 +1,5 @@
-SELECT
-    MIN(k.keyword) AS movie_keyword,
-    MIN(n.name) AS actor_name,
-    MIN(t.title) AS marvel_movie
-FROM
-    cast_info AS ci,
-    keyword AS k,
-    movie_keyword AS mk,
-    name AS n,
-    title AS t
+SELECT MIN(k.keyword) AS movie_keyword, MIN(n.name) AS actor_name, MIN(t.title) AS marvel_movie
+FROM cast_info AS ci, keyword AS k, movie_keyword AS mk, name AS n, title AS t
 WHERE k.keyword = 'marvel-cinematic-universe'
   AND n.name LIKE '%Downey%Robert%'
   AND t.production_year > 2000

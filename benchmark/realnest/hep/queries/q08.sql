@@ -39,9 +39,7 @@ WITH uniform_structure_leptons AS (
                         FROM uniform_structure_leptons
                     )
             ) AS _l2
-        WHERE idx1 < idx2
-          AND l1.type = l2.type
-          AND l1.charge != l2.charge
+        WHERE idx1 < idx2 AND l1.type = l2.type AND l1.charge != l2.charge
     ),
     processed_pairs AS (
         SELECT
@@ -62,9 +60,7 @@ WITH uniform_structure_leptons AS (
                         PARTITION BY row_id
                     ) idx
                 FROM (
-                        SELECT
-                            unnest(SYSTEM [3]) AS l,
-                            event row_id
+                        SELECT unnest(SYSTEM [3]) AS l, event row_id
                         FROM processed_pairs
                     )
             )
@@ -72,17 +68,8 @@ WITH uniform_structure_leptons AS (
         GROUP BY event
     )
 SELECT
-    FLOOR((CASE
-        WHEN pt < 15 THEN 14.99
-        WHEN pt > 250 THEN 250.1
-        ELSE pt
-    END - 0.9) / 2.35) * 2.35 + 2.075 AS x,
+    FLOOR((CASE WHEN pt < 15 THEN 14.99 WHEN pt > 250 THEN 250.1 ELSE pt END - 0.9) / 2.35) * 2.35 + 2.075 AS x,
     COUNT(*) AS y
 FROM other_max_pt
-GROUP BY
-    FLOOR((CASE
-        WHEN pt < 15 THEN 14.99
-        WHEN pt > 250 THEN 250.1
-        ELSE pt
-    END - 0.9) / 2.35) * 2.35 + 2.075
+GROUP BY FLOOR((CASE WHEN pt < 15 THEN 14.99 WHEN pt > 250 THEN 250.1 ELSE pt END - 0.9) / 2.35) * 2.35 + 2.075
 ORDER BY x;

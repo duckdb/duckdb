@@ -42,15 +42,10 @@ WITH trijets_invariant_mass AS MATERIALIZED (
                         WHERE array_length(jet) >= 3
                     )
             )
-        WHERE i < j
-          AND j < k
-          AND row_id_i = row_id_j
-          AND row_id_j = row_id_k
+        WHERE i < j AND j < k AND row_id_i = row_id_j AND row_id_j = row_id_k
         ORDER BY invariant_mass ASC
     )
-SELECT
-    HistogramBin(trijets_invariant_mass.triJet ['pt'], 15, 40, 100) AS x,
-    count(*) AS y
+SELECT HistogramBin(trijets_invariant_mass.triJet ['pt'], 15, 40, 100) AS x, count(*) AS y
 FROM trijets_invariant_mass
 WHERE
     invariant_mass IN (

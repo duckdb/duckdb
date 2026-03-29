@@ -1,6 +1,4 @@
-SELECT
-    MIN(at_.title) AS aka_title,
-    MIN(t.title) AS internet_movie_title
+SELECT MIN(at_.title) AS aka_title, MIN(t.title) AS internet_movie_title
 FROM
     aka_title AS at_,
     company_name AS cn,

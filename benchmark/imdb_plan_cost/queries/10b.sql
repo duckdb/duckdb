@@ -1,6 +1,4 @@
-SELECT
-    MIN(chn.name) AS character,
-    MIN(t.title) AS russian_mov_with_actor_producer
+SELECT MIN(chn.name) AS character, MIN(t.title) AS russian_mov_with_actor_producer
 FROM
     char_name AS chn,
     cast_info AS ci,

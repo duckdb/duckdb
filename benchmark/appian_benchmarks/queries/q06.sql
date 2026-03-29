@@ -19,47 +19,25 @@ LEFT OUTER JOIN (
             avg(c.customer_balance) AS t1rp6,
             p.product_id AS t1pk
         FROM ProductView p
-        LEFT OUTER JOIN
-            OrderItemView oi ON p.product_id = oi.orderItem_productId
-        LEFT OUTER JOIN
-            OrderView o ON oi.orderItem_orderId = o.order_id
-        LEFT OUTER JOIN
-            AddressView a ON o.order_customerId = a.address_customerId
-        LEFT OUTER JOIN
-            CustomerView c ON o.order_customerId = c.customer_id
+        LEFT OUTER JOIN OrderItemView oi ON p.product_id = oi.orderItem_productId
+        LEFT OUTER JOIN OrderView o ON oi.orderItem_orderId = o.order_id
+        LEFT OUTER JOIN AddressView a ON o.order_customerId = a.address_customerId
+        LEFT OUTER JOIN CustomerView c ON o.order_customerId = c.customer_id
         GROUP BY p.product_id
     ) t1 ON p.product_id = t1pk
 LEFT OUTER JOIN (
-        SELECT
-            min(a.address_zip) AS t2rp1,
-            p.product_id AS t2pk
+        SELECT min(a.address_zip) AS t2rp1, p.product_id AS t2pk
         FROM ProductView p
-        LEFT OUTER JOIN
-            OrderItemView oi ON p.product_id = oi.orderItem_productId
-        LEFT OUTER JOIN
-            OrderView o ON oi.orderItem_orderId = o.order_id
-        LEFT OUTER JOIN
-            AddressView a ON o.order_customerId = a.address_customerId
-        WHERE
-            a.address_state IN (
-                'PA',
-                'CA',
-                'VA',
-                'MA',
-                'ME',
-                'MD',
-                'CO',
-                'MO'
-            )
+        LEFT OUTER JOIN OrderItemView oi ON p.product_id = oi.orderItem_productId
+        LEFT OUTER JOIN OrderView o ON oi.orderItem_orderId = o.order_id
+        LEFT OUTER JOIN AddressView a ON o.order_customerId = a.address_customerId
+        WHERE a.address_state IN ('PA', 'CA', 'VA', 'MA', 'ME', 'MD', 'CO', 'MO')
         GROUP BY p.product_id
     ) t2 ON p.product_id = t2pk
 LEFT OUTER JOIN (
-        SELECT
-            ca.category_warehouseSqft AS t3rp1,
-            p.product_id AS t3pk
+        SELECT ca.category_warehouseSqft AS t3rp1, p.product_id AS t3pk
         FROM ProductView p
-        LEFT OUTER JOIN
-            CategoryView ca ON p.product_categoryName = ca.category_name
+        LEFT OUTER JOIN CategoryView ca ON p.product_categoryName = ca.category_name
         WHERE ca.category_seasonal = TRUE
     ) t3 ON p.product_id = t3pk
 WHERE t1rp1 > 10000.0

@@ -1,6 +1,4 @@
-SELECT
-    MIN(mi_idx.info) AS rating,
-    MIN(t.title) AS north_european_dark_production
+SELECT MIN(mi_idx.info) AS rating, MIN(t.title) AS north_european_dark_production
 FROM
     info_type AS it1,
     info_type AS it2,
@@ -13,12 +11,7 @@ FROM
 WHERE it1.info = 'countries'
   AND it2.info = 'rating'
   AND k.keyword IS NOT NULL
-  AND k.keyword IN (
-      'murder',
-      'murder-in-title',
-      'blood',
-      'violence'
-  )
+  AND k.keyword IN ('murder', 'murder-in-title', 'blood', 'violence')
   AND kt.kind IN ('movie', 'episode')
   AND mi.info IN (
       'Sweden',

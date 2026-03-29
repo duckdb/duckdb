@@ -6,67 +6,42 @@ SELECT
     min(cc.creditCard_lastChargeTimestamp) AS p1,
     count(DISTINCT (cc.creditCard_holder)) AS p2
 FROM CategoryView ca
-LEFT OUTER JOIN
-    ProductView p ON ca.category_name = p.product_categoryName
-LEFT OUTER JOIN
-    OrderItemView oi ON p.product_id = oi.orderItem_productId
-LEFT OUTER JOIN
-    OrderView o ON oi.orderItem_orderId = o.order_id
-LEFT OUTER JOIN
-    CreditCardView cc ON o.order_creditCardNumber = cc.creditCard_number
+LEFT OUTER JOIN ProductView p ON ca.category_name = p.product_categoryName
+LEFT OUTER JOIN OrderItemView oi ON p.product_id = oi.orderItem_productId
+LEFT OUTER JOIN OrderView o ON oi.orderItem_orderId = o.order_id
+LEFT OUTER JOIN CreditCardView cc ON o.order_creditCardNumber = cc.creditCard_number
 LEFT OUTER JOIN (
-        SELECT
-            sum(taxRecord_bracket) AS t1rp1,
-            ca.category_name AS t1pk
+        SELECT sum(taxRecord_bracket) AS t1rp1, ca.category_name AS t1pk
         FROM CategoryView ca
-        LEFT OUTER JOIN
-            ProductView p ON ca.category_name = p.product_categoryName
-        LEFT OUTER JOIN
-            OrderItemView oi ON p.product_id = oi.orderItem_productId
-        LEFT OUTER JOIN
-            OrderView o ON oi.orderItem_orderId = o.order_id
-        LEFT OUTER JOIN
-            CustomerView c ON o.order_customerId = c.customer_id
-        LEFT OUTER JOIN
-            AddressView a ON c.customer_id = a.address_customerId
-        LEFT OUTER JOIN
-            TaxRecordView t ON a.address_id = t.taxRecord_addressId
+        LEFT OUTER JOIN ProductView p ON ca.category_name = p.product_categoryName
+        LEFT OUTER JOIN OrderItemView oi ON p.product_id = oi.orderItem_productId
+        LEFT OUTER JOIN OrderView o ON oi.orderItem_orderId = o.order_id
+        LEFT OUTER JOIN CustomerView c ON o.order_customerId = c.customer_id
+        LEFT OUTER JOIN AddressView a ON c.customer_id = a.address_customerId
+        LEFT OUTER JOIN TaxRecordView t ON a.address_id = t.taxRecord_addressId
         GROUP BY ca.category_name
     ) t1 ON ca.category_name = t1pk
 LEFT OUTER JOIN (
-        SELECT
-            max(p.product_likes) AS t2rp1,
-            ca.category_name AS t2pk
+        SELECT max(p.product_likes) AS t2rp1, ca.category_name AS t2pk
         FROM CategoryView ca
-        LEFT OUTER JOIN
-            ProductView p ON ca.category_name = p.product_categoryName
+        LEFT OUTER JOIN ProductView p ON ca.category_name = p.product_categoryName
         GROUP BY ca.category_name
     ) t2 ON ca.category_name = t2pk
 LEFT OUTER JOIN (
-        SELECT
-            sum(oi.orderItem_productGroup) AS t3rp1,
-            ca.category_name AS t3pk
+        SELECT sum(oi.orderItem_productGroup) AS t3rp1, ca.category_name AS t3pk
         FROM CategoryView ca
-        LEFT OUTER JOIN
-            ProductView p ON ca.category_name = p.product_categoryName
-        LEFT OUTER JOIN
-            OrderItemView oi ON p.product_id = oi.orderItem_productId
+        LEFT OUTER JOIN ProductView p ON ca.category_name = p.product_categoryName
+        LEFT OUTER JOIN OrderItemView oi ON p.product_id = oi.orderItem_productId
         WHERE oi.orderItem_weight > 15.0
         GROUP BY ca.category_name
     ) t3 ON ca.category_name = t3pk
 LEFT OUTER JOIN (
-        SELECT
-            max(cc.creditCard_zip) AS t4rp1,
-            ca.category_name AS t4pk
+        SELECT max(cc.creditCard_zip) AS t4rp1, ca.category_name AS t4pk
         FROM CategoryView ca
-        LEFT OUTER JOIN
-            ProductView p ON ca.category_name = p.product_categoryName
-        LEFT OUTER JOIN
-            OrderItemView oi ON p.product_id = oi.orderItem_productId
-        LEFT OUTER JOIN
-            OrderView o ON oi.orderItem_orderId = o.order_id
-        LEFT OUTER JOIN
-            CreditCardView cc ON o.order_creditCardNumber = cc.creditCard_number
+        LEFT OUTER JOIN ProductView p ON ca.category_name = p.product_categoryName
+        LEFT OUTER JOIN OrderItemView oi ON p.product_id = oi.orderItem_productId
+        LEFT OUTER JOIN OrderView o ON oi.orderItem_orderId = o.order_id
+        LEFT OUTER JOIN CreditCardView cc ON o.order_creditCardNumber = cc.creditCard_number
         GROUP BY ca.category_name
     ) t4 ON ca.category_name = t4pk
 WHERE t1rp1 > 6

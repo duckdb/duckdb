@@ -25,8 +25,7 @@ SELECT
 ,
     count(DISTINCT p.m_messageid) AS postCount
 FROM top100_popular_forums t
-INNER JOIN
-    forum_person fp ON (t.forumid = fp.fp_forumid) -- author of the post
+INNER JOIN forum_person fp ON (t.forumid = fp.fp_forumid) -- author of the post
 
 INNER JOIN person au ON (fp.fp_personid = au.p_personid)
 LEFT JOIN
@@ -34,10 +33,6 @@ LEFT JOIN
                 SELECT forumid
                 FROM top100_popular_forums
             ) AND p.m_c_replyof IS NULL)
-GROUP BY
-    au.p_personid,
-    au.p_firstname,
-    au.p_lastname,
-    au.p_creationdate
+GROUP BY au.p_personid, au.p_firstname, au.p_lastname, au.p_creationdate
 ORDER BY postCount DESC, au.p_personid
 LIMIT 100;

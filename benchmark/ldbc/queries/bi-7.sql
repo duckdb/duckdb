@@ -5,16 +5,12 @@ INNER JOIN
 
 -- so proceed to the comment directly
 
-INNER JOIN
-    message c ON (pt.mt_messageid = c.m_c_replyof) -- comment's tag
+INNER JOIN message c ON (pt.mt_messageid = c.m_c_replyof) -- comment's tag
 
-INNER JOIN
-    message_tag ct ON (c.m_messageid = ct.mt_messageid)
-INNER JOIN
-    tag t2 ON (ct.mt_tagid = t2.t_tagid) -- comment doesn't have the given tag: antijoin in the where clause
+INNER JOIN message_tag ct ON (c.m_messageid = ct.mt_messageid)
+INNER JOIN tag t2 ON (ct.mt_tagid = t2.t_tagid) -- comment doesn't have the given tag: antijoin in the where clause
 
-LEFT JOIN
-    message_tag nt ON (c.m_messageid = nt.mt_messageid AND nt.mt_tagid = pt.mt_tagid)
+LEFT JOIN message_tag nt ON (c.m_messageid = nt.mt_messageid AND nt.mt_tagid = pt.mt_tagid)
 WHERE 1 = 1 -- join
 
 AND nt.mt_messageid IS NULL -- antijoin: comment (c) does not have the given tag

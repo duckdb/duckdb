@@ -6,13 +6,7 @@ FROM (
                 FROM o_orderdate
             ) AS o_year,
             l_extendedprice *(1 - l_discount) - ps_supplycost * l_quantity AS amount
-        FROM
-            part,
-            supplier,
-            lineitem,
-            partsupp,
-            orders,
-            nation
+        FROM part, supplier, lineitem, partsupp, orders, nation
         WHERE s_suppkey = l_suppkey
           AND ps_suppkey = l_suppkey
           AND ps_partkey = l_partkey

@@ -17,11 +17,7 @@ AND m.m_creationdate >= '2010-11-1'::date
             AND m.m_creationdate < '2010-11-1'::date + interval '2' month
         GROUP BY t.t_name
     )
-SELECT
-    t_name AS "tag.name",
-    countMonth1,
-    countMonth2,
-    abs(countMonth1 - countMonth2) AS diff
+SELECT t_name AS "tag.name", countMonth1, countMonth2, abs(countMonth1 - countMonth2) AS diff
 FROM detail d
 ORDER BY diff DESC, t_name
 LIMIT 100;

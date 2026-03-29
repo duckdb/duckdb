@@ -1,9 +1,4 @@
-SELECT
-    WatchID,
-    ClientIP,
-    COUNT(*) AS c,
-    SUM(IsRefresh),
-    AVG(ResolutionWidth)
+SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefresh), AVG(ResolutionWidth)
 FROM hits
 WHERE SearchPhrase <> ''
 GROUP BY WatchID, ClientIP

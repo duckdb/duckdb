@@ -1,8 +1,6 @@
 PRAGMA enable_profiling;
 WITH persons_of_country_w_friends AS (
-        SELECT
-            p.p_personid AS personid,
-            k.k_person2id AS friendid
+        SELECT p.p_personid AS personid, k.k_person2id AS friendid
         FROM person p, place ci -- city
 
 ,
@@ -19,10 +17,7 @@ AND p.p_placeid = ci.pl_placeid
 AND co.pl_name = 'Belarus'
     )
 SELECT count(*)
-FROM
-    persons_of_country_w_friends p1,
-    persons_of_country_w_friends p2,
-    persons_of_country_w_friends p3
+FROM persons_of_country_w_friends p1, persons_of_country_w_friends p2, persons_of_country_w_friends p3
 WHERE 1 = 1 -- join
 
 AND p1.friendid = p2.personid

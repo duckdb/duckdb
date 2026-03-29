@@ -6,23 +6,15 @@ FROM (
         UNION
         SELECT k2.k_person2id
         FROM knows k1, knows k2
-        WHERE k1.k_person1id = 6597069767251
-          AND k1.k_person2id = k2.k_person1id
-          AND k2.k_person2id <> 15393162789164
+        WHERE k1.k_person1id = 6597069767251 AND k1.k_person2id = k2.k_person1id AND k2.k_person2id <> 15393162789164
     ) f,
     person,
     place p1,
     place p2,
     (
-        SELECT
-            chn.m_c_creatorid,
-            ct1,
-            ct2,
-            ct1 + ct2 AS total
+        SELECT chn.m_c_creatorid, ct1, ct2, ct1 + ct2 AS total
         FROM (
-                SELECT
-                    m_creatorid AS m_c_creatorid,
-                    count(*) AS ct1
+                SELECT m_creatorid AS m_c_creatorid, count(*) AS ct1
                 FROM message, place
                 WHERE m_locationid = pl_placeid
                   AND pl_name = 'United_States'
@@ -32,9 +24,7 @@ FROM (
                 GROUP BY m_c_creatorid
             ) chn,
             (
-                SELECT
-                    m_creatorid AS m_c_creatorid,
-                    count(*) AS ct2
+                SELECT m_creatorid AS m_c_creatorid, count(*) AS ct2
                 FROM message, place
                 WHERE m_locationid = pl_placeid
                   AND pl_name = 'Canada'

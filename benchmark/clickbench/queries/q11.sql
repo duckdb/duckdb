@@ -1,7 +1,4 @@
-SELECT
-    MobilePhone,
-    MobilePhoneModel,
-    COUNT(DISTINCT UserID) AS u
+SELECT MobilePhone, MobilePhoneModel, COUNT(DISTINCT UserID) AS u
 FROM hits
 WHERE MobilePhoneModel <> ''
 GROUP BY MobilePhone, MobilePhoneModel

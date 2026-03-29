@@ -13,16 +13,12 @@ SELECT
 (CASE WHEN EXISTS (
                 SELECT 1
                 FROM knows
-                WHERE k_person1id = 21990232556256
-                  AND k_person2id = p_personid
+                WHERE k_person1id = 21990232556256 AND k_person2id = p_personid
             ) THEN 0 ELSE 1 END) AS isnew
 FROM (
-        SELECT
-            l_personid,
-            max(l_creationdate) AS l_creationdate
+        SELECT l_personid, max(l_creationdate) AS l_creationdate
         FROM likes, message
-        WHERE m_messageid = l_messageid
-          AND m_creatorid = 21990232556256
+        WHERE m_messageid = l_messageid AND m_creatorid = 21990232556256
         GROUP BY l_personid
         ORDER BY 2 DESC
         LIMIT 20

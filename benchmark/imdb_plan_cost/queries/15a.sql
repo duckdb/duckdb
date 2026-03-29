@@ -1,6 +1,4 @@
-SELECT
-    MIN(mi.info) AS release_date,
-    MIN(t.title) AS internet_movie
+SELECT MIN(mi.info) AS release_date, MIN(t.title) AS internet_movie
 FROM
     aka_title AS at_,
     company_name AS cn,
