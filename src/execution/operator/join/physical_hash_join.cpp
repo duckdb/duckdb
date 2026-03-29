@@ -800,8 +800,9 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		const auto &data_collection = sink.hash_table->GetDataCollection();
-		if (!partition_idx.IsValid()) {
-			// Single-threaded finalize
+		if (!partition_idx.IsValid() || sink.hash_table->GetRadixBits() == 0) {
+			// Unpartitioned builds still finalize over the full chunk range even if the scheduler created a
+			// single "partition 0" task, because tuple-data segments are not tagged with partition ids there.
 			sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state);
 		} else {
 			// Parallel finalize - each thread processes one partition
