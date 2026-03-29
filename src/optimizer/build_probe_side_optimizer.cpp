@@ -7,6 +7,8 @@
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -216,6 +218,15 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 }
 
 bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
+	auto recursive_preference = GetRecursiveProbeSidePreference(op);
+	if (recursive_preference != RecursiveProbeSidePreference::NONE) {
+		if (recursive_preference == RecursiveProbeSidePreference::SWAP) {
+			FlipChildren(op);
+			return true;
+		}
+		return false;
+	}
+
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
 	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
@@ -281,9 +292,96 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	return swap;
 }
 
+bool BuildProbeSideOptimizer::ContainsActiveRecursiveReference(const LogicalOperator &op) const {
+	if (active_recursive_cte_indexes.empty()) {
+		return false;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cte_ref = op.Cast<LogicalCTERef>();
+		for (auto &active_cte_index : active_recursive_cte_indexes) {
+			if (cte_ref.cte_index == active_cte_index) {
+				return true;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (ContainsActiveRecursiveReference(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BuildProbeSideOptimizer::ContainsCorrelationSensitiveOperators(const LogicalOperator &op) const {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return true;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (ContainsCorrelationSensitiveOperators(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+BuildProbeSideOptimizer::RecursiveProbeSidePreference
+BuildProbeSideOptimizer::GetRecursiveProbeSidePreference(const LogicalOperator &op) const {
+	if (active_recursive_cte_indexes.empty() || op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	idx_t has_range = 0;
+	bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
+	if (!join.HasEquality(has_range) || prefer_range_joins) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	auto left_depends_on_recursive_cte = ContainsActiveRecursiveReference(*op.children[0]);
+	auto right_depends_on_recursive_cte = ContainsActiveRecursiveReference(*op.children[1]);
+	if (left_depends_on_recursive_cte == right_depends_on_recursive_cte) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	const auto &current_build_side = *op.children[1];
+	auto current_orientation_can_reuse = left_depends_on_recursive_cte && !PropagatesBuildSide(join.join_type) &&
+	                                     !ContainsCorrelationSensitiveOperators(current_build_side);
+	if (current_orientation_can_reuse) {
+		return RecursiveProbeSidePreference::KEEP;
+	}
+
+	if (!HasInverseJoinType(join.join_type)) {
+		return RecursiveProbeSidePreference::NONE;
+	}
+
+	const auto &swapped_build_side = *op.children[0];
+	auto swapped_orientation_can_reuse = right_depends_on_recursive_cte &&
+	                                     !PropagatesBuildSide(InverseJoinType(join.join_type)) &&
+	                                     !ContainsCorrelationSensitiveOperators(swapped_build_side);
+	if (swapped_orientation_can_reuse) {
+		return RecursiveProbeSidePreference::SWAP;
+	}
+
+	return RecursiveProbeSidePreference::NONE;
+}
+
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 
+	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		VisitOperator(*op.children[0]);
+		active_recursive_cte_indexes.push_back(op.Cast<LogicalCTE>().table_index);
+		VisitOperator(*op.children[1]);
+		active_recursive_cte_indexes.pop_back();
+		return;
+	}
+
+	// then the currentoperator
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
