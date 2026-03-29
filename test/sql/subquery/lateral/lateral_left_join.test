@@ -69,3 +69,30 @@ statement error
 SELECT * FROM (SELECT * FROM integers WHERE i=2) t(i) RIGHT JOIN LATERAL (SELECT t.i WHERE t.i IN (1, 3)) t2(b) ON (i=b) ORDER BY i, b;
 ----
 LATERAL
+
+statement ok
+CREATE TABLE src_r(k TIMESTAMP);
+
+statement ok
+CREATE TABLE src_l(k TIMESTAMP);
+
+statement ok
+INSERT INTO src_r VALUES (TIMESTAMP '2001-01-01 00:00:00');
+
+statement ok
+INSERT INTO src_l VALUES (TIMESTAMP '2001-01-01 00:00:00');
+
+query I
+SELECT COUNT(*)
+FROM (
+    SELECT 1, l.k, r.k
+    FROM src_r AS r
+    LEFT JOIN LATERAL (
+        SELECT *
+        FROM src_l AS l
+        WHERE l.k > r.k
+    ) AS l ON TRUE
+    WHERE l.k IS NOT NULL
+) t;
+----
+0
