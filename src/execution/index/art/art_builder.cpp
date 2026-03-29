@@ -35,7 +35,7 @@ ARTConflictType ARTBuilder::Build() {
 				return ARTConflictType::CONSTRAINT;
 			}
 
-			reference<NodePointer> ref(entry.node);
+			reference<Node> ref(entry.node);
 			auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
 			Prefix::New(art, ref, start, prefix_depth, count);
 
@@ -57,7 +57,7 @@ ARTConflictType ARTBuilder::Build() {
 		}
 
 		// Create the prefix. Returns early, if the prefix_length is zero.
-		reference<NodePointer> ref(entry.node);
+		reference<Node> ref(entry.node);
 		auto prefix_length = entry.depth - prefix_depth;
 		Prefix::New(art, ref, start, prefix_depth, prefix_length);
 
@@ -70,14 +70,14 @@ ARTConflictType ARTBuilder::Build() {
 		}
 
 		// Create a new node containing the children.
-		NodePointer::New(art, ref, NodePointer::GetNodeType(child_offsets.size()));
+		Node::New(art, ref, Node::GetNodeType(child_offsets.size()));
 		auto start_offset = child_offsets[0];
 		for (idx_t i = 1; i <= child_offsets.size(); i++) {
 			auto child_byte = keys[start_offset].data[entry.depth];
 			// FIXME: Improve performance by either returning a reference to the child directly,
 			// FIXME: or by calling InsertChild after processing the child (at the end of the stack loop).
-			NodePointer::InsertChild(art, ref, child_byte);
-			auto child = ref.get().NodePointer::GetChildMutable(art, child_byte, true);
+			Node::InsertChild(art, ref, child_byte);
+			auto child = ref.get().Node::GetChildMutable(art, child_byte, true);
 			auto end_offset = i != child_offsets.size() ? child_offsets[i] - 1 : entry.end;
 			s.emplace(*child, start_offset, end_offset, entry.depth + 1);
 			start_offset = end_offset + 1;

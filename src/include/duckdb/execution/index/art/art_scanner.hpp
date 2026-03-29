@@ -25,10 +25,10 @@ enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 //! the parent while it is pinned, as well as defines the return NodePointer value that should be pushed onto the
 //! stack for further traversal.
 template <class NODE_TYPE, class PRE_HANDLER>
-static void ScanChildren(ART &art, NodePointer node, PRE_HANDLER &&pre_handler, vector<NodePointer> &stack) {
+static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<Node> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE_TYPE>();
-	NODE_TYPE::Iterator(n, [&](NodePointer &child) {
+	NODE_TYPE::Iterator(n, [&](Node &child) {
 		auto push = pre_handler(child);
 		if (push.HasMetadata()) {
 			stack.push_back(push);
@@ -42,8 +42,8 @@ static void ScanChildren(ART &art, NodePointer node, PRE_HANDLER &&pre_handler, 
 //! within the pinned parent node using preorder_handler (which also defines what NodePointer to push onto the stack
 //! for further traversal).
 template <class FILTER, class PRE_HANDLER>
-void ARTScanPreorder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &&preorder_handler) {
-	vector<NodePointer> stack;
+void ARTScanPreorder(ART &art, Node &root, FILTER &&filter, PRE_HANDLER &&preorder_handler) {
+	vector<Node> stack;
 
 	// root node is always pinned, handle it first.
 	auto push_node = preorder_handler(root);
@@ -52,7 +52,7 @@ void ARTScanPreorder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &
 	}
 
 	while (!stack.empty()) {
-		NodePointer current = stack.back();
+		Node current = stack.back();
 		stack.pop_back();
 
 		if (filter(current) == ScanNodeResult::SKIP) {
@@ -68,7 +68,7 @@ void ARTScanPreorder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &
 			break;
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
-			auto &child = *reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
 			push_node = preorder_handler(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(push_node);
@@ -98,20 +98,20 @@ void ARTScanPreorder(ART &art, NodePointer &root, FILTER &&filter, PRE_HANDLER &
 //===--------------------------------------------------------------------===//
 
 struct ScanEntry {
-	ScanEntry(NodePointer node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
+	ScanEntry(Node node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
 	}
 
-	NodePointer node;
+	Node node;
 	bool children_visited;
 };
 
 //! Pins the parent node and iterates over all the children. The filter receives each child by reference
 //! and returns the NodePointer value that should be pushed onto the stack for further traversal.
 template <class NODE_TYPE, class FILTER>
-static void ScanChildren(ART &art, NodePointer node, FILTER &&filter, vector<ScanEntry> &stack) {
+static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE_TYPE>();
-	NODE_TYPE::Iterator(n, [&](NodePointer &child) {
+	NODE_TYPE::Iterator(n, [&](Node &child) {
 		auto push_node = filter(child);
 		if (push_node.HasMetadata()) {
 			stack.push_back(ScanEntry {push_node, false});
@@ -126,7 +126,7 @@ static void ScanChildren(ART &art, NodePointer node, FILTER &&filter, vector<Sca
 //! On the second visit (children_visited = true, after all descendants have been processed),
 //! post_handler fires on the node and then we pop it from the stack.
 template <class FILTER, class POST_HANDLER>
-void ARTScanPostorder(ART &art, NodePointer &root, FILTER &&filter, POST_HANDLER &&postorder_handler) {
+void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&postorder_handler) {
 	vector<ScanEntry> stack;
 
 	D_ASSERT(root.HasMetadata());
@@ -153,7 +153,7 @@ void ARTScanPostorder(ART &art, NodePointer &root, FILTER &&filter, POST_HANDLER
 			break;
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
-			auto &child = *reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
 			auto push_node = filter(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(ScanEntry {push_node, false});

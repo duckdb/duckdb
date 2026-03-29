@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-void ARTMerger::Init(NodePointer &left, NodePointer &right) {
+void ARTMerger::Init(Node &left, Node &right) {
 	Emplace(left, right, GateStatus::GATE_NOT_SET, 0);
 }
 
@@ -76,7 +76,7 @@ ARTConflictType ARTMerger::Merge() {
 	return ARTConflictType::NO_CONFLICT;
 }
 
-void ARTMerger::Emplace(NodePointer &left, NodePointer &right, const GateStatus parent_status, const idx_t depth) {
+void ARTMerger::Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth) {
 	const auto left_type = left.GetType();
 	const auto right_type = right.GetType();
 
@@ -110,15 +110,15 @@ ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
 	                           DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 }
 
-array_ptr<uint8_t> ARTMerger::GetBytes(NodePointer &leaf) {
+array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf) {
 	const auto type = leaf.GetType();
 	switch (type) {
 	case NType::NODE_7_LEAF:
-		return NodePointer::Ref<Node7Leaf>(art, leaf, type).GetBytes();
+		return Node::Ref<Node7Leaf>(art, leaf, type).GetBytes();
 	case NType::NODE_15_LEAF:
-		return NodePointer::Ref<Node15Leaf>(art, leaf, type).GetBytes();
+		return Node::Ref<Node15Leaf>(art, leaf, type).GetBytes();
 	case NType::NODE_256_LEAF:
-		return NodePointer::Ref<Node256Leaf>(art, leaf, type).GetBytes(arena);
+		return Node::Ref<Node256Leaf>(art, leaf, type).GetBytes(arena);
 	default:
 		throw InternalException("invalid node type for ARTMerger::GetBytes: %s", EnumUtil::ToString(type));
 	}
@@ -142,22 +142,22 @@ void ARTMerger::MergeLeaves(NodeEntry &entry) {
 	// FIXME: Obtain a reference to left once and
 	// FIXME: handle the different node type combinations.
 	for (idx_t i = 0; i < bytes.size(); i++) {
-		NodePointer::InsertChild(art, entry.left, bytes[i]);
+		Node::InsertChild(art, entry.left, bytes[i]);
 	}
-	NodePointer::FreeNode(art, entry.right);
+	Node::FreeNode(art, entry.right);
 }
 
-NodePointerChildren ARTMerger::ExtractChildren(NodePointer &node) {
+NodePointerChildren ARTMerger::ExtractChildren(Node &node) {
 	const auto type = node.GetType();
 	switch (type) {
 	case NType::NODE_4:
-		return NodePointer::Ref<Node4>(art, node, type).ExtractChildren(arena);
+		return Node::Ref<Node4>(art, node, type).ExtractChildren(arena);
 	case NType::NODE_16:
-		return NodePointer::Ref<Node16>(art, node, type).ExtractChildren(arena);
+		return Node::Ref<Node16>(art, node, type).ExtractChildren(arena);
 	case NType::NODE_48:
-		return NodePointer::Ref<Node48>(art, node, type).ExtractChildren(arena);
+		return Node::Ref<Node48>(art, node, type).ExtractChildren(arena);
 	case NType::NODE_256:
-		return NodePointer::Ref<Node256>(art, node, type).ExtractChildren(arena);
+		return Node::Ref<Node256>(art, node, type).ExtractChildren(arena);
 	default:
 		throw InternalException("invalid node type for ARTMerger::GetChildren: %s", EnumUtil::ToString(type));
 	}
@@ -177,7 +177,7 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	auto children = ExtractChildren(entry.right);
 	// As long as the arena is valid,
 	// the copied-out nodes (and their references) are valid.
-	NodePointer::FreeNode(art, entry.right);
+	Node::FreeNode(art, entry.right);
 
 	// First, we iterate and insert children.
 	// This might grow the node, so we need to do it prior to Emplace.
@@ -190,7 +190,7 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 			// There is no child at this byte.
 			// We can insert the right node's child at byte and are done.
 			auto &right_child = children.children[i];
-			NodePointer::InsertChild(art, entry.left, byte, right_child);
+			Node::InsertChild(art, entry.left, byte, right_child);
 			continue;
 		}
 		// There is a left and a right child at this byte.
@@ -207,8 +207,8 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	}
 }
 
-void ARTMerger::MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status,
-                                   const idx_t parent_depth, const uint8_t pos) {
+void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth,
+                                   const uint8_t pos) {
 	D_ASSERT(node.IsNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
@@ -227,12 +227,11 @@ void ARTMerger::MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const
 
 	// There is no child at this prefix byte,
 	// so we can insert the remaining prefix and are done.
-	NodePointer::InsertChild(art, node, byte, prefix);
+	Node::InsertChild(art, node, byte, prefix);
 	prefix.Clear();
 }
 
-void ARTMerger::MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status,
-                                   const idx_t parent_depth) {
+void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth) {
 	D_ASSERT(node.IsNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
@@ -279,8 +278,8 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
 
 		// Split and reduce.
-		reference<NodePointer> ref(entry.left);
-		NodePointer l_child;
+		reference<Node> ref(entry.left);
+		Node l_child;
 		const auto status = Prefix::Split(art, ref, l_child, cast_pos);
 		Prefix::Reduce(art, entry.right, cast_pos);
 
@@ -298,7 +297,7 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// Free the right prefix, but keep the reference to its child alive.
 		// Then, iterate on the left and right (reduced) child.
 		auto r_child = *r_prefix.ptr;
-		NodePointer::FreeNode(art, entry.right);
+		Node::FreeNode(art, entry.right);
 		entry.right = r_child;
 
 		auto depth = entry.depth + l_prefix.data[count];

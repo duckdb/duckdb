@@ -22,7 +22,7 @@ public:
 
 public:
 	//! Initialize the ART builder by passing a reference to the root node.
-	void Init(NodePointer &node, const idx_t end) {
+	void Init(Node &node, const idx_t end) {
 		s.emplace(node, 0, end, 0);
 	}
 	//! Build the ART starting at the first entry in the stack.
@@ -31,10 +31,10 @@ public:
 private:
 	struct NodeEntry {
 		NodeEntry() = delete;
-		NodeEntry(NodePointer &node, const idx_t start, const idx_t end, const idx_t depth)
+		NodeEntry(Node &node, const idx_t start, const idx_t end, const idx_t depth)
 		    : node(node), start(start), end(end), depth(depth) {};
 
-		NodePointer &node;
+		Node &node;
 		idx_t start;
 		idx_t end;
 		idx_t depth;

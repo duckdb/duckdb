@@ -35,12 +35,12 @@ public:
 private:
 	uint8_t count;
 	uint8_t child_index[Node256::CAPACITY];
-	NodePointer children[CAPACITY];
+	Node children[CAPACITY];
 
 public:
 	//! Get a new Node48 handle and initialize the Node48.
-	static NodeHandle New(ART &art, NodePointer &node) {
-		node = NodePointer::GetAllocator(art, NODE_48).New();
+	static NodeHandle New(ART &art, Node &node) {
+		node = Node::GetAllocator(art, NODE_48).New();
 		node.SetMetadata(static_cast<uint8_t>(NODE_48));
 
 		NodeHandle handle(art, node);
@@ -60,11 +60,11 @@ public:
 	}
 
 	//! Insert a child at byte.
-	static void InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child);
+	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePointer &node, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
 	//! Replace the child at byte.
-	void ReplaceChild(const uint8_t byte, const NodePointer child) {
+	void ReplaceChild(const uint8_t byte, const Node child) {
 		D_ASSERT(count >= SHRINK_THRESHOLD);
 		auto status = children[child_index[byte]].GetGateStatus();
 		children[child_index[byte]] = child;
@@ -85,26 +85,26 @@ public:
 	}
 
 	//! Get the child node at byte (returns NodePointer by value).
-	static NodePointer GetChildNode(const Node48 &n, const uint8_t byte) {
+	static Node GetChildNode(const Node48 &n, const uint8_t byte) {
 		if (n.child_index[byte] != EMPTY_MARKER) {
 			return n.children[n.child_index[byte]];
 		}
-		return NodePointer();
+		return Node();
 	}
 
 	//! Get the first child node >= byte (returns NodePointer by value, updates byte).
-	static NodePointer GetNextChildNode(const Node48 &n, uint8_t &byte) {
+	static Node GetNextChildNode(const Node48 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				byte = UnsafeNumericCast<uint8_t>(i);
 				return n.children[n.child_index[i]];
 			}
 		}
-		return NodePointer();
+		return Node();
 	}
 
 	template <class NODE>
-	static unsafe_optional_ptr<NodePointer> GetChild(NODE &n, const uint8_t byte, const bool unsafe = false) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte, const bool unsafe = false) {
 		if (n.child_index[byte] != Node48::EMPTY_MARKER) {
 			if (!unsafe && !n.children[n.child_index[byte]].HasMetadata()) {
 				throw InternalException("empty child for byte %d in Node48::GetChild", byte);
@@ -115,7 +115,7 @@ public:
 	}
 
 	template <class NODE>
-	static unsafe_optional_ptr<NodePointer> GetNextChild(NODE &n, uint8_t &byte) {
+	static unsafe_optional_ptr<Node> GetNextChild(NODE &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				byte = UnsafeNumericCast<uint8_t>(i);
@@ -131,8 +131,8 @@ public:
 	NodePointerChildren ExtractChildren(ArenaAllocator &arena) {
 		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
 		array_ptr<uint8_t> bytes(mem_bytes, count);
-		auto mem_children = arena.AllocateAligned(sizeof(NodePointer) * count);
-		array_ptr<NodePointer> children_ptr(reinterpret_cast<NodePointer *>(mem_children), count);
+		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
+		array_ptr<Node> children_ptr(reinterpret_cast<Node *>(mem_children), count);
 
 		uint16_t ptr_idx = 0;
 		for (idx_t i = 0; i < Node256::CAPACITY; i++) {
@@ -147,8 +147,8 @@ public:
 	}
 
 private:
-	static void GrowNode16(ART &art, NodePointer &node48, NodePointer &node16);
+	static void GrowNode16(ART &art, Node &node48, Node &node16);
 	//! We shrink at <= Node256::SHRINK_THRESHOLD.
-	static void ShrinkNode256(ART &art, NodePointer &node48, NodePointer &node256);
+	static void ShrinkNode256(ART &art, Node &node48, Node &node256);
 };
 } // namespace duckdb

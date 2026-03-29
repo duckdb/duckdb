@@ -11,7 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 template <uint8_t CAPACITY, NType TYPE>
-void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t byte, const NodePointer child) {
+void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child) {
 	// Still space. Insert the child.
 	uint8_t child_pos = 0;
 	while (child_pos < n.count && n.key[child_pos] < byte) {
@@ -30,7 +30,7 @@ void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t by
 }
 
 template <uint8_t CAPACITY, NType TYPE>
-NodeHandle BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, NodePointer &node, const uint8_t byte) {
+NodeHandle BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<BaseNode<CAPACITY, TYPE>>();
 
@@ -58,7 +58,7 @@ NodeHandle BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, NodePointer &
 // Node4
 //===--------------------------------------------------------------------===//
 
-void Node4::InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child) {
+void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	{
 		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node4>();
@@ -75,8 +75,8 @@ void Node4::InsertChild(ART &art, NodePointer &node, const uint8_t byte, const N
 	Node16::InsertChild(art, node, byte, child);
 }
 
-void Node4::DeleteChild(ART &art, NodePointer &node, NodePointer &parent, const uint8_t byte, const GateStatus status) {
-	NodePointer child;
+void Node4::DeleteChild(ART &art, Node &node, Node &parent, const uint8_t byte, const GateStatus status) {
+	Node child;
 	uint8_t remaining_byte;
 
 	{
@@ -93,13 +93,13 @@ void Node4::DeleteChild(ART &art, NodePointer &node, NodePointer &parent, const 
 	}
 
 	auto prev_node4_status = node.GetGateStatus();
-	NodePointer::FreeNode(art, node);
+	Node::FreeNode(art, node);
 	// Propagate both the prev_node_4 status and the general gate status (if the gate was earlier on),
 	// since the concatenation logic depends on both.
 	Prefix::Concat(art, parent, node, child, remaining_byte, prev_node4_status, status);
 }
 
-void Node4::ShrinkNode16(ART &art, NodePointer &node4, NodePointer &node16) {
+void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	{
 		auto n4_handle = New(art, node4);
 		auto &n4 = n4_handle.Get<Node4>();
@@ -114,14 +114,14 @@ void Node4::ShrinkNode16(ART &art, NodePointer &node4, NodePointer &node16) {
 			n4.children[i] = n16.children[i];
 		}
 	}
-	NodePointer::FreeNode(art, node16);
+	Node::FreeNode(art, node16);
 }
 
 //===--------------------------------------------------------------------===//
 // Node16
 //===--------------------------------------------------------------------===//
 
-void Node16::InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child) {
+void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	{
 		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node16>();
@@ -137,7 +137,7 @@ void Node16::InsertChild(ART &art, NodePointer &node, const uint8_t byte, const 
 	Node48::InsertChild(art, node, byte, child);
 }
 
-void Node16::DeleteChild(ART &art, NodePointer &node, const uint8_t byte) {
+void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	{
 		auto handle = DeleteChildInternal(art, node, byte);
 		auto &n = handle.Get<Node16>();
@@ -150,7 +150,7 @@ void Node16::DeleteChild(ART &art, NodePointer &node, const uint8_t byte) {
 	Node4::ShrinkNode16(art, node, node16);
 }
 
-void Node16::GrowNode4(ART &art, NodePointer &node16, NodePointer &node4) {
+void Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 	{
 		NodeHandle n4_handle(art, node4);
 		auto &n4 = n4_handle.Get<Node4>();
@@ -165,10 +165,10 @@ void Node16::GrowNode4(ART &art, NodePointer &node16, NodePointer &node4) {
 			n16.children[i] = n4.children[i];
 		}
 	}
-	NodePointer::FreeNode(art, node4);
+	Node::FreeNode(art, node4);
 }
 
-void Node16::ShrinkNode48(ART &art, NodePointer &node16, NodePointer &node48) {
+void Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	{
 		auto n16_handle = New(art, node16);
 		auto &n16 = n16_handle.Get<Node16>();
@@ -186,7 +186,7 @@ void Node16::ShrinkNode48(ART &art, NodePointer &node16, NodePointer &node48) {
 			}
 		}
 	}
-	NodePointer::FreeNode(art, node48);
+	Node::FreeNode(art, node48);
 }
 
 } // namespace duckdb

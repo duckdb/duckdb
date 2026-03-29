@@ -28,11 +28,11 @@ public:
 private:
 	uint8_t count;
 	uint8_t key[CAPACITY];
-	NodePointer children[CAPACITY];
+	Node children[CAPACITY];
 
 public:
 	//! Get a new BaseNode handle and initialize the base node.
-	static NodeHandle New(ART &art, NodePointer &node) {
+	static NodeHandle New(ART &art, Node &node) {
 		node = NodePointer::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
@@ -51,7 +51,7 @@ public:
 	}
 
 	//! Replace the child at byte.
-	static void ReplaceChild(BaseNode &n, const uint8_t byte, const NodePointer child) {
+	static void ReplaceChild(BaseNode &n, const uint8_t byte, const Node child) {
 		D_ASSERT(n.count != 0);
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
@@ -67,28 +67,28 @@ public:
 	}
 
 	//! Get the child node at byte (returns NodePointer by value).
-	static NodePointer GetChildNode(const BaseNode &n, const uint8_t byte) {
+	static Node GetChildNode(const BaseNode &n, const uint8_t byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
 				return n.children[i];
 			}
 		}
-		return NodePointer();
+		return Node();
 	}
 
 	//! Get the first child node >= byte (returns NodePointer by value, updates byte).
-	static NodePointer GetNextChildNode(const BaseNode &n, uint8_t &byte) {
+	static Node GetNextChildNode(const BaseNode &n, uint8_t &byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] >= byte) {
 				byte = n.key[i];
 				return n.children[i];
 			}
 		}
-		return NodePointer();
+		return Node();
 	}
 
 	//! Get the child at byte.
-	static unsafe_optional_ptr<NodePointer> GetChild(BaseNode &n, const uint8_t byte, const bool unsafe = false) {
+	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte, const bool unsafe = false) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
 				if (!unsafe && !n.children[i].HasMetadata()) {
@@ -101,7 +101,7 @@ public:
 	}
 
 	//! Get the first child greater than or equal to the byte.
-	static unsafe_optional_ptr<NodePointer> GetNextChild(BaseNode &n, uint8_t &byte) {
+	static unsafe_optional_ptr<Node> GetNextChild(BaseNode &n, uint8_t &byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] >= byte) {
 				byte = n.key[i];
@@ -117,8 +117,8 @@ public:
 	NodePointerChildren ExtractChildren(ArenaAllocator &arena) {
 		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
 		array_ptr<uint8_t> bytes(mem_bytes, count);
-		auto mem_children = arena.AllocateAligned(sizeof(NodePointer) * count);
-		array_ptr<NodePointer> children_ptr(reinterpret_cast<NodePointer *>(mem_children), count);
+		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
+		array_ptr<Node> children_ptr(reinterpret_cast<Node *>(mem_children), count);
 
 		for (uint8_t i = 0; i < count; i++) {
 			bytes[i] = key[i];
@@ -137,8 +137,8 @@ public:
 	}
 
 private:
-	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const NodePointer child);
-	static NodeHandle DeleteChildInternal(ART &art, NodePointer &node, const uint8_t byte);
+	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child);
+	static NodeHandle DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node4 holds up to four children sorted by their key byte.
@@ -151,13 +151,12 @@ public:
 
 public:
 	//! Insert a child at byte.
-	static void InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child);
+	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte,
-	                        const GateStatus status);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status);
 
 private:
-	static void ShrinkNode16(ART &art, NodePointer &node4, NodePointer &node16);
+	static void ShrinkNode16(ART &art, Node &node4, Node &node16);
 };
 
 class Node16 : public BaseNode<16, NType::NODE_16> {
@@ -170,14 +169,14 @@ public:
 
 public:
 	//! Insert a child at byte.
-	static void InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child);
+	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePointer &node, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
 
 private:
-	static void GrowNode4(ART &art, NodePointer &node16, NodePointer &node4);
+	static void GrowNode4(ART &art, Node &node16, Node &node4);
 	//! We shrink at < Node48::SHRINK_THRESHOLD.
-	static void ShrinkNode48(ART &art, NodePointer &node16, NodePointer &node48);
+	static void ShrinkNode48(ART &art, Node &node16, Node &node48);
 };
 
 } // namespace duckdb

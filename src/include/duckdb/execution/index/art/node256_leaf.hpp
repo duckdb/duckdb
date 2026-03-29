@@ -34,12 +34,12 @@ private:
 
 public:
 	//! Get a new Node256Leaf handle and initialize the leaf.
-	static NodeHandle New(ART &art, NodePointer &node);
+	static NodeHandle New(ART &art, Node &node);
 
 	//! Insert a byte.
-	static void InsertByte(ART &art, NodePointer &node, const uint8_t byte);
+	static void InsertByte(ART &art, Node &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, NodePointer &node, const uint8_t byte);
+	static void DeleteByte(ART &art, Node &node, const uint8_t byte);
 
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(const uint8_t byte);
@@ -53,7 +53,7 @@ public:
 	bool GetNextByte(uint8_t &byte);
 
 private:
-	static void GrowNode15Leaf(ART &art, NodePointer &node256_leaf, NodePointer &node15_leaf);
+	static void GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf);
 };
 
 } // namespace duckdb

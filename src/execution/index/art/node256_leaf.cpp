@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-NodeHandle Node256Leaf::New(ART &art, NodePointer &node) {
-	node = NodePointer::GetAllocator(art, NODE_256_LEAF).New();
+NodeHandle Node256Leaf::New(ART &art, Node &node) {
+	node = Node::GetAllocator(art, NODE_256_LEAF).New();
 	node.SetMetadata(static_cast<uint8_t>(NODE_256_LEAF));
 
 	NodeHandle handle(art, node);
@@ -19,7 +19,7 @@ NodeHandle Node256Leaf::New(ART &art, NodePointer &node) {
 	return handle;
 }
 
-void Node256Leaf::InsertByte(ART &art, NodePointer &node, const uint8_t byte) {
+void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<Node256Leaf>();
 
@@ -28,7 +28,7 @@ void Node256Leaf::InsertByte(ART &art, NodePointer &node, const uint8_t byte) {
 	mask.SetValid(byte);
 }
 
-void Node256Leaf::DeleteByte(ART &art, NodePointer &node, const uint8_t byte) {
+void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	{
 		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node256Leaf>();
@@ -78,7 +78,7 @@ bool Node256Leaf::GetNextByte(uint8_t &byte) {
 	return false;
 }
 
-void Node256Leaf::GrowNode15Leaf(ART &art, NodePointer &node256_leaf, NodePointer &node15_leaf) {
+void Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf) {
 	{
 		NodeHandle n15_handle(art, node15_leaf);
 		auto &n15 = n15_handle.Get<Node15Leaf>();
@@ -93,7 +93,7 @@ void Node256Leaf::GrowNode15Leaf(ART &art, NodePointer &node256_leaf, NodePointe
 			mask.SetValid(n15.key[i]);
 		}
 	}
-	NodePointer::FreeNode(art, node15_leaf);
+	Node::FreeNode(art, node15_leaf);
 }
 
 } // namespace duckdb

@@ -12,15 +12,14 @@
 
 namespace duckdb {
 
-void Leaf::New(NodePointer &node, const row_t row_id) {
+void Leaf::New(Node &node, const row_t row_id) {
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
 	node.Clear();
 	node.SetMetadata(static_cast<uint8_t>(INLINED));
 	node.SetRowId(row_id);
 }
 
-void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePointer &left, NodePointer &right, GateStatus status,
-                        idx_t depth) {
+void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, Node &left, Node &right, GateStatus status, idx_t depth) {
 	D_ASSERT(left.GetType() == NType::LEAF_INLINED);
 	D_ASSERT(right.GetType() == NType::LEAF_INLINED);
 
@@ -43,7 +42,7 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePointer &left, Node
 	auto pos = left_key.GetMismatchPos(right_key, depth);
 
 	left.Clear();
-	reference<NodePointer> node(left);
+	reference<Node> node(left);
 	if (pos != depth) {
 		// The row IDs share a prefix.
 		Prefix::New(art, node, left_key, depth, pos - depth);
@@ -66,27 +65,27 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePointer &left, Node
 	// with a single inlined leaf as their child.
 	Node4::New(art, node);
 
-	NodePointer left_child;
+	Node left_child;
 	Leaf::New(left_child, left_row_id);
 	Node4::InsertChild(art, node, left_byte, left_child);
 
-	NodePointer right_child;
+	Node right_child;
 	Leaf::New(right_child, right_row_id);
 	Node4::InsertChild(art, node, right_byte, right_child);
 
 	left.SetGateStatus(status);
 }
 
-void Leaf::TransformToNested(ART &art, NodePointer &node) {
+void Leaf::TransformToNested(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
 
 	ArenaAllocator arena(Allocator::Get(art.db));
-	NodePointer root = NodePointer();
+	Node root = Node();
 
 	// Move all row IDs into the nested leaf.
-	reference<const NodePointer> leaf_ref(node);
+	reference<const Node> leaf_ref(node);
 	while (leaf_ref.get().HasMetadata()) {
-		auto &leaf = NodePointer::Ref<const Leaf>(art, leaf_ref, LEAF);
+		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(arena, leaf.row_ids[i]);
 			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET,
@@ -103,7 +102,7 @@ void Leaf::TransformToNested(ART &art, NodePointer &node) {
 	node = root;
 }
 
-void Leaf::TransformToDeprecated(ART &art, NodePointer &node) {
+void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	D_ASSERT(node.GetGateStatus() == GateStatus::GATE_SET || node.GetType() == LEAF);
 
 	// Early-out, if we never transformed this leaf.
@@ -118,18 +117,18 @@ void Leaf::TransformToDeprecated(ART &art, NodePointer &node) {
 	ARTKey empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, NumericLimits<row_t>().Maximum());
 	it.Scan(empty_key, output, false);
-	NodePointer::FreeTree(art, node);
+	Node::FreeTree(art, node);
 	D_ASSERT(row_ids.size() > 1);
 
 	// Create the deprecated leaves.
 	idx_t remaining = row_ids.size();
 	auto row_ids_it = row_ids.begin();
-	reference<NodePointer> ref(node);
+	reference<Node> ref(node);
 	while (remaining) {
-		ref.get() = NodePointer::GetAllocator(art, LEAF).New();
+		ref.get() = Node::GetAllocator(art, LEAF).New();
 		ref.get().SetMetadata(static_cast<uint8_t>(LEAF));
 
-		auto &leaf = NodePointer::Ref<Leaf>(art, ref, LEAF);
+		auto &leaf = Node::Ref<Leaf>(art, ref, LEAF);
 		auto min = MinValue(UnsafeNumericCast<idx_t>(LEAF_SIZE), remaining);
 		leaf.count = UnsafeNumericCast<uint8_t>(min);
 
@@ -148,21 +147,21 @@ void Leaf::TransformToDeprecated(ART &art, NodePointer &node) {
 // Deprecated code paths.
 //===--------------------------------------------------------------------===//
 
-void Leaf::DeprecatedFree(ART &art, NodePointer &node) {
+void Leaf::DeprecatedFree(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
-	NodePointer next;
+	Node next;
 	while (node.HasMetadata()) {
-		next = NodePointer::Ref<Leaf>(art, node, LEAF).ptr;
-		NodePointer::FreeNode(art, node);
+		next = Node::Ref<Leaf>(art, node, LEAF).ptr;
+		Node::FreeNode(art, node);
 		node = next;
 	}
 	node.Clear();
 }
 
-bool Leaf::DeprecatedGetRowIds(ART &art, const NodePointer &node, set<row_t> &row_ids, const idx_t max_count) {
+bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const NodePointer> ref(node);
+	reference<const Node> ref(node);
 	while (ref.get().HasMetadata()) {
 		ConstNodeHandle handle(art, ref.get());
 		auto &leaf = handle.Get<Leaf>();
@@ -177,11 +176,11 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const NodePointer &node, set<row_t> &ro
 	return true;
 }
 
-void Leaf::DeprecatedVacuum(ART &art, NodePointer node) {
+void Leaf::DeprecatedVacuum(ART &art, Node node) {
 	D_ASSERT(node.HasMetadata());
 	D_ASSERT(node.GetType() == LEAF);
 
-	auto &allocator = NodePointer::GetAllocator(art, LEAF);
+	auto &allocator = Node::GetAllocator(art, LEAF);
 	while (node.HasMetadata()) {
 		NodeHandle handle(art, node);
 		auto &leaf = handle.Get<Leaf>();
@@ -193,7 +192,7 @@ void Leaf::DeprecatedVacuum(ART &art, NodePointer node) {
 	}
 }
 
-string Leaf::DeprecatedToString(ART &art, const NodePointer &node, const ToStringOptions &options) {
+string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options) {
 	string str = "";
 
 	if (!options.print_deprecated_leaves) {
@@ -201,10 +200,10 @@ string Leaf::DeprecatedToString(ART &art, const NodePointer &node, const ToStrin
 		return str;
 	}
 
-	reference<const NodePointer> ref(node);
+	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
-		auto &leaf = NodePointer::Ref<const Leaf>(art, ref, LEAF);
+		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
 		str += options.tree_prefix + "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			str += to_string(leaf.row_ids[i]) + "-";
@@ -216,10 +215,10 @@ string Leaf::DeprecatedToString(ART &art, const NodePointer &node, const ToStrin
 	return str;
 }
 
-void Leaf::DeprecatedVerify(ART &art, const NodePointer &node) {
+void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const NodePointer> ref(node);
+	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
 		ConstNodeHandle handle(art, ref.get());
@@ -230,10 +229,10 @@ void Leaf::DeprecatedVerify(ART &art, const NodePointer &node) {
 }
 
 void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
-	auto idx = NodePointer::GetAllocatorIdx(LEAF);
+	auto idx = Node::GetAllocatorIdx(LEAF);
 	node_counts[idx]++;
 
-	reference<const NodePointer> ref(ptr);
+	reference<const Node> ref(ptr);
 	while (ref.get().HasMetadata()) {
 		ConstNodeHandle handle(art, ref.get());
 		auto &leaf = handle.Get<Leaf>();

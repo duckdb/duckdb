@@ -35,38 +35,37 @@ public:
 private:
 	uint8_t count;            // Deprecated.
 	row_t row_ids[LEAF_SIZE]; // Deprecated.
-	NodePointer ptr;          // Deprecated.
+	Node ptr;                 // Deprecated.
 
 public:
 	//! Inline a row ID into a node pointer.
-	static void New(NodePointer &node, const row_t row_id);
+	static void New(Node &node, const row_t row_id);
 
 	//! Merge two inlined leaf nodes.
-	static void MergeInlined(ArenaAllocator &arena, ART &art, NodePointer &left, NodePointer &right, GateStatus status,
-	                         idx_t depth);
+	static void MergeInlined(ArenaAllocator &arena, ART &art, Node &left, Node &right, GateStatus status, idx_t depth);
 
 	//! Transforms a deprecated leaf to a nested leaf.
-	static void TransformToNested(ART &art, NodePointer &node);
+	static void TransformToNested(ART &art, Node &node);
 	//! Transforms a nested leaf to a deprecated leaf.
-	static void TransformToDeprecated(ART &art, NodePointer &node);
+	static void TransformToDeprecated(ART &art, Node &node);
 
 public:
 	//! Frees the linked list of leaves.
-	static void DeprecatedFree(ART &art, NodePointer &node);
+	static void DeprecatedFree(ART &art, Node &node);
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
-	static bool DeprecatedGetRowIds(ART &art, const NodePointer &node, set<row_t> &row_ids, const idx_t max_count);
+	static bool DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count);
 	//! Vacuums the linked list of leaves.
-	static void DeprecatedVacuum(ART &art, NodePointer node);
+	static void DeprecatedVacuum(ART &art, Node node);
 
 	//! Traverses and verifies the linked list of leaves.
-	static void DeprecatedVerify(ART &art, const NodePointer &node);
+	static void DeprecatedVerify(ART &art, const Node &node);
 	//! Count the number of leaves.
 	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
 	//! Return string representation of the linked list of leaves.
 	//! If print_deprecated_leaves is false, returns "[deprecated leaves]" with proper indentation.
-	static string DeprecatedToString(ART &art, const NodePointer &node, const ToStringOptions &options);
+	static string DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options);
 };
 
 } // namespace duckdb

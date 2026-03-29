@@ -130,7 +130,7 @@ ARTScanResult Iterator::Scan(const ARTKey &upper_bound, Output &output, bool equ
 template ARTScanResult Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, bool);
 template ARTScanResult Iterator::Scan<KeyRowIdOutput>(const ARTKey &, KeyRowIdOutput &, bool);
 
-void Iterator::FindMinimum(NodePointer node) {
+void Iterator::FindMinimum(Node node) {
 	while (node.HasMetadata()) {
 		// Found the minimum.
 		if (node.IsAnyLeaf()) {
@@ -148,12 +148,12 @@ void Iterator::FindMinimum(NodePointer node) {
 
 		// Traverse the prefix.
 		if (node.GetType() == NType::PREFIX) {
-			NodePointer child;
+			Node child;
 			{
 				ConstNodeHandle handle(art, node);
 				auto data = handle.GetPtr();
 				auto count = data[art.PrefixCount()];
-				auto child_ptr = reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
+				auto child_ptr = reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
 
 				for (idx_t i = 0; i < count; i++) {
 					current_key.Push(data[i]);
@@ -189,7 +189,7 @@ void Iterator::FindMinimum(NodePointer node) {
 	throw InternalException("ART Iterator::FindMinimum: Reached node without metadata");
 }
 
-bool Iterator::LowerBound(NodePointer node, const ARTKey &key, const bool equal) {
+bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal) {
 	idx_t depth = 0;
 
 	while (node.HasMetadata()) {
@@ -236,12 +236,12 @@ bool Iterator::LowerBound(NodePointer node, const ARTKey &key, const bool equal)
 
 		// Push back all prefix bytes and compare with key bytes.
 		uint8_t prefix_count;
-		NodePointer prefix_child;
+		Node prefix_child;
 		{
 			ConstNodeHandle handle(art, node);
 			auto data = handle.GetPtr();
 			prefix_count = data[art.PrefixCount()];
-			auto child_ptr = reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
+			auto child_ptr = reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
 
 			for (idx_t i = 0; i < prefix_count; i++) {
 				current_key.Push(data[i]);
