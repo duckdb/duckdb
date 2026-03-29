@@ -46,10 +46,11 @@ SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND C
 physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 # Test each of the streaming window functions
+# row_number() over() is rewritten by the window_rewriter optimizer to use a virtual column
 query TT
 explain select row_number() over (), i, j from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TTT
 select row_number() over (), i, j from integers

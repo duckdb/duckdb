@@ -96,6 +96,7 @@ enum class MetricType : uint8_t {
 	OPTIMIZER_WINDOW_SELF_JOIN = 58,
 	OPTIMIZER_PROJECTION_PULLUP = 59,
 	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION = 60,
+	OPTIMIZER_WINDOW_REWRITER = 61,
 	// PhaseTiming metrics
 	ALL_OPTIMIZERS = 18,
 	CUMULATIVE_OPTIMIZER_TIMING = 19,
@@ -120,7 +121,7 @@ typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metric
 class MetricsUtils {
 public:
 	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
-	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION);
+	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_WINDOW_REWRITER);
 
 public:
 

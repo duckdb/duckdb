@@ -60,6 +60,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_UNNEST_REWRITER,
 		MetricType::OPTIMIZER_UNUSED_COLUMNS,
 		MetricType::OPTIMIZER_WINDOW_SELF_JOIN,
+		MetricType::OPTIMIZER_WINDOW_REWRITER,
 		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,

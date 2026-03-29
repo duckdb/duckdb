@@ -263,6 +263,10 @@ public:
 
 public:
 	ParallelTableScanState state;
+	//! The index of the row_number column in the output, if any
+	optional_idx row_number_col_index;
+	//! Atomic counter for assigning row numbers across all threads
+	atomic<idx_t> row_number_counter {0};
 
 private:
 	const TableScanBindData &bind_data;
@@ -278,6 +282,9 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
+			if (col.IsRowNumberColumn()) {
+				continue;
+			}
 			storage_ids.push_back(bind_data.table.GetStorageIndex(col));
 		}
 
@@ -312,6 +319,20 @@ public:
 				storage.Scan(tx, output, l_state.scan_state);
 			}
 			if (output.size() > 0) {
+				if (row_number_col_index.IsValid()) {
+					auto col_idx = row_number_col_index.GetIndex();
+					auto &row_number_vec = output.data[col_idx];
+					row_number_vec.SetVectorType(VectorType::FLAT_VECTOR);
+					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
+					auto count = output.size();
+
+					// Atomically claim a range of row numbers
+					auto base = row_number_counter.fetch_add(count);
+
+					for (idx_t i = 0; i < count; i++) {
+						row_number_data[i] = UnsafeNumericCast<row_t>(base + i + 1);
+					}
+				}
 				return;
 			}
 
@@ -387,7 +408,22 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 	}
 
-	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
+	// Detect row_number column
+	for (idx_t i = 0; i < input.column_ids.size(); i++) {
+		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			g_state->row_number_col_index = i;
+			break;
+		}
+	}
+
+	// Filter out row_number columns before passing to storage layer
+	vector<ColumnIndex> filtered_column_indexes;
+	for (const auto &col_idx : input.column_indexes) {
+		if (!col_idx.IsRowNumberColumn()) {
+			filtered_column_indexes.push_back(col_idx);
+		}
+	}
+	storage.InitializeParallelScan(context, g_state->state, filtered_column_indexes);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}
@@ -396,7 +432,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		if (col_idx.IsRowIdColumn()) {
+		if (col_idx.IsRowIdColumn() || col_idx.IsRowNumberColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 		} else if (col_idx.HasType()) {
 			g_state->scanned_types.push_back(col_idx.GetScanType());
@@ -729,7 +765,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, Ta
 		return nullptr;
 	}
 
-	if (column_id.IsRowIdColumn()) {
+	if (column_id.IsRowIdColumn() || column_id.IsRowNumberColumn()) {
 		return nullptr;
 	}
 	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));
