@@ -2944,15 +2944,6 @@ string ShellState::ReadFileContents(const string &filename) {
 	return result;
 }
 
-void ShellState::WriteFileContents(const string &filename, const string &content) {
-	FILE *out = fopen(filename.c_str(), "wb");
-	if (!out) {
-		throw duckdb::IOException("cannot open '%s' for writing: %s\n", filename.c_str(), strerror(errno));
-	}
-	fwrite(content.c_str(), 1, content.size(), out);
-	fclose(out);
-}
-
 /*
 ** Read input from the file given by sqliterc_override.  Or if that
 ** parameter is NULL, take input from ~/.duckdbrc

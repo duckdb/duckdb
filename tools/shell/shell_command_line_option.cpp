@@ -187,8 +187,8 @@ MetadataResult FormatFile(ShellState &state, const vector<string> &args) {
 	if (result != MetadataResult::SUCCESS) {
 		return result;
 	}
-
-	state.WriteFileContents(filename, sql);
+	state.HighlightSQL(sql);
+	state.Print(PrintOutput::STDOUT, sql);
 	return MetadataResult::SUCCESS;
 }
 

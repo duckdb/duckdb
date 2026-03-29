@@ -441,7 +441,6 @@ public:
 	void HighlightSQL(string &sql);
 	string ReadFileContents(FILE *f);
 	string ReadFileContents(const string &filename);
-	void WriteFileContents(const string &filename, const string &content);
 };
 
 struct PagerState {
