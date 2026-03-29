@@ -155,7 +155,10 @@ if args.directories:
 
 
 def duckdb_supports_format(duckdb_cli):
-    result = subprocess.run([duckdb_cli, '-help'], capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run([duckdb_cli, '-help'], capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return False
     if result.returncode != 0:
         # failed
         return False
