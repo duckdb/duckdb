@@ -72,11 +72,14 @@ class VectorBuffer {
 public:
 	explicit VectorBuffer(VectorBufferType type) : buffer_type(type), data_ptr(nullptr) {
 	}
-	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
+	VectorBuffer(Allocator &allocator, idx_t data_size)
+	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
 		if (data_size > 0) {
-			allocated_data = Allocator::DefaultAllocator().Allocate(data_size);
+			allocated_data = allocator.Allocate(data_size);
 			data_ptr = allocated_data.get();
 		}
+	}
+	explicit VectorBuffer(idx_t data_size) : VectorBuffer(Allocator::DefaultAllocator(), data_size) {
 	}
 	explicit VectorBuffer(data_ptr_t data_ptr_p)
 	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
@@ -95,14 +98,16 @@ public:
 		return data_ptr;
 	}
 
+	void SetData(data_ptr_t data) {
+		data_ptr = data;
+	}
 	void SetData(AllocatedData &&new_data) {
 		allocated_data = std::move(new_data);
 		data_ptr = allocated_data.get();
 	}
 
-	void SetData(data_ptr_t data) {
-		data_ptr = data;
-		allocated_data.Reset();
+	void ResetData() {
+		data_ptr = allocated_data.get();
 	}
 
 	VectorAuxiliaryData *GetAuxiliaryData() {

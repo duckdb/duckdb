@@ -16,8 +16,7 @@ public:
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// memory for the list offsets
-			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
-			buffer = make_buffer<VectorBuffer>(owned_data.get());
+			buffer = make_buffer<VectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
@@ -43,8 +42,7 @@ public:
 			break;
 		}
 		default:
-			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
-			buffer = make_buffer<VectorBuffer>(owned_data.get());
+			buffer = make_buffer<VectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
 			break;
 		}
 	}
@@ -57,7 +55,7 @@ public:
 		result.validity.Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			result.buffer->SetData(owned_data.get());
+			result.buffer->ResetData();
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
@@ -96,7 +94,7 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.buffer->SetData(owned_data.get());
+			result.buffer->ResetData();
 			result.auxiliary.reset();
 			break;
 		}
@@ -109,8 +107,6 @@ public:
 private:
 	//! The type of the vector cache
 	LogicalType type;
-	//! Owned data
-	AllocatedData owned_data;
 	//! Child caches (if any). Used for nested types.
 	vector<unique_ptr<VectorCacheEntry>> child_caches;
 	//! Buffer data for the vector (if any)
