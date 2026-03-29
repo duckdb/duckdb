@@ -42,6 +42,7 @@ except Exception as e:
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
+sql_format_command = ''
 
 try:
     subprocess.check_output(('cmake-format', '--version'), text=True)
@@ -137,6 +138,7 @@ parser.add_argument('-d', '--directories', nargs='*', default=[], help='Format s
 parser.add_argument('-y', '--noconfirm', action='store_true', help='Skip confirmation prompt')
 parser.add_argument('-q', '--silent', action='store_true', help='Suppress output')
 parser.add_argument('-f', '--force', action='store_true', help='Force formatting')
+parser.add_argument('--duckdb-binary', action='store', help='DuckDB binary to use for formatting SQL')
 args = parser.parse_args()
 
 revision = args.revision
@@ -150,6 +152,26 @@ force = args.force
 format_all = args.all
 if args.directories:
     formatted_directories = args.directories
+
+
+def duckdb_supports_format(duckdb_cli):
+    result = subprocess.run([duckdb_cli, '-help'], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        # failed
+        return False
+    return '-format-file' in result.stdout
+
+
+duckdb_binary = args.duckdb_binary
+if not duckdb_binary:
+    binaries_to_try = ['duckdb', 'build/reldebug/duckdb', 'build/release/duckdb']
+    for binary in binaries_to_try:
+        if duckdb_supports_format(binary):
+            duckdb_binary = binary
+            break
+
+if duckdb_binary:
+    sql_format_command = f'{duckdb_binary} -format-file'
 
 
 def file_is_ignored(full_path):
@@ -248,6 +270,9 @@ format_commands = {
     '.py': 'black --quiet - --skip-string-normalization --line-length 120 --stdin-filename',
     '.java': cpp_format_command,
 }
+if sql_format_command:
+    format_commands['.sql'] = sql_format_command
+    extensions.append('.sql')
 
 difference_files = []
 
