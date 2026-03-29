@@ -34,12 +34,12 @@ target int, position int NOT NULL, PRIMARY KEY (id));
 CREATE TABLE
     TrackElement(id int NOT NULL, region int NOT NULL, -- inverse of the elements edge
 
-PRIMARY KEY (id)); --
+PRIMARY KEY (id));
+--
 
 -- Edges
 
 --
-
 
 CREATE TABLE connectsTo(
     TrackElement1_id int NOT NULL,

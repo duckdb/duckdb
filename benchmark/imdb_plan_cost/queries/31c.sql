@@ -16,12 +16,33 @@ FROM
     name AS n,
     title AS t
 WHERE
-    ci.note IN ('(writer)', '(head writer)', '(written by)', '(story)', '(story editor)')
+    ci.note IN (
+        '(writer)',
+        '(head writer)',
+        '(written by)',
+        '(story)',
+        '(story editor)'
+    )
     AND cn.name LIKE 'Lionsgate%'
     AND it1.info = 'genres'
     AND it2.info = 'votes'
-    AND k.keyword IN ('murder', 'violence', 'blood', 'gore', 'death', 'female-nudity', 'hospital')
-    AND mi.info IN ('Horror', 'Action', 'Sci-Fi', 'Thriller', 'Crime', 'War')
+    AND k.keyword IN (
+        'murder',
+        'violence',
+        'blood',
+        'gore',
+        'death',
+        'female-nudity',
+        'hospital'
+    )
+    AND mi.info IN (
+        'Horror',
+        'Action',
+        'Sci-Fi',
+        'Thriller',
+        'Crime',
+        'War'
+    )
     AND t.id = mi.movie_id
     AND t.id = mi_idx.movie_id
     AND t.id = ci.movie_id

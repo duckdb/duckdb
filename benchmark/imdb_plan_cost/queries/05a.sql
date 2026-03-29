@@ -8,7 +8,16 @@ FROM
 WHERE ct.kind = 'production companies'
   AND mc.note LIKE '%(theatrical)%'
   AND mc.note LIKE '%(France)%'
-  AND mi.info IN ('Sweden', 'Norway', 'Germany', 'Denmark', 'Swedish', 'Denish', 'Norwegian', 'German')
+  AND mi.info IN (
+      'Sweden',
+      'Norway',
+      'Germany',
+      'Denmark',
+      'Swedish',
+      'Denish',
+      'Norwegian',
+      'German'
+  )
   AND t.production_year > 2005
   AND t.id = mi.movie_id
   AND t.id = mc.movie_id

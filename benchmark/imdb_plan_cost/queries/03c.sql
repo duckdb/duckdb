@@ -5,7 +5,18 @@ FROM
     movie_keyword AS mk,
     title AS t
 WHERE k.keyword LIKE '%sequel%'
-  AND mi.info IN ('Sweden', 'Norway', 'Germany', 'Denmark', 'Swedish', 'Denish', 'Norwegian', 'German', 'USA', 'American')
+  AND mi.info IN (
+      'Sweden',
+      'Norway',
+      'Germany',
+      'Denmark',
+      'Swedish',
+      'Denish',
+      'Norwegian',
+      'German',
+      'USA',
+      'American'
+  )
   AND t.production_year > 1990
   AND t.id = mi.movie_id
   AND t.id = mk.movie_id

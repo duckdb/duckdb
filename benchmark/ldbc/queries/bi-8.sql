@@ -42,7 +42,6 @@ SELECT
     sum(f.score) AS friendsScore
 FROM person_score p, knows k, person_score f -- the friend
 
-
 WHERE 1 = 1 -- join
 
 AND p.personid = k.k_person1id

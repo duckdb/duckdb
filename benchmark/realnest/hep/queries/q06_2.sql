@@ -1,13 +1,15 @@
 WITH trijets_b_tag_dval AS MATERIALIZED (
         SELECT
             row_id_i,
-            list_max(list_transform([ j1, j2, j3 ], lambda x : x.btag)) AS b_tag_dval,
-            AddPtEtaPhiM3({ 'pt' : j1.pt, 'eta' : j1.eta, 'phi' : j1.phi, 'mass' : j1.mass }, { 'pt' : j2.pt, 'eta' : j2.eta, 'phi' : j2.phi, 'mass' : j2.mass }, { 'pt' : j3.pt, 'eta' : j3.eta, 'phi' : j3.phi, 'mass' : j3.mass }) AS triJet,
-            abs(triJet [ 'mass' ] - 172.5) AS invariant_mass
+            list_max(list_transform([j1, j2, j3], lambda x :x.btag)) AS b_tag_dval,
+            AddPtEtaPhiM3({ 'pt' :j1.pt, 'eta' :j1.eta, 'phi' :j1.phi, 'mass' :j1.mass }, { 'pt' :j2.pt, 'eta' :j2.eta, 'phi' :j2.phi, 'mass' :j2.mass }, { 'pt' :j3.pt, 'eta' :j3.eta, 'phi' :j3.phi, 'mass' :j3.mass }) AS triJet,
+            abs(triJet ['mass'] - 172.5) AS invariant_mass
         FROM (
                 SELECT
                     j1,
-                    row_number() OVER (PARTITION BY row_id) i,
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) i,
                     row_id row_id_i
                 FROM (
                         SELECT UNNEST(Jet) j1, rowid row_id
@@ -18,7 +20,9 @@ WITH trijets_b_tag_dval AS MATERIALIZED (
             (
                 SELECT
                     j2,
-                    row_number() OVER (PARTITION BY row_id) j,
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) j,
                     row_id row_id_j
                 FROM (
                         SELECT UNNEST(Jet) j2, rowid row_id
@@ -29,7 +33,9 @@ WITH trijets_b_tag_dval AS MATERIALIZED (
             (
                 SELECT
                     j3,
-                    row_number() OVER (PARTITION BY row_id) k,
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) k,
                     row_id row_id_k
                 FROM (
                         SELECT UNNEST(Jet) j3, rowid row_id

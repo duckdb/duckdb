@@ -29,6 +29,5 @@ WHERE p_personid = f.k_person2id
 o_placeid = pl_placeid
     AND pl_name = 'United_States' -- :countryName
 
-
 ORDER BY pc_workfrom, p_personid, o_name DESC
 LIMIT 10

@@ -18,7 +18,6 @@ FROM
 ,
     place co -- country
 
-
 WHERE 1 = 1 -- join
 
 AND tc.tc_tagclassid = t.t_tagclassid

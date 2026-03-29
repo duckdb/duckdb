@@ -4,7 +4,8 @@ FROM (
         SELECT
             id6,
             v3,
-            row_number() OVER (PARTITION BY id6
+            row_number() OVER (
+                PARTITION BY id6
                 ORDER BY v3 DESC
             ) AS order_v3
         FROM x_group

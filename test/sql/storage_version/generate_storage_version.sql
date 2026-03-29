@@ -1,5 +1,5 @@
-BEGIN TRANSACTION; -- test various types
-
+BEGIN TRANSACTION;
+-- test various types
 
 CREATE TABLE integral_values(
     i TINYINT,
@@ -57,13 +57,13 @@ CREATE TABLE alias_values(
 );
 INSERT INTO alias_values
 VALUES (2, 'hello world', 'alias'),
-    (NULL, NULL, NULL); -- all types
-
+    (NULL, NULL, NULL);
+-- all types
 
 CREATE TABLE all_types AS
 SELECT *
-FROM test_all_types(); -- test constraints
-
+FROM test_all_types();
+-- test constraints
 
 CREATE TABLE check_constraint(
     i integer,
@@ -76,36 +76,35 @@ CREATE TABLE pk_constraint(
     j integer,
     PRIMARY KEY (i, j)
 );
-CREATE TABLE unique_constraint(i integer UNIQUE); -- test schemas
+CREATE TABLE unique_constraint(i integer UNIQUE);
+-- test schemas
 
+CREATE SCHEMA test3;
+-- test sequences
 
-CREATE SCHEMA test3; -- test sequences
-
-
-CREATE SEQUENCE test3.bla; -- test various views
-
+CREATE SEQUENCE test3.bla;
+-- test various views
 
 CREATE VIEW v1 AS
 SELECT *
 FROM integral_values;
 CREATE VIEW test3.v2 AS
-SELECT ((i + 2) * 3) :: INT
-FROM integral_values; -- bigger tables
-
+SELECT ((i + 2) * 3)::INT
+FROM integral_values;
+-- bigger tables
 
 CREATE TABLE big_integers AS
 SELECT i
 FROM RANGE (0, 100000) t1(i);
-CREATE TABLE big_string AS SELECT repeat(
-    'a',
-    100000
-) a; COMMIT; -- views
-
+CREATE TABLE big_string AS
+SELECT repeat('a', 100000) a;
+COMMIT;
+-- views
 
 CREATE TABLE base_table AS
 SELECT *
-FROM RANGE (4) tbl(i); -- many expression types
-
+FROM RANGE (4) tbl(i);
+-- many expression types
 
 CREATE VIEW cv1 AS
 SELECT
@@ -117,13 +116,10 @@ SELECT
         WHEN k = 3 THEN 4
         ELSE NULL
     END,
-    k BETWEEN 1
-    AND 2,
-    k :: VARCHAR COLLATE NOCASE,
-    (k = 3
-            AND k + 1 = 4)
-    OR (k = 2
-            AND k + 1 = 3),
+    k BETWEEN 1 AND 2,
+    k::VARCHAR COLLATE NOCASE,
+    (k = 3 AND k + 1 = 4)
+    OR (k = 2 AND k + 1 = 3),
     NOT (k = 3),
     # 1,
     (
@@ -136,16 +132,14 @@ SELECT
         SELECT 1
     ),
     'hello world',
-    [ 1,
-    2,
-    3 ],
-    { 'x' : [ 42,
-    88 ] },
-    sum(k) OVER (PARTITION BY k
+    [1, 2, 3],
+    { 'x' : [42, 88] },
+    sum(k) OVER (
+        PARTITION BY k
         ORDER BY k
     )
-FROM base_table bt(k); -- aggregates
-
+FROM base_table bt(k);
+-- aggregates
 
 CREATE VIEW cv2 AS
 SELECT
@@ -163,28 +157,29 @@ FROM base_table
 WHERE i <> 1
 GROUP BY 1
 HAVING k <> 1
-ORDER BY 1; -- window functions
-
+ORDER BY 1;
+-- window functions
 
 CREATE VIEW cv3 AS
 SELECT
     i,
     row_number() OVER () AS rownum,
-    sum(i) OVER (PARTITION BY i % 2
+    sum(i) OVER (
+        PARTITION BY i % 2
         ORDER BY i ASC
     ),
-    sum(i) OVER (PARTITION BY i % 2
+    sum(i) OVER (
+        PARTITION BY i % 2
         ORDER BY i DESC NULLS FIRST
     ),
     sum(i) OVER (
         ORDER BY
-            rowid ROWS BETWEEN 1 PRECEDING
-            AND CURRENT ROW
+            rowid ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
     )
 FROM base_table
 QUALIFY row_number() OVER () != 2
-ORDER BY 1; -- recursive CTE
-
+ORDER BY 1;
+-- recursive CTE
 
 CREATE VIEW cv4 AS
 WITH RECURSIVE cte AS (
@@ -195,8 +190,8 @@ WITH RECURSIVE cte AS (
         WHERE i < 3
     )
 SELECT *
-FROM cte; -- multiple regular CTEs with setops
-
+FROM cte;
+-- multiple regular CTEs with setops
 
 CREATE VIEW cv5 AS
 WITH cte AS (
@@ -218,8 +213,8 @@ FROM cte2
 UNION ALL
 SELECT *
 FROM cte3
-ORDER BY i; -- various set ops
-
+ORDER BY i;
+-- various set ops
 
 CREATE VIEW cv6 AS
 SELECT *
@@ -232,22 +227,22 @@ EXCEPT (
         UNION ALL
         SELECT 3
     )
-ORDER BY 1; -- group by all
-
+ORDER BY 1;
+-- group by all
 
 CREATE VIEW cv7 AS
 SELECT i % 2, SUM(i)
 FROM base_table
 GROUP BY ALL
-ORDER BY ALL; -- values
-
+ORDER BY ALL;
+-- values
 
 CREATE VIEW cv8 AS
 VALUES (1),
     (2),
     (3),
-    (NULL); -- subqueries
-
+    (NULL);
+-- subqueries
 
 CREATE VIEW cv9 AS
 SELECT
@@ -261,41 +256,43 @@ FROM (
     ) tbl(i)
 ORDER BY (
         SELECT tbl.i
-    ); -- samples
-
+    );
+-- samples
 
 CREATE VIEW cv10 AS
 SELECT *
 FROM base_table TABLESAMPLE 10 ROWS USING SAMPLE 100 %
-ORDER BY ALL; -- grouping sets
-
+ORDER BY ALL;
+-- grouping sets
 
 CREATE VIEW cv11 AS
 SELECT GROUPING_ID(k, i), i % 2 AS k, i, SUM(i)
 FROM base_table
 GROUP BY GROUPING SETS ((), (k), (k, i))
-ORDER BY ALL; -- window clause
-
+ORDER BY ALL;
+-- window clause
 
 CREATE VIEW cv12 AS
 SELECT i, sum(i) OVER (w)
 FROM
-    base_table WINDOW w AS (PARTITION BY i % 2
+    base_table WINDOW w AS (
+        PARTITION BY i % 2
         ORDER BY i ASC
     )
-ORDER BY ALL; -- limit order by
-
+ORDER BY ALL;
+-- limit order by
 
 CREATE VIEW cv13 AS
 SELECT *
 FROM base_table
 ORDER BY i DESC
 LIMIT 2
-OFFSET 1; -- v29: IGNORE NULLS
-
+OFFSET 1;
+-- v29: IGNORE NULLS
 
 CREATE FUNCTION
     V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (
         ORDER BY x NULLS LAST
-    ); FORCE
+    );
+FORCE
 CHECKPOINT;

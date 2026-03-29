@@ -11,10 +11,23 @@ FROM
     name AS n,
     title AS t
 WHERE
-    ci.note IN ('(writer)', '(head writer)', '(written by)', '(story)', '(story editor)')
+    ci.note IN (
+        '(writer)',
+        '(head writer)',
+        '(written by)',
+        '(story)',
+        '(story editor)'
+    )
     AND it1.info = 'genres'
     AND it2.info = 'votes'
-    AND mi.info IN ('Horror', 'Action', 'Sci-Fi', 'Thriller', 'Crime', 'War')
+    AND mi.info IN (
+        'Horror',
+        'Action',
+        'Sci-Fi',
+        'Thriller',
+        'Crime',
+        'War'
+    )
     AND n.gender = 'm'
     AND t.id = mi.movie_id
     AND t.id = mi_idx.movie_id

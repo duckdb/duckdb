@@ -1,12 +1,14 @@
 WITH trijets_invariant_mass AS MATERIALIZED (
         SELECT
             row_id_i,
-            AddPtEtaPhiM3({ 'pt' : j1.pt, 'eta' : j1.eta, 'phi' : j1.phi, 'mass' : j1.mass }, { 'pt' : j2.pt, 'eta' : j2.eta, 'phi' : j2.phi, 'mass' : j2.mass }, { 'pt' : j3.pt, 'eta' : j3.eta, 'phi' : j3.phi, 'mass' : j3.mass }) AS triJet,
-            abs(triJet [ 'mass' ] - 172.5) AS invariant_mass
+            AddPtEtaPhiM3({ 'pt' :j1.pt, 'eta' :j1.eta, 'phi' :j1.phi, 'mass' :j1.mass }, { 'pt' :j2.pt, 'eta' :j2.eta, 'phi' :j2.phi, 'mass' :j2.mass }, { 'pt' :j3.pt, 'eta' :j3.eta, 'phi' :j3.phi, 'mass' :j3.mass }) AS triJet,
+            abs(triJet ['mass'] - 172.5) AS invariant_mass
         FROM (
                 SELECT
                     j1,
-                    row_number() OVER (PARTITION BY row_id) i,
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) i,
                     row_id row_id_i
                 FROM (
                         SELECT UNNEST(Jet) j1, rowid row_id
@@ -17,7 +19,9 @@ WITH trijets_invariant_mass AS MATERIALIZED (
             (
                 SELECT
                     j2,
-                    row_number() OVER (PARTITION BY row_id) j,
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) j,
                     row_id row_id_j
                 FROM (
                         SELECT UNNEST(Jet) j2, rowid row_id
@@ -28,7 +32,9 @@ WITH trijets_invariant_mass AS MATERIALIZED (
             (
                 SELECT
                     j3,
-                    row_number() OVER (PARTITION BY row_id) k,
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) k,
                     row_id row_id_k
                 FROM (
                         SELECT UNNEST(Jet) j3, rowid row_id
@@ -43,7 +49,7 @@ WITH trijets_invariant_mass AS MATERIALIZED (
         ORDER BY invariant_mass ASC
     )
 SELECT
-    HistogramBin(trijets_invariant_mass.triJet [ 'pt' ], 15, 40, 100) AS x,
+    HistogramBin(trijets_invariant_mass.triJet ['pt'], 15, 40, 100) AS x,
     count(*) AS y
 FROM trijets_invariant_mass
 WHERE

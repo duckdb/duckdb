@@ -23,7 +23,6 @@ AND f.hopCount < 5
     ),
     friends_shortest AS (-- if a friend is reachable from startPerson using hopCount 2, 3 and 4, its distance from startPerson is 2
 
-
         SELECT
             startPerson,
             min(hopCount) AS hopCount,
@@ -43,15 +42,13 @@ AND f.hopCount < 5
 ,
             place co -- country
 
-
         WHERE 1 = 1 -- join
 
 AND f.friend = tf.p_personid
             AND tf.p_placeid = ci.pl_placeid
             AND ci.pl_containerplaceid = co.pl_placeid -- filter
 
-AND f.hopCount BETWEEN 3
-            AND 5
+AND f.hopCount BETWEEN 3 AND 5
             AND co.pl_name = 'Pakistan'
     ),
     messages_of_tagclass_by_friends AS (

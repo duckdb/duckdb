@@ -13,7 +13,12 @@ FROM
     role_type AS rt,
     title AS t
 WHERE
-    ci.note IN ('(voice)', '(voice: Japanese version)', '(voice) (uncredited)', '(voice: English version)')
+    ci.note IN (
+        '(voice)',
+        '(voice: Japanese version)',
+        '(voice) (uncredited)',
+        '(voice: English version)'
+    )
     AND cn.country_code = '[us]'
     AND it.info = 'release dates'
     AND n.gender = 'f'

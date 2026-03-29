@@ -17,7 +17,12 @@ FROM
 WHERE cn.country_code != '[us]'
   AND it1.info = 'countries'
   AND it2.info = 'rating'
-  AND k.keyword IN ('murder', 'murder-in-title', 'blood', 'violence')
+  AND k.keyword IN (
+      'murder',
+      'murder-in-title',
+      'blood',
+      'violence'
+  )
   AND kt.kind IN ('movie', 'episode')
   AND mc.note NOT LIKE '%(USA)%'
   AND mc.note LIKE '%(200%)%'

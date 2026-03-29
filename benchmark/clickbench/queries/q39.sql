@@ -2,8 +2,10 @@ SELECT
     TraficSourceID,
     SearchEngineID,
     AdvEngineID,
-    CASE WHEN (SearchEngineID = 0
-            AND AdvEngineID = 0) THEN Referer ELSE '' END AS Src,
+    CASE
+        WHEN (SearchEngineID = 0 AND AdvEngineID = 0) THEN Referer
+        ELSE ''
+    END AS Src,
     URL AS Dst,
     COUNT(*) AS PageViews
 FROM hits

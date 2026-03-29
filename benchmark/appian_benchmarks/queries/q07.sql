@@ -38,7 +38,12 @@ LEFT OUTER JOIN (
         LEFT OUTER JOIN
             CategoryView ca ON p.product_categoryName = ca.category_name
         WHERE
-            ca.category_name IN ('Pet', 'Food', 'Game', 'Software')
+            ca.category_name IN (
+                'Pet',
+                'Food',
+                'Game',
+                'Software'
+            )
         GROUP BY c.customer_id
     ) t2 ON c.customer_id = t2pk
 WHERE t.taxRecord_bracketThreshold IN (22, 24, 27, 29)

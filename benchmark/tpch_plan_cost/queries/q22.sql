@@ -20,7 +20,15 @@ FROM (
                     c_acctbal > 0.00
                     AND substring(c_phone
                         FROM 1 FOR 2
-                    ) IN ('13', '31', '23', '29', '30', '18', '17')
+                    ) IN (
+                        '13',
+                        '31',
+                        '23',
+                        '29',
+                        '30',
+                        '18',
+                        '17'
+                    )
             )
             AND NOT EXISTS (
                 SELECT *

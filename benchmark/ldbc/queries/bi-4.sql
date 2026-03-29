@@ -5,7 +5,6 @@ WITH top100_popular_forums AS (
 ,
             place co -- country
 
-
         WHERE 1 = 1 -- join
 
 AND fp.fp_personid = p.p_personid
@@ -29,16 +28,12 @@ FROM top100_popular_forums t
 INNER JOIN
     forum_person fp ON (t.forumid = fp.fp_forumid) -- author of the post
 
-
 INNER JOIN person au ON (fp.fp_personid = au.p_personid)
 LEFT JOIN
-    message p ON (1 = 1
-            AND au.p_personid = p.m_creatorid
-            AND p.m_ps_forumid IN (
+    message p ON (1 = 1 AND au.p_personid = p.m_creatorid AND p.m_ps_forumid IN (
                 SELECT forumid
                 FROM top100_popular_forums
-            )
-            AND p.m_c_replyof IS NULL)
+            ) AND p.m_c_replyof IS NULL)
 GROUP BY
     au.p_personid,
     au.p_firstname,

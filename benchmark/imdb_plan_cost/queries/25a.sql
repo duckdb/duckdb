@@ -14,10 +14,22 @@ FROM
     name AS n,
     title AS t
 WHERE
-    ci.note IN ('(writer)', '(head writer)', '(written by)', '(story)', '(story editor)')
+    ci.note IN (
+        '(writer)',
+        '(head writer)',
+        '(written by)',
+        '(story)',
+        '(story editor)'
+    )
     AND it1.info = 'genres'
     AND it2.info = 'votes'
-    AND k.keyword IN ('murder', 'blood', 'gore', 'death', 'female-nudity')
+    AND k.keyword IN (
+        'murder',
+        'blood',
+        'gore',
+        'death',
+        'female-nudity'
+    )
     AND mi.info = 'Horror'
     AND n.gender = 'm'
     AND t.id = mi.movie_id

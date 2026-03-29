@@ -26,8 +26,7 @@ WITH TEMP AS (
         WHERE len(Muon) > 1
           AND idx1 < idx2
           AND c1 <> c2
-          AND SQRT(2 * p1 * p2 *(COSH(e1 - e2) - COS(ph1 - ph2))) BETWEEN 60
-          AND 120
+          AND SQRT(2 * p1 * p2 *(COSH(e1 - e2) - COS(ph1 - ph2))) BETWEEN 60 AND 120
         GROUP BY rowid, MET.pt
         HAVING COUNT(*) > 0
     )

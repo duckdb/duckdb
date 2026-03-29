@@ -13,8 +13,8 @@ WITH detail AS (
 AND m.m_messageid = mt.mt_messageid
             AND mt.mt_tagid = t.t_tagid -- filter
 
-AND m.m_creationdate >= '2010-11-1' :: date
-            AND m.m_creationdate < '2010-11-1' :: date + interval '2' month
+AND m.m_creationdate >= '2010-11-1'::date
+            AND m.m_creationdate < '2010-11-1'::date + interval '2' month
         GROUP BY t.t_name
     )
 SELECT

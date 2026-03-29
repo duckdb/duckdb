@@ -29,7 +29,6 @@ FROM (
                   AND m_creationdate >= '2010-07-21T22:00:00'
                   AND m_creationdate < '2012-07-26T22:00:00' --('2011-07-21T22:00:00' + INTERVAL '1 days' * 5)
 
-
                 GROUP BY m_c_creatorid
             ) chn,
             (
@@ -41,7 +40,6 @@ FROM (
                   AND pl_name = 'Canada'
                   AND m_creationdate >= '2010-07-21T22:00:00'
                   AND m_creationdate < '2012-01-26T22:00:00' --('2011-07-21T22:00:00' + INTERVAL '1 days' * 5)
-
 
                 GROUP BY m_creatorid --m_c_creatorid
 

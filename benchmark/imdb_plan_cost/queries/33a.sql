@@ -27,8 +27,7 @@ WHERE cn1.country_code = '[us]'
   AND kt2.kind IN ('tv series')
   AND lt.link IN ('sequel', 'follows', 'followed by')
   AND mi_idx2.info < '3.0'
-  AND t2.production_year BETWEEN 2005
-  AND 2008
+  AND t2.production_year BETWEEN 2005 AND 2008
   AND lt.id = ml.link_type_id
   AND t1.id = ml.movie_id
   AND t2.id = ml.linked_movie_id

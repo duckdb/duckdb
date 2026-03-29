@@ -1,4 +1,6 @@
-CALL dbgen(sf = 10); EXPORT DATABASE 'duckdb_benchmark_data/tpch_parquet_sf10'(FORMAT PARQUET); EXPORT DATABASE 'duckdb_benchmark_data/tpch_csv_sf10'(FORMAT CSV);
+CALL dbgen(sf = 10);
+EXPORT DATABASE 'duckdb_benchmark_data/tpch_parquet_sf10'(FORMAT PARQUET);
+EXPORT DATABASE 'duckdb_benchmark_data/tpch_csv_sf10'(FORMAT CSV);
 CREATE VIEW lineitem_csv AS
 SELECT *
 FROM

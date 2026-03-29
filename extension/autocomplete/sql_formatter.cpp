@@ -70,6 +70,9 @@ private:
 	static idx_t FindCaseEnd(const string &s, idx_t case_pos);
 	static vector<string> SplitCaseBranches(const string &content);
 	string ExpandCaseExpressions(const string &formatted) const;
+
+	// Phase 6: expand long IN (...) lists to one value per line
+	string ExpandLongInClauses(const string &formatted) const;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,7 +95,8 @@ string SQLFormatter::Format(const string &sql) {
 	string merged = MergeShortClauses(multiline);
 	string collapsed = CollapseFirstCondition(merged);
 	string expanded = ExpandTableDefinition(collapsed);
-	return ExpandCaseExpressions(expanded);
+	string case_expanded = ExpandCaseExpressions(expanded);
+	return ExpandLongInClauses(case_expanded);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,9 +127,9 @@ bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 	    "INSERT", "UPDATE", "DELETE", "SET", "RETURNING", "VALUES", "CREATE", "DROP", "ALTER", "TRUNCATE", "QUALIFY",
 	    "PIVOT", "UNPIVOT", "REFRESH", "INSTALL", "LOAD", "ATTACH", "DETACH", "CHECKPOINT",
 	    // Compound clause keywords
-	    "GROUP BY", "ORDER BY", "UNION ALL", "UNION DISTINCT", "INTERSECT ALL", "INTERSECT DISTINCT", "EXCEPT ALL",
-	    "EXCEPT DISTINCT", "INNER JOIN", "CROSS JOIN", "NATURAL JOIN", "LEFT JOIN", "LEFT OUTER JOIN", "RIGHT JOIN",
-	    "RIGHT OUTER JOIN", "FULL JOIN", "FULL OUTER JOIN", "INSERT INTO", "DELETE FROM", "ON CONFLICT",
+	    "GROUP BY", "ORDER BY", "PARTITION BY", "UNION ALL", "UNION DISTINCT", "INTERSECT ALL", "INTERSECT DISTINCT",
+	    "EXCEPT ALL", "EXCEPT DISTINCT", "INNER JOIN", "CROSS JOIN", "NATURAL JOIN", "LEFT JOIN", "LEFT OUTER JOIN",
+	    "RIGHT JOIN", "RIGHT OUTER JOIN", "FULL JOIN", "FULL OUTER JOIN", "INSERT INTO", "DELETE FROM", "ON CONFLICT",
 	    "WITH RECURSIVE",
 	    // DDL compound keywords
 	    "CREATE TABLE", "CREATE VIEW", "CREATE INDEX", "CREATE UNIQUE INDEX", "CREATE SCHEMA", "CREATE SEQUENCE",
@@ -189,6 +193,7 @@ idx_t SQLFormatter::DetectCompoundClause(const vector<MatcherToken> &tokens, idx
 	    // Two-word clauses
 	    {"GROUP",     "BY"      },
 	    {"ORDER",     "BY"      },
+	    {"PARTITION", "BY"      },
 	    {"ALTER",     "TABLE"   },
 	    {"INSERT",    "INTO"    },
 	    {"DELETE",    "FROM"    },
@@ -349,6 +354,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 	bool at_line_start = true;
 	bool after_clause = false;
 	bool prev_was_keyword = false;
+	bool in_between = false; // true after BETWEEN keyword, cleared after next AND
 	// Uppercase text of the most recent keyword token — used to decide whether
 	// to insert a space before '('.  Only operator/conditional keywords like IN,
 	// EXISTS, NOT, SOME, ANY, ALL need a space; function-like or type keywords
@@ -376,7 +382,8 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 		at_line_start = true;
 	};
 	auto write_space = [&]() {
-		if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' && result.back() != '.') {
+		if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' && result.back() != '.' &&
+		    result.back() != '[' && result.back() != ':') {
 			result += ' ';
 		}
 	};
@@ -388,8 +395,10 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 	};
 
 	auto emit_clause = [&](const string &kw_text, const string &upper_last_word) {
-		if (!result.empty()) {
+		if (!result.empty() && !at_line_start) {
 			write_newline();
+			write_indent(clause_indent());
+		} else if (at_line_start && clause_indent() > 0) {
 			write_indent(clause_indent());
 		}
 		result += kw_text;
@@ -408,8 +417,13 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 		if (tok.type == TokenType::TERMINATOR) {
 			after_clause = false;
 			prev_was_keyword = false;
+			in_between = false;
 			result += ';';
 			at_line_start = false;
+			// A semicolon ends a statement; the next statement starts on a new line.
+			if (i + 1 < tokens.size()) {
+				write_newline();
+			}
 			i++;
 			continue;
 		}
@@ -470,6 +484,38 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			continue;
 		}
 
+		if (tok.type == TokenType::OPERATOR && tok.text == "[") {
+			after_clause = false;
+			prev_was_keyword = false;
+			if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' &&
+			    result.back() != '[' && result.back() != '.') {
+				result += ' ';
+			}
+			result += '[';
+			at_line_start = false;
+			// Brackets are array literals — push a paren level to keep commas inline.
+			int32_t ci = content_indent();
+			paren_stack.push_back({false, ci, ci + indent_size});
+			i++;
+			continue;
+		}
+
+		if (tok.type == TokenType::OPERATOR && tok.text == "]") {
+			after_clause = false;
+			prev_was_keyword = false;
+			if (!paren_stack.empty()) {
+				paren_stack.pop_back();
+			}
+			// Remove trailing space before ']' if present.
+			if (!result.empty() && result.back() == ' ') {
+				result.pop_back();
+			}
+			result += ']';
+			at_line_start = false;
+			i++;
+			continue;
+		}
+
 		if (tok.type == TokenType::OPERATOR && tok.text == ",") {
 			after_clause = false;
 			prev_was_keyword = false;
@@ -497,6 +543,19 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			continue;
 		}
 
+		// :: (typecast) binds tightly — no spaces around it.
+		if (tok.type == TokenType::OPERATOR && tok.text == "::") {
+			after_clause = false;
+			prev_was_keyword = false;
+			if (!result.empty() && result.back() == ' ') {
+				result.pop_back();
+			}
+			result += "::";
+			at_line_start = false;
+			i++;
+			continue;
+		}
+
 		if (tok.type == TokenType::KEYWORD) {
 			string compound_text;
 			string original_text;
@@ -516,7 +575,34 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 
 			const string upper = StringUtil::Upper(tok.text);
 
+			if (upper == "BETWEEN") {
+				in_between = true;
+			}
+
 			if ((upper == "AND" || upper == "OR") && !at_line_start) {
+				// AND after BETWEEN is part of the BETWEEN expression, not a conjunction.
+				if (upper == "AND" && in_between) {
+					in_between = false;
+					write_space();
+					result += ApplyCase(upper, tok.text, /*is_structural=*/true);
+					at_line_start = false;
+					prev_was_keyword = true;
+					prev_keyword = upper;
+					i++;
+					continue;
+				}
+				// AND/OR inside parentheses that have no clause keywords are part of
+				// an expression (e.g. (a = 1 AND b = 2)), not structural conjunctions.
+				bool inside_expression_parens = !paren_stack.empty() && !paren_stack.back().has_clauses;
+				if (inside_expression_parens) {
+					write_space();
+					result += ApplyCase(upper, tok.text, /*is_structural=*/true);
+					at_line_start = false;
+					prev_was_keyword = true;
+					prev_keyword = upper;
+					i++;
+					continue;
+				}
 				write_newline();
 				write_indent(content_indent());
 				result += ApplyCase(upper, tok.text, /*is_structural=*/true);
@@ -862,6 +948,21 @@ string SQLFormatter::ExpandTableDefinition(const string &formatted) const {
 			continue;
 		}
 
+		// CREATE TABLE ... AS SELECT — no column definition list to expand.
+		// Check if " AS" appears as a word boundary after the prefix.
+		{
+			const string after_prefix = upper_trimmed.substr(prefix_len);
+			auto as_pos = after_prefix.find(" AS");
+			if (as_pos != string::npos) {
+				idx_t end_pos = as_pos + 3;
+				if (end_pos == after_prefix.size() || after_prefix[end_pos] == ' ') {
+					out.push_back(line);
+					i++;
+					continue;
+				}
+			}
+		}
+
 		idx_t paren_pos = string::npos;
 		for (idx_t k = indent + prefix_len; k < line.size(); k++) {
 			if (line[k] == '(') {
@@ -1182,6 +1283,87 @@ string SQLFormatter::ExpandCaseExpressions(const string &formatted) const {
 	}
 
 	return JoinLines(lines);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 6: expand long IN (...) lists to one value per line
+// ─────────────────────────────────────────────────────────────────────────────
+
+//! Find " IN (" (case-insensitive) in a line, returning the position of the 'I'
+//! in "IN", or string::npos if not found.  Only matches at a word boundary.
+static idx_t FindInClause(const string &line, idx_t from_pos) {
+	for (idx_t k = from_pos; k + 4 < line.size(); k++) {
+		if (line[k] != ' ') {
+			continue;
+		}
+		if ((line[k + 1] == 'I' || line[k + 1] == 'i') && (line[k + 2] == 'N' || line[k + 2] == 'n') &&
+		    line[k + 3] == ' ' && line[k + 4] == '(') {
+			return k + 1;
+		}
+	}
+	return string::npos;
+}
+
+string SQLFormatter::ExpandLongInClauses(const string &formatted) const {
+	if (config.inline_threshold == 0) {
+		return formatted;
+	}
+
+	vector<string> lines = SplitLines(formatted);
+	vector<string> out;
+	out.reserve(lines.size());
+
+	for (const auto &line : lines) {
+		if (Utf8Proc::RenderWidth(line) <= config.inline_threshold) {
+			out.push_back(line);
+			continue;
+		}
+
+		// Look for " IN (" on this line.
+		idx_t in_pos = FindInClause(line, 0);
+		if (in_pos == string::npos) {
+			out.push_back(line);
+			continue;
+		}
+
+		// Find the opening '(' after IN.
+		idx_t open_paren = in_pos + 3; // position of '('
+		idx_t close_paren = FindMatchingClose(line, open_paren);
+		if (close_paren == string::npos) {
+			out.push_back(line);
+			continue;
+		}
+
+		// Extract the content inside IN (...).
+		string in_content = line.substr(open_paren + 1, close_paren - open_paren - 1);
+		vector<string> values = SplitTopLevelCommas(in_content);
+		if (values.size() <= 1) {
+			out.push_back(line);
+			continue;
+		}
+
+		// Check if expanding would help (i.e. the IN clause itself is long).
+		string prefix = line.substr(0, in_pos + 2); // up to and including "IN"
+		string suffix = line.substr(close_paren + 1);
+
+		const idx_t line_indent = LeadingSpaces(line);
+		const string val_indent(line_indent + config.indent_size, ' ');
+
+		// First line: everything up to and including "IN ("
+		out.push_back(prefix + " (");
+		// One value per line
+		for (idx_t v = 0; v < values.size(); v++) {
+			string val_line = val_indent + values[v];
+			if (v + 1 < values.size()) {
+				val_line += ',';
+			}
+			out.push_back(std::move(val_line));
+		}
+		// Closing paren + suffix
+		out.push_back(string(line_indent, ' ') + ")" + suffix);
+	}
+
+	return JoinLines(out);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

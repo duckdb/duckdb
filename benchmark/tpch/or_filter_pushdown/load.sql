@@ -16,13 +16,15 @@ CREATE OR REPLACE TABLE
         SELECT *
         FROM lineitem_sf10
         ORDER BY hash(rowid + 42)
-    ); PRAGMA memory_limit = '40GB';
+    );
+PRAGMA memory_limit = '40GB';
 CREATE OR REPLACE TABLE
     lineitem_sf100_random AS (
         SELECT *
         FROM lineitem
         ORDER BY hash(rowid + 42)
-    ); PRAGMA memory_limit = '';
+    );
+PRAGMA memory_limit = '';
 ALTER TABLE lineitem RENAME to lineitem_sf100;
 CREATE OR REPLACE TABLE orders_sf1 AS
 FROM orders
@@ -41,11 +43,13 @@ CREATE OR REPLACE TABLE
         SELECT *
         FROM orders_sf10
         ORDER BY hash(rowid + 42)
-    ); PRAGMA memory_limit = '40GB';
+    );
+PRAGMA memory_limit = '40GB';
 CREATE OR REPLACE TABLE
     orders_sf100_random AS (
         SELECT *
         FROM orders
         ORDER BY hash(rowid + 42)
-    ); PRAGMA memory_limit = '';
+    );
+PRAGMA memory_limit = '';
 ALTER TABLE orders RENAME to orders_sf100;

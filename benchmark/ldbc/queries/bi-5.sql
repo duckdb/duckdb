@@ -14,7 +14,6 @@ WITH detail AS (
 ,
             person cr -- creator
 
-
         WHERE 1 = 1 -- join
 
 AND t.t_tagid = pt.mt_tagid

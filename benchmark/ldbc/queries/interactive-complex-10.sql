@@ -55,15 +55,13 @@ WHERE
     AND p_personid = f.k_person2id
     AND ((extract(month
                         FROM p_birthday
-                    ) = 10
-                    AND (CASE WHEN extract(day
+                    ) = 10 AND (CASE WHEN extract(day
                                 FROM p_birthday
                             ) >= 21 THEN TRUE ELSE FALSE END)) -- :month
 
 OR (extract(month
                         FROM p_birthday
-                    ) = 11
-                    AND (CASE WHEN extract(day
+                    ) = 11 AND (CASE WHEN extract(day
                                 FROM p_birthday
                             ) < 22 THEN TRUE ELSE FALSE END)) -- :nextMonth
 

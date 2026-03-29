@@ -13,9 +13,25 @@ FROM
 WHERE it1.info = 'countries'
   AND it2.info = 'rating'
   AND k.keyword IS NOT NULL
-  AND k.keyword IN ('murder', 'murder-in-title', 'blood', 'violence')
+  AND k.keyword IN (
+      'murder',
+      'murder-in-title',
+      'blood',
+      'violence'
+  )
   AND kt.kind IN ('movie', 'episode')
-  AND mi.info IN ('Sweden', 'Norway', 'Germany', 'Denmark', 'Swedish', 'Danish', 'Norwegian', 'German', 'USA', 'American')
+  AND mi.info IN (
+      'Sweden',
+      'Norway',
+      'Germany',
+      'Denmark',
+      'Swedish',
+      'Danish',
+      'Norwegian',
+      'German',
+      'USA',
+      'American'
+  )
   AND mi_idx.info < '8.5'
   AND t.production_year > 2005
   AND kt.id = t.kind_id

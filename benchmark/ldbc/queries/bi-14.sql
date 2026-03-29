@@ -45,7 +45,6 @@ AND co.pl_name = 'Brazil'
 ,
             message r -- reply by p1
 
-
         WHERE 1 = 1 -- join
 
 AND m.m_messageid = r.m_c_replyof
@@ -64,7 +63,6 @@ AND m.m_messageid = r.m_c_replyof
 
 ,
             message r -- reply by p2
-
 
         WHERE 1 = 1 -- join
 
@@ -146,7 +144,8 @@ AND p1.personid = m.m_creatorid
             s.person2id,
             ci.pl_name AS cityName,
             s.score,
-            row_number() OVER (PARTITION BY ci.pl_placeid
+            row_number() OVER (
+                PARTITION BY ci.pl_placeid
                 ORDER BY
                     s.score DESC NULLS LAST,
                     s.person1id,
@@ -154,10 +153,8 @@ AND p1.personid = m.m_creatorid
             ) AS rn
         FROM place co -- country
 
-
         INNER JOIN
             place ci ON (co.pl_placeid = ci.pl_containerplaceid) -- city
-
 
         LEFT JOIN
             person1_list p1l ON (ci.pl_placeid = p1l.cityid)

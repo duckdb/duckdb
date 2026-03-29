@@ -109,4 +109,4 @@ INSERT INTO hits BY NAME
 SELECT
     * REPLACE (make_date(EventDate) AS EventDate, epoch_ms(EventTime * 1000) AS EventTime, epoch_ms(ClientEventTime * 1000) AS ClientEventTime, epoch_ms(LocalEventTime * 1000) AS LocalEventTime)
 FROM
-    read_parquet([ format('https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet', x) for x IN RANGE (0, 100) ], binary_as_string = TRUE);
+    read_parquet([format('https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet', x) for x IN RANGE (0, 100)], binary_as_string = TRUE);

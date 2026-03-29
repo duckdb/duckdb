@@ -20,26 +20,20 @@ INNER JOIN
 INNER JOIN
     monitoredBy AS mb1 ON mb1.TrackElement_id = ct1.TrackElement1_id -- segment1
 
-
 INNER JOIN
     monitoredBy AS mb2 ON mb2.TrackElement_id = ct2.TrackElement1_id -- segment2
-
 
 INNER JOIN
     monitoredBy AS mb3 ON mb3.TrackElement_id = ct3.TrackElement1_id -- segment3
 
-
 INNER JOIN
     monitoredBy AS mb4 ON mb4.TrackElement_id = ct4.TrackElement1_id -- segment4
-
 
 INNER JOIN
     monitoredBy AS mb5 ON mb5.TrackElement_id = ct5.TrackElement1_id -- segment5
 
-
 INNER JOIN
     monitoredBy AS mb6 ON mb6.TrackElement_id = ct5.TrackElement2_id -- segment6
-
 
 WHERE mb1.Sensor_id = mb2.Sensor_id
   AND mb1.Sensor_id = mb3.Sensor_id

@@ -9,8 +9,7 @@ WITH RECURSIVE post_all(psa_threadid, psa_thread_creatorid, psa_messageid, psa_c
         WHERE 1 = 1
           AND m_c_replyof IS NULL -- post, not comment
 
-AND m_creationdate BETWEEN '2012-06-01T00:00:00'
-            AND '2012-07-01T00:00:00'
+AND m_creationdate BETWEEN '2012-06-01T00:00:00' AND '2012-07-01T00:00:00'
         UNION ALL
         SELECT
             psa.psa_threadid AS psa_threadid,
@@ -22,8 +21,7 @@ AND m_creationdate BETWEEN '2012-06-01T00:00:00'
         WHERE 1 = 1
           AND p.m_c_replyof = psa.psa_messageid -- this is a performance optimisation only
 
-AND m_creationdate BETWEEN '2012-06-01T00:00:00'
-            AND '2012-07-01T00:00:00'
+AND m_creationdate BETWEEN '2012-06-01T00:00:00' AND '2012-07-01T00:00:00'
     )
 SELECT
     p.p_personid AS "person.id",
@@ -32,18 +30,12 @@ SELECT
     count(DISTINCT psa.psa_threadid) AS threadCount -- if the thread initiator message does not count as a reply
 
 --, count(DISTINCT CASE
-    WHEN psa.psa_messagetype = 'Comment' then psa.psa_messageid
-    ELSE null
-END) AS messageCount
 
-,
+WHEN psa.psa_messagetype = 'Comment' THEN psa.psa_messageid ELSE NULL END) AS messageCount,
     count(DISTINCT psa.psa_messageid) AS messageCount
 FROM person p
 LEFT JOIN
-    post_all psa ON (1 = 1
-            AND p.p_personid = psa.psa_thread_creatorid
-            AND psa_creationdate BETWEEN '2012-06-01T00:00:00'
-            AND '2012-07-01T00:00:00')
+    post_all psa ON (1 = 1 AND p.p_personid = psa.psa_thread_creatorid AND psa_creationdate BETWEEN '2012-06-01T00:00:00' AND '2012-07-01T00:00:00')
 GROUP BY p.p_personid, p.p_firstname, p.p_lastname
 ORDER BY messageCount DESC, p.p_personid
 LIMIT 100;

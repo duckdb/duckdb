@@ -2,7 +2,7 @@ WITH uniform_structure_leptons AS (
         SELECT
             event,
             MET,
-            list_distinct(list_concat(list_transform(COALESCE(Muon, ARRAY [ ]), x -> CAST(ROW (x.pt, x.eta, x.phi, x.mass, x.charge, 'm') AS ROW (pt REAL, eta REAL, phi REAL, mass REAL, charge INTEGER, type CHAR))), list_transform(COALESCE(Electron, ARRAY [ ]), x -> CAST(ROW (x.pt, x.eta, x.phi, x.mass, x.charge, 'e') AS ROW (pt REAL, eta REAL, phi REAL, mass REAL, charge INTEGER, type CHAR))))) AS Leptons
+            list_distinct(list_concat(list_transform(COALESCE(Muon, ARRAY []), x -> CAST(ROW (x.pt, x.eta, x.phi, x.mass, x.charge, 'm') AS ROW (pt REAL, eta REAL, phi REAL, mass REAL, charge INTEGER, type CHAR))), list_transform(COALESCE(Electron, ARRAY []), x -> CAST(ROW (x.pt, x.eta, x.phi, x.mass, x.charge, 'e') AS ROW (pt REAL, eta REAL, phi REAL, mass REAL, charge INTEGER, type CHAR))))) AS Leptons
         FROM hep_singleMu
         WHERE len(Muon) + len(Electron) > 2
     ),
@@ -20,7 +20,9 @@ WITH uniform_structure_leptons AS (
         CROSS JOIN (
                 SELECT
                     l1,
-                    row_number() OVER (PARTITION BY event) idx1
+                    row_number() OVER (
+                        PARTITION BY event
+                    ) idx1
                 FROM (
                         SELECT unnest(Leptons) l1, event
                         FROM uniform_structure_leptons
@@ -29,7 +31,9 @@ WITH uniform_structure_leptons AS (
         CROSS JOIN (
                 SELECT
                     l2,
-                    row_number() OVER (PARTITION BY event) idx2
+                    row_number() OVER (
+                        PARTITION BY event
+                    ) idx2
                 FROM (
                         SELECT unnest(Leptons) l2, event
                         FROM uniform_structure_leptons
@@ -49,20 +53,22 @@ WITH uniform_structure_leptons AS (
     other_max_pt AS (
         SELECT
             event,
-            CAST(max_by(sqrt(2 * SYSTEM [ 4 ] * l.pt *(1.0 - cos((SYSTEM [ 5 ] - l.phi + pi()) %(2 * pi()) - pi()))), l.pt) AS REAL) AS pt
+            CAST(max_by(sqrt(2 * SYSTEM [4] * l.pt *(1.0 - cos((SYSTEM [5] - l.phi + pi()) %(2 * pi()) - pi()))), l.pt) AS REAL) AS pt
         FROM processed_pairs
         CROSS JOIN (
                 SELECT
                     l,
-                    row_number() OVER (PARTITION BY row_id) idx
+                    row_number() OVER (
+                        PARTITION BY row_id
+                    ) idx
                 FROM (
                         SELECT
-                            unnest(SYSTEM [ 3 ]) AS l,
+                            unnest(SYSTEM [3]) AS l,
                             event row_id
                         FROM processed_pairs
                     )
             )
-        WHERE idx != SYSTEM [ 1 ] AND idx != SYSTEM [ 2 ]
+        WHERE idx != SYSTEM [1] AND idx != SYSTEM [2]
         GROUP BY event
     )
 SELECT

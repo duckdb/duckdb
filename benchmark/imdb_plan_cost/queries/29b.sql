@@ -23,7 +23,11 @@ FROM
 WHERE cct1.kind = 'cast'
   AND cct2.kind = 'complete+verified'
   AND chn.name = 'Queen'
-  AND ci.note IN ('(voice)', '(voice) (uncredited)', '(voice: English version)')
+  AND ci.note IN (
+      '(voice)',
+      '(voice) (uncredited)',
+      '(voice: English version)'
+  )
   AND cn.country_code = '[us]'
   AND it.info = 'release dates'
   AND it3.info = 'height'
@@ -33,8 +37,7 @@ WHERE cct1.kind = 'cast'
   AND n.name LIKE '%An%'
   AND rt.role = 'actress'
   AND t.title = 'Shrek 2'
-  AND t.production_year BETWEEN 2000
-  AND 2005
+  AND t.production_year BETWEEN 2000 AND 2005
   AND t.id = mi.movie_id
   AND t.id = mc.movie_id
   AND t.id = ci.movie_id

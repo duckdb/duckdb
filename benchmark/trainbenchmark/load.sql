@@ -56,22 +56,26 @@ CREATE TABLE requires(
     Route_id int NOT NULL,
     Sensor_id int NOT NULL,
     PRIMARY KEY (Route_id, Sensor_id)
-); COPY connectsTo
-FROM
-    'benchmark/trainbenchmark/sf1/connectsTo.csv'; COPY monitoredBy
-FROM
-    'benchmark/trainbenchmark/sf1/monitoredBy.csv'; COPY Region
-FROM
-    'benchmark/trainbenchmark/sf1/Region.csv'; COPY requires
-FROM 'benchmark/trainbenchmark/sf1/requires.csv'; COPY Route
-FROM 'benchmark/trainbenchmark/sf1/Route.csv'; COPY Segment
-FROM
-    'benchmark/trainbenchmark/sf1/Segment.csv'; COPY Semaphore
-FROM
-    'benchmark/trainbenchmark/sf1/Semaphore.csv'; COPY Sensor
-FROM 'benchmark/trainbenchmark/sf1/Sensor.csv'; COPY Switch
-FROM
-    'benchmark/trainbenchmark/sf1/Switch.csv'; COPY SwitchPosition
-FROM
-    'benchmark/trainbenchmark/sf1/SwitchPosition.csv'; COPY TrackElement
+);
+COPY connectsTo
+FROM 'benchmark/trainbenchmark/sf1/connectsTo.csv';
+COPY monitoredBy
+FROM 'benchmark/trainbenchmark/sf1/monitoredBy.csv';
+COPY Region
+FROM 'benchmark/trainbenchmark/sf1/Region.csv';
+COPY requires
+FROM 'benchmark/trainbenchmark/sf1/requires.csv';
+COPY Route
+FROM 'benchmark/trainbenchmark/sf1/Route.csv';
+COPY Segment
+FROM 'benchmark/trainbenchmark/sf1/Segment.csv';
+COPY Semaphore
+FROM 'benchmark/trainbenchmark/sf1/Semaphore.csv';
+COPY Sensor
+FROM 'benchmark/trainbenchmark/sf1/Sensor.csv';
+COPY Switch
+FROM 'benchmark/trainbenchmark/sf1/Switch.csv';
+COPY SwitchPosition
+FROM 'benchmark/trainbenchmark/sf1/SwitchPosition.csv';
+COPY TrackElement
 FROM 'benchmark/trainbenchmark/sf1/TrackElement.csv';

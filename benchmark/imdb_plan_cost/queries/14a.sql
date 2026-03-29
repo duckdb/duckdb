@@ -12,9 +12,25 @@ FROM
     title AS t
 WHERE it1.info = 'countries'
   AND it2.info = 'rating'
-  AND k.keyword IN ('murder', 'murder-in-title', 'blood', 'violence')
+  AND k.keyword IN (
+      'murder',
+      'murder-in-title',
+      'blood',
+      'violence'
+  )
   AND kt.kind = 'movie'
-  AND mi.info IN ('Sweden', 'Norway', 'Germany', 'Denmark', 'Swedish', 'Denish', 'Norwegian', 'German', 'USA', 'American')
+  AND mi.info IN (
+      'Sweden',
+      'Norway',
+      'Germany',
+      'Denmark',
+      'Swedish',
+      'Denish',
+      'Norwegian',
+      'German',
+      'USA',
+      'American'
+  )
   AND mi_idx.info < '8.5'
   AND t.production_year > 2010
   AND kt.id = t.kind_id

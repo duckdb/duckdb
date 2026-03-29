@@ -11,7 +11,6 @@ WITH poster_w_liker AS (
         LEFT JOIN
             likes l2 ON (m1.m_messageid = l2.l_messageid) --, person p2 -- we don't need the person itself as its ID is in the like l2
 
-
         WHERE 1 = 1 -- join
 
 AND t.t_tagid = pt.mt_tagid

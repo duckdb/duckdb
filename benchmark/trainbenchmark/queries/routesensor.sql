@@ -11,7 +11,6 @@ INNER JOIN
 INNER JOIN
     Route ON Route.id = SwitchPosition.route -- the "SwitchPosition.route" attribute is the inverse of the "Route.follows" edge
 
-
 LEFT OUTER JOIN
     requires ON requires.Route_id = Route.id
     AND requires.Sensor_id = Sensor.id

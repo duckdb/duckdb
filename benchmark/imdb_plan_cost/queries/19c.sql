@@ -13,12 +13,16 @@ FROM
     role_type AS rt,
     title AS t
 WHERE
-    ci.note IN ('(voice)', '(voice: Japanese version)', '(voice) (uncredited)', '(voice: English version)')
+    ci.note IN (
+        '(voice)',
+        '(voice: Japanese version)',
+        '(voice) (uncredited)',
+        '(voice: English version)'
+    )
     AND cn.country_code = '[us]'
     AND it.info = 'release dates'
     AND mi.info IS NOT NULL
-    AND (mi.info LIKE 'Japan:%200%'
-            OR mi.info LIKE 'USA:%200%')
+    AND (mi.info LIKE 'Japan:%200%' OR mi.info LIKE 'USA:%200%')
     AND n.gender = 'f'
     AND n.name LIKE '%An%'
     AND rt.role = 'actress'

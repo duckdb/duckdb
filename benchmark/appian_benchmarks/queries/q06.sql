@@ -41,7 +41,16 @@ LEFT OUTER JOIN (
         LEFT OUTER JOIN
             AddressView a ON o.order_customerId = a.address_customerId
         WHERE
-            a.address_state IN ('PA', 'CA', 'VA', 'MA', 'ME', 'MD', 'CO', 'MO')
+            a.address_state IN (
+                'PA',
+                'CA',
+                'VA',
+                'MA',
+                'ME',
+                'MD',
+                'CO',
+                'MO'
+            )
         GROUP BY p.product_id
     ) t2 ON p.product_id = t2pk
 LEFT OUTER JOIN (

@@ -16,14 +16,23 @@ FROM
     role_type AS rt,
     title AS t
 WHERE
-    ci.note IN ('(voice)', '(voice: Japanese version)', '(voice) (uncredited)', '(voice: English version)')
+    ci.note IN (
+        '(voice)',
+        '(voice: Japanese version)',
+        '(voice) (uncredited)',
+        '(voice: English version)'
+    )
     AND cn.country_code = '[us]'
     AND cn.name = 'DreamWorks Animation'
     AND it.info = 'release dates'
-    AND k.keyword IN ('hero', 'martial-arts', 'hand-to-hand-combat', 'computer-animated-movie')
+    AND k.keyword IN (
+        'hero',
+        'martial-arts',
+        'hand-to-hand-combat',
+        'computer-animated-movie'
+    )
     AND mi.info IS NOT NULL
-    AND (mi.info LIKE 'Japan:%201%'
-            OR mi.info LIKE 'USA:%201%')
+    AND (mi.info LIKE 'Japan:%201%' OR mi.info LIKE 'USA:%201%')
     AND n.gender = 'f'
     AND n.name LIKE '%An%'
     AND rt.role = 'actress'
