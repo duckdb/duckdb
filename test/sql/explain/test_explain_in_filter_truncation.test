@@ -1,0 +1,30 @@
+# name: test/sql/explain/test_explain_in_filter_truncation.test
+# description: Test that large IN filters are truncated in EXPLAIN output
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output='physical_only'
+
+statement ok
+CREATE TABLE t_filter AS SELECT range i FROM range(1000)
+
+# InFilter pushed down as table filter - small (all values shown)
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM t_filter WHERE i IN (1, 3, 7)
+----
+physical_plan	<REGEX>:.*IN \(1, 3, 7\).*
+
+# InFilter pushed down as table filter - large (truncated with total count)
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM t_filter WHERE i IN (2, 5, 9, 13, 19, 29, 37, 43, 59, 71, 89, 101)
+----
+physical_plan	<REGEX>:.*12 total values.*
+
+# Verify truncation shows first 10 values then total count
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM t_filter WHERE i IN (2, 5, 9, 13, 19, 29, 37, 43, 59, 71, 89, 101)
+----
+physical_plan	<REGEX>:.*IN \(2, 5, 9, 13, 19, 29, 37, 43, 59, 71,.*12 total values.*

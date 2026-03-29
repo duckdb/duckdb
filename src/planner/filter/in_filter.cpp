@@ -51,12 +51,17 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
 }
 
 string InFilter::ToString(const string &column_name) const {
+	static constexpr idx_t MAX_DISPLAY_VALUES = 10;
 	string in_list;
-	for (auto &val : values) {
+	idx_t display_count = MinValue<idx_t>(values.size(), MAX_DISPLAY_VALUES);
+	for (idx_t i = 0; i < display_count; i++) {
 		if (!in_list.empty()) {
 			in_list += ", ";
 		}
-		in_list += val.ToSQLString();
+		in_list += values[i].ToSQLString();
+	}
+	if (values.size() > MAX_DISPLAY_VALUES) {
+		in_list += ", ... " + to_string(values.size()) + " total values";
 	}
 	return column_name + " IN (" + in_list + ")";
 }
