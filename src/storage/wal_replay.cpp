@@ -631,6 +631,9 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	bool is_set = false;
 	deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+		if (i >= MainHeader::DB_IDENTIFIER_LEN) {
+			throw IOException("Corrupt file - database identifier in header out of range");
+		}
 		db_identifier[i] = list.ReadElement<uint8_t>();
 		is_set = true;
 	});
@@ -740,6 +743,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
+	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
 	if (!alter_info.IsAddPrimaryKey()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
@@ -1039,23 +1043,6 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	storage.LocalWALAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
-static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {
-	for (auto &pointer : col_data.pointers) {
-		auto block_id = pointer.block_pointer.block_id;
-		if (block_id != INVALID_BLOCK) {
-			manager.MarkBlockAsUsed(block_id);
-		}
-		if (pointer.segment_state) {
-			for (auto &block : pointer.segment_state->blocks) {
-				manager.MarkBlockAsUsed(block);
-			}
-		}
-	}
-	for (auto &child_column : col_data.child_columns) {
-		MarkBlocksAsUsed(manager, child_column);
-	}
-}
-
 void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
 	PersistentCollectionData data;
@@ -1069,10 +1056,8 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		// label blocks in data as used - they will be used after the WAL replay is finished
 		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
 		// by previous deserialization steps
-		for (auto &group : data.row_group_data) {
-			for (auto &col_data : group.column_data) {
-				MarkBlocksAsUsed(block_manager, col_data);
-			}
+		for (auto &block_id : data.GetBlockIds()) {
+			block_manager.MarkBlockAsUsed(block_id);
 		}
 		return;
 	}

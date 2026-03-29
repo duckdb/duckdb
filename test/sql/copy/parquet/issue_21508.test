@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/issue_21508.test
+# description: Issue #21508: crash when read_parquet uses encryption_config with union_by_name=true
+# group: [parquet]
+
+require parquet
+
+require noforcestorage
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+
+statement ok
+COPY (SELECT 1 AS id, 'Alice' AS name) TO '__TEST_DIR__/enc_union_by_name.parquet'
+	(FORMAT PARQUET, ENCRYPTION_CONFIG {footer_key: 'key256'})
+
+query II
+SELECT * FROM read_parquet('__TEST_DIR__/enc_union_by_name.parquet',
+	encryption_config={footer_key: 'key256'}, union_by_name=true)
+----
+1	Alice

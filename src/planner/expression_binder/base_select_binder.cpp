@@ -101,7 +101,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
-		const auto return_type = node.aggregates[aggr_index.index]->return_type;
+		const auto return_type = node.aggregates[aggr_index]->return_type;
 		auto uncollated_first_expression = make_uniq<BoundColumnRefExpression>(
 		    expr.GetName(), return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 
@@ -113,7 +113,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 
 		// otherwise we insert a case statement to return NULL when the collated group expression is NULL
 		// otherwise you can return the "first" of the uncollated expression.
-		auto &group = node.groups.group_expressions[group_index.index];
+		auto &group = node.groups.group_expressions[group_index];
 		auto collated_group_expression = make_uniq<BoundColumnRefExpression>(
 		    expr.GetName(), group->return_type, ColumnBinding(node.group_index, group_index), depth);
 
@@ -126,7 +126,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		    make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));
 		return BindResult(std::move(case_expr));
 	} else {
-		auto &group = node.groups.group_expressions[group_index.index];
+		auto &group = node.groups.group_expressions[group_index];
 		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
 		                                                      ColumnBinding(node.group_index, group_index), depth));
 	}

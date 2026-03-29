@@ -94,7 +94,8 @@ public:
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
 	      dlba_encoder(total_value_count, total_string_size), bss_initialized(false),
 	      bss_encoder(total_value_count, sizeof(TGT)), dictionary(dictionary_p), dict_written_value(false),
-	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.GetSize())), dict_encoder(dict_bit_width) {
+	      dict_bit_width(RleBpDecoder::ComputeBitWidthFromValueCount(dictionary.GetSize())),
+	      dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
 
@@ -205,7 +206,7 @@ public:
 
 		const auto &validity = FlatVector::Validity(vector);
 
-		if (!check_parent_empty && validity.AllValid()) {
+		if (!check_parent_empty && validity.CannotHaveNull()) {
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
@@ -257,7 +258,7 @@ public:
 				}
 			}
 		} else {
-			state.key_bit_width = RleBpDecoder::ComputeBitWidth(state.dictionary.GetSize());
+			state.key_bit_width = RleBpDecoder::ComputeBitWidthFromValueCount(state.dictionary.GetSize());
 		}
 	}
 
@@ -279,7 +280,7 @@ public:
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		const auto &mask = FlatVector::Validity(input_column);
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			WriteVectorInternal<true>(temp_writer, stats, page_state_p, input_column, chunk_start, chunk_end);
 		} else {
 			WriteVectorInternal<false>(temp_writer, stats, page_state_p, input_column, chunk_start, chunk_end);
@@ -433,7 +434,7 @@ private:
 		}
 		case duckdb_parquet::Encoding::PLAIN: {
 			D_ASSERT(page_state.encoding == duckdb_parquet::Encoding::PLAIN);
-			if (mask.AllValid()) {
+			if (mask.CannotHaveNull()) {
 				TemplatedWritePlain<SRC, TGT, OP, true>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
 			} else {
 				TemplatedWritePlain<SRC, TGT, OP, false>(input_column, stats, chunk_start, chunk_end, mask,

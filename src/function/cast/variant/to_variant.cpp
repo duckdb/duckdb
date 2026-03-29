@@ -1,3 +1,11 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -117,10 +125,10 @@ struct VariantLocalData : FunctionLocalState {
 		shredded_vector = make_uniq<Vector>(shredded_type, capacity);
 		auto &top_shredded = StructVector::GetEntries(*shredded_vector);
 		// NULL out everything in the unshredded part
-		auto &unshredded_child = *top_shredded[0];
+		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry->SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(*unshredded_entry, true);
+			unshredded_entry.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(unshredded_entry, true);
 		}
 		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(unshredded_child, true);
@@ -166,7 +174,7 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 	if (source.GetType().id() == LogicalTypeId::STRUCT) {
 		// source is "{<children>}", target is "{typed value STRUCT(<children>)}"
 		// go into the "typed_value"
-		auto &typed_value = *StructVector::GetEntries(result)[0];
+		auto &typed_value = StructVector::GetEntries(result)[0];
 		// copy over the validity
 		// we need to flatten in order to reference the validity
 		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
@@ -178,7 +186,7 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(typed_value);
 		for (idx_t child_idx = 0; child_idx < source_entries.size(); child_idx++) {
-			ShreddedVectorReference(*source_entries[child_idx], *target_entries[child_idx], count);
+			ShreddedVectorReference(source_entries[child_idx], target_entries[child_idx], count);
 		}
 		return;
 	}
@@ -194,7 +202,7 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &shredded_vector = local_data.GetShreddedVector(count);
 	// emit a shredded vector that references the source directly
 	auto &top_shredded = StructVector::GetEntries(shredded_vector);
-	auto &shredded_child = *top_shredded[1];
+	auto &shredded_child = top_shredded[1];
 	ShreddedVectorReference(source, shredded_child, count);
 	result.Shred(shredded_vector);
 	return true;
@@ -204,7 +212,7 @@ static void SetVectorConstant(Vector &vector) {
 	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(vector);
 		for (auto &entry : entries) {
-			SetVectorConstant(*entry);
+			SetVectorConstant(entry);
 		}
 	}
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);

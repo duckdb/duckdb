@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_boundaries_state.hpp"
@@ -9,7 +10,7 @@ namespace duckdb {
 // WindowBoundariesState
 //===--------------------------------------------------------------------===//
 idx_t WindowBoundariesState::FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		auto start = MinValue(l + n - 1, r);
 		n -= MinValue(n, r - l);
 		return start;
@@ -40,7 +41,7 @@ idx_t WindowBoundariesState::FindNextStart(const ValidityMask &mask, idx_t l, co
 }
 
 idx_t WindowBoundariesState::FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx_t &n) {
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		auto start = (r <= l + n) ? l : r - n;
 		n -= r - start;
 		return start;

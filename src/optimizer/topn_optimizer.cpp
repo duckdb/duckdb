@@ -129,8 +129,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
 
 		// push the filter into the table scan
-		auto &column_index = get.GetColumnIndex(col_binding);
-		get.table_filters.PushFilter(column_index, std::move(optional_filter));
+		get.table_filters.PushFilter(col_binding.column_index, std::move(optional_filter));
 	}
 }
 

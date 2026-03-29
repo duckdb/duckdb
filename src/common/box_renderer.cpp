@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -169,7 +171,7 @@ public:
 
 struct BoxRendererImplementation : public BoxRendererState {
 	BoxRendererImplementation(BoxRendererConfig config, ClientContext &context, const vector<string> &names,
-	                          const ColumnDataCollection &result);
+	                          const ColumnDataCollectionRenderInterface &result);
 
 public:
 	idx_t TotalRenderWidth() override {
@@ -182,7 +184,7 @@ private:
 	ClientContext &context;
 	vector<string> column_names;
 	vector<LogicalType> result_types;
-	const ColumnDataCollection &result;
+	const ColumnDataCollectionRenderInterface &result;
 	vector<idx_t> column_widths;
 	vector<idx_t> column_boundary_positions;
 	idx_t total_render_length = 0;
@@ -210,12 +212,12 @@ private:
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
 	void ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count, const LogicalType &original_type,
 	                         idx_t null_render_length);
-	void FetchTopCollection(RenderDataCollection &top_collection, const ColumnDataCollection &result, idx_t chunk_idx,
-	                        idx_t row_idx, idx_t top_rows, idx_t bottom_rows);
-	void FetchBottomCollection(RenderDataCollection &bottom_collection, const ColumnDataCollection &result,
-	                           idx_t bottom_rows);
-	vector<RenderDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
-	                                                    idx_t bottom_rows);
+	void FetchTopCollection(RenderDataCollection &top_collection, const ColumnDataCollectionRenderInterface &result,
+	                        idx_t chunk_idx, idx_t row_idx, idx_t top_rows, idx_t bottom_rows);
+	void FetchBottomCollection(RenderDataCollection &bottom_collection,
+	                           const ColumnDataCollectionRenderInterface &result, idx_t bottom_rows);
+	vector<RenderDataCollection> FetchRenderCollections(const ColumnDataCollectionRenderInterface &result,
+	                                                    idx_t top_rows, idx_t bottom_rows);
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
 
@@ -246,7 +248,8 @@ private:
 };
 
 BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig config_p, ClientContext &context,
-                                                     const vector<string> &names, const ColumnDataCollection &result)
+                                                     const vector<string> &names,
+                                                     const ColumnDataCollectionRenderInterface &result)
     : config(std::move(config_p)), context(context), column_names(names), result(result) {
 	result_types = result.Types();
 	Initialize();
@@ -644,8 +647,8 @@ void RenderDataCollection::InitializeChunk(DataChunk &chunk) {
 }
 
 void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_collection,
-                                                   const ColumnDataCollection &result, idx_t chunk_idx, idx_t row_idx,
-                                                   idx_t top_rows, idx_t bottom_rows) {
+                                                   const ColumnDataCollectionRenderInterface &result, idx_t chunk_idx,
+                                                   idx_t row_idx, idx_t top_rows, idx_t bottom_rows) {
 	auto column_count = result.ColumnCount();
 
 	DataChunk fetch_result;
@@ -732,7 +735,8 @@ void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_col
 }
 
 void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bottom_collection,
-                                                      const ColumnDataCollection &result, idx_t bottom_rows) {
+                                                      const ColumnDataCollectionRenderInterface &result,
+                                                      idx_t bottom_rows) {
 	if (bottom_rows == 0) {
 		return;
 	}
@@ -801,8 +805,9 @@ void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bott
 	}
 }
 
-vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
-                                                                               idx_t top_rows, idx_t bottom_rows) {
+vector<RenderDataCollection>
+BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollectionRenderInterface &result, idx_t top_rows,
+                                                  idx_t bottom_rows) {
 	auto column_count = result.ColumnCount();
 	vector<RenderDataCollection> collections;
 	collections.emplace_back(context, column_count);
@@ -1075,6 +1080,7 @@ bool JSONParser::Process(const string &value) {
 	state = JSONState::REGULAR;
 	char quote_char = '"';
 	bool can_parse_value = false;
+	bool in_unquoted_value = false;
 	pos = 0;
 	for (; success && pos < value.size(); pos++) {
 		auto c = value[pos];
@@ -1107,6 +1113,7 @@ bool JSONParser::Process(const string &value) {
 				}
 				separators.pop_back();
 				HandleBracketClose(c);
+				in_unquoted_value = false;
 				break;
 			}
 			case '"':
@@ -1118,6 +1125,7 @@ bool JSONParser::Process(const string &value) {
 			case ',':
 				// comma - move to next line
 				HandleComma(c);
+				in_unquoted_value = false;
 				break;
 			case ':':
 				HandleColon();
@@ -1133,11 +1141,16 @@ bool JSONParser::Process(const string &value) {
 				HandleCharacter(c);
 				break;
 			case ' ':
+				if (in_unquoted_value) {
+					HandleCharacter(c);
+				}
+				break;
 			case '\t':
 			case '\n':
 				// skip whitespace
 				break;
 			default:
+				in_unquoted_value = true;
 				HandleCharacter(c);
 				break;
 			}
@@ -2277,23 +2290,25 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 BoxRenderer::BoxRenderer(BoxRendererConfig config_p) : config(std::move(config_p)) {
 }
 
-string BoxRenderer::ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result) {
+string BoxRenderer::ToString(ClientContext &context, const vector<string> &names,
+                             const ColumnDataCollectionRenderInterface &result) {
 	StringResultRenderer ss;
 	Render(context, names, result, ss);
 	return ss.str();
 }
 
-void BoxRenderer::Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result) {
+void BoxRenderer::Print(ClientContext &context, const vector<string> &names,
+                        const ColumnDataCollectionRenderInterface &result) {
 	Printer::Print(ToString(context, names, result));
 }
 
 unique_ptr<BoxRendererState> BoxRenderer::Prepare(ClientContext &context, const vector<string> &names,
-                                                  const ColumnDataCollection &result) {
+                                                  const ColumnDataCollectionRenderInterface &result) {
 	return make_uniq<BoxRendererImplementation>(config, context, names, result);
 }
 
-void BoxRenderer::Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result,
-                         BaseResultRenderer &ss) {
+void BoxRenderer::Render(ClientContext &context, const vector<string> &names,
+                         const ColumnDataCollectionRenderInterface &result, BaseResultRenderer &ss) {
 	auto state = Prepare(context, names, result);
 	state->Render(ss);
 }

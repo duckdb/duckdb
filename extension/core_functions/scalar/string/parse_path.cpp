@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -284,10 +286,6 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	ListVector::SetListSize(result, total_splits);
 	D_ASSERT(ListVector::GetListSize(result) == total_splits);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunctionSet ParseDirnameFun::GetFunctions() {

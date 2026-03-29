@@ -23,7 +23,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 		// there is a projection map, generate a physical projection
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < op.projection_map.size(); i++) {
-			select_list.push_back(make_uniq<BoundReferenceExpression>(op.types[i], op.projection_map[i].index));
+			select_list.push_back(make_uniq<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
 		}
 		auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
 		proj.children.push_back(plan);

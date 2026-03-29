@@ -1,0 +1,139 @@
+# name: test/sql/insert/insert_query_node.test
+# description: Tests for InsertQueryNode (InsertStatement as thin wrapper over InsertQueryNode)
+# group: [insert]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t(a INT, b TEXT, c DOUBLE);
+
+# Basic INSERT
+statement ok
+INSERT INTO t VALUES (1, 'hello', 1.5), (2, 'world', 2.5);
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+1	hello	1.5
+2	world	2.5
+
+# INSERT with column list
+statement ok
+INSERT INTO t (a, b, c) VALUES (3, 'foo', 3.5);
+
+query III
+SELECT * FROM t WHERE a = 3;
+----
+3	foo	3.5
+
+# INSERT with RETURNING
+query III
+INSERT INTO t VALUES (4, 'bar', 4.5) RETURNING a, b, c;
+----
+4	bar	4.5
+
+# INSERT with CTE
+query I
+WITH vals AS (SELECT 5 AS a, 'cte' AS b, 5.5 AS c)
+INSERT INTO t SELECT * FROM vals RETURNING a;
+----
+5
+
+query III
+SELECT * FROM t WHERE a = 5;
+----
+5	cte	5.5
+
+# INSERT DEFAULT VALUES
+statement ok
+CREATE TABLE t2(x INT DEFAULT 42, y TEXT DEFAULT 'default');
+
+statement ok
+INSERT INTO t2 DEFAULT VALUES;
+
+query II
+SELECT * FROM t2;
+----
+42	default
+
+# INSERT from SELECT
+statement ok
+CREATE TABLE t3(a INT, b TEXT, c DOUBLE);
+
+statement ok
+INSERT INTO t3 SELECT * FROM t WHERE a <= 2;
+
+query III
+SELECT * FROM t3 ORDER BY a;
+----
+1	hello	1.5
+2	world	2.5
+
+# INSERT with schema-qualified table
+statement ok
+CREATE SCHEMA myschema;
+
+statement ok
+CREATE TABLE myschema.t4(x INT);
+
+statement ok
+INSERT INTO myschema.t4 VALUES (1), (2), (3);
+
+query I rowsort
+SELECT * FROM myschema.t4;
+----
+1
+2
+3
+
+# INSERT OR REPLACE
+statement ok
+CREATE TABLE t5(id INT PRIMARY KEY, val TEXT);
+
+statement ok
+INSERT INTO t5 VALUES (1, 'original');
+
+statement ok
+INSERT OR REPLACE INTO t5 VALUES (1, 'replaced');
+
+query II
+SELECT * FROM t5;
+----
+1	replaced
+
+# INSERT BY NAME
+statement ok
+CREATE TABLE t6(a INT, b TEXT, c DOUBLE);
+
+statement ok
+INSERT INTO t6 BY NAME SELECT 3.14 AS c, 'hello' AS b, 42 AS a;
+
+query III
+SELECT * FROM t6;
+----
+42	hello	3.14
+
+# INSERT with ON CONFLICT DO NOTHING
+statement ok
+CREATE TABLE t7(id INT PRIMARY KEY, val TEXT);
+
+statement ok
+INSERT INTO t7 VALUES (1, 'first');
+
+statement ok
+INSERT INTO t7 VALUES (1, 'duplicate') ON CONFLICT DO NOTHING;
+
+query II
+SELECT * FROM t7;
+----
+1	first
+
+# INSERT with ON CONFLICT DO UPDATE
+statement ok
+INSERT INTO t7 VALUES (1, 'updated') ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+
+query II
+SELECT * FROM t7;
+----
+1	updated

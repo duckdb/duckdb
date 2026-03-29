@@ -37,12 +37,13 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 
 JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
-                             const vector<idx_t> &output_columns_p, unique_ptr<ResidualPredicateInfo> residual_p,
-                             optional_ptr<Expression> predicate_ptr, const vector<idx_t> &output_in_probe)
+                             const idx_t initial_radix_bits, const vector<idx_t> &output_columns_p,
+                             unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr,
+                             const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      residual_predicate(predicate_ptr), radix_bits(INITIAL_RADIX_BITS) {
+      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -474,7 +475,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 			continue;
 		}
 		auto &col_key_data = vector_data[col_idx].unified;
-		if (col_key_data.validity.AllValid()) {
+		if (col_key_data.validity.CannotHaveNull()) {
 			continue;
 		}
 		added_count = FilterNullValues(col_key_data, *current_sel, added_count, sel);
@@ -616,7 +617,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	idx_t remaining_count = count;
 	const auto *remaining_sel = FlatVector::IncrementalSelectionVector();
 
-	const auto all_valid = layout.AllValid();
+	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();
 
 	if (PropagatesBuildSide(ht.join_type)) {
@@ -729,7 +730,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 		bloom_filter.InsertHashes(hashes_v, count);
 	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
-	auto row_locations = chunk_state.row_locations;
+	auto &row_locations = chunk_state.row_locations;
 	if (parallel) {
 		InsertHashesLoop<true>(atomic_entries, row_locations, hashes_v, count, insert_state, *data_collection, *this);
 	} else {
@@ -969,8 +970,8 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 
 	// If there is a matcher for the probing side because of non-equality predicates, use it
 	idx_t result_count;
+	idx_t no_match_count = 0;
 	if (ht.needs_chain_matcher) {
-		idx_t no_match_count = 0;
 		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
 		D_ASSERT(matcher);
 
@@ -984,7 +985,9 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 	}
 
 	if (ht.residual_predicate && ht.residual_info && result_count > 0) {
-		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel);
+		// Pass no_match_count as offset so residual non-matches are appended after non-equality non-matches
+		// instead of overwriting them (which would cause AdvancePointers to read stale data)
+		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel, no_match_count);
 	}
 
 	// Update total probe match count
@@ -994,7 +997,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 }
 
 idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-                                            SelectionVector *no_match_sel) {
+                                            SelectionVector *no_match_sel, idx_t no_match_offset) {
 	D_ASSERT(residual_state);
 	D_ASSERT(residual_executor);
 
@@ -1030,10 +1033,10 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	if (no_match_sel) {
-		idx_t no_match_count = match_count - new_match_count;
-		for (idx_t i = 0; i < no_match_count; i++) {
+		idx_t residual_no_match_count = match_count - new_match_count;
+		for (idx_t i = 0; i < residual_no_match_count; i++) {
 			idx_t dense_idx = remaining_sel.get_index(i);
-			no_match_sel->set_index(i, match_sel.get_index(dense_idx));
+			no_match_sel->set_index(no_match_offset + i, match_sel.get_index(dense_idx));
 		}
 	}
 
@@ -1332,7 +1335,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 		}
 		UnifiedVectorFormat jdata;
 		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
-		if (!jdata.validity.AllValid()) {
+		if (jdata.validity.CanHaveNull()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
 				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
@@ -1739,6 +1742,10 @@ idx_t JoinHashTable::CurrentPartitionCount() const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	D_ASSERT(current_partitions.Capacity() == num_partitions);
 	return current_partitions.CountValid(num_partitions);
+}
+
+const ValidityMask &JoinHashTable::GetCurrentPartitions() const {
+	return current_partitions;
 }
 
 idx_t JoinHashTable::FinishedPartitionCount() const {

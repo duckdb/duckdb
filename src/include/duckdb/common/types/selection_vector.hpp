@@ -41,6 +41,10 @@ struct SelectionVector {
 	SelectionVector(const SelectionVector &sel_vector) {
 		Initialize(sel_vector);
 	}
+	SelectionVector(SelectionVector &&other) noexcept
+	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)) {
+		other.sel_vector = nullptr;
+	}
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(std::move(data));
 	}

@@ -7,8 +7,10 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
       run_all:
+        type: boolean
+      runner_windows_2022_x64:
         type: string
   workflow_dispatch:
     inputs:
@@ -17,8 +19,12 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
+        default: false
       run_all:
+        type: boolean
+        default: true
+      runner_windows_2022_x64:
         type: string
 
 concurrency:
@@ -36,7 +42,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: windows-latest
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
     steps:
     - uses: actions/checkout@v6
       with:
@@ -53,36 +59,35 @@ jobs:
       shell: bash
       run: |
         python scripts/ci/retry.py -- python scripts/windows_ci.py
-        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- make windows_release
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
-      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
+      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
       shell: bash
-      run: echo $DUCKDB_INSTALL_LIB
+      run: echo "$DUCKDB_INSTALL_LIB"
 
     - name: Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
         choco install wget -y --no-progress
         wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test/Release
-        ./test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/Release/unittest.exe
         rm ./test/Release/msvcp140.dll
 
     - name: Tools Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
@@ -133,8 +138,8 @@ jobs:
     name: Windows (32 Bit)
     needs:
       - win-release-64
-    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
-    runs-on: windows-latest
+    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
 
     steps:
     - uses: actions/checkout@v6
@@ -151,12 +156,11 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- make windows_release_32
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
@@ -164,12 +168,11 @@ jobs:
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
 
-
  win-release-arm64:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
    runs-on: windows-latest
 
    steps:
@@ -231,8 +234,12 @@ jobs:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
-     if: ${{ inputs.skip_tests != 'true' }}
-     runs-on: windows-latest
+     if: ${{ !inputs.skip_tests }}
+     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+     env:
+       GEN: ninja
+       ENABLE_EXTENSION_AUTOLOADING: 1
+       ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
        - uses: actions/checkout@v6
          with:
@@ -242,35 +249,72 @@ jobs:
          with:
            python-version: '3.12'
 
-       - uses: msys2/setup-msys2@v2
-         with:
-           msystem: MINGW64
-           update: true
-           install: mingw-w64-x86_64-toolchain
-           cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
        - name: Dependencies
          shell: bash
          run: |
            choco install \
              ccache \
+             make \
              ninja \
+             --no-progress
+           choco install \
+             mingw --version 14.2.0 \
              --no-progress
 
        - uses: ./.github/actions/ccache-action
 
-       - name: Build
-         shell: cmd
+       - name: Build Environment
+         shell: bash
          run: |
-           set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
-           python scripts/ci/retry.py -- cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
-           python scripts/ci/retry.py -- cmake --build . --config Release
+           {
+             # bash from Git
+             echo 'C:/Program Files/Git/bin'
+             # make, ninja and ccache from Chocolatey
+             echo 'C:/ProgramData/Chocolatey/bin'
+             # g++ from Chocolatey
+             echo 'C:/ProgramData/mingw64/mingw64/bin'
+           } >> "${GITHUB_PATH}"
+
+       - name: Build Environment Check
+         shell: bash
+         run: |
+           where bash
+           bash --version
+           where make
+           make --version
+           where ninja
+           ninja --version
+           where ccache
+           ccache --version
+           where g++
+           g++ --version
+           echo %PATH%
+
+       - name: MinGW Runtime Diagnostics
+         shell: bash
+         run: |
+           set -x
+           echo "PWD=$PWD"
+           echo "PATH=$PATH"
+           where python
+           python --version
+           where unittest.exe || true
+           if [ -f build/release/test/unittest.exe ]; then
+             ls -l build/release/test/unittest.exe
+           fi
+           echo "Nearby DLLs and EXEs:"
+           find build/release -maxdepth 3 \( -name '*.dll' -o -name '*.exe' \) | sort || true
+           /c/Windows/System32/cmd.exe /c "where libstdc++-6.dll" || true
+           /c/Windows/System32/cmd.exe /c "where libgcc_s_seh-1.dll" || true
+           /c/Windows/System32/cmd.exe /c "where libwinpthread-1.dll" || true
+           objdump -p build/release/test/unittest.exe | sed -n '/DLL Name:/p' || true
+           ./build/release/test/unittest.exe --list-tests || true
+
+       - name: Build
+         run: make release
 
        - name: Test
-         shell: cmd
-         run: |
-           copy src\libduckdb.dll .
-           test\unittest.exe
+         run: make unittest_release SKIP_BUILD=1
 
  win-packaged-upload:
    runs-on: windows-latest

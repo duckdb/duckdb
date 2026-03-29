@@ -1,3 +1,12 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
@@ -402,7 +411,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
 		                              child_data, validity, count);
-		if (!lookup_validity.AllValid()) {
+		if (lookup_validity.CanHaveNull()) {
 			optional_idx nested_index;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
@@ -419,7 +428,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			return false;
 		}
 		//! Now cast all the values we found to the target type
-		auto &child = *children[child_idx];
+		auto &child = children[child_idx];
 		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
 			return false;
 		}
@@ -690,9 +699,9 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1]->GetType() == result.GetType()) {
+		if (shredded_entries[1].GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(*shredded_entries[1]);
+			result.Reference(shredded_entries[1]);
 			return true;
 		}
 	}

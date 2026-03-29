@@ -130,7 +130,9 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
-	    {"pin_threads", {"off"}}};
+	    {"pin_threads", {"off"}},
+	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
+	    {"checkpoint_on_detach", {"ENABLED"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -156,6 +158,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "access_mode",
+	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
 	    "schema",

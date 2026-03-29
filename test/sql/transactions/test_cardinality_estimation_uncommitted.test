@@ -1,0 +1,33 @@
+# name: test/sql/transactions/test_cardinality_estimation_uncommitted.test
+# description: Test that cardinality estimation includes uncommitted rows from local storage
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# create an empty table
+statement ok
+CREATE TABLE t1 (id INTEGER, val INTEGER)
+
+# begin a transaction and insert rows without committing
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t1 SELECT range, range FROM range(10000)
+
+# the planner should estimate ~10000 rows, not 0
+# this verifies that TableScanCardinality accounts for LocalStorage rows
+query II
+EXPLAIN SELECT * FROM t1
+----
+physical_plan	<REGEX>:.*~10,000 rows.*
+
+statement ok
+COMMIT
+
+# after commit, cardinality should still be correct
+query II
+EXPLAIN SELECT * FROM t1
+----
+physical_plan	<REGEX>:.*~10,000 rows.*

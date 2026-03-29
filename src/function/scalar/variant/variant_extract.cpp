@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
@@ -107,14 +114,14 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		Vector shredded_vector(shredded_type, count);
 		auto &top_shredded = StructVector::GetEntries(shredded_vector);
 		// NULL out everything in the unshredded part
-		auto &unshredded_child = *top_shredded[0];
+		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry->SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(*unshredded_entry, true);
+			unshredded_entry.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(unshredded_entry, true);
 		}
 		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(unshredded_child, true);
-		auto &shredded_child = *top_shredded[1];
+		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
 		result.Shred(shredded_vector);
@@ -127,7 +134,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 	}
 	// first entry is "typed_value"
 	auto &typed_entries = StructVector::GetEntries(input);
-	auto &typed_value = *typed_entries[0];
+	auto &typed_value = typed_entries[0];
 
 	// find the type in the struct type
 	auto &child_types = StructType::GetChildTypes(typed_value.GetType());
@@ -136,7 +143,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &entry = child_types[child_idx];
 		if (StringUtil::CIEquals(entry.first, component.key)) {
 			// key found - move onto next component
-			return TryShreddedExtractRecursive(*child_entries[child_idx], components, result, count, path_index + 1);
+			return TryShreddedExtractRecursive(child_entries[child_idx], components, result, count, path_index + 1);
 		}
 	}
 	// key not found - bail (FIXME: could we emit constant NULL here?)
@@ -204,7 +211,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			if (!validity.RowIsValid(j)) {
 				continue;
 			}
-			if (!lookup_validity.AllValid() && !lookup_validity.RowIsValid(j)) {
+			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
 				//! No child could be extracted, set to NULL
 				validity.SetInvalid(j);
 				continue;
@@ -266,7 +273,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
 	                              values_list_size);
 
-	if (!validity.AllValid()) {
+	if (validity.CanHaveNull()) {
 		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data
 		//! Which is a problem if we're still sharing the memory with 'input'
 		Vector other(result.GetType(), count);
@@ -279,11 +286,6 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
-
-	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'

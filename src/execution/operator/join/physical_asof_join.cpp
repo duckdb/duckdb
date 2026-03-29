@@ -1032,7 +1032,7 @@ void AsOfProbeBuffer::ScanLeft() {
 	}
 
 	// Filter out NULL matches
-	if (!lhs_valid_mask.AllValid()) {
+	if (lhs_valid_mask.CanHaveNull()) {
 		const auto count = lhs_match_count;
 		lhs_match_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
@@ -1589,6 +1589,7 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
 			if (!gsource.HasMoreTasks()) {
 				gsource.UnblockTasks();
+				break;
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source

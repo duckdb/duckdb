@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
@@ -73,7 +76,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 		const auto &q = quantiles_p[i];
 		pos += (q > 0);
 		neg += (q < 0);
-		normalised.emplace_back(QuantileAbs(q));
+		normalised.push_back(QuantileAbs(q));
 		order.push_back(i);
 	}
 	if (pos && neg) {
@@ -85,7 +88,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	std::sort(order.begin(), order.end(), lt);
 
 	for (const auto &q : normalised) {
-		quantiles.emplace_back(QuantileValue(q));
+		quantiles.emplace_back(q);
 	}
 }
 
@@ -131,7 +134,7 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 	}
 
 	for (const auto &r : raw) {
-		result->quantiles.emplace_back(QuantileValue(r));
+		result->quantiles.emplace_back(r);
 	}
 	return std::move(result);
 }
@@ -781,8 +784,7 @@ struct ContinuousQuantileListFunction {
 
 template <class OP>
 AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalType &result, const LogicalType &extra_arg) {
-	AggregateFunction fun({std::move(input)}, std::move(result), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      OP::Bind);
+	AggregateFunction fun({std::move(input)}, result, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
 		fun.arguments.push_back(extra_arg);
 	}

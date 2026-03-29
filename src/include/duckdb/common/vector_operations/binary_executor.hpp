@@ -10,6 +10,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
@@ -80,7 +82,7 @@ struct BinaryExecutor {
 			ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 		}
 
-		if (!mask.AllValid()) {
+		if (mask.CanHaveNull()) {
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
 			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
@@ -172,7 +174,7 @@ struct BinaryExecutor {
 		} else {
 			if (OPWRAPPER::AddsNulls()) {
 				result_validity.Copy(FlatVector::Validity(left), count);
-				if (result_validity.AllValid()) {
+				if (result_validity.CannotHaveNull()) {
 					result_validity.Copy(FlatVector::Validity(right), count);
 				} else {
 					result_validity.Combine(FlatVector::Validity(right), count);
@@ -192,7 +194,7 @@ struct BinaryExecutor {
 	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
 	                               const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
 	                               ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
-		if (!lvalidity.AllValid() || !rvalidity.AllValid()) {
+		if (lvalidity.CanHaveNull() || rvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto lindex = lsel->get_index(i);
 				auto rindex = rsel->get_index(i);
@@ -492,7 +494,7 @@ public:
 	                        const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
 	                        ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 #ifndef DUCKDB_SMALLER_BINARY
-		if (!lvalidity.AllValid() || !rvalidity.AllValid()) {
+		if (lvalidity.CanHaveNull() || rvalidity.CanHaveNull()) {
 			return SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
 		} else {

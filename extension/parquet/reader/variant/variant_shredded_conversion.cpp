@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant/variant_shredded_conversion.hpp"
 #include "column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -146,7 +149,7 @@ vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &b
 	}
 
 	vector<VariantValue> ret(length);
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < length; i++) {
 			auto index = typed_format.sel->get_index(i + offset);
 			if (TYPE_ID == LogicalTypeId::DECIMAL) {
@@ -427,7 +430,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	for (idx_t i = 0; i < fields.size(); i++) {
 		auto &field = fields[i];
 		auto &field_name = field.first;
-		auto &field_vec = *entries[i];
+		auto &field_vec = entries[i];
 
 		shredded_fields.emplace_back(field_name);
 		auto &shredded_field = shredded_fields.back();
@@ -435,7 +438,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	}
 
 	vector<VariantValue> ret(length);
-	if (typed_validity.AllValid()) {
+	if (typed_validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < length; i++) {
 			ret[i] = ConvertPartiallyShreddedObject(shredded_fields, metadata_format, value_format, i, offset);
 		}
@@ -490,7 +493,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 	auto &value_validity = value_format.validity;
 
 	vector<VariantValue> ret(length);
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		//! We can be sure that none of the values are binary encoded
 		for (idx_t i = 0; i < length; i++) {
 			auto typed_index = list_format.sel->get_index(i + offset);
@@ -540,9 +543,9 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 		auto &name = group_type_children[i].first;
 		auto &vec = group_entries[i];
 		if (name == "value") {
-			value = vec.get();
+			value = &vec;
 		} else if (name == "typed_value") {
-			typed_value = vec.get();
+			typed_value = &vec;
 		} else {
 			throw InvalidInputException("Variant group can only contain 'value'/'typed_value', not: %s", name);
 		}

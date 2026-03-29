@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
@@ -52,14 +54,11 @@ void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, id
 	RecursiveUnifiedVectorFormat input_data;
 	Vector::RecursiveToUnifiedFormat(input, count, input_data);
 
-	UnifiedVectorFormat states_data;
-	state_vector.ToUnifiedFormat(count, states_data);
-	auto states = UnifiedVectorFormat::GetData<ListAggState *>(states_data);
-
+	auto states = state_vector.Values<ListAggState *>(count);
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[states_data.sel->get_index(i)];
+		auto &state = *states[i].value;
 		aggr_input_data.allocator.AlignNext();
 		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state.linked_list, input_data, i);
 	}
@@ -68,13 +67,10 @@ void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, id
 void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
 
-	UnifiedVectorFormat states_data;
-	states_vector.ToUnifiedFormat(count, states_data);
-	auto states_ptr = UnifiedVectorFormat::GetData<ListAggState *>(states_data);
-
+	auto states = states_vector.Values<ListAggState *>(count);
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states_ptr[states_data.sel->get_index(i)];
+		auto &state = *states[i].value;
 		if (state.linked_list.total_capacity == 0) {
 			// NULL, no need to append
 			// this can happen when adding a FILTER to the grouping, e.g.,
@@ -96,9 +92,7 @@ void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputD
 
 void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                   idx_t offset) {
-	UnifiedVectorFormat states_data;
-	states_vector.ToUnifiedFormat(count, states_data);
-	auto states = UnifiedVectorFormat::GetData<ListAggState *>(states_data);
+	auto states = states_vector.Values<ListAggState *>(count);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
@@ -110,7 +104,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	// first iterate over all entries and set up the list entries, and get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[states_data.sel->get_index(i)];
+		auto &state = *states[i].value;
 		const auto rid = i + offset;
 		result_data[rid].offset = total_len;
 		if (state.linked_list.total_capacity == 0) {
@@ -129,7 +123,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 	ListVector::Reserve(result, total_len);
 	auto &result_child = ListVector::GetEntry(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[states_data.sel->get_index(i)];
+		auto &state = *states[i].value;
 		const auto rid = i + offset;
 		if (state.linked_list.total_capacity == 0) {
 			continue;
@@ -149,16 +143,14 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 		return;
 	}
 
-	UnifiedVectorFormat states_data;
-	states_vector.ToUnifiedFormat(count, states_data);
-	auto states_ptr = UnifiedVectorFormat::GetData<const ListAggState *>(states_data);
+	auto states = states_vector.Values<ListAggState *>(count);
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	auto result_type = ListType::GetChildType(list_bind_data.stype);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &source = *states_ptr[states_data.sel->get_index(i)];
+		auto &source = *states[i].value;
 		auto &target = *combined_ptr[i];
 
 		const auto entry_count = source.linked_list.total_capacity;
