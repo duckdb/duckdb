@@ -48,7 +48,7 @@ private:
 
 	// Phase 1: token-stream -> multiline string
 	string ApplyCase(const string &upper_kw, const string &orig_kw, bool is_structural = false) const;
-	string FormatMultiline(const vector<MatcherToken> &tokens) const;
+	string FormatMultiline(const string &sql, const vector<MatcherToken> &tokens) const;
 
 	// Phase 2: inline short clauses
 	string MergeShortClauses(const string &formatted) const;
@@ -71,8 +71,9 @@ private:
 	static vector<string> SplitCaseBranches(const string &content);
 	string ExpandCaseExpressions(const string &formatted) const;
 
-	// Phase 6: expand long IN (...) lists to one value per line
-	string ExpandLongInClauses(const string &formatted) const;
+	// Phase 6: expand long parenthesized comma-lists to one value per line
+	static idx_t FindLongestParenList(const string &line, idx_t from_pos);
+	string ExpandLongParenLists(const string &formatted) const;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,12 +92,17 @@ string SQLFormatter::Format(const string &sql) {
 		return sql;
 	}
 
-	string multiline = FormatMultiline(tokens);
+	string multiline = FormatMultiline(sql, tokens);
 	string merged = MergeShortClauses(multiline);
 	string collapsed = CollapseFirstCondition(merged);
 	string expanded = ExpandTableDefinition(collapsed);
 	string case_expanded = ExpandCaseExpressions(expanded);
-	return ExpandLongInClauses(case_expanded);
+	string result = ExpandLongParenLists(case_expanded);
+	// Strip trailing whitespace/newlines from the final output.
+	while (!result.empty() && (result.back() == '\n' || result.back() == '\r' || result.back() == ' ')) {
+		result.pop_back();
+	}
+	return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,12 +131,12 @@ bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 	    // Single-word clause starters
 	    "SELECT", "FROM", "WHERE", "HAVING", "LIMIT", "OFFSET", "JOIN", "UNION", "INTERSECT", "EXCEPT", "WITH",
 	    "INSERT", "UPDATE", "DELETE", "SET", "RETURNING", "VALUES", "CREATE", "DROP", "ALTER", "TRUNCATE", "QUALIFY",
-	    "PIVOT", "UNPIVOT", "REFRESH", "INSTALL", "LOAD", "ATTACH", "DETACH", "CHECKPOINT",
+	    "PIVOT", "UNPIVOT", "REFRESH", "INSTALL", "LOAD", "ATTACH", "DETACH", "CHECKPOINT", "COPY", "FORCE",
 	    // Compound clause keywords
 	    "GROUP BY", "ORDER BY", "PARTITION BY", "UNION ALL", "UNION DISTINCT", "INTERSECT ALL", "INTERSECT DISTINCT",
 	    "EXCEPT ALL", "EXCEPT DISTINCT", "INNER JOIN", "CROSS JOIN", "NATURAL JOIN", "LEFT JOIN", "LEFT OUTER JOIN",
 	    "RIGHT JOIN", "RIGHT OUTER JOIN", "FULL JOIN", "FULL OUTER JOIN", "INSERT INTO", "DELETE FROM", "ON CONFLICT",
-	    "WITH RECURSIVE",
+	    "WITH RECURSIVE", "FORCE CHECKPOINT",
 	    // DDL compound keywords
 	    "CREATE TABLE", "CREATE VIEW", "CREATE INDEX", "CREATE UNIQUE INDEX", "CREATE SCHEMA", "CREATE SEQUENCE",
 	    "CREATE MACRO", "CREATE FUNCTION", "CREATE TYPE", "CREATE TEMP TABLE", "CREATE TEMP VIEW",
@@ -198,6 +204,7 @@ idx_t SQLFormatter::DetectCompoundClause(const vector<MatcherToken> &tokens, idx
 	    {"INSERT",    "INTO"    },
 	    {"DELETE",    "FROM"    },
 	    {"ON",        "CONFLICT"},
+	    {"FORCE",     "CHECKPOINT"},
 	    // Set operations with qualifier
 	    {"UNION",     "ALL"     }, {"UNION",     "DISTINCT"},
 	    {"INTERSECT", "ALL"     }, {"INTERSECT", "DISTINCT"},
@@ -347,7 +354,7 @@ string SQLFormatter::ApplyCase(const string &upper_kw, const string &orig_kw, bo
 	}
 }
 
-string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
+string SQLFormatter::FormatMultiline(const string &sql, const vector<MatcherToken> &tokens) const {
 	string result;
 	result.reserve(tokens.size() * 8);
 
@@ -355,6 +362,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 	bool after_clause = false;
 	bool prev_was_keyword = false;
 	bool in_between = false; // true after BETWEEN keyword, cleared after next AND
+	string last_clause;      // uppercased text of the most recent clause keyword
 	// Uppercase text of the most recent keyword token — used to decide whether
 	// to insert a space before '('.  Only operator/conditional keywords like IN,
 	// EXISTS, NOT, SOME, ANY, ALL need a space; function-like or type keywords
@@ -394,7 +402,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 		return clause_indent() + indent_size;
 	};
 
-	auto emit_clause = [&](const string &kw_text, const string &upper_last_word) {
+	auto emit_clause = [&](const string &kw_text, const string &upper_compound, const string &upper_last_word) {
 		if (!result.empty() && !at_line_start) {
 			write_newline();
 			write_indent(clause_indent());
@@ -406,6 +414,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 		after_clause = true;
 		prev_was_keyword = true;
 		prev_keyword = upper_last_word;
+		last_clause = upper_compound;
 		if (!paren_stack.empty()) {
 			paren_stack.back().has_clauses = true;
 		}
@@ -418,20 +427,48 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			after_clause = false;
 			prev_was_keyword = false;
 			in_between = false;
+			last_clause.clear();
 			result += ';';
 			at_line_start = false;
 			// A semicolon ends a statement; the next statement starts on a new line.
+			// Preserve blank lines from the original SQL between statements.
 			if (i + 1 < tokens.size()) {
 				write_newline();
+				idx_t end_of_semi = tok.offset + tok.length;
+				idx_t next_start = tokens[i + 1].offset;
+				idx_t newline_count = 0;
+				for (idx_t k = end_of_semi; k < next_start && k < sql.size(); k++) {
+					if (sql[k] == '\n') {
+						newline_count++;
+					}
+				}
+				// Two or more newlines in the gap means there was a blank line.
+				if (newline_count >= 2) {
+					write_newline();
+				}
 			}
 			i++;
 			continue;
 		}
 
 		if (tok.type == TokenType::COMMENT) {
-			write_space();
-			result += tok.text;
-			if (tok.text.size() >= 2 && tok.text[0] == '-' && tok.text[1] == '-') {
+			// Strip trailing newline from comment text — we manage newlines ourselves.
+			string comment_text = tok.text;
+			while (!comment_text.empty() && (comment_text.back() == '\n' || comment_text.back() == '\r')) {
+				comment_text.pop_back();
+			}
+			bool is_block = comment_text.size() >= 2 && comment_text[0] == '/' && comment_text[1] == '*';
+			bool is_line = comment_text.size() >= 2 && comment_text[0] == '-' && comment_text[1] == '-';
+			// Block comments before the first statement go at column 0.
+			if (is_block && result.empty()) {
+				// no space prefix
+			} else if (is_block && at_line_start) {
+				write_indent(clause_indent());
+			} else {
+				write_space();
+			}
+			result += comment_text;
+			if (is_line || is_block) {
 				write_newline();
 			}
 			after_clause = false;
@@ -594,15 +631,21 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 			idx_t extra = DetectCompoundClause(tokens, i, compound_text, original_text);
 
 			if (extra != static_cast<idx_t>(-1)) {
-				auto sp = compound_text.rfind(' ');
-				const string last_word = (sp == string::npos) ? compound_text : compound_text.substr(sp + 1);
-				emit_clause(ApplyCase(compound_text, original_text, /*is_structural=*/true), last_word);
-				// WITH / WITH RECURSIVE: keep CTE name on the same line
-				if (compound_text == "WITH" || compound_text == "WITH RECURSIVE") {
-					after_clause = false;
+				// COPY tablename FROM — FROM should not start a new clause line.
+				if (compound_text == "FROM" && last_clause == "COPY") {
+					// Fall through to the regular keyword path below.
+				} else {
+					auto sp = compound_text.rfind(' ');
+					const string last_word = (sp == string::npos) ? compound_text : compound_text.substr(sp + 1);
+					emit_clause(ApplyCase(compound_text, original_text, /*is_structural=*/true), compound_text,
+					            last_word);
+					// WITH / WITH RECURSIVE: keep CTE name on the same line
+					if (compound_text == "WITH" || compound_text == "WITH RECURSIVE") {
+						after_clause = false;
+					}
+					i += 1 + extra;
+					continue;
 				}
-				i += 1 + extra;
-				continue;
 			}
 
 			const string upper = StringUtil::Upper(tok.text);
@@ -611,7 +654,7 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 				in_between = true;
 			}
 
-			if ((upper == "AND" || upper == "OR") && !at_line_start) {
+			if (upper == "AND" || upper == "OR") {
 				// AND after BETWEEN is part of the BETWEEN expression, not a conjunction.
 				if (upper == "AND" && in_between) {
 					in_between = false;
@@ -635,7 +678,9 @@ string SQLFormatter::FormatMultiline(const vector<MatcherToken> &tokens) const {
 					i++;
 					continue;
 				}
-				write_newline();
+				if (!at_line_start) {
+					write_newline();
+				}
 				write_indent(content_indent());
 				result += ApplyCase(upper, tok.text, /*is_structural=*/true);
 				at_line_start = false;
@@ -751,9 +796,29 @@ string SQLFormatter::MergeShortClauses(const string &formatted) const {
 						flat += TrimLeft(lines[k]);
 					}
 					string merged = string(clause_ind, ' ') + trimmed + ' ' + flat;
-					if (Utf8Proc::RenderWidth(merged) <= config.inline_threshold) {
+					// Always merge when there's only one content line — splitting
+					// doesn't save space, it just adds indentation overhead.
+					bool single_content = (content_end == i + 2);
+					if (single_content || Utf8Proc::RenderWidth(merged) <= config.inline_threshold) {
 						out.push_back(std::move(merged));
 						i = content_end;
+						continue;
+					}
+				}
+
+				}
+
+			// For CREATE/COPY clauses, always merge at least the first content
+			// line so the name stays on the same line as the keyword.
+			if (i + 1 < lines.size()) {
+				const string upper_trimmed = StringUtil::Upper(trimmed);
+				if (upper_trimmed.rfind("CREATE", 0) == 0 || upper_trimmed == "COPY") {
+					const string &next = lines[i + 1];
+					const idx_t next_ind = LeadingSpaces(next);
+					if (next_ind > clause_ind) {
+						string merged_first = string(clause_ind, ' ') + trimmed + ' ' + TrimLeft(next);
+						out.push_back(std::move(merged_first));
+						i += 2;
 						continue;
 					}
 				}
@@ -839,13 +904,6 @@ string SQLFormatter::CollapseFirstCondition(const string &formatted) const {
 		}
 
 		const string first_content = TrimLeft(lines[i + 1]);
-		// Don't lift content that contains a -- comment onto the keyword line
-		// if there are more content lines — the comment would swallow them.
-		if (first_content.find("--") != string::npos && content_count > 1) {
-			out.push_back(line);
-			i++;
-			continue;
-		}
 		const string merged_first = string(clause_ind, ' ') + trimmed + ' ' + first_content;
 		if (Utf8Proc::RenderWidth(merged_first) > config.inline_threshold) {
 			out.push_back(line);
@@ -1316,18 +1374,50 @@ string SQLFormatter::ExpandCaseExpressions(const string &formatted) const {
 			}
 
 			changed = true;
-			const string branch_indent(line_indent + config.indent_size, ' ');
-			const string end_indent(line_indent, ' ');
 
-			out.push_back(line.substr(0, case_pos + 4));
-
-			for (const string &branch : branches) {
-				out.push_back(branch_indent + branch);
+			// Check if CASE immediately follows '(' — if so, break after '('
+			// and indent CASE inside the function call.
+			string prefix = line.substr(0, case_pos);
+			// Strip trailing spaces from prefix to find preceding char.
+			idx_t prefix_end = prefix.size();
+			while (prefix_end > 0 && prefix[prefix_end - 1] == ' ') {
+				prefix_end--;
 			}
+			bool case_after_paren = (prefix_end > 0 && prefix[prefix_end - 1] == '(');
 
-			const string end_kw = line.substr(end_pos, 3);
-			const string suffix = line.substr(end_pos + 3);
-			out.push_back(end_indent + end_kw + suffix);
+			if (case_after_paren) {
+				// Break after '(' and put CASE on its own indented line.
+				const string open_line = prefix.substr(0, prefix_end);
+				const idx_t case_indent = line_indent + config.indent_size;
+				const string case_ind(case_indent, ' ');
+				const string branch_ind(case_indent + config.indent_size, ' ');
+				const string end_ind(case_indent, ' ');
+
+				out.push_back(open_line);
+				out.push_back(case_ind + "CASE");
+
+				for (const string &branch : branches) {
+					out.push_back(branch_ind + branch);
+				}
+
+				const string end_kw = line.substr(end_pos, 3);
+				const string suffix = line.substr(end_pos + 3);
+				out.push_back(end_ind + end_kw + suffix);
+			} else {
+				// CASE is not after '(' — expand in place using CASE position.
+				const string branch_indent(case_pos + config.indent_size, ' ');
+				const string end_indent(case_pos, ' ');
+
+				out.push_back(line.substr(0, case_pos + 4));
+
+				for (const string &branch : branches) {
+					out.push_back(branch_indent + branch);
+				}
+
+				const string end_kw = line.substr(end_pos, 3);
+				const string suffix = line.substr(end_pos + 3);
+				out.push_back(end_indent + end_kw + suffix);
+			}
 		}
 
 		lines = std::move(out);
@@ -1337,84 +1427,118 @@ string SQLFormatter::ExpandCaseExpressions(const string &formatted) const {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 6: expand long IN (...) lists to one value per line
+// Phase 6: expand long parenthesized comma-lists to one value per line
 // ─────────────────────────────────────────────────────────────────────────────
 
-//! Find " IN (" (case-insensitive) in a line, returning the position of the 'I'
-//! in "IN", or string::npos if not found.  Only matches at a word boundary.
-static idx_t FindInClause(const string &line, idx_t from_pos) {
-	for (idx_t k = from_pos; k + 4 < line.size(); k++) {
-		if (line[k] != ' ') {
+//! Find the '(' whose comma-separated content spans the most characters on
+//! this line.  Only considers top-level parens (not nested).  Returns the
+//! position of '(' or string::npos.
+idx_t SQLFormatter::FindLongestParenList(const string &line, idx_t from_pos) {
+	idx_t best_pos = string::npos;
+	idx_t best_len = 0;
+	bool in_str = false;
+	char str_char = '\0';
+	int32_t depth = 0;
+	for (idx_t k = from_pos; k < line.size(); k++) {
+		char c = line[k];
+		if (in_str) {
+			if (c == str_char) {
+				in_str = false;
+			}
 			continue;
 		}
-		if ((line[k + 1] == 'I' || line[k + 1] == 'i') && (line[k + 2] == 'N' || line[k + 2] == 'n') &&
-		    line[k + 3] == ' ' && line[k + 4] == '(') {
-			return k + 1;
+		if (c == '\'' || c == '"' || c == '`') {
+			in_str = true;
+			str_char = c;
+			continue;
+		}
+		if (c == '(' && depth == 0) {
+			idx_t close = FindMatchingClose(line, k);
+			if (close != string::npos) {
+				idx_t span = close - k;
+				if (span > best_len) {
+					// Only consider if it actually has commas (multiple items).
+					string content = line.substr(k + 1, close - k - 1);
+					auto parts = SplitTopLevelCommas(content);
+					if (parts.size() > 1) {
+						best_len = span;
+						best_pos = k;
+					}
+				}
+				// Skip past this paren group at depth 0.
+				k = close;
+			}
+		} else if (c == '(') {
+			depth++;
+		} else if (c == ')') {
+			depth--;
 		}
 	}
-	return string::npos;
+	return best_pos;
 }
 
-string SQLFormatter::ExpandLongInClauses(const string &formatted) const {
+string SQLFormatter::ExpandLongParenLists(const string &formatted) const {
 	if (config.inline_threshold == 0) {
 		return formatted;
 	}
 
 	vector<string> lines = SplitLines(formatted);
-	vector<string> out;
-	out.reserve(lines.size());
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		vector<string> out;
+		out.reserve(lines.size());
 
-	for (const auto &line : lines) {
-		if (Utf8Proc::RenderWidth(line) <= config.inline_threshold) {
-			out.push_back(line);
-			continue;
-		}
-
-		// Look for " IN (" on this line.
-		idx_t in_pos = FindInClause(line, 0);
-		if (in_pos == string::npos) {
-			out.push_back(line);
-			continue;
-		}
-
-		// Find the opening '(' after IN.
-		idx_t open_paren = in_pos + 3; // position of '('
-		idx_t close_paren = FindMatchingClose(line, open_paren);
-		if (close_paren == string::npos) {
-			out.push_back(line);
-			continue;
-		}
-
-		// Extract the content inside IN (...).
-		string in_content = line.substr(open_paren + 1, close_paren - open_paren - 1);
-		vector<string> values = SplitTopLevelCommas(in_content);
-		if (values.size() <= 1) {
-			out.push_back(line);
-			continue;
-		}
-
-		// Check if expanding would help (i.e. the IN clause itself is long).
-		string prefix = line.substr(0, in_pos + 2); // up to and including "IN"
-		string suffix = line.substr(close_paren + 1);
-
-		const idx_t line_indent = LeadingSpaces(line);
-		const string val_indent(line_indent + config.indent_size, ' ');
-
-		// First line: everything up to and including "IN ("
-		out.push_back(prefix + " (");
-		// One value per line
-		for (idx_t v = 0; v < values.size(); v++) {
-			string val_line = val_indent + values[v];
-			if (v + 1 < values.size()) {
-				val_line += ',';
+		for (const auto &line : lines) {
+			if (Utf8Proc::RenderWidth(line) <= config.inline_threshold) {
+				out.push_back(line);
+				continue;
 			}
-			out.push_back(std::move(val_line));
+
+			idx_t open_paren = FindLongestParenList(line, 0);
+			if (open_paren == string::npos) {
+				out.push_back(line);
+				continue;
+			}
+
+			idx_t close_paren = FindMatchingClose(line, open_paren);
+			if (close_paren == string::npos) {
+				out.push_back(line);
+				continue;
+			}
+
+			string content = line.substr(open_paren + 1, close_paren - open_paren - 1);
+			vector<string> values = SplitTopLevelCommas(content);
+			if (values.size() <= 1) {
+				out.push_back(line);
+				continue;
+			}
+
+			changed = true;
+			string prefix = line.substr(0, open_paren + 1); // up to and including '('
+			string suffix = line.substr(close_paren);        // from ')' onwards
+
+			const idx_t line_indent = LeadingSpaces(line);
+			const string val_indent(line_indent + config.indent_size, ' ');
+
+			// First line: everything up to and including '('
+			out.push_back(prefix);
+			// One value per line, closing ')' on the last value line
+			for (idx_t v = 0; v < values.size(); v++) {
+				string val_line = val_indent + values[v];
+				if (v + 1 < values.size()) {
+					val_line += ',';
+				} else {
+					val_line += suffix;
+				}
+				out.push_back(std::move(val_line));
+			}
 		}
-		// Closing paren + suffix
-		out.push_back(string(line_indent, ' ') + ")" + suffix);
+
+		lines = std::move(out);
 	}
 
-	return JoinLines(out);
+	return JoinLines(lines);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

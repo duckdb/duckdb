@@ -343,12 +343,7 @@ true
 
 # ── CREATE OR REPLACE MACRO (body too long to inline) ────────────────────────
 query I
-SELECT duckdb_format_sql('CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END') = $$CREATE OR REPLACE MACRO
-    clamp(x, lo, hi) AS CASE
-        WHEN x < lo THEN lo
-        WHEN x > hi THEN hi
-        ELSE x
-    END$$
+SELECT duckdb_format_sql('CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END') = $$CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END$$
 ----
 true
 
@@ -836,5 +831,103 @@ true
 query I
 SELECT duckdb_format_sql('SELECT a::INTEGER, b::VARCHAR(100) FROM t') = $$SELECT a::INTEGER, b::VARCHAR(100)
 FROM t$$
+----
+true
+
+# ══ Long Parenthesized Lists ═══════════════════════════════════════════
+
+# ── Long REPLACE argument list is expanded to one value per line ─────────────
+query I
+SELECT duckdb_format_sql('SELECT * REPLACE (make_date(EventDate) AS EventDate, epoch_ms(EventTime * 1000) AS EventTime, epoch_ms(ClientEventTime * 1000) AS ClientEventTime, epoch_ms(LocalEventTime * 1000) AS LocalEventTime) FROM t') = $$SELECT
+    * REPLACE (
+        make_date(EventDate) AS EventDate,
+        epoch_ms(EventTime * 1000) AS EventTime,
+        epoch_ms(ClientEventTime * 1000) AS ClientEventTime,
+        epoch_ms(LocalEventTime * 1000) AS LocalEventTime)
+FROM t$$
+----
+true
+
+# ── Short function calls stay inline ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT pow(corr(v1, v2), 2) FROM t') = $$SELECT pow(corr(v1, v2), 2)
+FROM t$$
+----
+true
+
+# ── CASE inside function call breaks after '(' ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT 100.00 * sum(CASE WHEN p_type LIKE ''PROMO%'' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / sum(l_extendedprice * (1 - l_discount)) AS promo_revenue FROM t') = $$SELECT 100.00 * sum(
+    CASE
+        WHEN p_type LIKE 'PROMO%' THEN l_extendedprice *(1 - l_discount)
+        ELSE 0
+    END) / sum(l_extendedprice *(1 - l_discount)) AS promo_revenue
+FROM t$$
+----
+true
+
+# ══ Single-Element Clause Merging ════════════════════════════════════════
+
+# ── FROM with a single long element stays on one line ────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT * FROM read_csv_auto(''https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz'')') = $$SELECT *
+FROM read_csv_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz')$$
+----
+true
+
+# ══ Blank Lines Between Statements ══════════════════════════════════════
+
+# ── Blank lines in input are preserved between statements ────────────────────
+query I
+SELECT duckdb_format_sql('SELECT 1;
+
+SELECT 2;
+SELECT 3') = $$SELECT 1;
+
+SELECT 2;
+SELECT 3$$
+----
+true
+
+# ══ Block Comments ══════════════════════════════════════════════════════
+
+# ── Block comments are preserved ─────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('/* hello */ SELECT 42') = $$/* hello */
+SELECT 42$$
+----
+true
+
+# ── Multi-line block comments before a statement ─────────────────────────────
+query I
+SELECT duckdb_format_sql('/* Q6. Most authoritative users
+\set tag ''Arnold_Schwarzenegger''
+ */
+SELECT 42') = $$/* Q6. Most authoritative users
+\set tag 'Arnold_Schwarzenegger'
+ */
+SELECT 42$$
+----
+true
+
+# ══ CREATE Name on First Line ═══════════════════════════════════════════
+
+# ── CREATE FUNCTION keeps name on the keyword line ───────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE FUNCTION DeltaPhi(p1, p2) AS (CASE WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) < -Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) + 2 * Pi() WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) > Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) - 2 * Pi() ELSE FMod2Pi(p1[''phi''] - p2[''phi'']) END)') = $$CREATE FUNCTION DeltaPhi(p1, p2) AS (CASE
+    WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) < - Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) + 2 * Pi()
+    WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) > Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) - 2 * Pi()
+    ELSE FMod2Pi(p1 ['phi'] - p2 ['phi'])
+END)$$
+----
+true
+
+# ── CREATE OR REPLACE TABLE keeps name on the keyword line ───────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE TABLE lineitem_sf100_random AS (SELECT * FROM lineitem ORDER BY hash(rowid + 42))') = $$CREATE OR REPLACE TABLE lineitem_sf100_random AS (
+        SELECT *
+        FROM lineitem
+        ORDER BY hash(rowid + 42)
+    )$$
 ----
 true

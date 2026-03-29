@@ -425,6 +425,7 @@ bool BaseTokenizer::TokenizeInput() {
 		case TokenizeState::MULTI_LINE_COMMENT:
 			if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
 				i++;
+				PushToken(last_pos, i + 1, TokenType::COMMENT);
 				last_pos = i + 1;
 				state = TokenizeState::STANDARD;
 			}
