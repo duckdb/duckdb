@@ -1,6 +1,7 @@
 add_library_unity(
   test_common
   OBJECT
+  caching_test_utils.cpp
   test_cast.cpp
   test_checksum.cpp
   test_file_buffer_handle_group.cpp

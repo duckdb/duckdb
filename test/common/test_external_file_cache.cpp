@@ -1,62 +1,13 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/string.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/thread_annotation.hpp"
-#include "duckdb/common/vector.hpp"
+#include "caching_test_utils.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
-#include "test_helpers.hpp"
 
 namespace duckdb {
 
-//===----------------------------------------------------------------------===//
-// Test Utilities
-//===----------------------------------------------------------------------===//
-
-class EFCTestFileGuard {
-public:
-	EFCTestFileGuard(const string &filename, const string &content) : file_path(TestCreatePath(filename)) {
-		auto local_fs = FileSystem::CreateLocal();
-		auto handle = local_fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-		handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
-		handle->Sync();
-	}
-
-	~EFCTestFileGuard() {
-		auto local_fs = FileSystem::CreateLocal();
-		local_fs->TryRemoveFile(file_path);
-	}
-
-	const string &GetPath() const {
-		return file_path;
-	}
-
-private:
-	string file_path;
-};
-
-class EFCTrackingFileSystem : public LocalFileSystem {
-public:
-	string GetName() const override {
-		return "TrackingFileSystem";
-	}
-
-	bool CanHandleFile(const string &path) override {
-		return StringUtil::StartsWith(path, TestDirectoryPath());
-	}
-
-	bool CanSeek() override {
-		return true;
-	}
-
-	string GetVersionTag(FileHandle &handle) override {
-		return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
-	}
-};
+using EFCTestFileGuard = CachingTestFileGuard;
+using EFCTrackingFileSystem = SimpleTrackingFileSystem;
 
 //===----------------------------------------------------------------------===//
 // ReindexCachedFiles Tests

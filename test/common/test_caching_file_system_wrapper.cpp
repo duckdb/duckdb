@@ -1,16 +1,12 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/local_file_system.hpp"
+#include "caching_test_utils.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/opener_file_system.hpp"
-#include "duckdb/common/string.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
-#include "test_helpers.hpp"
 
 #include <thread>
 
@@ -20,30 +16,9 @@ namespace duckdb {
 // Test Utilities
 //===----------------------------------------------------------------------===//
 
+using TestFileGuard = CachingTestFileGuard;
+
 constexpr idx_t TEST_BUFFER_SIZE = 200;
-
-// RAII wrapper for test file creation and cleanup
-class TestFileGuard {
-public:
-	TestFileGuard(const string &filename, const string &content) : file_path(TestCreatePath(filename)) {
-		auto local_fs = FileSystem::CreateLocal();
-		auto handle = local_fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-		handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
-		handle->Sync();
-	}
-
-	~TestFileGuard() {
-		auto local_fs = FileSystem::CreateLocal();
-		local_fs->TryRemoveFile(file_path);
-	}
-
-	const string &GetPath() const {
-		return file_path;
-	}
-
-private:
-	string file_path;
-};
 
 class FailingFileSystem : public LocalFileSystem {
 public:
