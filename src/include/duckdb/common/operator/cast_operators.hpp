@@ -992,8 +992,9 @@ struct CastFromBitToNumeric {
 		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
 		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
-			throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
-			                          GetTypeId<DST>());
+			HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<DST>()),
+			                             parameters);
+			return false;
 		}
 		Bit::BitToNumeric(input, result);
 		return (true);
