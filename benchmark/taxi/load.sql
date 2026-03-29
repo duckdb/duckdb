@@ -51,6 +51,5 @@ CREATE TABLE trips(
     dropoff_ntaname VARCHAR,
     dropoff_puma VARCHAR
 );
-COPY
-    trips
-FROM 'benchmark/taxi/data/trips_*.csv.gz'(header 0);
+
+COPY trips FROM 'benchmark/taxi/data/trips_*.csv.gz'(header 0);

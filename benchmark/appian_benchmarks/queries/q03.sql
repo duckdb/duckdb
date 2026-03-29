@@ -7,12 +7,13 @@ SELECT
     max(ca.category_auditDate) AS p2,
     CAST(avg(ca.category_valuation) AS int) AS p3,
     sum(t1rp2) AS p4,
-    sum(CASE
-        WHEN p.product_inventoryLastOrderedOn - ca.category_auditDate > 300 THEN 1
-        WHEN p.product_inventoryLastOrderedOn - ca.category_auditDate > 150 THEN 10
-        WHEN p.product_inventoryLastOrderedOn - ca.category_auditDate > 0 THEN 100
-        ELSE 1000
-    END +(c.customer_priority * a.address_zone)) AS p5
+    sum(
+        CASE
+            WHEN p.product_inventoryLastOrderedOn - ca.category_auditDate > 300 THEN 1
+            WHEN p.product_inventoryLastOrderedOn - ca.category_auditDate > 150 THEN 10
+            WHEN p.product_inventoryLastOrderedOn - ca.category_auditDate > 0 THEN 100
+            ELSE 1000
+        END +(c.customer_priority * a.address_zone)) AS p5
 FROM OrderItemView oi
 LEFT OUTER JOIN OrderView o ON oi.orderItem_orderId = o.order_id
 LEFT OUTER JOIN ProductView p ON oi.orderItem_productId = p.product_id

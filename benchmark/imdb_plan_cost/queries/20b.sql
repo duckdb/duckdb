@@ -22,8 +22,7 @@ WHERE cct1.kind = 'cast'
       'based-on-comic',
       'tv-special',
       'fight',
-      'violence'
-  )
+      'violence')
   AND kt.kind = 'movie'
   AND n.name LIKE '%Downey%Robert%'
   AND t.production_year > 2000

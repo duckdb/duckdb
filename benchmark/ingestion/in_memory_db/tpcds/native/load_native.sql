@@ -1,4 +1,5 @@
 call dsdgen(sf = 1);
+
 CREATE VIEW call_center_native AS
 SELECT *
 FROM call_center;

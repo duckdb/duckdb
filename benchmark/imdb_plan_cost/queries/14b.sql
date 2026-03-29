@@ -22,8 +22,7 @@ WHERE it1.info = 'countries'
       'Norwegian',
       'German',
       'USA',
-      'American'
-  )
+      'American')
   AND mi_idx.info > '6.0'
   AND t.production_year > 2010
   AND (t.title LIKE '%murder%' OR t.title LIKE '%Murder%' OR t.title LIKE '%Mord%')

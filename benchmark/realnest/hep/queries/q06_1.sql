@@ -1,7 +1,19 @@
 WITH trijets_invariant_mass AS MATERIALIZED (
         SELECT
             row_id_i,
-            AddPtEtaPhiM3({ 'pt' :j1.pt, 'eta' :j1.eta, 'phi' :j1.phi, 'mass' :j1.mass }, { 'pt' :j2.pt, 'eta' :j2.eta, 'phi' :j2.phi, 'mass' :j2.mass }, { 'pt' :j3.pt, 'eta' :j3.eta, 'phi' :j3.phi, 'mass' :j3.mass }) AS triJet,
+            AddPtEtaPhiM3(
+                { 'pt' :j1.pt,
+                'eta' :j1.eta,
+                'phi' :j1.phi,
+                'mass' :j1.mass },
+                { 'pt' :j2.pt,
+                'eta' :j2.eta,
+                'phi' :j2.phi,
+                'mass' :j2.mass },
+                { 'pt' :j3.pt,
+                'eta' :j3.eta,
+                'phi' :j3.phi,
+                'mass' :j3.mass }) AS triJet,
             abs(triJet ['mass'] - 172.5) AS invariant_mass
         FROM (
                 SELECT

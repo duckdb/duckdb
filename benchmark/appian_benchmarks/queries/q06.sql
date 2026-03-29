@@ -1,13 +1,14 @@
 SELECT
     t1rp2 AS g0,
     sum(t1rp3) / sum(t1rp4) AS p0,
-    sum(CASE
-        WHEN t1rp5 > 1 THEN 1
-        WHEN t2rp1 > 20200 THEN 2
-        WHEN t1rp6 > 15 THEN 3
-        WHEN t3rp1 > 150 THEN 4
-        ELSE 5
-    END) AS p1
+    sum(
+        CASE
+            WHEN t1rp5 > 1 THEN 1
+            WHEN t2rp1 > 20200 THEN 2
+            WHEN t1rp6 > 15 THEN 3
+            WHEN t3rp1 > 150 THEN 4
+            ELSE 5
+        END) AS p1
 FROM ProductView p
 LEFT OUTER JOIN (
         SELECT

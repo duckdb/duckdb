@@ -15,7 +15,6 @@ FROM
           AND k2.k_person2id <> 21990232556256
     ) f
 WHERE m_creatorid = f.k_person2id AND m_c_replyof IS NULL AND -- post, not comment
-
 m_messageid = mt_messageid
     AND mt_tagid = t_tagid
     AND t_name <> 'Hamid_Karzai'

@@ -21,7 +21,6 @@ FROM
                         FROM extended_tags k, tagclass
                         WHERE tc_tagclassid = k.s_supertagclassid AND tc_name = 'OfficeHolder'
                     ) -- :tagClassName
-
 )
     ) selected_tags
 WHERE k_person1id = 21990232556256

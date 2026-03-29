@@ -168,14 +168,16 @@ HAVING
 ORDER BY value DESC;
 SELECT
     l_shipmode,
-    sum(CASE
-        WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1
-        ELSE 0
-    END) AS high_line_count,
-    sum(CASE
-        WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1
-        ELSE 0
-    END) AS low_line_count
+    sum(
+        CASE
+            WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1
+            ELSE 0
+        END) AS high_line_count,
+    sum(
+        CASE
+            WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1
+            ELSE 0
+        END) AS low_line_count
 FROM orders, lineitem
 WHERE o_orderkey = l_orderkey
   AND l_shipmode IN ('MAIL', 'SHIP')
@@ -194,8 +196,8 @@ FROM (
     ) AS c_orders(c_custkey, c_count)
 GROUP BY c_count
 ORDER BY custdist DESC, c_count DESC;
-SELECT
-    100.00 * sum(CASE
+SELECT 100.00 * sum(
+    CASE
         WHEN p_type LIKE 'PROMO%' THEN l_extendedprice *(1 - l_discount)
         ELSE 0
     END) / sum(l_extendedprice *(1 - l_discount)) AS promo_revenue
@@ -268,24 +270,9 @@ ORDER BY o_totalprice DESC, o_orderdate
 LIMIT 100;
 SELECT sum(l_extendedprice *(1 - l_discount)) AS revenue
 FROM lineitem, part
-WHERE (p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN (
-    'SM CASE',
-    'SM BOX',
-    'SM PACK',
-    'SM PKG'
-) AND l_quantity >= 1 AND l_quantity <= 1 + 10 AND p_size BETWEEN 1 AND 5 AND l_shipmode IN ('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON')
-    OR (p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container IN (
-        'MED BAG',
-        'MED BOX',
-        'MED PKG',
-        'MED PACK'
-    ) AND l_quantity >= 10 AND l_quantity <= 10 + 10 AND p_size BETWEEN 1 AND 10 AND l_shipmode IN ('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON')
-    OR (p_partkey = l_partkey AND p_brand = 'Brand#34' AND p_container IN (
-        'LG CASE',
-        'LG BOX',
-        'LG PACK',
-        'LG PKG'
-    ) AND l_quantity >= 20 AND l_quantity <= 20 + 10 AND p_size BETWEEN 1 AND 15 AND l_shipmode IN ('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON');
+WHERE (p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= 1 AND l_quantity <= 1 + 10 AND p_size BETWEEN 1 AND 5 AND l_shipmode IN ('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON')
+    OR (p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container IN ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') AND l_quantity >= 10 AND l_quantity <= 10 + 10 AND p_size BETWEEN 1 AND 10 AND l_shipmode IN ('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON')
+    OR (p_partkey = l_partkey AND p_brand = 'Brand#34' AND p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') AND l_quantity >= 20 AND l_quantity <= 20 + 10 AND p_size BETWEEN 1 AND 15 AND l_shipmode IN ('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON');
 SELECT s_name, s_address
 FROM supplier, nation
 WHERE

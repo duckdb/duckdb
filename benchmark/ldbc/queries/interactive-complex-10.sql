@@ -6,7 +6,6 @@ SELECT
         SELECT count(DISTINCT m_messageid)
         FROM message, message_tag pt1
         WHERE m_creatorid = p_personid AND m_c_replyof IS NULL AND -- post, not comment
-
 m_messageid = mt_messageid
             AND EXISTS (
                 SELECT *
@@ -17,7 +16,6 @@ m_messageid = mt_messageid
         SELECT count(*)
         FROM message
         WHERE m_creatorid = p_personid AND m_c_replyof IS NULL AND -- post, not comment
-
 NOT EXISTS (
                 SELECT *
                 FROM person_tag, message_tag
@@ -52,13 +50,11 @@ WHERE
                     ) = 10 AND (CASE WHEN extract(day
                                 FROM p_birthday
                             ) >= 21 THEN TRUE ELSE FALSE END)) -- :month
-
 OR (extract(month
                         FROM p_birthday
                     ) = 11 AND (CASE WHEN extract(day
                                 FROM p_birthday
                             ) < 22 THEN TRUE ELSE FALSE END)) -- :nextMonth
-
 )
 ORDER BY score DESC, p_personid
 LIMIT 10

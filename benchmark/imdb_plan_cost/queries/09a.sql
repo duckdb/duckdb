@@ -13,8 +13,7 @@ WHERE
         '(voice)',
         '(voice: Japanese version)',
         '(voice) (uncredited)',
-        '(voice: English version)'
-    )
+        '(voice: English version)')
     AND cn.country_code = '[us]'
     AND mc.note IS NOT NULL
     AND (mc.note LIKE '%(USA)%' OR mc.note LIKE '%(worldwide)%')

@@ -1,4 +1,10 @@
-WITH RECURSIVE cposts(m_messageid, m_content, m_ps_imagefile, m_creationdate, m_c_replyof, m_creatorid) AS (
+WITH RECURSIVE cposts(
+    m_messageid,
+    m_content,
+    m_ps_imagefile,
+    m_creationdate,
+    m_c_replyof,
+    m_creatorid) AS (
         SELECT m_messageid, m_content, m_ps_imagefile, m_creationdate, m_c_replyof, m_creatorid
         FROM message
         WHERE m_creatorid = 21990232556256

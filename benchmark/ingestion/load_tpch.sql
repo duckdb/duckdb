@@ -1,6 +1,7 @@
 CALL dbgen(sf = 1);
 EXPORT DATABASE 'duckdb_benchmark_data/tpch_parquet'(FORMAT PARQUET);
 EXPORT DATABASE 'duckdb_benchmark_data/tpch_csv'(FORMAT CSV);
+
 CREATE VIEW customer_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/customer.csv');
@@ -10,6 +11,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/customer.parquet');
 CREATE VIEW customer_native AS
 SELECT *
 FROM customer;
+
 CREATE VIEW lineitem_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/lineitem.csv');
@@ -19,6 +21,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/lineitem.parquet');
 CREATE VIEW lineitem_native AS
 SELECT *
 FROM lineitem;
+
 CREATE VIEW nation_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/nation.csv');
@@ -28,6 +31,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/nation.parquet');
 CREATE VIEW nation_native AS
 SELECT *
 FROM nation;
+
 CREATE VIEW orders_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/orders.csv');
@@ -37,6 +41,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/orders.parquet');
 CREATE VIEW orders_native AS
 SELECT *
 FROM orders;
+
 CREATE VIEW part_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/part.csv');
@@ -46,6 +51,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/part.parquet');
 CREATE VIEW part_native AS
 SELECT *
 FROM part;
+
 CREATE VIEW partsupp_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/partsupp.csv');
@@ -55,6 +61,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/partsupp.parquet');
 CREATE VIEW partsupp_native AS
 SELECT *
 FROM partsupp;
+
 CREATE VIEW region_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/region.csv');
@@ -64,6 +71,7 @@ FROM read_parquet('duckdb_benchmark_data/tpch_parquet/region.parquet');
 CREATE VIEW region_native AS
 SELECT *
 FROM region;
+
 CREATE VIEW supplier_csv AS
 SELECT *
 FROM read_csv('duckdb_benchmark_data/tpch_csv/supplier.csv');

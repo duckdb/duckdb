@@ -24,8 +24,7 @@ WHERE cct1.kind = 'cast'
       'magnet',
       'web',
       'claw',
-      'laser'
-  )
+      'laser')
   AND kt.kind = 'movie'
   AND t.production_year > 2000
   AND kt.id = t.kind_id

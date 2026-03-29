@@ -7,9 +7,7 @@ SELECT
     COALESCE(m_ps_imagefile, '') || COALESCE(m_content, ''),
     0 AS lag,
     -- TODO
-
 --EXTRACT(EPOCH FROM (l.l_creationdate - m_creationdate)) / 60 as lag,
-
 (CASE WHEN EXISTS (
                 SELECT 1
                 FROM knows

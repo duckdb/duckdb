@@ -22,8 +22,7 @@ WHERE it1.info = 'countries'
       'Norwegian',
       'German',
       'USA',
-      'American'
-  )
+      'American')
   AND mi_idx.info < '8.5'
   AND t.production_year > 2010
   AND kt.id = t.kind_id

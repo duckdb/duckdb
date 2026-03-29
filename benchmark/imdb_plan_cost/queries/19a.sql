@@ -15,8 +15,7 @@ WHERE
         '(voice)',
         '(voice: Japanese version)',
         '(voice) (uncredited)',
-        '(voice: English version)'
-    )
+        '(voice: English version)')
     AND cn.country_code = '[us]'
     AND it.info = 'release dates'
     AND mc.note IS NOT NULL

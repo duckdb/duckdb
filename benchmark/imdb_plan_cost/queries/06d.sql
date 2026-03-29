@@ -9,8 +9,7 @@ WHERE
         'based-on-comic',
         'tv-special',
         'fight',
-        'violence'
-    )
+        'violence')
     AND n.name LIKE '%Downey%Robert%'
     AND t.production_year > 2000
     AND k.id = mk.keyword_id

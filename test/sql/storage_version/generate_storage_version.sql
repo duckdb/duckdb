@@ -1,6 +1,5 @@
 BEGIN TRANSACTION;
 -- test various types
-
 CREATE TABLE integral_values(
     i TINYINT,
     j smallint,
@@ -48,6 +47,7 @@ VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
     (NULL),
     ('47183823-2574-4bfd-b411-99ed177d3e43'),
     ('{10203040506070800102030405060708}');
+
 CREATE TYPE int_alias AS INTEGER;
 CREATE TYPE char_alias AS VARCHAR;
 CREATE TABLE alias_values(
@@ -59,12 +59,10 @@ INSERT INTO alias_values
 VALUES (2, 'hello world', 'alias'),
     (NULL, NULL, NULL);
 -- all types
-
 CREATE TABLE all_types AS
 SELECT *
 FROM test_all_types();
 -- test constraints
-
 CREATE TABLE check_constraint(
     i integer,
     j integer,
@@ -78,13 +76,10 @@ CREATE TABLE pk_constraint(
 );
 CREATE TABLE unique_constraint(i integer UNIQUE);
 -- test schemas
-
 CREATE SCHEMA test3;
 -- test sequences
-
 CREATE SEQUENCE test3.bla;
 -- test various views
-
 CREATE VIEW v1 AS
 SELECT *
 FROM integral_values;
@@ -92,20 +87,19 @@ CREATE VIEW test3.v2 AS
 SELECT ((i + 2) * 3)::INT
 FROM integral_values;
 -- bigger tables
-
 CREATE TABLE big_integers AS
 SELECT i
 FROM RANGE (0, 100000) t1(i);
 CREATE TABLE big_string AS
 SELECT repeat('a', 100000) a;
 COMMIT;
--- views
 
+-- views
 CREATE TABLE base_table AS
 SELECT *
 FROM RANGE (4) tbl(i);
--- many expression types
 
+-- many expression types
 CREATE VIEW cv1 AS
 SELECT
     bt.k,
@@ -134,8 +128,8 @@ SELECT
         ORDER BY k
     )
 FROM base_table bt(k);
--- aggregates
 
+-- aggregates
 CREATE VIEW cv2 AS
 SELECT
     i % 2 AS k,
@@ -153,8 +147,8 @@ WHERE i <> 1
 GROUP BY 1
 HAVING k <> 1
 ORDER BY 1;
--- window functions
 
+-- window functions
 CREATE VIEW cv3 AS
 SELECT
     i,
@@ -173,8 +167,8 @@ SELECT
 FROM base_table
 QUALIFY row_number() OVER () != 2
 ORDER BY 1;
--- recursive CTE
 
+-- recursive CTE
 CREATE VIEW cv4 AS
 WITH RECURSIVE cte AS (
         SELECT 1 i
@@ -185,8 +179,8 @@ WITH RECURSIVE cte AS (
     )
 SELECT *
 FROM cte;
--- multiple regular CTEs with setops
 
+-- multiple regular CTEs with setops
 CREATE VIEW cv5 AS
 WITH cte AS (
         SELECT 1 AS i
@@ -208,8 +202,8 @@ UNION ALL
 SELECT *
 FROM cte3
 ORDER BY i;
--- various set ops
 
+-- various set ops
 CREATE VIEW cv6 AS
 SELECT *
 FROM generate_series(0, 6, 1) tbl(i)
@@ -222,22 +216,22 @@ EXCEPT (
         SELECT 3
     )
 ORDER BY 1;
--- group by all
 
+-- group by all
 CREATE VIEW cv7 AS
 SELECT i % 2, SUM(i)
 FROM base_table
 GROUP BY ALL
 ORDER BY ALL;
--- values
 
+-- values
 CREATE VIEW cv8 AS
 VALUES (1),
     (2),
     (3),
     (NULL);
--- subqueries
 
+-- subqueries
 CREATE VIEW cv9 AS
 SELECT
     DISTINCT (
@@ -251,21 +245,21 @@ FROM (
 ORDER BY (
         SELECT tbl.i
     );
--- samples
 
+-- samples
 CREATE VIEW cv10 AS
 SELECT *
 FROM base_table TABLESAMPLE 10 ROWS USING SAMPLE 100 %
 ORDER BY ALL;
--- grouping sets
 
+-- grouping sets
 CREATE VIEW cv11 AS
 SELECT GROUPING_ID(k, i), i % 2 AS k, i, SUM(i)
 FROM base_table
 GROUP BY GROUPING SETS ((), (k), (k, i))
 ORDER BY ALL;
--- window clause
 
+-- window clause
 CREATE VIEW cv12 AS
 SELECT i, sum(i) OVER (w)
 FROM
@@ -274,19 +268,18 @@ FROM
         ORDER BY i ASC
     )
 ORDER BY ALL;
--- limit order by
 
+-- limit order by
 CREATE VIEW cv13 AS
 SELECT *
 FROM base_table
 ORDER BY i DESC
 LIMIT 2
 OFFSET 1;
--- v29: IGNORE NULLS
 
-CREATE FUNCTION
-    V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (
+-- v29: IGNORE NULLS
+CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (
         ORDER BY x NULLS LAST
     );
-FORCE
-CHECKPOINT;
+
+FORCE CHECKPOINT;

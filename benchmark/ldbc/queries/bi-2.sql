@@ -1,3 +1,7 @@
+/* Q2. Tag evolution
+\set year 2010
+\set month 11
+ */
 WITH detail AS (
         SELECT
             t.t_name,
@@ -9,12 +13,10 @@ WITH detail AS (
                     ) != 11 THEN m.m_messageid ELSE NULL END) AS countMonth2
         FROM message m, message_tag mt, tag t
         WHERE 1 = 1 -- join
-
-AND m.m_messageid = mt.mt_messageid
-            AND mt.mt_tagid = t.t_tagid -- filter
-
-AND m.m_creationdate >= '2010-11-1'::date
-            AND m.m_creationdate < '2010-11-1'::date + interval '2' month
+          AND m.m_messageid = mt.mt_messageid
+          AND mt.mt_tagid = t.t_tagid -- filter
+          AND m.m_creationdate >= '2010-11-1'::date
+          AND m.m_creationdate < '2010-11-1'::date + interval '2' month
         GROUP BY t.t_name
     )
 SELECT t_name AS "tag.name", countMonth1, countMonth2, abs(countMonth1 - countMonth2) AS diff

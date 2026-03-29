@@ -11,8 +11,7 @@ WHERE ct.kind = 'production companies'
       'Swedish',
       'Denish',
       'Norwegian',
-      'German'
-  )
+      'German')
   AND t.production_year > 2005
   AND t.id = mi.movie_id
   AND t.id = mc.movie_id

@@ -44,7 +44,9 @@ WITH uniform_structure_leptons AS (
     processed_pairs AS (
         SELECT
             event,
-            min_by(ROW (l1_idx, l2_idx, Leptons, MET.pt, MET.phi), abs(91.2 - sqrt(l.e * l.e - l.x * l.x - l.y * l.y - l.z * l.z))) AS SYSTEM
+            min_by(
+                ROW (l1_idx, l2_idx, Leptons, MET.pt, MET.phi),
+                abs(91.2 - sqrt(l.e * l.e - l.x * l.x - l.y * l.y - l.z * l.z))) AS SYSTEM
         FROM lepton_pairs
         GROUP BY event
     ),
@@ -68,15 +70,16 @@ WITH uniform_structure_leptons AS (
         GROUP BY event
     )
 SELECT
-    FLOOR((CASE
-        WHEN pt < 15 THEN 14.99
-        WHEN pt > 250 THEN 250.1
-        ELSE pt
-    END - 0.9) / 2.35) * 2.35 + 2.075 AS x,
+    FLOOR((
+        CASE
+            WHEN pt < 15 THEN 14.99
+            WHEN pt > 250 THEN 250.1
+            ELSE pt
+        END - 0.9) / 2.35) * 2.35 + 2.075 AS x,
     COUNT(*) AS y
 FROM other_max_pt
-GROUP BY
-    FLOOR((CASE
+GROUP BY FLOOR((
+    CASE
         WHEN pt < 15 THEN 14.99
         WHEN pt > 250 THEN 250.1
         ELSE pt

@@ -1,4 +1,5 @@
 call dbgen(sf = 1);
+
 CREATE VIEW customer_native AS
 SELECT *
 FROM customer;

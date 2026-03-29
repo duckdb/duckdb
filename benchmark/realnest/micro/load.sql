@@ -23,8 +23,11 @@ CREATE TABLE run2012B_singleMu AS
 SELECT *
 FROM rn_singleMu.run2012B_singleMu;
 CREATE TABLE single_mu_lists AS
-SELECT
-    * REPLACE (list_resize(Jet, 10, NULL) AS Jet, list_resize(Muon, 10, NULL) AS Muon, list_resize(Photon, 10, NULL) AS Photon, list_resize(Tau, 10, NULL) AS Tau)
+SELECT * REPLACE (
+    list_resize(Jet, 10, NULL) AS Jet,
+    list_resize(Muon, 10, NULL) AS Muon,
+    list_resize(Photon, 10, NULL) AS Photon,
+    list_resize(Tau, 10, NULL) AS Tau)
 FROM rn_singleMu.run2012B_singleMu;
 CREATE OR REPLACE TABLE singleMu AS
 SELECT

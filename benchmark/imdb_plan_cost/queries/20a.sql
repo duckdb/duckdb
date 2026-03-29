@@ -22,8 +22,7 @@ WHERE cct1.kind = 'cast'
       'based-on-comic',
       'tv-special',
       'fight',
-      'violence'
-  )
+      'violence')
   AND kt.kind = 'movie'
   AND t.production_year > 1950
   AND kt.id = t.kind_id

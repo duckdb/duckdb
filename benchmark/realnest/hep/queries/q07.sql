@@ -8,15 +8,16 @@ WITH matching_jets AS (
         GROUP BY rowid
     )
 SELECT
-    FLOOR((CASE
-        WHEN pt_sum < 15 THEN 14.9
-        WHEN pt_sum > 200 THEN 200.1
-        ELSE pt_sum
-    END - 0.2) / 1.85) * 1.85 + 1.125 AS x,
+    FLOOR((
+        CASE
+            WHEN pt_sum < 15 THEN 14.9
+            WHEN pt_sum > 200 THEN 200.1
+            ELSE pt_sum
+        END - 0.2) / 1.85) * 1.85 + 1.125 AS x,
     COUNT(*) AS y
 FROM matching_jets
-GROUP BY
-    FLOOR((CASE
+GROUP BY FLOOR((
+    CASE
         WHEN pt_sum < 15 THEN 14.9
         WHEN pt_sum > 200 THEN 200.1
         ELSE pt_sum

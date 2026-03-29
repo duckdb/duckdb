@@ -805,8 +805,7 @@ string SQLFormatter::MergeShortClauses(const string &formatted) const {
 						continue;
 					}
 				}
-
-				}
+			}
 
 			// For CREATE/COPY clauses, always merge at least the first content
 			// line so the name stays on the same line as the keyword.
@@ -1516,7 +1515,7 @@ string SQLFormatter::ExpandLongParenLists(const string &formatted) const {
 
 			changed = true;
 			string prefix = line.substr(0, open_paren + 1); // up to and including '('
-			string suffix = line.substr(close_paren);        // from ')' onwards
+			string suffix = line.substr(close_paren);       // from ')' onwards
 
 			const idx_t line_indent = LeadingSpaces(line);
 			const string val_indent(line_indent + config.indent_size, ' ');
