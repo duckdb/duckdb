@@ -39,6 +39,21 @@ public:
 
 	bool BuildPerfectHashTable(LogicalType &type);
 
+	//! Get the build-side statistics (min, max, range)
+	const PerfectHashJoinStats &GetStatistics() const {
+		return perfect_join_statistics;
+	}
+
+	//! Get the build-side key existence bitmap
+	const ValidityMask &GetBitmap() const {
+		return bitmap_build_idx;
+	}
+
+	//! Get the number of unique keys in the build side
+	idx_t GetUniqueKeys() const {
+		return unique_keys;
+	}
+
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
 	                                         DataChunk &chunk, OperatorState &state);

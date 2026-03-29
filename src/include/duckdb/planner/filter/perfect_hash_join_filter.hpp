@@ -32,6 +32,16 @@ public:
 	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const;
 	bool FilterValue(const Value &value) const;
 
+	//! Get the key column name
+	const string &GetKeyColumnName() const {
+		return key_column_name;
+	}
+
+	//! Get the underlying executor (may be null)
+	optional_ptr<const PerfectHashJoinExecutor> GetExecutor() const {
+		return perfect_join_executor;
+	}
+
 private:
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
