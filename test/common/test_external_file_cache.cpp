@@ -251,6 +251,56 @@ TEST_CASE("ReindexCachedFiles non-aligned block sizes", "[external_file_cache]")
 	REQUIRE(total_bytes_after == FILE_SIZE);
 }
 
+TEST_CASE("ReindexCachedFiles non-aligned merge", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t OLD_BLOCK_SIZE = 3000;
+	const idx_t NEW_BLOCK_SIZE = 7000;
+	const idx_t FILE_SIZE = 21000; // 7 old blocks exactly
+
+	Connection con(db);
+	con.Query("SET external_file_cache_local_block_size=" + to_string(OLD_BLOCK_SIZE));
+
+	string content(FILE_SIZE, '\0');
+	for (idx_t i = 0; i < FILE_SIZE; i++) {
+		content[i] = static_cast<char>('A' + (i % 26));
+	}
+	EFCTestFileGuard test_file("test_reindex_nonaligned_merge.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	{
+		auto group = handle->Read(FILE_SIZE, 0);
+		string result(FILE_SIZE, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
+		REQUIRE(result == content);
+	}
+
+	REQUIRE(cache.GetCachedFileInformation().size() == 7); // 7 x 3000 byte blocks
+
+	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
+
+	auto cached_after = cache.GetCachedFileInformation();
+	idx_t total_bytes_after = 0;
+	for (auto &info : cached_after) {
+		total_bytes_after += info.nr_bytes;
+	}
+	// 21000 / 7000 = 3 new blocks. Each needs multiple old blocks (e.g., new block 0
+	// needs old blocks 0,1,2 since [0,7000) spans [0,3000),[3000,6000),[6000,9000)).
+	// New block 1 at [7000,14000) spans old blocks 2,3,4 — old block 2 covers [6000,9000),
+	// so it contributes [7000,9000). All old blocks pinned, so all new blocks created.
+	REQUIRE(cached_after.size() == 3);
+	REQUIRE(total_bytes_after == FILE_SIZE);
+}
+
 TEST_CASE("ReindexCachedFiles local vs remote isolation", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;

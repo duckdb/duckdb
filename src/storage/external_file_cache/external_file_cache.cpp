@@ -3,6 +3,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -20,7 +21,7 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 }
 
 void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_block_size, idx_t new_block_size) {
-	idx_t file_size;
+	idx_t file_size = 0;
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
 		file_size = cached_file.file_size;
@@ -29,14 +30,14 @@ void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_blo
 		return;
 	}
 
-	annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 
-	// Phase 1: Pin all LOADED old blocks.
-	unordered_map<idx_t, pair<BufferHandle, idx_t>> pinned;
+	// Phase 1: Pin all LOADED old blocks, sorted by block index.
+	map<idx_t, pair<BufferHandle, idx_t>> pinned;
 	for (auto &block_entry : cached_file.blocks) {
 		const idx_t old_idx = block_entry.first;
 		auto &block = *block_entry.second;
-		annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+		const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
 		if (block.state != CacheBlockState::LOADED || !block.block_handle) {
 			continue;
 		}
@@ -51,71 +52,56 @@ void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_blo
 		return;
 	}
 
-	// Phase 2: Build new blocks by copying data from pinned old blocks.
+	// Phase 2: Find contiguous runs of old blocks and create new blocks from each run.
+	// A new block is only created if its entire byte range is covered by the run.
 	unordered_map<idx_t, shared_ptr<CacheBlock>> new_blocks;
 
-	for (auto &pinned_entry : pinned) {
-		const idx_t old_idx = pinned_entry.first;
-		const idx_t old_nr_bytes = pinned_entry.second.second;
-		const idx_t old_start = old_idx * old_block_size;
+	auto it = pinned.begin();
+	while (it != pinned.end()) {
+		// Find a contiguous run of old blocks starting at 'it'.
+		const idx_t run_byte_start = it->first * old_block_size;
+		idx_t run_byte_end = run_byte_start;
+		idx_t expected_idx = it->first;
+		auto run_end = it;
+		while (run_end != pinned.end() && run_end->first == expected_idx) {
+			run_byte_end = run_end->first * old_block_size + run_end->second.second;
+			expected_idx++;
+			++run_end;
+		}
 
-		const idx_t new_first = old_start / new_block_size;
-		const idx_t new_last = (old_start + old_nr_bytes - 1) / new_block_size;
+		// This contiguous run covers file bytes [run_byte_start, run_byte_end).
+		// Create all new blocks whose byte range fits entirely within this run.
+		const idx_t first_new = run_byte_start / new_block_size;
+		const idx_t last_new = (run_byte_end - 1) / new_block_size;
 
-		for (idx_t new_idx = new_first; new_idx <= new_last; new_idx++) {
-			if (new_blocks.count(new_idx)) {
-				continue;
-			}
-
+		for (idx_t new_idx = first_new; new_idx <= last_new; new_idx++) {
 			const idx_t new_start = new_idx * new_block_size;
 			const idx_t new_end = MinValue(new_start + new_block_size, file_size);
-			if (new_start >= new_end) {
+			if (new_start >= new_end || new_start < run_byte_start || new_end > run_byte_end) {
 				continue;
 			}
 			const idx_t new_size = new_end - new_start;
 
-			// Check that ALL contributing old blocks are pinned and have enough bytes.
-			const idx_t contrib_first = new_start / old_block_size;
-			const idx_t contrib_last = (new_end - 1) / old_block_size;
-			bool all_available = true;
-			for (idx_t oi = contrib_first; oi <= contrib_last; oi++) {
-				if (!pinned.count(oi)) {
-					all_available = false;
-					break;
-				}
-				const idx_t oi_file_start = oi * old_block_size;
-				const idx_t need_up_to = MinValue(new_end, oi_file_start + old_block_size);
-				if (oi_file_start + pinned.at(oi).second < need_up_to) {
-					all_available = false;
-					break;
-				}
-			}
-			if (!all_available) {
-				continue;
-			}
-
-			// Allocate new buffer and copy from contributing old block(s).
 			auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_size);
 
+			// Copy from each contributing old block in the run.
+			const idx_t contrib_first = new_start / old_block_size;
+			const idx_t contrib_last = (new_end - 1) / old_block_size;
 			for (idx_t oi = contrib_first; oi <= contrib_last; oi++) {
-				auto &old_pin = pinned.at(oi).first;
-				const idx_t old_pin_bytes = pinned.at(oi).second;
+				auto &old_entry = pinned.at(oi);
 				const idx_t oi_file_start = oi * old_block_size;
-
 				const idx_t copy_start = MaxValue(new_start, oi_file_start);
-				const idx_t copy_end = MinValue(new_end, oi_file_start + old_pin_bytes);
+				const idx_t copy_end = MinValue(new_end, oi_file_start + old_entry.second);
 				if (copy_start >= copy_end) {
 					continue;
 				}
-				const idx_t src_offset = copy_start - oi_file_start;
-				const idx_t dst_offset = copy_start - new_start;
-				const idx_t copy_len = copy_end - copy_start;
-				memcpy(buf.Ptr() + dst_offset, old_pin.Ptr() + src_offset, copy_len);
+				memcpy(buf.Ptr() + (copy_start - new_start), old_entry.first.Ptr() + (copy_start - oi_file_start),
+				       copy_end - copy_start);
 			}
 
 			auto new_block = make_shared_ptr<CacheBlock>();
 			{
-				annotated_lock_guard<annotated_mutex> block_guard(new_block->mtx);
+				const annotated_lock_guard<annotated_mutex> block_guard(new_block->mtx);
 				new_block->block_handle = buf.GetBlockHandle();
 				new_block->nr_bytes = new_size;
 				new_block->state = CacheBlockState::LOADED;
@@ -125,6 +111,8 @@ void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_blo
 			}
 			new_blocks[new_idx] = std::move(new_block);
 		}
+
+		it = run_end;
 	}
 
 	// Phase 3: Replace old blocks with new blocks.
