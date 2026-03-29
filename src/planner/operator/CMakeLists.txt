@@ -13,6 +13,7 @@ add_library_unity(
   logical_cross_product.cpp
   logical_cteref.cpp
   logical_delete.cpp
+  logical_trigger.cpp
   logical_delim_get.cpp
   logical_dependent_join.cpp
   logical_distinct.cpp

@@ -172,6 +172,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		result = LogicalSimple::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		result = LogicalTrigger::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(deserializer);
 		break;
@@ -790,6 +793,25 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer)
 	auto limit = deserializer.ReadPropertyWithDefault<idx_t>(201, "limit");
 	auto offset = deserializer.ReadPropertyWithDefault<idx_t>(202, "offset");
 	auto result = duckdb::unique_ptr<LogicalTopN>(new LogicalTopN(std::move(orders), limit, offset));
+	return std::move(result);
+}
+
+void LogicalTrigger::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
+	serializer.WriteProperty<TriggerTiming>(201, "timing", timing);
+	serializer.WriteProperty<TriggerEventType>(202, "event_type", event_type);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<QueryNode>>>(203, "trigger_bodies", trigger_bodies);
+	serializer.WritePropertyWithDefault<vector<TriggerForEach>>(204, "trigger_for_each", trigger_for_each);
+}
+
+unique_ptr<LogicalOperator> LogicalTrigger::Deserialize(Deserializer &deserializer) {
+	auto table_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info");
+	auto timing = deserializer.ReadProperty<TriggerTiming>(201, "timing");
+	auto event_type = deserializer.ReadProperty<TriggerEventType>(202, "event_type");
+	auto result = duckdb::unique_ptr<LogicalTrigger>(new LogicalTrigger(deserializer.Get<ClientContext &>(), table_info, timing, event_type));
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<QueryNode>>>(203, "trigger_bodies", result->trigger_bodies);
+	deserializer.ReadPropertyWithDefault<vector<TriggerForEach>>(204, "trigger_for_each", result->trigger_for_each);
 	return std::move(result);
 }
 

@@ -11,6 +11,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/table_scan.hpp"
@@ -605,7 +606,20 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());
-	result.plan = std::move(insert);
+
+	// BEFORE is not yet supported
+	vector<unique_ptr<QueryNode>> trigger_bodies;
+	vector<TriggerForEach> trigger_for_each;
+	CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT, trigger_bodies,
+	                trigger_for_each);
+	if (!trigger_bodies.empty()) {
+		auto trigger = make_uniq<LogicalTrigger>(table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT,
+		                                         std::move(trigger_bodies), std::move(trigger_for_each));
+		trigger->AddChild(std::move(insert));
+		result.plan = std::move(trigger);
+	} else {
+		result.plan = std::move(insert);
+	}
 
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;

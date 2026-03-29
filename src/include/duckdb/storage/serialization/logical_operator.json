@@ -798,6 +798,45 @@
     ]
   },
   {
+    "class": "LogicalTrigger",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TRIGGER",
+    "members": [
+      {
+        "id": 200,
+        "name": "table_info",
+        "type": "CreateInfo*",
+        "serialize_property": "table.GetInfo()"
+      },
+      {
+        "id": 201,
+        "name": "timing",
+        "type": "TriggerTiming"
+      },
+      {
+        "id": 202,
+        "name": "event_type",
+        "type": "TriggerEventType"
+      },
+      {
+        "id": 203,
+        "name": "trigger_bodies",
+        "type": "vector<QueryNode*>"
+      },
+      {
+        "id": 204,
+        "name": "trigger_for_each",
+        "type": "vector<TriggerForEach>"
+      }
+    ],
+    "constructor": [
+      "$ClientContext",
+      "table_info&",
+      "timing",
+      "event_type"
+    ]
+  },
+  {
     "class": "LogicalUpdate",
     "base": "LogicalOperator",
     "enum": "LOGICAL_UPDATE",

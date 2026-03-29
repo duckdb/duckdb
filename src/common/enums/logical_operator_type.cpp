@@ -72,6 +72,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return "MERGE_INTO";
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		return "TRIGGER";
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "PREPARE";
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:

@@ -12,9 +12,6 @@
 #include "duckdb/execution/trigger_executor.hpp"
 
 namespace duckdb {
-class ClientContext;
-class PhysicalPlanGenerator;
-class TableCatalogEntry;
 
 //! PhysicalTrigger fires triggers after a statement completes
 class PhysicalTrigger : public PhysicalOperator {
@@ -24,15 +21,7 @@ public:
 public:
 	PhysicalTrigger(PhysicalPlan &physical_plan, vector<TriggerInfo> triggers, idx_t estimated_cardinality);
 
-	//! Trigger bodies collected at physical-plan generation time
 	vector<TriggerInfo> triggers;
-
-public:
-	//! Wraps an existing physical operator with a PhysicalTrigger if matching triggers exist.
-	//! Should be running in physical-plan generation time.
-	static PhysicalOperator &WrapIfNeeded(ClientContext &context, PhysicalPlanGenerator &planner,
-	                                      PhysicalOperator &op, TableCatalogEntry &table, TriggerTiming timing,
-	                                      TriggerEventType event_type);
 
 	// Sink interface - receives the row count emitted by the operator
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;

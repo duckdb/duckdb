@@ -25,6 +25,7 @@ add_library_unity(
   plan_filter.cpp
   plan_get.cpp
   plan_insert.cpp
+  plan_trigger.cpp
   plan_limit.cpp
   plan_merge_into.cpp
   plan_order.cpp

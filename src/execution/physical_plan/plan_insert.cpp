@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
-#include "duckdb/execution/operator/persistent/physical_trigger.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/main/config.hpp"
@@ -142,8 +141,7 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table, std::move(op.bound_constraints),
 		                                                 op.estimated_cardinality);
 		insert.children.push_back(*plan);
-		return PhysicalTrigger::WrapIfNeeded(context, planner, insert, op.table, TriggerTiming::AFTER,
-		                                     TriggerEventType::INSERT_EVENT);
+		return insert;
 	}
 
 	auto &insert = planner.Make<PhysicalInsert>(
@@ -154,8 +152,7 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 	    std::move(op.on_conflict_info.on_conflict_filter), std::move(op.on_conflict_info.columns_to_fetch),
 	    op.on_conflict_info.update_is_del_and_insert);
 	insert.children.push_back(*plan);
-	return PhysicalTrigger::WrapIfNeeded(context, planner, insert, op.table, TriggerTiming::AFTER,
-	                                     TriggerEventType::INSERT_EVENT);
+	return insert;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {

@@ -8,6 +8,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
 #include "duckdb/main/settings.hpp"
@@ -123,6 +124,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalUpdate>());
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return CreatePlan(op.Cast<LogicalMergeInto>());
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		return CreatePlan(op.Cast<LogicalTrigger>());
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
