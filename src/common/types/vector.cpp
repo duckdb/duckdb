@@ -412,10 +412,12 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 
 		// Copy the data buffer to a resized buffer.
 		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
-		auto new_data = stored_allocator ? stored_allocator->Allocate(target_size)
-		                                 : Allocator::DefaultAllocator().Allocate(target_size);
+		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
+		auto new_data = allocator.Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
-		resize_info_entry.buffer->SetData(std::move(new_data));
+		auto new_buffer = make_buffer<VectorBuffer>(std::move(new_data));
+		resize_info_entry.buffer = new_buffer.get();
+		resize_info_entry.vec.buffer = std::move(new_buffer);
 	}
 }
 

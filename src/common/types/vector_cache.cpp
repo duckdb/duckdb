@@ -55,7 +55,6 @@ public:
 		result.validity.Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			result.buffer->ResetData();
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
@@ -94,7 +93,6 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.buffer->ResetData();
 			result.auxiliary.reset();
 			break;
 		}

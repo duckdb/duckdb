@@ -98,18 +98,6 @@ public:
 		return data_ptr;
 	}
 
-	void SetData(data_ptr_t data) {
-		data_ptr = data;
-	}
-	void SetData(AllocatedData &&new_data) {
-		allocated_data = std::move(new_data);
-		data_ptr = allocated_data.get();
-	}
-
-	void ResetData() {
-		data_ptr = allocated_data.get();
-	}
-
 	VectorAuxiliaryData *GetAuxiliaryData() {
 		return aux_data.get();
 	}
