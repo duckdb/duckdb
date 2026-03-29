@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 #include <functional>
 
