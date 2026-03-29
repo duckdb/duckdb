@@ -35,7 +35,10 @@ SELECT
     z.zombieid AS "zombie.id",
     count(zl.zombieid) AS zombieLikeCount,
     count(l.l_personid) AS totalLikeCount,
-    CASE WHEN count(l.l_personid) = 0 THEN 0 ELSE count(zl.zombieid)::float / count(l.l_personid) END AS zombieScore
+    CASE
+        WHEN count(l.l_personid) = 0 THEN 0
+        ELSE count(zl.zombieid)::float / count(l.l_personid)
+    END AS zombieScore
 FROM message m
 INNER JOIN likes l ON (m.m_messageid = l.l_messageid)
 INNER JOIN person p ON (l.l_personid = p.p_personid AND p.p_creationdate < '2013-01-01T00:00:00')

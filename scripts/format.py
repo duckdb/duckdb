@@ -337,11 +337,13 @@ def get_formatted_text(f, full_path, directory, ext):
     )
     new_text = proc.stdout.read().decode('utf8')
     stderr = proc.stderr.read().decode('utf8')
-    if len(stderr) > 0:
+    proc.wait()
+    if proc.returncode != 0:
         print(os.getcwd())
         print("Failed to format file " + full_path)
         print(' '.join(proc_command))
-        print(stderr)
+        if len(stderr) > 0:
+            print(stderr)
         exit(1)
     new_text = new_text.replace('\r', '')
     new_text = re.sub(r'\n*$', '', new_text)

@@ -51,7 +51,10 @@ LEFT OUTER JOIN (
         GROUP BY c.customer_id
     ) t7 ON c.customer_id = t7pk
 LEFT OUTER JOIN (
-        SELECT sum(creditCard_zip) AS t8rp1, sum(creditCard_lastChargeAmount) AS t8rp2, c.customer_id AS t8pk
+        SELECT
+            sum(creditCard_zip) AS t8rp1,
+            sum(creditCard_lastChargeAmount) AS t8rp2,
+            c.customer_id AS t8pk
         FROM CustomerView c
         LEFT OUTER JOIN OrderView o ON c.customer_id = o.order_customerId
         LEFT OUTER JOIN CreditCardView cc ON o.order_creditCardNumber = cc.creditCard_number

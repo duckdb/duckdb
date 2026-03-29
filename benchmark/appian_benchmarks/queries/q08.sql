@@ -1,4 +1,9 @@
-SELECT t4rp1 AS g0, t5rp1 AS g1, sum(creditCard_lastChargeAmount) AS p0, min(t6rp1) AS p1, sum(t3rp2) AS p2
+SELECT
+    t4rp1 AS g0,
+    t5rp1 AS g1,
+    sum(creditCard_lastChargeAmount) AS p0,
+    min(t6rp1) AS p1,
+    sum(t3rp2) AS p2
 FROM CreditCardView cc
 LEFT OUTER JOIN (
         SELECT min(order_id) AS t1rp1, creditCard_number AS t1pk
@@ -15,7 +20,10 @@ LEFT OUTER JOIN (
         GROUP BY creditCard_number
     ) t2 ON cc.creditCard_number = t2pk
 LEFT OUTER JOIN (
-        SELECT min(address_zip) AS t3rp1, sum(taxRecord_bracketThreshold) AS t3rp2, creditCard_number AS t3pk
+        SELECT
+            min(address_zip) AS t3rp1,
+            sum(taxRecord_bracketThreshold) AS t3rp2,
+            creditCard_number AS t3pk
         FROM CreditCardView cc
         LEFT OUTER JOIN OrderView o ON cc.creditCard_number = o.order_creditCardNumber
         LEFT OUTER JOIN CustomerView c ON o.order_customerId = c.customer_id

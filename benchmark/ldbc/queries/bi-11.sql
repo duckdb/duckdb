@@ -17,7 +17,10 @@ AND p.p_placeid = ci.pl_placeid
 AND co.pl_name = 'Belarus'
     )
 SELECT count(*)
-FROM persons_of_country_w_friends p1, persons_of_country_w_friends p2, persons_of_country_w_friends p3
+FROM
+    persons_of_country_w_friends p1,
+    persons_of_country_w_friends p2,
+    persons_of_country_w_friends p3
 WHERE 1 = 1 -- join
 
 AND p1.friendid = p2.personid

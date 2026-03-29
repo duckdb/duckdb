@@ -15,7 +15,17 @@ WHERE cn.country_code != '[pl]'
   AND k.keyword = 'sequel'
   AND lt.link LIKE '%follow%'
   AND mc.note IS NULL
-  AND mi.info IN ('Sweden', 'Norway', 'Germany', 'Denmark', 'Swedish', 'Denish', 'Norwegian', 'German', 'English')
+  AND mi.info IN (
+      'Sweden',
+      'Norway',
+      'Germany',
+      'Denmark',
+      'Swedish',
+      'Denish',
+      'Norwegian',
+      'German',
+      'English'
+  )
   AND t.production_year BETWEEN 1950 AND 2010
   AND lt.id = ml.link_type_id
   AND ml.movie_id = t.id

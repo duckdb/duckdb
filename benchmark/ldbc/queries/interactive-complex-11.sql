@@ -11,7 +11,9 @@ FROM
         UNION
         SELECT k2.k_person2id
         FROM knows k1, knows k2
-        WHERE k1.k_person1id = 21990232556256 AND k1.k_person2id = k2.k_person1id AND k2.k_person2id <> 21990232556256
+        WHERE k1.k_person1id = 21990232556256
+          AND k1.k_person2id = k2.k_person1id
+          AND k2.k_person2id <> 21990232556256
     ) f
 WHERE p_personid = f.k_person2id
   AND p_personid = pc_personid

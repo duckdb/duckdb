@@ -34,7 +34,7 @@ struct FormatterConfig {
 	//! a single line.  Clauses whose content fits within this limit are inlined
 	//! (e.g. "FROM orders" instead of "FROM\n    orders").
 	//! Set to 0 to disable inlining and always emit multiline output.
-	idx_t inline_threshold = 120;
+	idx_t inline_threshold = 100;
 
 	//! How to case SQL keywords in the output.
 	KeywordCase keyword_case = KeywordCase::UPPER;

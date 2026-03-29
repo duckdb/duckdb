@@ -2,7 +2,8 @@
 
 COPY
     forum
-FROM 'PATHVAR/dynamic/forum_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/dynamic/forum_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- Populate forum_person table
 
 COPY
@@ -13,17 +14,20 @@ FROM
 
 COPY
     forum_tag
-FROM 'PATHVAR/dynamic/forum_hasTag_tag_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/dynamic/forum_hasTag_tag_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- Populate organisation table
 
 COPY
     organisation
-FROM 'PATHVAR/static/organisation_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/static/organisation_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- Populate person table
 
 COPY
     person
-FROM 'PATHVAR/dynamic/person_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/dynamic/person_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- Populate person_email table
 
 COPY
@@ -78,12 +82,14 @@ FROM
 
 COPY
     place
-FROM 'PATHVAR/static/place_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/static/place_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- Populate message_tag table
 
 COPY
     message_tag
-FROM 'PATHVAR/dynamic/post_hasTag_tag_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/dynamic/post_hasTag_tag_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 COPY
     message_tag
 FROM
@@ -92,22 +98,26 @@ FROM
 
 COPY
     tagclass
-FROM 'PATHVAR/static/tagclass_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/static/tagclass_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- Populate tag table
 
 COPY
     tag
-FROM 'PATHVAR/static/tag_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/static/tag_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 -- PROBLEMATIC
 
 -- Populate message table
 
 COPY
     post
-FROM 'PATHVAR/dynamic/post_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/dynamic/post_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 COPY
     comment
-FROM 'PATHVAR/dynamic/comment_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
+FROM
+    'PATHVAR/dynamic/comment_0_0.csv.gz'(DELIMITER '|', HEADER, TIMESTAMPFORMAT '%Y-%m-%dT%H:%M:%S.%g+00:00');
 CREATE VIEW country AS
 SELECT city.pl_placeid AS ctry_city, ctry.pl_name AS ctry_name
 FROM place city, place ctry

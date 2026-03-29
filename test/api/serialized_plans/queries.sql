@@ -168,8 +168,14 @@ HAVING
 ORDER BY value DESC;
 SELECT
     l_shipmode,
-    sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count,
-    sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count
+    sum(CASE
+        WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1
+        ELSE 0
+    END) AS high_line_count,
+    sum(CASE
+        WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1
+        ELSE 0
+    END) AS low_line_count
 FROM orders, lineitem
 WHERE o_orderkey = l_orderkey
   AND l_shipmode IN ('MAIL', 'SHIP')
@@ -194,7 +200,9 @@ SELECT
         ELSE 0
     END) / sum(l_extendedprice *(1 - l_discount)) AS promo_revenue
 FROM lineitem, part
-WHERE l_partkey = p_partkey AND l_shipdate >= date '1995-09-01' AND l_shipdate < CAST('1995-10-01' AS date);
+WHERE l_partkey = p_partkey
+  AND l_shipdate >= date '1995-09-01'
+  AND l_shipdate < CAST('1995-10-01' AS date);
 SELECT s_suppkey, s_name, s_address, s_phone, total_revenue
 FROM
     supplier,
@@ -209,9 +217,12 @@ WHERE
     AND total_revenue =(
         SELECT max(total_revenue)
         FROM (
-                SELECT l_suppkey AS supplier_no, sum(l_extendedprice *(1 - l_discount)) AS total_revenue
+                SELECT
+                    l_suppkey AS supplier_no,
+                    sum(l_extendedprice *(1 - l_discount)) AS total_revenue
                 FROM lineitem
-                WHERE l_shipdate >= CAST('1996-01-01' AS date) AND l_shipdate < CAST('1996-04-01' AS date)
+                WHERE l_shipdate >= CAST('1996-01-01' AS date)
+                  AND l_shipdate < CAST('1996-04-01' AS date)
                 GROUP BY supplier_no
             ) revenue1
     )
@@ -314,7 +325,9 @@ WHERE
     AND NOT EXISTS (
         SELECT *
         FROM lineitem l3
-        WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate
+        WHERE l3.l_orderkey = l1.l_orderkey
+          AND l3.l_suppkey <> l1.l_suppkey
+          AND l3.l_receiptdate > l3.l_commitdate
     )
     AND s_nationkey = n_nationkey
     AND n_name = 'SAUDI ARABIA'

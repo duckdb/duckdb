@@ -21,7 +21,9 @@ m_messageid = mt_messageid
 NOT EXISTS (
                 SELECT *
                 FROM person_tag, message_tag
-                WHERE pt_personid = 21990232556256 AND pt_tagid = mt_tagid AND mt_messageid = m_messageid
+                WHERE pt_personid = 21990232556256
+                  AND pt_tagid = mt_tagid
+                  AND mt_messageid = m_messageid
             )
     ) AS score,
     p_gender,

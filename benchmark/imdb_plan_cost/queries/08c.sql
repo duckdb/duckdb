@@ -1,5 +1,12 @@
 SELECT MIN(a1.name) AS writer_pseudo_name, MIN(t.title) AS movie_title
-FROM aka_name AS a1, cast_info AS ci, company_name AS cn, movie_companies AS mc, name AS n1, role_type AS rt, title AS t
+FROM
+    aka_name AS a1,
+    cast_info AS ci,
+    company_name AS cn,
+    movie_companies AS mc,
+    name AS n1,
+    role_type AS rt,
+    title AS t
 WHERE cn.country_code = '[us]'
   AND rt.role = 'writer'
   AND a1.person_id = n1.id

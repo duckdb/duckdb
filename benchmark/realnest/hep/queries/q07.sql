@@ -16,5 +16,9 @@ SELECT
     COUNT(*) AS y
 FROM matching_jets
 GROUP BY
-    FLOOR((CASE WHEN pt_sum < 15 THEN 14.9 WHEN pt_sum > 200 THEN 200.1 ELSE pt_sum END - 0.2) / 1.85) * 1.85 + 1.125
+    FLOOR((CASE
+        WHEN pt_sum < 15 THEN 14.9
+        WHEN pt_sum > 200 THEN 200.1
+        ELSE pt_sum
+    END - 0.2) / 1.85) * 1.85 + 1.125
 ORDER BY x;

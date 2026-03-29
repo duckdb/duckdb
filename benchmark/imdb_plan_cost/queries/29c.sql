@@ -1,4 +1,7 @@
-SELECT MIN(chn.name) AS voiced_char, MIN(n.name) AS voicing_actress, MIN(t.title) AS voiced_animation
+SELECT
+    MIN(chn.name) AS voiced_char,
+    MIN(n.name) AS voicing_actress,
+    MIN(t.title) AS voiced_animation
 FROM
     aka_name AS an,
     complete_cast AS cc,
@@ -19,7 +22,12 @@ FROM
     title AS t
 WHERE cct1.kind = 'cast'
   AND cct2.kind = 'complete+verified'
-  AND ci.note IN ('(voice)', '(voice: Japanese version)', '(voice) (uncredited)', '(voice: English version)')
+  AND ci.note IN (
+      '(voice)',
+      '(voice: Japanese version)',
+      '(voice) (uncredited)',
+      '(voice: English version)'
+  )
   AND cn.country_code = '[us]'
   AND it.info = 'release dates'
   AND it3.info = 'trivia'

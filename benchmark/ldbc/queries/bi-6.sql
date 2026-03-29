@@ -1,6 +1,8 @@
 WITH poster_w_liker AS (
         SELECT DISTINCT m1.m_creatorid posterPersonid, l2.l_personid AS likerPersonid
-        FROM tag t, message_tag pt -- as an optimization, we use that the set of message1 is the same as message2
+        FROM
+            tag t,
+            message_tag pt -- as an optimization, we use that the set of message1 is the same as message2
 
 ,
             message m1

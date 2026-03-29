@@ -1,4 +1,7 @@
-SELECT MIN(cn.name) AS movie_company, MIN(mi_idx.info) AS rating, MIN(t.title) AS western_violent_movie
+SELECT
+    MIN(cn.name) AS movie_company,
+    MIN(mi_idx.info) AS rating,
+    MIN(t.title) AS western_violent_movie
 FROM
     company_name AS cn,
     company_type AS ct,

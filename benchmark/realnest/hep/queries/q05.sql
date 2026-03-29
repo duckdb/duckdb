@@ -6,11 +6,21 @@ WITH TEMP AS (
         SELECT rowid, MET.pt, COUNT(*)
         FROM hep_singleMu
         CROSS JOIN (
-                SELECT row_number() OVER () idx1, m.charge AS c1, m.eta AS e1, m.phi AS ph1, m.pt AS p1
+                SELECT
+                    row_number() OVER () idx1,
+                    m.charge AS c1,
+                    m.eta AS e1,
+                    m.phi AS ph1,
+                    m.pt AS p1
                 FROM m
             ) AS _m1
         CROSS JOIN (
-                SELECT row_number() OVER () idx2, m.charge AS c2, m.eta AS e2, m.phi AS ph2, m.pt AS p2
+                SELECT
+                    row_number() OVER () idx2,
+                    m.charge AS c2,
+                    m.eta AS e2,
+                    m.phi AS ph2,
+                    m.pt AS p2
                 FROM m
             ) AS _m2
         WHERE len(Muon) > 1
@@ -20,7 +30,9 @@ WITH TEMP AS (
         GROUP BY rowid, MET.pt
         HAVING COUNT(*) > 0
     )
-SELECT FLOOR((CASE WHEN pt < 0 THEN - 1 WHEN pt > 2000 THEN 2001 ELSE pt END) / 20) * 20 + 10 AS x, COUNT(*) AS y
+SELECT
+    FLOOR((CASE WHEN pt < 0 THEN - 1 WHEN pt > 2000 THEN 2001 ELSE pt END) / 20) * 20 + 10 AS x,
+    COUNT(*) AS y
 FROM TEMP
 GROUP BY FLOOR((CASE WHEN pt < 0 THEN - 1 WHEN pt > 2000 THEN 2001 ELSE pt END) / 20) * 20 + 10
 ORDER BY x;

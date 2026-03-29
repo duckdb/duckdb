@@ -6,7 +6,9 @@ FROM (
         UNION
         SELECT k2.k_person2id
         FROM knows k1, knows k2
-        WHERE k1.k_person1id = 6597069767251 AND k1.k_person2id = k2.k_person1id AND k2.k_person2id <> 15393162789164
+        WHERE k1.k_person1id = 6597069767251
+          AND k1.k_person2id = k2.k_person1id
+          AND k2.k_person2id <> 15393162789164
     ) f,
     person,
     place p1,
