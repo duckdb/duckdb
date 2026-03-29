@@ -10,6 +10,9 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
 	auto &filter = op->Cast<LogicalFilter>();
+	if (filter.HasProjectionMap()) {
+		return FinishPushdown(std::move(op));
+	}
 	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN ||
 	    filter.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = filter.children[0]->Cast<LogicalJoin>();
@@ -21,22 +24,24 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 			LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
 			vector<unique_ptr<Expression>> remain_expressions;
 			for (auto &expression : filter.expressions) {
-				auto side = JoinSide::GetJoinSide(*expression, left_bindings, right_bindings);
-				if (side != JoinSide::LEFT) {
-					remain_expressions.push_back(std::move(expression));
-					continue;
-				}
-				if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
-					return make_uniq<LogicalEmptyResult>(std::move(op));
+				vector<unique_ptr<Expression>> predicates;
+				predicates.push_back(std::move(expression));
+				LogicalFilter::SplitPredicates(predicates);
+				for (auto &predicate : predicates) {
+					auto side = JoinSide::GetJoinSide(*predicate, left_bindings, right_bindings);
+					if (side != JoinSide::LEFT) {
+						remain_expressions.push_back(std::move(predicate));
+						continue;
+					}
+					if (AddFilter(std::move(predicate)) == FilterResult::UNSATISFIABLE) {
+						return make_uniq<LogicalEmptyResult>(std::move(op));
+					}
 				}
 			}
 			GenerateFilters();
 			auto child = Rewrite(std::move(filter.children[0]));
 			return AddLogicalFilter(std::move(child), std::move(remain_expressions));
 		}
-	}
-	if (filter.HasProjectionMap()) {
-		return FinishPushdown(std::move(op));
 	}
 	// filter: gather the filters and remove the filter from the set of operations
 	for (auto &expression : filter.expressions) {
