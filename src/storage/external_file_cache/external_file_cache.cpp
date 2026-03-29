@@ -58,7 +58,7 @@ void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_blo
 
 	auto it = pinned.begin();
 	while (it != pinned.end()) {
-		// Find a contiguous run of old blocks starting at 'it'.
+		// Find a contiguous run of old blocks starting at current block.
 		const idx_t run_byte_start = it->first * old_block_size;
 		idx_t run_byte_end = run_byte_start;
 		idx_t expected_idx = it->first;
@@ -77,7 +77,7 @@ void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_blo
 		for (idx_t new_idx = first_new; new_idx <= last_new; new_idx++) {
 			const idx_t new_start = new_idx * new_block_size;
 			const idx_t new_end = MinValue(new_start + new_block_size, file_size);
-			if (new_start >= new_end || new_start < run_byte_start || new_end > run_byte_end) {
+			if (!(new_start < new_end && new_start >= run_byte_start && new_end <= run_byte_end)) {
 				continue;
 			}
 			const idx_t new_size = new_end - new_start;
