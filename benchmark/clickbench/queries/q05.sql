@@ -1,1 +1,2 @@
-SELECT COUNT(DISTINCT SearchPhrase) FROM hits;
+SELECT COUNT(DISTINCT SearchPhrase)
+FROM hits;

@@ -1,1 +1,93 @@
-select t4rp1 as g0, t5rp1 as g1, sum(creditCard_lastChargeAmount) as p0, min(t6rp1) as p1, sum(t3rp2) as p2 from CreditCardView cc left outer join ( select min(order_id) as t1rp1, creditCard_number as t1pk from CreditCardView cc left outer join OrderView o on cc.creditCard_number = o.order_creditCardNumber where order_slaProbability > 0.125 group by creditCard_number ) t1 on cc.creditCard_number = t1pk left outer join ( select sum(orderItem_weight) as t2rp1, creditCard_number as t2pk from CreditCardView cc left outer join OrderView o on cc.creditCard_number = o.order_creditCardNumber left outer join OrderItemView oi on o.order_id = oi.orderItem_orderId group by creditCard_number ) t2 on cc.creditCard_number = t2pk left outer join ( select min(address_zip) as t3rp1, sum(taxRecord_bracketThreshold) as t3rp2, creditCard_number as t3pk from CreditCardView cc left outer join OrderView o on cc.creditCard_number = o.order_creditCardNumber left outer join CustomerView c on o.order_customerId = c.customer_id left outer join AddressView a on c.customer_id = a.address_customerId left outer join TaxRecordView t on a.address_id = t.taxRecord_addressId group by creditCard_number ) t3 on cc.creditCard_number = t3pk left outer join ( select sum(product_price) as t4rp1, creditCard_number as t4pk from CreditCardView cc left outer join OrderView o on cc.creditCard_number = o.order_creditCardNumber left outer join OrderItemView oi on o.order_id = oi.orderItem_orderId left outer join ProductView p on oi.orderItem_productId = p.product_id where orderItem_weight < 25.0 group by creditCard_number ) t4 on cc.creditCard_number = t4pk left outer join ( select sum(category_regulationProbability) as t5rp1, creditCard_number as t5pk from CreditCardView cc left outer join OrderView o on cc.creditCard_number = o.order_creditCardNumber left outer join OrderItemView oi on o.order_id = oi.orderItem_orderId left outer join ProductView p on oi.orderItem_productId = p.product_id left outer join CategoryView ca on p.product_categoryName = ca.category_name group by creditCard_number ) t5 on cc.creditCard_number = t5pk left outer join ( select min(product_inventoryLastOrderedOn) as t6rp1, creditCard_number as t6pk from CreditCardView cc left outer join OrderView o on cc.creditCard_number = o.order_creditCardNumber left outer join OrderItemView oi on o.order_id = oi.orderItem_orderId left outer join ProductView p on oi.orderItem_productId = p.product_id left outer join CategoryView ca on p.product_categoryName = ca.category_name where product_price < 200.0 group by creditCard_number ) t6 on cc.creditCard_number = t6pk where t1rp1 > 10000 or t2rp1 > 15 or t3rp1 > 20200 group by t4rp1, t5rp1 order by p0, p1, p2 limit 500;
+SELECT
+    t4rp1 AS g0,
+    t5rp1 AS g1,
+    sum(creditCard_lastChargeAmount) AS p0,
+    min(t6rp1) AS p1,
+    sum(t3rp2) AS p2
+FROM CreditCardView cc
+LEFT OUTER JOIN (
+        SELECT
+            min(order_id) AS t1rp1,
+            creditCard_number AS t1pk
+        FROM CreditCardView cc
+        LEFT OUTER JOIN
+            OrderView o ON cc.creditCard_number = o.order_creditCardNumber
+        WHERE order_slaProbability > 0.125
+        GROUP BY creditCard_number
+    ) t1 ON cc.creditCard_number = t1pk
+LEFT OUTER JOIN (
+        SELECT
+            sum(orderItem_weight) AS t2rp1,
+            creditCard_number AS t2pk
+        FROM CreditCardView cc
+        LEFT OUTER JOIN
+            OrderView o ON cc.creditCard_number = o.order_creditCardNumber
+        LEFT OUTER JOIN
+            OrderItemView oi ON o.order_id = oi.orderItem_orderId
+        GROUP BY creditCard_number
+    ) t2 ON cc.creditCard_number = t2pk
+LEFT OUTER JOIN (
+        SELECT
+            min(address_zip) AS t3rp1,
+            sum(taxRecord_bracketThreshold) AS t3rp2,
+            creditCard_number AS t3pk
+        FROM CreditCardView cc
+        LEFT OUTER JOIN
+            OrderView o ON cc.creditCard_number = o.order_creditCardNumber
+        LEFT OUTER JOIN
+            CustomerView c ON o.order_customerId = c.customer_id
+        LEFT OUTER JOIN
+            AddressView a ON c.customer_id = a.address_customerId
+        LEFT OUTER JOIN
+            TaxRecordView t ON a.address_id = t.taxRecord_addressId
+        GROUP BY creditCard_number
+    ) t3 ON cc.creditCard_number = t3pk
+LEFT OUTER JOIN (
+        SELECT
+            sum(product_price) AS t4rp1,
+            creditCard_number AS t4pk
+        FROM CreditCardView cc
+        LEFT OUTER JOIN
+            OrderView o ON cc.creditCard_number = o.order_creditCardNumber
+        LEFT OUTER JOIN
+            OrderItemView oi ON o.order_id = oi.orderItem_orderId
+        LEFT OUTER JOIN
+            ProductView p ON oi.orderItem_productId = p.product_id
+        WHERE orderItem_weight < 25.0
+        GROUP BY creditCard_number
+    ) t4 ON cc.creditCard_number = t4pk
+LEFT OUTER JOIN (
+        SELECT
+            sum(category_regulationProbability) AS t5rp1,
+            creditCard_number AS t5pk
+        FROM CreditCardView cc
+        LEFT OUTER JOIN
+            OrderView o ON cc.creditCard_number = o.order_creditCardNumber
+        LEFT OUTER JOIN
+            OrderItemView oi ON o.order_id = oi.orderItem_orderId
+        LEFT OUTER JOIN
+            ProductView p ON oi.orderItem_productId = p.product_id
+        LEFT OUTER JOIN
+            CategoryView ca ON p.product_categoryName = ca.category_name
+        GROUP BY creditCard_number
+    ) t5 ON cc.creditCard_number = t5pk
+LEFT OUTER JOIN (
+        SELECT
+            min(product_inventoryLastOrderedOn) AS t6rp1,
+            creditCard_number AS t6pk
+        FROM CreditCardView cc
+        LEFT OUTER JOIN
+            OrderView o ON cc.creditCard_number = o.order_creditCardNumber
+        LEFT OUTER JOIN
+            OrderItemView oi ON o.order_id = oi.orderItem_orderId
+        LEFT OUTER JOIN
+            ProductView p ON oi.orderItem_productId = p.product_id
+        LEFT OUTER JOIN
+            CategoryView ca ON p.product_categoryName = ca.category_name
+        WHERE product_price < 200.0
+        GROUP BY creditCard_number
+    ) t6 ON cc.creditCard_number = t6pk
+WHERE t1rp1 > 10000 OR t2rp1 > 15 OR t3rp1 > 20200
+GROUP BY t4rp1, t5rp1
+ORDER BY p0, p1, p2
+LIMIT 500;

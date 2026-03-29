@@ -1,1 +1,1 @@
-CALL dsdgen(sf=1);
+CALL dsdgen(sf = 1);

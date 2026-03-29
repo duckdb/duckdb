@@ -5,20 +5,14 @@ SELECT
     o_orderdate,
     o_totalprice,
     sum(l_quantity)
-FROM
-    customer,
-    orders,
-    lineitem
+FROM customer, orders, lineitem
 WHERE
     o_orderkey IN (
-        SELECT
-            l_orderkey
-        FROM
-            lineitem
-        GROUP BY
-            l_orderkey
-        HAVING
-            sum(l_quantity) > 300)
+        SELECT l_orderkey
+        FROM lineitem
+        GROUP BY l_orderkey
+        HAVING sum(l_quantity) > 300
+    )
     AND c_custkey = o_custkey
     AND o_orderkey = l_orderkey
 GROUP BY
@@ -27,7 +21,5 @@ GROUP BY
     o_orderkey,
     o_orderdate,
     o_totalprice
-ORDER BY
-    o_totalprice DESC,
-    o_orderdate
+ORDER BY o_totalprice DESC, o_orderdate
 LIMIT 100;
