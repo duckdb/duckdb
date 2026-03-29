@@ -182,6 +182,26 @@ public:
 		return initialized;
 	}
 
+	Value GetMinValue() const override {
+		return Value::CreateValue(static_cast<T>(min));
+	}
+
+	uhugeint_t GetSpan() const override {
+		return Uhugeint::Convert(span);
+	}
+
+	idx_t GetShift() const override {
+		return shift;
+	}
+
+	idx_t GetWordCount() const override {
+		return word_count;
+	}
+
+	const uint64_t *GetBitmapData() const override {
+		return bitmap;
+	}
+
 private:
 	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
 	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;

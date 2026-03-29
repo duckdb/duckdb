@@ -34,6 +34,18 @@ public:
 	virtual bool LookupOneValue(const Value &key) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
+
+	//! Get the minimum key value (type-erased)
+	virtual Value GetMinValue() const = 0;
+	//! Get the span (max - min) as uhugeint
+	virtual uhugeint_t GetSpan() const = 0;
+	//! Get the shift factor (number of bits keys are right-shifted for bucketing)
+	virtual idx_t GetShift() const = 0;
+	//! Get the number of 64-bit words in the bitmap
+	virtual idx_t GetWordCount() const = 0;
+	//! Get a read-only pointer to the bitmap data
+	virtual const uint64_t *GetBitmapData() const = 0;
+
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
 	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
 };
@@ -56,6 +68,15 @@ public:
 
 	LogicalType GetKeyType() const {
 		return key_type;
+	}
+
+	const string &GetKeyColumnName() const {
+		return key_column_name;
+	}
+
+	const PrefixRangeFilter &GetPrefixRangeFilter() const {
+		D_ASSERT(filter);
+		return *filter;
 	}
 
 	string ToString(const string &column_name) const override;
