@@ -55,7 +55,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	col_chunk.meta_data.num_values += NumericCast<int64_t>(vcount);
 
 	const bool check_parent_empty = parent && !parent->is_empty.empty();
-	if (!check_parent_empty && validity.AllValid() && TypeIsConstantSize(vector.GetType().InternalType()) &&
+	if (!check_parent_empty && validity.CannotHaveNull() && TypeIsConstantSize(vector.GetType().InternalType()) &&
 	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount <
 	        MAX_UNCOMPRESSED_PAGE_SIZE) {
 		// Fast path: fixed-size type, all valid, and it fits on the current page
@@ -451,7 +451,7 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	schema_element.name = name;
 	if (field_id.IsValid()) {
 		schema_element.__isset.field_id = true;
-		schema_element.field_id = field_id.GetIndex();
+		schema_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
 	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());

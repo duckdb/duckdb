@@ -62,12 +62,9 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	// Non-constant input: return a DICTIONARY_VECTOR over two entries (keys list and NULL) to preserve per-row NULLs
 	// Build the dictionary selection: 0 for non-null input, 1 for null input
 	SelectionVector sel(count);
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	auto validity_entries = input.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		const bool is_valid = input_data.validity.RowIsValid(idx);
-		sel.set_index(i, !is_valid);
+		sel.set_index(i, !validity_entries.IsValid(i));
 	}
 
 	result.Slice(keys_vector, sel, count);

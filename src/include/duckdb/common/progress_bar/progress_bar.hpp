@@ -45,7 +45,7 @@ public:
 
 	explicit ProgressBar(
 	    Executor &executor, idx_t show_progress_after,
-	    progress_bar_display_create_func_t create_display_func = ProgressBar::DefaultProgressBarDisplay);
+	    const progress_bar_display_create_func_t &create_display_func = ProgressBar::DefaultProgressBarDisplay);
 
 	//! Starts the thread
 	void Start();

@@ -165,11 +165,13 @@ class RunTestsScriptTest(unittest.TestCase):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as state_file:
             state_file_path = Path(state_file.name)
 
+        batch_timeout = 0.3
+
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as helper:
             helper.write("#!/bin/sh\n")
             helper.write(f"if [ ! -f {state_file_path} ]; then\n")
             helper.write(f"  touch {state_file_path}\n")
-            helper.write("  sleep 2\n")
+            helper.write(f"  sleep {batch_timeout + 0.1}\n")
             helper.write("fi\n")
             helper.write("echo fake success\n")
             helper.write("exit 0\n")
@@ -187,7 +189,7 @@ class RunTestsScriptTest(unittest.TestCase):
                     "--retry",
                     "1",
                     "--batch-timeout",
-                    "1",
+                    str(batch_timeout),
                     "--test-list",
                     str(test_list_path),
                     "--test-command",
@@ -205,7 +207,7 @@ class RunTestsScriptTest(unittest.TestCase):
             helper_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("batch timed out after 1 seconds", proc.stdout)
+        self.assertIn(f"batch timed out after {batch_timeout} seconds", proc.stdout)
         self.assertIn("retrying failed test", proc.stdout)
         self.assertIn("all tests passed in ", proc.stdout)
 

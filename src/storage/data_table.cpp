@@ -481,13 +481,8 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 		throw ConstraintException("CHECK constraint failed on table %s with expression %s (Unknown Error)", table.name,
 		                          check.ToString());
 	} // LCOV_EXCL_STOP
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(chunk.size(), vdata);
-
-	auto dataptr = UnifiedVectorFormat::GetData<int32_t>(vdata);
-	for (idx_t i = 0; i < chunk.size(); i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx) && dataptr[idx] == 0) {
+	for (auto entry : result.Values<int32_t>(chunk.size())) {
+		if (entry.IsValid() && entry.value == 0) {
 			throw ConstraintException("CHECK constraint failed on table %s with expression %s", table.name,
 			                          check.ToString());
 		}

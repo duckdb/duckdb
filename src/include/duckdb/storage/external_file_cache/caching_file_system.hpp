@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/caching_file_system.hpp
+// duckdb/storage/external_file_cache/caching_file_system.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,13 +9,15 @@
 #pragma once
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 
 namespace duckdb {
 
@@ -25,14 +27,11 @@ class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
-class StorageLockKey;
 class QueryContext;
 class CachingFileSystem;
 
 struct CachingFileHandle {
 public:
-	using CachedFileRangeOverlap = ExternalFileCache::CachedFileRangeOverlap;
-	using CachedFileRange = ExternalFileCache::CachedFileRange;
 	using CachedFile = ExternalFileCache::CachedFile;
 
 public:
@@ -43,11 +42,11 @@ public:
 public:
 	//! Get the underlying FileHandle
 	DUCKDB_API FileHandle &GetFileHandle();
-	//! Read (seek) nr_bytes from the file (or cache) at location. The pointer will be set to the requested range
-	//! The buffer is guaranteed to stay in memory as long as the returned BufferHandle is in scope
-	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
-	//! Read (non-seeking) nr bytes from the file (or cache), same as above, also sets nr_bytes to actually read bytes
-	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t &nr_bytes);
+	//! Read [nr_bytes] bytes at the requested [location].
+	//! Returns a buffer handle group that keeps the data pinned in memory.
+	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
+	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
+	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -59,26 +58,6 @@ public:
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
-
-private:
-	//! Get the version tag of the file (for checking cache invalidation)
-	const string &GetVersionTag(const unique_ptr<StorageLockKey> &guard);
-	//! Tries to read from the cache, filling "overlapping_ranges" with ranges that overlap with the request.
-	//! Returns an invalid BufferHandle if it fails
-	BufferHandle TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
-	                              optional_idx &start_location_of_next_range);
-	//! Try to read from the specified range, return an invalid BufferHandle if it fails
-	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
-	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
-	//! Try to insert the file range into the cache
-	BufferHandle TryInsertFileRange(BufferHandle &pin, data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-	                                shared_ptr<CachedFileRange> &new_file_range);
-	//! Read from file and copy from cached buffers until the requested read is complete
-	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
-	idx_t ReadAndCopyInterleaved(const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
-	                             const shared_ptr<CachedFileRange> &new_file_range, data_ptr_t buffer, idx_t nr_bytes,
-	                             idx_t location, bool actually_read);
 
 private:
 	QueryContext context;
@@ -95,10 +74,12 @@ private:
 	optional_ptr<FileOpener> opener;
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
-	//! The associated CachedFile with cached ranges
+	//! The associated CachedFile with cached blocks
 	CachedFile &cached_file;
 
-	//! The underlying FileHandle (optional)
+	//! Used to ensure file handle and cached file metadata is only initialized once.
+	annotated_mutex file_handle_mutex;
+	//! File handle for the internal filesystem.
 	unique_ptr<FileHandle> file_handle;
 	//! Last modified time and version tag (if FileHandle is opened)
 	timestamp_t last_modified;

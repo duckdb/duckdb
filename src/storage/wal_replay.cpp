@@ -743,6 +743,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
+	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
 	if (!alter_info.IsAddPrimaryKey()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}

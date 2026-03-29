@@ -194,6 +194,13 @@
         "default_value": "100"
     },
     {
+        "name": "checkpoint_on_detach",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "type": "ENUM<CheckpointOnDetach>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "VARCHAR",

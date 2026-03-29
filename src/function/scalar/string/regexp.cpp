@@ -296,12 +296,6 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			}
 		}
 	} else {
-		UnifiedVectorFormat iunified;
-		input.ToUnifiedFormat(count, iunified);
-
-		const auto &ivalidity = iunified.validity;
-		auto idata = UnifiedVectorFormat::GetData<string_t>(iunified);
-
 		// Start with a valid flat vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -311,20 +305,20 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 
-		for (idx_t i = 0; i < count; ++i) {
-			const auto idx = iunified.sel->get_index(i);
-			if (ivalidity.RowIsValid(idx)) {
-				auto str = CreateStringPiece(idata[idx]);
-				auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
-				                                            UnsafeNumericCast<int>(groups.size()));
-				for (size_t col = 0; col < child_entries.size(); ++col) {
-					auto &child_entry = child_entries[col];
-					auto cdata = FlatVector::GetData<string_t>(child_entry);
-					auto &extracted = ws[col];
-					cdata[i] = string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
-				}
-			} else {
-				FlatVector::SetNull(result, i, true);
+		for (auto entry : input.Values<string_t>(count)) {
+			if (!entry.IsValid()) {
+				FlatVector::SetNull(result, entry.index, true);
+				continue;
+			}
+			auto str = CreateStringPiece(entry.value);
+			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
+			                                            UnsafeNumericCast<int>(groups.size()));
+			for (size_t col = 0; col < child_entries.size(); ++col) {
+				auto &child_entry = child_entries[col];
+				auto cdata = FlatVector::GetData<string_t>(child_entry);
+				auto &extracted = ws[col];
+				cdata[entry.index] =
+				    string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 			}
 		}
 	}

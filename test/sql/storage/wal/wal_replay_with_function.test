@@ -16,6 +16,9 @@ statement ok
 INSERT INTO test VALUES (1);
 
 statement ok
+ALTER TABLE test ADD COLUMN r double DEFAULT pi();
+
+statement ok
 CHECKPOINT;
 
 # ALTER TABLE with function-based DEFAULT — this goes to WAL
@@ -24,7 +27,7 @@ ALTER TABLE test ADD COLUMN data BIGINT DEFAULT length('duck');
 
 restart
 
-query II
+query III
 from test;
 ----
-1	4
+1	3.141592653589793	4

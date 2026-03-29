@@ -36,7 +36,7 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
                                                                          const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, STANDARD_VECTOR_SIZE), statef(client, aggr) {
 	// Locate the partition boundaries
-	if (partition_mask.AllValid()) {
+	if (partition_mask.CannotHaveNull()) {
 		partition_offsets.emplace_back(0);
 	} else {
 		idx_t entry_idx;

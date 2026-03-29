@@ -168,7 +168,8 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(std::move(database)), interrupted(false), transaction(*this), connection_id(DConstants::INVALID_INDEX) {
+    : db(std::move(database)), interrupt_state(ClientInterruptState::NOT_INTERRUPTED), transaction(*this),
+      connection_id(DConstants::INVALID_INDEX) {
 	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
@@ -825,7 +826,7 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! allow_suspend=true: if a streaming result is open in an explicit transaction,
 	//! suspend it instead of destroying it, enabling interleaved streaming + DML.
 	CleanupInternal(lock, nullptr, false, /*allow_suspend=*/true);
-	interrupted = false;
+	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &query) {
@@ -1211,7 +1212,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			}
 			// Reset the interrupted flag, this was set by the task that found the error
 			// Next statements should not be bothered by that interruption
-			interrupted = false;
+			interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 			return current_result;
 		}
 		// now append the result to the list of results
@@ -1317,15 +1318,20 @@ unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContext
 }
 
 void ClientContext::Interrupt() {
-	interrupted = true;
+	ClientInterruptState expected = ClientInterruptState::NOT_INTERRUPTED;
+	interrupt_state.compare_exchange_strong(expected, ClientInterruptState::INTERRUPTED);
 }
 
 bool ClientContext::IsInterrupted() const {
-	return interrupted;
+	return interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED;
 }
 
 void ClientContext::ClearInterrupt() {
-	interrupted = false;
+	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+}
+
+void ClientContext::SuppressInterrupts() {
+	interrupt_state = ClientInterruptState::INTERRUPTS_SUPPRESSED;
 }
 
 void ClientContext::InterruptCheck() const {
@@ -1333,7 +1339,7 @@ void ClientContext::InterruptCheck() const {
 	static constexpr uint32_t TIMEOUT_CHECK_INTERVAL = 256;
 	thread_local uint32_t timeout_check_counter = 0;
 
-	if (interrupted.load(std::memory_order_relaxed)) {
+	if (interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
 		throw InterruptException();
 	}
 	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
@@ -1392,7 +1398,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	if (require_new_transaction) {
 		D_ASSERT(!active_query);
 		transaction.BeginTransaction();
-		interrupted = false;
+		interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 	}
 	try {
 		fun();

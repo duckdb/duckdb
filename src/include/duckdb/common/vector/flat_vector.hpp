@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector/map_vector.hpp
+// duckdb/common/vector/flat_vector.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -25,6 +25,9 @@ struct FlatVector {
 	}
 
 	static inline data_ptr_t GetData(Vector &vector) {
+		return ConstantVector::GetData(vector);
+	}
+	static inline const_data_ptr_t GetData(const Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
 	template <class T>

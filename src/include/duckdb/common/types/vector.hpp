@@ -20,6 +20,13 @@ class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
 struct SelCache;
+enum class VectorConstructorAction;
+
+template <class T>
+class VectorValueIterator;
+template <class T>
+class VectorValidValueIterator;
+class VectorValidityIterator;
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
@@ -39,8 +46,6 @@ class Vector {
 	friend class VectorCacheBuffer;
 
 public:
-	//! Create a vector that references the other vector
-	DUCKDB_API Vector(Vector &other);
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Create a vector that slices another vector between a pair of offsets
@@ -61,12 +66,13 @@ public:
 	*/
 	DUCKDB_API Vector(LogicalType type, bool create_data, bool initialize_to_zero,
 	                  idx_t capacity = STANDARD_VECTOR_SIZE);
-	// implicit copying of Vectors is not allowed
-	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
+	//! Create a new vector that references the other vector
+	DUCKDB_API static Vector Ref(const Vector &other);
+
 	//! Create a vector that references the specified value.
 	DUCKDB_API void Reference(const Value &value);
 	//! Causes this vector to reference the data held by the other vector.
@@ -112,17 +118,19 @@ public:
 	DUCKDB_API void Print() const;
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	DUCKDB_API void Flatten(idx_t count);
-	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count);
+	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
+	//! As such, it can be used on constant vectors.
+	DUCKDB_API void Flatten(idx_t count) const;
+	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 	//! Creates a UnifiedVectorFormat of a vector
 	//! The UnifiedVectorFormat allows efficient reading of vectors regardless of their vector type
 	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
 	//! Access to the individual vector elements can be performed through data_pointer[sel_idx[i]]/validity[sel_idx[i]]
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
-	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data);
+	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) const;
 	//! Recursively calls UnifiedVectorFormat on a vector and its child vectors (for nested types)
-	static void RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
+	static void RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
@@ -188,28 +196,41 @@ public:
 	// Transform vector to an equivalent nested vector
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
+	template <class T>
+	VectorValueIterator<T> Values(idx_t count) const;
+
+	template <class T>
+	VectorValidValueIterator<T> ValidValues(idx_t count) const;
+
+	VectorValidityIterator Validity(idx_t count) const;
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
 
-	//! Flatten a constant vector
-	void FlattenConstant(idx_t count);
+	//! This allows a vector to reference another vector while const
+	//! This is only used internally in `Flatten` - since referencing
+	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
+	void ConstReference(const Vector &other) const;
+
+	//! Create a vector that references the other vector
+	Vector(const Vector &other, VectorConstructorAction action);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
 	//! constant, if it is compressed)
-	VectorType vector_type;
+	mutable VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	LogicalType type;
 	//! The validity mask of the vector
-	ValidityMask validity;
+	mutable ValidityMask validity;
 	//! The main buffer holding the data of the vector
-	buffer_ptr<VectorBuffer> buffer;
+	mutable buffer_ptr<VectorBuffer> buffer;
 	//! The buffer holding auxiliary data of the vector
 	//! e.g. a string vector uses this to store strings
-	buffer_ptr<VectorBuffer> auxiliary;
+	mutable buffer_ptr<VectorBuffer> auxiliary;
 };
 
 //! The VectorChildBuffer holds a child Vector
@@ -230,3 +251,5 @@ public:
 };
 
 } // namespace duckdb
+
+#include "duckdb/common/vector/vector_iterator.hpp"

@@ -52,6 +52,12 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 		} else {
 			// explicitly commit the current transaction
 			client.transaction.Commit();
+			// Suppress further interrupts for the remainder of this query.
+			// A committed transaction is irreversible. If a concurrent Interrupt()
+			// arrives after the physical commit, it must be silently discarded —
+			// otherwise the caller sees a failed COMMIT even though the data
+			// is already durably committed.
+			client.SuppressInterrupts();
 		}
 		break;
 	}

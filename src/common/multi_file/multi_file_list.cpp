@@ -332,7 +332,7 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 	if (all_files_expanded) {
 		return false;
 	}
-	if (context && context->interrupted) {
+	if (context && context->IsInterrupted()) {
 		throw InterruptException();
 	}
 	if (!ExpandNextPath()) {
