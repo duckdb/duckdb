@@ -176,6 +176,15 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 	return false;
 }
 
+static bool RecursiveCTERefCanReorder(optional_ptr<LogicalOperator> parent) {
+	if (!parent || parent->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto &join = parent->Cast<LogicalComparisonJoin>();
+	idx_t range_count = 0;
+	return join.HasEquality(range_count);
+}
+
 static bool HasNonReorderableChild(LogicalOperator &op) {
 	LogicalOperator *tmp = &op;
 	while (tmp->children.size() == 1) {
@@ -455,7 +464,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		auto is_recursive = optimizer.recursive_cte_indexes.find(cte_ref.cte_index);
 		if (is_recursive != optimizer.recursive_cte_indexes.end()) {
-			return false;
+			// Only let recursive CTE references participate in join reordering when they sit directly
+			// under an equality comparison join. This still enables the reusable recursive hash-join
+			// case, while avoiding broader reorderings that let residual/range predicates drive the
+			// reconstructed join tree into expensive range-join plans.
+			return RecursiveCTERefCanReorder(parent);
 		}
 		return true;
 	}
