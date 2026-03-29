@@ -58,17 +58,26 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, Physic
 //===--------------------------------------------------------------------===//
 class LeftDelimJoinGlobalState : public GlobalSinkState {
 public:
-	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
-		D_ASSERT(!delim_join.delim_scans.empty());
-		LeftDelimBindScanCollection(delim_join, lhs_data);
+	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join_p)
+	    : delim_join(delim_join_p), lhs_data(context, delim_join_p.children[0].get().GetTypes()) {
+		D_ASSERT(!delim_join_p.delim_scans.empty());
+		LeftDelimBindScanCollection(delim_join_p, lhs_data);
 	}
 
+	const PhysicalLeftDelimJoin &delim_join;
 	ColumnDataCollection lhs_data;
 	mutex lhs_lock;
 
 	void Merge(ColumnDataCollection &input) {
+		if (input.Count() == 0) {
+			return;
+		}
 		lock_guard<mutex> guard(lhs_lock);
+		if (lhs_data.Count() == 0) {
+			lhs_data.Swap(input);
+			LeftDelimBindScanCollection(delim_join, lhs_data);
+			return;
+		}
 		lhs_data.Combine(input);
 	}
 };
@@ -106,7 +115,7 @@ unique_ptr<LocalSinkState> PhysicalLeftDelimJoin::GetLocalSinkState(ExecutionCon
 
 bool PhysicalLeftDelimJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
 	auto &state = state_p.Cast<LeftDelimJoinGlobalState>();
-	state.lhs_data.Reset();
+	state.lhs_data.ResetForReuse();
 	LeftDelimBindScanCollection(*this, state.lhs_data);
 	LeftDelimResetSinkState(distinct, context, distinct.sink_state);
 	if (delim_scans.size() > 1) {
@@ -119,7 +128,7 @@ bool PhysicalLeftDelimJoin::ResetLocalSinkState(ExecutionContext &context, Globa
                                                 LocalSinkState &state_p) const {
 	(void)gstate_p;
 	auto &state = state_p.Cast<LeftDelimJoinLocalState>();
-	state.lhs_data.Reset();
+	state.lhs_data.ResetForReuse();
 	state.lhs_data.InitializeAppend(state.append_state);
 	LeftDelimResetLocalSinkState(distinct, context, *distinct.sink_state, state.distinct_state);
 	return true;

@@ -111,6 +111,8 @@ public:
 
 	//! Appends the other ColumnDataCollection to this, destroying the other data collection
 	DUCKDB_API void Combine(ColumnDataCollection &other);
+	//! Swaps the contents of two compatible ColumnDataCollections
+	DUCKDB_API void Swap(ColumnDataCollection &other);
 
 	DUCKDB_API void Verify();
 
