@@ -108,6 +108,7 @@ ignored_files = [
     'expr.cc',
     'function_list.cpp',
     'inlined_grammar.hpp',
+    'queries.sql',
 ]
 ignored_directories = [
     '.eggs',
