@@ -5,38 +5,10 @@
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
-      "reason": "Does not produce prepared statement",
-      "paths": [
-        "test/sql/types/map/map_empty.test"
-      ]
-    },
-    {
-      "reason": "Test expects lowercase option name",
-      "paths": [
-        "test/sql/copy/parquet/copy_option_suggestion.test"
-      ]
-    },
-    {
-      "reason": "Parser error",
-      "paths": [
-        "test/sql/json/scalar/test_json_extract.test"
-      ]
-    },
-    {
       "reason": "Setting option to 'fallback' changes behavior of first tests",
       "paths": [
-        "test/extension/loadable_parser_override.test",
-        "test/sql/collate/test_unsupported_collations.test"
-      ]
-    },
-    {
-      "reason": "Different behaviour compared to PostgreSQL parser",
-      "paths": [
-        "test/sql/function/string/test_string_slice.test",
-        "test/sql/function/string/test_subscript.test",
-        "test/sql/prepared/parameter_variants.test",
-        "test/sql/parser/digit_separators.test"
+        "test/extension/loadable_parser_override.test"
       ]
     }
-  ]
+   ]
 }

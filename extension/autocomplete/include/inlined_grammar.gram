@@ -821,8 +821,8 @@ SingleExpression <-
 # LEVEL 1 (Lowest)
 Expression <- LambdaArrowExpression
 # LEVEL 1.5
-LambdaArrowExpression <- LogicalOrExpression (LambdaOperator LogicalOrExpression)*
-LambdaOperator <- '->'
+LambdaArrowExpression <- LogicalOrExpression SingleArrowPair*
+SingleArrowPair <- '->' LogicalOrExpression
 LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
 # LEVEL 2
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
@@ -877,7 +877,7 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
 AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'

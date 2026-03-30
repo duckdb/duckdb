@@ -760,6 +760,26 @@ private:
 	}
 };
 
+static bool IsOperatorChar(char c) {
+	switch (c) {
+	case '+': case '-': case '*': case '/': case '%': case '^':
+	case '<': case '>': case '=': case '~': case '!': case '@':
+	case '&': case '|':
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool IsArithmeticOperatorChar(char c) {
+	switch (c) {
+	case '+': case '-': case '*': case '/': case '%':
+		return true;
+	default:
+		return false;
+	}
+}
+
 class OperatorMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
@@ -798,24 +818,26 @@ public:
 private:
 	static bool MatchOperator(MatchState &state) {
 		auto &token_text = state.tokens[state.token_index].text;
+		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
+		if (token_text == "->" || token_text == "->>") {
+			return false;
+		}
+		// Single-character operators are handled at specific precedence levels (comparison, additive, etc.)
+		if (token_text.size() == 1) {
+			return false;
+		}
+		// Exclude known comparison operators — handled by ComparisonExpression, not as function calls
+		if (token_text == "<=" || token_text == ">=" || token_text == "!=" || token_text == "==" ||
+		    token_text == "<>") {
+			return false;
+		}
+		// Exclude LIKE/SIMILAR operators — handled by LikeVariations at a higher precedence level
+		if (token_text == "~~" || token_text == "~~*" || token_text == "~~~" || token_text == "!~~" ||
+		    token_text == "!~~*" || token_text == "!~") {
+			return false;
+		}
 		for (auto &c : token_text) {
-			switch (c) {
-			case '+':
-			case '-':
-			case '*':
-			case '/':
-			case '%':
-			case '^':
-			case '<':
-			case '>':
-			case '=':
-			case '~':
-			case '!':
-			case '@':
-			case '&':
-			case '|':
-				break;
-			default:
+			if (!IsOperatorChar(c)) {
 				return false;
 			}
 		}
@@ -864,14 +886,7 @@ private:
 	static bool MatchArithmeticOperator(MatchState &state) {
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
-			switch (c) {
-			case '*':
-			case '/':
-			case '+':
-			case '-':
-			case '%':
-				break;
-			default:
+			if (!IsArithmeticOperatorChar(c)) {
 				return false;
 			}
 		}

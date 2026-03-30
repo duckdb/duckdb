@@ -633,10 +633,11 @@ PEGTransformerFactory::TransformLambdaArrowExpression(PEGTransformer &transforme
 	if (!lambda_opt.HasResult()) {
 		return expr;
 	}
+	// Each child is a SingleArrowPair ListParseResult: ['->', LogicalOrExpression]
 	auto inner_lambda_list = lambda_opt.optional_result->Cast<RepeatParseResult>();
-	for (auto lambda_expr : inner_lambda_list.children) {
-		auto &inner_list_pr = lambda_expr->Cast<ListParseResult>();
-		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+	for (auto &pair_node : inner_lambda_list.children) {
+		auto &pair_list = pair_node->Cast<ListParseResult>(); // SingleArrowPair
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(pair_list.Child<ListParseResult>(1));
 		expr = make_uniq<LambdaExpression>(std::move(expr), std::move(right_expr));
 	}
 	return expr;
@@ -1084,7 +1085,12 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto child = list_pr.Child<ChoiceParseResult>(0).result;
+	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
+	if (child->type == ParseResultType::OPERATOR) {
+		return child->Cast<OperatorParseResult>().operator_token;
+	}
+	return transformer.Transform<string>(child);
 }
 
 // QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
@@ -1107,6 +1113,7 @@ string PEGTransformerFactory::TransformJsonOperator(PEGTransformer &transformer,
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.Child<KeywordParseResult>(0).keyword;
 }
+
 
 string PEGTransformerFactory::TransformInetOperator(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
