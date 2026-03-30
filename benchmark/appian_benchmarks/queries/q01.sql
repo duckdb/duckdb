@@ -1,8 +1,1 @@
-SELECT address_state AS g0, sum(orderItem_quantity) AS p0
-FROM CustomerView c
-LEFT OUTER JOIN AddressView a ON c.customer_id = a.address_customerId
-LEFT OUTER JOIN OrderView o ON c.customer_id = o.order_customerId
-LEFT OUTER JOIN OrderItemView oi ON o.order_id = oi.orderItem_orderId
-GROUP BY address_state
-ORDER BY address_state
-LIMIT 500;
+select address_state as g0, sum(orderItem_quantity) as p0 from CustomerView c left outer join AddressView a on c.customer_id = a.address_customerId left outer join OrderView o on c.customer_id = o.order_customerId left outer join OrderItemView oi on o.order_id = oi.orderItem_orderId group by address_state order by address_state limit 500;

@@ -1,3 +1,1 @@
-SELECT COUNT(*)
-FROM hits
-WHERE URL LIKE '%google%';
+SELECT COUNT(*) FROM hits WHERE URL LIKE '%google%';

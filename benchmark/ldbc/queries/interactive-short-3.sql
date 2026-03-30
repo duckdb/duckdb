@@ -1,4 +1,4 @@
-SELECT p_personid, p_firstname, p_lastname, k_creationdate
-FROM knows, person
-WHERE k_person1id = 21990232556256 AND k_person2id = p_personid
-ORDER BY k_creationdate DESC, p_personid ASC;
+select p_personid, p_firstname, p_lastname, k_creationdate
+from knows, person
+where k_person1id = 21990232556256 and k_person2id = p_personid
+order by k_creationdate desc, p_personid asc;

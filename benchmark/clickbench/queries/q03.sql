@@ -1,2 +1,1 @@
-SELECT AVG(UserID)
-FROM hits;
+SELECT AVG(UserID) FROM hits;

@@ -1,1 +1,1 @@
-CALL dbgen(sf = 0.01);
+CALL dbgen(sf=0.01);

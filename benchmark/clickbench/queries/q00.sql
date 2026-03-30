@@ -1,2 +1,1 @@
-SELECT COUNT(*)
-FROM hits;
+SELECT COUNT(*) FROM hits;
