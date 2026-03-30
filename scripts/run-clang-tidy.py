@@ -78,6 +78,15 @@ def make_absolute(f, directory):
     return os.path.normpath(os.path.join(directory, f))
 
 
+IGNORED_DIRECTORIES = {'third_party'}
+
+
+def is_ignored_file(path):
+    normalized = os.path.normpath(path)
+    path_parts = normalized.split(os.sep)
+    return any(directory in path_parts for directory in IGNORED_DIRECTORIES)
+
+
 def get_tidy_invocation(
     f, clang_tidy_binary, checks, tmpdir, build_path, header_filter, extra_arg, extra_arg_before, quiet, config
 ):
@@ -304,6 +313,8 @@ def main():
 
         # Fill the queue with files.
         for name in files:
+            if is_ignored_file(name):
+                continue
             if file_name_re.search(name):
                 task_queue.put(name)
 
