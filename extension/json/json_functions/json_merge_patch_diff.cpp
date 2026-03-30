@@ -6,7 +6,7 @@ namespace duckdb {
 //! Compute the minimal RFC 7396 merge patch that transforms old_val into new_val.
 //! Inputs are immutable yyjson_val; only the diff result is built as mutable.
 //! Returns nullptr when old_val and new_val are equal (no diff).
-static yyjson_mut_val *MergeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
+static yyjson_mut_val *MergePatchDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
 	// Both objects: compute recursive structural diff
 	if (yyjson_is_obj(old_val) && yyjson_is_obj(new_val)) {
 		auto builder = yyjson_mut_obj(doc);
@@ -36,7 +36,7 @@ static yyjson_mut_val *MergeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjso
 					has_diff = true;
 				} else {
 					// Key exists in both: recurse
-					auto sub_diff = MergeDiff(doc, old_child, new_child);
+					auto sub_diff = MergePatchDiff(doc, old_child, new_child);
 					if (sub_diff) {
 						yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), sub_diff);
 						has_diff = true;
@@ -56,7 +56,7 @@ static yyjson_mut_val *MergeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjso
 }
 
 //! Compute the RFC 7396 merge patch that transforms old into new
-static void MergeDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -91,7 +91,7 @@ static void MergeDiffFunction(DataChunk &args, ExpressionState &state, Vector &r
 		auto old_doc = JSONCommon::ReadDocument(old_inputs[old_idx], JSONCommon::READ_FLAG, alc);
 
 		if (yyjson_is_obj(old_doc->root) && yyjson_is_obj(new_doc->root)) {
-			auto diff = MergeDiff(doc, old_doc->root, new_doc->root);
+			auto diff = MergePatchDiff(doc, old_doc->root, new_doc->root);
 			if (!diff) {
 				diff = yyjson_mut_obj(doc);
 			}
@@ -108,9 +108,9 @@ static void MergeDiffFunction(DataChunk &args, ExpressionState &state, Vector &r
 	JSONAllocator::AddBuffer(result, alc);
 }
 
-ScalarFunctionSet JSONFunctions::GetMergeDiffFunction() {
-	ScalarFunction fun("json_merge_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   MergeDiffFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
+ScalarFunctionSet JSONFunctions::GetMergePatchDiffFunction() {
+	ScalarFunction fun("json_merge_patch_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
+	                   MergePatchDiffFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);
