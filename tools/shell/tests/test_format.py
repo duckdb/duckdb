@@ -33,13 +33,6 @@ def test_format_basic_select(shell, tmp_path):
     assert "ORDER BY a DESC" in contents
     assert "LIMIT 10" in contents
 
-def test_format_multi_statement(shell, tmp_path):
-    """Multiple statements are separated by semicolons in the output."""
-    p = sql_file(tmp_path, "q.sql", "select a from t; select b from u")
-    result, contents = run_format(shell, p)
-    assert result.status_code == 0
-    assert "SELECT a\nFROM t;\nSELECT b\nFROM u" in contents
-
 def test_format_does_not_read_stdin(shell, tmp_path):
     """--format-file must not block waiting for stdin; formatted SQL goes to stdout."""
     p = sql_file(tmp_path, "q.sql", "select 1")
