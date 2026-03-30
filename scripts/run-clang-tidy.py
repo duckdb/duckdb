@@ -78,13 +78,9 @@ def make_absolute(f, directory):
     return os.path.normpath(os.path.join(directory, f))
 
 
-IGNORED_DIRECTORIES = {'third_party'}
-
-
 def is_ignored_file(path):
     normalized = os.path.normpath(path)
-    path_parts = normalized.split(os.sep)
-    return any(directory in path_parts for directory in IGNORED_DIRECTORIES)
+    return normalized.startswith('third_party' + os.sep)
 
 
 def get_tidy_invocation(
