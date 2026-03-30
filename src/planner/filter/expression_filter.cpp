@@ -173,22 +173,29 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expressi
 	if (expr.type == ExpressionType::COMPARE_IN) {
 		auto &op_expr = expr.Cast<BoundOperatorExpression>();
 		if (op_expr.children.size() > 1 && IsDirectColumnRef(*op_expr.children[0])) {
-			// Collect the constant values
+			// Collect the non-NULL constant values. NULL list entries never make IN evaluate to TRUE in a filter.
 			vector<Value> values;
 			bool all_constants = true;
 			for (idx_t i = 1; i < op_expr.children.size(); i++) {
 				if (op_expr.children[i]->type == ExpressionType::VALUE_CONSTANT) {
 					auto &const_expr = op_expr.children[i]->Cast<BoundConstantExpression>();
-					values.push_back(const_expr.value);
+					if (!const_expr.value.IsNull()) {
+						values.push_back(const_expr.value);
+					}
 				} else {
 					all_constants = false;
 					break;
 				}
 			}
-			if (all_constants && !values.empty()) {
+			if (all_constants) {
+				if (values.empty()) {
+					// x IN (NULL, NULL, ...) cannot produce TRUE for any row in filter context.
+					return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+				}
 				if (!stats.CanHaveNoNull()) {
 					return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 				}
+				FilterPropagateResult result;
 				switch (values[0].type().InternalType()) {
 				case PhysicalType::UINT8:
 				case PhysicalType::UINT16:
@@ -202,17 +209,23 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expressi
 				case PhysicalType::INT128:
 				case PhysicalType::FLOAT:
 				case PhysicalType::DOUBLE:
-					return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-					                                  array_ptr<const Value>(values.data(), values.size()));
+					result = NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
+					                                    array_ptr<const Value>(values.data(), values.size()));
+					break;
 				case PhysicalType::VARCHAR:
 					if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-						return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-						                                 array_ptr<const Value>(values.data(), values.size()));
+						result = StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
+						                                   array_ptr<const Value>(values.data(), values.size()));
+						break;
 					}
 					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 				default:
 					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 				}
+				if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				}
+				return result;
 			}
 		}
 	}

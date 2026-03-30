@@ -465,7 +465,10 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 		auto &op = expr.Cast<BoundOperatorExpression>();
 		for (idx_t i = 1; i < op.children.size(); i++) {
 			if (op.children[i]->type == ExpressionType::VALUE_CONSTANT) {
-				in_values.insert(op.children[i]->Cast<BoundConstantExpression>().value);
+				auto &constant = op.children[i]->Cast<BoundConstantExpression>().value;
+				if (!constant.IsNull()) {
+					in_values.insert(constant);
+				}
 			}
 		}
 		return true;
