@@ -87,7 +87,6 @@ Vector Vector::Ref(const Vector &other) {
 void Vector::Reference(const Value &value) {
 	D_ASSERT(GetType().id() == value.type().id());
 	this->vector_type = VectorType::CONSTANT_VECTOR;
-	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
 		auto struct_buffer = make_uniq<VectorStructBuffer>();
@@ -97,19 +96,21 @@ void Vector::Reference(const Value &value) {
 			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
 			                                          : StructValue::GetChildren(value)[i]);
 		}
+		buffer = VectorBuffer::CreateConstantVector(value.type());
 		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
 		if (value.IsNull()) {
 			SetValue(0, value);
 		}
 	} else if (internal_type == PhysicalType::LIST) {
+		buffer = VectorBuffer::CreateConstantVector(value.type());
 		auto list_buffer = make_uniq<VectorListBuffer>(value.type());
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 		SetValue(0, value);
 	} else if (internal_type == PhysicalType::ARRAY) {
-		auto array_buffer = make_uniq<VectorArrayBuffer>(value.type());
-		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
+		buffer = make_buffer<VectorArrayBuffer>(value.type());
 		SetValue(0, value);
 	} else {
+		buffer = VectorBuffer::CreateConstantVector(value.type());
 		auxiliary.reset();
 		SetValue(0, value);
 	}
@@ -329,8 +330,7 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 	} else if (internal_type == PhysicalType::ARRAY) {
-		auto array_buffer = make_uniq<VectorArrayBuffer>(type, capacity);
-		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
+		buffer = make_buffer<VectorArrayBuffer>(type, capacity);
 	}
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
@@ -352,6 +352,16 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	ResizeInfo resize_info(*this, buffer_ptr, multiplier);
 	resize_infos.emplace_back(resize_info);
 
+	if (buffer && buffer->GetBufferType() == VectorBufferType::ARRAY_BUFFER) {
+		// We need to multiply the multiplier by the array size because
+		// the child vectors of ARRAY types are always child_count * array_size.
+		auto &vector_array_buffer = buffer->Cast<VectorArrayBuffer>();
+		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
+		auto &child = vector_array_buffer.GetChild();
+		child.FindResizeInfos(resize_infos, new_multiplier);
+		return;
+	}
+
 	if (!auxiliary) {
 		return;
 	}
@@ -363,15 +373,6 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 		for (auto &child : children) {
 			child.FindResizeInfos(resize_infos, multiplier);
 		}
-		break;
-	}
-	case VectorBufferType::ARRAY_BUFFER: {
-		// We need to multiply the multiplier by the array size because
-		// the child vectors of ARRAY types are always child_count * array_size.
-		auto &vector_array_buffer = auxiliary->Cast<VectorArrayBuffer>();
-		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
-		auto &child = vector_array_buffer.GetChild();
-		child.FindResizeInfos(resize_infos, new_multiplier);
 		break;
 	}
 	default:

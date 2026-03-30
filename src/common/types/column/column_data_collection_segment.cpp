@@ -170,7 +170,9 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	auto validity_data = GetValidityPointer(base_ptr, type_size, vdata.count);
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
-		FlatVector::SetData(result, base_ptr);
+		if (result.GetType().InternalType() != PhysicalType::ARRAY) {
+			FlatVector::SetData(result, base_ptr);
+		}
 		FlatVector::Validity(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
 	}

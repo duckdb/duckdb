@@ -77,7 +77,7 @@ public:
 
 public:
 	virtual data_ptr_t GetData() {
-		throw InternalException("VectorBuffer does not have data!");
+		return nullptr;
 	}
 	VectorAuxiliaryData *GetAuxiliaryData() {
 		return aux_data.get();
