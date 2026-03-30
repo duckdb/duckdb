@@ -50,7 +50,7 @@ hash_t CombineHashScalar(hash_t a, hash_t b) {
 template <bool HAS_RSEL, bool HAS_SEL_VECTOR, class T, bool INPUT_IS_ALREADY_HASH>
 void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel, idx_t count,
                    const SelectionVector *__restrict sel_vector, const ValidityMask &mask) {
-	if (!mask.AllValid()) {
+	if (mask.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
 			auto idx = HAS_SEL_VECTOR ? sel_vector->get_index_unsafe(ridx) : ridx;
@@ -350,7 +350,7 @@ template <bool HAS_RSEL, class T, bool INPUT_IS_ALREADY_HASH>
 void TightLoopCombineHashConstant(const T *__restrict ldata, hash_t constant_hash, hash_t *__restrict hash_data,
                                   const SelectionVector *rsel, idx_t count,
                                   const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
-	if (!mask.AllValid()) {
+	if (mask.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
@@ -372,7 +372,7 @@ template <bool HAS_RSEL, bool HAS_SEL, class T, bool INPUT_IS_ALREADY_HASH>
 static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict const hash_data,
                                         const SelectionVector *__restrict const rsel, const idx_t count,
                                         const SelectionVector *__restrict const sel_vector, const ValidityMask &mask) {
-	if (!mask.AllValid()) {
+	if (mask.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
 			auto idx = HAS_SEL ? sel_vector->get_index_unsafe(ridx) : ridx;

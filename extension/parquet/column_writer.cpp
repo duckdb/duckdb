@@ -189,8 +189,8 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 	if (state.repetition_levels.size() >= parent->repetition_levels.size()) {
 		return;
 	}
-	state.repetition_levels.insert(state.repetition_levels.end(),
-	                               parent->repetition_levels.begin() + state.repetition_levels.size(),
+	auto repetition_offset = NumericCast<ptrdiff_t>(state.repetition_levels.size());
+	state.repetition_levels.insert(state.repetition_levels.end(), parent->repetition_levels.begin() + repetition_offset,
 	                               parent->repetition_levels.end());
 }
 
@@ -225,7 +225,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 	}
 
 	// no parent: set definition levels only from this validity mask
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		state.definition_levels.insert(state.definition_levels.end(), count, define_value);
 	} else {
 		for (idx_t i = 0; i < count; i++) {

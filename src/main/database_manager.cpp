@@ -258,7 +258,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
-	AttachedDatabase::InvokeCloseIfLastReference(attached_db);
+	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {

@@ -108,19 +108,17 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(scan_count > 0);
 	validity->ScanCount(state.child_states[0], result, count);
 
-	UnifiedVectorFormat offsets;
-	offset_vector.ToUnifiedFormat(scan_count, offsets);
-	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
-	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
+	auto data = offset_vector.Values<uint64_t>(scan_count);
+	auto last_entry = data[scan_count - 1].value;
 
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	auto base_offset = state.last_offset;
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto offset_index = offsets.sel->get_index(i);
+		auto offset = data[i].value;
 		result_data[i].offset = current_offset;
-		result_data[i].length = data[offset_index] - current_offset - base_offset;
+		result_data[i].length = offset - current_offset - base_offset;
 		current_offset += result_data[i].length;
 	}
 
@@ -185,12 +183,9 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	D_ASSERT(count > 0);
-	UnifiedVectorFormat list_data;
-	vector.ToUnifiedFormat(count, list_data);
-	auto &list_validity = list_data.validity;
 
 	// construct the list_entry_t entries to append to the column data
-	auto input_offsets = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	auto input_offsets = vector.Values<list_entry_t>(count);
 	auto start_offset = child_column->GetMaxEntry();
 	idx_t child_count = 0;
 
@@ -198,33 +193,34 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	auto append_offsets = unique_ptr<uint64_t[]>(new uint64_t[count]);
 	bool child_contiguous = true;
 	for (idx_t i = 0; i < count; i++) {
-		auto input_idx = list_data.sel->get_index(i);
-		if (list_validity.RowIsValid(input_idx)) {
-			auto &input_list = input_offsets[input_idx];
-			if (input_list.offset != child_count) {
-				child_contiguous = false;
-			}
-			append_offsets[i] = start_offset + child_count + input_list.length;
-			child_count += input_list.length;
-		} else {
+		auto list_entry = input_offsets[i];
+		if (!list_entry.is_valid) {
 			append_mask.SetInvalid(i);
 			append_offsets[i] = start_offset + child_count;
+			continue;
 		}
+		auto &input_list = list_entry.value;
+		if (input_list.offset != child_count) {
+			child_contiguous = false;
+		}
+		append_offsets[i] = start_offset + child_count + input_list.length;
+		child_count += input_list.length;
 	}
 	auto &list_child = ListVector::GetEntry(vector);
-	Vector child_vector(list_child);
+	Vector child_vector(Vector::Ref(list_child));
 	if (!child_contiguous) {
 		// if the child of the list vector is a non-contiguous vector (i.e. list elements are repeating or have gaps)
 		// we first push a selection vector and flatten the child vector to turn it into a contiguous vector
 		SelectionVector child_sel(child_count);
 		idx_t current_count = 0;
 		for (idx_t i = 0; i < count; i++) {
-			auto input_idx = list_data.sel->get_index(i);
-			if (list_validity.RowIsValid(input_idx)) {
-				auto &input_list = input_offsets[input_idx];
-				for (idx_t list_idx = 0; list_idx < input_list.length; list_idx++) {
-					child_sel.set_index(current_count++, input_list.offset + list_idx);
-				}
+			auto list_entry = input_offsets[i];
+			if (!list_entry.is_valid) {
+				continue;
+			}
+			auto &input_list = list_entry.value;
+			for (idx_t list_idx = 0; list_idx < input_list.length; list_idx++) {
+				child_sel.set_index(current_count++, input_list.offset + list_idx);
 			}
 		}
 		D_ASSERT(current_count == child_count);

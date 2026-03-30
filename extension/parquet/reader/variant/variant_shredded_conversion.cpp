@@ -149,7 +149,7 @@ vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &b
 	}
 
 	vector<VariantValue> ret(length);
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < length; i++) {
 			auto index = typed_format.sel->get_index(i + offset);
 			if (TYPE_ID == LogicalTypeId::DECIMAL) {
@@ -438,7 +438,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	}
 
 	vector<VariantValue> ret(length);
-	if (typed_validity.AllValid()) {
+	if (typed_validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < length; i++) {
 			ret[i] = ConvertPartiallyShreddedObject(shredded_fields, metadata_format, value_format, i, offset);
 		}
@@ -493,7 +493,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 	auto &value_validity = value_format.validity;
 
 	vector<VariantValue> ret(length);
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		//! We can be sure that none of the values are binary encoded
 		for (idx_t i = 0; i < length; i++) {
 			auto typed_index = list_format.sel->get_index(i + offset);

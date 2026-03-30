@@ -70,7 +70,9 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	if (parent) {
 		// propagate empty entries from the parent
 		if (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			state.is_empty.insert(state.is_empty.end(),
+			                      parent->is_empty.begin() +
+			                          NumericCast<duckdb::vector<bool>::difference_type>(state.is_empty.size()),
 			                      parent->is_empty.end());
 		}
 	}
@@ -120,14 +122,14 @@ idx_t StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &
 	// set up the schema element for this struct
 	duckdb_parquet::SchemaElement schema_element;
 	schema_element.repetition_type = repetition_type;
-	schema_element.num_children = child_writers.size();
+	schema_element.num_children = NumericCast<int32_t>(child_writers.size());
 	schema_element.__isset.num_children = true;
 	schema_element.__isset.type = false;
 	schema_element.__isset.repetition_type = true;
 	schema_element.name = name;
 	if (field_id.IsValid()) {
 		schema_element.__isset.field_id = true;
-		schema_element.field_id = field_id.GetIndex();
+		schema_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	schemas.push_back(std::move(schema_element));
 

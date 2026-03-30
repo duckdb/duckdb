@@ -90,7 +90,7 @@ struct StringVector {
 	//! Adds a reference to an unspecified vector buffer that stores strings of this vector
 	DUCKDB_API static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
-	DUCKDB_API static void AddHeapReference(Vector &vector, Vector &other);
+	DUCKDB_API static void AddHeapReference(Vector &vector, const Vector &other);
 };
 
 } // namespace duckdb

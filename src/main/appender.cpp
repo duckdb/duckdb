@@ -18,6 +18,7 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
@@ -447,7 +448,7 @@ unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &c
 CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::INSERT_STATEMENT:
-		return statement.Cast<InsertStatement>().cte_map;
+		return statement.Cast<InsertStatement>().node->cte_map;
 	case StatementType::DELETE_STATEMENT:
 		return statement.Cast<DeleteStatement>().node->cte_map;
 	case StatementType::UPDATE_STATEMENT:

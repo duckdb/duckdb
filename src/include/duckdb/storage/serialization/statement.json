@@ -39,5 +39,33 @@
         "type": "vector<ParsedExpression*>"
       }
     ]
+  },
+  {
+    "class": "OnConflictInfo",
+    "includes": [
+      "duckdb/parser/statement/insert_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "action_type",
+        "type": "OnConflictAction"
+      },
+      {
+        "id": 101,
+        "name": "indexed_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 102,
+        "name": "set_info",
+        "type": "UpdateSetInfo*"
+      },
+      {
+        "id": 103,
+        "name": "condition",
+        "type": "ParsedExpression*"
+      }
+    ]
   }
 ]

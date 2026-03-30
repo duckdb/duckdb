@@ -388,7 +388,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 	// Structs become values, therefore we initialize vals to JSON values
 	UnifiedVectorFormat value_data;
 	value_v.ToUnifiedFormat(count, value_data);
-	if (value_data.validity.AllValid()) {
+	if (value_data.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			vals[i] = yyjson_mut_obj(doc);
 		}
@@ -654,10 +654,6 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);
 	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 
@@ -688,10 +684,6 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(arrs[i], alc);
 	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 

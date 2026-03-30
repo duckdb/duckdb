@@ -204,13 +204,12 @@ struct ApproxTopKOperation {
 		if (state.values.empty()) {
 			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
-			UnifiedVectorFormat kdata;
-			top_k_vector.ToUnifiedFormat(count, kdata);
-			auto kidx = kdata.sel->get_index(offset);
-			if (!kdata.validity.RowIsValid(kidx)) {
+			auto top_k_format = top_k_vector.Values<int64_t>(count);
+			auto top_k_entry = top_k_format[offset];
+			if (!top_k_entry.is_valid) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value cannot be NULL");
 			}
-			auto kval = UnifiedVectorFormat::GetData<int64_t>(kdata)[kidx];
+			auto kval = top_k_entry.value;
 			if (kval <= 0) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value must be > 0");
 			}
@@ -321,8 +320,6 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
                       idx_t count) {
 	using STATE = ApproxTopKState;
 	auto &input = inputs[0];
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
 
 	auto &top_k_vector = inputs[1];
 
@@ -330,30 +327,28 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
+	auto states = state_vector.Values<STATE *>(count);
 	auto data = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].value;
 		ApproxTopKOperation::Operation<T, STATE>(state, data[idx], aggr_input, top_k_vector, i, count);
 	}
 }
 
 template <class OP = HistogramGenericFunctor>
 void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = UnifiedVectorFormat::GetData<ApproxTopKState *>(sdata);
+	auto states = state_vector.Values<ApproxTopKState *>(count);
 
 	auto &mask = FlatVector::Validity(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = states[sdata.sel->get_index(i)]->GetState();
+		auto &state = states[i].value->GetState();
 		if (state.values.empty()) {
 			continue;
 		}
@@ -369,7 +364,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto &state = states[sdata.sel->get_index(i)]->GetState();
+		auto &state = states[i].value->GetState();
 		if (state.values.empty()) {
 			mask.SetInvalid(rid);
 			continue;

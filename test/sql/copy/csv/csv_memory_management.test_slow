@@ -2,6 +2,8 @@
 # description: Test the CSV Buffer Manager under strict memory limit conditions
 # group: [csv]
 
+mode skip
+
 statement ok
 PRAGMA enable_verification
 

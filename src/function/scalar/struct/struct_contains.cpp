@@ -190,10 +190,6 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &target = args.data[1];
 
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> StructContainsBind(ClientContext &context, ScalarFunction &bound_function,

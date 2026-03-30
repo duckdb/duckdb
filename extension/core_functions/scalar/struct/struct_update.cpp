@@ -51,11 +51,6 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 			result_child_entries[field_idx++].Reference(args.data[arg_idx]);
 		}
 	}
-
-	result.Verify(args.size());
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarFunction &bound_function,

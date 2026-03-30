@@ -10,7 +10,7 @@ namespace {
 
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
-	    : context(context), left_slice(make_uniq<Vector>(*info.child_vector)) {
+	    : context(context), left_slice(make_uniq<Vector>(Vector::Ref(*info.child_vector))) {
 		if (info.has_initial) {
 			initial_value_offset = 0;
 		}

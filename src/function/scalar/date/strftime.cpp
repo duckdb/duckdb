@@ -156,11 +156,9 @@ struct StrpTimeFunction {
 		//	There is a bizarre situation where the format column is foldable but not constant
 		//	(i.e., the statistics tell us it has only one value)
 		//	We have to check whether that value is NULL
-		const auto count = args.size();
-		UnifiedVectorFormat format_unified;
-		args.data[1].ToUnifiedFormat(count, format_unified);
+		auto format_entries = args.data[1].Validity(args.size());
 
-		if (!format_unified.validity.RowIsValid(0)) {
+		if (!format_entries.IsValid(0)) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 			return;

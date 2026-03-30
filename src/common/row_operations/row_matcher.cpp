@@ -27,8 +27,8 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	const auto &lhs_validity = lhs_format.unified.validity;
 
 #ifdef DUCKDB_SMALLER_BINARY
-	const auto LHS_ALL_VALID = lhs_validity.AllValid();
-	const auto RHS_ALL_VALID = rhs_layout.AllValid();
+	const auto LHS_ALL_VALID = lhs_validity.CannotHaveNull();
+	const auto RHS_ALL_VALID = rhs_layout.CannotHaveNull();
 #endif
 
 	// RHS
@@ -69,8 +69,8 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
 	                                               no_match_sel, no_match_count);
 #else
-	if (lhs_format.unified.validity.AllValid()) {
-		if (rhs_layout.AllValid()) {
+	if (lhs_format.unified.validity.CannotHaveNull()) {
+		if (rhs_layout.CannotHaveNull()) {
 			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true, true>(
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		} else {
@@ -78,7 +78,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		}
 	} else {
-		if (rhs_layout.AllValid()) {
+		if (rhs_layout.CannotHaveNull()) {
 			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false, true>(
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		} else {
@@ -111,11 +111,11 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 		const auto idx = sel.get_index(i);
 
 		const auto lhs_idx = lhs_sel.get_index(idx);
-		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
+		const auto lhs_null = lhs_validity.CannotHaveNull() ? false : !lhs_validity.RowIsValid(lhs_idx);
 
 		const auto &rhs_location = rhs_locations[idx];
 		const auto rhs_null =
-		    !rhs_layout.AllValid() &&
+		    rhs_layout.CanHaveNull() &&
 		    !ValidityBytes::RowIsValid(
 		        ValidityBytes(rhs_location, rhs_layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 

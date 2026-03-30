@@ -340,7 +340,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 54>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 53>(input.child_stats);
 		}
 	};
 
@@ -429,7 +429,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000000000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999999>(input.child_stats);
 		}
 	};
 
@@ -441,7 +441,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999>(input.child_stats);
 		}
 	};
 
@@ -453,7 +453,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999>(input.child_stats);
 		}
 	};
 
@@ -465,7 +465,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
 		}
 	};
 
@@ -477,7 +477,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
 		}
 	};
 
@@ -2042,11 +2042,7 @@ struct StructDatePart {
 				}
 			}
 		} else {
-			UnifiedVectorFormat rdata;
-			input.ToUnifiedFormat(count, rdata);
-
-			const auto &arg_valid = rdata.validity;
-			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
+			auto entries = input.template Values<INPUT_TYPE>(count);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -2078,10 +2074,10 @@ struct StructDatePart {
 			}
 
 			for (idx_t i = 0; i < count; ++i) {
-				const auto idx = rdata.sel->get_index(i);
-				if (arg_valid.RowIsValid(idx)) {
-					if (Value::IsFinite(tdata[idx])) {
-						DatePart::StructOperator::Operation(bigint_values, double_values, tdata[idx], i, part_mask);
+				auto entry = entries[i];
+				if (entry.IsValid()) {
+					if (Value::IsFinite(entry.value)) {
+						DatePart::StructOperator::Operation(bigint_values, double_values, entry.value, i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
 							FlatVector::Validity(child_entry).SetInvalid(i);
