@@ -68,14 +68,11 @@ public:
 				sort_nulls.Initialize();
 			}
 		}
+	}
 
-		auto &required = state.required;
-		required.clear();
-
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
 		required.insert(FRAME_BEGIN);
 		required.insert(FRAME_END);
-
-		WindowBoundariesState::AddImpliedBounds(required, gvstate.executor.wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -249,12 +246,9 @@ public:
 		if (gstate.row_tree) {
 			local_row = gstate.row_tree->GetLocalState(context);
 		}
+	}
 
-		const auto &wexpr = gstate.executor.wexpr;
-
-		auto &required = state.required;
-		required.clear();
-
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
 		if (wexpr.arg_orders.empty()) {
 			required.insert(PARTITION_BEGIN);
 			required.insert(PARTITION_END);
@@ -263,8 +257,6 @@ public:
 			required.insert(FRAME_BEGIN);
 			required.insert(FRAME_END);
 		}
-
-		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -318,24 +310,30 @@ WindowFunctionSet LeadFun::GetFunctions() {
 	WindowFunctionSet funcs("lead");
 
 	auto bind = WindowLeadLagExecutor::Bind;
+	auto bounds = WindowLeadLagLocalState::GetBounds;
+
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LEAD, bind));
+	                                 ExpressionType::WINDOW_LEAD, bind, bounds));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
+	                                 ExpressionType::WINDOW_LEAD, bind, bounds));
 	funcs.AddFunction(
-	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind));
+	    WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind, bounds));
 
 	return funcs;
 }
 
 WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
 	auto bind = WindowLeadLagExecutor::Bind;
+	auto bounds = WindowLeadLagLocalState::GetBounds;
+
 	switch (nargs) {
 	case 1:
-		return WindowFunction("lead", {type}, type, ExpressionType::WINDOW_LEAD, bind);
+		return WindowFunction("lead", {type}, type, ExpressionType::WINDOW_LEAD, bind, bounds);
 	case 2:
-		return WindowFunction("lead", {type, LogicalType::BIGINT}, type, ExpressionType::WINDOW_LEAD, bind);
+		return WindowFunction("lead", {type, LogicalType::BIGINT}, type, ExpressionType::WINDOW_LEAD, bind, bounds);
 	case 3:
-		return WindowFunction("lead", {type, LogicalType::BIGINT, type}, type, ExpressionType::WINDOW_LEAD, bind);
+		return WindowFunction("lead", {type, LogicalType::BIGINT, type}, type, ExpressionType::WINDOW_LEAD, bind,
+		                      bounds);
 	default:
 		throw InternalException("Invalid number of arguments requested for LEAD: %lld", nargs);
 	}
@@ -345,11 +343,13 @@ WindowFunctionSet LagFun::GetFunctions() {
 	WindowFunctionSet funcs("lag");
 
 	auto bind = WindowLeadLagExecutor::Bind;
+	auto bounds = WindowLeadLagLocalState::GetBounds;
+
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LAG, bind));
+	                                 ExpressionType::WINDOW_LAG, bind, bounds));
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY,
-	                                 ExpressionType::WINDOW_LAG, bind));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAG, bind));
+	                                 ExpressionType::WINDOW_LAG, bind, bounds));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAG, bind, bounds));
 
 	return funcs;
 }
@@ -527,7 +527,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun("first_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
-	                   WindowFirstValueExecutor::Bind);
+	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds);
 	return fun;
 }
 
@@ -586,7 +586,7 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 
 WindowFunction LastValueFun::GetFunction() {
 	WindowFunction fun("last_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
-	                   WindowFirstValueExecutor::Bind);
+	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds);
 	return fun;
 }
 
@@ -651,7 +651,8 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 
 WindowFunction NthValueFun::GetFunction() {
 	WindowFunction fun("nth_value", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ExpressionType::WINDOW_NTH_VALUE, WindowFirstValueExecutor::Bind);
+	                   ExpressionType::WINDOW_NTH_VALUE, WindowFirstValueExecutor::Bind,
+	                   WindowValueLocalState::GetBounds);
 	return fun;
 }
 
@@ -982,22 +983,13 @@ void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &functi
 	}
 }
 
-WindowFunction FillFun::GetFunction() {
-	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
-	                   WindowFillExecutor::Bind);
-	fun.SetValidateCallback(WindowFillExecutor::Validate);
-
-	return fun;
-}
-
 WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
                                        WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
 	//	If the argument order is prefix of the partition ordering,
 	//	then we can just use the partition ordering.
 	auto &arg_orders = wexpr.arg_orders;
-	const auto optimize = ClientConfig::GetConfig(client).enable_optimizer;
-	if (optimize && BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size()) {
+	if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size()) {
 		arg_order_idx.clear();
 	}
 
@@ -1043,22 +1035,20 @@ class WindowFillLocalState : public WindowLeadLagLocalState {
 public:
 	WindowFillLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gvstate)
 	    : WindowLeadLagLocalState(context, gvstate) {
-		const auto &wexpr = gvstate.executor.wexpr;
+	}
 
-		auto &required = state.required;
-		required.clear();
-
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
 		required.insert(FRAME_BEGIN);
 		required.insert(FRAME_END);
 
-		if (wexpr.arg_orders.empty() || !gvstate.value_tree) {
+		auto &arg_orders = wexpr.arg_orders;
+		const auto shared = BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size();
+		if (wexpr.arg_orders.empty() || shared) {
 			//	FILL uses the validity ranges to quickly eliminate indexes that can't be interpolated.
 			//	This only works for non-secondary orderings
 			required.insert(VALID_BEGIN);
 			required.insert(VALID_END);
 		}
-
-		WindowBoundariesState::AddImpliedBounds(required, gvstate.executor.wexpr);
 	}
 
 	//! Finish the sinking and prepare to scan
@@ -1076,6 +1066,14 @@ void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr col
 	if (!order_cursor && gfstate.order_idx != DConstants::INVALID_INDEX) {
 		order_cursor = make_uniq<WindowCursor>(*collection, gfstate.order_idx);
 	}
+}
+
+WindowFunction FillFun::GetFunction() {
+	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
+	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds);
+	fun.SetValidateCallback(WindowFillExecutor::Validate);
+
+	return fun;
 }
 
 unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,

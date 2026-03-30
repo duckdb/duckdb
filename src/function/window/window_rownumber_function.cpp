@@ -55,11 +55,9 @@ public:
 		if (grstate.token_tree) {
 			local_tree = grstate.token_tree->GetLocalState(context);
 		}
+	}
 
-		auto &required = state.required;
-		required.clear();
-
-		const auto &wexpr = grstate.executor.wexpr;
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
 		if (wexpr.arg_orders.empty()) {
 			required.insert(PARTITION_BEGIN);
 		} else {
@@ -67,8 +65,6 @@ public:
 			required.insert(FRAME_BEGIN);
 			required.insert(FRAME_END);
 		}
-
-		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -108,6 +104,7 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 WindowFunction RowNumberFunc::GetFunction() {
 	WindowFunction fun("row_number", {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
+	fun.SetBoundsCallback(WindowRowNumberLocalState::GetBounds);
 	return fun;
 }
 
@@ -164,11 +161,9 @@ class WindowNtileLocalState : public WindowRowNumberLocalState {
 public:
 	WindowNtileLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
 	    : WindowRowNumberLocalState(context, grstate) {
-		const auto &wexpr = grstate.executor.wexpr;
+	}
 
-		auto &required = state.required;
-		required.clear();
-
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
 		if (wexpr.arg_orders.empty()) {
 			required.insert(PARTITION_BEGIN);
 			required.insert(PARTITION_END);
@@ -177,13 +172,12 @@ public:
 			required.insert(FRAME_BEGIN);
 			required.insert(FRAME_END);
 		}
-
-		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 };
 
 WindowFunction NtileFunc::GetFunction() {
 	WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
+	fun.SetBoundsCallback(WindowNtileLocalState::GetBounds);
 	return fun;
 }
 
