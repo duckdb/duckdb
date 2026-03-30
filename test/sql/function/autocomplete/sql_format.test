@@ -129,9 +129,7 @@ true
 query I
 SELECT duckdb_format_sql('select 1 from t where some_long_column_name = 1 and another_long_column = 2 or yet_another_column = 3') = $$SELECT 1
 FROM t
-WHERE some_long_column_name = 1
-  AND another_long_column = 2
-  OR yet_another_column = 3$$
+WHERE some_long_column_name = 1 AND another_long_column = 2 OR yet_another_column = 3$$
 ----
 true
 
@@ -158,14 +156,13 @@ WHERE
 true
 
 # ── FormatterConfig: small inline_threshold keeps long clauses multiline ──────
-# 'FROM long_table_name' = 18 chars > threshold 10 → stays multiline.
+# SELECT list 'a, b, c' = 7 chars but threshold 10 forces multiline for select list.
 query I
 SELECT duckdb_format_sql('select a, b, c from long_table_name', MAP {'inline_threshold': '10'}) = $$SELECT
     a,
     b,
     c
-FROM
-    long_table_name$$
+FROM long_table_name$$
 ----
 true
 
@@ -287,8 +284,7 @@ true
 
 # ── CREATE VIEW where full header exceeds threshold — view name on next line ──
 query I
-SELECT duckdb_format_sql('CREATE VIEW a_very_long_schema_name.a_very_long_view_name_here AS SELECT id FROM t') = $$CREATE VIEW
-    a_very_long_schema_name.a_very_long_view_name_here AS
+SELECT duckdb_format_sql('CREATE VIEW a_very_long_schema_name.a_very_long_view_name_here AS SELECT id FROM t') = $$CREATE VIEW a_very_long_schema_name.a_very_long_view_name_here AS
 SELECT id
 FROM t$$
 ----
@@ -521,15 +517,9 @@ SELECT duckdb_format_sql('SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, coale
     m,
     n,
     coalesce(x, y, z) AS val,
-    CASE
-        WHEN a > 1 THEN 'yes'
-        WHEN a > 0 THEN 'maybe'
-        ELSE 'no'
-    END AS result
+    CASE WHEN a > 1 THEN 'yes' WHEN a > 0 THEN 'maybe' ELSE 'no' END AS result
 FROM very_long_table_name_here
-WHERE some_column_name = 1
-  AND another_column > 2
-  AND yet_another_column < 100
+WHERE some_column_name = 1 AND another_column > 2 AND yet_another_column < 100
 ORDER BY a, b, c, d$$
 ----
 true
@@ -544,8 +534,7 @@ true
 
 # ── Long arithmetic expression exceeding threshold ────────────────────────────
 query I
-SELECT duckdb_format_sql('SELECT a + b * c - d / e + f % g + h * (i + j) - k * l + m * n * o + p - q + r * s FROM t') = $$SELECT
-    a + b * c - d / e + f % g + h *(i + j) - k * l + m * n * o + p - q + r * s
+SELECT duckdb_format_sql('SELECT a + b * c - d / e + f % g + h * (i + j) - k * l + m * n * o + p - q + r * s FROM t') = $$SELECT a + b * c - d / e + f % g + h *(i + j) - k * l + m * n * o + p - q + r * s
 FROM t$$
 ----
 true
@@ -628,20 +617,19 @@ true
 
 # ── Lambda function — list_transform ─────────────────────────────────────────
 query I
-SELECT duckdb_format_sql('SELECT list_transform([1, 2, 3], x -> x + 1)') = $$SELECT list_transform([ 1, 2, 3 ], x -> x + 1)$$
+SELECT duckdb_format_sql('SELECT list_transform([1, 2, 3], x -> x + 1)') = $$SELECT list_transform([1, 2, 3], x -> x + 1)$$
 ----
 true
 
 # ── Nested lambdas — list_apply(list_filter(…)) ─────────────────────────────
 query I
-SELECT duckdb_format_sql('SELECT list_apply(list_filter([1,2,3,4,5], x -> x > 2), y -> y * 10)') = $$SELECT
-    list_apply(list_filter([ 1, 2, 3, 4, 5 ], x -> x > 2), y -> y * 10)$$
+SELECT duckdb_format_sql('SELECT list_apply(list_filter([1,2,3,4,5], x -> x > 2), y -> y * 10)') = $$SELECT list_apply(list_filter([1, 2, 3, 4, 5], x -> x > 2), y -> y * 10)$$
 ----
 true
 
 # ── Dot syntax for method-style function calls ──────────────────────────────
 query I
-SELECT duckdb_format_sql('SELECT [1, 2, 3].list_transform(x -> x + 1)') = $$SELECT [ 1, 2, 3 ].list_transform(x -> x + 1)$$
+SELECT duckdb_format_sql('SELECT [1, 2, 3].list_transform(x -> x + 1)') = $$SELECT [1, 2, 3].list_transform(x -> x + 1)$$
 ----
 true
 
@@ -677,7 +665,8 @@ true
 
 # ── Window function with multiple PARTITION BY columns ───────────────────────
 query I
-SELECT duckdb_format_sql('SELECT sum(amount) OVER (PARTITION BY region, year ORDER BY month) FROM sales') = $$SELECT sum(amount) OVER (
+SELECT duckdb_format_sql('SELECT sum(amount) OVER (PARTITION BY region, year ORDER BY month) FROM sales') = $$SELECT
+    sum(amount) OVER (
         PARTITION BY region, year
         ORDER BY month
     )
@@ -739,8 +728,7 @@ WHERE
         'magnet',
         'web',
         'claw',
-        'laser'
-    )
+        'laser')
     AND kt.kind = 'movie'$$
 ----
 true
@@ -778,12 +766,10 @@ true
 
 # ── Semicolon starts a new line for the next statement ───────────────────────
 query I
-SELECT duckdb_format_sql('CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (ORDER BY x NULLS LAST); FORCE CHECKPOINT') = $$CREATE FUNCTION
-    V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (
+SELECT duckdb_format_sql('CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (ORDER BY x NULLS LAST); FORCE CHECKPOINT') = $$CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (
         ORDER BY x NULLS LAST
     );
-FORCE
-CHECKPOINT$$
+FORCE CHECKPOINT$$
 ----
 true
 
@@ -838,12 +824,11 @@ true
 
 # ── Long REPLACE argument list is expanded to one value per line ─────────────
 query I
-SELECT duckdb_format_sql('SELECT * REPLACE (make_date(EventDate) AS EventDate, epoch_ms(EventTime * 1000) AS EventTime, epoch_ms(ClientEventTime * 1000) AS ClientEventTime, epoch_ms(LocalEventTime * 1000) AS LocalEventTime) FROM t') = $$SELECT
-    * REPLACE (
-        make_date(EventDate) AS EventDate,
-        epoch_ms(EventTime * 1000) AS EventTime,
-        epoch_ms(ClientEventTime * 1000) AS ClientEventTime,
-        epoch_ms(LocalEventTime * 1000) AS LocalEventTime)
+SELECT duckdb_format_sql('SELECT * REPLACE (make_date(EventDate) AS EventDate, epoch_ms(EventTime * 1000) AS EventTime, epoch_ms(ClientEventTime * 1000) AS ClientEventTime, epoch_ms(LocalEventTime * 1000) AS LocalEventTime) FROM t') = $$SELECT * REPLACE (
+    make_date(EventDate) AS EventDate,
+    epoch_ms(EventTime * 1000) AS EventTime,
+    epoch_ms(ClientEventTime * 1000) AS ClientEventTime,
+    epoch_ms(LocalEventTime * 1000) AS LocalEventTime)
 FROM t$$
 ----
 true
@@ -879,13 +864,7 @@ true
 
 # ── Blank lines in input are preserved between statements ────────────────────
 query I
-SELECT duckdb_format_sql('SELECT 1;
-
-SELECT 2;
-SELECT 3') = $$SELECT 1;
-
-SELECT 2;
-SELECT 3$$
+SELECT duckdb_format_sql('SELECT 1;' || chr(10) || chr(10) || 'SELECT 2;' || chr(10) || 'SELECT 3') = ('SELECT 1;' || chr(10) || chr(10) || 'SELECT 2;' || chr(10) || 'SELECT 3')
 ----
 true
 
@@ -914,11 +893,12 @@ true
 
 # ── CREATE FUNCTION keeps name on the keyword line ───────────────────────────
 query I
-SELECT duckdb_format_sql('CREATE FUNCTION DeltaPhi(p1, p2) AS (CASE WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) < -Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) + 2 * Pi() WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) > Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) - 2 * Pi() ELSE FMod2Pi(p1[''phi''] - p2[''phi'']) END)') = $$CREATE FUNCTION DeltaPhi(p1, p2) AS (CASE
-    WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) < - Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) + 2 * Pi()
-    WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) > Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) - 2 * Pi()
-    ELSE FMod2Pi(p1 ['phi'] - p2 ['phi'])
-END)$$
+SELECT duckdb_format_sql('CREATE FUNCTION DeltaPhi(p1, p2) AS (CASE WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) < -Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) + 2 * Pi() WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) > Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) - 2 * Pi() ELSE FMod2Pi(p1[''phi''] - p2[''phi'']) END)') = $$CREATE FUNCTION DeltaPhi(p1, p2) AS (
+    CASE
+        WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) < - Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) + 2 * Pi()
+        WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) > Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) - 2 * Pi()
+        ELSE FMod2Pi(p1 ['phi'] - p2 ['phi'])
+    END)$$
 ----
 true
 
