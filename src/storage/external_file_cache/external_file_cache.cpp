@@ -30,11 +30,17 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return true; // Assume valid
 	}
 	if (!current_version_tag.empty() || !cached_version_tag.empty()) {
-		return cached_version_tag == current_version_tag; // Validity checked by version tag (httpfs)
+		return cached_version_tag == current_version_tag; // Validity checked by version tag
 	}
 	if (cached_last_modified != current_last_modified) {
 		return false; // The file has certainly been modified
 	}
+
+	// If the modified time is not assigned (i.e., storage backend does not provide it), we can't validate it.
+	if (!Timestamp::IsFinite(current_last_modified) || !Timestamp::IsFinite(cached_last_modified)) {
+		return false;
+	}
+
 	// The last modified time matches. However, we cannot blindly trust this,
 	// because some file systems use a low resolution clock to set the last modified time.
 	// So, we will require that the last modified time is more than 10 seconds ago.
