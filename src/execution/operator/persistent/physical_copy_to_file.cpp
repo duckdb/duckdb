@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <thread>
 
 namespace duckdb {
 
@@ -367,7 +366,7 @@ public:
 	void Combine(ExecutionContext &execution_context, PartitionedCopyLocalState &lstate,
 	             InterruptState &interrupt_state);
 	void Finalize(Pipeline &pipeline, Event &event);
-	bool Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
+	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
 
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
 
@@ -928,9 +927,7 @@ public:
 		                                   event->Cast<BasePipelineEvent>().pipeline);
 		InterruptState interrupt_state(shared_from_this());
 		while (partitioned_copy.flushing.load(std::memory_order_relaxed)) {
-			if (!partitioned_copy.Flush(execution_context, interrupt_state)) {
-				TaskScheduler::YieldThread();
-			}
+			partitioned_copy.Flush(execution_context, interrupt_state);
 		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -989,7 +986,7 @@ void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event) {
 	event.InsertEvent(std::move(partitioned_copy_finalize_event));
 }
 
-bool PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState &interrupt_state) {
+void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState &interrupt_state) {
 	shared_ptr<PartitionedCopyState> flushing_state_copy;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
@@ -997,14 +994,12 @@ bool PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 	}
 
 	if (!flushing_state_copy || !flushing_state_copy->global_source_state) {
-		return false; // Finalization not yet complete, nothing to do
+		return; // Finalization not yet complete, nothing to do
 	}
 
 	PartitionedCopyTask task;
-	bool did_work = false;
 	while (flushing_state_copy->TryAssignTask(task)) {
 		flushing_state_copy->ExecuteTask(execution_context, task, interrupt_state);
-		did_work = true;
 	}
 
 	if (flushing_state_copy->AllGroupsDone()) {
@@ -1012,9 +1007,8 @@ bool PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		D_ASSERT(flushing_state && RefersToSameObject(*flushing_state, *flushing_state_copy));
 		flushing_state.reset();
 		flushing = false;
-		return true;
+		return;
 	}
-	return did_work;
 }
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values) {
