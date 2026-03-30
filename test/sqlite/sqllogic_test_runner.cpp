@@ -195,12 +195,13 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 }
 
-void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement) {
+void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement,
+                               const string &test_name) {
 	auto loop_it = "{" + loop_iterator_name + "}";
 	auto deprecated_loop_it = "$" + loop_it;
 	if (StringUtil::Contains(text, deprecated_loop_it)) {
-		Printer::PrintF("Replacing deprecated loop it %s in text \"%s\" - please use the new loop iterator %s",
-		                deprecated_loop_it, text, loop_it);
+		Printer::PrintF("Replacing deprecated loop iterator %s in test \"%s\" - please use the new loop iterator %s",
+		                deprecated_loop_it, test_name, loop_it);
 		text = StringUtil::Replace(text, deprecated_loop_it, replacement);
 	}
 	text = StringUtil::Replace(text, loop_it, replacement);
@@ -216,11 +217,11 @@ string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator
 			     ") does not match number of commas in replacement (" + replacement + ")");
 		}
 		for (idx_t i = 0; i < name_splits.size(); i++) {
-			StringReplaceLoopIterator(text, name_splits[i], replacement_splits[i]);
+			StringReplaceLoopIterator(text, name_splits[i], replacement_splits[i], file_name);
 		}
 		return text;
 	} else {
-		StringReplaceLoopIterator(text, loop_iterator_name, replacement);
+		StringReplaceLoopIterator(text, loop_iterator_name, replacement, file_name);
 		return text;
 	}
 }
