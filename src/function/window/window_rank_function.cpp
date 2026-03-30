@@ -3,6 +3,8 @@
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
 
@@ -142,6 +144,11 @@ public:
 	}
 };
 
+WindowFunction RankFunc::GetFunction() {
+	WindowFunction fun("rank", {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK);
+	return fun;
+}
+
 WindowRankExecutor::WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowPeerExecutor(wexpr, shared) {
 }
@@ -190,6 +197,17 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 // WindowDenseRankExecutor
 //===--------------------------------------------------------------------===//
+WindowFunction DenseRankFun::GetFunction() {
+	WindowFunction fun("dense_rank", {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE);
+	return fun;
+}
+
+WindowFunction RankDenseFun::GetFunction() {
+	auto fun = DenseRankFun::GetFunction();
+	fun.name = "rank_dense";
+	return fun;
+}
+
 class WindowDenseRankLocalState : public WindowPeerLocalState {
 public:
 	WindowDenseRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -281,6 +299,11 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowPercentRankExecutor
 //===--------------------------------------------------------------------===//
+WindowFunction PercentRankFun::GetFunction() {
+	WindowFunction fun("percent_rank", {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK);
+	return fun;
+}
+
 class WindowPercentRankLocalState : public WindowPeerLocalState {
 public:
 	WindowPercentRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -361,6 +384,11 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 //===--------------------------------------------------------------------===//
 // WindowCumeDistExecutor
 //===--------------------------------------------------------------------===//
+WindowFunction CumeDistFun::GetFunction() {
+	WindowFunction fun("cume_dist", {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST);
+	return fun;
+}
+
 class WindowCumeDistLocalState : public WindowPeerLocalState {
 public:
 	WindowCumeDistLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)

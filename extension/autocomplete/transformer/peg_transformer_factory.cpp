@@ -388,6 +388,7 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropBehavior);
 	REGISTER_TRANSFORM(TransformDropSecret);
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
+	REGISTER_TRANSFORM(TransformDropTrigger);
 }
 
 void PEGTransformerFactory::RegisterExecute() {

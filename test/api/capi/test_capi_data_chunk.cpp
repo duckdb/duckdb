@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "capi_tester.hpp"
 
 using namespace duckdb;
@@ -414,7 +415,7 @@ TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
 		((int *)duckdb_vector_get_data(child))[i] = i;
 	}
 
-	auto vec = (Vector &)(*array_vector);
+	auto &vec = (Vector &)(*array_vector);
 	for (int i = 0; i < 2; i++) {
 		auto child_vals = ArrayValue::GetChildren(vec.GetValue(i));
 		for (int j = 0; j < 3; j++) {

@@ -182,7 +182,7 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	UnifiedVectorFormat leftv, rightv;
 	left.ToUnifiedFormat(count, leftv);
 	right.ToUnifiedFormat(count, rightv);
-	if (!leftv.validity.AllValid() || !rightv.validity.AllValid()) {
+	if (leftv.validity.CanHaveNull() || rightv.validity.CanHaveNull()) {
 		ComparesNotNull(leftv, rightv, result_validity, count);
 	}
 	ValidityMask original_mask;

@@ -84,15 +84,27 @@ public:
 		D_ASSERT(values_skipped == batch_size);
 	}
 
-	static uint8_t ComputeBitWidth(idx_t val) {
-		if (val == 0) {
+	static uint8_t ComputeBitWidthFromMaxValue(idx_t max_value) {
+		if (max_value == 0) {
 			return 0;
 		}
 		uint8_t ret = 1;
-		while ((((idx_t)1u << (idx_t)ret) - 1) < val) {
+		while ((((idx_t)1u << (idx_t)ret) - 1) < max_value) {
 			ret++;
 		}
 		return ret;
+	}
+
+	static uint8_t ComputeBitWidthFromValueCount(idx_t value_count) {
+		if (value_count == 0) {
+			return 0;
+		}
+		if (value_count == 1) {
+			// A singleton dictionary only emits index 0. In theory that needs 0 bits, but the
+			// current writer still assumes dictionary bit widths are non-zero when it flushes pages.
+			return 1;
+		}
+		return ComputeBitWidthFromMaxValue(value_count - 1);
 	}
 
 private:

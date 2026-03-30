@@ -1,6 +1,8 @@
 #include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
+#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -104,6 +106,11 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
+WindowFunction RowNumberFunc::GetFunction() {
+	WindowFunction fun("row_number", {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
+	return fun;
+}
+
 WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
 	for (const auto &order : wexpr.arg_orders) {
@@ -174,6 +181,11 @@ public:
 		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 };
+
+WindowFunction NtileFunc::GetFunction() {
+	WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
+	return fun;
+}
 
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowRowNumberExecutor(wexpr, shared) {

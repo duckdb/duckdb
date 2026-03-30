@@ -318,3 +318,43 @@ SELECT * FROM a, LATERAL (SELECT *, a_id AS id_dup FROM b ORDER BY array_distanc
 [1.0, 2.0, 3.0]	1	[1.0, 2.0, 3.0]	a	1
 [4.0, 5.0, 6.0]	2	[4.0, 5.0, 6.0]	b	2
 
+statement ok
+CREATE TABLE t(a INT, b INT, c VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 100, 'x'), (2, 200, 'y');
+
+query II
+SELECT c, avg(b)
+FROM (
+    SELECT * FROM t
+    QUALIFY row_number() OVER (PARTITION BY a, c ORDER BY b DESC) = 1
+) sub
+GROUP BY c
+ORDER BY ALL
+----
+x	100.0
+y	200.0
+
+query II
+SELECT c, avg(b)
+FROM (
+    SELECT *, row_number() OVER (PARTITION BY a, c ORDER BY b DESC) AS rn
+    FROM t
+) sub
+WHERE rn = 1
+GROUP BY c
+ORDER BY ALL;
+----
+x	100.0
+y	200.0
+
+query II
+WITH sub AS (
+    SELECT * FROM t
+    QUALIFY row_number() OVER (PARTITION BY a, c ORDER BY b DESC) = 1
+)
+SELECT c, avg(b) FROM sub GROUP BY c ORDER BY ALL;
+----
+x	100.0
+y	200.0

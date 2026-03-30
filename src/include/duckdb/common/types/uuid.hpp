@@ -24,7 +24,7 @@ public:
 	static bool FromString(const string &str, hugeint_t &result, bool strict = false);
 	//! Convert a uuid string to a hugeint object
 	static bool FromCString(const char *str, idx_t len, hugeint_t &result) {
-		return FromString(string(str, 0, len), result);
+		return FromString(string(str, len), result);
 	}
 	//! Convert a hugeint object to a uuid style string
 	static void ToString(hugeint_t input, char *buf);

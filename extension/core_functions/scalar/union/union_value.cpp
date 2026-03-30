@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/union_vector.hpp"
 #include "core_functions/scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -30,12 +31,6 @@ void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &tag_vector = UnionVector::GetTags(result);
 	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = 0;
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(args.size());
 }
 
 unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,

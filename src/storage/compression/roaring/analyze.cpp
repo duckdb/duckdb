@@ -173,7 +173,7 @@ void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count
 	auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
 	const bool *src = FlatVector::GetData<bool>(input);
 	const auto &validity = FlatVector::Validity(input);
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		BitPackBooleans<false, true>(dst, src, count);
 	} else {
 		BitPackBooleans<false, false>(dst, src, count, &validity);

@@ -76,23 +76,19 @@ void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
 	UnaryExecutor::Execute<list_entry_t, int64_t>(
 	    input, result, args.size(), [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnifiedVectorFormat format;
-	args.data[0].ToUnifiedFormat(args.size(), format);
+	auto validity_entries = args.data[0].Validity(args.size());
 
 	// for arrays the length is constant
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<int64_t>(result)[0] = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
 
 	// but we do need to take null values into account
-	if (format.validity.AllValid()) {
+	if (!validity_entries.CanHaveNull()) {
 		// if there are no null values we can just return the constant
 		return;
 	}
@@ -100,13 +96,9 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	result.Flatten(args.size());
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t r = 0; r < args.size(); r++) {
-		auto idx = format.sel->get_index(r);
-		if (!format.validity.RowIsValid(idx)) {
+		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
 		}
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
@@ -143,9 +135,6 @@ void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector &result
 		    }
 		    return UnsafeNumericCast<int64_t>(input.length);
 	    });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 struct ArrayLengthBinaryFunctionData : public FunctionData {
@@ -179,10 +168,6 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 		return dimensions[UnsafeNumericCast<idx_t>(dimension - 1)];
 	});
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,

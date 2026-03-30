@@ -172,8 +172,6 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	result_entry.Slice(l_child, result_sel, offset);
 	result_entry.Flatten(offset);
 	FlatVector::SetValidity(result_entry, result_entry_validity_mask);
-
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 static unique_ptr<FunctionData> ListIntersectBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {

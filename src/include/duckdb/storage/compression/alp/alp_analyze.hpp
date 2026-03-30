@@ -105,7 +105,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	//! We need to store the entire sampled vector to perform the 'analyze' compression in it
 	idx_t nulls_idx = 0;
 	// We optimize by doing a different loop when there are no nulls
-	if (vdata.validity.AllValid()) {
+	if (vdata.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < sampling_params.n_lookup_values; i++) {
 			auto idx = vdata.sel->get_index(i);
 			T value = data[idx];

@@ -64,7 +64,8 @@ private:
 	WriteStream &serializer;
 };
 
-bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_ptr<Type::type> parquet_type_ptr) {
+bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_ptr<Type::type> parquet_type_ptr,
+                                      bool write_timestamp_as_int96) {
 	Type::type parquet_type;
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -97,12 +98,14 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-		parquet_type = Type::INT64;
+		parquet_type = write_timestamp_as_int96 ? Type::INT96 : Type::INT64;
 		break;
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
@@ -145,9 +148,9 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 	return true;
 }
 
-Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
+Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type, bool write_timestamp_as_int96) {
 	Type::type result;
-	if (TryGetParquetType(duckdb_type, &result)) {
+	if (TryGetParquetType(duckdb_type, &result, write_timestamp_as_int96)) {
 		return result;
 	}
 	throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
@@ -167,7 +170,7 @@ static bool GetTimestampIsAdjustedToUTC(const LogicalTypeId type_id, const TimeS
 }
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-                                        bool allow_geometry, ClientContext &context,
+                                        bool allow_geometry, ClientContext &context, bool write_timestamp_as_int96,
                                         TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc) {
 	if (duckdb_type.IsJSONType()) {
 		schema_ele.converted_type = ConvertedType::JSON;
@@ -225,6 +228,9 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
+		if (write_timestamp_as_int96) {
+			return;
+		}
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
@@ -234,6 +240,9 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
+		if (write_timestamp_as_int96) {
+			return;
+		}
 		schema_ele.__isset.converted_type = false;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
@@ -242,6 +251,9 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
+		if (write_timestamp_as_int96) {
+			return;
+		}
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
@@ -378,7 +390,7 @@ public:
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
 };
 
-ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
+ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
     : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
       executor(context, expressions) {
@@ -405,7 +417,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
                              int64_t compression_level_p, ParquetVersion parquet_version,
-                             GeoParquetVersion geoparquet_version,
+                             GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96_p,
                              TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc_p)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
@@ -415,6 +427,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       enable_bloom_filters(enable_bloom_filters_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       parquet_version(parquet_version), geoparquet_version(geoparquet_version),
+      write_timestamp_as_int96(write_timestamp_as_int96_p),
       timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), total_written(0), num_row_groups(0) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),

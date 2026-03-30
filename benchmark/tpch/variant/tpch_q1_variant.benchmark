@@ -5,7 +5,7 @@
 name Q01 variants
 group tpch
 subgroup sf1
-storage persistent
+storage persistent v1.5.0
 
 require tpch
 
@@ -15,8 +15,7 @@ load
 CALL dbgen(sf=1, suffix='_normalized');
 SET variant_minimum_shredding_size = 0;
 create table lineitem_variant as select
-	struct_pack(*COLUMNS(lineitem_normalized.* EXCLUDE l_shipdate))::VARIANT lineitem,
-	l_shipdate
+	struct_pack(*COLUMNS(lineitem_normalized.*))::VARIANT lineitem
 from lineitem_normalized;
 checkpoint;
 CREATE VIEW lineitem AS SELECT
@@ -30,7 +29,7 @@ CREATE VIEW lineitem AS SELECT
 	lineitem.l_tax::DECIMAL(15,2) l_tax,
 	lineitem.l_returnflag::VARCHAR l_returnflag,
 	lineitem.l_linestatus::VARCHAR l_linestatus,
-	l_shipdate,
+	lineitem.l_shipdate::DATE l_shipdate,
 	lineitem.l_commitdate::DATE l_commitdate,
 	lineitem.l_receiptdate::DATE l_receiptdate,
 	lineitem.l_shipinstruct::VARCHAR l_shipinstruct,

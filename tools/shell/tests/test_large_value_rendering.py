@@ -222,4 +222,28 @@ def test_json_special_characters(shell):
     for key in keys:
         assert re.search(f'│\\s+["]{key}["]:', result.stdout) is not None
 
+def test_duckbox_grapheme_clusters(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".maxwidth 80")
+        .statement("""
+FROM (VALUES
+    ('Write a short Threads post (2 punchy sentences) for an English tech-news account about Google launching “Personal Intelligence” as a new layer in AI Mode. Include: a hook-style alert/opening, explain that it lets Search “connect the dots” across a user’s Google apps to tailor answers to their context, note it began in the Gemini app, and say it’s now rolling out inside AI Mode in Search for Google AI Pro and Ultra subscribers as a Labs experiment in the U.S. Keep it concise, newsy, and matter-of-fact. No links. Use one 🚨 emoji at the start.'),
+    ('Write a short Threads post for an English tech-news account about the US government officially designating AI company Anthropic a “supply chain risk.” Start with a punchy hook and include the 🇺🇸 flag emoji. Clearly state the designation and explain why it’s notable: the label is typically reserved for foreign enemies/adversaries and hasn’t been applied to a US company before. Keep it concise (2–3 sentences), breaking lines for emphasis. Tone: urgent, newsy, slightly incredulous. No extra context, no links, no hashtags, no CTA.')
+);"""
+        )
+    )
+    result = test.run()
+    result.check_stdout("🇺🇸 flag")
+
+def test_struct_spaces_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement('.maxwidth 80')
+        .statement("select { column1: 'apple river cloud hammer bright', column2: 'forest table ocean pencil green' } s;")
+    )
+    result = test.run()
+    # verify the entire string is printed
+    result.check_stdout("apple river cloud hammer bright")
+
 # fmt: on

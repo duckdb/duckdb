@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/uhugeint.hpp"
@@ -514,7 +520,7 @@ static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, con
 	for (idx_t child_count = 0; child_count < children.size(); child_count++) {
 		auto struct_children_segment = Load<ListSegment *>(const_data_ptr_cast(struct_children + child_count));
 		auto &child_function = functions.child_functions[child_count];
-		child_function.read_data(child_function, struct_children_segment, *children[child_count], total_count);
+		child_function.read_data(child_function, struct_children_segment, children[child_count], total_count);
 	}
 }
 

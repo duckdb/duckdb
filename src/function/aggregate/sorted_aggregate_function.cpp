@@ -470,7 +470,7 @@ struct SortedAggregateFunction {
 		states.ToUnifiedFormat(count, svdata);
 
 		// Size the selection vector for each state.
-		auto sdata = UnifiedVectorFormat::GetDataNoConst<SortedAggregateState *>(svdata);
+		auto sdata = UnifiedVectorFormat::GetData<SortedAggregateState *>(svdata);
 		for (idx_t i = 0; i < count; ++i) {
 			auto sidx = svdata.sel->get_index(i);
 			auto order_state = sdata[sidx];

@@ -100,7 +100,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	SelectionVector delete_sel(chunk.size());
 	idx_t delete_count = chunk.size();
-	Vector delete_row_ids(row_ids);
+	Vector delete_row_ids(Vector::Ref(row_ids));
 
 	// If RETURNING is enabled, deduplicate row_ids: per-thread set (lock-free) then global set (batched lock).
 	if (return_chunk) {

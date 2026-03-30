@@ -50,7 +50,7 @@ public:
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	//! Initialize HT for this operator
-	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
+	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context, idx_t initial_radix_bits) const;
 
 	//! The types of the join keys
 	vector<LogicalType> condition_types;

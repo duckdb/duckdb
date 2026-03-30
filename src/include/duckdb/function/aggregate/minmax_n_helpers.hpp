@@ -6,6 +6,9 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -165,6 +168,12 @@ private:
 	idx_t capacity;
 	HeapEntry<T> *heap;
 	idx_t size;
+};
+
+struct List {
+	uint32_t capacity;
+	uint32_t size;
+	List *next;
 };
 
 template <class K, class V, class K_COMPARATOR>

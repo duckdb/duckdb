@@ -199,6 +199,10 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
     : BaseFileReader(std::move(file_p)), context(context_p), finished(false) {
 	auto &attached = GetAttachedDatabase();
 	auto &catalog = attached.GetCatalog();
+	if (!catalog.IsDuckCatalog()) {
+		throw NotImplementedException("read_duckdb can only be used to read DuckDB files - \"%s\" is of type \"%s\"",
+		                              catalog.GetDBPath(), catalog.GetCatalogType());
+	}
 	vector<reference<TableCatalogEntry>> tables;
 	vector<reference<TableCatalogEntry>> candidate_tables;
 	catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {

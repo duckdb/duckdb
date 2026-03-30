@@ -496,7 +496,7 @@ struct UDFSum {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto mask = FlatVector::Validity(inputs[0]);
-			if (!mask.AllValid()) {
+			if (mask.CanHaveNull()) {
 				// potential NULL values and NULL values are ignored
 				for (idx_t i = 0; i < count; i++) {
 					if (mask.RowIsValid(i)) {
@@ -529,7 +529,7 @@ struct UDFSum {
 			inputs[0].Flatten(count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto &mask = FlatVector::Validity(inputs[0]);
-			if (!mask.AllValid()) {
+			if (mask.CanHaveNull()) {
 				// potential NULL values and NULL values are ignored
 				for (idx_t i = 0; i < count; i++) {
 					if (mask.RowIsValid(i)) {

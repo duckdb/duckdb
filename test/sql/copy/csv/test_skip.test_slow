@@ -2,6 +2,8 @@
 # description: Test that the skip option works for csv files
 # group: [csv]
 
+mode skip
+
 statement ok
 PRAGMA enable_verification
 

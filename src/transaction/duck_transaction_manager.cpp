@@ -17,6 +17,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
 
@@ -90,29 +91,11 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-ActiveCheckpointWrapper::ActiveCheckpointWrapper(DuckTransactionManager &manager)
-    : manager(manager), is_cleared(false) {
+void DuckTransactionManager::SetActiveCheckpoint(transaction_t checkpoint_id) {
+	active_checkpoint = checkpoint_id;
 }
 
-void ActiveCheckpointWrapper::Clear() {
-	if (is_cleared) {
-		return;
-	}
-	is_cleared = true;
-	manager.ResetCheckpointId();
-}
-
-transaction_t DuckTransactionManager::GetNewCheckpointId() {
-	if (active_checkpoint != MAX_TRANSACTION_ID) {
-		throw InternalException(
-		    "DuckTransactionManager::GetNewCheckpointId requested a new id but active_checkpoint was already set");
-	}
-	auto result = last_commit.load();
-	active_checkpoint = result;
-	return result;
-}
-
-void DuckTransactionManager::ResetCheckpointId() {
+void DuckTransactionManager::ResetActiveCheckpoint() {
 	active_checkpoint = MAX_TRANSACTION_ID;
 }
 
@@ -505,7 +488,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 	idx_t t_index = active_transactions.size();
 	auto lowest_start_time = TRANSACTION_ID_START;
 	auto lowest_transaction_id = MAX_TRANSACTION_ID;
-	auto active_checkpoint_id = active_checkpoint.load();
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
@@ -513,9 +495,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 		}
 		lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
-	}
-	if (active_checkpoint_id != MAX_TRANSACTION_ID && active_checkpoint_id < lowest_start_time) {
-		lowest_start_time = active_checkpoint_id;
 	}
 	lowest_active_start = lowest_start_time;
 	lowest_active_id = lowest_transaction_id;

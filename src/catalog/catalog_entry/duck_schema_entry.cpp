@@ -15,6 +15,7 @@
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_coordinate_systems.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_table_functions.hpp"
@@ -212,6 +213,12 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 		function = make_uniq_base<StandardEntry, AggregateFunctionCatalogEntry>(
 		    catalog, *this, info.Cast<CreateAggregateFunctionInfo>());
 		break;
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
+		D_ASSERT(info.type == CatalogType::WINDOW_FUNCTION_ENTRY);
+		// create a window function
+		function = make_uniq_base<StandardEntry, WindowFunctionCatalogEntry>(catalog, *this,
+		                                                                     info.Cast<CreateWindowFunctionInfo>());
+		break;
 	default:
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info.type));
 	}
@@ -395,6 +402,7 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 	case CatalogType::MACRO_ENTRY:
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;

@@ -28,7 +28,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -181,6 +181,30 @@ void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &inp
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Allowed Configs
+//===----------------------------------------------------------------------===//
+void AllowedConfigsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allowed_configs.clear();
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.AddAllowedConfig(val.GetValue<string>());
+	}
+}
+
+void AllowedConfigsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allowed_configs = DBConfigOptions().allowed_configs;
+}
+
+Value AllowedConfigsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> configs;
+	for (auto &cfg : config.options.allowed_configs) {
+		configs.emplace_back(cfg);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(configs));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1663,4 +1687,12 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	}
 }
 
+void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.context) {
+		throw InvalidInputException(
+		    "current_transaction_invalidaton_policy can only be set when there is an active client context");
+	}
+	info.context->transaction.SetInvalidationPolicy(
+	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
+}
 } // namespace duckdb
