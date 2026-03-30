@@ -217,6 +217,9 @@ struct PartitionedCopyTask {
 	idx_t thread_idx = 0;
 	idx_t begin_idx = 0;
 	idx_t end_idx = 0;
+
+	// This differs from PhysicalWindow tasks - need a batch index too
+	idx_t batch_idx = 0;
 };
 
 struct PartitionedCopyBatch {
@@ -255,7 +258,7 @@ public:
 		return (n + (val - 1)) / val;
 	}
 
-	bool TryPrepareNextStage();
+	bool TryPrepareNextStage() DUCKDB_REQUIRES(lock);
 	bool TryNextTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
 	bool TryNextBatchTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
 	bool TryNextFlushTask(PartitionedCopyTask &task) DUCKDB_REQUIRES(lock);
@@ -420,7 +423,6 @@ idx_t PartitionedCopyHashGroup::InitTasks(idx_t per_thread_p) {
 }
 
 bool PartitionedCopyHashGroup::TryPrepareNextStage() {
-	annotated_lock_guard<annotated_mutex> prepare_guard(lock);
 	switch (stage.load()) {
 	case PartitionedCopyStage::SORT:
 		if (sorted == blocks) {
@@ -494,8 +496,9 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 
 	// Reuse these fields
 	task.stage = PartitionedCopyStage::BATCH;
-	task.hash_bin = batch_states.size() - 1;
-	task.thread_idx = batch_state.batches.size();
+	task.hash_bin = hash_bin;
+	task.thread_idx = batch_states.size() - 1;
+	task.batch_idx = batch_state.batches.size();
 	task.begin_idx = batch_row_idx;
 
 	// Find the end_idx
@@ -505,35 +508,31 @@ bool PartitionedCopyHashGroup::TryNextBatchTask(PartitionedCopyTask &task) {
 	while (batch_row_idx < count) {
 		// Look for the next partition boundary within the current chunk
 		D_ASSERT(batch_row_idx <= batch_scan_state.next_row_index);
-		for (; batch_row_idx < batch_scan_state.next_row_index; batch_row_idx++) {
-			if (partition_mask.RowIsValidUnsafe(batch_row_idx)) {
+		for (; batch_row_idx < batch_scan_state.next_row_index;) {
+			if (partition_mask.RowIsValidUnsafe(batch_row_idx++)) {
 				found_next_partition = true;
 				break;
 			}
 		}
 
-		if (found_next_partition) {
-			break; // Found the next partition boundary
-		}
-
 		// Did not find the next partition boundary, add chunk
 		auto &segment = segments[batch_scan_state.segment_index];
 		const auto current_batch_size = batch_row_idx - task.begin_idx;
-		current_batch_size_bytes += segment->GetChunkAllocationSize(batch_scan_state.chunk_index);
+		current_batch_size_bytes += segment->GetChunkAllocationSize(batch_scan_state.chunk_index - 1);
 		const CopyFunctionBatchAnalyzer batch_analyzer(current_batch_size, current_batch_size_bytes,
 		                                               partitioned_copy.op.batch_size,
 		                                               partitioned_copy.op.batch_size_bytes);
-		if (batch_analyzer.MeetsFlushCriteria()) {
-			break; // Batch is large enough - stop
+
+		// Move to the next chunk if we exhausted this one
+		if (batch_row_idx == batch_scan_state.next_row_index) {
+			idx_t chunk_index;
+			idx_t segment_index;
+			idx_t row_index;
+			collection->NextScanIndex(batch_scan_state, chunk_index, segment_index, row_index);
 		}
 
-		// Move to the next chunk
-		idx_t chunk_index;
-		idx_t segment_index;
-		idx_t row_index;
-		const auto success = collection->NextScanIndex(batch_scan_state, chunk_index, segment_index, row_index);
-		if (!success) {
-			throw InternalException("NextScanIndex failed in PartitionedCopyHashGroup::TryNextBatchTask");
+		if (found_next_partition || batch_analyzer.MeetsFlushCriteria()) {
+			break; // Move to the next partition or batch
 		}
 	}
 	task.end_idx = batch_row_idx;
@@ -550,7 +549,8 @@ bool PartitionedCopyHashGroup::TryNextFlushTask(PartitionedCopyTask &task) {
 	}
 
 	task.stage = PartitionedCopyStage::FLUSH;
-	task.hash_bin = flush_partition_idx++;
+	task.hash_bin = hash_bin;
+	task.thread_idx = flush_partition_idx++;
 
 	return true;
 }
@@ -576,6 +576,11 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &execution_context, 
 		if (!collection) {
 			collection = partitioned_copy.sort_strategy->GetColumnData(hash_bin, source_input);
 			collection->InitializeScan(batch_scan_state);
+
+			idx_t chunk_index;
+			idx_t segment_index;
+			idx_t row_index;
+			collection->NextScanIndex(batch_scan_state, chunk_index, segment_index, row_index);
 		}
 	}
 }
@@ -669,7 +674,7 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	optional_ptr<PartitionedCopyBatchState> batch_state;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		batch_state = batch_states[task.hash_bin];
+		batch_state = batch_states[task.thread_idx];
 		D_ASSERT(batch_state->values.empty() || batch_state->values == values);
 		if (batch_state->values.empty()) {
 			batch_state->values = std::move(values);
@@ -682,7 +687,7 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	auto prepared_batch = op.function.prepare_batch(partitioned_copy.context, *op.bind_data,
 	                                                *batch_state->file_state->data, std::move(batch));
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	batch_state->batches[task.thread_idx] = make_uniq<PartitionedCopyBatch>(batch_analyzer, std::move(prepared_batch));
+	batch_state->batches[task.batch_idx] = make_uniq<PartitionedCopyBatch>(batch_analyzer, std::move(prepared_batch));
 	// TODO: if this batch is an entire partition, we could immediately write it without moving it
 
 	batched += (task.end_idx - task.begin_idx);
@@ -694,7 +699,7 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, const 
 	optional_ptr<PartitionedCopyBatchState> batch_state;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		batch_state = batch_states[task.hash_bin];
+		batch_state = batch_states[task.thread_idx];
 	}
 
 	auto &op = partitioned_copy.op;
@@ -757,12 +762,10 @@ bool PartitionedCopyState::TryAssignTask(PartitionedCopyTask &task) {
 		if (!hash_group) {
 			continue;
 		}
+		annotated_lock_guard<annotated_mutex> guard(hash_group->lock);
 		hash_group->TryPrepareNextStage();
-		{
-			annotated_lock_guard<annotated_mutex> guard(hash_group->lock);
-			if (hash_group->TryNextTask(task)) {
-				return true;
-			}
+		if (hash_group->TryNextTask(task)) {
+			return true;
 		}
 	}
 	return false;
