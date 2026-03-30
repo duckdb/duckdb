@@ -76,39 +76,6 @@ static bool IsSupportedConstantComparison(ExpressionType type) {
 	}
 }
 
-static bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, idx_t &child_idx) {
-	if (func.function.name == "struct_extract_at") {
-		if (func.bind_info) {
-			child_idx = func.bind_info->Cast<StructExtractBindData>().index;
-			return true;
-		}
-		if (func.children.size() > 1 && func.children[1]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			auto &field_value = func.children[1]->Cast<BoundConstantExpression>().value;
-			if (field_value.IsNull()) {
-				return false;
-			}
-			auto index = field_value.GetValue<int64_t>();
-			if (index <= 0) {
-				return false;
-			}
-			child_idx = static_cast<idx_t>(index - 1);
-			return true;
-		}
-		return false;
-	}
-	if (func.function.name != "struct_extract" || func.children.size() <= 1 ||
-	    func.children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-	    func.children[0]->return_type.id() != LogicalTypeId::STRUCT) {
-		return false;
-	}
-	auto &field_value = func.children[1]->Cast<BoundConstantExpression>().value;
-	if (field_value.IsNull() || field_value.type().id() != LogicalTypeId::VARCHAR) {
-		return false;
-	}
-	child_idx = StructType::GetChildIndexUnsafe(func.children[0]->return_type, field_value.GetValue<string>());
-	return true;
-}
-
 static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructPathEntry> &struct_path) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
