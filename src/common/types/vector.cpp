@@ -52,7 +52,7 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType:
 	if (dataptr && !type.IsValid()) {
 		throw InternalException("Cannot create a vector of type INVALID!");
 	}
-	buffer = make_uniq<VectorBuffer>(dataptr);
+	buffer = make_buffer<StandardVectorBuffer>(dataptr);
 }
 
 Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
@@ -206,7 +206,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		Reference(other);
 		if (offset > 0) {
 			auto offset_ptr = buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-			buffer = make_buffer<VectorBuffer>(offset_ptr);
+			buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
 			validity.Slice(other.validity, offset, end - offset);
 		}
 	}
@@ -382,7 +382,7 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 void Vector::Resize(idx_t current_size, idx_t new_size) {
 	// The vector does not contain any data.
 	if (!buffer) {
-		buffer = make_buffer<VectorBuffer>(0);
+		buffer = make_buffer<StandardVectorBuffer>(0);
 	}
 
 	// Obtain the resize information for each (nested) vector.
@@ -415,7 +415,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 		auto new_data = allocator.Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
-		auto new_buffer = make_buffer<VectorBuffer>(std::move(new_data));
+		auto new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
 		resize_info_entry.buffer = new_buffer.get();
 		resize_info_entry.vec.buffer = std::move(new_buffer);
 	}

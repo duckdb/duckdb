@@ -16,11 +16,11 @@
 namespace duckdb {
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, idx_t capacity) {
-	return make_buffer<VectorBuffer>(capacity * GetTypeIdSize(type));
+	return make_buffer<StandardVectorBuffer>(capacity * GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
-	return make_buffer<VectorBuffer>(GetTypeIdSize(type));
+	return make_buffer<StandardVectorBuffer>(GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &type) {

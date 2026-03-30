@@ -48,7 +48,7 @@ struct FlatVector {
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
 		VerifyFlatVector(vector);
-		vector.buffer = make_buffer<VectorBuffer>(data);
+		vector.buffer = make_buffer<StandardVectorBuffer>(data);
 	}
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {

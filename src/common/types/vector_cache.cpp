@@ -16,7 +16,7 @@ public:
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// memory for the list offsets
-			buffer = make_buffer<VectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
+			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
@@ -42,7 +42,7 @@ public:
 			break;
 		}
 		default:
-			buffer = make_buffer<VectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
+			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
 			break;
 		}
 	}

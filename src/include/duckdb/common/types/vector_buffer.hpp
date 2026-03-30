@@ -70,34 +70,15 @@ public:
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
-	explicit VectorBuffer(VectorBufferType type) : buffer_type(type), data_ptr(nullptr) {
-	}
-	VectorBuffer(Allocator &allocator, idx_t data_size)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
-		if (data_size > 0) {
-			allocated_data = allocator.Allocate(data_size);
-			data_ptr = allocated_data.get();
-		}
-	}
-	explicit VectorBuffer(idx_t data_size) : VectorBuffer(Allocator::DefaultAllocator(), data_size) {
-	}
-	explicit VectorBuffer(data_ptr_t data_ptr_p)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
-	}
-	explicit VectorBuffer(AllocatedData &&data_p)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), allocated_data(std::move(data_p)) {
-		data_ptr = allocated_data.get();
+	explicit VectorBuffer(VectorBufferType type) : buffer_type(type) {
 	}
 	virtual ~VectorBuffer() {
 	}
-	VectorBuffer() : data_ptr(nullptr) {
-	}
 
 public:
-	data_ptr_t GetData() {
-		return data_ptr;
+	virtual data_ptr_t GetData() {
+		throw InternalException("VectorBuffer does not have data!");
 	}
-
 	VectorAuxiliaryData *GetAuxiliaryData() {
 		return aux_data.get();
 	}
@@ -111,7 +92,7 @@ public:
 	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
-		return allocated_data.GetAllocator();
+		return nullptr;
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -131,8 +112,6 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
 
 public:
 	template <class TARGET>
@@ -147,6 +126,39 @@ public:
 	}
 };
 
+class StandardVectorBuffer : public VectorBuffer {
+public:
+	StandardVectorBuffer(Allocator &allocator, idx_t data_size)
+	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
+		if (data_size > 0) {
+			allocated_data = allocator.Allocate(data_size);
+			data_ptr = allocated_data.get();
+		}
+	}
+	explicit StandardVectorBuffer(idx_t data_size) : StandardVectorBuffer(Allocator::DefaultAllocator(), data_size) {
+	}
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p)
+	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
+	}
+	explicit StandardVectorBuffer(AllocatedData &&data_p)
+	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), allocated_data(std::move(data_p)) {
+		data_ptr = allocated_data.get();
+	}
+
+public:
+	data_ptr_t GetData() override {
+		return data_ptr;
+	}
+
+	optional_ptr<Allocator> GetAllocator() const override {
+		return allocated_data.GetAllocator();
+	}
+
+protected:
+	data_ptr_t data_ptr;
+	AllocatedData allocated_data;
+};
+
 //! The ManagedVectorBuffer holds a buffer handle
 class ManagedVectorBuffer : public VectorBuffer {
 public:
@@ -157,18 +169,4 @@ private:
 	BufferHandle handle;
 };
 
-//! The DictionaryBuffer holds a selection vector
-class ShreddedVectorBuffer : public VectorBuffer {
-public:
-	explicit ShreddedVectorBuffer(Vector &shredded_data);
-	~ShreddedVectorBuffer() override;
-
-public:
-	Vector &GetChild() {
-		return *shredded_data;
-	}
-
-private:
-	unique_ptr<Vector> shredded_data;
-};
 } // namespace duckdb
