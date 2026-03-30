@@ -47,8 +47,8 @@ jobs:
         if: ${{ env.MOVE_PR_TO_DRAFT_TOKEN_ENV != '' }}
         run: |
           echo "${{ env.MOVE_PR_TO_DRAFT_TOKEN_ENV }}" | gh auth login --with-token
-          gh api graphql -F "id=${{ env.PR_NUMBER }}" -f query="
-            mutation(\$id: ID!) {
+          gh api graphql -F "id=${{ env.PR_NUMBER }}" -f query='
+            mutation($id: ID!) {
               convertPullRequestToDraft(input: { pullRequestId: $id }) {
                 pullRequest {
                   id
@@ -57,4 +57,4 @@ jobs:
                 }
               }
             }
-          "
+          '
