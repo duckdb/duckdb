@@ -13,6 +13,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/list.hpp"
 #include "duckdb/common/column_data_collection_render_interface.hpp"
+#include "duckdb/common/box_renderer_context.hpp"
 
 namespace duckdb {
 class ColumnDataCollection;
@@ -151,13 +152,15 @@ class BoxRenderer {
 public:
 	explicit BoxRenderer(BoxRendererConfig config_p = BoxRendererConfig());
 
-	string ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollectionRenderInterface &op);
+	string ToString(BoxRendererContext &context, const vector<string> &names,
+	                const ColumnDataCollectionRenderInterface &op);
 
-	unique_ptr<BoxRendererState> Prepare(ClientContext &context, const vector<string> &names,
+	unique_ptr<BoxRendererState> Prepare(BoxRendererContext &context, const vector<string> &names,
 	                                     const ColumnDataCollectionRenderInterface &op);
-	void Render(ClientContext &context, const vector<string> &names, const ColumnDataCollectionRenderInterface &op,
-	            BaseResultRenderer &ss);
-	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollectionRenderInterface &op);
+	void Render(BoxRendererContext &context, const vector<string> &names,
+	            const ColumnDataCollectionRenderInterface &op, BaseResultRenderer &ss);
+	void Print(BoxRendererContext &context, const vector<string> &names,
+	           const ColumnDataCollectionRenderInterface &op);
 
 	static string TryFormatLargeNumber(const string &numeric, char decimal_sep);
 	static string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);

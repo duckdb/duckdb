@@ -1682,7 +1682,8 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &con = *state.conn;
 	try {
 		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, *wrapper);
+		duckdb::ClientBoxRendererContext render_context(*con.context);
+		render_state = renderer.Prepare(render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();
