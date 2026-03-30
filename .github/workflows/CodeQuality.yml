@@ -21,30 +21,6 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-  enum-check:
-    name: C Enum Integrity Check
-    runs-on: ubuntu-22.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-
-    - name: Install python dependencies
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      shell: bash
-      run: python -m pip install cxxheaderparser pcpp
-
-    - name: Verify C enum integrity
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      shell: bash
-      run: python scripts/verify_enum_integrity.py src/include/duckdb.h
-
   tidy-check:
     name: Tidy Check
     runs-on: ubuntu-24.04

@@ -204,7 +204,7 @@ jobs:
           clang-format --version
           clang-format --dump-config
           black --version
-          make format-check-silent
+          make format-check-silent enum-integrity-check
 
       - name: Check generated files
         run: |

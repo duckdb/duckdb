@@ -505,7 +505,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools
+.PHONY: toolsci format_tools enum-integrity-check
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -523,6 +523,9 @@ test_ci:
 format_tools:
 	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
 	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+
+enum-integrity-check:
+	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
 benchmark:
 	mkdir -p ./build/release && \
