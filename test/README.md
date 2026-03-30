@@ -14,6 +14,7 @@ Within SQL tests, the test runner (unittest) guarantees that these environment v
 | `DATA_DIR`  | `{WORKING_DIR}/data`        | `DATA_DIR=mydata unittest ...`<br/>also test configs, `test_env` specification | Should provide a copy of `duckdb/data/**`, use to test AWS, Azure, other VFS reads          |
 | `TEMP_BASE` | `{WORKING_DIR}/duckdb_unittest_tempdir`          | via `unittest --test-temp-dir` (retains dir after test)      | use to test VFS writes <br/> AKA: `__TEST_DIR__`                            |
 | `TEMP_DIR` | `{TEMP_BASE}/<process-id>`          | via `unittest --test-temp-dir` (retains dir after test)      | use to test VFS writes <br/> AKA: `__TEST_DIR__`                            |
+| `TEMP_DIR_ABSOLUTE` | absolute path to `{TEMP_DIR}` | N/A | use when a test requires an absolute path, e.g. `file://` URIs |
 
 Some tests require a particular environment variables to be set so they can properly run, usually this can be seen via `require-env VAR` in the test.
 
