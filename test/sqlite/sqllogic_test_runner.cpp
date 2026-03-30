@@ -239,19 +239,29 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	// TODO: (@benfleis) Remove after ${} syntax replaced (test-env, loop vars, ???), and __BUILD_DIRECTORY__ and
 	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
 	//
 	// Replace environment variables in the SQL
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
-		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
-		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
+		auto legacy_syntax = StringUtil::Format("${%s}", name);
+		auto env_syntax = StringUtil::Format("{%s}", name);
+		if (StringUtil::Contains(input, legacy_syntax)) {
+			Printer::PrintF("Replacing deprecated %s in test %s - please replace with %s", legacy_syntax, file_name,
+			                env_syntax);
+			input = StringUtil::Replace(input, legacy_syntax, value);
+		}
+		input = StringUtil::Replace(input, env_syntax, value);
 	}
 	auto &test_config = TestConfiguration::Get();
 	test_config.ProcessPath(input, file_name);
-	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	input = StringUtil::Replace(input, "{BUILD_DIRECTORY}", DUCKDB_BUILD_DIRECTORY);
+	if (StringUtil::Contains(input, "__BUILD_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated __BUILD_DIRECTORY__ in test %s - please replace with {BUILD_DIRECTORY}",
+		                file_name);
+		input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	}
 
 	return input;
 }
