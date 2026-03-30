@@ -1065,6 +1065,13 @@
         "default_value": "VALIDATE_ALL"
     },
     {
+        "name": "variant_legacy_encoding",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "variant_minimum_shredding_size",
         "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
         "type": "BIGINT",

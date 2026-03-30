@@ -199,6 +199,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
+    DUCKDB_SETTING(VariantLegacyEncodingSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
     DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
