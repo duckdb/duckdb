@@ -1,2 +1,2 @@
-promotions|total|?column?
-68951.36|68951.36|100.00000000000000000000
+promotions|total|((CAST(promotions AS DECIMAL(15, 4)) / CAST(total AS DECIMAL(15, 4))) * 100)
+55567.02|55684.22|99.78952744601611
