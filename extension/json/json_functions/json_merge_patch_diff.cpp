@@ -3,10 +3,9 @@
 
 namespace duckdb {
 
-//! Compute the minimal RFC 7396 merge patch that transforms old_val into new_val.
-//! Inputs are immutable yyjson_val; only the diff result is built as mutable.
-//! Returns nullptr when old_val and new_val are equal (no diff).
-static yyjson_mut_val *MergePatchDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
+//! Internal recursive diff. Returns nullptr to signal "no changes" to the caller,
+//! which is used to skip unchanged keys in the parent object's diff.
+static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
 	// Both objects: compute recursive structural diff
 	if (yyjson_is_obj(old_val) && yyjson_is_obj(new_val)) {
 		auto builder = yyjson_mut_obj(doc);
@@ -36,7 +35,7 @@ static yyjson_mut_val *MergePatchDiff(yyjson_mut_doc *doc, yyjson_val *old_val, 
 					has_diff = true;
 				} else {
 					// Key exists in both: recurse
-					auto sub_diff = MergePatchDiff(doc, old_child, new_child);
+					auto sub_diff = ComputeDiff(doc, old_child, new_child);
 					if (sub_diff) {
 						yyjson_mut_obj_add(builder, yyjson_val_mut_copy(doc, key), sub_diff);
 						has_diff = true;
@@ -51,6 +50,17 @@ static yyjson_mut_val *MergePatchDiff(yyjson_mut_doc *doc, yyjson_val *old_val, 
 	// Not both objects: use yyjson's built-in deep equality
 	if (yyjson_equals(old_val, new_val)) {
 		return nullptr;
+	}
+	return yyjson_val_mut_copy(doc, new_val);
+}
+
+//! Compute the minimal RFC 7396 merge patch that transforms old_val into new_val.
+//! Both objects: returns the structural diff (or empty object {} if equal).
+//! Otherwise: returns a copy of new_val.
+static yyjson_mut_val *MergePatchDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val) {
+	if (yyjson_is_obj(old_val) && yyjson_is_obj(new_val)) {
+		auto diff = ComputeDiff(doc, old_val, new_val);
+		return diff ? diff : yyjson_mut_obj(doc);
 	}
 	return yyjson_val_mut_copy(doc, new_val);
 }
@@ -89,16 +99,8 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 		}
 
 		auto old_doc = JSONCommon::ReadDocument(old_inputs[old_idx], JSONCommon::READ_FLAG, alc);
-
-		if (yyjson_is_obj(old_doc->root) && yyjson_is_obj(new_doc->root)) {
-			auto diff = MergePatchDiff(doc, old_doc->root, new_doc->root);
-			if (!diff) {
-				diff = yyjson_mut_obj(doc);
-			}
-			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(diff, alc);
-		} else {
-			result_data[i] = JSONCommon::WriteVal<yyjson_val>(new_doc->root, alc);
-		}
+		auto diff = MergePatchDiff(doc, old_doc->root, new_doc->root);
+		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(diff, alc);
 	}
 
 	if (args.AllConstant()) {
