@@ -13,11 +13,11 @@ PRAGMA enable_verification
 
 # Set the repository to the correct one
 statement ok
-set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+set custom_extension_repository='{LOCAL_EXTENSION_REPO}'
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/update_extensions'
+set extension_directory='{TEST_DIR}/update_extensions'
 
 statement error
 with cte as (select 42 AS a) UPDATE EXTENSIONS

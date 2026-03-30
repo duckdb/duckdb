@@ -1198,7 +1198,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
 				parser.Fail("unzip requires 1 argument: <path/to/file.db.gz> [optional: "
-				            "<path/to/unzipped_file.db>, default: __TEST_DIR__/<file.db>]");
+				            "<path/to/unzipped_file.db>, default: {TEST_DIR}/<file.db>]");
 			}
 
 			// set input path
@@ -1212,7 +1212,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);
 
 			// extraction path
-			string default_extraction_path = ReplaceKeywords("__TEST_DIR__/" + filename);
+			string default_extraction_path = ReplaceKeywords("{TEST_DIR}/" + filename);
 			string extraction_path =
 			    (token.parameters.size() == 2) ? ReplaceKeywords(token.parameters[1]) : default_extraction_path;
 			if (extraction_path == "NULL") {
@@ -1225,7 +1225,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// NOTE: tags-before-test-commands is the low bar right now
 			// 1 better: all non-command lines precede command lines
 			// Mo better: parse first, build entire context before execution; allows e.g.
-			// - implicit tag scans of e.g. strings, vars, etc., like '${ENVVAR}', '__TEST_DIR__', 'ATTACH'
+			// - implicit tag scans of e.g. strings, vars, etc., like '{ENVVAR}', '{TEST_DIR}', 'ATTACH'
 			// - faster subset runs
 			// - tag match runs to generate lists
 			if (test_expr_executed) {

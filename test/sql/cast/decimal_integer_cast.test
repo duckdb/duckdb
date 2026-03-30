@@ -8,12 +8,12 @@ PRAGMA enable_verification
 foreach datatype TINYINT SMALLINT INTEGER BIGINT HUGEINT
 
 query I
-SELECT CAST(0.55 AS ${datatype}) as x;
+SELECT CAST(0.55 AS {datatype}) as x;
 ----
 1
 
 query I
-SELECT CAST(-0.55 AS ${datatype}) as x;
+SELECT CAST(-0.55 AS {datatype}) as x;
 ----
 -1
 
