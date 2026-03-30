@@ -139,7 +139,7 @@ public:
 public:
 	void InitializeSortedRun(const Sort &sort, ClientContext &context) {
 		D_ASSERT(!sorted_run);
-		sorted_run = make_uniq<SortedRun>(context, sort, sort.is_index_sort);
+		sorted_run = make_uniq<SortedRun>(context, sort, false);
 	}
 
 public:
