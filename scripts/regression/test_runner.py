@@ -50,6 +50,9 @@ parser.add_argument(
     "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
 )
 parser.add_argument(
+    "--keep-benchmark-data", type=str, default=False, help="Benchmark data will not be deleted between tests"
+)
+parser.add_argument(
     "--regression-threshold-seconds",
     type=float,
     default=0.05,
@@ -72,6 +75,7 @@ max_timeout = args.max_timeout
 root_dir = args.root_dir
 no_summary = args.no_summary
 clear_benchmark_cache = args.clear_benchmark_cache
+keep_benchmark_data = args.keep_benchmark_data
 regression_threshold_seconds = args.regression_threshold_seconds
 
 
@@ -285,8 +289,9 @@ else:
     print(f"New timing geometric mean: {time_b}")
 
 # nuke cached benchmark data between runs
-if os.path.isdir("duckdb_benchmark_data"):
-    shutil.rmtree('duckdb_benchmark_data')
+if not keep_benchmark_data:
+    if os.path.isdir("duckdb_benchmark_data"):
+        shutil.rmtree('duckdb_benchmark_data')
 
 if summary and not no_summary:
     print(
