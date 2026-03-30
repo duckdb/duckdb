@@ -928,7 +928,12 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 		auto physical_size = GetTypeIdSize(type.InternalType());
 		auto total_size = physical_size * cardinality;
 
-		auto child_cardinality = ListVector::GetListCapacity(*this);
+		idx_t child_cardinality = 0;
+		if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			child_cardinality = ListVector::GetListCapacity(DictionaryVector::Child(*this));
+		} else {
+			child_cardinality = ListVector::GetListCapacity(*this);
+		}
 		auto &child_entry = ListVector::GetEntry(*this);
 		total_size += (child_entry.GetAllocationSize(child_cardinality));
 		return total_size;

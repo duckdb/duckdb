@@ -45,8 +45,7 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 
 idx_t ListVector::GetListCapacity(const Vector &vec) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vec);
-		return ListVector::GetListSize(child);
+		throw InternalException("ListVector::GetListCapacity called on dictionary vector");
 	}
 	D_ASSERT(vec.auxiliary);
 	return vec.auxiliary->Cast<VectorListBuffer>().GetCapacity();
@@ -63,9 +62,7 @@ void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vec);
-		ListVector::SetListSize(child, size);
-		return;
+		throw InternalException("ListVector::SetListSize called on dictionary vector");
 	}
 	vec.auxiliary->Cast<VectorListBuffer>().SetSize(size);
 }
