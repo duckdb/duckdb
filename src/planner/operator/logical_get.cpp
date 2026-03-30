@@ -11,14 +11,17 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
 class SerializationCompatibilityLogicalGet : public LogicalOperator {
 public:
 	SerializationCompatibilityLogicalGet(const LogicalGet &get_p,
-	                                     const map<ProjectionIndex, unique_ptr<TableFilter>> &filters_p)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_GET), get(get_p), filters(filters_p) {
+	                                     const map<ProjectionIndex, unique_ptr<TableFilter>> &filters_p,
+	                                     bool project_all_columns_p)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_GET), get(get_p), filters(filters_p),
+	      project_all_columns(project_all_columns_p) {
 	}
 
 	void Serialize(Serializer &serializer) const override;
@@ -30,23 +33,23 @@ protected:
 private:
 	const LogicalGet &get;
 	const map<ProjectionIndex, unique_ptr<TableFilter>> &filters;
+	bool project_all_columns;
 };
 
 static void SerializeCompatibilityTableFilters(Serializer &serializer,
                                                const map<ProjectionIndex, unique_ptr<TableFilter>> &filters) {
-	vector<unique_ptr<Expression>> generic_filters;
 	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", filters);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(101, "generic_filters", generic_filters);
 }
 
 static void SerializeCompatibilityLogicalGet(Serializer &serializer, const LogicalGet &get,
-                                             const map<ProjectionIndex, unique_ptr<TableFilter>> &filters) {
+                                             const map<ProjectionIndex, unique_ptr<TableFilter>> &filters,
+                                             bool project_all_columns = false) {
 	serializer.WriteProperty<LogicalOperatorType>(100, "type", LogicalOperatorType::LOGICAL_GET);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", get.children);
 	serializer.WriteProperty(200, "table_index", get.table_index);
 	serializer.WriteProperty(201, "returned_types", get.returned_types);
 	serializer.WriteProperty(202, "names", get.names);
-	serializer.WriteProperty(204, "projection_ids", get.projection_ids);
+	serializer.WriteProperty(204, "projection_ids", project_all_columns ? vector<ProjectionIndex> {} : get.projection_ids);
 	serializer.WriteObject(205, "table_filters", [&](Serializer &table_filter_serializer) {
 		SerializeCompatibilityTableFilters(table_filter_serializer, filters);
 	});
@@ -66,7 +69,7 @@ static void SerializeCompatibilityLogicalGet(Serializer &serializer, const Logic
 }
 
 void SerializationCompatibilityLogicalGet::Serialize(Serializer &serializer) const {
-	SerializeCompatibilityLogicalGet(serializer, get, filters);
+	SerializeCompatibilityLogicalGet(serializer, get, filters, project_all_columns);
 }
 
 static void ConvertLegacyTableFilters(LogicalGet &get) {
@@ -366,12 +369,12 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 		filter_expressions.push_back(filter->Copy());
 	}
 	vector<unique_ptr<LogicalOperator>> filter_children;
-	filter_children.push_back(make_uniq<SerializationCompatibilityLogicalGet>(*this, serialized_filters));
+	filter_children.push_back(make_uniq<SerializationCompatibilityLogicalGet>(*this, serialized_filters, true));
 
 	serializer.WriteProperty<LogicalOperatorType>(100, "type", LogicalOperatorType::LOGICAL_FILTER);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", filter_children);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", filter_expressions);
-	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "projection_map", vector<ProjectionIndex> {});
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "projection_map", projection_ids);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
