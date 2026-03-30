@@ -157,6 +157,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
 	    "allowed_configs",
 	    "allowed_directories",
