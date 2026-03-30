@@ -533,18 +533,18 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 	}
 	//! Names have to be 'metadata' and 'value' respectively
 	//! But apparently some writers can mix the order, so we are more lenient
-	if (children[0] != "metadata" && children[1] != "metadata") {
+	if (children[0].name != "metadata" && children[1].name != "metadata") {
 		return false;
 	}
-	if (children[0] != "value" && children[1] != "value") {
+	if (children[0].name != "value" && children[1].name != "value") {
 		return false;
 	}
 
 	//! Verify types
-	if (children[0] != duckdb_parquet::Type::BYTE_ARRAY) {
+	if (children[0].parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
 		return false;
 	}
-	if (children[1] != duckdb_parquet::Type::BYTE_ARRAY) {
+	if (children[1].parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
 		return false;
 	}
 	if (children.size() == 3) {
