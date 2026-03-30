@@ -199,7 +199,8 @@ void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, c
 	auto loop_it = "{" + loop_iterator_name + "}";
 	auto deprecated_loop_it = "$" + loop_it;
 	if (StringUtil::Contains(text, deprecated_loop_it)) {
-		Printer::PrintF("Replacing deprecated loop it %s in text \"%s\" - please use the new loop iterator %s", deprecated_loop_it, text, loop_it);
+		Printer::PrintF("Replacing deprecated loop it %s in text \"%s\" - please use the new loop iterator %s",
+		                deprecated_loop_it, text, loop_it);
 		text = StringUtil::Replace(text, deprecated_loop_it, replacement);
 	}
 	text = StringUtil::Replace(text, loop_it, replacement);
