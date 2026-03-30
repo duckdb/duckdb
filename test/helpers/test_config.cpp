@@ -125,7 +125,13 @@ void TestConfiguration::UpdateEnvironment() {
 	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
 
 	string temp_dir = TestDirectoryPath();
+	auto fs = FileSystem::CreateLocal();
+	string temp_dir_absolute = temp_dir;
+	if (!fs->IsPathAbsolute(temp_dir_absolute)) {
+		temp_dir_absolute = fs->JoinPath(working_dir, temp_dir_absolute);
+	}
 	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // default: {WORKING_DIR}/duckdb_unittest_tempdir/$PID
 	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
 }
 

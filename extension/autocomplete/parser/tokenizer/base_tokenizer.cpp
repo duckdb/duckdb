@@ -85,6 +85,9 @@ bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
 	if (c == 'E' || c == 'e') {
 		return true;
 	}
+	if (c == 'B' || c == 'b') {
+		return true;
+	}
 	return false;
 }
 

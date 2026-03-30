@@ -11,10 +11,10 @@ ATTACH 'dummy_extension:/hello.world';
 not found
 
 statement ok
-ATTACH 'file://{WORKING_DIR}/{TEST_DIR}/dummy.csv'
+ATTACH 'file://{TEMP_DIR_ABSOLUTE}/dummy.csv'
 
 statement error
-ATTACH '{TEST_DIR}/dummy.csv'
+ATTACH 'file://{TEMP_DIR_ABSOLUTE}/dummy.csv'
 ----
 already attached
 
@@ -25,7 +25,7 @@ statement ok
 DETACH dummy
 
 statement ok
-ATTACH '{TEST_DIR}/dummy.csv'
+ATTACH 'file://{TEMP_DIR_ABSOLUTE}/dummy.csv'
 
 query I
 FROM dummy.tbl

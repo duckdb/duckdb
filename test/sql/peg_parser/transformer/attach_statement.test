@@ -12,7 +12,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-set allow_parser_override_extension=strict_when_supported;
+call enable_peg_parser();
 
 statement ok
 ATTACH '{TEST_DIR}/first.db' (TYPE DUCKDB);
@@ -68,5 +68,3 @@ DETACH db2
 
 statement ok
 ATTACH '{TEST_DIR}/attach_read_only.db' AS db2 (READONLY 1);
-
-

@@ -128,3 +128,51 @@ query II
 select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
 ----
 TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 timestamps with fractional seconds and/or timezone offsets should also be inferred as TIMESTAMP
+# These are all valid ISO 8601 representations that read_json_auto currently fails to detect
+
+# ISO 8601 with fractional seconds + Z suffix: "2023-02-07T19:12:28.123Z"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.123Z"}'))) to '{TEMP_DIR}/iso8601_frac_z.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_z.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.123
+
+# ISO 8601 with UTC timezone offset (+00:00): "2023-02-07T19:12:28+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28+00:00"}'))) to '{TEMP_DIR}/iso8601_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 with fractional seconds + UTC timezone offset: "2023-02-07T19:12:28.456+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.456+00:00"}'))) to '{TEMP_DIR}/iso8601_frac_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.456
+
+# ISO 8601 with positive offset: "2023-02-07T14:12:28+05:00" -> UTC 09:12:28
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T14:12:28+05:00"}'))) to '{TEMP_DIR}/iso8601_pos_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_pos_offset.json')
+----
+TIMESTAMP	2023-02-07 09:12:28
+
+# ISO 8601 with negative offset + fractional seconds: "2023-02-07T19:12:28.789-07:00" -> UTC 2023-02-08 02:12:28.789
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.789-07:00"}'))) to '{TEMP_DIR}/iso8601_neg_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
+----
+TIMESTAMP	2023-02-08 02:12:28.789
