@@ -32,7 +32,7 @@ struct QuantileCursor {
 		inputs.InitializeScanChunk(scan, page);
 
 		D_ASSERT(partition.all_valid.size() == 1);
-		all_valid = partition.all_valid[0];
+		cannot_have_null = partition.all_valid[0];
 	}
 
 	inline sel_t RowOffset(idx_t row_idx) const {
@@ -63,8 +63,8 @@ struct QuantileCursor {
 		return validity->RowIsValid(offset);
 	}
 
-	inline bool AllValid() {
-		return all_valid;
+	inline bool CannotHaveNull() {
+		return cannot_have_null;
 	}
 
 	//! Windowed paging
@@ -78,7 +78,7 @@ struct QuantileCursor {
 	//! The validity mask
 	const ValidityMask *validity = nullptr;
 	//! Paged chunks do not track this but it is really necessary for performance
-	bool all_valid;
+	bool cannot_have_null;
 };
 
 // Direct access
@@ -293,8 +293,11 @@ struct QuantileIncluded {
 		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
 	}
 
+	inline bool CannotHaveNull() {
+		return fmask.CannotHaveNull() && dmask.CannotHaveNull();
+	}
 	inline bool AllValid() {
-		return fmask.AllValid() && dmask.AllValid();
+		return CannotHaveNull();
 	}
 
 	const ValidityMask &fmask;
@@ -331,7 +334,7 @@ struct QuantileSortTree {
 		SelectionVector filter_sel(STANDARD_VECTOR_SIZE);
 		while (inputs.Scan(scan, sort)) {
 			const auto row_idx = scan.current_row_index;
-			if (!filter_mask.AllValid() || !partition.all_valid[0]) {
+			if (filter_mask.CanHaveNull() || !partition.all_valid[0]) {
 				auto &key = sort.data[0];
 				auto &validity = FlatVector::Validity(key);
 				idx_t filtered = 0;

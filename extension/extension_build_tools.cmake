@@ -325,8 +325,8 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
-        message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\"")
     else()
+        unset(PATCH_COMMAND)
         if (${APPLY_PATCHES})
             set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
         endif()
@@ -336,9 +336,9 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
                 GIT_TAG ${COMMIT}
                 GIT_SUBMODULES "${SUBMODULES}"
                 PATCH_COMMAND ${PATCH_COMMAND}
+                SOURCE_SUBDIR __duckdb_no_add_subdirectory__
         )
-        FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
-        message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
+        FETCHCONTENT_MAKEAVAILABLE(${NAME}_EXTENSION_FC)
     endif()
 
     # Autogenerate version tag if not provided
@@ -350,6 +350,12 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
 
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)
+
+    if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
+        message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\" @ ${EXTERNAL_EXTENSION_VERSION}")
+    else()
+        message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
+    endif()
 
     if ("${INCLUDE_PATH}" STREQUAL "")
         set(INCLUDE_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/src/include")

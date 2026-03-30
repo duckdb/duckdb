@@ -29,7 +29,7 @@ struct UnifiedVectorFormat {
 	DUCKDB_API UnifiedVectorFormat &operator=(UnifiedVectorFormat &&) noexcept;
 
 	const SelectionVector *sel;
-	data_ptr_t data;
+	const_data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
 	PhysicalType physical_type;
@@ -95,9 +95,7 @@ struct UnifiedVariantVector {
 
 //! This is a helper data structure. It contains all fields necessary to resize a vector.
 struct ResizeInfo {
-	ResizeInfo(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, const idx_t multiplier)
-	    : vec(vec), data(data), buffer(buffer), multiplier(multiplier) {
-	}
+	ResizeInfo(Vector &vec, optional_ptr<VectorBuffer> buffer, const idx_t multiplier);
 
 	Vector &vec;
 	data_ptr_t data;

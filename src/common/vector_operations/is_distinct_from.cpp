@@ -145,7 +145,7 @@ idx_t DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const R
                                       const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                       ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
 #ifndef DUCKDB_SMALLER_BINARY
-	if (!lmask.AllValid() || !rmask.AllValid()) {
+	if (lmask.CanHaveNull() || rmask.CanHaveNull()) {
 		return DistinctSelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
 	} else {
@@ -278,18 +278,13 @@ idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector 
 }
 
 void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, ValidityMask &null_mask) {
-	UnifiedVectorFormat vdata;
-	vec.ToUnifiedFormat(count, vdata);
-
-	if (vdata.validity.AllValid()) {
+	auto entries = vec.Validity(count);
+	if (!entries.CanHaveNull()) {
 		return;
 	}
-
 	for (idx_t i = 0; i < count; ++i) {
-		const auto ridx = sel.get_index(i);
-		const auto vidx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(vidx)) {
-			null_mask.SetInvalid(ridx);
+		if (!entries.IsValid(i)) {
+			null_mask.SetInvalid(sel.get_index(i));
 		}
 	}
 }
@@ -330,15 +325,11 @@ template <class OP>
 idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
                             const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
                             OptionalSelection &false_opt, optional_ptr<ValidityMask> null_mask) {
-	UnifiedVectorFormat lvdata, rvdata;
-	left.ToUnifiedFormat(count, lvdata);
-	right.ToUnifiedFormat(count, rvdata);
-
-	auto &lmask = lvdata.validity;
-	auto &rmask = rvdata.validity;
+	auto ldata = left.Validity(count);
+	auto rdata = right.Validity(count);
 
 	idx_t remaining = 0;
-	if (lmask.AllValid() && rmask.AllValid()) {
+	if (!ldata.CanHaveNull() && !rdata.CanHaveNull()) {
 		//	None are NULL, distinguish values.
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = sel.get_index(i);
@@ -353,10 +344,8 @@ idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; ++i) {
 		const auto result_idx = sel.get_index(i);
-		const auto lidx = lvdata.sel->get_index(i);
-		const auto ridx = rvdata.sel->get_index(i);
-		const auto lnull = !lmask.RowIsValid(lidx);
-		const auto rnull = !rmask.RowIsValid(ridx);
+		const auto lnull = !ldata.IsValid(i);
+		const auto rnull = !rdata.IsValid(i);
 		if (lnull || rnull) {
 			// If either is NULL then we can major distinguish them
 			if (null_mask) {
@@ -545,11 +534,11 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 	idx_t match_count = 0;
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
 		// Slice the children to maintain density
-		Vector lchild(lchildren[col_no]);
+		Vector lchild(Vector::Ref(lchildren[col_no]));
 		lchild.Flatten(vcount);
 		lchild.Slice(slice_sel, count);
 
-		Vector rchild(rchildren[col_no]);
+		Vector rchild(Vector::Ref(rchildren[col_no]));
 		rchild.Flatten(vcount);
 		rchild.Slice(slice_sel, count);
 
@@ -633,8 +622,8 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	Vector lentry_flattened(ListVector::GetEntry(left));
-	Vector rentry_flattened(ListVector::GetEntry(right));
+	Vector lentry_flattened(Vector::Ref(ListVector::GetEntry(left)));
+	Vector rentry_flattened(Vector::Ref(ListVector::GetEntry(right)));
 	lentry_flattened.Flatten(ListVector::GetListSize(left));
 	rentry_flattened.Flatten(ListVector::GetListSize(right));
 	Vector lchild(lentry_flattened, lcursor, count);
@@ -783,8 +772,8 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	Vector lentry_flattened(ArrayVector::GetEntry(left));
-	Vector rentry_flattened(ArrayVector::GetEntry(right));
+	Vector lentry_flattened(Vector::Ref(ArrayVector::GetEntry(left)));
+	Vector rentry_flattened(Vector::Ref(ArrayVector::GetEntry(right)));
 	lentry_flattened.Flatten(ArrayVector::GetTotalSize(left));
 	rentry_flattened.Flatten(ArrayVector::GetTotalSize(right));
 	Vector lchild(lentry_flattened, lcursor, count);
@@ -990,8 +979,8 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 	SelectionVector maybe_vec(count);
 
 	// Handle NULL nested values
-	Vector l_not_null(left);
-	Vector r_not_null(right);
+	Vector l_not_null(Vector::Ref(left));
+	Vector r_not_null(Vector::Ref(right));
 
 	idx_t match_count = 0;
 	auto unknown = DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt,

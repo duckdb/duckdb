@@ -219,7 +219,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 	auto &list_mask = FlatVector::Validity(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
-		if (!parent_mask->AllValid()) {
+		if (parent_mask->CanHaveNull()) {
 			for (idx_t i = 0; i < size; i++) {
 				if (!parent_mask->RowIsValid(i)) {
 					list_mask.SetInvalid(i);
@@ -277,7 +277,7 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	auto &array_mask = FlatVector::Validity(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
-		if (!parent_mask->AllValid()) {
+		if (parent_mask->CanHaveNull()) {
 			for (idx_t i = 0; i < size; i++) {
 				if (!parent_mask->RowIsValid(i)) {
 					array_mask.SetInvalid(i);
@@ -287,7 +287,7 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 
 	// Broadcast the validity mask to the child vector
-	if (!array_mask.AllValid()) {
+	if (array_mask.CanHaveNull()) {
 		auto &child_validity_mask = FlatVector::Validity(child_vector);
 		for (idx_t i = 0; i < size; i++) {
 			if (!array_mask.RowIsValid(i)) {
@@ -395,7 +395,7 @@ static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
 				throw ConversionException("Could not convert Time to Microsecond");
@@ -420,7 +420,7 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			// dtime_ns_t.micros actually holds nanos (!)
 			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
@@ -446,7 +446,7 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const hugeint_t *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			tgt_ptr[row].lower = static_cast<uint64_t>(BSwapIfLE(src_ptr[row].upper));
 			// flip Upper MSD
@@ -472,7 +472,7 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr =
 	    ArrowBufferData<int64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimestampTZ to Microsecond");
@@ -531,7 +531,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, i
 // Find the index of the first run-end that is strictly greater than the offset.
 // count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
-static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offset) {
+static idx_t FindRunIndex(const VectorValueIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
 	// Binary-search within the [0, count) range. For example:
 	// [0, 0, 0, 1, 1, 2] encoded as
 	// run_ends: [3, 5, 6]:
@@ -544,7 +544,7 @@ static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offse
 	while (begin < end) {
 		idx_t middle = (begin + end) / 2;
 		// begin < end implies middle < end
-		if (offset >= static_cast<idx_t>(run_ends[middle])) {
+		if (offset >= static_cast<idx_t>(run_ends[middle].value)) {
 			// keep searching in [middle + 1, end)
 			begin = middle + 1;
 		} else {
@@ -561,12 +561,8 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto &runs = *run_end_encoding.run_ends;
 	auto &values = *run_end_encoding.values;
 
-	UnifiedVectorFormat run_end_format;
-	UnifiedVectorFormat value_format;
-	runs.ToUnifiedFormat(compressed_size, run_end_format);
-	values.ToUnifiedFormat(compressed_size, value_format);
-	auto run_ends_data = run_end_format.GetData<RUN_END_TYPE>(run_end_format);
-	auto values_data = value_format.GetData<VALUE_TYPE>(value_format);
+	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
+	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
 	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
 	auto &validity = FlatVector::Validity(result);
 
@@ -578,13 +574,13 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto run = FindRunIndex(run_ends_data, compressed_size, scan_offset);
 	idx_t logical_index = scan_offset;
 	idx_t index = 0;
-	if (value_format.validity.AllValid()) {
+	if (!values_data.CanHaveNull()) {
 		// None of the compressed values are NULL
 		for (; run < compressed_size; ++run) {
-			auto run_end_index = run_end_format.sel->get_index(run);
-			auto value_index = value_format.sel->get_index(run);
-			auto &value = values_data[value_index];
-			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
+			auto run_end_entry = run_ends_data[run];
+			auto value_entry = values_data[run];
+			auto &value = value_entry.value;
+			auto run_end = static_cast<idx_t>(run_end_entry.value);
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
@@ -605,17 +601,17 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 		}
 	} else {
 		for (; run < compressed_size; ++run) {
-			auto run_end_index = run_end_format.sel->get_index(run);
-			auto value_index = value_format.sel->get_index(run);
-			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
+			auto run_end_entry = run_ends_data[run];
+			auto value_entry = values_data[run];
+			auto run_end = static_cast<idx_t>(run_end_entry.value);
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
 			// Cap the amount to scan so we don't go over size
 			to_scan = MinValue<idx_t>(to_scan, (count - index));
 
-			if (value_format.validity.RowIsValidUnsafe(value_index)) {
-				auto &value = values_data[value_index];
+			if (value_entry.is_valid) {
+				auto &value = value_entry.value;
 				for (idx_t i = 0; i < to_scan; i++) {
 					result_data[index + i] = value;
 					validity.SetValid(index + i);
@@ -1171,7 +1167,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 			ArrowToDuckDBConversion::SetValidityMask(child_entry, child_array, chunk_offset, size, array.offset,
 			                                         nested_offset);
-			if (!struct_validity_mask.AllValid()) {
+			if (struct_validity_mask.CanHaveNull()) {
 				auto &child_validity_mark = FlatVector::Validity(child_entry);
 				for (idx_t i = 0; i < size; i++) {
 					if (!struct_validity_mask.RowIsValid(i)) {
@@ -1388,7 +1384,7 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 	if (!parent_mask) {
 		return false;
 	}
-	return !parent_mask->AllValid();
+	return parent_mask->CanHaveNull();
 }
 
 void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
@@ -1441,7 +1437,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 	if (has_nulls) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset));
-		if (parent_mask && !parent_mask->AllValid()) {
+		if (parent_mask && parent_mask->CanHaveNull()) {
 			auto &struct_validity_mask = *parent_mask;
 			for (idx_t i = 0; i < size; i++) {
 				if (!struct_validity_mask.RowIsValid(i)) {

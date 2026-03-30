@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector/map_vector.hpp
+// duckdb/common/vector/flat_vector.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -27,6 +27,9 @@ struct FlatVector {
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
+	static inline const_data_ptr_t GetData(const Vector &vector) {
+		return ConstantVector::GetData(vector);
+	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
@@ -44,12 +47,12 @@ struct FlatVector {
 		return ConstantVector::GetDataUnsafe<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		vector.data = data;
+		VerifyFlatVector(vector);
+		vector.buffer->SetData(data);
 	}
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {

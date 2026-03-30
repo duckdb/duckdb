@@ -110,14 +110,10 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 		// then build an SV to hold them
 		const auto coll_count = coll_chunk.size();
 		auto &child = coll_chunk.data[gvstate.child_idx];
-		UnifiedVectorFormat child_data;
-		child.ToUnifiedFormat(coll_count, child_data);
-		const auto &validity = child_data.validity;
-		if (gvstate.executor.IgnoreNulls() && !validity.AllValid()) {
-			const auto &sel = *child_data.sel;
+		auto validity = child.Validity(coll_count);
+		if (gvstate.executor.IgnoreNulls() && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
-				const auto idx = sel.get_index(i);
-				if (validity.RowIsValidUnsafe(idx)) {
+				if (validity.IsValid(i)) {
 					sort_nulls[filtered++] = i;
 				}
 			}
@@ -435,7 +431,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
 	// or if we are using framing (the frame may change on each row)
 	auto &ignore_nulls = glstate.ignore_nulls;
-	bool can_shift = ignore_nulls->AllValid() && !glstate.use_framing;
+	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
 	if (has_offset) {
 		can_shift = can_shift && wexpr.children[1]->IsFoldable();
 	}
@@ -1084,9 +1080,8 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 	WindowFillCopy(cursor, result, count, row_idx, 0);
 
 	//	If all are valid, we are done
-	UnifiedVectorFormat arg_data;
-	result.ToUnifiedFormat(count, arg_data);
-	if (arg_data.validity.AllValid()) {
+	auto validity = result.Validity(count);
+	if (!validity.CanHaveNull()) {
 		return;
 	}
 
@@ -1113,8 +1108,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		auto &frame = frames[0];
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
 			//	If this value is valid, move on
-			const auto idx = arg_data.sel->get_index(i);
-			if (arg_data.validity.RowIsValid(idx)) {
+			if (validity.IsValid(i)) {
 				continue;
 			}
 
@@ -1237,8 +1231,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		}
 
 		//	If this value is valid,
-		const auto idx = arg_data.sel->get_index(i);
-		if (arg_data.validity.RowIsValid(idx)) {
+		if (validity.IsValid(i)) {
 			//	If it is usable, track it for the next gap.
 			if (value_func(row_idx, cursor)) {
 				prev_valid = row_idx;

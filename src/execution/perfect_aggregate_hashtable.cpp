@@ -57,7 +57,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
                                           idx_t current_shift, idx_t count) {
 	auto data = UnifiedVectorFormat::GetData<T>(group_data);
 	auto min_val = min.GetValueUnsafe<T>();
-	if (!group_data.validity.AllValid()) {
+	if (group_data.validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
 			// check if the value is NULL

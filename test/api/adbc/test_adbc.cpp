@@ -3457,6 +3457,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	}
 
 	// Test file://localhost/<abs path> is accepted
+#ifndef _WIN32
 	{
 		auto abs_path = TestCreatePath("test_uri_localhost.db");
 		if (!abs_path.empty() && abs_path[0] != '/') {
@@ -3476,6 +3477,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		REQUIRE(file_exists(abs_path.c_str()));
 		std::remove(abs_path.c_str());
 	}
+#endif
 
 	// Test file://<non-localhost>/<abs path> is rejected
 	{

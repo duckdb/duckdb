@@ -66,7 +66,7 @@ jobs:
         run: |
           python3 scripts/ci/retry.py -- make toolsci
           python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
-          python3 scripts/ci/retry.py -- sudo pip3 install pybind11[global] --break-system-packages
+          python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
       - uses: ./.github/actions/ccache-action
 

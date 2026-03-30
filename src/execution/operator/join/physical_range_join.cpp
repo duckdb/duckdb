@@ -44,7 +44,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	executor.Execute(input, keys);
 
 	// Do not operate on primary key directly to avoid modifying the input chunk
-	Vector primary = keys.data[0];
+	auto primary = Vector::Ref(keys.data[0]);
 	// Count the NULLs so we can exclude them later
 	has_null += MergeNulls(primary, global_table.op.conditions);
 	count += keys.size();
@@ -412,7 +412,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			UnifiedVectorFormat vdata;
 			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
-			if (vvalidity.AllValid()) {
+			if (vvalidity.CannotHaveNull()) {
 				continue;
 			}
 			pvalidity.EnsureWritable();
@@ -472,14 +472,16 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
-	for (idx_t i = 0; i < result.size(); ++i) {
+	const auto result_size = NumericCast<idx_t>(result.size());
+
+	for (idx_t i = 0; i < result_size; ++i) {
 		const auto idx = state.GetIndex(chunk_idx, result[i]);
 		sort_keys[i] = &itr[idx];
 	}
 
 	// Scan
 	chunk.Reset();
-	scan_state.Scan(sorted_run, sort_key_pointers, result.size(), chunk);
+	scan_state.Scan(sorted_run, sort_key_pointers, result_size, chunk);
 }
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,

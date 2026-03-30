@@ -92,7 +92,7 @@ public:
 			}
 		} else {
 			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
-			if (idata.validity.AllValid()) {
+			if (idata.validity.CannotHaveNull()) {
 				for (idx_t i = 0; i < count; ++i) {
 					const auto hash = hashes[i];
 					InsertElement(hash);

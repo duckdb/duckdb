@@ -224,7 +224,7 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
-		Vector append_vector(vector);
+		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten(count);
 		Append(stats, state, append_vector, count);
 		return;

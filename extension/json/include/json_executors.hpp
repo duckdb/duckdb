@@ -94,7 +94,7 @@ public:
 			D_ASSERT(info.path_type == JSONCommon::JSONPathType::REGULAR);
 			unique_ptr<Vector> casted_paths;
 			if (args.data[1].GetType().id() == LogicalTypeId::VARCHAR) {
-				casted_paths = make_uniq<Vector>(args.data[1]);
+				casted_paths = make_uniq<Vector>(Vector::Ref(args.data[1]));
 			} else {
 				casted_paths = make_uniq<Vector>(LogicalTypeId::VARCHAR);
 				VectorOperations::DefaultCast(args.data[1], *casted_paths, args.size(), true);
@@ -112,10 +112,6 @@ public:
 				    }
 			    });
 		}
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-
 		JSONAllocator::AddBuffer(result, alc);
 	}
 
@@ -170,11 +166,6 @@ public:
 			offset += num_paths;
 		}
 		ListVector::SetListSize(result, offset);
-
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-
 		JSONAllocator::AddBuffer(result, alc);
 	}
 };

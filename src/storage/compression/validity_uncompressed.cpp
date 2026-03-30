@@ -252,7 +252,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	ValidityMask source_mask128(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask128.RowIsValid(input_start + i)) {
-			if (result_mask.AllValid()) {
+			if (result_mask.CannotHaveNull()) {
 				result_mask.Initialize();
 			}
 			result_mask.SetInvalid(result_offset + i);
@@ -546,7 +546,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
-	if (data.validity.AllValid()) {
+	if (data.validity.CannotHaveNull()) {
 		// no null values: skip append
 		segment.count += append_count;
 		validity_stats.SetHasNoNullFast();

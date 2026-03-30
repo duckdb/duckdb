@@ -37,7 +37,6 @@ unique_ptr<FunctionData> ConcatFunctionData::Copy() const {
 }
 
 void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	// iterate over the vectors to count how large the final string will be
 	idx_t constant_lengths = 0;
 	vector<idx_t> result_lengths(args.size(), 0);
@@ -52,20 +51,12 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			auto input_data = ConstantVector::GetData<string_t>(input);
 			constant_lengths += input_data->GetSize();
 		} else {
-			// non-constant vector: set the result type to a flat vector
-			result.SetVectorType(VectorType::FLAT_VECTOR);
 			// now get the lengths of each of the input elements
-			UnifiedVectorFormat vdata;
-			input.ToUnifiedFormat(args.size(), vdata);
-
-			auto input_data = UnifiedVectorFormat::GetData<string_t>(vdata);
-			// now add the length of each vector to the result length
-			for (idx_t i = 0; i < args.size(); i++) {
-				auto idx = vdata.sel->get_index(i);
-				if (!vdata.validity.RowIsValid(idx)) {
+			for (auto entry : input.Values<string_t>(args.size())) {
+				if (!entry.IsValid()) {
 					continue;
 				}
-				result_lengths[i] += input_data[idx].GetSize();
+				result_lengths[entry.index] += entry.value.GetSize();
 			}
 		}
 	}
@@ -100,18 +91,14 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				result_lengths[i] += input_len;
 			}
 		} else {
-			// standard vector
-			UnifiedVectorFormat idata;
-			input.ToUnifiedFormat(args.size(), idata);
-
-			auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
-			for (idx_t i = 0; i < args.size(); i++) {
-				auto idx = idata.sel->get_index(i);
-				if (!idata.validity.RowIsValid(idx)) {
+			for (auto entry : input.Values<string_t>(args.size())) {
+				if (!entry.IsValid()) {
 					continue;
 				}
-				auto input_ptr = input_data[idx].GetData();
-				auto input_len = input_data[idx].GetSize();
+				auto &input_str = entry.value;
+				auto i = entry.index;
+				auto input_ptr = input_str.GetData();
+				auto input_len = input_str.GetSize();
 				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
 				result_lengths[i] += input_len;
 			}
@@ -198,10 +185,6 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 		offset += result_entry.length;
 	}
 	ListVector::SetListSize(result, offset);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {

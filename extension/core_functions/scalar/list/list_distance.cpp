@@ -61,10 +61,6 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 
 		    return OP::Operation(lhs_data + left.offset, rhs_data + right.offset, left.length);
 	    });
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 //-------------------------------------------------------------------------

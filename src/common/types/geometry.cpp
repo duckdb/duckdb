@@ -2485,25 +2485,22 @@ void Geometry::FromSpatialGeometry(const string_t &source, string_t &target, Vec
 }
 
 void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t count, idx_t result_offset) {
-	UnifiedVectorFormat source_format;
-	source_vec.ToUnifiedFormat(count, source_format);
-
-	const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_format);
+	auto entries = source_vec.Values<string_t>(count);
 	const auto target_data = FlatVector::GetData<string_t>(target_vec);
 
 	auto &target_mask = FlatVector::Validity(target_vec);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		const auto src_idx = source_format.sel->get_index(row_idx);
+		auto entry = entries[row_idx];
 		const auto res_idx = result_offset + row_idx;
 
-		if (!source_format.validity.RowIsValid(src_idx)) {
+		if (!entry.IsValid()) {
 			target_mask.EnsureWritable();
 			target_mask.SetInvalid(res_idx);
 			continue;
 		}
 
-		const auto &source = source_data[src_idx];
+		const auto &source = entry.value;
 		BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
 		const auto required_size = FromLegacyGeometryRequiredSize(reader);
 
