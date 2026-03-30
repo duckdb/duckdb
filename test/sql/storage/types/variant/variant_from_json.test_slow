@@ -1,0 +1,35 @@
+# name: test/sql/storage/types/variant/variant_from_json.test_slow
+# group: [variant]
+
+load __TEST_DIR__/tmp_variant.db readwrite v1.5.0
+
+require parquet
+
+require json
+
+statement ok
+CREATE TABLE messages AS SELECT * FROM '__WORKING_DIRECTORY__/data/parquet-testing/variant_json_logs.parquet';
+
+# Convert to JSON
+statement ok
+ALTER TABLE messages ADD COLUMN msg_json JSON;
+
+statement ok
+UPDATE messages SET msg_json = msg::JSON;
+
+# Drop original
+statement ok
+ALTER TABLE messages DROP COLUMN msg;
+
+# Add back as VARIANT
+statement ok
+ALTER TABLE messages ADD COLUMN msg VARIANT;
+
+# Populate from JSON
+statement ok
+UPDATE messages SET msg = msg_json::VARIANT;
+
+query I
+select min(char_length(msg.user::VARCHAR)) from messages;
+----
+5
