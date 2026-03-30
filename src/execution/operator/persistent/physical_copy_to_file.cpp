@@ -891,7 +891,7 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 		return;
 	}
 
-	// This thread's local state is currently being flushed, combine it (lock-free), and reset
+	// Combine this thread's local state lock-free and reset it
 	OperatorSinkCombineInput sort_strategy_combine_input {*lstate.current_state->global_sink_state,
 	                                                      *lstate.sort_strategy_local_state, interrupt_state};
 	sort_strategy->Combine(execution_context, sort_strategy_combine_input);
@@ -914,6 +914,11 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 
 	lstate.sort_strategy_local_state.reset();
 	lstate.current_state.reset();
+
+	// Participate if we are flushing
+	if (flushing.load(std::memory_order_relaxed)) {
+		Flush(execution_context, interrupt_state);
+	}
 }
 
 class PartitionedCopyFinalizeTask : public ExecutorTask {
