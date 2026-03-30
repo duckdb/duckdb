@@ -257,15 +257,43 @@ Value OtherBucketValue(const LogicalType &type) {
 	}
 }
 
+static void CombineMasks(DataChunk &args, ValidityMask &result) {
+	auto count = args.size();
+	for (auto &arg : args.data) {
+		UnifiedVectorFormat arg_data;
+		arg.ToUnifiedFormat(count, arg_data);
+
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = arg_data.sel->get_index(i);
+			if (!arg_data.validity.RowIsValid(idx)) {
+				result.SetInvalid(i);
+			}
+		}
+	}
+}
+
 void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_type = args.data[0].GetType();
 	if (!SupportsOtherBucket(input_type)) {
 		result.Reference(Value::BOOLEAN(false));
 		return;
 	}
+	auto count = args.size();
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v);
-	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+	VectorOperations::NotDistinctFrom(args.data[0], ref, result, count);
+	auto column_count = args.ColumnCount();
+
+	ValidityMask combined_mask(count);
+	CombineMasks(args, combined_mask);
+
+	result.Flatten(count);
+	auto &validity_mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		if (!combined_mask.RowIsValid(i)) {
+			validity_mask.SetInvalid(i);
+		}
+	}
 }
 
 template <class OP, class T>
