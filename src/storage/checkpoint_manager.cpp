@@ -150,6 +150,20 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 			entries.push_back(view.get());
 		}
 
+		// Scan triggers from each table directly (triggers are nested under their table)
+		for (auto &table_entry : tables) {
+			auto &table = table_entry.get().Cast<TableCatalogEntry>();
+			if (!table.IsDuckTable()) {
+				continue;
+			}
+			auto &duck_table = table.Cast<DuckTableEntry>();
+			duck_table.ScanTriggersNonTransactional([&](CatalogEntry &entry) {
+				if (!entry.internal) {
+					entries.push_back(entry);
+				}
+			});
+		}
+
 		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
@@ -170,13 +184,6 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 
 		schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
 			D_ASSERT(!entry.internal);
-			entries.push_back(entry);
-		});
-
-		schema.Scan(CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
 			entries.push_back(entry);
 		});
 	}

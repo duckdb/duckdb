@@ -1,7 +1,9 @@
 #include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
@@ -71,8 +73,19 @@ unique_ptr<GlobalTableFunctionState> DuckDBTriggersInit(ClientContext &context, 
 
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::TRIGGER_ENTRY,
-		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.Cast<TriggerCatalogEntry>()); });
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				return;
+			}
+			auto &table = entry.Cast<TableCatalogEntry>();
+			if (!table.IsDuckTable()) {
+				return;
+			}
+			auto &duck_table = entry.Cast<DuckTableEntry>();
+			duck_table.ScanTriggers(schema.get().GetCatalogTransaction(context), [&](CatalogEntry &trigger) {
+				result->entries.push_back(trigger.Cast<TriggerCatalogEntry>());
+			});
+		});
 	}
 	return std::move(result);
 }

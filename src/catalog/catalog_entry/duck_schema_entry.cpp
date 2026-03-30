@@ -33,14 +33,11 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
-#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
-#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -239,19 +236,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction tr
 	return AddEntry(transaction, std::move(sequence), info.on_conflict);
 }
 
-void DuckSchemaEntry::ScanTriggers(CatalogTransaction transaction,
-                                   const std::function<void(CatalogEntry &)> &callback) {
-	tables.Scan(transaction, [&](CatalogEntry &entry) {
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			auto &table_entry = entry.Cast<TableCatalogEntry>();
-			if (table_entry.IsDuckTable()) {
-				auto &duck_table = entry.Cast<DuckTableEntry>();
-				duck_table.ScanTriggers(transaction, callback);
-			}
-		}
-	});
-}
-
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
 	auto type_entry = make_uniq<TypeCatalogEntry>(catalog, *this, info);
 	return AddEntry(transaction, std::move(type_entry), info.on_conflict);
@@ -330,25 +314,11 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 
 void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,
                            const std::function<void(CatalogEntry &)> &callback) {
-	if (type == CatalogType::TRIGGER_ENTRY) {
-		ScanTriggers(GetCatalogTransaction(context), callback);
-		return;
-	}
 	auto &set = GetCatalogSet(type);
 	set.Scan(GetCatalogTransaction(context), callback);
 }
 
 void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
-	if (type == CatalogType::TRIGGER_ENTRY) {
-		// Scan triggers across all tables (non-transactional, used by checkpoint writer)
-		tables.Scan([&](CatalogEntry &entry) {
-			if (entry.type == CatalogType::TABLE_ENTRY && entry.Cast<TableCatalogEntry>().IsDuckTable()) {
-				auto &duck_table = entry.Cast<DuckTableEntry>();
-				duck_table.ScanTriggersNonTransactional(callback);
-			}
-		});
-		return;
-	}
 	auto &set = GetCatalogSet(type);
 	set.Scan(callback);
 }
