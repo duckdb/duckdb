@@ -1,8 +1,111 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/dynamic_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
+
+static bool ContainsInternalTableFilterFunction(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+			return true;
+		}
+	}
+	bool found = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (found) {
+			return;
+		}
+		found = ContainsInternalTableFilterFunction(child);
+	});
+	return found;
+}
+
+static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expression &expr);
+
+static unique_ptr<TableFilter> SerializeOptionalChild(const optional_ptr<const Expression> child_expr) {
+	if (!child_expr) {
+		return nullptr;
+	}
+	return SerializeExpressionToLegacyFilter(*child_expr);
+}
+
+static unique_ptr<TableFilter> SerializeInternalFunctionToLegacyFilter(const BoundFunctionExpression &func_expr) {
+	auto &func_name = func_expr.function.name;
+	if (func_name == OptionalFilterScalarFun::NAME) {
+		unique_ptr<TableFilter> child_filter;
+		if (func_expr.bind_info) {
+			auto &data = func_expr.bind_info->Cast<OptionalFilterFunctionData>();
+			child_filter = SerializeOptionalChild(data.child_filter_expr.get());
+		}
+		return make_uniq<OptionalFilter>(std::move(child_filter));
+	}
+	if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
+		unique_ptr<TableFilter> child_filter;
+		if (func_expr.bind_info) {
+			auto &data = func_expr.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			child_filter = SerializeOptionalChild(data.child_filter_expr.get());
+		}
+		return make_uniq<OptionalFilter>(std::move(child_filter));
+	}
+	if (func_name == DynamicFilterScalarFun::NAME) {
+		if (!func_expr.bind_info) {
+			return make_uniq<DynamicFilter>();
+		}
+		auto &data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
+		return make_uniq<DynamicFilter>(data.filter_data);
+	}
+	if (func_name == BloomFilterScalarFun::NAME || func_name == PerfectHashJoinScalarFun::NAME ||
+	    func_name == PrefixRangeScalarFun::NAME) {
+		return make_uniq<OptionalFilter>();
+	}
+	throw SerializationException("Unsupported internal tablefilter function \"%s\" during serialization", func_name);
+}
+
+static unique_ptr<TableFilter> SerializeConjunctionToLegacyFilter(const BoundConjunctionExpression &conjunction) {
+	unique_ptr<ConjunctionFilter> result;
+	if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
+		result = make_uniq<ConjunctionAndFilter>();
+	} else if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
+		result = make_uniq<ConjunctionOrFilter>();
+	} else {
+		throw SerializationException("Unsupported conjunction type %s during table-filter serialization",
+		                             EnumUtil::ToString(conjunction.type));
+	}
+	for (auto &child : conjunction.children) {
+		auto child_filter = SerializeExpressionToLegacyFilter(*child);
+		if (!child_filter) {
+			return nullptr;
+		}
+		result->child_filters.push_back(std::move(child_filter));
+	}
+	return std::move(result);
+}
+
+static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		return SerializeConjunctionToLegacyFilter(expr.Cast<BoundConjunctionExpression>());
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+			return SerializeInternalFunctionToLegacyFilter(func);
+		}
+	}
+	if (ContainsInternalTableFilterFunction(expr)) {
+		return nullptr;
+	}
+	return make_uniq<ExpressionFilter>(expr.Copy());
+}
 
 TableFilterSet::ConstTableFilterIteratorEntry::ConstTableFilterIteratorEntry(
     map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator it)
@@ -222,6 +325,30 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 		return nullptr;
 	}
 	return result;
+}
+
+map<ProjectionIndex, unique_ptr<TableFilter>>
+TableFilterSet::GetTableFiltersForSerialization(Serializer &serializer) const {
+	(void)serializer;
+	map<ProjectionIndex, unique_ptr<TableFilter>> result;
+	for (auto &entry : filters) {
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(*entry.second, "TableFilterSet::GetTableFiltersForSerialization");
+		auto serialized_filter = SerializeExpressionToLegacyFilter(*expr_filter.expr);
+		if (!serialized_filter) {
+			throw SerializationException(
+			    "Could not serialize table filter for projection index %llu to the legacy format",
+			    entry.first.GetIndex());
+		}
+		result.emplace(entry.first, std::move(serialized_filter));
+	}
+	return result;
+}
+
+map<ProjectionIndex, unique_ptr<TableFilter>> &
+TableFilterSet::GetTableFiltersForDeserialization(Deserializer &deserializer) {
+	(void)deserializer;
+	return filters;
 }
 
 } // namespace duckdb

@@ -14,6 +14,61 @@
 
 namespace duckdb {
 
+class SerializationCompatibilityLogicalGet : public LogicalOperator {
+public:
+	SerializationCompatibilityLogicalGet(const LogicalGet &get_p,
+	                                     const map<ProjectionIndex, unique_ptr<TableFilter>> &filters_p)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_GET), get(get_p), filters(filters_p) {
+	}
+
+	void Serialize(Serializer &serializer) const override;
+
+protected:
+	void ResolveTypes() override {
+	}
+
+private:
+	const LogicalGet &get;
+	const map<ProjectionIndex, unique_ptr<TableFilter>> &filters;
+};
+
+static void SerializeCompatibilityTableFilters(Serializer &serializer,
+                                               const map<ProjectionIndex, unique_ptr<TableFilter>> &filters) {
+	vector<unique_ptr<Expression>> generic_filters;
+	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", filters);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(101, "generic_filters", generic_filters);
+}
+
+static void SerializeCompatibilityLogicalGet(Serializer &serializer, const LogicalGet &get,
+                                             const map<ProjectionIndex, unique_ptr<TableFilter>> &filters) {
+	serializer.WriteProperty<LogicalOperatorType>(100, "type", LogicalOperatorType::LOGICAL_GET);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", get.children);
+	serializer.WriteProperty(200, "table_index", get.table_index);
+	serializer.WriteProperty(201, "returned_types", get.returned_types);
+	serializer.WriteProperty(202, "names", get.names);
+	serializer.WriteProperty(204, "projection_ids", get.projection_ids);
+	serializer.WriteObject(205, "table_filters", [&](Serializer &table_filter_serializer) {
+		SerializeCompatibilityTableFilters(table_filter_serializer, filters);
+	});
+	FunctionSerializer::Serialize(serializer, get.function, get.bind_data.get());
+	if (!get.function.serialize) {
+		serializer.WriteProperty(206, "parameters", get.parameters);
+		serializer.WriteProperty(207, "named_parameters", get.named_parameters);
+		serializer.WriteProperty(208, "input_table_types", get.input_table_types);
+		serializer.WriteProperty(209, "input_table_names", get.input_table_names);
+	}
+	serializer.WriteProperty(210, "projected_input", get.projected_input);
+	serializer.WritePropertyWithDefault(211, "column_indexes", get.GetColumnIds());
+	serializer.WritePropertyWithDefault(212, "extra_info", get.extra_info, ExtraOperatorInfo {});
+	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", get.ordinality_idx);
+	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
+	                                                                      get.row_group_order_options);
+}
+
+void SerializationCompatibilityLogicalGet::Serialize(Serializer &serializer) const {
+	SerializeCompatibilityLogicalGet(serializer, get, filters);
+}
+
 static void ConvertLegacyTableFilters(LogicalGet &get) {
 	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> converted_filters;
 	for (auto &entry : get.table_filters) {
@@ -300,28 +355,23 @@ void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {
-	LogicalOperator::Serialize(serializer);
-	serializer.WriteProperty(200, "table_index", table_index);
-	serializer.WriteProperty(201, "returned_types", returned_types);
-	serializer.WriteProperty(202, "names", names);
-	/* [Deleted] (vector<column_t>) "column_ids" */
-	serializer.WriteProperty(204, "projection_ids", projection_ids);
-	serializer.WriteProperty(205, "table_filters", table_filters);
-	FunctionSerializer::Serialize(serializer, function, bind_data.get());
-	if (!function.serialize) {
-		D_ASSERT(!function.serialize);
-		// no serialize method: serialize input values and named_parameters for rebinding purposes
-		serializer.WriteProperty(206, "parameters", parameters);
-		serializer.WriteProperty(207, "named_parameters", named_parameters);
-		serializer.WriteProperty(208, "input_table_types", input_table_types);
-		serializer.WriteProperty(209, "input_table_names", input_table_names);
+	auto serialized_filters = table_filters.GetTableFiltersForSerialization(serializer);
+	if (!table_filters.HasGenericFilters()) {
+		SerializeCompatibilityLogicalGet(serializer, *this, serialized_filters);
+		return;
 	}
-	serializer.WriteProperty(210, "projected_input", projected_input);
-	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
-	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
-	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
-	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
-	                                                                      row_group_order_options);
+
+	vector<unique_ptr<Expression>> filter_expressions;
+	for (auto &filter : table_filters.GetGenericFilters()) {
+		filter_expressions.push_back(filter->Copy());
+	}
+	vector<unique_ptr<LogicalOperator>> filter_children;
+	filter_children.push_back(make_uniq<SerializationCompatibilityLogicalGet>(*this, serialized_filters));
+
+	serializer.WriteProperty<LogicalOperatorType>(100, "type", LogicalOperatorType::LOGICAL_FILTER);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", filter_children);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", filter_expressions);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "projection_map", vector<ProjectionIndex> {});
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
