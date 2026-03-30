@@ -975,3 +975,12 @@ TEST_CASE("Path one-off tests", "[file_system]") {
 	CHECK(Path::FromString("a").Join(std::vector<string>({"b"})).ToString() == "a/b");
 	CHECK(Path::FromString("a").Join(std::vector<string>({"b", "c"})).ToString() == "a/b/c");
 }
+
+#ifdef _WIN32
+TEST_CASE("Check path canonicalization on Windows", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	auto canonical_work_dir = fs->CanonicalizePath(fs->GetWorkingDirectory());
+	// check that long path prefix "\\?\" or "\\?\UNC\" is not present
+	REQUIRE(!StringUtil::StartsWith(canonical_work_dir, "\\\\"));
+}
+#endif // _WIN32

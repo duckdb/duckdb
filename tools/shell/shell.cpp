@@ -1010,7 +1010,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
 			}
-			if (UseDescribeRenderMode(*statement, describe_table_name)) {
+			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
@@ -3024,6 +3024,23 @@ void ShellState::Initialize() {
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
 		linenoiseSetPrompt(continuePrompt, continuePromptSelected, scrollUpPrompt, scrollDownPrompt);
+	}
+#endif
+#if defined(_WIN32) || defined(WIN32)
+	if (stdout_is_console) {
+		// On Windows virtual terminal processing may be disabled by default,
+		// we need it enabled (even when highlighting is off) to process
+		// ANSI escape sequences, for example the position of the cursor.
+		HANDLE out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (out_handle != INVALID_HANDLE_VALUE) {
+			DWORD mode = 0;
+			if (GetConsoleMode(out_handle, &mode)) {
+				if (!(mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+					mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+					SetConsoleMode(out_handle, mode);
+				}
+			}
+		}
 	}
 #endif
 }

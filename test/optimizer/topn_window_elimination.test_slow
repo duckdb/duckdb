@@ -358,3 +358,18 @@ SELECT c, avg(b) FROM sub GROUP BY c ORDER BY ALL;
 ----
 x	100.0
 y	200.0
+
+statement ok
+CREATE TABLE except_test (id INT, ord INT, grp INT);
+
+statement ok
+INSERT INTO except_test VALUES (1, 1, 1);
+
+query II
+SELECT sub.id, sub.ord
+FROM (SELECT id, ord, grp, row_number() OVER (ORDER BY ord) AS rn FROM except_test) sub
+JOIN (VALUES (1)) t2(grp) ON t2.grp = sub.grp
+WHERE sub.rn = 1
+EXCEPT
+SELECT id, ord FROM (SELECT id, ord, row_number() OVER (ORDER BY ord) AS rn FROM except_test) WHERE rn = 1;
+----
