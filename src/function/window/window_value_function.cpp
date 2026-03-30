@@ -381,7 +381,6 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 
 	const bool has_offset = (offset_idx != DConstants::INVALID_INDEX);
 	const bool has_default = (default_idx != DConstants::INVALID_INDEX);
-	const bool is_lead = (wexpr.window->name == "lead");
 
 	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
 	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
@@ -406,7 +405,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
-			if (is_lead) {
+			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 			} else {
 				val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
@@ -465,7 +464,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
-		if (is_lead) {
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
 			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);

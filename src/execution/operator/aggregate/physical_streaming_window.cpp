@@ -3,7 +3,6 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/window_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -133,7 +132,7 @@ public:
 			}
 
 			//	We can only support LEAD and LAG values within one standard vector
-			if (wexpr.window->window_enum == ExpressionType::WINDOW_LEAD) {
+			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 				offset = -offset;
 			}
 			return std::abs(offset) < MAX_BUFFER;

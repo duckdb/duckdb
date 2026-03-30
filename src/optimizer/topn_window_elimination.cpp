@@ -16,7 +16,6 @@
 #include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
@@ -563,10 +562,10 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 			}
 		}
 	}
-	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-	if (!window_expr.window || window_expr.window->name != "row_number") {
+	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
 		return false;
 	}
+	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 
 	if (window_expr.orders.size() != 1) {
 		return false;
