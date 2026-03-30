@@ -546,7 +546,13 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "trigger");
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateTrigger(transaction, trigger_info);
+	auto &schema = catalog.GetSchema(transaction, trigger_info.schema);
+	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name);
+	if (!table_entry) {
+		throw IOException("corrupt database file - trigger entry without table entry");
+	}
+	auto &duck_table = table_entry->Cast<DuckTableEntry>();
+	duck_table.CreateTrigger(transaction, trigger_info);
 }
 
 //===--------------------------------------------------------------------===//

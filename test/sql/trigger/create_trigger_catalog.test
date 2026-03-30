@@ -114,3 +114,45 @@ DROP TABLE my_schema.log2;
 
 statement ok
 DROP SCHEMA my_schema CASCADE;
+
+# --- Same trigger name on different tables ---
+statement ok
+CREATE TABLE a (id INTEGER);
+
+statement ok
+CREATE TABLE b (id INTEGER);
+
+statement ok
+CREATE TABLE log_ab (id INTEGER);
+
+statement ok
+CREATE TRIGGER same_name AFTER INSERT ON a INSERT INTO log_ab VALUES (1);
+
+statement ok
+CREATE TRIGGER same_name AFTER INSERT ON b INSERT INTO log_ab VALUES (2);
+
+# Both triggers should exist
+query TT
+SELECT trigger_name, table_name FROM duckdb_triggers() WHERE trigger_name = 'same_name' ORDER BY table_name;
+----
+same_name	a
+same_name	b
+
+# Duplicate on same table should error
+statement error
+CREATE TRIGGER same_name AFTER DELETE ON a INSERT INTO log_ab VALUES (3);
+----
+already exists
+
+# IF NOT EXISTS on same table should succeed silently
+statement ok
+CREATE TRIGGER IF NOT EXISTS same_name AFTER DELETE ON a INSERT INTO log_ab VALUES (3);
+
+statement ok
+DROP TABLE a CASCADE;
+
+statement ok
+DROP TABLE b CASCADE;
+
+statement ok
+DROP TABLE log_ab;

@@ -81,8 +81,7 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
                       catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
-      sequences(catalog), triggers(catalog), collations(catalog),
-      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
+      sequences(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
       coordinate_systems(
           catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultCoordinateSystemGenerator>(catalog, *this) : nullptr) {
 }
@@ -240,9 +239,17 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction tr
 	return AddEntry(transaction, std::move(sequence), info.on_conflict);
 }
 
-optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
-	auto trigger = make_uniq<TriggerCatalogEntry>(catalog, *this, info);
-	return AddEntry(transaction, std::move(trigger), info.on_conflict);
+void DuckSchemaEntry::ScanTriggers(CatalogTransaction transaction,
+                                   const std::function<void(CatalogEntry &)> &callback) {
+	tables.Scan(transaction, [&](CatalogEntry &entry) {
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			auto &table_entry = entry.Cast<TableCatalogEntry>();
+			if (table_entry.IsDuckTable()) {
+				auto &duck_table = entry.Cast<DuckTableEntry>();
+				duck_table.ScanTriggers(transaction, callback);
+			}
+		}
+	});
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
@@ -323,16 +330,33 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 
 void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,
                            const std::function<void(CatalogEntry &)> &callback) {
+	if (type == CatalogType::TRIGGER_ENTRY) {
+		ScanTriggers(GetCatalogTransaction(context), callback);
+		return;
+	}
 	auto &set = GetCatalogSet(type);
 	set.Scan(GetCatalogTransaction(context), callback);
 }
 
 void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
+	if (type == CatalogType::TRIGGER_ENTRY) {
+		// Scan triggers across all tables (non-transactional, used by checkpoint writer)
+		tables.Scan([&](CatalogEntry &entry) {
+			if (entry.type == CatalogType::TABLE_ENTRY && entry.Cast<TableCatalogEntry>().IsDuckTable()) {
+				auto &duck_table = entry.Cast<DuckTableEntry>();
+				duck_table.ScanTriggersNonTransactional(callback);
+			}
+		});
+		return;
+	}
 	auto &set = GetCatalogSet(type);
 	set.Scan(callback);
 }
 
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+	if (info.type == CatalogType::TRIGGER_ENTRY) {
+		throw InternalException("Triggers should be dropped through their table, not through the schema");
+	}
 	auto &set = GetCatalogSet(info.type);
 
 	// first find the entry
@@ -414,8 +438,6 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
-	case CatalogType::TRIGGER_ENTRY:
-		return triggers;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	case CatalogType::COORDINATE_SYSTEM_ENTRY:
@@ -437,7 +459,6 @@ void DuckSchemaEntry::Verify(Catalog &catalog) {
 	pragma_functions.Verify(catalog);
 	functions.Verify(catalog);
 	sequences.Verify(catalog);
-	triggers.Verify(catalog);
 	collations.Verify(catalog);
 	types.Verify(catalog);
 }

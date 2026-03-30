@@ -930,7 +930,12 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	catalog.CreateTrigger(context, info->Cast<CreateTriggerInfo>());
+	auto &trigger_info = info->Cast<CreateTriggerInfo>();
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog, trigger_info.schema,
+	                                                   trigger_info.base_table->table_name);
+	auto &duck_table = table.Cast<DuckTableEntry>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	duck_table.CreateTrigger(transaction, trigger_info);
 }
 
 void WriteAheadLogDeserializer::ReplayDropTrigger() {
@@ -938,10 +943,16 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	info.type = CatalogType::TRIGGER_ENTRY;
 	info.schema = deserializer.ReadProperty<string>(101, "schema");
 	info.name = deserializer.ReadProperty<string>(102, "name");
+	auto table_name = deserializer.ReadPropertyWithDefault<string>(103, "table");
 	if (DeserializeOnly()) {
 		return;
 	}
-	catalog.DropEntry(context, info);
+	if (!table_name.empty()) {
+		auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+		auto &duck_table = table.Cast<DuckTableEntry>();
+		auto transaction = catalog.GetCatalogTransaction(context);
+		duck_table.DropTrigger(transaction, info.name, info.cascade);
+	}
 }
 
 //===--------------------------------------------------------------------===//

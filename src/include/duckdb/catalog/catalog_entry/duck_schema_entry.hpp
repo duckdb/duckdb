@@ -33,8 +33,6 @@ private:
 	CatalogSet functions;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
-	//! The catalog set holding the triggers
-	CatalogSet triggers;
 	//! The catalog set holding the collations
 	CatalogSet collations;
 	//! The catalog set holding the types
@@ -54,7 +52,8 @@ public:
 	                                       TableCatalogEntry &table) override;
 	optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) override;
 	optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) override;
-	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	//! Scan triggers across all tables in this schema
+	void ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
 	                                               CreateTableFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction,

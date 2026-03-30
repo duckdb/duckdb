@@ -445,6 +445,7 @@ void WriteAheadLog::WriteDropTrigger(const TriggerCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::DROP_TRIGGER);
 	serializer.WriteProperty(101, "schema", entry.schema.name);
 	serializer.WriteProperty(102, "name", entry.name);
+	serializer.WriteProperty(103, "table", entry.base_table->table_name);
 	serializer.End();
 }
 
