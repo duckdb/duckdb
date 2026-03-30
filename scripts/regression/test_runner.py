@@ -70,6 +70,7 @@ disable_timeout = args.disable_timeout
 max_timeout = args.max_timeout
 root_dir = args.root_dir
 no_summary = args.no_summary
+clear_benchmark_cache = args.clear_benchmark_cache
 regression_threshold_seconds = args.regression_threshold_seconds
 
 
@@ -88,7 +89,7 @@ if not os.path.isfile(new_runner_path):
     print(f"Failed to find new runner {new_runner_path}")
     exit(1)
 
-if args.clear_benchmark_cache:
+if clear_benchmark_cache:
     old_cache_path = os.path.join(os.path.dirname(old_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
     new_cache_path = os.path.join(os.path.dirname(new_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
     try:
