@@ -1,5 +1,12 @@
 [
     {
+        "name": "__delta_only_variant_encoding_enabled",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "access_mode",
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
         "type": "ENUM<AccessMode>",
@@ -1063,13 +1070,6 @@
         "type": "ENUM<CacheValidationMode>",
         "default_scope": "global",
         "default_value": "VALIDATE_ALL"
-    },
-    {
-        "name": "variant_legacy_encoding",
-        "description": "Enables the Parquet reader to identify a Variant structurally.",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "default_value": "false"
     },
     {
         "name": "variant_minimum_shredding_size",

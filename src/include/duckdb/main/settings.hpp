@@ -87,6 +87,16 @@ private:
 // Start of the auto-generated list of settings structures
 //===----------------------------------------------------------------------===//
 
+struct DeltaOnlyVariantEncodingEnabledSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "__delta_only_variant_encoding_enabled";
+	static constexpr const char *Description = "Enables the Parquet reader to identify a Variant structurally.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AccessModeSetting {
 	using RETURN_TYPE = AccessMode;
 	static constexpr const char *Name = "access_mode";
@@ -1550,16 +1560,6 @@ struct ValidateExternalFileCacheSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct VariantLegacyEncodingSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "variant_legacy_encoding";
-	static constexpr const char *Description = "Enables the Parquet reader to identify a Variant structurally.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 91;
-};
-
 struct VariantMinimumShreddingSizeSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "variant_minimum_shredding_size";
@@ -1568,7 +1568,7 @@ struct VariantMinimumShreddingSizeSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "30000";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 92;
+	static constexpr idx_t SettingIndex = 91;
 };
 
 struct WalAutocheckpointEntriesSetting {
@@ -1579,7 +1579,7 @@ struct WalAutocheckpointEntriesSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 93;
+	static constexpr idx_t SettingIndex = 92;
 };
 
 struct WarningsAsErrorsSetting {
@@ -1589,7 +1589,7 @@ struct WarningsAsErrorsSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 94;
+	static constexpr idx_t SettingIndex = 93;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
@@ -1601,7 +1601,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 95;
+	static constexpr idx_t SettingIndex = 94;
 };
 
 struct ZstdMinStringLengthSetting {
@@ -1612,11 +1612,11 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 96;
+	static constexpr idx_t SettingIndex = 95;
 };
 
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = 97;
+	static constexpr idx_t MaxSettingIndex = 96;
 };
 
 //===----------------------------------------------------------------------===//

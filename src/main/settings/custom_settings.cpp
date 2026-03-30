@@ -109,6 +109,22 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 }
 
 //===----------------------------------------------------------------------===//
+// Delta Only Variant Legacy Encoding
+//===----------------------------------------------------------------------===//
+void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.variant_legacy_encoding);
+}
+
+//===----------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===----------------------------------------------------------------------===//
 void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
