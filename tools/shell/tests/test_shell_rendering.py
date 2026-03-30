@@ -109,3 +109,13 @@ def test_mode_json_empty_result(shell):
 
     result = test.run()
     result.check_stdout("[]")
+
+def test_long_type_empty_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".maxwidth 80")
+        .statement("select * from (values ({'thisisalongfieldnamethatresultsinalongtypename': 42, 'thisisyetanotherlongfieldname': 84})) t(s) limit 0;")
+    )
+
+    result = test.run()
+    result.check_stdout("thisisalongfieldnamethatresultsinalongtypename")

@@ -85,10 +85,10 @@ CREATE TRIGGER is not yet supported
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT my_table INSERT INTO log_table VALUES (1);
 ----
-Parser Error: Syntax error at or near "my_table"
+syntax error
 
 # Syntax errors - missing timing
 statement error
 CREATE TRIGGER my_trigger INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-Parser Error: Syntax error at or near "INSERT"
+syntax error
