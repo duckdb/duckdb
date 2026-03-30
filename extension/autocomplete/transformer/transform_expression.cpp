@@ -1114,7 +1114,6 @@ string PEGTransformerFactory::TransformJsonOperator(PEGTransformer &transformer,
 	return list_pr.Child<KeywordParseResult>(0).keyword;
 }
 
-
 string PEGTransformerFactory::TransformInetOperator(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
