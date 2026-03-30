@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <thread>
 
 namespace duckdb {
 
@@ -271,9 +272,6 @@ public:
 	void Batch(const PartitionedCopyTask &task);
 	void Flush(ExecutionContext &execution_context, const PartitionedCopyTask &task);
 
-private:
-	void AllocateMask();
-
 public:
 	//! The PartitionedCopy that this hash group belongs to
 	PartitionedCopy &partitioned_copy;
@@ -369,7 +367,7 @@ public:
 	void Combine(ExecutionContext &execution_context, PartitionedCopyLocalState &lstate,
 	             InterruptState &interrupt_state);
 	void Finalize(Pipeline &pipeline, Event &event);
-	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
+	bool Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
 
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
 
@@ -432,6 +430,7 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 		return false;
 	case PartitionedCopyStage::MATERIALIZE:
 		if (materialized == blocks && collection.get()) {
+			partition_mask.Initialize(count);
 			stage = PartitionedCopyStage::MASK;
 			return true;
 		}
@@ -585,20 +584,11 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &execution_context, 
 	}
 }
 
-void PartitionedCopyHashGroup::AllocateMask() {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	if (partition_mask.IsMaskSet()) {
-		return;
-	}
-	partition_mask.Initialize(count);
-}
-
 void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::MASK);
 	D_ASSERT(count > 0);
 	D_ASSERT(collection);
-
-	AllocateMask();
+	D_ASSERT(partition_mask.IsMaskSet());
 
 	const auto begin_entry = partition_mask.EntryCount(task.begin_idx * STANDARD_VECTOR_SIZE);
 	const auto end_entry = partition_mask.EntryCount(MinValue<idx_t>(task.end_idx * STANDARD_VECTOR_SIZE, count));
@@ -759,7 +749,7 @@ void PartitionedCopyState::InitHashGroups() {
 
 bool PartitionedCopyState::TryAssignTask(PartitionedCopyTask &task) {
 	for (auto &hash_group : hash_groups) {
-		if (!hash_group) {
+		if (!hash_group || hash_group->stage.load(std::memory_order_acquire) == PartitionedCopyStage::DONE) {
 			continue;
 		}
 		annotated_lock_guard<annotated_mutex> guard(hash_group->lock);
@@ -938,7 +928,9 @@ public:
 		                                   event->Cast<BasePipelineEvent>().pipeline);
 		InterruptState interrupt_state(shared_from_this());
 		while (partitioned_copy.flushing.load(std::memory_order_relaxed)) {
-			partitioned_copy.Flush(execution_context, interrupt_state);
+			if (!partitioned_copy.Flush(execution_context, interrupt_state)) {
+				TaskScheduler::YieldThread();
+			}
 		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -997,7 +989,7 @@ void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event) {
 	event.InsertEvent(std::move(partitioned_copy_finalize_event));
 }
 
-void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState &interrupt_state) {
+bool PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState &interrupt_state) {
 	shared_ptr<PartitionedCopyState> flushing_state_copy;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
@@ -1005,12 +997,14 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 	}
 
 	if (!flushing_state_copy || !flushing_state_copy->global_source_state) {
-		return; // Finalization not yet complete, nothing to do
+		return false; // Finalization not yet complete, nothing to do
 	}
 
 	PartitionedCopyTask task;
+	bool did_work = false;
 	while (flushing_state_copy->TryAssignTask(task)) {
 		flushing_state_copy->ExecuteTask(execution_context, task, interrupt_state);
+		did_work = true;
 	}
 
 	if (flushing_state_copy->AllGroupsDone()) {
@@ -1018,7 +1012,9 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		D_ASSERT(flushing_state && RefersToSameObject(*flushing_state, *flushing_state_copy));
 		flushing_state.reset();
 		flushing = false;
+		return true;
 	}
+	return did_work;
 }
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values) {
