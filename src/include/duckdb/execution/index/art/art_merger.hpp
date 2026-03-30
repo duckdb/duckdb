@@ -64,7 +64,7 @@ private:
 	array_ptr<uint8_t> GetBytes(Node &leaf);
 	void MergeLeaves(NodeEntry &entry);
 
-	NodePointerChildren ExtractChildren(Node &node);
+	NodeChildren ExtractChildren(Node &node);
 	void MergeNodes(NodeEntry &entry);
 
 	//! Merges a node and a prefix.

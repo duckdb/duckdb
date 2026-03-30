@@ -84,7 +84,7 @@ public:
 		}
 	}
 
-	//! Get the child node at byte (returns NodePointer by value).
+	//! Get the child node at byte (returns Node by value).
 	static Node GetChildNode(const Node48 &n, const uint8_t byte) {
 		if (n.child_index[byte] != EMPTY_MARKER) {
 			return n.children[n.child_index[byte]];
@@ -92,7 +92,7 @@ public:
 		return Node();
 	}
 
-	//! Get the first child node >= byte (returns NodePointer by value, updates byte).
+	//! Get the first child node >= byte (returns Node by value, updates byte).
 	static Node GetNextChildNode(const Node48 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
@@ -128,7 +128,7 @@ public:
 	//! Extracts the bytes and their respective children.
 	//! The return value is valid as long as the arena is valid.
 	//! The node must be freed after calling into this function.
-	NodePointerChildren ExtractChildren(ArenaAllocator &arena) {
+	NodeChildren ExtractChildren(ArenaAllocator &arena) {
 		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
 		array_ptr<uint8_t> bytes(mem_bytes, count);
 		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
@@ -143,7 +143,7 @@ public:
 			}
 		}
 
-		return NodePointerChildren(bytes, children_ptr);
+		return NodeChildren(bytes, children_ptr);
 	}
 
 private:

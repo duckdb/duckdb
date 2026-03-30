@@ -22,7 +22,7 @@ namespace duckdb {
 enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 
 //! Pins the parent node and calls preorder_handler on all the children, which can perform in-place updates within
-//! the parent while it is pinned, as well as defines the return NodePointer value that should be pushed onto the
+//! the parent while it is pinned, as well as defines the return Node value that should be pushed onto the
 //! stack for further traversal.
 template <class NODE_TYPE, class PRE_HANDLER>
 static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<Node> &stack) {
@@ -39,7 +39,7 @@ static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<
 //! Pre-order scanner: each child is processed by pre_handler before being pushed onto the stack.
 //! When a node is popped, the filter decides whether to scan its children or skip it.
 //! If the children need to be scanned, the parent is pinned in ScanChildren and any updates are performed in place
-//! within the pinned parent node using preorder_handler (which also defines what NodePointer to push onto the stack
+//! within the pinned parent node using preorder_handler (which also defines what Node to push onto the stack
 //! for further traversal).
 template <class FILTER, class PRE_HANDLER>
 void ARTScanPreorder(ART &art, Node &root, FILTER &&filter, PRE_HANDLER &&preorder_handler) {
@@ -106,7 +106,7 @@ struct ScanEntry {
 };
 
 //! Pins the parent node and iterates over all the children. The filter receives each child by reference
-//! and returns the NodePointer value that should be pushed onto the stack for further traversal.
+//! and returns the Node value that should be pushed onto the stack for further traversal.
 template <class NODE_TYPE, class FILTER>
 static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
@@ -121,7 +121,7 @@ static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry>
 
 //! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
 //! On the first visit (children_visited = false), the node is marked as visited and the filter decides which
-//! children to push onto the stack. The filter receives each child by reference and returns the NodePointer
+//! children to push onto the stack. The filter receives each child by reference and returns the Node
 //! to push for further traversal.
 //! On the second visit (children_visited = true, after all descendants have been processed),
 //! post_handler fires on the node and then we pop it from the stack.

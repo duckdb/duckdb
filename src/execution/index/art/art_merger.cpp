@@ -147,7 +147,7 @@ void ARTMerger::MergeLeaves(NodeEntry &entry) {
 	Node::FreeNode(art, entry.right);
 }
 
-NodePointerChildren ARTMerger::ExtractChildren(Node &node) {
+NodeChildren ARTMerger::ExtractChildren(Node &node) {
 	const auto type = node.GetType();
 	switch (type) {
 	case NType::NODE_4:

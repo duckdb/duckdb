@@ -108,7 +108,7 @@ struct ToStringOptions {
 	}
 };
 
-//! The NodePointer is the pointer class of the ART index.
+//! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
 class Node : public IndexPointer {
 	friend class Prefix;
@@ -146,9 +146,9 @@ public:
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
 	                        const ARTKey &row_id);
 
-	//! Get the child node at byte (returns NodePointer by value via ConstNodeHandle).
+	//! Get the child node at byte (returns Node by value via ConstNodeHandle).
 	Node GetChildNode(const ART &art, const uint8_t byte) const;
-	//! Get the first child node >= byte (returns NodePointer by value, updates byte).
+	//! Get the first child node >= byte (returns Node by value, updates byte).
 	Node GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
@@ -227,12 +227,12 @@ private:
 	string ToStringChildren(ART &art, const ToStringOptions &options) const;
 };
 
-//! NodePointerChildren holds the extracted bytes of a node, and their respective children.
+//! NodeChildren holds the extracted bytes of a node, and their respective children.
 //! The bytes and children are valid as long as the arena is valid,
 //! even if the original node has been freed.
-struct NodePointerChildren {
-	NodePointerChildren() = delete;
-	NodePointerChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
+struct NodeChildren {
+	NodeChildren() = delete;
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
 
 	array_ptr<uint8_t> bytes;
 	array_ptr<Node> children;

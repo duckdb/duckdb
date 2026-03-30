@@ -19,8 +19,8 @@ namespace duckdb {
 //! ARTOperator provides functionality for different ART operations.
 class ARTOperator {
 public:
-	//! Lookup returns a NodePointer by value matching the key,
-	//! or an empty NodePointer, if no such leaf exists.
+	//! Lookup returns a Node by value matching the key,
+	//! or an empty Node, if no such leaf exists.
 	static Node Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
 		Node current(node);
 

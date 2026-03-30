@@ -75,7 +75,7 @@ public:
 		}
 	}
 
-	//! Get the child node at byte (returns NodePointer by value).
+	//! Get the child node at byte (returns Node by value).
 	static Node GetChildNode(const Node256 &n, const uint8_t byte) {
 		if (n.children[byte].HasMetadata()) {
 			return n.children[byte];
@@ -83,7 +83,7 @@ public:
 		return Node();
 	}
 
-	//! Get the first child node >= byte (returns NodePointer by value, updates byte).
+	//! Get the first child node >= byte (returns Node by value, updates byte).
 	static Node GetNextChildNode(const Node256 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < CAPACITY; i++) {
 			if (n.children[i].HasMetadata()) {
@@ -119,7 +119,7 @@ public:
 	//! Extracts the bytes and their respective children.
 	//! The return value is valid as long as the arena is valid.
 	//! The node must be freed after calling into this function.
-	NodePointerChildren ExtractChildren(ArenaAllocator &arena) {
+	NodeChildren ExtractChildren(ArenaAllocator &arena) {
 		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
 		array_ptr<uint8_t> bytes(mem_bytes, count);
 		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
@@ -134,7 +134,7 @@ public:
 			}
 		}
 
-		return NodePointerChildren(bytes, children_ptr);
+		return NodeChildren(bytes, children_ptr);
 	}
 
 private:

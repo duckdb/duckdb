@@ -17,7 +17,7 @@ class ARTKey;
 
 //! Prefix is a wrapper class to access a prefix.
 //! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
-//! It also contains a NodePointer pointer to a child node.
+//! It also contains a Node pointer to a child node.
 class Prefix {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;

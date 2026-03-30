@@ -70,8 +70,8 @@ void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8
 	// We have four situations from which we enter here:
 	// 1: PREFIX (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
 	// 2: PREFIX (parent) - Node4 (prev_node4) - INLINED_LEAF (child), or
-	// 3: NodePointer (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
-	// 4: NodePointer (parent) - Node4 (prev_node4) - INLINED_LEAF (child).
+	// 3: Node (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
+	// 4: Node (parent) - Node4 (prev_node4) - INLINED_LEAF (child).
 
 	D_ASSERT(!parent.IsAnyLeaf());
 	D_ASSERT(child.HasMetadata());

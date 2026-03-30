@@ -608,7 +608,7 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 				auto is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
 				                    child_type == NType::NODE_48 || child_type == NType::NODE_256);
 				if (is_internal) {
-					str += child_prefix + NODE_BRANCH_END + "NodePointer" + to_string(GetCapacity(child_type)) + "\n";
+					str += child_prefix + NODE_BRANCH_END + "Node" + to_string(GetCapacity(child_type)) + "\n";
 					child_options.tree_prefix = child_prefix + NODE_SPACE;
 					str += child_ptr->ToStringChildren(art, child_options);
 				} else {
@@ -651,7 +651,7 @@ string Node::ToString(ART &art, const ToStringOptions &options) const {
 	}
 
 	// For internal nodes: print header then children
-	auto str = options.tree_prefix + "NodePointer" + to_string(GetCapacity(type)) + "\n";
+	auto str = options.tree_prefix + "Node" + to_string(GetCapacity(type)) + "\n";
 	str += ToStringChildren(art, options);
 
 	if (is_gate && type != NType::PREFIX) {

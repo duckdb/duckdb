@@ -15,7 +15,7 @@
 namespace duckdb {
 
 //! There are three types of leaves.
-//! 1. LEAF_INLINED: Inlines a row ID in a NodePointer pointer.
+//! 1. LEAF_INLINED: Inlines a row ID in a Node pointer.
 //! 2. LEAF: Deprecated. A list of Leaf nodes containing row IDs.
 //! 3. Nested leaves indicated by gate nodes. If an ART key contains multiple row IDs,
 //! then we use the row IDs as keys and create a nested ART behind the gate node.
