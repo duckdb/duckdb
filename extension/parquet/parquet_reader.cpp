@@ -831,7 +831,8 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
-	} else if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
+	}
+	if (context.TryGetCurrentSetting("__delta_only_variant_encoding_enabled", lookup_value)) {
 		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
