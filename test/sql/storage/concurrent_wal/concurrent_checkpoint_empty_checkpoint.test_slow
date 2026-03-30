@@ -5,7 +5,7 @@
 foreach wal_abort_mode before_wal_finish before_header
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
+ATTACH '{TEST_DIR}/concurrent_abort.db' AS main_db
 
 statement ok
 SET checkpoint_threshold='1TB'
@@ -20,7 +20,7 @@ statement ok
 CREATE OR REPLACE TABLE main_db.integers(i INTEGER)
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db
+ATTACH '{TEST_DIR}/concurrent_other_db.db' AS other_db
 
 statement ok
 CREATE OR REPLACE TABLE other_db.ranges(begin_range INT, end_range INT)
@@ -60,16 +60,16 @@ restart
 # overwrite the checkpoint file with an empty file
 # note: we actually lose data here, so we can't verify anything about the data
 statement ok
-copy (select blob '') to '__TEST_DIR__/concurrent_abort.db.wal.checkpoint' (FORMAT blob);
+copy (select blob '') to '{TEST_DIR}/concurrent_abort.db.wal.checkpoint' (FORMAT blob);
 
 statement ok
 SET debug_checkpoint_abort='none'
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
+ATTACH '{TEST_DIR}/concurrent_abort.db' AS main_db
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db
+ATTACH '{TEST_DIR}/concurrent_other_db.db' AS other_db
 
 restart
 

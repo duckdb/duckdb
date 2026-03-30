@@ -2,7 +2,7 @@
 # description: Test that indexed tables do not create a new row group on every load+insert cycle
 # group: [checkpoint]
 
-load __TEST_DIR__/indexed_table_row_group_growth.db
+load {TEST_DIR}/indexed_table_row_group_growth.db
 
 statement ok
 create table z(id integer primary key, a varchar, b varchar, c varchar);
