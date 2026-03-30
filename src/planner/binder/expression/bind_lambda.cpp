@@ -78,7 +78,7 @@ static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr
 	children.push_back(std::move(rhs_func.children[1]));
 	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
 	restructured->is_operator = true;
-	return restructured;
+	return std::move(restructured);
 }
 
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
