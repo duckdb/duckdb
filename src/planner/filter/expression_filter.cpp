@@ -29,7 +29,11 @@ const ExpressionFilter &ExpressionFilter::GetExpressionFilter(const TableFilter 
 }
 
 ExpressionFilter &ExpressionFilter::GetExpressionFilter(TableFilter &filter, const char *context) {
-	return const_cast<ExpressionFilter &>(GetExpressionFilter(const_cast<const TableFilter &>(filter), context));
+	D_ASSERT(filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw InternalException("%s expected ExpressionFilter", context);
+	}
+	return filter.Cast<ExpressionFilter>();
 }
 
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
