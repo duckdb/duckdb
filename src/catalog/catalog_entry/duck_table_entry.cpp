@@ -66,10 +66,13 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto required = GetStorageVersionName(Geometry::VERSION_ADDED, false);
 				auto current = GetStorageVersionName(storage_version, false);
 
-				throw InvalidInputException(
-				    "GEOMETRY columns with coordinate reference system identifiers are not supported in storage "
-				    "versions prior %s (database \"%s\" is using storage version %s)",
-				    required, db.GetName(), current);
+				// TODO: Turn this into a hard error
+				auto &logger = Logger::Get(db.GetDatabase());
+				logger.WriteLog(DefaultLogType::NAME, LogLevel::LOG_WARNING,
+				                "GEOMETRY columns with coordinate reference system identifiers are not supported in "
+				                "storage versions prior "
+				                "to %s (database \"%s\" is using storage version %s). CRS will not be persisted.",
+				                required, db.GetName(), current);
 			}
 		} break;
 		default:
