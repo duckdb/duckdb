@@ -50,28 +50,31 @@ private:
 	string ApplyCase(const string &upper_kw, const string &orig_kw, bool is_structural = false) const;
 	string FormatMultiline(const string &sql, const vector<MatcherToken> &tokens) const;
 
-	// Phase 2: inline short clauses
+	// Phase 2: inline short struct literals
+	string InlineStructLiterals(const string &formatted) const;
+
+	// Phase 3: inline short clauses
 	string MergeShortClauses(const string &formatted) const;
 
-	// Phase 3: lift first WHERE/HAVING predicate onto the keyword's line
+	// Phase 4: lift first WHERE/HAVING predicate onto the keyword's line
 	static bool IsConditionClauseLine(const string &trimmed);
 	static bool StartsWithConjunction(const string &trimmed);
 	string CollapseFirstCondition(const string &formatted) const;
 
-	// Phase 4: expand CREATE TABLE column list to one column per line
+	// Phase 5: expand CREATE TABLE column list to one column per line
 	static vector<string> SplitTopLevelCommas(const string &s);
 	static idx_t FindMatchingClose(const string &s, idx_t open_pos);
 	static idx_t MatchCreateTablePrefix(const string &upper_trimmed);
 	string ExpandTableDefinition(const string &formatted) const;
 
-	// Phase 5: expand long CASE expressions to one WHEN/ELSE per line
+	// Phase 6: expand long CASE expressions to one WHEN/ELSE per line
 	static bool MatchKeywordAt(const string &s, idx_t pos, const char *keyword);
 	static idx_t FindKeywordAny(const string &s, idx_t from_pos, const char *keyword);
 	static idx_t FindCaseEnd(const string &s, idx_t case_pos);
 	static vector<string> SplitCaseBranches(const string &content);
 	string ExpandCaseExpressions(const string &formatted) const;
 
-	// Phase 6: expand long parenthesized comma-lists to one value per line
+	// Phase 7: expand long parenthesized comma-lists to one value per line
 	static idx_t FindLongestParenList(const string &line, idx_t from_pos);
 	string ExpandLongParenLists(const string &formatted) const;
 };
@@ -93,7 +96,8 @@ string SQLFormatter::Format(const string &sql) {
 	}
 
 	string multiline = FormatMultiline(sql, tokens);
-	string merged = MergeShortClauses(multiline);
+	string struct_inlined = InlineStructLiterals(multiline);
+	string merged = MergeShortClauses(struct_inlined);
 	string collapsed = CollapseFirstCondition(merged);
 	string expanded = ExpandTableDefinition(collapsed);
 	string case_expanded = ExpandCaseExpressions(expanded);
@@ -521,33 +525,37 @@ string SQLFormatter::FormatMultiline(const string &sql, const vector<MatcherToke
 			continue;
 		}
 
-		if (tok.type == TokenType::OPERATOR && tok.text == "[") {
-			after_clause = false;
+		// { (struct literal) — always multiline; phase 2 inlines short ones.
+		if (tok.type == TokenType::OPERATOR && tok.text == "{") {
 			prev_was_keyword = false;
-			if (!at_line_start && !result.empty() && result.back() != ' ' && result.back() != '(' &&
-			    result.back() != '[' && result.back() != '.') {
-				result += ' ';
+			if (after_clause) {
+				write_newline();
+				write_indent(content_indent());
+				after_clause = false;
+			} else {
+				write_space();
 			}
-			result += '[';
+			result += '{';
 			at_line_start = false;
-			// Brackets are array literals — push a paren level to keep commas inline.
 			int32_t ci = content_indent();
-			paren_stack.push_back({false, ci, ci + indent_size});
+			paren_stack.push_back({true, ci, ci + indent_size});
+			after_clause = true;
 			i++;
 			continue;
 		}
 
-		if (tok.type == TokenType::OPERATOR && tok.text == "]") {
+		if (tok.type == TokenType::OPERATOR && tok.text == "}") {
 			after_clause = false;
 			prev_was_keyword = false;
+			int32_t close_ind = paren_stack.empty() ? 0 : paren_stack.back().close_indent;
 			if (!paren_stack.empty()) {
 				paren_stack.pop_back();
 			}
-			// Remove trailing space before ']' if present.
-			if (!result.empty() && result.back() == ' ') {
-				result.pop_back();
+			if (!at_line_start) {
+				write_newline();
+				write_indent(close_ind);
 			}
-			result += ']';
+			result += '}';
 			at_line_start = false;
 			i++;
 			continue;
@@ -607,6 +615,19 @@ string SQLFormatter::FormatMultiline(const string &sql, const vector<MatcherToke
 				result.pop_back();
 			}
 			result += '.';
+			at_line_start = false;
+			i++;
+			continue;
+		}
+
+		// : (struct literal key-value separator) — no space before, space after.
+		if (tok.type == TokenType::OPERATOR && tok.text == ":") {
+			after_clause = false;
+			prev_was_keyword = false;
+			if (!result.empty() && result.back() == ' ') {
+				result.pop_back();
+			}
+			result += ": ";
 			at_line_start = false;
 			i++;
 			continue;
@@ -724,7 +745,67 @@ string SQLFormatter::FormatMultiline(const string &sql, const vector<MatcherToke
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 2: inline short clauses
+// Phase 2: inline short struct literals
+// ─────────────────────────────────────────────────────────────────────────────
+
+//! Walk through the formatted output and inline short struct literals.
+//! A struct literal that was expanded to multiple lines ('{' on one line,
+//! entries on subsequent lines, '}' on its own line) is collapsed back to
+//! a single line when the result fits within inline_threshold.
+string SQLFormatter::InlineStructLiterals(const string &formatted) const {
+	if (config.inline_threshold == 0) {
+		return formatted;
+	}
+
+	const vector<string> lines = SplitLines(formatted);
+	vector<string> out;
+	out.reserve(lines.size());
+
+	for (idx_t i = 0; i < lines.size();) {
+		const string &line = lines[i];
+		const string trimmed = TrimLeft(line);
+
+		// Look for lines whose trimmed content ends with '{'.
+		if (!trimmed.empty() && trimmed.back() == '{') {
+			// Find the closing '}' line.
+			idx_t close_line = i + 1;
+			bool found_close = false;
+			while (close_line < lines.size()) {
+				const string ctrimmed = TrimLeft(lines[close_line]);
+				if (ctrimmed == "}") {
+					found_close = true;
+					break;
+				}
+				close_line++;
+			}
+			if (found_close && close_line > i + 1) {
+				// Build the flat content inside the braces.
+				string flat;
+				for (idx_t k = i + 1; k < close_line; k++) {
+					if (!flat.empty()) {
+						flat += ' ';
+					}
+					flat += TrimLeft(lines[k]);
+				}
+				// Merge: line with '{' + space + flat content + space + '}'
+				string merged = line + " " + flat + " }";
+				if (Utf8Proc::RenderWidth(merged) <= config.inline_threshold) {
+					out.push_back(std::move(merged));
+					i = close_line + 1;
+					continue;
+				}
+			}
+		}
+
+		out.push_back(line);
+		i++;
+	}
+
+	return JoinLines(out);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3: inline short clauses
 // ─────────────────────────────────────────────────────────────────────────────
 
 //! Post-processing pass: walk through the already-formatted multiline output

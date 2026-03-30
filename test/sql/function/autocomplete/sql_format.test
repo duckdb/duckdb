@@ -911,3 +911,57 @@ SELECT duckdb_format_sql('CREATE OR REPLACE TABLE lineitem_sf100_random AS (SELE
     )$$
 ----
 true
+
+# ── Struct literal — short struct inlines with space after colon ─────────────
+query I
+SELECT duckdb_format_sql('SELECT {''key'': ''value'', ''key2'': ''value2'', ''key3'': ''value3''}') = $$SELECT { 'key': 'value', 'key2': 'value2', 'key3': 'value3' }$$
+----
+true
+
+# ── Struct literal — long struct expands to one entry per line ──────────────
+query I
+SELECT duckdb_format_sql('SELECT {''l_orderkey'': 1, ''l_partkey'': 155190, ''l_suppkey'': 7706, ''l_linenumber'': 1, ''l_quantity'': 17.00, ''l_extendedprice'': 21168.23, ''l_discount'': 0.04, ''l_tax'': 0.02, ''l_returnflag'': ''N'', ''l_linestatus'': ''O'', ''l_shipdate'': ''1996-03-13'', ''l_commitdate'': ''1996-02-12'', ''l_receiptdate'': ''1996-03-22'', ''l_shipinstruct'': ''DELIVER IN PERSON'', ''l_shipmode'': ''TRUCK'', ''l_comment'': ''to beans x-ray carefull''}') = $$SELECT
+    {
+            'l_orderkey': 1,
+            'l_partkey': 155190,
+            'l_suppkey': 7706,
+            'l_linenumber': 1,
+            'l_quantity': 17.00,
+            'l_extendedprice': 21168.23,
+            'l_discount': 0.04,
+            'l_tax': 0.02,
+            'l_returnflag': 'N',
+            'l_linestatus': 'O',
+            'l_shipdate': '1996-03-13',
+            'l_commitdate': '1996-02-12',
+            'l_receiptdate': '1996-03-22',
+            'l_shipinstruct': 'DELIVER IN PERSON',
+            'l_shipmode': 'TRUCK',
+            'l_comment': 'to beans x-ray carefull'
+    }$$
+----
+true
+
+# ── MAP literal — long MAP expands to one entry per line ────────────────────
+query I
+SELECT duckdb_format_sql('SELECT MAP {''l_orderkey'': ''1'', ''l_partkey'': ''155190'', ''l_suppkey'': ''7706'', ''l_linenumber'': ''1'', ''l_quantity'': ''17.00'', ''l_extendedprice'': ''21168.23'', ''l_discount'': ''0.04'', ''l_tax'': ''0.02'', ''l_returnflag'': ''N'', ''l_linestatus'': ''O'', ''l_shipdate'': ''1996-03-13'', ''l_commitdate'': ''1996-02-12'', ''l_receiptdate'': ''1996-03-22'', ''l_shipinstruct'': ''DELIVER IN PERSON'', ''l_shipmode'': ''TRUCK'', ''l_comment'': ''to beans x-ray carefull''}') = $$SELECT
+    MAP {
+            'l_orderkey': '1',
+            'l_partkey': '155190',
+            'l_suppkey': '7706',
+            'l_linenumber': '1',
+            'l_quantity': '17.00',
+            'l_extendedprice': '21168.23',
+            'l_discount': '0.04',
+            'l_tax': '0.02',
+            'l_returnflag': 'N',
+            'l_linestatus': 'O',
+            'l_shipdate': '1996-03-13',
+            'l_commitdate': '1996-02-12',
+            'l_receiptdate': '1996-03-22',
+            'l_shipinstruct': 'DELIVER IN PERSON',
+            'l_shipmode': 'TRUCK',
+            'l_comment': 'to beans x-ray carefull'
+    }$$
+----
+true
