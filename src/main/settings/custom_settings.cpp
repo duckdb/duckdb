@@ -11,6 +11,7 @@
 
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -757,6 +758,10 @@ void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Va
 	if (bytes == 0) {
 		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
 	}
+	if (!IsPowerOfTwo(bytes)) {
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		                            bytes);
+	}
 	if (info.db) {
 		const auto old_bs = Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(*info.db);
 		if (old_bs != bytes) {
@@ -769,6 +774,10 @@ void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, V
 	const auto bytes = input.GetValue<uint64_t>();
 	if (bytes == 0) {
 		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (!IsPowerOfTwo(bytes)) {
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		                            bytes);
 	}
 	if (info.db) {
 		const auto old_bs = Settings::Get<ExternalFileCacheRemoteBlockSizeSetting>(*info.db);
