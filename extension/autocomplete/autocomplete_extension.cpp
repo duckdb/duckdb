@@ -686,8 +686,8 @@ static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<uniqu
 	}
 	for (const auto &pair : MapValue::GetChildren(map_val)) {
 		const auto &kv = StructValue::GetChildren(pair);
-		const auto key = StringUtil::Lower(StringValue::Get(kv[0]));
-		const auto val_str = StringValue::Get(kv[1]);
+		const auto key = StringUtil::Lower(kv[0].ToString());
+		const auto val_str = kv[1].ToString();
 		if (key == "indent_size") {
 			config.indent_size = std::stoull(val_str);
 		} else if (key == "inline_threshold") {
