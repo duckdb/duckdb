@@ -673,7 +673,7 @@ void Executor::PushError(ErrorData exception) {
 	// push the exception onto the stack
 	error_manager.PushError(std::move(exception));
 	// interrupt execution of any other pipelines that belong to this executor
-	context.interrupted = true;
+	context.interrupt_state = ClientInterruptState::INTERRUPTED;
 }
 
 bool Executor::HasError() {

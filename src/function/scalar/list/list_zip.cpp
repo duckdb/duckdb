@@ -123,7 +123,6 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		struct_entries[child_idx].Flatten(result_size);
 		FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);
 	}
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 
 static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,

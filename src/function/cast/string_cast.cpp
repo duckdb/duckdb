@@ -181,14 +181,12 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	    cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
 	    vector_cast_data.all_converted;
 	if (!all_converted && parameters.nullify_parent) {
-		UnifiedVectorFormat inserted_column_data;
-		result_child.ToUnifiedFormat(total_list_size, inserted_column_data);
-		UnifiedVectorFormat parse_column_data;
-		varchar_vector.ToUnifiedFormat(total_list_size, parse_column_data);
+		auto result_child_validity = result_child.Validity(total_list_size);
+		auto varchar_vector_validity = varchar_vector.Validity(total_list_size);
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
-				if (!inserted_column_data.validity.RowIsValid(j) && parse_column_data.validity.RowIsValid(j)) {
+				if (!result_child_validity.IsValid(j) && varchar_vector_validity.IsValid(j)) {
 					result_mask.SetInvalid(i);
 					break;
 				}

@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 #include <functional>
 
@@ -60,7 +62,7 @@ struct SeptenaryExecutor {
 			vector<UnifiedVectorFormat> vdata(NCOLS);
 			for (size_t c = 0; c < NCOLS; ++c) {
 				input.data[c].ToUnifiedFormat(count, vdata[c]);
-				all_valid = all_valid && vdata[c].validity.AllValid();
+				all_valid = all_valid && vdata[c].validity.CannotHaveNull();
 			}
 
 			auto adata = (const TA *)(vdata[0].data);

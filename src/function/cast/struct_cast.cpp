@@ -336,12 +336,10 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	}
 
 	// Check for nulls in the source rows, and set the list data
-	UnifiedVectorFormat format;
-	source.ToUnifiedFormat(count, format);
-	auto &validity = format.validity;
+	auto validity_entries = source.Validity(count);
 	auto list_data = ListVector::GetData(result);
 	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(format.sel->get_index(i))) { // is row null?
+		if (!validity_entries.IsValid(i)) { // is row null?
 			// Note: this must be a FlatVector because if we set it to be a ConstantVector and that was null then we've
 			// already returned
 			FlatVector::SetNull(result, i, true);

@@ -33,7 +33,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		switch (args.data[idx].GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
 			auto &input_mask = FlatVector::Validity(args.data[idx]);
-			if (!input_mask.AllValid()) {
+			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
@@ -55,13 +55,12 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		default: {
-			UnifiedVectorFormat vdata;
-			args.data[idx].ToUnifiedFormat(args.size(), vdata);
-			if (!vdata.validity.AllValid()) {
+			auto entries = args.data[idx].Validity(args.size());
+			if (entries.CanHaveNull()) {
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
 				for (idx_t i = 0; i < args.size(); i++) {
-					if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+					if (!entries.IsValid(i)) {
 						result_mask.SetInvalid(i);
 					}
 				}

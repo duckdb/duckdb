@@ -67,16 +67,31 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+      # Avoid downloading blobs >50 KB until they are actually needed by git.
+      GIT_FETCH_FILTER: blob:limit=50k
+      GIT_CONFIG_COUNT: 1
+      GIT_CONFIG_KEY_0: checkout.workers
+      GIT_CONFIG_VALUE_0: 4
     steps:
       - uses: actions/checkout@v6
+        with:
+          filter: ${{ env.GIT_FETCH_FILTER }}
 
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
+      - name: Fetch PR base branch history
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          # changed-files needs base branch history for merge-base lookup
+          # and the exact base SHA for comparison.
+          git fetch --no-tags --depth=100 --filter="${GIT_FETCH_FILTER}" origin \
+            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} \
+            ${{ github.event.pull_request.base.sha }}
 
       - name: Detect changes
         id: changed
         uses: tj-actions/changed-files@v47
         with:
+          base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          skip_initial_fetch: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           files_yaml: |
             github:
               - .github/**
@@ -195,6 +210,9 @@ jobs:
         run: |
           make generate-files
           git diff --exit-code
+
+      - name: Test CI scripts
+        run: make test_ci
 
  linux-debug:
     name: Linux Debug
@@ -441,6 +459,8 @@ jobs:
         python3 -m pip install --break-system-packages pytest
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
       run: |
@@ -524,6 +544,8 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
       shell: bash

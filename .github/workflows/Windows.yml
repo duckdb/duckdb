@@ -73,7 +73,7 @@ jobs:
       shell: bash
       if: ${{ !inputs.skip_tests }}
       run: |
-        test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
@@ -82,7 +82,7 @@ jobs:
         choco install wget -y --no-progress
         wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test/Release
-        ./test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/Release/unittest.exe
         rm ./test/Release/msvcp140.dll
 
     - name: Tools Test
@@ -160,7 +160,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash

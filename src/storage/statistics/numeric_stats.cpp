@@ -559,23 +559,20 @@ child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
 template <class T>
 void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel,
                                    idx_t count) {
-	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	auto entries = vector.Values<T>(count);
 	auto min_value = NumericStats::MinOrNull(stats);
 	auto max_value = NumericStats::MaxOrNull(stats);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		auto index = vdata.sel->get_index(idx);
-		if (!vdata.validity.RowIsValid(index)) {
+		auto entry = entries[idx];
+		if (!entry.IsValid()) {
 			continue;
 		}
-		if (!min_value.IsNull() && LessThan::Operation(data[index], min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
+		if (!min_value.IsNull() && LessThan::Operation(entry.value, min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		} // LCOV_EXCL_STOP
-		if (!max_value.IsNull() && GreaterThan::Operation(data[index], max_value.GetValueUnsafe<T>())) {
+		if (!max_value.IsNull() && GreaterThan::Operation(entry.value, max_value.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}

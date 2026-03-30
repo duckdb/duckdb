@@ -60,22 +60,16 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 }
 
 static void UpdateNullMask(Vector &vec, optional_ptr<const SelectionVector> sel, idx_t count, ValidityMask &null_mask) {
-	UnifiedVectorFormat vdata;
-	vec.ToUnifiedFormat(count, vdata);
-
-	if (vdata.validity.AllValid()) {
+	auto entries = vec.Validity(count);
+	if (!entries.CanHaveNull()) {
 		return;
 	}
-
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();
 	}
-
 	for (idx_t i = 0; i < count; ++i) {
-		const auto ridx = sel->get_index(i);
-		const auto vidx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(vidx)) {
-			null_mask.SetInvalid(ridx);
+		if (!entries.IsValid(i)) {
+			null_mask.SetInvalid(sel->get_index(i));
 		}
 	}
 }
@@ -220,17 +214,13 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
                                   SelectionVector &maybe_vec, OptionalSelection &false_opt,
                                   optional_ptr<ValidityMask> null_mask) {
-	UnifiedVectorFormat lvdata, rvdata;
-	left.ToUnifiedFormat(count, lvdata);
-	right.ToUnifiedFormat(count, rvdata);
-
-	auto &lmask = lvdata.validity;
-	auto &rmask = rvdata.validity;
+	auto ldata = left.Validity(count);
+	auto rdata = right.Validity(count);
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULLs
 	idx_t remaining = 0;
-	if (lmask.AllValid() && rmask.AllValid()) {
+	if (!ldata.CanHaveNull() && !rdata.CanHaveNull()) {
 		//	None are NULL, distinguish values.
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = sel.get_index(i);
@@ -244,9 +234,7 @@ static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; ++i) {
 		const auto result_idx = sel.get_index(i);
-		const auto lidx = lvdata.sel->get_index(i);
-		const auto ridx = rvdata.sel->get_index(i);
-		if (!lmask.RowIsValid(lidx) || !rmask.RowIsValid(ridx)) {
+		if (!ldata.IsValid(i) || !rdata.IsValid(i)) {
 			if (null_mask) {
 				null_mask->SetInvalid(result_idx);
 			}

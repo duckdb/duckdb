@@ -82,13 +82,6 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	UnifiedVectorFormat vdata;
 	separator.ToUnifiedFormat(args.size(), vdata);
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			break;
-		}
-	}
 	switch (separator.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		if (ConstantVector::IsNull(separator)) {

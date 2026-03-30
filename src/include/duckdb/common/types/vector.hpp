@@ -22,6 +22,12 @@ class VectorListBuffer;
 struct SelCache;
 enum class VectorConstructorAction;
 
+template <class T>
+class VectorValueIterator;
+template <class T>
+class VectorValidValueIterator;
+class VectorValidityIterator;
+
 //! Vector of values of a specified PhysicalType.
 class Vector {
 	friend struct ConstantVector;
@@ -190,6 +196,14 @@ public:
 	// Transform vector to an equivalent nested vector
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
+	template <class T>
+	VectorValueIterator<T> Values(idx_t count) const;
+
+	template <class T>
+	VectorValidValueIterator<T> ValidValues(idx_t count) const;
+
+	VectorValidityIterator Validity(idx_t count) const;
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
@@ -237,3 +251,5 @@ public:
 };
 
 } // namespace duckdb
+
+#include "duckdb/common/vector/vector_iterator.hpp"

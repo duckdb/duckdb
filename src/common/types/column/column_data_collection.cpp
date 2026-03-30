@@ -351,7 +351,7 @@ void ColumnDataCopyValidity(const UnifiedVectorFormat &source_data, validity_t *
 		validity.SetAllValid(STANDARD_VECTOR_SIZE);
 	}
 	// FIXME: we can do something more optimized here using bitshifts & bitwise ors
-	if (!source_data.validity.AllValid()) {
+	if (source_data.validity.CanHaveNull()) {
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto idx = source_data.sel->get_index(source_offset + i);
 			if (!source_data.validity.RowIsValid(idx)) {
@@ -442,7 +442,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 			// initialize the validity mask to set all to valid
 			result_validity.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
-		if (source_data.validity.AllValid()) {
+		if (source_data.validity.CannotHaveNull()) {
 			// Fast path: all valid
 			for (idx_t i = 0; i < append_count; i++) {
 				auto source_idx = source_data.sel->get_index(offset + i);
@@ -505,7 +505,7 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 
 		// Compute total size needed for dictionary strings
 		const auto dictionary_size_idx = dictionary_size.GetIndex();
-		if (dictionary_validity.AllValid()) {
+		if (dictionary_validity.CannotHaveNull()) {
 			for (idx_t i = 0; i < dictionary_size_idx; i++) {
 				const auto &dictionary_string = dictionary_strings[i];
 				heap_size += !dictionary_string.IsInlined() * dictionary_string.GetSize();

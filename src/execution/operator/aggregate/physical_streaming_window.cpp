@@ -543,7 +543,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
 				auto &prev = *state.const_vectors[expr_idx];
-				if (validity.AllValid()) {
+				if (validity.CannotHaveNull()) {
 					prev.Reference(arg.GetValue(0));
 					result.Reference(prev);
 				} else {
@@ -578,7 +578,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				UnifiedVectorFormat unified;
 				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
-				if (validity.AllValid()) {
+				if (validity.CannotHaveNull()) {
 					VectorOperations::Copy(arg, result, count, 0, 0);
 				} else {
 					//	Copy the data as it may be a reference to the argument

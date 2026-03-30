@@ -450,9 +450,6 @@ unittest_relassert:
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
 
-runnertests:
-	python3 -m unittest scripts.ci.test_run_tests
-
 unittestarrow:
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) "[arrow]"
 
@@ -519,6 +516,9 @@ toolsci:
 	ls -lh /usr/bin/gcc* /usr/bin/g++*
 	gcc --version
 	g++ --version
+
+test_ci:
+	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
 
 format_tools:
 	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)

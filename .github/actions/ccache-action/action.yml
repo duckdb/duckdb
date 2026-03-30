@@ -1,5 +1,10 @@
 name: 'Setup Ccache'
 description: 'Configure ccache for workflow jobs'
+inputs:
+  key:
+    description: 'Override the ccache key prefix; defaults to github.job'
+    required: false
+    default: ${{ github.job }}
 runs:
   using: "composite"
   steps:
@@ -7,8 +12,8 @@ runs:
        if: ${{ github.workflow != 'NightlyTests' }}
        uses: hendrikmuhs/ccache-action@main
        with:
-         key: ${{ github.job }}
-         save: ${{ github.repository != 'duckdb/duckdb' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
+         key: ${{ inputs.key }}
+         save: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
          # Dump verbose ccache statistics report at end of CI job.
          verbose: 1
          # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.
