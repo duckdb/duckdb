@@ -68,6 +68,20 @@ EXPLAIN SELECT count(*) FROM integers WHERE i = 99 AND i + j = 198
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*\(i = 99\).*\(.*i \+ j.*= 198.*\).*
 
+# pushed expression filters must not mutate projected scan values
+statement ok
+CREATE TABLE expr_filter_values(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+INSERT INTO expr_filter_values VALUES (46, 51, 23), (64, 77, 40), (75, 67, 58)
+
+query III rowsort
+SELECT DISTINCT * FROM expr_filter_values WHERE NOT ( col2 + 59 * + col2 * - - 59 * col2 ) <= 43
+----
+46	51	23
+64	77	40
+75	67	58
+
 require parquet
 
 statement ok

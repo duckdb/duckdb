@@ -806,7 +806,13 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		DataChunk chunk;
 		chunk.data.emplace_back(vector);
 		chunk.SetCardinality(scan_count);
-		approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, sel, approved_tuple_count);
+		SelectionVector identity_sel;
+		optional_ptr<SelectionVector> current_sel = &sel;
+		if (!sel.IsSet()) {
+			identity_sel = SelectionVector(0, approved_tuple_count);
+			current_sel = &identity_sel;
+		}
+		approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	}
 	sel.Initialize(result_sel);
 	return approved_tuple_count;
