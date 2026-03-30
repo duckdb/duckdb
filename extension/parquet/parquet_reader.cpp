@@ -174,6 +174,11 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		metadata->read(file_proto.get());
 	}
 
+	if (metadata->num_rows < 0) {
+		throw InvalidInputException("Failed to read Parquet file \"%s\": has negative number of rows",
+		                            file_handle.GetPath());
+	}
+
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
@@ -592,7 +597,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		vector<ParquetColumnSchema> child_schemas;
 
 		idx_t c_idx = 0;
-		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
+		idx_t num_children = 0;
+		if (s_ele.__isset.num_children && !TryCast::Operation(s_ele.num_children, num_children)) {
+			throw InvalidInputException(
+			    "Failed to read Parquet file \"%s\": schema element has negative number of children", file.path);
+		}
 		while (c_idx < num_children) {
 			next_schema_idx++;
 
@@ -880,7 +889,7 @@ optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
 		return reader->Cast<ParquetReader>().NumRows();
 	}
 	if (metadata) {
-		return metadata->metadata->num_rows;
+		return NumericCast<idx_t>(metadata->metadata->num_rows);
 	}
 	return optional_idx();
 }
@@ -1208,7 +1217,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 }
 
 idx_t ParquetReader::NumRows() const {
-	return GetFileMetadata()->num_rows;
+	return NumericCast<idx_t>(GetFileMetadata()->num_rows);
 }
 
 idx_t ParquetReader::NumRowGroups() const {

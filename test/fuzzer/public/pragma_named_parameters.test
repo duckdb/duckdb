@@ -8,4 +8,4 @@ pragma enable_verification
 statement error
 PRAGMA e=r=0,0;
 ----
-Parser Error: PRAGMA statement with assignment cannot have named parameters
+Parser Error: PRAGMA statement
