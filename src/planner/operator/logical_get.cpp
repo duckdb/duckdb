@@ -49,7 +49,8 @@ static void SerializeCompatibilityLogicalGet(Serializer &serializer, const Logic
 	serializer.WriteProperty(200, "table_index", get.table_index);
 	serializer.WriteProperty(201, "returned_types", get.returned_types);
 	serializer.WriteProperty(202, "names", get.names);
-	serializer.WriteProperty(204, "projection_ids", project_all_columns ? vector<ProjectionIndex> {} : get.projection_ids);
+	serializer.WriteProperty(204, "projection_ids",
+	                         project_all_columns ? vector<ProjectionIndex> {} : get.projection_ids);
 	serializer.WriteObject(205, "table_filters", [&](Serializer &table_filter_serializer) {
 		SerializeCompatibilityTableFilters(table_filter_serializer, filters);
 	});
