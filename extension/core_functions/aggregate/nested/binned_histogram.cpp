@@ -282,7 +282,6 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v);
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, count);
-	auto column_count = args.ColumnCount();
 
 	ValidityMask combined_mask(count);
 	CombineMasks(args, combined_mask);
