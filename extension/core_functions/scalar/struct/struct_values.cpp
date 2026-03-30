@@ -36,15 +36,13 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
-		UnifiedVectorFormat input_data;
-		input.ToUnifiedFormat(count, input_data);
+		auto validity_entries = input.Validity(count);
 
-		if (!input_data.validity.AllValid()) {
+		if (validity_entries.CanHaveNull()) {
 			auto &validity = FlatVector::Validity(result);
 
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = input_data.sel->get_index(i);
-				if (!input_data.validity.RowIsValid(idx)) {
+				if (!validity_entries.IsValid(i)) {
 					validity.SetInvalid(i);
 				}
 			}

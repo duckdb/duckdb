@@ -52,7 +52,7 @@ void BooleanColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStat
 	const auto &mask = FlatVector::Validity(input_column);
 
 	const auto *const ptr = FlatVector::GetData<bool>(input_column);
-	if (stats.max && !stats.min && mask.AllValid()) {
+	if (stats.max && !stats.min && mask.CannotHaveNull()) {
 		// Fast path: stats have already been set, and there's no NULLs
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
 			const auto &val = ptr[r];

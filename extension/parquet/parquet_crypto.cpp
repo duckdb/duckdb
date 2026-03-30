@@ -11,7 +11,6 @@
 #include "duckdb/common/allocator.hpp"
 
 using duckdb_parquet::ColumnChunk;
-class Allocator;
 
 namespace duckdb {
 
@@ -495,9 +494,9 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
 			page_ordinal -= 1;
 		}
-		return page_ordinal;
+		return NumericCast<int16_t>(page_ordinal);
 	case DATA_PAGE:
-		return page_ordinal;
+		return NumericCast<int16_t>(page_ordinal);
 	default:
 		// All modules except DataPage(Header) are -1 (absent)
 		return -1;

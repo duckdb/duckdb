@@ -83,9 +83,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	values_child_vector.ToUnifiedFormat(ListVector::GetListSize(values), values_child_data);
 
 	// a LIST vector, where each row contains a MAP (LIST of STRUCTs)
-	UnifiedVectorFormat result_data;
-	result.ToUnifiedFormat(row_count, result_data);
-	auto result_entries = UnifiedVectorFormat::GetDataNoConst<list_entry_t>(result_data);
+	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 
 	auto &result_validity = FlatVector::Validity(result);
 
@@ -109,7 +107,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto keys_idx = keys_data.sel->get_index(row_idx);
 		auto values_idx = values_data.sel->get_index(row_idx);
-		auto result_idx = result_data.sel->get_index(row_idx);
 
 		// NULL MAP
 		if (!keys_data.validity.RowIsValid(keys_idx) || !values_data.validity.RowIsValid(values_idx)) {
@@ -148,8 +145,8 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		}
 
 		// keys_entry and values_entry have the same length
-		result_entries[result_idx].length = keys_entry.length;
-		result_entries[result_idx].offset = offset;
+		result_entries[row_idx].length = keys_entry.length;
+		result_entries[row_idx].offset = offset;
 		offset += keys_entry.length;
 	}
 	D_ASSERT(offset == result_child_size);
@@ -163,10 +160,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	result_value_vector.Slice(values_child_vector, sel_values, offset);
 	result_value_vector.Flatten(offset);
 	FlatVector::Validity(ListVector::GetEntry(result)).Resize(result_child_size);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 	result.Verify(row_count);
 }
 

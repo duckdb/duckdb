@@ -816,7 +816,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	UnifiedVectorFormat sdata;
 	states.ToUnifiedFormat(count, sdata);
-	auto state_ptrs = reinterpret_cast<data_ptr_t *>(sdata.data);
+	auto state_ptrs = UnifiedVectorFormat::GetData<data_ptr_t>(sdata);
 
 	inputs[0].Flatten(count);
 

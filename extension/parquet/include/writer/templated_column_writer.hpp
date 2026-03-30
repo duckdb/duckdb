@@ -206,7 +206,7 @@ public:
 
 		const auto &validity = FlatVector::Validity(vector);
 
-		if (!check_parent_empty && validity.AllValid()) {
+		if (!check_parent_empty && validity.CannotHaveNull()) {
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
@@ -280,7 +280,7 @@ public:
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		const auto &mask = FlatVector::Validity(input_column);
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			WriteVectorInternal<true>(temp_writer, stats, page_state_p, input_column, chunk_start, chunk_end);
 		} else {
 			WriteVectorInternal<false>(temp_writer, stats, page_state_p, input_column, chunk_start, chunk_end);
@@ -434,7 +434,7 @@ private:
 		}
 		case duckdb_parquet::Encoding::PLAIN: {
 			D_ASSERT(page_state.encoding == duckdb_parquet::Encoding::PLAIN);
-			if (mask.AllValid()) {
+			if (mask.CannotHaveNull()) {
 				TemplatedWritePlain<SRC, TGT, OP, true>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
 			} else {
 				TemplatedWritePlain<SRC, TGT, OP, false>(input_column, stats, chunk_start, chunk_end, mask,

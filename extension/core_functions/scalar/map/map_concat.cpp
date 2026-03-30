@@ -117,11 +117,6 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			ListVector::PushBack(result, list_entry);
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 bool IsEmptyMap(const LogicalType &map) {

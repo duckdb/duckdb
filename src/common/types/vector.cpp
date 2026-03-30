@@ -347,7 +347,9 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 }
 
 void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
-	ResizeInfo resize_info(*this, buffer.get(), multiplier);
+	const auto type_size = GetTypeIdSize(type.InternalType());
+	auto buffer_ptr = type_size ? buffer.get() : nullptr;
+	ResizeInfo resize_info(*this, buffer_ptr, multiplier);
 	resize_infos.emplace_back(resize_info);
 
 	if (!auxiliary) {
@@ -1093,7 +1095,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 	}
 }
 
-void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
+void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -1136,7 +1138,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 	}
 }
 
-void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
+void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
 	input.ToUnifiedFormat(count, data.unified);
 	data.logical_type = input.GetType();
 
@@ -1184,9 +1186,8 @@ void Vector::Shred(Vector &shredded_data) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
 	this->vector_type = VectorType::SHREDDED_VECTOR;
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
+	this->auxiliary = make_buffer<ShreddedVectorBuffer>(shredded_data);
 	validity.Reset();
-	auxiliary.reset();
 }
 
 // FIXME: This should ideally be const
@@ -1251,7 +1252,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
 	}
 
-	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
+	const bool has_validity_mask = (count > 0) && vdata.validity.CanHaveNull();
 	serializer.WriteProperty(100, "has_validity_mask", has_validity_mask);
 	if (has_validity_mask) {
 		ValidityMask flat_mask(count);

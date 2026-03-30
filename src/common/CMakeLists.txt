@@ -34,6 +34,7 @@ add_library_unity(
   assert.cpp
   bind_helpers.cpp
   box_renderer.cpp
+  column_data_collection_render_interface.cpp
   cgroups.cpp
   column_index.cpp
   csv_writer.cpp

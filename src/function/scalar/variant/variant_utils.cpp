@@ -231,7 +231,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! keys_entry
 	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(format);
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
-	D_ASSERT(keys_entry.validity.AllValid());
+	D_ASSERT(keys_entry.validity.CannotHaveNull());
 
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(format);

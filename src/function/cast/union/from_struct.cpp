@@ -77,13 +77,11 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	} else {
 		// if the tag is NULL, the union should be NULL
 		auto &tag_vec = target_children[0];
-		UnifiedVectorFormat source_data, tag_data;
-		source.ToUnifiedFormat(count, source_data);
-		tag_vec.ToUnifiedFormat(count, tag_data);
+		auto source_validity = source.Validity(count);
+		auto tag_validity = tag_vec.Validity(count);
 
 		for (idx_t i = 0; i < count; i++) {
-			if (!source_data.validity.RowIsValid(source_data.sel->get_index(i)) ||
-			    !tag_data.validity.RowIsValid(tag_data.sel->get_index(i))) {
+			if (!source_validity.IsValid(i) || !tag_validity.IsValid(i)) {
 				FlatVector::SetNull(result, i, true);
 			}
 		}

@@ -37,7 +37,15 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	parameters.query_location = expr.GetQueryLocation();
 	parameters.cast_source = expr.child.get();
 	parameters.cast_target = expr;
+	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (all_constant) {
+		// if the input is constant we only need to cast one value
+		count = 1;
+	}
 	expr.bound_cast.function(child, result, count, parameters);
+	if (all_constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 } // namespace duckdb

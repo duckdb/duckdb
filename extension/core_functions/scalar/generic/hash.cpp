@@ -4,9 +4,6 @@ namespace duckdb {
 
 static void HashFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	args.Hash(result);
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunction HashFun::GetFunction() {

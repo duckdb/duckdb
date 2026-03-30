@@ -85,11 +85,6 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 
