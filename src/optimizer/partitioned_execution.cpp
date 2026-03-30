@@ -113,7 +113,7 @@ static optional_ptr<LogicalGet> PartitionedExecutionTraceColumns(LogicalOperator
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &proj = child_ref.get().Cast<LogicalProjection>();
 			for (auto it = columns.begin(); it != columns.end();) {
-				auto &expr = *proj.expressions[it->column_binding.column_index.index];
+				auto &expr = *proj.expressions[it->column_binding.column_index.GetIndex()];
 				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 					it->column_binding = expr.Cast<BoundColumnRefExpression>().binding;
 					it++;
@@ -145,7 +145,7 @@ static optional_ptr<LogicalGet> PartitionedExecutionTraceColumns(LogicalOperator
 	// Get the storage index
 	const auto &column_ids = get.GetColumnIds();
 	for (auto it = columns.begin(); it != columns.end();) {
-		it->column_index = column_ids[it->column_binding.column_index.index];
+		it->column_index = column_ids[it->column_binding.column_index.GetIndex()];
 		if (get.TryGetStorageIndex(it->column_index, it->storage_index)) {
 			it++;
 		} else {
