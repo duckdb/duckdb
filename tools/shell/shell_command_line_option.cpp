@@ -204,7 +204,7 @@ static const CommandLineOption command_line_options[] = {
     {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"format", 0, "", EnableBatch, FormatStdin, "format SQL from stdin, writing result to stdout"},
-    {"format-file", 1, "FILENAME", EnableBatch, FormatFile, "format SQL in file, writing result back to the file"},
+    {"format-file", 1, "FILENAME", EnableBatch, FormatFile, "format SQL in file, writing result to stdout"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
     {"h", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
