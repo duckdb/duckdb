@@ -534,11 +534,6 @@
         "type": "map<ProjectionIndex, TableFilter*>",
         "serialize_property": "GetTableFiltersForSerialization(serializer)",
         "deserialize_property": "GetTableFiltersForDeserialization(deserializer)"
-      },
-      {
-        "id": 101,
-        "name": "generic_filters",
-        "type": "vector<Expression*>"
       }
     ],
     "pointer_type": "none"
