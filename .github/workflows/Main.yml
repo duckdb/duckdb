@@ -229,6 +229,7 @@ jobs:
       FORCE_ASSERT: 1
       REDUCE_SYMBOLS: 1
       EXTENSIONS_STATIC_BUILD: 0
+      CCACHE_DIAGNOSTICS_DIR: ${{ github.workspace }}/ccache-debug/linux-debug
 
     steps:
     - uses: actions/checkout@v6
@@ -240,6 +241,28 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+
+    - name: Prepare ccache diagnostics
+      shell: bash
+      run: |
+        rm -rf "$CCACHE_DIAGNOSTICS_DIR"
+        mkdir -p "$CCACHE_DIAGNOSTICS_DIR/files"
+        {
+          echo "CCACHE_DEBUG=1"
+          echo "CCACHE_DEBUGLEVEL=3"
+          echo "CCACHE_DEBUGDIR=$CCACHE_DIAGNOSTICS_DIR/files"
+          echo "CCACHE_LOGFILE=$CCACHE_DIAGNOSTICS_DIR/ccache.log"
+          echo "CCACHE_STATSLOG=$CCACHE_DIAGNOSTICS_DIR/ccache.stats.log"
+        } >> "$GITHUB_ENV"
+        ccache -p > "$CCACHE_DIAGNOSTICS_DIR/ccache-config.txt"
+        ccache -s > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-summary.before.txt"
+        ccache --print-stats > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-raw.before.txt"
+        ccache -z
+        {
+          echo "job=${GITHUB_JOB}"
+          echo "sha=${GITHUB_SHA}"
+          echo "runner=${RUNNER_NAME}"
+        } > "$CCACHE_DIAGNOSTICS_DIR/metadata.txt"
 
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
@@ -260,8 +283,25 @@ jobs:
         path: build/relassert-artifact.tar.gz
         if-no-files-found: error
 
+    - name: Collect ccache diagnostics
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        ccache -s > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-summary.after.txt"
+        ccache --print-stats > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-raw.after.txt"
+        find "$CCACHE_DIAGNOSTICS_DIR" -type f | sort > "$CCACHE_DIAGNOSTICS_DIR/files.txt"
+
+    - name: Upload ccache diagnostics
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-debug-ccache-diagnostics
+        path: ${{ env.CCACHE_DIAGNOSTICS_DIR }}
+        if-no-files-found: error
+
  linux-debug-tests:
     name: Linux Debug Tests
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs:
       - prepare
       - linux-debug
@@ -294,6 +334,7 @@ jobs:
       run: make unittest_relassert
 
  regression:
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
     needs:
@@ -306,11 +347,13 @@ jobs:
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     uses: ./.github/workflows/CodeQuality.yml
     secrets: inherit
     needs: prepare
 
  extensions:
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
     needs:
@@ -325,6 +368,7 @@ jobs:
 
  wasm-eh:
     name: Wasm EH
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs:
       - prepare
       - linux-debug
@@ -349,6 +393,7 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
+      CCACHE_DIAGNOSTICS_DIR: ${{ github.workspace }}/ccache-debug/linux-release
 
     steps:
     - uses: actions/checkout@v6
@@ -357,6 +402,28 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+
+    - name: Prepare ccache diagnostics
+      shell: bash
+      run: |
+        rm -rf "$CCACHE_DIAGNOSTICS_DIR"
+        mkdir -p "$CCACHE_DIAGNOSTICS_DIR/files"
+        {
+          echo "CCACHE_DEBUG=1"
+          echo "CCACHE_DEBUGLEVEL=3"
+          echo "CCACHE_DEBUGDIR=$CCACHE_DIAGNOSTICS_DIR/files"
+          echo "CCACHE_LOGFILE=$CCACHE_DIAGNOSTICS_DIR/ccache.log"
+          echo "CCACHE_STATSLOG=$CCACHE_DIAGNOSTICS_DIR/ccache.stats.log"
+        } >> "$GITHUB_ENV"
+        ccache -p > "$CCACHE_DIAGNOSTICS_DIR/ccache-config.txt"
+        ccache -s > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-summary.before.txt"
+        ccache --print-stats > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-raw.before.txt"
+        ccache -z
+        {
+          echo "job=${GITHUB_JOB}"
+          echo "sha=${GITHUB_SHA}"
+          echo "runner=${RUNNER_NAME}"
+        } > "$CCACHE_DIAGNOSTICS_DIR/metadata.txt"
 
     - uses: ./.github/actions/linux_release_build
       with:
@@ -377,8 +444,25 @@ jobs:
         path: build/linux-default-release.tar.gz
         if-no-files-found: error
 
+    - name: Collect ccache diagnostics
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        ccache -s > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-summary.after.txt"
+        ccache --print-stats > "$CCACHE_DIAGNOSTICS_DIR/ccache-stats-raw.after.txt"
+        find "$CCACHE_DIAGNOSTICS_DIR" -type f | sort > "$CCACHE_DIAGNOSTICS_DIR/files.txt"
+
+    - name: Upload ccache diagnostics
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-release-ccache-diagnostics
+        path: ${{ env.CCACHE_DIAGNOSTICS_DIR }}
+        if-no-files-found: error
+
  linux-release-tests:
     name: Linux Release Tests
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs:
       - prepare
       - linux-release
@@ -406,6 +490,7 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     runs-on: ubuntu-24.04
     needs:
       - prepare
@@ -437,6 +522,7 @@ jobs:
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs:
       - prepare
       - linux-release-tests
@@ -524,6 +610,7 @@ jobs:
 
  linux-musl-release-cli:
     name: Linux CLI (${{ matrix.config.arch }}-musl)
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs:
       - prepare
       - linux-release-tests
@@ -621,7 +708,7 @@ jobs:
 
  main_julia:
     name: Julia ${{ matrix.version }}
-    if: ${{ github.ref_name == 'main' }}
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs: linux-release-cli
     runs-on: ubuntu-latest
     strategy:
@@ -680,6 +767,7 @@ jobs:
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs: linux-release-cli
     runs-on: ubuntu-latest
 
@@ -701,6 +789,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
     needs:
@@ -710,6 +799,7 @@ jobs:
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
     needs:
@@ -723,6 +813,7 @@ jobs:
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
@@ -754,6 +845,7 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
     needs:
       - prepare
@@ -780,7 +872,7 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     runs-on: ubuntu-24.04
     needs: linux-debug
     env:
@@ -816,6 +908,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     needs:
       - prepare
       - linux-debug
@@ -845,6 +938,7 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
     needs:
       - prepare
@@ -870,6 +964,7 @@ jobs:
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
+    if: ${{ github.repository == '__ccache_analysis_only__/__disabled__' }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
