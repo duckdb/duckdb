@@ -226,6 +226,27 @@ SELECT COUNT(*) FROM batch_audit;
 ----
 1
 
+# Trigger body inserts into a table in another schema
+statement ok
+CREATE SCHEMA audit_schema;
+
+statement ok
+CREATE TABLE audit_schema.cross_log (msg VARCHAR);
+
+statement ok
+CREATE TABLE cross_src (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_cross_schema AFTER INSERT ON cross_src INSERT INTO audit_schema.cross_log VALUES ('fired');
+
+statement ok
+INSERT INTO cross_src VALUES (1);
+
+query I
+SELECT COUNT(*) FROM audit_schema.cross_log;
+----
+1
+
 # Recursive trigger guard: depth limit error
 statement ok
 CREATE TABLE recurse_tbl (id INTEGER);
