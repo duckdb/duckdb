@@ -1283,8 +1283,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, create_sql.c_str(), &result) == DuckDBError) {
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&result);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
 		break;
@@ -1296,8 +1297,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&result);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
 		break;
@@ -1708,9 +1710,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			if (res != DuckDBSuccess) {
 				auto err = duckdb_result_error(&stream_wrapper->result);
 				SetError(error, err);
+				bool interrupted = IsInterruptError(err);
 				duckdb_destroy_result(&stream_wrapper->result);
 				free(stream_wrapper);
-				return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+				return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			// Recreate wrappers for next iteration
 			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
@@ -1721,9 +1724,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		if (res != DuckDBSuccess) {
 			auto err = duckdb_result_error(&stream_wrapper->result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&stream_wrapper->result);
 			free(stream_wrapper);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
 

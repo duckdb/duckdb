@@ -828,6 +828,10 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child_filter = struct_filter.child_filter;
 
+		if (constant.IsNull()) {
+			// NULL struct - filter cannot match (NULL propagation)
+			return false;
+		}
 		if (constant.type().id() != LogicalTypeId::STRUCT) {
 			throw InternalException(
 			    "Constant for this column is not of type struct, but used in a STRUCT_EXTRACT TableFilter");
