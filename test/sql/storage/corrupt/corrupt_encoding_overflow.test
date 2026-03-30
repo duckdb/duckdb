@@ -1,0 +1,14 @@
+# name: test/sql/storage/corrupt/corrupt_encoding_overflow.test
+# description: Test corrupt integer encoding
+# group: [corrupt]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/corrupt_wal_encoding.db.gz __TEST_DIR__/corrupt_wal_encoding.db
+
+unzip data/storage/corrupt/corrupt_wal_encoding.db.wal.gz __TEST_DIR__/corrupt_wal_encoding.db.wal
+
+statement error
+ATTACH '__TEST_DIR__/corrupt_wal_encoding.db'
+----
+corrupt

@@ -665,9 +665,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	if (alias[0] >= '0' && alias[0] <= '9') {
-		throw ParserException("syntax error at or near \"%s\"", alias);
-	}
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
 	return expr;
@@ -1087,16 +1084,20 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 		auto other_operator_pr = inner_list_pr.Child<ListParseResult>(0);
 		auto other_operator_choice = other_operator_pr.Child<ChoiceParseResult>(0).result;
 		if (StringUtil::CIEquals(other_operator_choice->name, "AnyAllOperator")) {
-			auto any_all = transformer.Transform<pair<ExpressionType, bool>>(other_operator_choice);
-			auto expression_type = any_all.first;
+			auto any_all = transformer.Transform<pair<string, bool>>(other_operator_choice);
+			auto op_string = any_all.first;
 			auto is_any = any_all.second;
+
+			// Map operator string to ExpressionType (INVALID if not a comparison operator)
+			auto expression_type = OperatorToExpressionType(op_string);
+
 			auto subquery_expr = make_uniq<SubqueryExpression>();
 			if (right_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+				if (expression_type == ExpressionType::INVALID) {
+					throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
+				}
 				subquery_expr->subquery_type = SubqueryType::ANY;
 				subquery_expr->comparison_type = expression_type;
-				if (right_expr->GetExpressionClass() != ExpressionClass::SUBQUERY) {
-					throw NotImplementedException("ANY/ALL expected a subquery");
-				}
 				auto &right_expr_subquery = right_expr->Cast<SubqueryExpression>();
 				subquery_expr->subquery = std::move(right_expr_subquery.subquery);
 				subquery_expr->child = std::move(expr);
@@ -1111,6 +1112,9 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 			} else {
 				// left=ANY(right)
 				// we turn this into left=ANY((SELECT UNNEST(right)))
+				if (expression_type == ExpressionType::INVALID) {
+					throw ParserException("Unsupported comparison \"%s\" for ANY/ALL subquery", op_string);
+				}
 				auto select_statement = make_uniq<SelectStatement>();
 				auto select_node = make_uniq<SelectNode>();
 				vector<unique_ptr<ParsedExpression>> children;
@@ -1123,10 +1127,6 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 				subquery_expr->subquery_type = SubqueryType::ANY;
 				subquery_expr->child = std::move(expr);
 				subquery_expr->comparison_type = expression_type;
-				if (subquery_expr->comparison_type == ExpressionType::INVALID) {
-					throw ParserException("Unsupported comparison \"%s\" for ANY/ALL subquery",
-					                      ExpressionTypeToString(expression_type));
-				}
 				if (!is_any) {
 					// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 					// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
@@ -1197,12 +1197,12 @@ string PEGTransformerFactory::TransformListOperator(PEGTransformer &transformer,
 	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
-pair<ExpressionType, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
+pair<string, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer,
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto comparison_type = transformer.Transform<ExpressionType>(list_pr.Child<ListParseResult>(0));
+	auto op_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto subquery_type = transformer.Transform<bool>(list_pr.Child<ListParseResult>(1));
-	return make_pair(comparison_type, subquery_type);
+	return make_pair(op_string, subquery_type);
 }
 
 bool PEGTransformerFactory::TransformAnyOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
@@ -1459,8 +1459,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
 
-	// Apply prefixes in order (from right to left, as they were parsed)
-	for (auto &prefix_expr : prefix_repeat.children) {
+	// Apply prefixes right-to-left so the rightmost (innermost) prefix wraps the base first.
+	for (auto it = prefix_repeat.children.rbegin(); it != prefix_repeat.children.rend(); ++it) {
+		auto &prefix_expr = *it;
 		auto prefix = transformer.Transform<string>(prefix_expr);
 
 		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
@@ -1572,7 +1573,7 @@ PEGTransformerFactory::TransformPositionalExpression(PEGTransformer &transformer
 	auto &const_expr = number->Cast<ConstantExpression>();
 	int32_t index = const_expr.value.GetValue<int32_t>();
 	if (index <= 0) {
-		throw ParserException("Positional index must be greater than 0");
+		throw ParserException("Positional reference node needs to be >= 1");
 	}
 	return make_uniq<PositionalReferenceExpression>(NumericCast<idx_t>(index));
 }
@@ -2358,7 +2359,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTr
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto expr_list_opt = extract_parens->Cast<OptionalParseResult>();
 	if (!expr_list_opt.HasResult()) {
-		throw InvalidInputException("Can't pack nothing into a struct");
+		return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row",
+		                                     vector<unique_ptr<ParsedExpression>>());
 	}
 	auto expr_list = ExtractParseResultsFromList(expr_list_opt.optional_result);
 	vector<unique_ptr<ParsedExpression>> results;

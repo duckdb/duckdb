@@ -1920,8 +1920,8 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 
 	// check if we shortened any columns that would be rendered and if we can expand them
 	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
-	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count + 5 < config.max_rows &&
-	    pruned_columns.empty()) {
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count > 0 &&
+	    row_count + 5 < config.max_rows && pruned_columns.empty()) {
 		max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
 		if (max_rows_per_row > 1) {
 			// we can expand rows - check if we should expand any rows
