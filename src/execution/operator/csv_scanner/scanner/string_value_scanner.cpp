@@ -529,11 +529,23 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	if (!result.unquoted) {
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
+	if (buffer_pos <= result.quoted_position + 1) {
+		AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1, 0,
+		                        buffer_pos < result.last_position.buffer_pos + 2);
+		result.quoted = false;
+		return;
+	}
 	// remove potential empty values
 	idx_t length = buffer_pos - result.quoted_position - 1;
 	while (length > 0 && result.ignore_empty_values &&
 	       result.buffer_ptr[result.quoted_position + 1 + length - 1] == ' ') {
 		length--;
+	}
+	if (length == 0) {
+		// All content was stripped as empty/space values
+		AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1, 0, true);
+		result.quoted = false;
+		return;
 	}
 	length--;
 	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1, length,
