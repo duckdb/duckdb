@@ -29,11 +29,11 @@ public:
 	virtual Allocator &GetAllocator() = 0;
 
 	//! Cast a single source vector to VARCHAR. Delegates to the chunk-level virtual.
-	void CastToVarchar(Vector &source, Vector &result, idx_t count, bool as_json = false);
+	void CastToVarchar(Vector &source, Vector &result, idx_t count);
 
 protected:
 	//! Cast source chunk columns to VARCHAR into result chunk. Derived classes implement this.
-	virtual void CastToVarchar(DataChunk &source, DataChunk &result, idx_t count, bool as_json = false) = 0;
+	virtual void CastToVarchar(DataChunk &source, DataChunk &result, idx_t count) = 0;
 };
 
 //! ClientBoxRendererContext wraps a ClientContext to implement BoxRendererContext.
@@ -45,7 +45,7 @@ public:
 	Allocator &GetAllocator() override;
 
 protected:
-	void CastToVarchar(DataChunk &source, DataChunk &result, idx_t count, bool as_json = false) override;
+	void CastToVarchar(DataChunk &source, DataChunk &result, idx_t count) override;
 
 private:
 	ClientContext &context;

@@ -12,7 +12,7 @@ bool ClientBoxRendererContext::IsInterrupted() const {
 	return context.IsInterrupted();
 }
 
-void ClientBoxRendererContext::CastToVarchar(DataChunk &source, DataChunk &result, idx_t count, bool as_json) {
+void ClientBoxRendererContext::CastToVarchar(DataChunk &source, DataChunk &result, idx_t count) {
 	for (idx_t c = 0; c < source.ColumnCount(); c++) {
 		VectorOperations::TryCast(context, source.data[c], result.data[c], count, nullptr, false);
 	}
