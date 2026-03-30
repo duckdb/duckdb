@@ -619,26 +619,31 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 
 void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::BATCH);
-
 	const auto &op = partitioned_copy.op;
-	vector<column_t> column_ids;
-	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
-	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
-		if (op.write_partition_columns || part_col_set.find(col_idx) == part_col_set.end()) {
-			column_ids.push_back(col_idx);
-		}
-	}
 
 	// Initialize the scan
 	ColumnDataScanState scan_state;
-	collection->InitializeScan(scan_state, column_ids);
+	collection->InitializeScan(scan_state);
 	DataChunk scan_chunk;
 	collection->InitializeScanChunk(scan_state, scan_chunk);
 	collection->Seek(task.begin_idx, scan_state, scan_chunk);
 	D_ASSERT(task.begin_idx >= scan_state.current_row_index);
 
+	// Compute which columns to write out and then initialize the write chunk TODO: do this once in PartitionedCopy
+	vector<column_t> write_columns;
+	vector<LogicalType> write_types;
+	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
+	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
+		if (op.write_partition_columns || part_col_set.find(col_idx) == part_col_set.end()) {
+			write_columns.push_back(col_idx);
+			write_types.push_back(collection->Types()[col_idx]);
+		}
+	}
+	DataChunk write_chunk;
+	write_chunk.Initialize(partitioned_copy.context, write_types);
+
 	// Initialize the append
-	auto batch = make_uniq<ColumnDataCollection>(partitioned_copy.context, scan_chunk.GetTypes());
+	auto batch = make_uniq<ColumnDataCollection>(partitioned_copy.context, write_types);
 	ColumnDataAppendState append_state;
 	batch->InitializeAppend(append_state);
 
@@ -655,7 +660,8 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 			}
 		}
 
-		batch->Append(append_state, scan_chunk);
+		write_chunk.ReferenceColumns(scan_chunk, write_columns);
+		batch->Append(append_state, write_chunk);
 		collection->Scan(scan_state, scan_chunk);
 	}
 

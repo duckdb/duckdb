@@ -1350,7 +1350,7 @@ const StringUtil::EnumStringLiteral *GetCopyFunctionFlushBatchReasonValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE), "BATCH_SIZE" },
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE_BYTES), "BATCH_SIZE_BYTES" },
-		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::LAST_BATCH), "LAST_BATCH" }
+		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::FORCED_FLUSH), "FORCED_FLUSH" }
 	};
 	return values;
 }
