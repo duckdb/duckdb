@@ -19,8 +19,8 @@ void CollectTriggers(ClientContext &context, TableCatalogEntry &table, TriggerTi
 		if (trigger.base_table->table_name != table.name) {
 			return;
 		}
-		D_ASSERT(trigger.sql_body);
-		trigger_bodies.push_back(trigger.sql_body->Copy());
+		D_ASSERT(trigger.trigger_action);
+		trigger_bodies.push_back(trigger.trigger_action->Copy());
 		trigger_for_each.push_back(trigger.for_each);
 	});
 }
