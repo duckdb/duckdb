@@ -122,7 +122,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 
 	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
 		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-		D_ASSERT(op.get()->expressions.size() >= column_id &&
+		D_ASSERT(op.get()->expressions.size() > column_id &&
 		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
 		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
 		column_id = colref.binding.column_index;
@@ -139,6 +139,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer,
                                              optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats_p)
     : context(context_p), optimizer(optimizer), stats(stats_p) {
+	D_ASSERT(stats);
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
@@ -302,13 +303,11 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 		auto &group = aggregate->groups[i];
 		if (group->type == ExpressionType::BOUND_COLUMN_REF) {
 			auto &column_ref = group->Cast<BoundColumnRefExpression>();
-			if (stats) {
-				auto group_stats = stats->find(column_ref.binding);
-				if (group_stats == stats->end()) {
-					continue;
-				}
-				aggregate->group_stats[i] = group_stats->second->ToUnique();
+			auto group_stats = stats->find(column_ref.binding);
+			if (group_stats == stats->end()) {
+				continue;
 			}
+			aggregate->group_stats[i] = group_stats->second->ToUnique();
 		}
 	}
 
@@ -775,6 +774,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 		const auto &column_stats = stats->find(column_ref.first);
 		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
 			params.can_be_null = true;
+			break;
 		}
 	}
 	column_references.clear();
@@ -782,32 +782,37 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	return params;
 }
 
+bool TopNWindowElimination::ExtractSingleBinding(unique_ptr<Expression> *expr, ColumnBinding &binding,
+                                                 const bool require_direct_column_ref) {
+	if (require_direct_column_ref && expr->get()->type != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	VisitExpression(expr);
+	if (column_references.size() != 1) {
+		column_references.clear();
+		return false;
+	}
+	binding = column_references.begin()->first;
+	column_references.clear();
+	return true;
+}
+
 bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
                                                       vector<idx_t> &lhs_projections,
                                                       vector<reference<LogicalOperator>> &stack) {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
-	auto extract_single_binding = [&](unique_ptr<Expression> *expr, ColumnBinding &binding) {
-		VisitExpression(expr);
-		if (column_references.size() != 1) {
-			column_references.clear();
-			return false;
-		}
-		binding = column_references.begin()->first;
-		column_references.clear();
-		return true;
-	};
 
 	// Build a projection list for an LHS table scan to recreate the column order of an aggregate with struct packing
 	for (idx_t i = 0; i < window_expr.partitions.size(); i++) {
 		auto &partition = window_expr.partitions[i];
-		if (!extract_single_binding(&partition, projections[i])) {
+		if (!ExtractSingleBinding(&partition, projections[i])) {
 			return false;
 		}
 	}
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto &arg = args[i];
-		if (!extract_single_binding(&arg, projections[window_expr.partitions.size() + i])) {
+		if (!ExtractSingleBinding(&arg, projections[window_expr.partitions.size() + i])) {
 			return false;
 		}
 	}
@@ -828,7 +833,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				if (projection_idx >= projection.expressions.size()) {
 					return false;
 				}
-				if (!extract_single_binding(&projection.expressions[projection_idx], projections[i])) {
+				if (!ExtractSingleBinding(&projection.expressions[projection_idx], projections[i])) {
 					return false;
 				}
 			}
@@ -854,11 +859,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 					return false;
 				}
 				ColumnBinding left_binding;
-				if (!extract_single_binding(&condition.left, left_binding)) {
+				if (!ExtractSingleBinding(&condition.left, left_binding, true)) {
 					return false;
 				}
 				ColumnBinding right_binding;
-				if (!extract_single_binding(&condition.right, right_binding)) {
+				if (!ExtractSingleBinding(&condition.right, right_binding, true)) {
 					return false;
 				}
 
@@ -1029,10 +1034,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 				auto &join = op.Cast<LogicalComparisonJoin>();
 				auto &op_child = std::prev(stack_it)->get();
 
-				auto &projection_map = join.left_projection_map;
-				if (&op_child != &*join.children[0]) {
-					projection_map = join.right_projection_map;
-				}
+				auto &projection_map = RefersToSameObject(op_child, *join.children[0]) ? join.left_projection_map
+				                                                                       : join.right_projection_map;
 				for (const auto rowid_idx : rhs_rowid_idxs) {
 					projection_map.push_back(rowid_idx);
 				}
