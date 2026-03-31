@@ -93,7 +93,7 @@ public:
 		const U y = key - min;
 		const U bit_idx = y >> shift;
 		const uint8_t in_range = y <= span;
-		const uint32_t word_idx = NumericCast<uint32_t>(bit_idx >> WORD_SHIFT) & (0U - in_range);
+		const uint32_t word_idx = static_cast<uint32_t>(bit_idx >> WORD_SHIFT) & (0U - in_range);
 		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 		return bit & in_range;
 	}
@@ -113,8 +113,8 @@ public:
 		const auto ub_bit_idx = (adjusted_ub - min) >> shift;
 		const auto ub_word_idx = ub_bit_idx >> WORD_SHIFT;
 
-		const idx_t lb_bit_off = NumericCast<idx_t>(lb_bit_idx & NumericCast<U>(WORD_MASK));
-		const idx_t ub_bit_off = NumericCast<idx_t>(ub_bit_idx & NumericCast<U>(WORD_MASK));
+		const idx_t lb_bit_off = static_cast<idx_t>(lb_bit_idx & static_cast<U>(WORD_MASK));
+		const idx_t ub_bit_off = static_cast<idx_t>(ub_bit_idx & static_cast<U>(WORD_MASK));
 
 		// TODO: Count the amount of 1's in the range, compare to a threshold, and make a decision if we want to use the
 		// per-row filter for this row group.
@@ -329,7 +329,7 @@ bool ComputeStringPrefixSpan(const Value &lower_bound, const Value &upper_bound,
 #else
 	auto lb_value = lower_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
 	auto ub_value = upper_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
-	result = Uhugeint::Convert(NumericCast<uint64_t>(ub_value - lb_value));
+	result = Uhugeint::Convert(static_cast<uint64_t>(ub_value - lb_value));
 	return true;
 #endif
 }
