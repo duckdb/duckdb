@@ -1,6 +1,8 @@
 # name: test/parquet/variant/variant_legacy_encoding.test
 # group: [variant]
 
+load __TEST_DIR__/variant_legacy_encoding.db readwrite v1.5.0
+
 require parquet
 
 query I
