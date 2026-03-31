@@ -459,6 +459,8 @@ jobs:
         python3 -m pip install --break-system-packages pytest
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
       run: |
@@ -542,6 +544,8 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
       shell: bash

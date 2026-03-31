@@ -1,7 +1,10 @@
 #include "duckdb/parser/transformer.hpp"
 
 #include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/parser_options.hpp"
 
