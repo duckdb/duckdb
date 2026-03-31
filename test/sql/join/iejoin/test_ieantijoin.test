@@ -293,9 +293,6 @@ ORDER BY id;
 6	NULL	2026-01-01 02:50:40	G	237.27142857142857
 7	2026-01-01 02:50:40	NULL	H	251.9
 
-endloop
-
-# TODO: Move back inside the loop when #21273 is fixed.
 # Verify all predicates
 query IIIII
 FROM wide_ranges l
@@ -312,3 +309,5 @@ ORDER BY id;
 5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
 6	NULL	2026-01-01 02:50:40	G	237.27142857142857
 7	2026-01-01 02:50:40	NULL	H	251.9
+
+endloop
