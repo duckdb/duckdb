@@ -677,16 +677,15 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	});
 
 	// Keep old dependencies
-	bool has_new_dependencies = alter_info.new_dependencies != nullptr;
+	bool has_new_dependencies = alter_info.new_dependencies;
 	ScanSubjects(transaction, old_info, [&](DependencyEntry &dep) {
-		auto entry = LookupEntry(transaction, dep);
-		if (!entry) {
-			return;
-		}
-
 		if (has_new_dependencies && !dep.Subject().flags.IsOwnership()) {
 			// The alter provided updated dependencies - skip old non-ownership subject dependencies
 			// as they will be replaced by the new dependencies
+			return;
+		}
+		auto entry = LookupEntry(transaction, dep);
+		if (!entry) {
 			return;
 		}
 
@@ -706,7 +705,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		CreateDependencies(transaction, new_obj, *alter_info.new_dependencies);
 	}
 
-	// Reinstate the dependencies
+	// Reinstate any old dependencies
 	for (auto &dep : dependencies) {
 		CreateDependency(transaction, dep);
 	}
