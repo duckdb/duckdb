@@ -2,7 +2,7 @@
 # description: Verify that dropping columns with multi-use blocks does not leak memory
 # group: [partial_blocks]
 
-load __TEST_DIR__/many_columns.db
+load {TEST_DIR}/many_columns.db
 
 
 statement ok
@@ -24,10 +24,10 @@ COMMIT
 loop i 0 99
 
 statement ok
-ALTER TABLE integers DROP COLUMN i${i}
+ALTER TABLE integers DROP COLUMN i{i}
 
 statement ok
-ALTER TABLE integers ADD COLUMN i${i} INTEGER
+ALTER TABLE integers ADD COLUMN i{i} INTEGER
 
 statement ok
 CHECKPOINT

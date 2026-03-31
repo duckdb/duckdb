@@ -119,9 +119,9 @@ foreach src sec milli micro nano
 foreach dst sec milli micro nano
 
 statement ok
-SELECT ${src}, ${dst} 
+SELECT {src}, {dst} 
 FROM timestamp 
-WHERE ${src} = ${dst} ;
+WHERE {src} = {dst} ;
 
 endloop
 
@@ -131,7 +131,7 @@ endloop
 foreach src sec milli micro nano
 
 query I
-SELECT ${src}::DATE from timestamp
+SELECT {src}::DATE from timestamp
 ----
 2008-01-01
 2008-01-01

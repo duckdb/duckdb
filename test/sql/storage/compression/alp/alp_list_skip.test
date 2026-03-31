@@ -3,12 +3,12 @@
 # group: [alp]
 
 # load the DB from disk
-load __TEST_DIR__/test_alp_list_skip.db
+load {TEST_DIR}/test_alp_list_skip.db
 
 foreach comp alp alprd
 
 statement ok
-SET force_compression='${comp}'
+SET force_compression='{comp}'
 
 # Create a table with random doubles of limited precision compressed as Uncompressed
 # This data should achieve x6 compression ratio

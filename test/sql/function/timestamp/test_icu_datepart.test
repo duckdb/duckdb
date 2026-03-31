@@ -544,7 +544,7 @@ foreach partcode era millennium century decade year quarter month day hour minut
 query III
 SELECT *
 FROM (
-	SELECT ts, DATE_PART('${partcode}', ts) AS p, ${partcode}(ts) AS f
+	SELECT ts, DATE_PART('{partcode}', ts) AS p, {partcode}(ts) AS f
 	FROM timestamps
 ) tbl
 WHERE p IS DISTINCT FROM f
@@ -560,9 +560,9 @@ endloop
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
-SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
+SELECT ts, DATE_PART('{partcode}', ts) AS pc, DATE_PART(['{partcode}'], ts) AS st
 FROM timestamps
-WHERE pc IS DISTINCT FROM st['${partcode}'];
+WHERE pc IS DISTINCT FROM st['{partcode}'];
 ----
 
 endloop
@@ -679,9 +679,9 @@ NULL	NULL
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
-SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
+SELECT ts, DATE_PART('{partcode}', ts) AS p, DATE_PART(['{partcode}'], ts) AS s
 FROM timestamps
-WHERE p IS DISTINCT FROM s['${partcode}'];
+WHERE p IS DISTINCT FROM s['{partcode}'];
 ----
 
 endloop

@@ -26,17 +26,17 @@ loop x 0 100
 
 onlyif threadid>0
 statement maybe
-CREATE TABLE s1.tbl${threadid}(i INTEGER)
+CREATE TABLE s1.tbl{threadid}(i INTEGER)
 ----
 
 onlyif threadid>0
 statement maybe
-INSERT INTO s1.tbl${threadid} VALUES (1), (2), (3), (4), (5)
+INSERT INTO s1.tbl{threadid} VALUES (1), (2), (3), (4), (5)
 ----
 
 onlyif threadid>0
 statement maybe
-CREATE VIEW s1.view${threadid} AS SELECT 42
+CREATE VIEW s1.view{threadid} AS SELECT 42
 ----
 
 onlyif threadid>0

@@ -2,7 +2,7 @@
 # description: Test ART Node 16
 # group: [nodes]
 
-load __TEST_DIR__/test_index.db
+load {TEST_DIR}/test_index.db
 
 statement ok
 CREATE TABLE integers(i integer)
@@ -15,7 +15,7 @@ CREATE INDEX i_index ON integers(i)
 loop i 0 6
 
 statement ok
-INSERT INTO integers VALUES (${i} + 1);
+INSERT INTO integers VALUES ({i} + 1);
 
 endloop
 
@@ -26,7 +26,7 @@ restart
 loop i 0 6
 
 query I
-SELECT COUNT(*) FROM integers WHERE i = ${i} + 1
+SELECT COUNT(*) FROM integers WHERE i = {i} + 1
 ----
 1
 
@@ -49,7 +49,7 @@ SELECT sum(i) FROM integers WHERE i > 4
 loop i 0 6
 
 statement ok
-DELETE FROM integers WHERE i = ${i} + 1
+DELETE FROM integers WHERE i = {i} + 1
 
 endloop
 
