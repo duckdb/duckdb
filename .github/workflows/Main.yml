@@ -543,11 +543,8 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
-    - name: Test
-      run: make allunit
-
-    - name: Release specific tests
-      run: make unittest_release_tag
+    - name: Release tests
+      run: make alltest_release_tag
 
     - name: Tools Tests
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
@@ -645,10 +642,8 @@ jobs:
             python3    \
             py3-pytest
           cd \"$PWD\"
-          echo Tests
-          make allunit
-          echo Release specific tests
-          make unittest_release_tag
+          echo Release tests
+          make alltest_release_tag
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
