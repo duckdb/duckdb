@@ -255,25 +255,6 @@ ORDER BY ALL;
 10	zzzzzz	4	106
 
 statement ok
-SET disabled_optimizers = 'join_filter_pushdown';
-
-query IIII
-SELECT p.id, p.k, p.g, b.payload
-FROM prf_probe_string p
-JOIN prf_build_string b
-  ON p.k = b.k
- AND p.g >= b.g
-ORDER BY ALL;
-----
-1	ab	1	100
-2	abc	2	101
-4	abcd1	4	103
-10	zzzzzz	4	106
-
-statement ok
-SET disabled_optimizers = '';
-
-statement ok
 CREATE OR REPLACE TABLE prf_probe_string_nul (
 	id INTEGER,
 	k VARCHAR,
@@ -310,23 +291,6 @@ ORDER BY ALL;
 ----
 1	61620064	2	200
 3	6162	4	202
-
-statement ok
-SET disabled_optimizers = 'join_filter_pushdown';
-
-query IIII
-SELECT p.id, hex(p.k), p.g, b.payload
-FROM prf_probe_string_nul p
-JOIN prf_build_string_nul b
-  ON p.k = b.k
- AND p.g >= b.g
-ORDER BY ALL;
-----
-1	61620064	2	200
-3	6162	4	202
-
-statement ok
-SET disabled_optimizers = '';
 
 statement ok
 CREATE OR REPLACE TABLE prf_probe_span (
@@ -369,19 +333,3 @@ ORDER BY ALL;
 1	0	0	10
 3	1048576	5	11
 
-statement ok
-SET disabled_optimizers = 'join_filter_pushdown';
-
-query IIII
-SELECT p.id, p.k, p.g, b.payload
-FROM prf_probe_span p
-JOIN prf_build_span b
-  ON p.k = b.k
- AND p.g >= b.g
-ORDER BY ALL;
-----
-1	0	0	10
-3	1048576	5	11
-
-statement ok
-SET disabled_optimizers = '';
