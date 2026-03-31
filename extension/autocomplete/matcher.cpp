@@ -762,9 +762,20 @@ private:
 
 static bool IsOperatorChar(char c) {
 	switch (c) {
-	case '+': case '-': case '*': case '/': case '%': case '^':
-	case '<': case '>': case '=': case '~': case '!': case '@':
-	case '&': case '|':
+	case '+':
+	case '-':
+	case '*':
+	case '/':
+	case '%':
+	case '^':
+	case '<':
+	case '>':
+	case '=':
+	case '~':
+	case '!':
+	case '@':
+	case '&':
+	case '|':
 		return true;
 	default:
 		return false;
@@ -773,7 +784,11 @@ static bool IsOperatorChar(char c) {
 
 static bool IsArithmeticOperatorChar(char c) {
 	switch (c) {
-	case '+': case '-': case '*': case '/': case '%':
+	case '+':
+	case '-':
+	case '*':
+	case '/':
+	case '%':
 		return true;
 	default:
 		return false;

@@ -9,7 +9,12 @@
       "paths": [
         "test/extension/loadable_parser_override.test",
         "test/extension/consistent_semicolon_extension_parse.test",
-        "test/extension/load_extension.test"
+        "test/extension/load_extension.test",
+        "test/extension/test_tags.test",
+        "test/extension/concurrent_load_extension.test",
+        "test/extension/test_alias_point.test",
+        "test/extension/test_custom_type_modifier_cast.test",
+        "test/extension/load_test_alias.test"
       ]
     }
   ]

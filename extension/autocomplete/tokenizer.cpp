@@ -343,8 +343,8 @@ bool BaseTokenizer::TokenizeInput() {
 				bool has_special = false;
 				for (idx_t j = last_pos; j < end_pos; j++) {
 					char oc = sql[j];
-					if (oc == '~' || oc == '!' || oc == '@' || oc == '#' || oc == '%' || oc == '^' ||
-					    oc == '&' || oc == '|' || oc == '`' || oc == '?') {
+					if (oc == '~' || oc == '!' || oc == '@' || oc == '#' || oc == '%' || oc == '^' || oc == '&' ||
+					    oc == '|' || oc == '`' || oc == '?') {
 						has_special = true;
 						break;
 					}
