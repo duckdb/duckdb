@@ -3,6 +3,7 @@
 
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 
 namespace duckdb {
 

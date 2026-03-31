@@ -15,6 +15,9 @@
 
 namespace duckdb {
 
+class BloomFilter;
+class DynamicFilterData;
+
 //! Thread-local state for executing a table filter
 struct TableFilterState {
 public:
