@@ -2,6 +2,8 @@
 import argparse
 import concurrent.futures
 import contextlib
+import hashlib
+import json
 import os
 import shlex
 import subprocess
@@ -35,6 +37,7 @@ class TestRunnerConfig:
     test_flags: str
     patterns: list[str]
     test_command: str
+    profile_dir: Path | None
     workers: int
     retry: int
     max_retries: int
@@ -170,6 +173,14 @@ def build_test_command(config: TestRunnerConfig, test_list: str):
     )
 
 
+def build_batch_profile_name(batch):
+    joined = "__".join(batch)
+    digest = hashlib.sha1(joined.encode("utf8")).hexdigest()[:12]
+    sanitized = "".join(char if char.isalnum() else "_" for char in batch[0]).strip("_")
+    sanitized = sanitized[:80] or "batch"
+    return f"{sanitized}-{digest}"
+
+
 def get_process_rss_bytes(pid: int):
     if sys.platform.startswith("linux"):
         try:
@@ -298,6 +309,7 @@ def run_batch(config: TestRunnerConfig, batch):
     stderr = ""
     message = None
     peak_rss_bytes = 0
+    env = None
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
     # is still open here, so keep it after close and unlink it ourselves.
@@ -309,11 +321,25 @@ def run_batch(config: TestRunnerConfig, batch):
 
     command = build_test_command(config, shlex.quote(str(batch_file_path)))
     try:
+        if config.profile_dir is not None:
+            batch_profile_dir = config.profile_dir / build_batch_profile_name(batch)
+            batch_profile_dir.mkdir(parents=True, exist_ok=True)
+            for old_profraw in batch_profile_dir.glob("*.profraw"):
+                old_profraw.unlink()
+            metadata = {
+                "tests": batch,
+                "llvm_profile_file": str(batch_profile_dir / "%p.profraw"),
+            }
+            (batch_profile_dir / "meta.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf8")
+            env = os.environ.copy()
+            env["LLVM_PROFILE_FILE"] = metadata["llvm_profile_file"]
+
         proc = subprocess.Popen(
             shlex.split(command),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
 
@@ -449,6 +475,11 @@ def parse_args():
         help="shell command template used to run a test batch; supports {binary}, {flags}, and {test_list}",
     )
     parser.add_argument(
+        "--profile-dir",
+        type=Path,
+        help="directory where per-batch LLVM profile files should be written via LLVM_PROFILE_FILE",
+    )
+    parser.add_argument(
         "--track-runtime",
         type=int,
         nargs="?",
@@ -506,6 +537,7 @@ def main():
             test_flags=test_flags,
             patterns=args.patterns,
             test_command=args.test_command,
+            profile_dir=args.profile_dir,
             workers=workers,
             retry=retry,
             max_retries=max_retries,
