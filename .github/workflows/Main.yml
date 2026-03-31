@@ -100,13 +100,18 @@ jobs:
               - .github/patches/**
               - extensions/**
 
-      - name: Check workflow files
+      - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
         run: |
           echo "::add-matcher::.github/actionlint-matcher.json"
+          echo "::group::ShellCheck version"
           shellcheck --version
+          echo "::endgroup::"
+          echo "::group::Install actionlint"
           bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "::endgroup::"
           ./actionlint -color
+          make test_ci
         shell: bash
 
       - name: Configure CI
@@ -210,9 +215,6 @@ jobs:
           make generate-files
           git diff --exit-code
           echo "::endgroup::"
-
-      - name: Test CI scripts
-        run: make test_ci
 
  linux-debug:
     name: Linux Debug
