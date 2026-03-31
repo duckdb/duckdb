@@ -103,14 +103,14 @@ public:
 		if (upper_bound < min || lower_bound > max) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return LookupClampedRange(MaxValue<U>(lower_bound, min), MinValue<U>(upper_bound, max));
+	}
 
-		const auto adjusted_lb = MaxValue<U>(lower_bound, min);
-		const auto adjusted_ub = MinValue<U>(upper_bound, max);
-
-		const auto lb_bit_idx = (adjusted_lb - min) >> shift;
+	FilterPropagateResult LookupClampedRange(U lower_bound, U upper_bound) const {
+		const auto lb_bit_idx = (lower_bound - min) >> shift;
 		const auto lb_word_idx = lb_bit_idx >> WORD_SHIFT;
 
-		const auto ub_bit_idx = (adjusted_ub - min) >> shift;
+		const auto ub_bit_idx = (upper_bound - min) >> shift;
 		const auto ub_word_idx = ub_bit_idx >> WORD_SHIFT;
 
 		const idx_t lb_bit_off = static_cast<idx_t>(lb_bit_idx & static_cast<U>(WORD_MASK));
@@ -149,6 +149,14 @@ public:
 		return initialized;
 	}
 
+	U Min() const {
+		return min;
+	}
+
+	U Span() const {
+		return span;
+	}
+
 private:
 	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
 	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
@@ -170,15 +178,27 @@ struct NumericPrefixPolicy {
 	using comparable_type = typename MakeUnsigned<T>::type;
 
 	static comparable_type ToComparable(input_type value) {
-		auto result = static_cast<comparable_type>(value);
-		if (std::is_signed<T>::value) {
-			result ^= comparable_type(1) << ((sizeof(T) * 8) - 1);
-		}
-		return result;
+		return static_cast<comparable_type>(value);
 	}
 
 	static comparable_type ToComparable(const Value &value) {
 		return ToComparable(value.GetValueUnsafe<input_type>());
+	}
+
+	static FilterPropagateResult LookupRange(const PrefixRangeBitmap<comparable_type> &bitmap, const Value &lower_bound,
+	                                         const Value &upper_bound) {
+		const auto lb = lower_bound.GetValueUnsafe<input_type>();
+		const auto ub = upper_bound.GetValueUnsafe<input_type>();
+
+		const auto min_t = static_cast<input_type>(bitmap.Min());
+		const auto max_t = static_cast<input_type>(bitmap.Min() + bitmap.Span());
+		if (ub < min_t || lb > max_t) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+
+		const auto adjusted_lb = static_cast<comparable_type>(MaxValue<input_type>(lb, min_t));
+		const auto adjusted_ub = static_cast<comparable_type>(MinValue<input_type>(ub, max_t));
+		return bitmap.LookupClampedRange(adjusted_lb, adjusted_ub);
 	}
 };
 
@@ -193,13 +213,18 @@ struct StringPrefixPolicy {
 	static comparable_type ToComparable(const Value &value) {
 		return ToComparable(value.GetValueUnsafe<input_type>());
 	}
+
+	static FilterPropagateResult LookupRange(const PrefixRangeBitmap<comparable_type> &bitmap, const Value &lower_bound,
+	                                         const Value &upper_bound) {
+		return bitmap.LookupRange(ToComparable(lower_bound), ToComparable(upper_bound));
+	}
 };
 
-static uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
+uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
 	return string_t(StringStats::Min(stats)).GetPrefixIntegerComparable();
 }
 
-static uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
+uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
 	const auto max_string = StringStats::Max(stats);
 	if (max_string.size() >= string_t::PREFIX_BYTES) {
 		return string_t(max_string).GetPrefixIntegerComparable();
@@ -261,7 +286,7 @@ public:
 	}
 
 	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
-		return bitmap.LookupRange(Policy::ToComparable(lower_bound), Policy::ToComparable(upper_bound));
+		return Policy::LookupRange(bitmap, lower_bound, upper_bound);
 	}
 
 	FilterPropagateResult LookupComparableRange(Comparable lower_bound, Comparable upper_bound) const {
