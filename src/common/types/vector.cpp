@@ -211,10 +211,14 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<VectorListBuffer>(offset_ptr, list_buffer);
 		validity.Slice(other.validity, offset, end - offset);
+		vector_type = other.vector_type;
+		AssignSharedPointer(auxiliary, other.auxiliary);
 	} else {
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
 		validity.Slice(other.validity, offset, end - offset);
+		vector_type = other.vector_type;
+		AssignSharedPointer(auxiliary, other.auxiliary);
 	}
 }
 
