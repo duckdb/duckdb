@@ -623,6 +623,7 @@ tidy-check-clangd:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
+	trap 'rm -rf ./pchs' EXIT && \
 	$(PYTHON) ../../scripts/run-clangd-tidy.py -j $(CI_CPU_COUNT) ${CLANGD_TIDY_BINARY_PARAMETER} ${CLANGD_BINARY_PARAMETER} ${CLANGD_TIDY_QUERY_DRIVER_PARAMETER}
 
 tidy-check-diff:
