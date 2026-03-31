@@ -1046,8 +1046,8 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	const auto key_type = ht.conditions[0].GetLHS().return_type;
 	ht.SetBuildBloomFilter(true);
 	auto func = BloomFilterScalarFun::GetFunction(key_type);
-	auto bind_data =
-	    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type, 0.0f, idx_t(0));
+	auto bind_data = make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type,
+	                                                    0.0f, idx_t(0));
 	vector<unique_ptr<Expression>> args;
 	args.push_back(make_uniq<BoundReferenceExpression>(key_type, idx_t(0)));
 	auto func_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
