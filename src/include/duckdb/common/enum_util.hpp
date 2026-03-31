@@ -392,6 +392,8 @@ enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
+enum class RecursiveProbeSidePreference : uint8_t;
+
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
@@ -1076,6 +1078,9 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1833,6 +1838,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
+
+template<>
+RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
