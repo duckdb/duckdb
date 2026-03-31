@@ -728,9 +728,10 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	for (idx_t k = 0; k < key_count; k++) {
 		// Cast to storage type, only insert if it succeeds
 		auto value = build_vector.GetValue(k);
-		if (value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
-			unique_ht_values.insert(value);
+		if (!value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
+			return; // it's all or nothing sadly
 		}
+		unique_ht_values.insert(value);
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
