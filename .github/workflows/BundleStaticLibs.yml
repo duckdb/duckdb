@@ -179,6 +179,81 @@ jobs:
           path: |
             static-libs-windows-mingw.zip
 
+  bundle-windows-arm64-static-libs:
+    name: Windows ARM64 static libs
+    runs-on: ubuntu-latest
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+      DUCKDB_PLATFORM: windows_arm64
+      # llvm-mingw version providing aarch64-w64-mingw32 cross-toolchain
+      LLVM_MINGW_VERSION: "20240619"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build make zip ccache
+
+      - name: Install llvm-mingw (ARM64 Windows cross-toolchain)
+        shell: bash
+        run: |
+          TARBALL="llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz"
+          curl -fsSL -o /tmp/llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${TARBALL}"
+          sudo tar -xf /tmp/llvm-mingw.tar.xz -C /opt
+          echo "/opt/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64/bin" >> "${GITHUB_PATH}"
+
+      - uses: ./.github/actions/ccache-action
+
+      - name: Build Environment Check
+        shell: bash
+        run: |
+          aarch64-w64-mingw32-clang++ --version
+          aarch64-w64-mingw32-ar --version
+          ninja --version
+
+      - name: Bundle static library
+        shell: bash
+        env:
+          CC: aarch64-w64-mingw32-clang
+          CXX: aarch64-w64-mingw32-clang++
+          AR: aarch64-w64-mingw32-ar
+          RANLIB: aarch64-w64-mingw32-ranlib
+          WINDRES: aarch64-w64-mingw32-windres
+        run: |
+          make gather-libs \
+            DUCKDB_EXPLICIT_PLATFORM=windows_arm64 \
+            DUCKDB_CUSTOM_PLATFORM=windows_arm64
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          python3 scripts/amalgamation.py
+          zip -r -j static-libs-windows-arm64.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-arm64.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-windows-arm64
+          path: |
+            static-libs-windows-arm64.zip
+
   bundle-linux-static-libs:
     strategy:
       fail-fast: false
@@ -211,7 +286,7 @@ jobs:
           bash -c "
             set -e
             yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
-            
+
             source /opt/rh/gcc-toolset-12/enable
             export CC=gcc
             export CXX=g++
