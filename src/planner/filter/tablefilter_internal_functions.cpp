@@ -440,6 +440,7 @@ ScalarFunction BloomFilterScalarFun::GetFunction(const LogicalType &input_type) 
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, BloomFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
 	func.SetInitStateCallback(BloomFilterInitLocalState);
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(BloomFilterScalarFun::FilterPrune);
 	func.serialize = TableFilterInternalSerialize;
 	func.deserialize = TableFilterInternalDeserialize;
@@ -579,6 +580,7 @@ ScalarFunction PerfectHashJoinScalarFun::GetFunction(const LogicalType &input_ty
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, PerfectHashJoinFunction,
 	                    TableFilterInternalFunctions::Bind);
 	func.SetInitStateCallback(PerfectHashJoinInitLocalState);
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(PerfectHashJoinScalarFun::FilterPrune);
 	func.serialize = TableFilterInternalSerialize;
 	func.deserialize = TableFilterInternalDeserialize;
@@ -675,6 +677,7 @@ ScalarFunction PrefixRangeScalarFun::GetFunction(const LogicalType &input_type) 
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, PrefixRangeFunction,
 	                    TableFilterInternalFunctions::Bind);
 	func.SetInitStateCallback(PrefixRangeInitLocalState);
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(PrefixRangeScalarFun::FilterPrune);
 	func.serialize = TableFilterInternalSerialize;
 	func.deserialize = TableFilterInternalDeserialize;
@@ -751,6 +754,7 @@ static void DynamicFilterFunction(DataChunk &args, ExpressionState &state, Vecto
 ScalarFunction DynamicFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, DynamicFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(DynamicFilterScalarFun::FilterPrune);
 	func.serialize = TableFilterInternalSerialize;
 	func.deserialize = TableFilterInternalDeserialize;
@@ -786,6 +790,7 @@ static void OptionalFilterFunction(DataChunk &args, ExpressionState &state, Vect
 ScalarFunction OptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, OptionalFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(OptionalFilterScalarFun::FilterPrune);
 	func.serialize = OptionalFilterSerialize;
 	func.deserialize = OptionalFilterDeserialize;
@@ -864,6 +869,7 @@ ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, SelectivityOptionalFilterFunction,
 	                    TableFilterInternalFunctions::Bind);
 	func.SetInitStateCallback(SelectivityOptionalFilterInitLocalState);
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(SelectivityOptionalFilterScalarFun::FilterPrune);
 	func.serialize = SelectivityOptionalFilterSerialize;
 	func.deserialize = SelectivityOptionalFilterDeserialize;
