@@ -89,15 +89,14 @@ void Vector::Reference(const Value &value) {
 	this->vector_type = VectorType::CONSTANT_VECTOR;
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_uniq<VectorStructBuffer>();
+		auto struct_buffer = make_buffer<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
 			                                          : StructValue::GetChildren(value)[i]);
 		}
-		buffer = VectorBuffer::CreateConstantVector(value.type());
-		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
+		buffer = std::move(struct_buffer);
 		if (value.IsNull()) {
 			SetValue(0, value);
 		}
@@ -237,7 +236,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 			auto &child_vector = DictionaryVector::Child(*this);
 
 			Vector new_child(Vector::Ref(child_vector));
-			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
+			new_child.buffer = make_buffer<VectorStructBuffer>(new_child, sel, count);
 			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
 		}
 		if (dictionary_size.IsValid()) {
@@ -256,7 +255,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	Vector child_vector(Vector::Ref(*this));
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		child_vector.auxiliary = make_buffer<VectorStructBuffer>(*this, sel, count);
+		child_vector.buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
 	}
 	auto child_ref = make_buffer<VectorChildBuffer>(std::move(child_vector));
 	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
@@ -324,8 +323,7 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_uniq<VectorStructBuffer>(type, capacity);
-		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
+		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
 		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
@@ -352,23 +350,22 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	ResizeInfo resize_info(*this, buffer_ptr, multiplier);
 	resize_infos.emplace_back(resize_info);
 
-	if (buffer && buffer->GetBufferType() == VectorBufferType::ARRAY_BUFFER) {
+	if (!buffer) {
+		return;
+	}
+
+	switch (buffer->GetBufferType()) {
+	case VectorBufferType::ARRAY_BUFFER: {
 		// We need to multiply the multiplier by the array size because
 		// the child vectors of ARRAY types are always child_count * array_size.
 		auto &vector_array_buffer = buffer->Cast<VectorArrayBuffer>();
 		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
 		auto &child = vector_array_buffer.GetChild();
 		child.FindResizeInfos(resize_infos, new_multiplier);
-		return;
+		break;
 	}
-
-	if (!auxiliary) {
-		return;
-	}
-
-	switch (GetAuxiliary()->GetBufferType()) {
 	case VectorBufferType::STRUCT_BUFFER: {
-		auto &vector_struct_buffer = auxiliary->Cast<VectorStructBuffer>();
+		auto &vector_struct_buffer = buffer->Cast<VectorStructBuffer>();
 		auto &children = vector_struct_buffer.GetChildren();
 		for (auto &child : children) {
 			child.FindResizeInfos(resize_infos, multiplier);

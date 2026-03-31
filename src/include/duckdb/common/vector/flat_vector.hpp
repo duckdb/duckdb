@@ -51,6 +51,9 @@ struct FlatVector {
 		if (vector.GetType().InternalType() == PhysicalType::ARRAY) {
 			throw InternalException("SetData not supported for array");
 		}
+		if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
+			throw InternalException("SetData not supported for struct");
+		}
 		vector.buffer = make_buffer<StandardVectorBuffer>(data);
 	}
 	template <class T>

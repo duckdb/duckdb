@@ -37,8 +37,7 @@ public:
 			for (auto &child_type : child_types) {
 				child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type.second, capacity));
 			}
-			auto struct_buffer = make_shared_ptr<VectorStructBuffer>(type);
-			auxiliary = std::move(struct_buffer);
+			buffer = make_buffer<VectorStructBuffer>(type);
 			break;
 		}
 		default:
@@ -70,8 +69,7 @@ public:
 		}
 		case PhysicalType::ARRAY: {
 			// reinitialize the VectorArrayBuffer
-			// auxiliary->SetAuxiliaryData(nullptr);
-			AssignSharedPointer(result.auxiliary, auxiliary);
+			result.auxiliary.reset();
 
 			// propagate through child
 			auto &child_cache = *child_caches[0];
@@ -81,10 +79,9 @@ public:
 		}
 		case PhysicalType::STRUCT: {
 			// reinitialize the VectorStructBuffer
-			auxiliary->SetAuxiliaryData(nullptr);
-			AssignSharedPointer(result.auxiliary, auxiliary);
+			result.auxiliary.reset();
 			// propagate through children
-			auto &children = result.auxiliary->Cast<VectorStructBuffer>().GetChildren();
+			auto &children = result.buffer->Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
 				auto &child_cache = *child_caches[i];
 				child_cache.ResetFromCache(children[i]);
