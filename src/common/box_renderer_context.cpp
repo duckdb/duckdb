@@ -1,6 +1,7 @@
 #include "duckdb/common/box_renderer_context.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -15,7 +16,7 @@ void BoxRendererContext::CastToVarchar(Vector &source, Vector &result, idx_t cou
 
 	CastToVarchar(source_chunk, result_chunk, count);
 
-	result.Reference(result_chunk.data[0]);
+	VectorOperations::Copy(result_chunk.data[0], result, count, 0, 0);
 }
 
 } // namespace duckdb
