@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
 	for (idx_t i = 0; i < statements.size() - 1; i++) {
 		auto result = con.Query(statements[i]);
 		if (result->HasError()) {
-			fprintf(stderr, "Error executing statement %llu: %s\n", i, result->GetError().c_str());
+			fprintf(stderr, "Error executing statement %s\n", result->GetError().c_str());
 			return 1;
 		}
 	}

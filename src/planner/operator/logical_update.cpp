@@ -1,4 +1,6 @@
 #include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
@@ -49,7 +51,6 @@ string LogicalUpdate::GetName() const {
 
 void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 	auto &update = update_op.Cast<LogicalUpdate>();
-	;
 
 	if (update.update_is_del_and_insert) {
 		return;
