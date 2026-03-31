@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+class LogicalDependencyList;
+
 enum class AlterType : uint8_t {
 	INVALID = 0,
 	ALTER_TABLE = 1,
@@ -60,6 +62,8 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
+	//! New dependencies for the altered entry (set during binding)
+	unique_ptr<LogicalDependencyList> new_dependencies;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;
