@@ -57,7 +57,7 @@ public:
 	//! Number of recurring table scans inside the recursive member
 	idx_t recurring_reference_count = 0;
 	//! Recursive table scans rebound to the current iteration input buffer
-	vector<PhysicalColumnDataScan *> recursive_scans;
+	vector<reference<PhysicalColumnDataScan>> recursive_scans;
 	//! Recursive meta-pipelines that are independent of the active recursive scan graph and can be materialized once
 	reference_set_t<const MetaPipeline> invariant_meta_pipelines;
 

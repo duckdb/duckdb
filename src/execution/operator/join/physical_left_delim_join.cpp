@@ -22,8 +22,8 @@ static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &c
 	state = op.GetGlobalSinkState(context);
 }
 
-static void LeftDelimResetLocalSinkState(const PhysicalOperator &op, ExecutionContext &context,
-                                         GlobalSinkState &gstate, unique_ptr<LocalSinkState> &state) {
+static void LeftDelimResetLocalSinkState(const PhysicalOperator &op, ExecutionContext &context, GlobalSinkState &gstate,
+                                         unique_ptr<LocalSinkState> &state) {
 	if (state && op.ResetLocalSinkState(context, gstate, *state)) {
 		return;
 	}

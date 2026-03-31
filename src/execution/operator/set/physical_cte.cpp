@@ -68,7 +68,8 @@ bool PhysicalCTE::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &
 	return true;
 }
 
-bool PhysicalCTE::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &state_p) const {
+bool PhysicalCTE::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
+                                      LocalSinkState &state_p) const {
 	(void)context;
 	(void)gstate_p;
 	auto &state = state_p.Cast<CTELocalState>();

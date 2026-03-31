@@ -53,10 +53,10 @@ public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : op(op), executor(context), allow_executor_reuse(context.config.enable_caching_operators),
 	      executor_pool(op.shared_executor_pool),
-	      intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE),
-	      dummy_addresses(LogicalType::POINTER) {
+	      intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()),
+	      new_groups(STANDARD_VECTOR_SIZE), dummy_addresses(LogicalType::POINTER) {
 		vector<LogicalType> aggr_input_types;
-		vector<BoundAggregateExpression *> payload_aggregates_ptr;
+		vector<AggregateObject> payload_aggregates;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 			D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
@@ -64,13 +64,13 @@ public:
 				executor.AddExpression(*child_expr);
 				aggr_input_types.push_back(child_expr->GetReturnType());
 			}
-			payload_aggregates_ptr.push_back(&bound_aggr_expr);
+			payload_aggregates.emplace_back(bound_aggr_expr);
 		}
 
 		payload_rows.Initialize(Allocator::Get(context), aggr_input_types);
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
-		                                          op.payload_types, payload_aggregates_ptr);
+		                                          op.payload_types, std::move(payload_aggregates));
 		if (op.using_key && !op.distinct_types.empty()) {
 			distinct_rows.Initialize(Allocator::DefaultAllocator(), op.distinct_types);
 		}
@@ -173,9 +173,9 @@ public:
 			return;
 		}
 		auto &input_table = CurrentInputTable();
-		for (auto *scan : op.recursive_scans) {
-			D_ASSERT(scan);
-			scan->collection = &input_table;
+		for (auto &scan_ref : op.recursive_scans) {
+			auto &scan = scan_ref.get();
+			scan.collection = input_table;
 		}
 	}
 
@@ -183,7 +183,8 @@ public:
 		lock_guard<mutex> guard(cached_executor_lock);
 		auto entry = cached_executors.find(pipeline);
 		if (entry == cached_executors.end()) {
-			entry = cached_executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>()).first;
+			entry =
+			    cached_executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>()).first;
 		}
 		auto &executors = entry->second;
 		if (!allow_executor_reuse) {
@@ -196,8 +197,9 @@ public:
 		lock_guard<mutex> pool_guard(executor_pool->lock);
 		auto pool_entry = executor_pool->executors.find(pipeline);
 		if (pool_entry == executor_pool->executors.end()) {
-			pool_entry = executor_pool->executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>())
-			                 .first;
+			pool_entry =
+			    executor_pool->executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>())
+			        .first;
 		}
 		auto &shared_executors = pool_entry->second;
 		while (executors.size() < max_threads) {
@@ -225,7 +227,8 @@ public:
 		for (auto &entry : cached_executors) {
 			auto pool_entry = executor_pool->executors.find(entry.first.get());
 			if (pool_entry == executor_pool->executors.end()) {
-				pool_entry = executor_pool->executors.emplace(entry.first, vector<unique_ptr<PipelineExecutor>>()).first;
+				pool_entry =
+				    executor_pool->executors.emplace(entry.first, vector<unique_ptr<PipelineExecutor>>()).first;
 			}
 			auto &shared_executors = pool_entry->second;
 			for (auto &executor : entry.second) {
@@ -320,8 +323,7 @@ static void ExecuteRecursivePipelineInline(PipelineExecutor &pipeline_executor) 
 class RecursiveCTETask : public ExecutorTask {
 public:
 	RecursiveCTETask(Pipeline &pipeline_p, shared_ptr<Event> event_p, PipelineExecutor &executor_p)
-	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p),
-	      pipeline_executor(executor_p) {
+	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p), pipeline_executor(executor_p) {
 	}
 
 	Pipeline &pipeline;
@@ -409,7 +411,8 @@ public:
 
 class RecursiveCTEPrepareFinishEvent : public BasePipelineEvent {
 public:
-	explicit RecursiveCTEPrepareFinishEvent(shared_ptr<Pipeline> pipeline_p) : BasePipelineEvent(std::move(pipeline_p)) {
+	explicit RecursiveCTEPrepareFinishEvent(shared_ptr<Pipeline> pipeline_p)
+	    : BasePipelineEvent(std::move(pipeline_p)) {
 	}
 
 	void Schedule() override {
@@ -521,7 +524,8 @@ struct RecursiveCTEInlinePlan {
 
 using recursive_cte_inline_stage_map_t = reference_map_t<Pipeline, RecursiveCTEInlineStageStack>;
 
-static idx_t AddRecursiveInlineStage(RecursiveCTEInlinePlan &plan, RecursiveCTEInlineStageType type, Pipeline &pipeline) {
+static idx_t AddRecursiveInlineStage(RecursiveCTEInlinePlan &plan, RecursiveCTEInlineStageType type,
+                                     Pipeline &pipeline) {
 	plan.stages.emplace_back(type, pipeline);
 	return plan.stages.size() - 1;
 }
@@ -532,13 +536,15 @@ static void AddRecursiveInlineDependency(RecursiveCTEInlinePlan &plan, idx_t dep
 	plan.stages[dependency_stage].dependents.push_back(dependent_stage);
 }
 
-static void BuildRecursiveInlineMetaPipeline(const shared_ptr<MetaPipeline> &meta_pipeline, RecursiveCTEInlinePlan &plan,
+static void BuildRecursiveInlineMetaPipeline(const shared_ptr<MetaPipeline> &meta_pipeline,
+                                             RecursiveCTEInlinePlan &plan,
                                              recursive_cte_inline_stage_map_t &stage_map) {
 	D_ASSERT(meta_pipeline);
 
 	auto &base_pipeline = meta_pipeline->GetBasePipeline();
 	auto base_execute = AddRecursiveInlineStage(plan, RecursiveCTEInlineStageType::EXECUTE, *base_pipeline);
-	auto base_prepare_finish = AddRecursiveInlineStage(plan, RecursiveCTEInlineStageType::PREPARE_FINISH, *base_pipeline);
+	auto base_prepare_finish =
+	    AddRecursiveInlineStage(plan, RecursiveCTEInlineStageType::PREPARE_FINISH, *base_pipeline);
 	auto base_finish = AddRecursiveInlineStage(plan, RecursiveCTEInlineStageType::FINISH, *base_pipeline);
 	AddRecursiveInlineDependency(plan, base_prepare_finish, base_execute);
 	AddRecursiveInlineDependency(plan, base_finish, base_prepare_finish);
@@ -562,7 +568,7 @@ static void BuildRecursiveInlineMetaPipeline(const shared_ptr<MetaPipeline> &met
 
 			stage_map.emplace(reference<Pipeline>(*pipeline),
 			                  RecursiveCTEInlineStageStack(pipeline_execute, group_entry->second.prepare_finish_stage,
-			                                                group_entry->second.finish_stage));
+			                                               group_entry->second.finish_stage));
 			continue;
 		}
 
@@ -629,7 +635,8 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 				if (dependency_entry == stage_map.end()) {
 					continue;
 				}
-				AddRecursiveInlineDependency(*plan, pipeline_entry->second.execute_stage, dependency_entry->second.execute_stage);
+				AddRecursiveInlineDependency(*plan, pipeline_entry->second.execute_stage,
+				                             dependency_entry->second.execute_stage);
 			}
 		}
 	}
@@ -880,8 +887,8 @@ static void WaitForRecursiveEvent(Executor &executor, Event &event) {
 }
 
 static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_pipeline, RecursiveCTEState &state,
-                                         Executor &executor, recursive_cte_event_map_t &event_map,
-                                         vector<shared_ptr<Event>> &events, bool inline_execution) {
+                                          Executor &executor, recursive_cte_event_map_t &event_map,
+                                          vector<shared_ptr<Event>> &events, bool inline_execution) {
 	D_ASSERT(meta_pipeline);
 
 	auto &base_pipeline = meta_pipeline->GetBasePipeline();
@@ -923,7 +930,8 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 			group_entry->second.pipeline_prepare_finish_event->AddDependency(*pipeline_execute);
 
 			event_map.emplace(reference<Pipeline>(*pipeline),
-			                  RecursiveCTEEventStack(pipeline_execute, group_entry->second.pipeline_prepare_finish_event,
+			                  RecursiveCTEEventStack(pipeline_execute,
+			                                         group_entry->second.pipeline_prepare_finish_event,
 			                                         group_entry->second.pipeline_finish_event, base_complete));
 			events.push_back(std::move(pipeline_execute));
 			continue;
@@ -945,9 +953,9 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 			pipeline_finish->AddDependency(*pipeline_prepare_finish);
 			base_complete->AddDependency(*pipeline_finish);
 
-			event_map.emplace(reference<Pipeline>(*pipeline),
-			                  RecursiveCTEEventStack(pipeline_execute, pipeline_prepare_finish, pipeline_finish,
-			                                         base_complete));
+			event_map.emplace(
+			    reference<Pipeline>(*pipeline),
+			    RecursiveCTEEventStack(pipeline_execute, pipeline_prepare_finish, pipeline_finish, base_complete));
 			events.push_back(pipeline_execute);
 			events.push_back(pipeline_prepare_finish);
 			events.push_back(pipeline_finish);
@@ -1380,7 +1388,7 @@ static void GatherColumnDataScans(const PhysicalOperator &op, vector<const_refer
 }
 
 static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_index,
-                                         vector<PhysicalColumnDataScan *> &recursive_scans,
+                                         vector<reference<PhysicalColumnDataScan>> &recursive_scans,
                                          reference_set_t<const PhysicalOperator> &visited) {
 	if (!visited.insert(op).second) {
 		return;
@@ -1388,7 +1396,7 @@ static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_in
 	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN) {
 		auto &scan = op.Cast<PhysicalColumnDataScan>();
 		if (scan.cte_index == cte_index) {
-			recursive_scans.push_back(&scan);
+			recursive_scans.push_back(scan);
 		}
 	}
 	for (auto child : op.GetChildren()) {
@@ -1397,20 +1405,20 @@ static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_in
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
 		auto &delim_join = op.Cast<PhysicalDelimJoin>();
 		for (auto &scan : delim_join.delim_scans) {
-			GatherRecursiveScansInternal(const_cast<PhysicalOperator &>(scan.get()), cte_index, recursive_scans, visited);
+			GatherRecursiveScansInternal(const_cast<PhysicalOperator &>(scan.get()), cte_index, recursive_scans,
+			                             visited);
 		}
 	}
 }
 
 static void GatherRecursiveScans(PhysicalOperator &op, TableIndex cte_index,
-                                 vector<PhysicalColumnDataScan *> &recursive_scans) {
+                                 vector<reference<PhysicalColumnDataScan>> &recursive_scans) {
 	reference_set_t<const PhysicalOperator> visited;
 	GatherRecursiveScansInternal(op, cte_index, recursive_scans, visited);
 }
 
 static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIndex cte_index,
-                                             idx_t &recursive_reference_count,
-                                             idx_t &recurring_reference_count,
+                                             idx_t &recursive_reference_count, idx_t &recurring_reference_count,
                                              reference_set_t<const PhysicalOperator> &visited) {
 	if (!visited.insert(op).second) {
 		return;
@@ -1433,8 +1441,8 @@ static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIn
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
 		auto &delim_join = op.Cast<PhysicalDelimJoin>();
 		for (auto &scan : delim_join.delim_scans) {
-			CountRecursiveReferencesInternal(scan.get(), cte_index, recursive_reference_count, recurring_reference_count,
-			                                 visited);
+			CountRecursiveReferencesInternal(scan.get(), cte_index, recursive_reference_count,
+			                                 recurring_reference_count, visited);
 		}
 	}
 }

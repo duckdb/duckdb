@@ -283,7 +283,8 @@ static bool CanUsePerfectHashJoin(const PhysicalHashJoin &op, PerfectHashJoinExe
 	if (!TypeIsIntegral(right_stats.GetType().InternalType()) || !NumericStats::HasMinMax(right_stats)) {
 		return false;
 	}
-	return perfect_join_executor.CanDoPerfectHashJoin(op, NumericStats::Min(right_stats), NumericStats::Max(right_stats));
+	return perfect_join_executor.CanDoPerfectHashJoin(op, NumericStats::Min(right_stats),
+	                                                  NumericStats::Max(right_stats));
 }
 
 unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context,
@@ -448,7 +449,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			auto &info = result->correlated_mark_join_info;
 
 			vector<LogicalType> delim_payload_types;
-			vector<BoundAggregateExpression *> correlated_aggregates;
+			vector<AggregateObject> correlated_aggregates;
 			unique_ptr<BoundAggregateExpression> aggr;
 
 			// jury-rigging the GroupedAggregateHashTable
@@ -457,7 +458,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			FunctionBinder function_binder(context);
 			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
 			                                             AggregateType::NON_DISTINCT);
-			correlated_aggregates.push_back(&*aggr);
+			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
@@ -467,13 +468,13 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
-			correlated_aggregates.push_back(&*aggr);
+			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto &allocator = BufferAllocator::Get(context);
-			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(context, allocator, delim_types,
-			                                                              delim_payload_types, correlated_aggregates);
+			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(
+			    context, allocator, delim_types, delim_payload_types, std::move(correlated_aggregates));
 			info.correlated_types = delim_types;
 			info.group_chunk.Initialize(allocator, delim_types);
 			info.result_chunk.Initialize(allocator, delim_payload_types);
@@ -499,7 +500,7 @@ bool PhysicalHashJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkSt
 	auto use_perfect_hash = CanUsePerfectHashJoin(*this, *state.perfect_join_executor);
 	state.finalized = false;
 	state.active_local_states = 0;
-	state.external = ClientConfig::GetConfig(context).force_external;
+	state.external = Settings::Get<DebugForceExternalSetting>(context);
 	state.total_size = 0;
 	state.max_partition_size = 0;
 	state.max_partition_count = 0;

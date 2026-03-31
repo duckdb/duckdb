@@ -1038,8 +1038,8 @@ void GroupedAggregateHashTable::ResetForNewIteration(idx_t initial_capacity, idx
 	aggregate_allocator->Reset();
 	stored_allocators.clear();
 
-	const auto reuse_partitioned_data =
-	    partitioned_data && RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) == radix_bits_p;
+	const auto reuse_partitioned_data = partitioned_data && RadixPartitioning::RadixBitsOfPowerOfTwo(
+	                                                            partitioned_data->PartitionCount()) == radix_bits_p;
 	const auto reuse_unpartitioned_data =
 	    radix_bits_p >= UNPARTITIONED_RADIX_BITS_THRESHOLD && unpartitioned_data &&
 	    RadixPartitioning::RadixBitsOfPowerOfTwo(unpartitioned_data->PartitionCount()) == 0;
@@ -1049,8 +1049,8 @@ void GroupedAggregateHashTable::ResetForNewIteration(idx_t initial_capacity, idx
 		if (partitioned_data->Count() != 0) {
 			partitioned_data->Reset();
 		}
-		partitioned_data->ResetAppendState(
-		    state.partitioned_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+		partitioned_data->ResetAppendState(state.partitioned_append_state,
+		                                   TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	} else {
 		InitializePartitionedData();
 	}
@@ -1059,8 +1059,8 @@ void GroupedAggregateHashTable::ResetForNewIteration(idx_t initial_capacity, idx
 			if (unpartitioned_data->Count() != 0) {
 				unpartitioned_data->Reset();
 			}
-			unpartitioned_data->ResetAppendState(
-			    state.unpartitioned_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+			unpartitioned_data->ResetAppendState(state.unpartitioned_append_state,
+			                                     TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 		} else {
 			InitializeUnpartitionedData();
 		}

@@ -309,7 +309,7 @@ bool PhysicalHashAggregate::ResetLocalSinkState(ExecutionContext &context, Globa
 				continue;
 			}
 			radix_table->ResetLocalSinkState(context, *distinct_gstate.radix_states[table_idx],
-			                                *grouping_state.distinct_states[table_idx]);
+			                                 *grouping_state.distinct_states[table_idx]);
 		}
 	}
 	return true;
