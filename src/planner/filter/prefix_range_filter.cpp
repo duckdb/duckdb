@@ -46,10 +46,9 @@ struct PrefixRangeBuildState : public PrefixRangeFilter::BuildState {
 template <typename U>
 class PrefixRangeBitmap {
 public:
-	void Initialize(ClientContext &context, U min_p, U max_p) {
-		D_ASSERT(min_p <= max_p);
+	void Initialize(ClientContext &context, U min_p, U span_p) {
 		min = min_p;
-		span = max_p - min;
+		span = span_p;
 		shift = 0;
 
 		if (span >= CAP_BITS) {
@@ -185,6 +184,13 @@ struct NumericPrefixPolicy {
 		return ToComparable(value.GetValueUnsafe<input_type>());
 	}
 
+	static void InitializeBitmap(PrefixRangeBitmap<comparable_type> &bitmap, ClientContext &context,
+	                             const Value &min_val, const Value &max_val) {
+		const auto min = ToComparable(min_val);
+		const auto max = ToComparable(max_val);
+		bitmap.Initialize(context, min, max - min);
+	}
+
 	static FilterPropagateResult LookupRange(const PrefixRangeBitmap<comparable_type> &bitmap, const Value &lower_bound,
 	                                         const Value &upper_bound) {
 		const auto lb = lower_bound.GetValueUnsafe<input_type>();
@@ -212,6 +218,14 @@ struct StringPrefixPolicy {
 
 	static comparable_type ToComparable(const Value &value) {
 		return ToComparable(value.GetValueUnsafe<input_type>());
+	}
+
+	static void InitializeBitmap(PrefixRangeBitmap<comparable_type> &bitmap, ClientContext &context,
+	                             const Value &min_val, const Value &max_val) {
+		const auto min = ToComparable(min_val);
+		const auto max = ToComparable(max_val);
+		D_ASSERT(min <= max);
+		bitmap.Initialize(context, min, max - min);
 	}
 
 	static FilterPropagateResult LookupRange(const PrefixRangeBitmap<comparable_type> &bitmap, const Value &lower_bound,
@@ -248,7 +262,7 @@ public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
-		bitmap.Initialize(context, Policy::ToComparable(min_val), Policy::ToComparable(max_val));
+		Policy::InitializeBitmap(bitmap, context, min_val, max_val);
 	}
 
 	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
