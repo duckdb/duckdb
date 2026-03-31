@@ -677,7 +677,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	});
 
 	// Keep old dependencies
-	bool has_new_dependencies = alter_info.new_dependencies;
+	bool has_new_dependencies = alter_info.new_dependencies.get();
 	ScanSubjects(transaction, old_info, [&](DependencyEntry &dep) {
 		if (has_new_dependencies && !dep.Subject().flags.IsOwnership()) {
 			// The alter provided updated dependencies - skip old non-ownership subject dependencies
