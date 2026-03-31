@@ -14,7 +14,7 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
-SET debug_checkpoint_abort='${wal_abort_mode}'
+SET debug_checkpoint_abort='{wal_abort_mode}'
 
 statement ok
 CREATE OR REPLACE TABLE main_db.integers(i INTEGER)
@@ -35,13 +35,13 @@ loop x 0 10
 # otherwise we have lost data
 onlyif threadid<>10
 statement maybe
-INSERT INTO main_db.integers SELECT * FROM range(${x} * 2000 + ${threadid} * 100, ${x} * 2000 + (${threadid} + 1) * 100);
+INSERT INTO main_db.integers SELECT * FROM range({x} * 2000 + {threadid} * 100, {x} * 2000 + ({threadid} + 1) * 100);
 ----
 database has been invalidated because of a previous fatal error
 
 onlyif threadid<>10
 statement maybe
-INSERT INTO other_db.ranges VALUES (${x} * 2000 + ${threadid} * 100, ${x} * 2000 + (${threadid} + 1) * 100);
+INSERT INTO other_db.ranges VALUES ({x} * 2000 + {threadid} * 100, {x} * 2000 + ({threadid} + 1) * 100);
 ----
 database has been invalidated because of a previous fatal error
 
