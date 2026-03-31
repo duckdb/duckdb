@@ -21,7 +21,7 @@ loop i 0 20
 restart
 
 statement ok
-insert into z select 100000 + 100 * ${i} + j, 'a','b','c' from range(100) t(j);
+insert into z select 100000 + 100 * {i} + j, 'a','b','c' from range(100) t(j);
 
 statement ok
 CHECKPOINT;
