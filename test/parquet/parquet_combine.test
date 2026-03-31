@@ -9,6 +9,10 @@ require vector_size 2048
 statement ok
 set threads=2;
 
+# FanOut changes parallelization of range(), which alters row group counts
+statement ok
+set disable_fan_out=true;
+
 # before we combined data from threads into multiple row groups,
 # this would create 4 row groups, now it should create 2
 statement ok

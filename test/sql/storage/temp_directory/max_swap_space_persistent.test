@@ -9,6 +9,10 @@ require block_size 262144
 
 load {TEST_DIR}/max_swap_space.db
 
+# FanOut buffering changes memory usage patterns under tight memory limits
+statement ok
+set disable_fan_out=true;
+
 # The default temp_directory for a persistent database is <db_name>.tmp.
 query I
 SELECT current_setting('temp_directory').split('/')[-1];

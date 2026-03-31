@@ -6,6 +6,10 @@ require vector_size 2048
 
 require parquet
 
+# FanOut buffering changes memory usage patterns under tight memory limits
+statement ok
+set disable_fan_out=true;
+
 # low memory limit to test that we don't blow up intermediates
 statement ok
 set memory_limit='100mb'

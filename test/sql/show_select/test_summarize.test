@@ -2,6 +2,10 @@
 # description: Test summarize command
 # group: [show_select]
 
+# FanOut changes chunk ordering from range()
+statement ok
+set disable_fan_out=true;
+
 statement ok
 PRAGMA enable_verification
 

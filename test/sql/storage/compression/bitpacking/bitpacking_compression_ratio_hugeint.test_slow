@@ -8,6 +8,10 @@ require block_size 262144
 
 load {TEST_DIR}/test_bitpacking.db
 
+# FanOut changes produced chunks
+statement ok
+set disable_fan_out=true;
+
 #### CONSTANT MODE:
 # Ratio ~= 1000x
 statement ok

@@ -7,6 +7,10 @@ require skip_reload
 # RNG order depends on vector size
 require vector_size 1024
 
+# FanOut changes chunk ordering from range(), which affects random() with a seed
+statement ok
+set disable_fan_out=true;
+
 statement ok
 PRAGMA enable_verification
 

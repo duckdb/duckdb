@@ -8,6 +8,10 @@ require noforcestorage
 
 load {TEST_DIR}/test_roaring.db readwrite v1.2.0
 
+# FanOut changes batching patterns, affecting compression segment counts
+statement ok
+set disable_fan_out=true;
+
 statement ok
 set logging_level='info';
 

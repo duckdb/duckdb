@@ -4,6 +4,10 @@
 
 require skip_reload
 
+# FanOut changes chunk ordering from generate_series()
+statement ok
+set disable_fan_out=true;
+
 statement ok
 create sequence test INCREMENT BY -1 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800 CYCLE;
 

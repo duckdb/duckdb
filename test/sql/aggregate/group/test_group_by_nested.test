@@ -192,9 +192,9 @@ FROM ((VALUES
 	(32, [NULL])
 	)
 UNION ALL
-	select 24 as i, list(r) as pk from range(2000) tbl(r)
+	select 24 as i, list(r ORDER BY r) as pk from range(2000) tbl(r)
 UNION ALL
-	select 34 as i, list(r) as pk from range(2000) tbl(r)
+	select 34 as i, list(r ORDER BY r) as pk from range(2000) tbl(r)
 ) sv(v, k);
 
 # mode output_hash

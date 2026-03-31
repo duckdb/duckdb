@@ -3,6 +3,10 @@
 
 require parquet
 
+# FanOut changes batching patterns, affecting row group sizes
+statement ok
+set disable_fan_out=true;
+
 #
 # do tests with IMPLICIT parquet_version, (default is v1)
 #

@@ -4,6 +4,10 @@
 
 require vector_size 1024
 
+# FanOut changes chunk ordering from range(), which affects random() with a seed
+statement ok
+set disable_fan_out=true;
+
 set seed 0.42
 
 statement ok

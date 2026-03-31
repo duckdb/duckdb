@@ -2,6 +2,10 @@
 # description: Test approx quantile operator
 # group: [aggregates]
 
+# FanOut changes chunk ordering from range(), affecting reservoir sampling
+statement ok
+set disable_fan_out=true;
+
 statement ok
 PRAGMA enable_verification
 

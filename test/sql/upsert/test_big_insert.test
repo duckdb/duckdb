@@ -2,11 +2,12 @@
 # description: Test insert into statements
 # group: [upsert]
 
+# FanOut changes batching patterns
 statement ok
-PRAGMA enable_verification;
+set disable_fan_out=true;
 
 statement ok
-SET preserve_insertion_order = false;
+PRAGMA enable_verification;
 
 statement ok
 CREATE TABLE integers(
@@ -17,6 +18,9 @@ CREATE TABLE integers(
 
 statement ok
 INSERT INTO integers(i) SELECT i FROM range(5000) tbl(i);
+
+statement ok
+SET preserve_insertion_order = false;
 
 query I
 SELECT COUNT(*) FROM integers

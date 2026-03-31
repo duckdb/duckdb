@@ -10,6 +10,10 @@ require notwindows
 statement ok
 PRAGMA enable_verification
 
+# FanOut changes chunk ordering from range(), which affects random() with a seed
+statement ok
+set disable_fan_out=true;
+
 set seed 0.8675309
 
 statement ok

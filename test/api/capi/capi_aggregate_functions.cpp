@@ -368,6 +368,8 @@ TEST_CASE("Test String Aggregate Function", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
+	// FanOut changes chunk ordering from range()
+	REQUIRE_NO_FAIL(tester.Query("SET disable_fan_out=true"));
 	CAPIRegisterRepeatedStringAgg(tester.connection);
 
 	// now call it

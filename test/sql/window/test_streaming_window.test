@@ -365,12 +365,13 @@ NULL	A
 # Multiple blocks
 query III
 WITH alternate AS (
-	SELECT 
+	SELECT
 		range r,
 		IF(range % 2, range, NULL) s
 	FROM range(3000)
+	ORDER BY range
 )
-SELECT 
+SELECT
 	r,
 	s,
 	last(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) l
@@ -380,10 +381,11 @@ QUALIFY l <> r - ((r + 1) % 2)
 
 query III
 WITH alternate AS (
-	SELECT 
+	SELECT
 		range r,
 		IF(range < 2100, NULL, range) s
 	FROM range(3000)
+	ORDER BY range
 )
 SELECT 
 	r,

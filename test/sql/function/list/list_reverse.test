@@ -248,7 +248,7 @@ SELECT ([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]]).list_reverse()
 
 
 statement ok
-CREATE OR REPLACE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+CREATE OR REPLACE TABLE lists AS SELECT range % 4 g, list(range ORDER BY range) l FROM range(10000) GROUP BY range % 4;
 
 query T
 with cte0 as (
