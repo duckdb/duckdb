@@ -311,7 +311,7 @@ jobs:
            ./build/release/test/unittest.exe --list-tests || true
 
        - name: Build
-         run: make release
+         run: python scripts/ci/retry.py -- make release
 
        - name: Test
          run: make unittest_release SKIP_BUILD=1
