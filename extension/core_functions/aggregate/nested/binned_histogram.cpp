@@ -293,6 +293,9 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 			validity_mask.SetInvalid(i);
 		}
 	}
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 template <class OP, class T>
