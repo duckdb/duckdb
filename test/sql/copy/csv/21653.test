@@ -1,0 +1,46 @@
+# name: test/sql/copy/csv/21653.test
+# description: COPY FROM should not auto-detect a header unless requested
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE copy_no_header_int(id INT)
+
+query I
+COPY copy_no_header_int FROM '{DATA_DIR}/csv/test/copy_from_no_header_21653.csv'
+----
+2
+
+query I
+SELECT SUM(id) FROM copy_no_header_int
+----
+3
+
+statement ok
+CREATE TABLE copy_no_header_varchar(id VARCHAR)
+
+query I
+COPY copy_no_header_varchar FROM '{DATA_DIR}/csv/test/copy_from_no_header_21653.csv'
+----
+2
+
+query TT
+SELECT * FROM copy_no_header_varchar ORDER BY id
+----
+1
+2
+
+statement ok
+CREATE TABLE copy_with_header(id VARCHAR)
+
+query I
+COPY copy_with_header FROM '{DATA_DIR}/csv/test/copy_from_no_header_21653.csv' (HEADER)
+----
+1
+
+query T
+SELECT * FROM copy_with_header
+----
+2

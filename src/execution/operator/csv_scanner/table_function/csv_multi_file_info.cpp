@@ -37,6 +37,11 @@ void CSVMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOp
                                         const vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	auto &csv_options = options.options;
+	if (!csv_options.dialect_options.header.IsSetByUser()) {
+		// COPY FROM targets an existing table schema, so the default must remain "no header"
+		// while still allowing the sniffer to infer the rest of the CSV dialect.
+		csv_options.dialect_options.header.Set(false);
+	}
 	csv_options.name_list = expected_names;
 	csv_options.sql_type_list = expected_types;
 	csv_options.columns_set = true;
