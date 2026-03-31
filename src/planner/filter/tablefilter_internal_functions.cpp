@@ -49,13 +49,13 @@ static void TableFilterInternalSerialize(Serializer &serializer, const optional_
 static unique_ptr<FunctionData> TableFilterInternalDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	auto key_type = function.arguments.empty() ? LogicalType::ANY : function.arguments[0];
 	if (function.name == BloomFilterScalarFun::NAME) {
-		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, 0);
+		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
 	}
 	if (function.name == PerfectHashJoinScalarFun::NAME) {
-		return make_uniq<PerfectHashJoinFunctionData>(nullptr, string(), 0.0f, 0);
+		return make_uniq<PerfectHashJoinFunctionData>(nullptr, string(), 0.0f, idx_t(0));
 	}
 	if (function.name == PrefixRangeScalarFun::NAME) {
-		return make_uniq<PrefixRangeFunctionData>(nullptr, string(), key_type, 0.0f, 0);
+		return make_uniq<PrefixRangeFunctionData>(nullptr, string(), key_type, 0.0f, idx_t(0));
 	}
 	if (function.name == DynamicFilterScalarFun::NAME) {
 		return make_uniq<DynamicFilterFunctionData>(nullptr);

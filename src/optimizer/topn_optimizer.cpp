@@ -140,7 +140,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		if (nulls_first) {
 			// Create OR(IS_NULL(col), dynamic_filter(col))
 			auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-			is_null->children.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+			is_null->children.push_back(make_uniq<BoundReferenceExpression>(type, idx_t(0)));
 
 			auto or_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 			or_expr->children.push_back(std::move(is_null));

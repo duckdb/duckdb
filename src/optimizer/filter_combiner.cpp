@@ -245,7 +245,7 @@ static unique_ptr<ExpressionFilter> CreateOptionalExpressionFilter(unique_ptr<Ex
 	auto func = OptionalFilterScalarFun::GetFunction(col_type);
 	auto bind_data = make_uniq<OptionalFilterFunctionData>(std::move(child_expr));
 	vector<unique_ptr<Expression>> args;
-	args.push_back(make_uniq<BoundReferenceExpression>(col_type, 0));
+	args.push_back(make_uniq<BoundReferenceExpression>(col_type, idx_t(0)));
 	auto func_expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
 	                                                    std::move(bind_data));
 	return make_uniq<ExpressionFilter>(std::move(func_expr));

@@ -97,7 +97,7 @@ unique_ptr<TableFilter> BFTableFilter::Copy() const {
 unique_ptr<Expression> BFTableFilter::ToExpression(const Expression &column) const {
 	auto func = BloomFilterScalarFun::GetFunction(column.return_type);
 	auto bind_data =
-	    make_uniq<BloomFilterFunctionData>(filter, filters_null_values, key_column_name, key_type, 0.0f, 0);
+	    make_uniq<BloomFilterFunctionData>(filter, filters_null_values, key_column_name, key_type, 0.0f, idx_t(0));
 	vector<unique_ptr<Expression>> args;
 	args.push_back(column.Copy());
 	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),

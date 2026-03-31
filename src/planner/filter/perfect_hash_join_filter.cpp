@@ -81,7 +81,7 @@ unique_ptr<TableFilter> PerfectHashJoinFilter::Copy() const {
 
 unique_ptr<Expression> PerfectHashJoinFilter::ToExpression(const Expression &column) const {
 	auto func = PerfectHashJoinScalarFun::GetFunction(column.return_type);
-	auto bind_data = make_uniq<PerfectHashJoinFunctionData>(perfect_join_executor, key_column_name, 0.0f, 0);
+	auto bind_data = make_uniq<PerfectHashJoinFunctionData>(perfect_join_executor, key_column_name, 0.0f, idx_t(0));
 	vector<unique_ptr<Expression>> args;
 	args.push_back(column.Copy());
 	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
