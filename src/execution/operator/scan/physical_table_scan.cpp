@@ -411,6 +411,10 @@ bool PhysicalTableScan::ParallelSource() const {
 	return true;
 }
 
+bool PhysicalTableScan::SourceSupportsParallelFanOut() const {
+	return function.parallelize_sequential_source;
+}
+
 InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalSourceState &gstate_p,
                                                                          LocalSourceState &lstate) const {
 	if (!function.dynamic_to_string) {

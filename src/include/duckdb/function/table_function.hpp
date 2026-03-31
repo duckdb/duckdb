@@ -494,6 +494,8 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	//! Whether this sequential source should be automatically parallelized by the engine
+	bool parallelize_sequential_source = false;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function

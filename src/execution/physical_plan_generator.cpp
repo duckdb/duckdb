@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/execution/operator/helper/physical_fan_out.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -24,6 +25,16 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator>
 	auto &plan = ResolveAndPlan(std::move(op));
 	plan.Verify();
 	return std::move(physical_plan);
+}
+
+PhysicalOperator &PhysicalPlanGenerator::WrapWithFanOut(PhysicalOperator &source) {
+	if (Settings::Get<DisableFanOutSetting>(context)) {
+		return source;
+	}
+	if (!source.SourceSupportsParallelFanOut()) {
+		return source;
+	}
+	return Make<PhysicalFanOut>(source, source.estimated_cardinality);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperator> op) {

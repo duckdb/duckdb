@@ -629,6 +629,17 @@ struct DisableDatabaseInvalidationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DisableFanOutSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "disable_fan_out";
+	static constexpr const char *Description =
+	    "Disable automatic FanOut injection for parallel consumption of sequential sources";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DisableTimestamptzCastsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "disable_timestamptz_casts";

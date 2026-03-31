@@ -147,10 +147,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto &table_scan = Make<PhysicalTableScan>(
+		auto &raw_scan = Make<PhysicalTableScan>(
 		    op.returned_types, op.function, std::move(op.bind_data), op.returned_types, column_ids, vector<column_t>(),
 		    op.names, std::move(table_filters), op.estimated_cardinality, std::move(op.extra_info),
 		    std::move(op.parameters), std::move(op.virtual_columns));
+		auto &table_scan = WrapWithFanOut(raw_scan);
 		// first check if an additional projection is necessary
 		if (column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -197,12 +198,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		projection_indices.push_back(proj_id);
 	}
 
-	auto &table_scan = Make<PhysicalTableScan>(
+	auto &raw_scan = Make<PhysicalTableScan>(
 	    op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids, std::move(projection_indices),
 	    op.names, std::move(table_filters), op.estimated_cardinality, std::move(op.extra_info),
 	    std::move(op.parameters), std::move(op.virtual_columns));
-	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
+	auto &cast_table_scan = raw_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
+	auto &table_scan = WrapWithFanOut(raw_scan);
 	if (filter) {
 		filter->children.push_back(table_scan);
 		return *filter;

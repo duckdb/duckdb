@@ -145,6 +145,11 @@ public:
 		return false;
 	}
 
+	//! Whether this source supports being wrapped by FanOut for parallel consumption
+	virtual bool SourceSupportsParallelFanOut() const {
+		return false;
+	}
+
 	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
 		if (partition_info.AnyRequired()) {
 			return false;
