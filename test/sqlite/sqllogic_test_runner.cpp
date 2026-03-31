@@ -195,6 +195,13 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 }
 
+void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement) {
+	auto loop_it = "{" + loop_iterator_name + "}";
+	auto deprecated_loop_it = "$" + loop_it;
+	text = StringUtil::Replace(text, deprecated_loop_it, replacement);
+	text = StringUtil::Replace(text, loop_it, replacement);
+}
+
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
 	replacement = ReplaceKeywords(replacement);
 	if (StringUtil::Contains(loop_iterator_name, ",")) {
@@ -205,11 +212,12 @@ string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator
 			     ") does not match number of commas in replacement (" + replacement + ")");
 		}
 		for (idx_t i = 0; i < name_splits.size(); i++) {
-			text = StringUtil::Replace(text, "${" + name_splits[i] + "}", replacement_splits[i]);
+			StringReplaceLoopIterator(text, name_splits[i], replacement_splits[i]);
 		}
 		return text;
 	} else {
-		return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+		StringReplaceLoopIterator(text, loop_iterator_name, replacement);
+		return text;
 	}
 }
 

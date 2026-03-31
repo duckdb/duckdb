@@ -75,6 +75,8 @@ private:
 	                                                 const TopNWindowEliminationParameters &params);
 	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
 	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack);
+	bool ExtractSingleBinding(unique_ptr<Expression> *expr, ColumnBinding &binding,
+	                          bool require_direct_column_ref = false);
 
 private:
 	ClientContext &context;

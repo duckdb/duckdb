@@ -359,6 +359,43 @@ SELECT c, avg(b) FROM sub GROUP BY c ORDER BY ALL;
 x	100.0
 y	200.0
 
+# Left projection map corruption issue #21650
+statement ok
+CREATE TABLE s (s1 VARCHAR)
+
+statement ok
+CREATE TABLE e (e1 VARCHAR, e2 VARCHAR, e3 VARCHAR)
+
+statement ok
+SELECT *
+FROM s b1
+JOIN (
+	SELECT *, row_number() OVER (PARTITION BY b2.s1 ORDER BY e1.e1) rn
+	FROM s b2
+	JOIN e e1 ON b2.s1 = e1.e2
+) e2 ON b1.s1 = e2.s1
+WHERE e2.rn = 1;
+
+# Late Materialization with cast in join issue #21604
+statement ok
+CREATE TABLE t1 (c VARCHAR, c1 VARCHAR, c2 VARCHAR, c3 VARCHAR)
+
+statement ok
+CREATE TABLE t2 (a BIGINT, a1 VARCHAR, a2 VARCHAR)
+
+statement ok
+WITH ct1 AS (
+	SELECT * FROM t1
+)
+SELECT *
+FROM ct1 b
+JOIN (
+	SELECT c, a1, a2, row_number() OVER (PARTITION BY b.c ORDER BY e.a1) rn
+	FROM ct1 b
+	JOIN t2 e ON b.c = e.a
+) e ON b.c = e.c
+WHERE e.rn = 1;
+
 statement ok
 CREATE TABLE except_test (id INT, ord INT, grp INT);
 
