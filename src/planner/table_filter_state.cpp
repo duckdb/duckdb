@@ -145,7 +145,7 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 			}
 		}
 		if (function.function.name == OptionalFilterScalarFun::NAME && function.bind_info) {
-			fast_path = ExpressionFilterFastPath::OPTIONAL;
+			fast_path = ExpressionFilterFastPath::IS_OPTIONAL;
 			initialize_executor();
 			return;
 		}

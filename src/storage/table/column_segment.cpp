@@ -622,7 +622,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 	}
 	if (state.HasFastPath()) {
 		switch (state.fast_path) {
-		case ExpressionFilterFastPath::OPTIONAL:
+		case ExpressionFilterFastPath::IS_OPTIONAL:
 			return approved_tuple_count;
 		case ExpressionFilterFastPath::CONSTANT_COMPARISON:
 			return ExecuteConstantComparisonSelection(sel, vector, vdata, state.constant, state.comparison_type,

@@ -1916,7 +1916,7 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 const StringUtil::EnumStringLiteral *GetExpressionFilterFastPathValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExpressionFilterFastPath::NONE), "NONE" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::OPTIONAL), "OPTIONAL" },
+		{ static_cast<uint32_t>(ExpressionFilterFastPath::IS_OPTIONAL), "IS_OPTIONAL" },
 		{ static_cast<uint32_t>(ExpressionFilterFastPath::CONSTANT_COMPARISON), "CONSTANT_COMPARISON" },
 		{ static_cast<uint32_t>(ExpressionFilterFastPath::IS_NULL), "IS_NULL" },
 		{ static_cast<uint32_t>(ExpressionFilterFastPath::IS_NOT_NULL), "IS_NOT_NULL" },

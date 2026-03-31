@@ -54,7 +54,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 	}
 
 	switch (state.fast_path) {
-	case ExpressionFilterFastPath::OPTIONAL:
+	case ExpressionFilterFastPath::IS_OPTIONAL:
 		return true;
 	case ExpressionFilterFastPath::CONSTANT_COMPARISON:
 		if (state.constant.IsNull()) {

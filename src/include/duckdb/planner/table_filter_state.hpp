@@ -41,7 +41,7 @@ public:
 
 enum class ExpressionFilterFastPath : uint8_t {
 	NONE,
-	OPTIONAL,
+	IS_OPTIONAL,
 	CONSTANT_COMPARISON,
 	IS_NULL,
 	IS_NOT_NULL,
