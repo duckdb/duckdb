@@ -17,6 +17,9 @@ set allow_parser_override_extension=doesnotexist;
 ----
 unrecognized value "doesnotexist" for enum "AllowParserOverride"
 
+statement ok
+set allow_parser_override_extension=default;
+
 # Default behavior is not using the parser override
 statement error
 override
@@ -58,7 +61,7 @@ overri
 ----
 Parser Error: Parser overridden, query equaled "overri" but not "override"
 
-statement error
+query I
 SELECT 1;
 ----
-Not implemented Error: QuackParser has not yet implemented the statements to transform this query
+1
