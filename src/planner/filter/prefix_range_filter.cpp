@@ -231,24 +231,8 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
-		UnifiedVectorFormat vector_data;
-		keys.ToUnifiedFormat(count, vector_data);
-		const auto data = UnifiedVectorFormat::GetData<const Input>(vector_data);
-		const auto &validity_mask = vector_data.validity;
-
-		if (validity_mask.AllValid()) {
-			for (idx_t i = 0; i < count; i++) {
-				const auto data_idx = vector_data.sel->get_index(i);
-				bitmap.Insert(Policy::ToComparable(data[data_idx]), state);
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				const auto data_idx = vector_data.sel->get_index(i);
-				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
-					continue;
-				}
-				bitmap.Insert(Policy::ToComparable(data[data_idx]), state);
-			}
+		for (const auto &entry : keys.template ValidValues<Input>(count)) {
+			bitmap.Insert(Policy::ToComparable(entry.value), state);
 		}
 	}
 
@@ -261,29 +245,11 @@ public:
 			return LookupOneValue(keys.GetValue(0)) ? count : 0;
 		}
 
-		UnifiedVectorFormat vector_data;
-		keys.ToUnifiedFormat(count, vector_data);
-		const auto data = UnifiedVectorFormat::GetData<const Input>(vector_data);
-		const auto &validity_mask = vector_data.validity;
-
 		idx_t found_count = 0;
-		if (validity_mask.AllValid()) {
-			for (idx_t i = 0; i < count; i++) {
-				result_sel.set_index(found_count, i);
-				const auto data_idx = vector_data.sel->get_index(i);
-				found_count += bitmap.Lookup(Policy::ToComparable(data[data_idx]));
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				const auto data_idx = vector_data.sel->get_index(i);
-				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
-					continue;
-				}
-				result_sel.set_index(found_count, i);
-				found_count += bitmap.Lookup(Policy::ToComparable(data[data_idx]));
-			}
+		for (const auto &entry : keys.template ValidValues<Input>(count)) {
+			result_sel.set_index(found_count, entry.index);
+			found_count += bitmap.Lookup(Policy::ToComparable(entry.value));
 		}
-
 		return found_count;
 	}
 
