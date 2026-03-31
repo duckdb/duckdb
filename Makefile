@@ -208,6 +208,27 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+CLANGD_TIDY_VERSION := 1.1.1
+CLANGD_TIDY_VENV ?= $(abspath build/clangd-tidy-venv)
+ifeq ($(CLANGD_TIDY_BINARY),)
+ifneq ($(wildcard $(CLANGD_TIDY_VENV)/bin/clangd-tidy),)
+CLANGD_TIDY_BINARY := $(CLANGD_TIDY_VENV)/bin/clangd-tidy
+endif
+endif
+ifeq ($(CLANGD_BINARY),)
+ifneq ("${CMAKE_LLVM_PATH}", "")
+CLANGD_BINARY := ${CMAKE_LLVM_PATH}/bin/clangd
+endif
+endif
+ifneq ($(CLANGD_TIDY_BINARY),)
+	CLANGD_TIDY_BINARY_PARAMETER := --clangd-tidy-binary ${CLANGD_TIDY_BINARY}
+endif
+ifneq ($(CLANGD_BINARY),)
+	CLANGD_BINARY_PARAMETER := --clangd-binary ${CLANGD_BINARY}
+endif
+ifneq ($(CLANGD_TIDY_QUERY_DRIVER),)
+	CLANGD_TIDY_QUERY_DRIVER_PARAMETER := --query-driver ${CLANGD_TIDY_QUERY_DRIVER}
+endif
 ifneq ($(TIDY_CHECKS),)
         TIDY_PERFORM_CHECKS := '-checks=${TIDY_CHECKS}'
 endif
@@ -592,6 +613,17 @@ tidy-check:
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+
+install-clangd-tidy:
+	mkdir -p $(dir $(CLANGD_TIDY_VENV)) && \
+	$(PYTHON) -m venv $(CLANGD_TIDY_VENV) && \
+	$(CLANGD_TIDY_VENV)/bin/pip install --upgrade 'clangd-tidy==$(CLANGD_TIDY_VERSION)'
+
+tidy-check-clangd:
+	mkdir -p ./build/tidy && \
+	cd build/tidy && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
+	$(PYTHON) ../../scripts/run-clangd-tidy.py -j $(CI_CPU_COUNT) ${CLANGD_TIDY_BINARY_PARAMETER} ${CLANGD_BINARY_PARAMETER} ${CLANGD_TIDY_QUERY_DRIVER_PARAMETER}
 
 tidy-check-diff:
 	mkdir -p ./build/tidy && \
