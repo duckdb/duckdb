@@ -350,7 +350,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_DISTINCT_FROM: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, NotEquals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
 		} else {
@@ -399,7 +399,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 		break;
 	}
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, Equals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
 		} else {
@@ -804,7 +804,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 	} else {
 		// standard case: we can handle everything at once - run the expression once
 		DataChunk chunk;
-		chunk.data.emplace_back(vector);
+		chunk.data.emplace_back(Vector::Ref(vector));
 		chunk.SetCardinality(scan_count);
 		SelectionVector identity_sel;
 		optional_ptr<SelectionVector> current_sel = &sel;
