@@ -16,12 +16,21 @@ namespace duckdb {
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, const VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
 	Vector &GetChild() {
+		return *child;
+	}
+	const Vector &GetChild() const {
 		return *child;
 	}
 	void Reserve(idx_t to_reserve);
@@ -42,7 +51,18 @@ public:
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
 
+	data_ptr_t GetData() override {
+		return data_ptr;
+	}
+
+	optional_ptr<Allocator> GetAllocator() const override {
+		return allocated_data.GetAllocator();
+	}
+
 private:
+	// data for list offsets
+	data_ptr_t data_ptr;
+	AllocatedData allocated_data;
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;

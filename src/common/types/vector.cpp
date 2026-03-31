@@ -49,8 +49,14 @@ Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(std::move(type_p), t
 }
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
-	if (dataptr && !type.IsValid()) {
+	if (!dataptr) {
+		return;
+	}
+	if (!type.IsValid()) {
 		throw InternalException("Cannot create a vector of type INVALID!");
+	}
+	if (type.IsNested()) {
+		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	buffer = make_buffer<StandardVectorBuffer>(dataptr);
 }
@@ -102,8 +108,6 @@ void Vector::Reference(const Value &value) {
 		}
 	} else if (internal_type == PhysicalType::LIST) {
 		buffer = VectorBuffer::CreateConstantVector(value.type());
-		auto list_buffer = make_uniq<VectorListBuffer>(value.type());
-		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 		SetValue(0, value);
 	} else if (internal_type == PhysicalType::ARRAY) {
 		buffer = make_buffer<VectorArrayBuffer>(value.type());
@@ -165,7 +169,7 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 
 void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	D_ASSERT(end >= offset);
-	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR || offset == 0) {
 		Reference(other);
 		return;
 	}
@@ -202,13 +206,15 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		child_vec.Slice(other_child_vec, offset * array_size, end * array_size);
 		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
+	} else if (internal_type == PhysicalType::LIST) {
+		auto &list_buffer = other.buffer->Cast<VectorListBuffer>();
+		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
+		buffer = make_buffer<VectorListBuffer>(offset_ptr, list_buffer);
+		validity.Slice(other.validity, offset, end - offset);
 	} else {
-		Reference(other);
-		if (offset > 0) {
-			auto offset_ptr = buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-			buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
-			validity.Slice(other.validity, offset, end - offset);
-		}
+		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
+		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
+		validity.Slice(other.validity, offset, end - offset);
 	}
 }
 
@@ -325,13 +331,18 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 	if (internal_type == PhysicalType::STRUCT) {
 		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
-		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
+		buffer = make_buffer<VectorListBuffer>(capacity, type);
+		if (initialize_to_zero) {
+			auto data = buffer->GetData();
+			memset(data, 0, capacity * sizeof(list_entry_t));
+		}
 	} else if (internal_type == PhysicalType::ARRAY) {
 		buffer = make_buffer<VectorArrayBuffer>(type, capacity);
-	}
-	auto type_size = GetTypeIdSize(internal_type);
-	if (type_size > 0) {
+	} else {
+		auto type_size = GetTypeIdSize(internal_type);
+		if (type_size == 0) {
+			throw InternalException("Trying to create buffer for zero-length type");
+		}
 		buffer = VectorBuffer::CreateStandardVector(type, capacity);
 		if (initialize_to_zero) {
 			auto data = buffer->GetData();
@@ -380,6 +391,9 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 void Vector::Resize(idx_t current_size, idx_t new_size) {
 	// The vector does not contain any data.
 	if (!buffer) {
+		if (GetType().InternalType() == PhysicalType::LIST) {
+			throw InternalException("Resize for empty list not supported");
+		}
 		buffer = make_buffer<StandardVectorBuffer>(0);
 	}
 
@@ -407,13 +421,18 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 			                          StringUtil::BytesToHumanReadableString(target_size),
 			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
 		}
-
 		// Copy the data buffer to a resized buffer.
 		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
 		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 		auto new_data = allocator.Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
-		auto new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
+		buffer_ptr<VectorBuffer> new_buffer;
+		if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::LIST) {
+			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorListBuffer>();
+			new_buffer = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
+		} else {
+			new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
+		}
 		resize_info_entry.buffer = new_buffer.get();
 		resize_info_entry.vec.buffer = std::move(new_buffer);
 	}

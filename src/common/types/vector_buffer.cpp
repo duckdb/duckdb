@@ -16,18 +16,30 @@
 namespace duckdb {
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, idx_t capacity) {
+	if (type == PhysicalType::LIST) {
+		throw InternalException("VectorBuffer::CreateStandardVector requires full list type");
+	}
 	return make_buffer<StandardVectorBuffer>(capacity * GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
+	if (type == PhysicalType::LIST) {
+		throw InternalException("VectorBuffer::CreateConstantVector requires full list type");
+	}
 	return make_buffer<StandardVectorBuffer>(GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &type) {
+	if (type.InternalType() == PhysicalType::LIST) {
+		return make_buffer<VectorListBuffer>(1ULL, type);
+	}
 	return VectorBuffer::CreateConstantVector(type.InternalType());
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, idx_t capacity) {
+	if (type.InternalType() == PhysicalType::LIST) {
+		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
+	}
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
@@ -66,13 +78,38 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
-VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(initial_capacity) {
+VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
+                                   idx_t child_capacity)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(child_capacity) {
+	if (capacity > 0) {
+		allocated_data = allocator.Allocate(capacity * sizeof(list_entry_t));
+		data_ptr = allocated_data.get();
+	}
+}
+VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
+                                   idx_t child_capacity)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER),
+      child(make_uniq<Vector>(ListType::GetChildType(list_type), child_capacity)), capacity(child_capacity) {
+	if (capacity > 0) {
+		allocated_data = allocator.Allocate(capacity * sizeof(list_entry_t));
+		data_ptr = allocated_data.get();
+	}
 }
 
-VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER),
-      child(make_uniq<Vector>(ListType::GetChildType(list_type), initial_capacity)), capacity(initial_capacity) {
+VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type, idx_t child_capacity)
+    : VectorListBuffer(Allocator::DefaultAllocator(), capacity, list_type, child_capacity) {
+}
+
+VectorListBuffer::VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data), capacity(parent.capacity), size(parent.size) {
+	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
+}
+
+VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, const VectorListBuffer &parent)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), allocated_data(std::move(allocated_data_p)),
+      capacity(parent.capacity), size(parent.size) {
+	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
+	data_ptr = allocated_data.get();
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {

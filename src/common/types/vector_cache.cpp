@@ -15,13 +15,11 @@ public:
 		auto internal_type = type.InternalType();
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			// memory for the list offsets
-			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, false, false);
-			auxiliary = make_shared_ptr<VectorListBuffer>(std::move(child_vector));
+			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector), capacity);
 			break;
 		}
 		case PhysicalType::ARRAY: {
@@ -55,10 +53,10 @@ public:
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer
-			AssignSharedPointer(result.auxiliary, auxiliary);
+			result.auxiliary.reset();
 			// propagate through child
 			auto &child_cache = *child_caches[0];
-			auto &list_buffer = result.auxiliary->Cast<VectorListBuffer>();
+			auto &list_buffer = result.buffer->Cast<VectorListBuffer>();
 			list_buffer.SetCapacity(child_cache.capacity);
 			list_buffer.SetSize(0);
 			list_buffer.SetAuxiliaryData(nullptr);

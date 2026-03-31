@@ -34,9 +34,14 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 					FlatVector::SetNull(child, i, is_null);
 				}
 			}
+		} else if (internal_type == PhysicalType::LIST) {
+			// for list - don't do anything
+			if (!vector.buffer || vector.buffer->GetBufferType() != VectorBufferType::LIST_BUFFER) {
+				throw InternalException("Not a list buffer!?");
+			}
 		} else {
 			// if we don't have a standard buffer overwrite it
-			if (vector.buffer->GetBufferType() != VectorBufferType::STANDARD_BUFFER) {
+			if (!vector.buffer || vector.buffer->GetBufferType() != VectorBufferType::STANDARD_BUFFER) {
 				vector.buffer = make_buffer<StandardVectorBuffer>(GetTypeIdSize(internal_type));
 			}
 		}

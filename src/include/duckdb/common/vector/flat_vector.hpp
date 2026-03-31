@@ -46,16 +46,7 @@ struct FlatVector {
 	static inline T *GetDataUnsafe(Vector &vector) {
 		return ConstantVector::GetDataUnsafe<T>(vector);
 	}
-	static inline void SetData(Vector &vector, data_ptr_t data) {
-		VerifyFlatVector(vector);
-		if (vector.GetType().InternalType() == PhysicalType::ARRAY) {
-			throw InternalException("SetData not supported for array");
-		}
-		if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
-			throw InternalException("SetData not supported for struct");
-		}
-		vector.buffer = make_buffer<StandardVectorBuffer>(data);
-	}
+	static void SetData(Vector &vector, data_ptr_t data);
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
 		VerifyFlatVector(vector);

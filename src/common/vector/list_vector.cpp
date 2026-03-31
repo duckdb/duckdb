@@ -11,9 +11,9 @@ T &ListVector::GetEntryInternal(T &vector) {
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	return vector.auxiliary->template Cast<VectorListBuffer>().GetChild();
+	D_ASSERT(vector.buffer);
+	D_ASSERT(vector.buffer->GetBufferType() == VectorBufferType::LIST_BUFFER);
+	return vector.buffer->template Cast<VectorListBuffer>().GetChild();
 }
 
 const Vector &ListVector::GetEntry(const Vector &vector) {
@@ -28,9 +28,9 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	auto &child_buffer = vector.auxiliary->Cast<VectorListBuffer>();
+	D_ASSERT(vector.buffer);
+	D_ASSERT(vector.buffer->GetBufferType() == VectorBufferType::LIST_BUFFER);
+	auto &child_buffer = vector.buffer->Cast<VectorListBuffer>();
 	child_buffer.Reserve(required_capacity);
 }
 
@@ -39,16 +39,16 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 		auto &child = DictionaryVector::Child(vec);
 		return ListVector::GetListSize(child);
 	}
-	D_ASSERT(vec.auxiliary);
-	return vec.auxiliary->Cast<VectorListBuffer>().GetSize();
+	D_ASSERT(vec.buffer);
+	return vec.buffer->Cast<VectorListBuffer>().GetSize();
 }
 
 idx_t ListVector::GetListCapacity(const Vector &vec) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("ListVector::GetListCapacity called on dictionary vector");
 	}
-	D_ASSERT(vec.auxiliary);
-	return vec.auxiliary->Cast<VectorListBuffer>().GetCapacity();
+	D_ASSERT(vec.buffer);
+	return vec.buffer->Cast<VectorListBuffer>().GetCapacity();
 }
 
 void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
@@ -57,14 +57,14 @@ void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(other.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR || other.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	vector.auxiliary = other.auxiliary;
+	vector.buffer = other.buffer;
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("ListVector::SetListSize called on dictionary vector");
 	}
-	vec.auxiliary->Cast<VectorListBuffer>().SetSize(size);
+	vec.buffer->Cast<VectorListBuffer>().SetSize(size);
 }
 
 void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {
@@ -72,7 +72,7 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size,
 		//! Nothing to add
 		return;
 	}
-	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
+	auto &target_buffer = target.buffer->Cast<VectorListBuffer>();
 	target_buffer.Append(source, source_size, source_offset);
 }
 
@@ -82,12 +82,12 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 		//! Nothing to add
 		return;
 	}
-	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
+	auto &target_buffer = target.buffer->Cast<VectorListBuffer>();
 	target_buffer.Append(source, sel, source_size, source_offset);
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {
-	auto &target_buffer = target.auxiliary.get()->Cast<VectorListBuffer>();
+	auto &target_buffer = target.buffer.get()->Cast<VectorListBuffer>();
 	target_buffer.PushBack(insert);
 }
 
