@@ -706,7 +706,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
@@ -839,7 +839,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	}
 
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
@@ -1392,7 +1392,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
                                                             const ArrowType &arrow_type, int64_t nested_offset,
                                                             const ValidityMask *parent_mask, uint64_t parent_offset) {
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	D_ASSERT(arrow_type.HasDictionary());
 	const bool has_nulls = CanContainNull(array, parent_mask);

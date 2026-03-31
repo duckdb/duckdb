@@ -48,6 +48,7 @@ public:
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
 		result.vector_type = VectorType::FLAT_VECTOR;
+		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
 		result.validity.Reset(capacity);
 		switch (internal_type) {
@@ -59,7 +60,6 @@ public:
 			auto &list_buffer = result.buffer->Cast<VectorListBuffer>();
 			list_buffer.SetCapacity(child_cache.capacity);
 			list_buffer.SetSize(0);
-			list_buffer.SetAuxiliaryData(nullptr);
 
 			auto &list_child = list_buffer.GetChild();
 			child_cache.ResetFromCache(list_child);

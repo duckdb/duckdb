@@ -3,6 +3,53 @@
 
 namespace duckdb {
 
+VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)), heap(AllocateHeap()) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
+VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
+    : StandardVectorBuffer(allocator, 0), heap(AllocateHeap(allocator)) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
+VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t data_size)
+    : StandardVectorBuffer(allocator, data_size), heap(AllocateHeap(allocator)) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
+VectorStringBuffer::VectorStringBuffer(idx_t data_size) : StandardVectorBuffer(data_size), heap(AllocateHeap()) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
+VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p) : StandardVectorBuffer(data_ptr_p), heap(AllocateHeap()) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
+    : StandardVectorBuffer(std::move(data_p)), heap(AllocateHeap()) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
+VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : StandardVectorBuffer(idx_t(0)), heap(AllocateHeap()) {
+	buffer_type = type;
+}
+
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
+    : StandardVectorBuffer(std::move(data_p)), heap(AllocateHeap()) {
+	auxiliary_data = other.auxiliary_data;
+}
+
+StringHeap &VectorStringBuffer::AllocateHeap(Allocator &allocator) {
+	auto data = make_uniq<StringHeapHolder>(allocator);
+	auto &result = data->heap;
+	AddAuxiliaryData(std::move(data));
+	return result;
+}
+
+StringHeap &VectorStringBuffer::AllocateHeap() {
+	return AllocateHeap(Allocator::DefaultAllocator());
+}
+
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
@@ -24,6 +71,11 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		throw InternalException("StringVector::GetStringBuffer - vector is not of internal type VARCHAR but of type %s",
 		                        vector.GetType());
 	}
+	// check if the main buffer is a VectorStringBuffer
+	if (vector.buffer && vector.buffer->GetBufferType() == VectorBufferType::STRING_BUFFER) {
+		return vector.buffer->Cast<VectorStringBuffer>();
+	}
+	// fall back to auxiliary (e.g. for cached vectors or vectors with external data pointers)
 	if (!vector.auxiliary) {
 		auto stored_allocator = vector.buffer ? vector.buffer->GetAllocator() : nullptr;
 		if (stored_allocator) {
@@ -69,15 +121,12 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	return string_buffer.EmptyString(len);
 }
 
-void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
-	auto &string_buffer = GetStringBuffer(vector);
-	string_buffer.AddHeapReference(make_buffer<ManagedVectorBuffer>(std::move(handle)));
+void StringVector::AddAuxiliaryData(Vector &vector, unique_ptr<AuxiliaryDataHolder> data) {
+	vector.buffer->AddAuxiliaryData(std::move(data));
 }
 
-void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
-	D_ASSERT(buffer.get() != vector.auxiliary.get());
-	auto &string_buffer = GetStringBuffer(vector);
-	string_buffer.AddHeapReference(std::move(buffer));
+void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
+	AddAuxiliaryData(vector, make_uniq<PinnedBufferHolder>(std::move(handle)));
 }
 
 void StringVector::AddHeapReference(Vector &vector, const Vector &other) {
@@ -85,13 +134,18 @@ void StringVector::AddHeapReference(Vector &vector, const Vector &other) {
 	D_ASSERT(other.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		StringVector::AddHeapReference(vector, DictionaryVector::Child(other));
+		AddHeapReference(vector, DictionaryVector::Child(other));
 		return;
 	}
-	if (!other.auxiliary) {
+	if (!other.buffer) {
 		return;
 	}
-	StringVector::AddBuffer(vector, other.auxiliary);
+	auto data = other.buffer->GetAuxiliaryData();
+	if (!data) {
+		// no auxiliary data to reference
+		return;
+	}
+	AddAuxiliaryData(vector, make_uniq<AuxiliaryDataSetHolder>(std::move(data)));
 }
 
 } // namespace duckdb

@@ -19,12 +19,18 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, i
 	if (type == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateStandardVector requires full list type");
 	}
+	if (type == PhysicalType::VARCHAR) {
+		return make_buffer<VectorStringBuffer>(capacity * GetTypeIdSize(type));
+	}
 	return make_buffer<StandardVectorBuffer>(capacity * GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 	if (type == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateConstantVector requires full list type");
+	}
+	if (type == PhysicalType::VARCHAR) {
+		return make_buffer<VectorStringBuffer>(GetTypeIdSize(type));
 	}
 	return make_buffer<StandardVectorBuffer>(GetTypeIdSize(type));
 }
@@ -41,16 +47,6 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
 	}
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
-}
-
-VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
-}
-
-VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
-    : VectorBuffer(VectorBufferType::STRING_BUFFER), heap(allocator) {
-}
-
-VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : VectorBuffer(type) {
 }
 
 VectorFSSTStringBuffer::VectorFSSTStringBuffer() : VectorStringBuffer(VectorBufferType::FSST_BUFFER) {
@@ -187,11 +183,10 @@ idx_t VectorArrayBuffer::GetChildSize() {
 	return size * array_size;
 }
 
-ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
-    : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(std::move(handle)) {
+PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {
 }
 
-ManagedVectorBuffer::~ManagedVectorBuffer() {
+PinnedBufferHolder::~PinnedBufferHolder() {
 }
 
 ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)

@@ -5581,23 +5581,6 @@ VariantValueType EnumUtil::FromString<VariantValueType>(const char *value) {
 	return static_cast<VariantValueType>(StringUtil::StringToEnum(GetVariantValueTypeValues(), 4, "VariantValueType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetVectorAuxiliaryDataTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(VectorAuxiliaryDataType::ARROW_AUXILIARY), "ARROW_AUXILIARY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value) {
-	return StringUtil::EnumToString(GetVectorAuxiliaryDataTypeValues(), 1, "VectorAuxiliaryDataType", static_cast<uint32_t>(value));
-}
-
-template<>
-VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value) {
-	return static_cast<VectorAuxiliaryDataType>(StringUtil::StringToEnum(GetVectorAuxiliaryDataTypeValues(), 1, "VectorAuxiliaryDataType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetVectorBufferTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(VectorBufferType::STANDARD_BUFFER), "STANDARD_BUFFER" },

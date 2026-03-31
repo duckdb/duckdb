@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
@@ -16,6 +17,10 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
 		vector.buffer = make_buffer<VectorListBuffer>(data, current_buffer);
+		return;
+	}
+	if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+		vector.buffer = make_buffer<VectorStringBuffer>(data);
 		return;
 	}
 	vector.buffer = make_buffer<StandardVectorBuffer>(data);

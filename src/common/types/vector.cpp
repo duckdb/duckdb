@@ -58,7 +58,11 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType:
 	if (type.IsNested()) {
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
-	buffer = make_buffer<StandardVectorBuffer>(dataptr);
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		buffer = make_buffer<VectorStringBuffer>(dataptr);
+	} else {
+		buffer = make_buffer<StandardVectorBuffer>(dataptr);
+	}
 }
 
 Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
@@ -210,15 +214,23 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto &list_buffer = other.buffer->Cast<VectorListBuffer>();
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<VectorListBuffer>(offset_ptr, list_buffer);
+		auxiliary.reset();
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;
-		AssignSharedPointer(auxiliary, other.auxiliary);
+	} else if (internal_type == PhysicalType::VARCHAR) {
+		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
+		auto string_buffer = make_buffer<VectorStringBuffer>(offset_ptr);
+		StringVector::AddHeapReference(*this, other);
+		buffer = std::move(string_buffer);
+		auxiliary.reset();
+		validity.Slice(other.validity, offset, end - offset);
+		vector_type = other.vector_type;
 	} else {
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
+		auxiliary.reset();
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;
-		AssignSharedPointer(auxiliary, other.auxiliary);
 	}
 }
 
@@ -398,7 +410,11 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		if (GetType().InternalType() == PhysicalType::LIST) {
 			throw InternalException("Resize for empty list not supported");
 		}
-		buffer = make_buffer<StandardVectorBuffer>(0);
+		if (GetType().InternalType() == PhysicalType::VARCHAR) {
+			buffer = make_buffer<VectorStringBuffer>(idx_t(0));
+		} else {
+			buffer = make_buffer<StandardVectorBuffer>(0);
+		}
 	}
 
 	// Obtain the resize information for each (nested) vector.
@@ -434,6 +450,9 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::LIST) {
 			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorListBuffer>();
 			new_buffer = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
+		} else if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::VARCHAR) {
+			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorStringBuffer>();
+			new_buffer = make_buffer<VectorStringBuffer>(std::move(new_data), old_buffer);
 		} else {
 			new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
 		}
@@ -1421,9 +1440,9 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	}
 }
 
-class StringDeserializeBuffer : public VectorBuffer {
+class StringDeserializeHolder : public AuxiliaryDataHolder {
 public:
-	explicit StringDeserializeBuffer(idx_t size) : VectorBuffer(VectorBufferType::OPAQUE_BUFFER) {
+	explicit StringDeserializeHolder(idx_t size) {
 		data = unique_ptr<data_t[]>(new data_t[size]);
 	}
 	unique_ptr<data_t[]> data;
@@ -1511,12 +1530,12 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
 				deserializer.ReadProperty(108, "length_data", length_data.get(), length_data_length);
 
-				auto byte_data_buffer = make_buffer<StringDeserializeBuffer>(byte_data_length.GetIndex());
+				auto byte_data_buffer = make_uniq<StringDeserializeHolder>(byte_data_length.GetIndex());
 				// directly read into a string buffer we can glue to the vector
 				deserializer.ReadProperty(109, "byte_data", byte_data_buffer->data.get(), byte_data_length.GetIndex());
 				auto lengths_read_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				auto byte_read_ptr = reinterpret_cast<const char *>(byte_data_buffer->data.get());
-				StringVector::AddBuffer(*this, byte_data_buffer);
+				StringVector::AddAuxiliaryData(*this, std::move(byte_data_buffer));
 
 				for (idx_t i = 0; i < count; ++i) {
 					if (!validity.RowIsValid(i)) {

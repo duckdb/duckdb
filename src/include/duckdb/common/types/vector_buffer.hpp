@@ -35,36 +35,30 @@ enum class VectorBufferType : uint8_t {
 	SEQUENCE_BUFFER      // holds a linear numeric sequence (start, increment)
 };
 
-enum class VectorAuxiliaryDataType : uint8_t {
-	ARROW_AUXILIARY // Holds Arrow Chunks that this vector depends on
+struct AuxiliaryDataHolder {
+	virtual ~AuxiliaryDataHolder() = default;
 };
 
-struct VectorAuxiliaryData {
-	explicit VectorAuxiliaryData(VectorAuxiliaryDataType type_p)
-	    : type(type_p) {
-
-	      };
-	VectorAuxiliaryDataType type;
-
-	virtual ~VectorAuxiliaryData() {
-	}
-
+class PinnedBufferHolder : public AuxiliaryDataHolder {
 public:
-	template <class TARGET>
-	TARGET &Cast() {
-		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
-		}
-		return reinterpret_cast<TARGET &>(*this);
+	explicit PinnedBufferHolder(BufferHandle handle);
+	~PinnedBufferHolder() override;
+
+private:
+	BufferHandle handle;
+};
+
+struct AuxiliaryData {
+	vector<unique_ptr<AuxiliaryDataHolder>> data;
+};
+
+class AuxiliaryDataSetHolder : public AuxiliaryDataHolder {
+public:
+	explicit AuxiliaryDataSetHolder(buffer_ptr<AuxiliaryData> data) : auxiliary_data(std::move(data)) {
 	}
 
-	template <class TARGET>
-	const TARGET &Cast() const {
-		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
-		}
-		return reinterpret_cast<const TARGET &>(*this);
-	}
+private:
+	buffer_ptr<AuxiliaryData> auxiliary_data;
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -79,16 +73,18 @@ public:
 	virtual data_ptr_t GetData() {
 		return nullptr;
 	}
-	VectorAuxiliaryData *GetAuxiliaryData() {
-		return aux_data.get();
-	}
 
-	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
-		aux_data = std::move(aux_data_p);
+	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
+		if (!auxiliary_data) {
+			auxiliary_data = make_buffer<AuxiliaryData>();
+		}
+		auxiliary_data->data.push_back(std::move(aux_data_p));
 	}
-
-	void MoveAuxiliaryData(VectorBuffer &source_buffer) {
-		SetAuxiliaryData(std::move(source_buffer.aux_data));
+	buffer_ptr<AuxiliaryData> GetAuxiliaryData() {
+		return auxiliary_data;
+	}
+	void ClearAuxiliaryData() {
+		auxiliary_data.reset();
 	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
@@ -105,13 +101,9 @@ public:
 		return buffer_type;
 	}
 
-	inline VectorAuxiliaryDataType GetAuxiliaryDataType() const {
-		return aux_data->type;
-	}
-
 protected:
 	VectorBufferType buffer_type;
-	unique_ptr<VectorAuxiliaryData> aux_data;
+	buffer_ptr<AuxiliaryData> auxiliary_data;
 
 public:
 	template <class TARGET>
@@ -157,16 +149,6 @@ public:
 protected:
 	data_ptr_t data_ptr;
 	AllocatedData allocated_data;
-};
-
-//! The ManagedVectorBuffer holds a buffer handle
-class ManagedVectorBuffer : public VectorBuffer {
-public:
-	explicit ManagedVectorBuffer(BufferHandle handle);
-	~ManagedVectorBuffer() override;
-
-private:
-	BufferHandle handle;
 };
 
 } // namespace duckdb

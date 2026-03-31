@@ -12,13 +12,27 @@
 
 namespace duckdb {
 
-class VectorStringBuffer : public VectorBuffer {
+struct StringHeapHolder : public AuxiliaryDataHolder {
+	explicit StringHeapHolder(Allocator &allocator) : heap(allocator) {
+	}
+
+	StringHeap heap;
+};
+
+class VectorStringBuffer : public StandardVectorBuffer {
 public:
 	VectorStringBuffer();
 	explicit VectorStringBuffer(Allocator &allocator);
+	VectorStringBuffer(Allocator &allocator, idx_t data_size);
+	explicit VectorStringBuffer(idx_t data_size);
+	explicit VectorStringBuffer(data_ptr_t data_ptr_p);
+	explicit VectorStringBuffer(AllocatedData &&data_p);
 	explicit VectorStringBuffer(VectorBufferType type);
+	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
 
 public:
+	StringHeap &GetHeap();
+
 	string_t AddString(const char *data, idx_t len) {
 		return heap.AddString(data, len);
 	}
@@ -36,15 +50,12 @@ public:
 		return heap.GetAllocator();
 	}
 
-	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
-		references.push_back(std::move(heap));
-	}
+private:
+	StringHeap &AllocateHeap(Allocator &allocator);
+	StringHeap &AllocateHeap();
 
 private:
-	//! The string heap of this buffer
-	StringHeap heap;
-	//! References to additional vector buffers referenced by this string buffer
-	vector<buffer_ptr<VectorBuffer>> references;
+	StringHeap &heap;
 };
 
 struct StringVector {
@@ -71,10 +82,10 @@ struct StringVector {
 	DUCKDB_API static ArenaAllocator &GetStringAllocator(Vector &vector);
 	//! Adds a reference to a handle that stores strings of this vector
 	DUCKDB_API static void AddHandle(Vector &vector, BufferHandle handle);
-	//! Adds a reference to an unspecified vector buffer that stores strings of this vector
-	DUCKDB_API static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
 	DUCKDB_API static void AddHeapReference(Vector &vector, const Vector &other);
+	//! Add a reference from this vector to the auxiliary data
+	DUCKDB_API static void AddAuxiliaryData(Vector &vector, unique_ptr<AuxiliaryDataHolder> data);
 
 	//! Allocate a buffer to store up to "len" bytes for a string
 	//! This can be turned into a proper string by using FinalizeBuffer afterwards
