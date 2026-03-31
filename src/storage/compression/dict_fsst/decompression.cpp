@@ -32,7 +32,8 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 		if (all_values_inlined) {
 			return FSSTPrimitives::DecompressInlinedValue(decoder, str_ptr, string_len);
 		} else {
-			return FSSTPrimitives::DecompressValue(decoder, StringVector::GetStringBuffer(result), str_ptr, string_len);
+			return FSSTPrimitives::DecompressValue(decoder, StringVector::GetStringAllocator(result), str_ptr,
+			                                       string_len);
 		}
 	}
 	default:

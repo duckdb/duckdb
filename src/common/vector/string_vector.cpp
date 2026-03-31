@@ -36,6 +36,10 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 	return vector.auxiliary.get()->Cast<VectorStringBuffer>();
 }
 
+ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {
+	return GetStringBuffer(vector).GetStringAllocator();
+}
+
 string_t StringVector::AddString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::BIT);
 	if (data.IsInlined()) {
