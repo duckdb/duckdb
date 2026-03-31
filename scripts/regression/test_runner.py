@@ -50,7 +50,7 @@ parser.add_argument(
     "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
 )
 parser.add_argument(
-    "--keep-benchmark-data", type=str, default=False, help="Benchmark data will not be deleted between tests"
+    "--keep-benchmark-data", action="store_true", help="Benchmark data will not be deleted between tests", default=False
 )
 parser.add_argument(
     "--regression-threshold-seconds",
