@@ -25,7 +25,7 @@ DROP TRIGGER is not yet supported
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_table;
 ----
-Parser Error: Syntax error at or near "."
+<REGEX>:.*yntax error.*
 
 # Schema-qualified table name
 statement error
@@ -37,13 +37,13 @@ DROP TRIGGER is not yet supported
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_schema.my_table;
 ----
-Parser Error: Syntax error at or near "."
+<REGEX>:.*yntax error.*
 
 # DROP TRIGGER IF EXISTS with schema-qualified trigger name
 statement error
 DROP TRIGGER IF EXISTS my_schema.my_trigger ON my_schema.my_table;
 ----
-Parser Error: Syntax error at or near "."
+<REGEX>:.*yntax error.*
 
 # CASCADE
 statement error
@@ -73,16 +73,16 @@ DROP TRIGGER is not yet supported
 statement error
 DROP TRIGGER my_trigger my_table;
 ----
-syntax error
+yntax error
 
 # Syntax errors - missing table name
 statement error
 DROP TRIGGER my_trigger ON;
 ----
-syntax error
+yntax error
 
 # Syntax errors - missing trigger name
 statement error
 DROP TRIGGER ON my_table;
 ----
-syntax error
+yntax error

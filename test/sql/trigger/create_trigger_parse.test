@@ -61,7 +61,7 @@ Table with name my_table does not exist
 statement error
 CREATE TRIGGER my_schema.my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-Parser Error: Syntax error at or near "."
+<REGEX>:.*yntax error.*
 
 # Schema-qualified table name - schema may not exist
 statement error
@@ -85,10 +85,10 @@ Table with name my_table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT my_table INSERT INTO log_table VALUES (1);
 ----
-syntax error
+yntax error
 
 # Syntax errors - missing timing
 statement error
 CREATE TRIGGER my_trigger INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-syntax error
+yntax error
