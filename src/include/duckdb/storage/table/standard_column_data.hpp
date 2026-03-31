@@ -30,6 +30,7 @@ public:
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t target_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) override;
+	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	            SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) override;
