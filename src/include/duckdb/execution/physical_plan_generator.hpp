@@ -94,6 +94,8 @@ public:
 	//! The order preservation type of the given operator decided by recursively looking at its children
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
 
+	//! Post-pass: walk the plan tree and inject FanOut wrappers on eligible sources
+	void InjectFanOut(PhysicalOperator &op);
 	//! Wrap a source with FanOut if it supports parallel fan-out and fan-out is enabled
 	PhysicalOperator &WrapWithFanOut(PhysicalOperator &source);
 

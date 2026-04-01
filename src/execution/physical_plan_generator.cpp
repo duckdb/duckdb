@@ -27,22 +27,49 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator>
 	return std::move(physical_plan);
 }
 
-PhysicalOperator &PhysicalPlanGenerator::WrapWithFanOut(PhysicalOperator &source) {
-	// Resolve: max(global_setting, func_flag) — DISABLED wins
-	auto setting_str = Settings::Get<ParallelizeSequentialSourcesSetting>(context);
-	auto global_flag = ParallelizeSequentialSource::AUTOMATIC;
-	if (setting_str == "enabled") {
-		global_flag = ParallelizeSequentialSource::ENABLED;
-	} else if (setting_str == "disabled") {
-		global_flag = ParallelizeSequentialSource::DISABLED;
+void PhysicalPlanGenerator::InjectFanOut(PhysicalOperator &op) {
+	// Recursively walk the plan tree and wrap eligible sources with FanOut
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		auto &child = op.children[i].get();
+		// Recurse first (bottom-up)
+		InjectFanOut(child);
+		// Only wrap table scans — other sources (ORDER BY, etc.) should not be wrapped
+		if (child.type != PhysicalOperatorType::TABLE_SCAN) {
+			continue;
+		}
+		auto &wrapped = WrapWithFanOut(child);
+		if (&wrapped != &child) {
+			op.children[i] = reference<PhysicalOperator>(wrapped);
+		}
 	}
-	auto func_flag = source.SourceSupportsParallelFanOut();
-	auto resolved = MaxValue(global_flag, func_flag);
-	if (resolved == ParallelizeSequentialSource::DISABLED) {
+}
+
+PhysicalOperator &PhysicalPlanGenerator::WrapWithFanOut(PhysicalOperator &source) {
+	// Only single-threaded sources can benefit from FanOut
+	if (!source.SingleThreadedSource()) {
 		return source;
 	}
-	if (resolved == ParallelizeSequentialSource::AUTOMATIC) {
-		// AUTOMATIC: engine decides — currently no auto-detection, skip
+	// Read the global setting and the per-function flag
+	auto setting_str = Settings::Get<ParallelizeSequentialSourcesSetting>(context);
+	auto global_setting = ParallelizeSequentialSource::AUTOMATIC;
+	if (setting_str == "enabled") {
+		global_setting = ParallelizeSequentialSource::ENABLED;
+	} else if (setting_str == "disabled") {
+		global_setting = ParallelizeSequentialSource::DISABLED;
+	}
+	auto func_setting = source.SourceSupportsParallelFanOut();
+	// DISABLED from either side is a veto
+	if (global_setting == ParallelizeSequentialSource::DISABLED || func_setting == ParallelizeSequentialSource::DISABLED) {
+		return source;
+	}
+	// Either side saying ENABLED triggers FanOut, otherwise no action
+	bool want_fan_out = false;
+	if (global_setting == ParallelizeSequentialSource::ENABLED) {
+		want_fan_out = true;
+	} else if (func_setting == ParallelizeSequentialSource::ENABLED) {
+		want_fan_out = true;
+	}
+	if (!want_fan_out) {
 		return source;
 	}
 	return Make<PhysicalFanOut>(source, source.estimated_cardinality);
@@ -66,6 +93,10 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_CREATE_PLAN);
 	physical_plan = PlanInternal(*op);
 	profiler.EndPhase();
+
+	// Post-pass: inject FanOut wrappers on sources that support parallel fan-out.
+	// Done after plan creation so index scans and other optimizations are already resolved.
+	InjectFanOut(physical_plan->Root());
 
 	// Return a reference to the root of this plan.
 	return physical_plan->Root();

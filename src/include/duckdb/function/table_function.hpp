@@ -504,6 +504,8 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	//! Whether this source is inherently single-threaded (MaxThreads will always be 1)
+	bool single_threaded_source = false;
 	//! Whether this sequential source should be automatically parallelized by the engine
 	ParallelizeSequentialSource parallelize_sequential_source = ParallelizeSequentialSource::AUTOMATIC;
 	//! Additional function info, passed to the bind

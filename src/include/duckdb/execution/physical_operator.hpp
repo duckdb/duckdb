@@ -146,6 +146,11 @@ public:
 		return false;
 	}
 
+	//! Whether this source is inherently single-threaded
+	virtual bool SingleThreadedSource() const {
+		return false;
+	}
+
 	//! Whether this source supports being wrapped by FanOut for parallel consumption
 	virtual ParallelizeSequentialSource SourceSupportsParallelFanOut() const;
 
