@@ -326,13 +326,13 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 	auto &func_name = func_expr.function.name;
 	if (func_name == BloomFilterScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<BloomFilterFunctionData>();
-		return column_name + " IN BF(" + data.key_column_name + ")";
+		return BloomFilterScalarFun::ToString(column_name, data.key_column_name);
 	} else if (func_name == PerfectHashJoinScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<PerfectHashJoinFunctionData>();
-		return column_name + " IN PHJ(" + data.key_column_name + ")";
+		return PerfectHashJoinScalarFun::ToString(column_name, data.key_column_name);
 	} else if (func_name == PrefixRangeScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<PrefixRangeFunctionData>();
-		return column_name + " IN PRF(" + data.key_column_name + ")";
+		return PrefixRangeScalarFun::ToString(column_name, data.key_column_name);
 	} else if (func_name == DynamicFilterScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
 		if (data.filter_data) {

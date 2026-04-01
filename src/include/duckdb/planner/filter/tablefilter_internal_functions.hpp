@@ -25,6 +25,9 @@ namespace duckdb {
 
 class BaseStatistics;
 class PerfectHashJoinExecutor;
+struct BloomFilterFunctionData;
+struct PerfectHashJoinFunctionData;
+struct PrefixRangeFunctionData;
 
 class BloomFilter {
 public:
@@ -210,6 +213,7 @@ struct BloomFilterScalarFun : public InternalTableFilterBloomFilterFun {
 	static constexpr const char *NAME = InternalTableFilterBloomFilterFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
+	static string ToString(const string &column_name, const string &key_column_name);
 };
 
 //! Factory for perfect hash join internal function
@@ -218,6 +222,7 @@ struct PerfectHashJoinScalarFun : public InternalTableFilterPerfectHashJoinFun {
 	static constexpr const char *NAME = InternalTableFilterPerfectHashJoinFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
+	static string ToString(const string &column_name, const string &key_column_name);
 };
 
 //! Factory for prefix range internal function
@@ -226,6 +231,7 @@ struct PrefixRangeScalarFun : public InternalTableFilterPrefixRangeFun {
 	static constexpr const char *NAME = InternalTableFilterPrefixRangeFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
+	static string ToString(const string &column_name, const string &key_column_name);
 };
 
 //! Factory for dynamic filter internal function

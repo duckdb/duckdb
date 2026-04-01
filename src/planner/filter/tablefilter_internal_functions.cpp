@@ -447,6 +447,10 @@ ScalarFunction BloomFilterScalarFun::GetFunction(const LogicalType &input_type) 
 	return func;
 }
 
+string BloomFilterScalarFun::ToString(const string &column_name, const string &key_column_name) {
+	return column_name + " IN BF(" + key_column_name + ")";
+}
+
 FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatisticsPruneInput &input) {
 	if (!input.bind_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -587,6 +591,10 @@ ScalarFunction PerfectHashJoinScalarFun::GetFunction(const LogicalType &input_ty
 	return func;
 }
 
+string PerfectHashJoinScalarFun::ToString(const string &column_name, const string &key_column_name) {
+	return column_name + " IN PHJ(" + key_column_name + ")";
+}
+
 FilterPropagateResult PerfectHashJoinScalarFun::FilterPrune(const FunctionStatisticsPruneInput &input) {
 	if (!input.bind_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -682,6 +690,10 @@ ScalarFunction PrefixRangeScalarFun::GetFunction(const LogicalType &input_type) 
 	func.serialize = TableFilterInternalSerialize;
 	func.deserialize = TableFilterInternalDeserialize;
 	return func;
+}
+
+string PrefixRangeScalarFun::ToString(const string &column_name, const string &key_column_name) {
+	return column_name + " IN PRF(" + key_column_name + ")";
 }
 
 FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatisticsPruneInput &input) {
