@@ -30,9 +30,9 @@ namespace duckdb {
 //! Used both as a per-function flag and as a global setting.
 //! Resolution: max(global_setting, func_flag) — DISABLED wins over anything.
 enum class ParallelizeSequentialSource : uint8_t {
-	AUTOMATIC = 0,  //! Engine decides (default)
-	ENABLED = 1,    //! Parallelize this source
-	DISABLED = 2    //! Never parallelize (vetoes everything)
+	AUTOMATIC = 0, //! Engine decides (default)
+	ENABLED = 1,   //! Parallelize this source
+	DISABLED = 2   //! Never parallelize (vetoes everything)
 };
 
 class BaseStatistics;

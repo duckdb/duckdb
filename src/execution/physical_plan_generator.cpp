@@ -12,6 +12,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,10 @@ PhysicalOperator &PhysicalPlanGenerator::WrapWithFanOut(PhysicalOperator &source
 	if (!source.SingleThreadedSource()) {
 		return source;
 	}
+	// No point fanning out if there's only 1 worker thread
+	if (TaskScheduler::GetScheduler(context).NumberOfThreads() <= 1) {
+		return source;
+	}
 	// Read the global setting and the per-function flag
 	auto setting_str = Settings::Get<ParallelizeSequentialSourcesSetting>(context);
 	auto global_setting = ParallelizeSequentialSource::AUTOMATIC;
@@ -59,7 +64,8 @@ PhysicalOperator &PhysicalPlanGenerator::WrapWithFanOut(PhysicalOperator &source
 	}
 	auto func_setting = source.SourceSupportsParallelFanOut();
 	// DISABLED from either side is a veto
-	if (global_setting == ParallelizeSequentialSource::DISABLED || func_setting == ParallelizeSequentialSource::DISABLED) {
+	if (global_setting == ParallelizeSequentialSource::DISABLED ||
+	    func_setting == ParallelizeSequentialSource::DISABLED) {
 		return source;
 	}
 	// Either side saying ENABLED triggers FanOut, otherwise no action

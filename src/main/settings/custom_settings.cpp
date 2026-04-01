@@ -180,7 +180,8 @@ void DisableDatabaseInvalidationSetting::OnSet(SettingCallbackInfo &info, Value 
 void ParallelizeSequentialSourcesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	auto val = StringUtil::Lower(StringValue::Get(input));
 	if (val != "automatic" && val != "enabled" && val != "disabled") {
-		throw InvalidInputException("Invalid value for parallelize_sequential_sources: '%s' (expected automatic/enabled/disabled)", val);
+		throw InvalidInputException(
+		    "Invalid value for parallelize_sequential_sources: '%s' (expected automatic/enabled/disabled)", val);
 	}
 	input = Value(val);
 }
