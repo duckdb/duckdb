@@ -513,7 +513,6 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 
 map<ProjectionIndex, unique_ptr<TableFilter>>
 TableFilterSet::GetTableFiltersForSerialization(Serializer &serializer) const {
-	(void)serializer;
 	map<ProjectionIndex, unique_ptr<TableFilter>> result;
 	for (auto &entry : filters) {
 		auto &expr_filter =
@@ -531,7 +530,6 @@ TableFilterSet::GetTableFiltersForSerialization(Serializer &serializer) const {
 
 map<ProjectionIndex, unique_ptr<TableFilter>> &
 TableFilterSet::GetTableFiltersForDeserialization(Deserializer &deserializer) {
-	(void)deserializer;
 	return filters;
 }
 

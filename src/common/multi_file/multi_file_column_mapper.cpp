@@ -824,7 +824,7 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 }
 
 static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type) {
-	return make_uniq<BoundReferenceExpression>(type, 0);
+	return make_uniq<BoundReferenceExpression>(type, storage_t(0));
 }
 
 static unique_ptr<Expression> CreateComparisonFilterExpression(ExpressionType comparison_type, Value constant,

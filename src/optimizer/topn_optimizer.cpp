@@ -23,7 +23,7 @@ static unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFi
 	auto dynamic_func = DynamicFilterScalarFun::GetFunction(type);
 	auto dynamic_bind = make_uniq<DynamicFilterFunctionData>(std::move(filter_data));
 	vector<unique_ptr<Expression>> args;
-	args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	args.push_back(make_uniq<BoundReferenceExpression>(type, storage_t(0)));
 	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(dynamic_func), std::move(args),
 	                                          std::move(dynamic_bind));
 }
@@ -32,7 +32,7 @@ static unique_ptr<Expression> WrapOptionalFilter(unique_ptr<Expression> child_ex
 	auto opt_func = OptionalFilterScalarFun::GetFunction(type);
 	auto opt_bind = make_uniq<OptionalFilterFunctionData>(std::move(child_expr));
 	vector<unique_ptr<Expression>> args;
-	args.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	args.push_back(make_uniq<BoundReferenceExpression>(type, storage_t(0)));
 	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(opt_func), std::move(args),
 	                                          std::move(opt_bind));
 }

@@ -243,7 +243,7 @@ bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value
 
 FilterPropagateResult DynamicFilterData::CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
                                                          const Value &constant) {
-	auto col_ref = make_uniq<BoundReferenceExpression>(stats.GetType(), 0);
+	auto col_ref = make_uniq<BoundReferenceExpression>(stats.GetType(), storage_t(0));
 	auto bound_constant = make_uniq<BoundConstantExpression>(constant);
 	auto expr = make_uniq<BoundComparisonExpression>(comparison_type, std::move(col_ref), std::move(bound_constant));
 	return ExpressionFilter::CheckExpressionStatistics(*expr, stats);
