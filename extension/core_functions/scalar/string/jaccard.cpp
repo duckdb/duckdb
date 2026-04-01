@@ -1,9 +1,6 @@
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 
 #include <bitset>
-#include <ctype.h>
 
 namespace duckdb {
 
