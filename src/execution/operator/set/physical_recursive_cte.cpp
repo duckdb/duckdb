@@ -375,11 +375,24 @@ public:
 
 	RecursiveCTEState &state;
 	const bool inline_execution;
+	bool prepared_for_schedule = false;
+
+	void PrepareForSchedule() {
+		// Root recursive pipeline events can be scheduled back-to-back while sharing operator instances.
+		// Prepare their global pipeline state up-front on the main thread so later task execution does
+		// not race with another root event resetting the same operator state.
+		pipeline->ResetForReschedule(false);
+		prepared_for_schedule = true;
+	}
 
 	void Schedule() override {
 		// Sink state is prepared up-front from the main thread. Reinitialize the remaining
 		// global state here, reusing existing state objects when operators expose reset hooks.
-		pipeline->ResetForReschedule(false);
+		// Dependency-free pipeline events can be prepared up-front on the main thread to avoid
+		// racing with another root event that shares operator instances.
+		if (!prepared_for_schedule) {
+			pipeline->ResetForReschedule(false);
+		}
 
 		auto max_threads = GetRecursivePipelineMaxThreads(state, *pipeline);
 
@@ -478,15 +491,16 @@ public:
 };
 
 struct RecursiveCTEEventStack {
-	RecursiveCTEEventStack(shared_ptr<Event> pipeline_event_p, shared_ptr<Event> pipeline_prepare_finish_event_p,
-	                       shared_ptr<Event> pipeline_finish_event_p, shared_ptr<Event> pipeline_complete_event_p)
+	RecursiveCTEEventStack(shared_ptr<RecursiveCTEPipelineEvent> pipeline_event_p,
+	                       shared_ptr<Event> pipeline_prepare_finish_event_p, shared_ptr<Event> pipeline_finish_event_p,
+	                       shared_ptr<Event> pipeline_complete_event_p)
 	    : pipeline_event(std::move(pipeline_event_p)),
 	      pipeline_prepare_finish_event(std::move(pipeline_prepare_finish_event_p)),
 	      pipeline_finish_event(std::move(pipeline_finish_event_p)),
 	      pipeline_complete_event(std::move(pipeline_complete_event_p)) {
 	}
 
-	shared_ptr<Event> pipeline_event;
+	shared_ptr<RecursiveCTEPipelineEvent> pipeline_event;
 	shared_ptr<Event> pipeline_prepare_finish_event;
 	shared_ptr<Event> pipeline_finish_event;
 	shared_ptr<Event> pipeline_complete_event;
@@ -1044,6 +1058,12 @@ static void ScheduleRecursivePipelines(const vector<shared_ptr<MetaPipeline>> &m
 				child1_entry->second.pipeline_finish_event->AddDependency(
 				    *child2_entry->second.pipeline_prepare_finish_event);
 			}
+		}
+	}
+
+	for (auto &entry : event_map) {
+		if (!entry.second.pipeline_event->HasDependencies()) {
+			entry.second.pipeline_event->PrepareForSchedule();
 		}
 	}
 
