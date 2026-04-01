@@ -21,7 +21,7 @@ statement ok
 SET wal_autocheckpoint='1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/autocheckpoint_latency.db' AS acp_db;
+ATTACH '{TEST_DIR}/autocheckpoint_latency.db' AS acp_db;
 
 statement ok
 CREATE TABLE acp_db.tbl(id INTEGER);
@@ -33,7 +33,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/acp_before.json';
+PRAGMA profiling_output = '{TEST_DIR}/acp_before.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true", "TOTAL_BYTES_WRITTEN": "true", "COMMIT_LOCAL_STORAGE_LATENCY": "true", "WRITE_TO_WAL_LATENCY": "true"}';
@@ -55,7 +55,7 @@ SELECT
     CASE WHEN total_bytes_written = 0 THEN 'true' ELSE 'false' END,
     CASE WHEN commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
     CASE WHEN write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
-FROM '__TEST_DIR__/acp_before.json';
+FROM '{TEST_DIR}/acp_before.json';
 ----
 true	true	true	true
 
@@ -67,7 +67,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/acp_after.json';
+PRAGMA profiling_output = '{TEST_DIR}/acp_after.json';
 
 # This INSERT should trigger auto-checkpoint on commit.
 statement ok
@@ -83,7 +83,7 @@ SELECT
     CASE WHEN total_bytes_written > 0 THEN 'true' ELSE 'false' END,
     CASE WHEN commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
     CASE WHEN write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
-FROM '__TEST_DIR__/acp_after.json';
+FROM '{TEST_DIR}/acp_after.json';
 ----
 true	true	true	true
 

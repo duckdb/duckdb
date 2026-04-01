@@ -54,6 +54,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
+#include "highlighting.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
@@ -2894,6 +2895,55 @@ string ShellState::GetDefaultDuckDBRC() {
 	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
 }
 
+MetadataResult ShellState::FormatSQL(string &sql) {
+	if (sql.empty()) {
+		// no input
+		return MetadataResult::SUCCESS;
+	}
+	// Format through the duckdb_format_sql SQL function using a prepared statement.
+	auto result = conn->Query("SELECT duckdb_format_sql($1)", duckdb::Value(sql));
+	if (result->HasError()) {
+		PrintF(PrintOutput::STDERR, "%s: %s\n", program_name, result->GetError().c_str());
+		return MetadataResult::FAIL;
+	}
+	sql = string();
+	for (auto &row : *result) {
+		sql = row.GetValue<string>(0) + "\n";
+	}
+	return MetadataResult::SUCCESS;
+}
+
+void ShellState::HighlightSQL(string &sql) {
+	if (!stdout_is_console || !duckdb::Highlighting::IsEnabled()) {
+		// highlighting is not enabled
+		return;
+	}
+	auto tokens = duckdb::Highlighting::Tokenize(const_cast<char *>(sql.c_str()), sql.size(), false);
+	auto highlighted =
+	    duckdb::Highlighting::HighlightText(const_cast<char *>(sql.c_str()), sql.size(), 0, sql.size(), tokens);
+	sql = std::move(highlighted);
+}
+
+string ShellState::ReadFileContents(FILE *f) {
+	char buf[4096];
+	size_t n;
+	string result;
+	while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+		result.append(buf, n);
+	}
+	return result;
+}
+
+string ShellState::ReadFileContents(const string &filename) {
+	FILE *f = fopen(filename.c_str(), "rb");
+	if (!f) {
+		throw duckdb::IOException("cannot open '%s' for reading: %s\n", filename.c_str(), strerror(errno));
+	}
+	string result = ReadFileContents(f);
+	fclose(f);
+	return result;
+}
+
 /*
 ** Read input from the file given by sqliterc_override.  Or if that
 ** parameter is NULL, take input from ~/.duckdbrc
@@ -2944,6 +2994,37 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 /*
 ** Linenoise completion callback
 */
+static char *linenoise_format(const char *zLine) {
+	auto &state = ShellState::Get();
+	if (state.auto_format == AutoFormatMode::NO_AUTO_FORMAT) {
+		return nullptr;
+	}
+	if (!state.conn) {
+		return nullptr;
+	}
+	if (zLine[0] == '.' || zLine[0] == '#' || zLine[0] == '\3') {
+		return nullptr;
+	}
+	try {
+		auto prepared = state.conn->Prepare("SELECT duckdb_format_sql($1)");
+		if (prepared->HasError()) {
+			return nullptr;
+		}
+		vector<duckdb::Value> params = {duckdb::Value(string(zLine))};
+		auto result = prepared->Execute(params, /*allow_stream_result=*/false);
+		if (result->HasError()) {
+			return nullptr;
+		}
+		auto row = result->begin();
+		if (row == result->end() || (*row).IsNull(0)) {
+			return nullptr;
+		}
+		return strdup((*row).GetValue<string>(0).c_str());
+	} catch (std::exception &) {
+		return nullptr;
+	}
+}
+
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	auto &state = ShellState::Get();
 	try {
@@ -3254,6 +3335,7 @@ int RunShell(int argc, const char **argv) {
 #ifdef HAVE_LINENOISE
 			if (data.rl_version == ReadLineVersion::LINENOISE) {
 				linenoiseSetCompletionCallback(linenoise_completion);
+				linenoiseSetFormatCallback(linenoise_format);
 			}
 #endif
 			data.in = 0;

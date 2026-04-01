@@ -162,6 +162,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
+	functions.push_back(GetMergePatchDiffFunction());
 	functions.push_back(GetDeepMergeFunction());
 
 	// Structure/Transform

@@ -128,7 +128,7 @@ query I
 SELECT
 	CASE WHEN stats.min = expected_result.min AND stats.max = expected_result.max THEN NULL ELSE {'stats': stats, 'expected_result': expected_result} END
 FROM (
-	SELECT STATS(EXTRACT(${component} FROM d)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '${component}') expected_result FROM dates LIMIT 1
+	SELECT STATS(EXTRACT({component} FROM d)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '{component}') expected_result FROM dates LIMIT 1
 )
 ----
 NULL

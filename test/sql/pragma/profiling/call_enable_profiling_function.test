@@ -5,7 +5,7 @@
 require json
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/test.txt'
+PRAGMA profiling_output = '{TEST_DIR}/test.txt'
 
 #########################################################################################################################
 #            disable_profiling()
@@ -77,19 +77,19 @@ Not implemented Error
 query I
 SELECT CURRENT_SETTING('profiling_output');
 ----
-__TEST_DIR__/test.txt
+{TEST_DIR}/test.txt
 
 statement ok
-CALL enable_profiling(save_location='__TEST_DIR__/other_file.txt')
+CALL enable_profiling(save_location='{TEST_DIR}/other_file.txt')
 
 query I
 SELECT CURRENT_SETTING('profiling_output');
 ----
-__TEST_DIR__/other_file.txt
+{TEST_DIR}/other_file.txt
 
 # doesn't work on a wrong file type
 statement error
-CALL enable_profiling(save_location='__TEST_DIR__/other_file.db')
+CALL enable_profiling(save_location='{TEST_DIR}/other_file.db')
 ----
 Parser Error: Invalid output file type: db
 
@@ -256,7 +256,7 @@ Invalid Error: Unnamed parameters cannot come after named parameters
 
 # Set profiling format and save location to json file
 statement ok
-CALL enable_profiling(format='json', save_location='__TEST_DIR__/test.json')
+CALL enable_profiling(format='json', save_location='{TEST_DIR}/test.json')
 
 query I
 SELECT CURRENT_SETTING('enable_profiling');
@@ -266,11 +266,11 @@ json
 query I
 SELECT CURRENT_SETTING('profiling_output');
 ----
-__TEST_DIR__/test.json
+{TEST_DIR}/test.json
 
 # format and save location file type don't match
 statement error
-CALL enable_profiling(format='query_tree', save_location='__TEST_DIR__/test.json')
+CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.json')
 ----
 Invalid Input Error: EnableProfiling: the save_location must be a .txt file or match the specified format.
 
@@ -279,7 +279,7 @@ Invalid Input Error: EnableProfiling: the save_location must be a .txt file or m
 #########################################################################################################################
 
 statement ok
-CALL enable_profiling(format='query_tree', save_location='__TEST_DIR__/test.txt', coverage='select', mode='standard', metrics=['QUERY_NAME', 'LATENCY'])
+CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['QUERY_NAME', 'LATENCY'])
 
 query I
 SELECT CURRENT_SETTING('enable_profiling');
@@ -289,7 +289,7 @@ query_tree
 query I
 SELECT CURRENT_SETTING('profiling_output');
 ----
-__TEST_DIR__/test.txt
+{TEST_DIR}/test.txt
 
 query I
 SELECT CURRENT_SETTING('profiling_coverage');

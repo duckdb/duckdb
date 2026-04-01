@@ -3,7 +3,7 @@
 # group: [bitpacking]
 
 # load the DB from disk
-load __TEST_DIR__/test_bitpacking.db
+load {TEST_DIR}/test_bitpacking.db
 
 statement ok
 PRAGMA force_compression = 'bitpacking'
@@ -11,7 +11,7 @@ PRAGMA force_compression = 'bitpacking'
 foreach bitpacking_mode delta_for for constant_delta constant
 
 statement ok
-PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+PRAGMA force_bitpacking_mode='{bitpacking_mode}'
 
 statement ok
 CREATE TABLE test (s ROW(a INTEGER));

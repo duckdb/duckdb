@@ -113,8 +113,8 @@ foreach type TINYINT SMALLINT INTEGER BIGINT
 statement ok
 CREATE OR REPLACE TABLE prf_probe_small (
 	id INTEGER,
-	k ${type},
-	g ${type}
+	k {type},
+	g {type}
 );
 
 statement ok
@@ -131,8 +131,8 @@ INSERT INTO prf_probe_small VALUES
 
 statement ok
 CREATE OR REPLACE TABLE prf_build_small (
-	k ${type},
-	g ${type},
+	k {type},
+	g {type},
 	payload INTEGER
 );
 
