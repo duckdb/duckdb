@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
@@ -47,7 +48,7 @@ inline bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, i
 			if (index <= 0) {
 				return false;
 			}
-			child_idx = static_cast<idx_t>(index - 1);
+			child_idx = NumericCast<idx_t>(index - 1);
 			return true;
 		}
 		return false;
