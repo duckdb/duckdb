@@ -329,8 +329,7 @@ bool BuildProbeSideOptimizer::ContainsCorrelationSensitiveOperators(const Logica
 	return false;
 }
 
-BuildProbeSideOptimizer::RecursiveProbeSidePreference
-BuildProbeSideOptimizer::GetRecursiveProbeSidePreference(const LogicalOperator &op) const {
+RecursiveProbeSidePreference BuildProbeSideOptimizer::GetRecursiveProbeSidePreference(const LogicalOperator &op) const {
 	if (active_recursive_cte_indexes.empty() || op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return RecursiveProbeSidePreference::NONE;
 	}

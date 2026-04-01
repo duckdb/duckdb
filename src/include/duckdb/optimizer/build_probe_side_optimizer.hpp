@@ -24,11 +24,12 @@ struct BuildSize {
 	}
 };
 
+enum class RecursiveProbeSidePreference : uint8_t { NONE, KEEP, SWAP };
+
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
 private:
 	static constexpr idx_t COLUMN_COUNT_PENALTY = 2;
 	static constexpr double PREFER_RIGHT_DEEP_PENALTY = 0.15;
-	enum class RecursiveProbeSidePreference : uint8_t { NONE, KEEP, SWAP };
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
