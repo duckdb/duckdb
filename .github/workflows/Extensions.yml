@@ -91,10 +91,8 @@ jobs:
       main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
       rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
-      external_extensions_config: ${{ steps.set-external-extensions1.outputs.extension_config }}
-      external_extensions2_config: ${{ steps.set-external-extensions2.outputs.extension_config }}
-      external_extensions_exclude_archs: ${{ steps.set-external-extensions1.outputs.exclude_archs }}
-      external_extensions2_exclude_archs: ${{ steps.set-external-extensions2.outputs.exclude_archs }}
+      external_extensions_config: ${{ steps.set-external-extensions.outputs.extension_config }}
+      external_extensions_exclude_archs: ${{ steps.set-external-extensions.outputs.exclude_archs }}
 
     env:
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
@@ -140,28 +138,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
-      - id: set-external-extensions1
-        name: Configure External extensions (batch 1)
+      - id: set-external-extensions
+        name: Configure External extensions
         env:
           CONFIG_FILE: .github/config/external_extensions.cmake
           DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
         run: |
           echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
-          external_extensions="$(<"$CONFIG_FILE")"
-          {
-            echo "extension_config<<EOF"
-            echo "$external_extensions"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          cat "$GITHUB_OUTPUT"
-
-      - id: set-external-extensions2
-        name: Configure External extensions (batch 2)
-        env:
-          CONFIG_FILE: .github/config/external_extensions2.cmake
-          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
-        run: |
-          echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS;osx_amd64" >> "$GITHUB_OUTPUT"
           external_extensions="$(<"$CONFIG_FILE")"
           {
             echo "extension_config<<EOF"
@@ -221,39 +204,12 @@ jobs:
       extra_extension_config: ${{ matrix.extension_config }}
       runners: ${{ inputs.runners }}
 
-  # Build the extensions from .github/config/external_extensions2.cmake
-  external-extensions2:
-    name: External Extensions (2nd batch)
-    needs:
-      - load-extension-configs
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
-    with:
-      # We piggy-back extension-template to build the extensions in extension_config
-      override_repository: duckdb/extension-template
-      override_ref: main
-      upload_all_extensions: true
-      extension_name: external-extensions2
-      set_caller_as_duckdb: true
-      duckdb_version: ${{ inputs.git_ref }}
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
-      exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions2_exclude_archs }}
-      extra_toolchains: 'rust'
-      use_merged_vcpkg_manifest: '1'
-      duckdb_tag: ${{ inputs.override_git_describe }}
-      skip_tests: ${{ inputs.skip_tests }}
-      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
-      extensions_test_selection: 'complete'
-      extra_extension_config: ${{ needs.load-extension-configs.outputs.external_extensions2_config }}
-      runners: ${{ inputs.runners }}
-
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
     name: Create Extension Repository
     runs-on: ubuntu-slim
     needs:
       - extensions-build
-      - external-extensions2
     steps:
       - uses: actions/checkout@v6
 
@@ -272,14 +228,8 @@ jobs:
       - uses: actions/download-artifact@v5
         name: Download external extensions
         with:
-          pattern: external-extensions1*
-          path: /tmp/repository_generation/external-extensions1
-
-      - uses: actions/download-artifact@v5
-        name: Download external extensions (2nd batch)
-        with:
-          pattern: external-extensions2*
-          path: /tmp/repository_generation/external-extensions2
+          pattern: external-extensions*
+          path: /tmp/repository_generation/external-extensions
 
       - name: Print all extensions
         run: |
@@ -288,12 +238,14 @@ jobs:
       - name: Merge into single repository
         shell: bash
         run: |
-          mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}
           shopt -s nullglob
-          for platform_dir in /tmp/repository_generation/*/*/*; do
-            platform="$(basename "$platform_dir")"
-            mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}/"$platform"
-            cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.git_ref }}/"$platform"
+          for version_dir in /tmp/repository_generation/*/*/*; do
+            version="$(basename "$version_dir")"
+            for platform_dir in "$version_dir"/*; do
+              platform="$(basename "$platform_dir")"
+              mkdir -p /tmp/merged_repository/"$version"/"$platform"
+              cp -r "$platform_dir"/. /tmp/merged_repository/"$version"/"$platform"
+            done
           done
           tree /tmp/merged_repository
 

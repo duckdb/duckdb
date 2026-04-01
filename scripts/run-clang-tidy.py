@@ -78,9 +78,9 @@ def make_absolute(f, directory):
     return os.path.normpath(os.path.join(directory, f))
 
 
-def is_ignored_file(path):
+def is_ignored_file(path, third_party_path):
     normalized = os.path.normpath(path)
-    return normalized.startswith('third_party' + os.sep)
+    return normalized == third_party_path or normalized.startswith(third_party_path + os.sep)
 
 
 def get_tidy_invocation(
@@ -282,6 +282,8 @@ def main():
     # Load the database and extract all files.
     database = json.load(open(os.path.join(build_path, db_path)))
     files = [make_absolute(entry['file'], entry['directory']) for entry in database]
+    source_root = os.path.commonpath(files)
+    third_party_path = os.path.join(source_root, 'third_party')
 
     max_task = args.j
     if max_task == 0:
@@ -309,7 +311,7 @@ def main():
 
         # Fill the queue with files.
         for name in files:
-            if is_ignored_file(name):
+            if is_ignored_file(name, third_party_path):
                 continue
             if file_name_re.search(name):
                 task_queue.put(name)
