@@ -159,6 +159,9 @@ public:
 		buffer = other.buffer;
 	}
 
+	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
+	void AddHeapReference(const Vector &other);
+
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.

@@ -115,7 +115,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 }
 
 void StringVector::AddAuxiliaryData(Vector &vector, unique_ptr<AuxiliaryDataHolder> data) {
-	vector.buffer->AddAuxiliaryData(std::move(data));
+	vector.AddAuxiliaryData(std::move(data));
 }
 
 void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
@@ -123,22 +123,7 @@ void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
 }
 
 void StringVector::AddHeapReference(Vector &vector, const Vector &other) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	D_ASSERT(other.GetType().InternalType() == PhysicalType::VARCHAR);
-
-	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		AddHeapReference(vector, DictionaryVector::Child(other));
-		return;
-	}
-	if (!other.buffer) {
-		return;
-	}
-	auto data = other.buffer->GetAuxiliaryData();
-	if (!data) {
-		// no auxiliary data to reference
-		return;
-	}
-	AddAuxiliaryData(vector, make_uniq<AuxiliaryDataSetHolder>(std::move(data)));
+	vector.AddHeapReference(other);
 }
 
 } // namespace duckdb

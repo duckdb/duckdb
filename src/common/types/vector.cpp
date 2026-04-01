@@ -401,6 +401,26 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	}
 }
 
+void Vector::AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data) {
+	buffer->AddAuxiliaryData(std::move(data));
+}
+
+void Vector::AddHeapReference(const Vector &other) {
+	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		AddHeapReference(DictionaryVector::Child(other));
+		return;
+	}
+	if (!other.buffer) {
+		return;
+	}
+	auto data = other.buffer->GetAuxiliaryData();
+	if (!data) {
+		// no auxiliary data to reference
+		return;
+	}
+	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(std::move(data)));
+}
+
 void Vector::Resize(idx_t current_size, idx_t new_size) {
 	// The vector does not contain any data.
 	if (!buffer) {
