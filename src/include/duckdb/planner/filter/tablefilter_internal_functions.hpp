@@ -124,6 +124,10 @@ struct DynamicFilterData {
 struct TableFilterInternalFunctions {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
+	static bool IsInternalTableFilterFunction(const string &name);
+	static bool IsInternalTableFilterFunction(const ScalarFunction &function) {
+		return IsInternalTableFilterFunction(function.name);
+	}
 };
 
 //! FunctionData for bloom filter internal function

@@ -378,7 +378,7 @@ string ExpressionFilter::ExpressionToFriendlyString(const Expression &expression
 		for (auto &child : conj.children) {
 			if (child->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 				auto &func = child->Cast<BoundFunctionExpression>();
-				if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+				if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
 					has_internal = true;
 					break;
 				}

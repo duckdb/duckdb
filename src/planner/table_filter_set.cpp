@@ -32,7 +32,7 @@ struct LegacyStructPathEntry {
 static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+		if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
 			return true;
 		}
 	}
@@ -279,7 +279,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+		if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}

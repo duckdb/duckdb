@@ -514,7 +514,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 			}
 			return true;
 		}
-		if (StringUtil::StartsWith(func.function.name, "__internal_tablefilter_")) {
+		if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
 			return true;
 		}
 	}

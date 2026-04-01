@@ -39,6 +39,18 @@ unique_ptr<FunctionData> TableFilterInternalFunctions::Bind(ClientContext &conte
                                                             vector<unique_ptr<Expression>> &arguments) {
 	throw BinderException("Table filter functions are for internal use only!");
 }
+
+bool TableFilterInternalFunctions::IsInternalTableFilterFunction(const string &name) {
+	static const char *const INTERNAL_TABLE_FILTER_FUNCTIONS[] = {
+	    BloomFilterScalarFun::NAME,     DynamicFilterScalarFun::NAME, OptionalFilterScalarFun::NAME,
+	    PerfectHashJoinScalarFun::NAME, PrefixRangeScalarFun::NAME,   SelectivityOptionalFilterScalarFun::NAME};
+	for (auto function_name : INTERNAL_TABLE_FILTER_FUNCTIONS) {
+		if (name == function_name) {
+			return true;
+		}
+	}
+	return false;
+}
 // LCOV_EXCL_STOP
 
 static void TableFilterInternalSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
