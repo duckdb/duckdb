@@ -824,6 +824,13 @@ string DynamicFilterScalarFun::ToString(const string &column_name, bool has_filt
 	return "Dynamic Filter";
 }
 
+static string OptionalFilterToString(const string &child_filter_string) {
+	if (child_filter_string.empty()) {
+		return "optional";
+	}
+	return "optional: " + child_filter_string;
+}
+
 //===----------------------------------------------------------------------===//
 // Optional Filter Scalar Function
 //===----------------------------------------------------------------------===//
@@ -854,6 +861,10 @@ FilterPropagateResult OptionalFilterScalarFun::FilterPrune(const FunctionStatist
 	}
 	// Delegate to the child expression's statistics check
 	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
+}
+
+string OptionalFilterScalarFun::ToString(const string &child_filter_string) {
+	return OptionalFilterToString(child_filter_string);
 }
 
 //===----------------------------------------------------------------------===//
@@ -924,6 +935,10 @@ FilterPropagateResult SelectivityOptionalFilterScalarFun::FilterPrune(const Func
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
+}
+
+string SelectivityOptionalFilterScalarFun::ToString(const string &child_filter_string) {
+	return OptionalFilterToString(child_filter_string);
 }
 
 ScalarFunction InternalTableFilterBloomFilterFun::GetFunction() {

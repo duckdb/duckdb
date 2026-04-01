@@ -321,26 +321,27 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 		auto &data = func_expr.bind_info->Cast<PrefixRangeFunctionData>();
 		return PrefixRangeScalarFun::ToString(column_name, data.key_column_name);
 	} else if (func_name == DynamicFilterScalarFun::NAME) {
-		const auto has_filter_data = func_expr.bind_info && func_expr.bind_info->Cast<DynamicFilterFunctionData>().filter_data;
+		const auto has_filter_data =
+		    func_expr.bind_info && func_expr.bind_info->Cast<DynamicFilterFunctionData>().filter_data;
 		return DynamicFilterScalarFun::ToString(column_name, has_filter_data);
 	} else if (func_name == OptionalFilterScalarFun::NAME) {
-		if (!func_expr.bind_info) {
-			return "optional";
+		string child_filter_string;
+		if (func_expr.bind_info) {
+			auto &data = func_expr.bind_info->Cast<OptionalFilterFunctionData>();
+			if (data.child_filter_expr) {
+				child_filter_string = ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+			}
 		}
-		auto &data = func_expr.bind_info->Cast<OptionalFilterFunctionData>();
-		if (!data.child_filter_expr) {
-			return "optional";
-		}
-		return "optional: " + ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+		return OptionalFilterScalarFun::ToString(child_filter_string);
 	} else if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
-		if (!func_expr.bind_info) {
-			return "optional";
+		string child_filter_string;
+		if (func_expr.bind_info) {
+			auto &data = func_expr.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			if (data.child_filter_expr) {
+				child_filter_string = ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+			}
 		}
-		auto &data = func_expr.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-		if (!data.child_filter_expr) {
-			return "optional";
-		}
-		return "optional: " + ExpressionToFriendlyString(*data.child_filter_expr, column_name);
+		return SelectivityOptionalFilterScalarFun::ToString(child_filter_string);
 	}
 	return string();
 }

@@ -24,6 +24,7 @@
 namespace duckdb {
 
 class BaseStatistics;
+class Expression;
 class PerfectHashJoinExecutor;
 struct BloomFilterFunctionData;
 struct PerfectHashJoinFunctionData;
@@ -264,6 +265,7 @@ struct OptionalFilterScalarFun : public InternalTableFilterOptionalFun {
 	static constexpr const char *NAME = InternalTableFilterOptionalFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
+	static string ToString(const string &child_filter_string);
 };
 
 //! Factory for selectivity-optional filter internal function
@@ -272,6 +274,7 @@ struct SelectivityOptionalFilterScalarFun : public InternalTableFilterSelectivit
 	static constexpr const char *NAME = InternalTableFilterSelectivityOptionalFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
+	static string ToString(const string &child_filter_string);
 };
 
 } // namespace duckdb
