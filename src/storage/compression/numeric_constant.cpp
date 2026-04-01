@@ -1,3 +1,4 @@
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -12,11 +13,11 @@
 
 namespace duckdb {
 
-static const BoundFunctionExpression *TryGetFunctionExpression(const Expression &expression) {
+static optional_ptr<const BoundFunctionExpression> TryGetFunctionExpression(const Expression &expression) {
 	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return nullptr;
 	}
-	return &expression.Cast<BoundFunctionExpression>();
+	return expression.Cast<BoundFunctionExpression>();
 }
 
 static bool TryExpressionFiltersNullValues(const Expression &expression, ExpressionFilterState &state,
