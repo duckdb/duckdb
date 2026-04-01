@@ -128,12 +128,14 @@ jobs:
       - name: Merge into single repository
         shell: bash
         run: |
-          mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}
           shopt -s nullglob
-          for platform_dir in /tmp/repository_generation/*/*/*; do
-            platform="$(basename "$platform_dir")"
-            mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
-            cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
+          for version_dir in /tmp/repository_generation/*/*/*; do
+            version="$(basename "$version_dir")"
+            for platform_dir in "$version_dir"/*; do
+              platform="$(basename "$platform_dir")"
+              mkdir -p /tmp/merged_repository/"$version"/"$platform"
+              cp -r "$platform_dir"/. /tmp/merged_repository/"$version"/"$platform"
+            done
           done
           tree /tmp/merged_repository
 
