@@ -7,7 +7,7 @@ require autocomplete
 statement error
 ATTACH unknown_scalar('test.db') AS db;
 ----
-<REGEX>:(.*Parser Error: syntax error at or near.*|.*Catalog Error: Scalar function with name.*)
+<REGEX>:(.*Parser Error: syntax error at or near.*|.*Catalog Error: Scalar Function with name.*)
 
 statement ok
 ATTACH ':memory:' AS memdb
