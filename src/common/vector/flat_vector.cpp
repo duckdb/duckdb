@@ -7,11 +7,10 @@
 namespace duckdb {
 
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t data_size)
-    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr), allocator(allocator) {
+    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
 	if (data_size > 0) {
-		auto allocated_data = allocator.Allocate(data_size);
+		allocated_data = allocator.Allocate(data_size);
 		data_ptr = allocated_data.get();
-		AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(allocated_data)));
 	}
 }
 StandardVectorBuffer::StandardVectorBuffer(idx_t data_size)
@@ -21,8 +20,7 @@ StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p)
     : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
 }
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p)
-    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocator(data_p.GetAllocator()) {
-	AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(data_p)));
+    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocated_data(std::move(data_p)) {
 }
 
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {
@@ -35,7 +33,8 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	}
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
-		vector.buffer = make_buffer<VectorListBuffer>(data, current_buffer);
+		vector.buffer = make_buffer<VectorListBuffer>(data, current_buffer.GetChild(), current_buffer.GetCapacity(),
+		                                              current_buffer.GetSize());
 		return;
 	}
 	if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {

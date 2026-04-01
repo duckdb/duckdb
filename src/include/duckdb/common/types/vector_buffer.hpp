@@ -47,26 +47,13 @@ private:
 	BufferHandle handle;
 };
 
-struct AuxiliaryData {
-	vector<unique_ptr<AuxiliaryDataHolder>> data;
-};
-
-class AuxiliaryDataSetHolder : public AuxiliaryDataHolder {
+class VectorBufferHolder : public AuxiliaryDataHolder {
 public:
-	explicit AuxiliaryDataSetHolder(buffer_ptr<AuxiliaryData> data) : auxiliary_data(std::move(data)) {
+	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer) : vector_buffer(std::move(buffer)) {
 	}
 
 private:
-	buffer_ptr<AuxiliaryData> auxiliary_data;
-};
-
-class AuxiliaryAllocatedDataHolder : public AuxiliaryDataHolder {
-public:
-	explicit AuxiliaryAllocatedDataHolder(AllocatedData &&data_p) : allocated_data(std::move(data_p)) {
-	}
-
-private:
-	AllocatedData allocated_data;
+	buffer_ptr<VectorBuffer> vector_buffer;
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -83,12 +70,9 @@ public:
 	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
-		if (!auxiliary_data) {
-			auxiliary_data = make_buffer<AuxiliaryData>();
-		}
-		auxiliary_data->data.push_back(std::move(aux_data_p));
+		auxiliary_data.push_back(std::move(aux_data_p));
 	}
-	buffer_ptr<AuxiliaryData> GetAuxiliaryData() const {
+	vector<unique_ptr<AuxiliaryDataHolder>> &GetAuxiliaryDataMutable() {
 		return auxiliary_data;
 	}
 
@@ -108,7 +92,7 @@ public:
 
 protected:
 	VectorBufferType buffer_type;
-	buffer_ptr<AuxiliaryData> auxiliary_data;
+	vector<unique_ptr<AuxiliaryDataHolder>> auxiliary_data;
 
 public:
 	template <class TARGET>
