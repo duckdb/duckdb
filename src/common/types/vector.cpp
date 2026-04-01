@@ -1155,12 +1155,15 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 			// dictionary with non-flat child: create a new reference to the child and flatten it
 			Vector child_vector(Vector::Ref(child));
 			child_vector.Flatten(sel, count);
-			auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
-			auto &dict_buffer = this->buffer->Cast<DictionaryBuffer>();
-			dict_buffer.SetEntry(std::move(new_entry));
+			auto new_entry = make_buffer<DictionaryEntry>(std::move(child_vector));
+			auto &dict_entry = *new_entry;
+			auto &old_dict_buffer = this->buffer->Cast<DictionaryBuffer>();
+			auto new_dict_buffer = make_buffer<DictionaryBuffer>(old_dict_buffer.GetSelVector(), std::move(new_entry));
+			auto &dict_buffer = *new_dict_buffer;
+			this->buffer = std::move(new_dict_buffer);
 
-			format.data = FlatVector::GetData(dict_buffer.GetEntry().data);
-			format.validity = FlatVector::Validity(dict_buffer.GetEntry().data);
+			format.data = FlatVector::GetData(dict_entry.data);
+			format.validity = FlatVector::Validity(dict_entry.data);
 		}
 		break;
 	}
