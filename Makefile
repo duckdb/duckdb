@@ -459,8 +459,12 @@ endif
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
 	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/$(UNITTEST_BINARY) "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+
+.PHONY: unittest_threadsan_extra
+unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
+unittest_threadsan_extra: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \

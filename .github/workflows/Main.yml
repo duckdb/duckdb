@@ -839,6 +839,10 @@ jobs:
     - name: Test
       run: make unittest_threadsan
 
+    - name: Test Extra
+      if: github.ref_name == 'main'
+      run: make unittest_threadsan_extra
+
  amalgamation-tests:
     name: Amalgamation Tests
     runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
