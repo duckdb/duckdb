@@ -18,7 +18,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 
-#include <limits>
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 

@@ -3,7 +3,6 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {

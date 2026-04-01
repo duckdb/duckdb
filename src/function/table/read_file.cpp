@@ -1,11 +1,8 @@
 #include "duckdb/function/table/read_file.hpp"
 #include "duckdb/function/table/direct_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
-#include "utf8proc_wrapper.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 namespace duckdb {

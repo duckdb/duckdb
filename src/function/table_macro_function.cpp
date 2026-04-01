@@ -8,7 +8,6 @@
 //! The SelectStatement of the view
 #include "duckdb/function/table_macro_function.hpp"
 
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {

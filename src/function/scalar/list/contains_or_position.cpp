@@ -1,7 +1,4 @@
 #include "duckdb/function/scalar/list_functions.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 
 namespace duckdb {

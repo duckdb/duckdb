@@ -1,7 +1,6 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/secret/secret.hpp"
 

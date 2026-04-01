@@ -1,4 +1,3 @@
-#include "duckdb/function/scalar/variant_utils.hpp"
 #include "yyjson.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/decimal.hpp"

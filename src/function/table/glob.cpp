@@ -1,6 +1,5 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"

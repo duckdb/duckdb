@@ -1,5 +1,4 @@
 #include "duckdb/function/table/range.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"

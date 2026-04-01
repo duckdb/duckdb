@@ -1,6 +1,5 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/common/string_map_set.hpp"

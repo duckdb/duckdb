@@ -1,6 +1,5 @@
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {

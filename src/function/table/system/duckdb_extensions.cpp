@@ -8,7 +8,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 

@@ -7,7 +7,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraint.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 

@@ -2,7 +2,6 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"

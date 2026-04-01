@@ -1,5 +1,4 @@
 #include "duckdb/function/table/range.hpp"
-#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 

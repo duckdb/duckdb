@@ -3,8 +3,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/platform.hpp"
 
-#include <cstdint>
-
 namespace duckdb {
 
 struct PragmaVersionData : public GlobalTableFunctionState {

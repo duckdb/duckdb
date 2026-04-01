@@ -1,7 +1,5 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 
-#include <iostream>
-
 namespace duckdb {
 
 namespace {

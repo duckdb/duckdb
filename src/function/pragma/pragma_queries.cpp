@@ -1,16 +1,12 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
-#include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {

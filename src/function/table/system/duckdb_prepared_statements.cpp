@@ -2,7 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parser.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 

@@ -6,11 +6,9 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
 
 #include <algorithm>
 

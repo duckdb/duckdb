@@ -1,6 +1,5 @@
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
