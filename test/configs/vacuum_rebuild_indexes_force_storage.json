@@ -1,7 +1,12 @@
 {
   "base_config": "test/configs/force_storage.json",
   "description": "Run tests on persistent storage with experimental vacuum rebuild indexes enabled",
-  "on_init": "SET experimental_vacuum_rebuild_indexes = true;",
+  "settings": [
+    {
+      "name": "experimental_vacuum_rebuild_indexes",
+      "value": "true"
+    }
+  ],
   "skip_tests": [
     {
       "reason": "Tests check explicit rowid values which shift when vacuum compacts row groups.",

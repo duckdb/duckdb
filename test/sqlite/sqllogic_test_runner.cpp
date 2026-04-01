@@ -609,6 +609,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::MISSING;
 	}
+	if (param == "experimental_vacuum_rebuild_indexes") {
+		if (Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(*config)) {
+			return RequireResult::PRESENT;
+		}
+		return RequireResult::MISSING;
+	}
 
 	bool excluded_from_autoloading = true;
 	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {

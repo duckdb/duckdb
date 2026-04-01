@@ -2,6 +2,8 @@
 # description: Test that vacuum correctly rebuilds indexes when empty row groups are dropped
 # group: [vacuum]
 
+require experimental_vacuum_rebuild_indexes
+
 load {TEST_DIR}/vacuum_rebuild_indexes.db
 
 statement ok
@@ -30,9 +32,6 @@ statement ok
 DELETE FROM t WHERE i < 122880
 
 statement ok
-SET experimental_vacuum_rebuild_indexes = true
-
-statement ok
 CHECKPOINT
 
 # the empty first row group is dropped, shifting row IDs of the second group
@@ -56,3 +55,9 @@ query I
 SELECT COUNT(*) FROM t
 ----
 122880
+
+# verify that the setting cannot be changed while the database is running
+statement error
+SET experimental_vacuum_rebuild_indexes = true
+----
+Cannot change experimental_vacuum_rebuild_indexes setting while database is running

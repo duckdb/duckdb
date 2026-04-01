@@ -2,10 +2,9 @@
 # description: Test concurrent reads during vacuum index rebuild
 # group: [interquery]
 
-load {TEST_DIR}/concurrent_read_during_vacuum_rebuild.db
+require experimental_vacuum_rebuild_indexes
 
-statement ok
-SET experimental_vacuum_rebuild_indexes = true
+load {TEST_DIR}/concurrent_read_during_vacuum_rebuild.db
 
 statement ok
 SET wal_autocheckpoint='100GB'
@@ -64,3 +63,9 @@ query I
 SELECT COUNT(*) FROM t
 ----
 377120
+
+# verify that the setting cannot be changed while the database is running
+statement error
+SET experimental_vacuum_rebuild_indexes = true
+----
+Cannot change experimental_vacuum_rebuild_indexes setting while database is running
