@@ -3705,6 +3705,25 @@ OutputStream EnumUtil::FromString<OutputStream>(const char *value) {
 	return static_cast<OutputStream>(StringUtil::StringToEnum(GetOutputStreamValues(), 2, "OutputStream", value));
 }
 
+const StringUtil::EnumStringLiteral *GetParallelizeSequentialSourceValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ParallelizeSequentialSource::AUTOMATIC), "AUTOMATIC" },
+		{ static_cast<uint32_t>(ParallelizeSequentialSource::ENABLED), "ENABLED" },
+		{ static_cast<uint32_t>(ParallelizeSequentialSource::DISABLED), "DISABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ParallelizeSequentialSource>(ParallelizeSequentialSource value) {
+	return StringUtil::EnumToString(GetParallelizeSequentialSourceValues(), 3, "ParallelizeSequentialSource", static_cast<uint32_t>(value));
+}
+
+template<>
+ParallelizeSequentialSource EnumUtil::FromString<ParallelizeSequentialSource>(const char *value) {
+	return static_cast<ParallelizeSequentialSource>(StringUtil::StringToEnum(GetParallelizeSequentialSourceValues(), 3, "ParallelizeSequentialSource", value));
+}
+
 const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ParseInfoType::ALTER_INFO), "ALTER_INFO" },

@@ -399,13 +399,6 @@
         ]
     },
     {
-        "name": "parallelize_sequential_sources",
-        "description": "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)",
-        "type": "VARCHAR",
-        "default_scope": "local",
-        "default_value": "automatic"
-    },
-    {
         "name": "disable_timestamptz_casts",
         "description": "Disable casting from timestamp to timestamptz ",
         "type": "BOOLEAN",
@@ -881,6 +874,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "parallelize_sequential_sources",
+        "description": "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)",
+        "type": "VARCHAR",
+        "default_scope": "local",
+        "default_value": "automatic"
     },
     {
         "name": "partitioned_write_flush_threshold",
