@@ -19,6 +19,11 @@
         "name": "children",
         "type": "vector<LogicalOperator*>"
       }
+    ],
+    "finalize_deserialization": [
+      "if (type == LogicalOperatorType::LOGICAL_UPDATE) {",
+      "\tLogicalUpdate::RewriteInPlaceUpdates(*result);",
+      "}"
     ]
   },
   {
