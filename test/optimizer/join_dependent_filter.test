@@ -154,7 +154,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = t2.i and t1.i = 7) or (t1.j = 3)
 ----
-physical_plan	<REGEX>:.*Filters.*
+physical_plan	<REGEX>:.*FILTER.*
 
 # we can also do more complex expressions, like modulo
 query I
@@ -169,7 +169,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = t2.i and t1.i % 5 = 0) or (t1.j % 6 = 0)
 ----
-physical_plan	<REGEX>:.*Filters.*
+physical_plan	<REGEX>:.*FILTER.*
 
 # or something like IN
 query I
@@ -184,7 +184,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = t2.i and t1.i IN (1, 2)) or (t1.j IN (3, 4))
 ----
-physical_plan	<REGEX>:.*Filters.*
+physical_plan	<REGEX>:.*FILTER.*
 
 require tpch
 
@@ -285,7 +285,7 @@ WHERE (p_partkey = l_partkey
         AND l_shipmode IN ('AIR', 'AIR REG')
         AND l_shipinstruct = 'DELIVER IN PERSON');
 ----
-physical_plan	<REGEX>:.*Filters.*FILTER.*Filters.*
+physical_plan	<REGEX>:.*FILTER.*FILTER.*
 
 # results should still be the same
 query IIII

@@ -4,11 +4,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -17,79 +13,6 @@
 #include <utility>
 
 namespace duckdb {
-
-static vector<idx_t> GetFullProjectionIds(const PhysicalTableScan &op) {
-	vector<idx_t> result;
-	result.reserve(op.column_ids.size());
-	for (idx_t i = 0; i < op.column_ids.size(); i++) {
-		result.push_back(i);
-	}
-	return result;
-}
-
-static vector<LogicalType> GetScanTypes(const PhysicalTableScan &op) {
-	vector<LogicalType> result;
-	result.reserve(op.column_ids.size());
-	for (auto &column_index : op.column_ids) {
-		auto column_id = column_index.GetPrimaryIndex();
-		if (column_index.IsRowIdColumn()) {
-			result.emplace_back(LogicalType::ROW_TYPE);
-		} else if (column_index.IsVirtualColumn()) {
-			auto entry = op.virtual_columns.find(column_id);
-			if (entry == op.virtual_columns.end()) {
-				throw InternalException("Virtual column not found");
-			}
-			result.push_back(entry->second.type);
-		} else if (column_index.HasType()) {
-			result.push_back(column_index.GetScanType());
-		} else {
-			result.push_back(op.returned_types[column_id]);
-		}
-	}
-	return result;
-}
-
-static unique_ptr<Expression> ConvertGenericFilterExpression(const Expression &expr) {
-	auto result = expr.Copy();
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    result, [&](BoundColumnRefExpression &column_ref, unique_ptr<Expression> &child) {
-		    child = make_uniq<BoundReferenceExpression>(column_ref.alias, column_ref.return_type,
-		                                                column_ref.binding.column_index.GetIndex());
-	    });
-	return result;
-}
-
-struct GenericFilterLocalState {
-	GenericFilterLocalState() : sel_a(STANDARD_VECTOR_SIZE), sel_b(STANDARD_VECTOR_SIZE) {
-	}
-
-	SelectionVector sel_a;
-	SelectionVector sel_b;
-};
-
-static idx_t ApplyGenericFilters(const vector<unique_ptr<ExpressionExecutor>> &executors,
-                                 GenericFilterLocalState &state, DataChunk &chunk) {
-	if (executors.empty() || chunk.size() == 0) {
-		return chunk.size();
-	}
-	optional_ptr<SelectionVector> current_sel;
-	idx_t current_count = chunk.size();
-	bool use_first = true;
-	for (auto &executor : executors) {
-		auto &result_sel = use_first ? state.sel_a : state.sel_b;
-		current_count = executor->SelectExpression(chunk, result_sel, current_sel, current_count);
-		if (current_count == 0) {
-			chunk.SetCardinality(0);
-			return 0;
-		}
-		current_sel = &result_sel;
-		use_first = !use_first;
-	}
-	if (current_sel) {
-		chunk.Slice(*current_sel, current_count);
-	}
-	return current_count;
-}
 
 PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
@@ -113,22 +36,10 @@ public:
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
-		function_projection_ids = op.projection_ids;
-		auto filters = GetTableFilters(op);
-		if (filters && filters->HasGenericFilters()) {
-			use_intermediate_chunk = op.function.projection_pushdown && !op.projection_ids.empty() &&
-			                         op.projection_ids.size() != op.column_ids.size();
-			if (use_intermediate_chunk) {
-				function_projection_ids = GetFullProjectionIds(op);
-				scan_types = GetScanTypes(op);
-			}
-			for (auto &filter : filters->GetGenericFilters()) {
-				generic_filters.push_back(ConvertGenericFilterExpression(*filter));
-			}
-		}
 
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, function_projection_ids, filters,
+			auto filters = table_filters ? *table_filters : GetTableFilters(op);
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
 			                             op.extra_info.sample_options, &op);
 
 			global_state = op.function.init_global(context, input);
@@ -159,10 +70,6 @@ public:
 	DataChunk input_chunk;
 	//! Combined table filters, if we have dynamic filters
 	unique_ptr<TableFilterSet> table_filters;
-	vector<idx_t> function_projection_ids;
-	vector<LogicalType> scan_types;
-	vector<unique_ptr<Expression>> generic_filters;
-	bool use_intermediate_chunk = false;
 
 	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
 		return table_filters ? table_filters.get() : op.table_filters.get();
@@ -177,25 +84,13 @@ public:
 	TableScanLocalSourceState(ExecutionContext &context, TableScanGlobalSourceState &gstate,
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, gstate.function_projection_ids,
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
 			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
-		}
-		if (gstate.use_intermediate_chunk) {
-			scan_chunk.Initialize(context.client, gstate.scan_types);
-		}
-		for (auto &filter : gstate.generic_filters) {
-			generic_filter_executors.push_back(make_uniq<ExpressionExecutor>(context.client, *filter));
-		}
-		if (!generic_filter_executors.empty()) {
-			generic_filter_state = make_uniq<GenericFilterLocalState>();
 		}
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
-	DataChunk scan_chunk;
-	vector<unique_ptr<ExpressionExecutor>> generic_filter_executors;
-	unique_ptr<GenericFilterLocalState> generic_filter_state;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
@@ -271,77 +166,49 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 
 	if (function.function) {
-		do {
-			data.async_result = AsyncResultType::IMPLICIT;
+		data.async_result = AsyncResultType::IMPLICIT;
 
-			const auto initial_async_result = data.async_result.GetResultType();
-			const auto execution_strategy = g_state.physical_table_scan_execution_strategy;
-			const auto input_execution_mode = AsyncResult::ConvertToAsyncResultExecutionMode(execution_strategy);
-			data.results_execution_mode = input_execution_mode;
+		const auto initial_async_result = data.async_result.GetResultType();
+		const auto execution_strategy = g_state.physical_table_scan_execution_strategy;
+		const auto input_execution_mode = AsyncResult::ConvertToAsyncResultExecutionMode(execution_strategy);
+		data.results_execution_mode = input_execution_mode;
 
-			auto &function_chunk = g_state.use_intermediate_chunk ? l_state.scan_chunk : chunk;
-			function_chunk.Reset();
-			if (g_state.use_intermediate_chunk) {
-				chunk.Reset();
+		// Actually call the function
+		function.function(context.client, data, chunk);
+
+		const auto output_async_result = data.async_result.GetResultType();
+
+		// Compare and check whether state before and after function.function call is compatible, will throw in case of
+		// inconsistencies
+		ValidateAsyncStrategyResult(execution_strategy, input_execution_mode, data.results_execution_mode,
+		                            initial_async_result, output_async_result, chunk.size());
+
+		// Handle results
+		switch (output_async_result) {
+		case AsyncResultType::BLOCKED: {
+			D_ASSERT(data.async_result.HasTasks());
+			annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+			if (g_state.CanBlock()) {
+				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+				return SourceResultType::BLOCKED;
 			}
-
-			// Actually call the function
-			function.function(context.client, data, function_chunk);
-
-			const auto output_async_result = data.async_result.GetResultType();
-			const auto raw_chunk_size = function_chunk.size();
-
-			// Compare and check whether state before and after function.function call is compatible, will throw in case
-			// of inconsistencies
-			ValidateAsyncStrategyResult(execution_strategy, input_execution_mode, data.results_execution_mode,
-			                            initial_async_result, output_async_result, raw_chunk_size);
-
-			switch (output_async_result) {
-			case AsyncResultType::BLOCKED: {
-				if (g_state.use_intermediate_chunk) {
-					chunk.Reset();
-				}
-				D_ASSERT(data.async_result.HasTasks());
-				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
-				if (g_state.CanBlock()) {
-					data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
-					return SourceResultType::BLOCKED;
-				}
-				return SourceResultType::FINISHED;
+			return SourceResultType::FINISHED;
+		}
+		case AsyncResultType::IMPLICIT:
+			if (chunk.size() > 0) {
+				return SourceResultType::HAVE_MORE_OUTPUT;
 			}
-			case AsyncResultType::FINISHED:
-				if (g_state.use_intermediate_chunk) {
-					chunk.Reset();
-				}
-				return SourceResultType::FINISHED;
-			case AsyncResultType::IMPLICIT:
-				if (raw_chunk_size == 0) {
-					if (g_state.use_intermediate_chunk) {
-						chunk.Reset();
-					}
-					return SourceResultType::FINISHED;
-				}
-				break;
-			case AsyncResultType::HAVE_MORE_OUTPUT:
-				break;
-			default:
-				throw InternalException(
-				    "PhysicalTableScan::GetData call of function.function returned unexpected return '%'",
-				    EnumUtil::ToChars(data.async_result.GetResultType()));
-			}
-
-			if (!l_state.generic_filter_executors.empty()) {
-				ApplyGenericFilters(l_state.generic_filter_executors, *l_state.generic_filter_state, function_chunk);
-			}
-			if (g_state.use_intermediate_chunk) {
-				if (function_chunk.size() > 0) {
-					chunk.ReferenceColumns(function_chunk, projection_ids);
-				} else {
-					chunk.Reset();
-				}
-			}
-		} while (chunk.size() == 0);
-		return SourceResultType::HAVE_MORE_OUTPUT;
+			return SourceResultType::FINISHED;
+		case AsyncResultType::FINISHED:
+			return SourceResultType::FINISHED;
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		default:
+			throw InternalException(
+			    "PhysicalTableScan::GetData call of function.function returned unexpected return '%'",
+			    EnumUtil::ToChars(data.async_result.GetResultType()));
+		}
+		throw InternalException("PhysicalTableScan::GetData hasn't handled a function.function return");
 	}
 
 	if (g_state.in_out_final) {
@@ -466,13 +333,6 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 				filters_info += filter.ToString(column_name);
 			}
 		}
-	}
-	for (auto &filter : filter_set.GetGenericFilters()) {
-		if (!first_item) {
-			filters_info += "\n";
-		}
-		first_item = false;
-		filters_info += filter->ToString();
 	}
 	return filters_info;
 }

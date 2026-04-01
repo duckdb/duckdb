@@ -384,7 +384,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
-static void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
+void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &expr) {
 		    expr = make_uniq<BoundReferenceExpression>(col_ref.alias, col_ref.return_type, 0ULL);
@@ -402,33 +402,23 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	bool single_column = true;
-	for (auto &binding : bindings) {
-		if (binding.table_index != get.table_index) {
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-	}
+	// we can only pushdown expressions that refer to exactly one column
 	for (idx_t i = 1; i < bindings.size(); i++) {
 		if (bindings[i] != bindings[0]) {
-			single_column = false;
-			break;
+			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 	}
 	if (!get.function.pushdown_expression(context, get, expr)) {
 		// the scan does not support pushing down THIS expression
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	if (single_column) {
-		// replace the BoundColumnRefExpression with a BoundReference
-		auto filter_expr = expr.Copy();
-		ReplaceWithBoundReference(filter_expr);
+	// replace the BoundColumnRefExpression with a BoundReference
+	auto filter_expr = expr.Copy();
+	ReplaceWithBoundReference(filter_expr);
 
-		// push the expression filter
-		auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
-		get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
-	} else {
-		get.table_filters.PushFilter(expr.Copy());
-	}
+	// push the expression filter
+	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
+	get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 

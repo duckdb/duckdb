@@ -9,7 +9,7 @@ CREATE TABLE integers AS SELECT a as a, a as b FROM generate_series(1, 5, 1) tbl
 query II
 EXPLAIN SELECT * FROM integers WHERE a=1 OR b=2 AND (a>3 OR b<5)
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE a=1 OR b=2 AND (a>3 OR b<5)
@@ -178,7 +178,7 @@ SELECT * FROM integers WHERE (a<2 OR a>3) AND (a=1 OR a=4) AND (b=1 OR b<5)
 query II
 EXPLAIN SELECT * FROM integers WHERE concat(a=1, b=1)='truetrue' OR a=2 ORDER by a
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE concat(a=1, b=1)='truetrue' OR a=2 ORDER by a

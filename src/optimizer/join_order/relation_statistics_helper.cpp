@@ -116,7 +116,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 	if (get.table_filters.HasFilters()) {
 		unique_ptr<BaseStatistics> column_statistics;
-		bool has_non_optional_filters = get.table_filters.HasGenericFilters();
+		bool has_non_optional_filters = false;
 		for (auto &entry : get.table_filters) {
 			auto &column_index = get.GetColumnIndex(entry.GetIndex());
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {

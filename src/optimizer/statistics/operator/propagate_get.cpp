@@ -222,23 +222,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			break;
 		}
 	}
-	auto &generic_filters = get.table_filters.GetMutableGenericFilters();
-	for (idx_t i = 0; i < generic_filters.size(); i++) {
-		auto &filter_expr = generic_filters[i];
-		auto propagate_result = HandleFilter(filter_expr);
-		switch (propagate_result) {
-		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
-			generic_filters.erase_at(i);
-			i--;
-			break;
-		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
-		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
-			ReplaceWithEmptyResult(node_ptr);
-			return make_uniq<NodeStatistics>(0U, 0U);
-		default:
-			break;
-		}
-	}
 	return std::move(node_stats);
 }
 

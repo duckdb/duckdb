@@ -326,19 +326,13 @@ unique_ptr<TableFilter> TableFilterSet::TableFilterIteratorEntry::TakeFilter() {
 }
 
 bool TableFilterSet::HasFilters() const {
-	return !filters.empty() || !generic_filters.empty();
+	return !filters.empty();
 }
 bool TableFilterSet::HasColumnFilters() const {
 	return !filters.empty();
 }
-bool TableFilterSet::HasGenericFilters() const {
-	return !generic_filters.empty();
-}
 idx_t TableFilterSet::FilterCount() const {
 	return filters.size();
-}
-idx_t TableFilterSet::GenericFilterCount() const {
-	return generic_filters.size();
 }
 bool TableFilterSet::HasFilter(ProjectionIndex col_idx) const {
 	return filters.find(col_idx) != filters.end();
@@ -390,14 +384,10 @@ void TableFilterSet::SetFilterByColumnIndex(ProjectionIndex col_idx, unique_ptr<
 
 void TableFilterSet::ClearFilters() {
 	filters.clear();
-	generic_filters.clear();
 }
 
 bool TableFilterSet::Equals(TableFilterSet &other) {
 	if (filters.size() != other.filters.size()) {
-		return false;
-	}
-	if (generic_filters.size() != other.generic_filters.size()) {
 		return false;
 	}
 	for (auto &entry : filters) {
@@ -406,11 +396,6 @@ bool TableFilterSet::Equals(TableFilterSet &other) {
 			return false;
 		}
 		if (!entry.second->Cast<ExpressionFilter>().Equals(other_entry->second->Cast<ExpressionFilter>())) {
-			return false;
-		}
-	}
-	for (idx_t i = 0; i < generic_filters.size(); i++) {
-		if (!generic_filters[i]->Equals(*other.generic_filters[i])) {
 			return false;
 		}
 	}
@@ -432,14 +417,7 @@ unique_ptr<TableFilterSet> TableFilterSet::Copy() const {
 	for (auto &it : filters) {
 		copy->filters.emplace(it.first, it.second->Cast<ExpressionFilter>().Copy());
 	}
-	for (auto &filter : generic_filters) {
-		copy->generic_filters.push_back(filter->Copy());
-	}
 	return copy;
-}
-
-void TableFilterSet::PushFilter(unique_ptr<Expression> filter) {
-	generic_filters.push_back(std::move(filter));
 }
 
 void TableFilterSet::PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter) {
@@ -495,9 +473,6 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	if (existing_filters) {
 		for (auto &filter_entry : *existing_filters) {
 			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Cast<ExpressionFilter>().Copy());
-		}
-		for (auto &filter : existing_filters->GetGenericFilters()) {
-			result->PushFilter(filter->Copy());
 		}
 	}
 	for (auto &entry : filters) {

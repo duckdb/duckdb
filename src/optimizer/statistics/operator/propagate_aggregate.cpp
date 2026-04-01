@@ -167,10 +167,6 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// GET does not support getting the partition stats
 		return;
 	}
-	if (get.table_filters.HasGenericFilters()) {
-		// Residual generic filters cannot be decided exactly from per-partition row counts alone.
-		return;
-	}
 	if (get.extra_info.sample_options) {
 		// only use row group statistics if we query the whole table
 		return;

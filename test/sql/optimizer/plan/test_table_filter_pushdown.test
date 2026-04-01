@@ -6,9 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-PRAGMA explain_output='physical_only';
-
-statement ok
 CREATE TABLE integers AS SELECT i AS i, i AS j FROM range(0, 100) tbl(i)
 
 query I
@@ -34,66 +31,3 @@ query I
 SELECT count(i) FROM integers where j > 90 and j < 95
 ----
 4
-
-# multi-column expressions can be pushed into the scan
-query I
-SELECT j FROM integers WHERE i + j = 198
-----
-99
-
-query II
-EXPLAIN SELECT j FROM integers WHERE i + j = 198
-----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*\(.*i \+ j.*= 198.*\).*
-
-# hidden filter columns stay available until after the generic filter executes
-query I
-SELECT i FROM integers WHERE i + j = 198
-----
-99
-
-query II
-EXPLAIN SELECT i FROM integers WHERE i + j = 198
-----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*\(.*i \+ j.*= 198.*\).*
-
-# generic filters can coexist with per-column table filters
-query I
-SELECT count(*) FROM integers WHERE i = 99 AND i + j = 198
-----
-1
-
-query II
-EXPLAIN SELECT count(*) FROM integers WHERE i = 99 AND i + j = 198
-----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*\(i = 99\).*\(.*i \+ j.*= 198.*\).*
-
-# pushed expression filters must not mutate projected scan values
-statement ok
-CREATE TABLE expr_filter_values(col0 INTEGER, col1 INTEGER, col2 INTEGER)
-
-statement ok
-INSERT INTO expr_filter_values VALUES (46, 51, 23), (64, 77, 40), (75, 67, 58)
-
-query III rowsort
-SELECT DISTINCT * FROM expr_filter_values WHERE NOT ( col2 + 59 * + col2 * - - 59 * col2 ) <= 43
-----
-46	51	23
-64	77	40
-75	67	58
-
-require parquet
-
-statement ok
-COPY integers TO '__TEST_DIR__/multicol_tablefilter.parquet' (FORMAT parquet);
-
-# shared PhysicalTableScan path also handles multi-column pushed expressions for table functions
-query I
-SELECT j FROM read_parquet('__TEST_DIR__/multicol_tablefilter.parquet') WHERE i + j = 198
-----
-99
-
-query II
-EXPLAIN SELECT j FROM read_parquet('__TEST_DIR__/multicol_tablefilter.parquet') WHERE i + j = 198
-----
-physical_plan	<REGEX>:.*READ_PARQUET.*Filters:.*\(.*i \+ j.*= 198.*\).*

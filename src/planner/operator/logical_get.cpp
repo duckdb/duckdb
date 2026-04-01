@@ -140,13 +140,6 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 			filters_info += filter.ToString(column_name);
 		}
 	}
-	for (auto &filter : table_filters.GetGenericFilters()) {
-		if (!first_item) {
-			filters_info += "\n";
-		}
-		first_item = false;
-		filters_info += filter->ToString();
-	}
 	result["Filters"] = filters_info;
 
 	if (extra_info.sample_options) {
@@ -360,22 +353,7 @@ void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
 
 void LogicalGet::Serialize(Serializer &serializer) const {
 	auto serialized_filters = table_filters.GetTableFiltersForSerialization(serializer);
-	if (!table_filters.HasGenericFilters()) {
-		SerializeCompatibilityLogicalGet(serializer, *this, serialized_filters);
-		return;
-	}
-
-	vector<unique_ptr<Expression>> filter_expressions;
-	for (auto &filter : table_filters.GetGenericFilters()) {
-		filter_expressions.push_back(filter->Copy());
-	}
-	vector<unique_ptr<LogicalOperator>> filter_children;
-	filter_children.push_back(make_uniq<SerializationCompatibilityLogicalGet>(*this, serialized_filters, true));
-
-	serializer.WriteProperty<LogicalOperatorType>(100, "type", LogicalOperatorType::LOGICAL_FILTER);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", filter_children);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", filter_expressions);
-	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "projection_map", projection_ids);
+	SerializeCompatibilityLogicalGet(serializer, *this, serialized_filters);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
