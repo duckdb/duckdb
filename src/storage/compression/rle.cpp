@@ -153,7 +153,6 @@ struct RLECompressState : public CompressionState {
 		auto column_segment =
 		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(column_segment);
-		segment_has_null = false;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
@@ -163,9 +162,6 @@ struct RLECompressState : public CompressionState {
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			if (WRITE_STATISTICS && !vdata.validity.RowIsValid(idx)) {
-				segment_has_null = true;
-			}
 			state.template Update<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>(data, vdata.validity, idx);
 		}
 	}
@@ -199,9 +195,6 @@ struct RLECompressState : public CompressionState {
 	}
 
 	void FlushSegment() {
-		if (WRITE_STATISTICS && segment_has_null) {
-			current_segment->stats.statistics.SetHasNullFast();
-		}
 		// flush the segment
 		// we compact the segment by moving the counts so they are directly next to the values
 		idx_t counts_size = sizeof(rle_count_t) * entry_count;
@@ -237,7 +230,6 @@ struct RLECompressState : public CompressionState {
 	RLEState<T> state;
 	idx_t entry_count = 0;
 	idx_t max_rle_count;
-	bool segment_has_null = false;
 };
 
 template <class T, bool WRITE_STATISTICS>
