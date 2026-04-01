@@ -38,6 +38,9 @@ public:
 			buffer = make_buffer<VectorStructBuffer>(type);
 			break;
 		}
+		case PhysicalType::VARCHAR:
+			buffer = make_buffer<VectorStringBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
+			break;
 		default:
 			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
 			break;

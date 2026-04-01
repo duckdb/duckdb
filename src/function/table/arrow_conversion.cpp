@@ -681,7 +681,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 		break;
 	case PhysicalType::VARCHAR: {
 		// Share the string heap, we don't need to allocate new strings, we just reference the existing ones
-		result.SetAuxiliary(values.GetAuxiliary());
+		StringVector::AddHeapReference(result, values);
 		FlattenRunEnds<RUN_END_TYPE, string_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	}

@@ -83,7 +83,7 @@ public:
 	buffer_ptr<AuxiliaryData> GetAuxiliaryData() {
 		return auxiliary_data;
 	}
-	void ClearAuxiliaryData() {
+	virtual void ClearAuxiliaryData() {
 		auxiliary_data.reset();
 	}
 

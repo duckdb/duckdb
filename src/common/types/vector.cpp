@@ -220,8 +220,8 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	} else if (internal_type == PhysicalType::VARCHAR) {
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		auto string_buffer = make_buffer<VectorStringBuffer>(offset_ptr);
-		StringVector::AddHeapReference(*this, other);
 		buffer = std::move(string_buffer);
+		StringVector::AddHeapReference(*this, other);
 		auxiliary.reset();
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;

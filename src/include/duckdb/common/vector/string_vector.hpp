@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector/map_vector.hpp
+// duckdb/common/vector/string_vector.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -31,23 +31,39 @@ public:
 	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
 
 public:
-	StringHeap &GetHeap();
+	StringHeap &GetHeap() {
+		if (heap) {
+			return *heap;
+		}
+		auto allocator = GetAllocator();
+		if (allocator) {
+			heap = AllocateHeap(*allocator);
+		} else {
+			heap = AllocateHeap();
+		}
+		return *heap;
+	}
+
+	void ClearAuxiliaryData() override {
+		StandardVectorBuffer::ClearAuxiliaryData();
+		heap = nullptr;
+	}
 
 	string_t AddString(const char *data, idx_t len) {
-		return heap.AddString(data, len);
+		return GetHeap().AddString(data, len);
 	}
 	string_t AddString(string_t data) {
-		return heap.AddString(data);
+		return GetHeap().AddString(data);
 	}
 	string_t AddBlob(string_t data) {
-		return heap.AddBlob(data.GetData(), data.GetSize());
+		return GetHeap().AddBlob(data.GetData(), data.GetSize());
 	}
 	string_t EmptyString(idx_t len) {
-		return heap.EmptyString(len);
+		return GetHeap().EmptyString(len);
 	}
 
 	ArenaAllocator &GetStringAllocator() {
-		return heap.GetAllocator();
+		return GetHeap().GetAllocator();
 	}
 
 private:
@@ -55,7 +71,7 @@ private:
 	StringHeap &AllocateHeap();
 
 private:
-	StringHeap &heap;
+	optional_ptr<StringHeap> heap;
 };
 
 struct StringVector {

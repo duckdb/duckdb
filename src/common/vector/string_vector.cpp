@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)), heap(AllocateHeap()) {
+VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
@@ -13,15 +13,15 @@ VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t data_size)
-    : StandardVectorBuffer(allocator, data_size), heap(AllocateHeap(allocator)) {
+    : StandardVectorBuffer(allocator, data_size) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(idx_t data_size) : StandardVectorBuffer(data_size), heap(AllocateHeap()) {
+VectorStringBuffer::VectorStringBuffer(idx_t data_size) : StandardVectorBuffer(data_size) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p) : StandardVectorBuffer(data_ptr_p), heap(AllocateHeap()) {
+VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p) : StandardVectorBuffer(data_ptr_p) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
@@ -30,13 +30,14 @@ VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : StandardVectorBuffer(idx_t(0)), heap(AllocateHeap()) {
+VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : StandardVectorBuffer(idx_t(0)) {
 	buffer_type = type;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
-    : StandardVectorBuffer(std::move(data_p)), heap(AllocateHeap()) {
+    : StandardVectorBuffer(std::move(data_p)) {
 	auxiliary_data = other.auxiliary_data;
+	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 StringHeap &VectorStringBuffer::AllocateHeap(Allocator &allocator) {
@@ -72,20 +73,14 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	// check if the main buffer is a VectorStringBuffer
-	if (vector.buffer && vector.buffer->GetBufferType() == VectorBufferType::STRING_BUFFER) {
-		return vector.buffer->Cast<VectorStringBuffer>();
+	if (!vector.buffer) {
+		vector.buffer = make_buffer<VectorStringBuffer>(nullptr);
 	}
-	// fall back to auxiliary (e.g. for cached vectors or vectors with external data pointers)
-	if (!vector.auxiliary) {
-		auto stored_allocator = vector.buffer ? vector.buffer->GetAllocator() : nullptr;
-		if (stored_allocator) {
-			vector.auxiliary = make_buffer<VectorStringBuffer>(*stored_allocator);
-		} else {
-			vector.auxiliary = make_buffer<VectorStringBuffer>();
-		}
+	if (vector.buffer->GetBufferType() != VectorBufferType::STRING_BUFFER) {
+		throw InternalException(
+		    "StringVector::GetStringBuffer called on a vector - but that vector does NOT have a string buffer");
 	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	return vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	return vector.buffer->Cast<VectorStringBuffer>();
 }
 
 ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {
@@ -136,6 +131,16 @@ void StringVector::AddHeapReference(Vector &vector, const Vector &other) {
 	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		AddHeapReference(vector, DictionaryVector::Child(other));
 		return;
+	}
+	if (other.auxiliary && other.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER) {
+		// FIXME: temp work-around
+		if (other.GetVectorType() != VectorType::FSST_VECTOR) {
+			throw InternalException("Auxiliary of non-FSST vector is a string!?");
+		}
+		auto data = other.auxiliary->GetAuxiliaryData();
+		if (data) {
+			AddAuxiliaryData(vector, make_uniq<AuxiliaryDataSetHolder>(std::move(data)));
+		}
 	}
 	if (!other.buffer) {
 		return;
