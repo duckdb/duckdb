@@ -1,0 +1,54 @@
+# name: test/sql/attach/attach_hidden.test
+# description: Test ATTACH with HIDDEN option hides the catalog from listings
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH ':memory:' AS hidden_db (HIDDEN true);
+
+# hidden database should not appear in SHOW DATABASES
+query I
+SHOW DATABASES
+----
+memory
+
+# hidden database should not appear in pragma_database_list
+query I
+SELECT name FROM pragma_database_list ORDER BY name
+----
+memory
+
+# hidden database should not appear in duckdb_databases()
+query I
+SELECT database_name FROM duckdb_databases() ORDER BY database_name
+----
+memory
+system
+temp
+
+# hidden database should not appear in duckdb_tables()
+query I
+SELECT database_name FROM duckdb_tables() WHERE database_name = 'hidden_db'
+----
+
+
+# the catalog is still accessible via qualified names
+statement ok
+CREATE TABLE hidden_db.main.tbl AS SELECT 42 AS i;
+
+query I
+SELECT * FROM hidden_db.main.tbl
+----
+42
+
+# hidden database can still be detached
+statement ok
+DETACH hidden_db;
+
+# after detach, the catalog is no longer accessible
+statement error
+SELECT * FROM hidden_db.main.tbl
+----
+Binder Error: Catalog "hidden_db" does not exist!
