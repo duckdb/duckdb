@@ -8,16 +8,29 @@ TEST_CASE("Test C API GEOMETRY type support", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t1 (data GEOMETRY)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO t1 VALUES ('POINT(42 1337)::GEOMETRY')"));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t1 (data GEOMETRY('OGC:CRS84'))"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO t1 VALUES ('POINT(42 1337)')"));
 
 	result = tester.Query("SELECT data FROM t1");
 	REQUIRE_NO_FAIL(*result);
+
 	REQUIRE(result->ColumnType(0) == DUCKDB_TYPE_GEOMETRY);
+
 	auto chunk = result->FetchChunk(0);
 	REQUIRE(chunk);
 
 	auto vec = duckdb_data_chunk_get_vector(chunk->GetChunk(), 0);
+
+	auto type = duckdb_vector_get_column_type(vec);
+
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_GEOMETRY);
+	auto crs = duckdb_geometry_type_get_crs(type);
+	REQUIRE(crs);
+	REQUIRE(strcmp(crs, "OGC:CRS84") == 0);
+	duckdb_free(crs);
+
+	duckdb_destroy_logical_type(&type);
+
 	auto blob = *static_cast<duckdb_string_t *>(duckdb_vector_get_data(vec));
 
 	REQUIRE(duckdb_string_t_length(blob) == 21);
