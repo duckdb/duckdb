@@ -402,17 +402,8 @@ jobs:
     - name: Build linux default release
       run: make clean release
 
-    - name: Prepare linux default release artifact
-      run: |
-        make release-artifact
-        mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
-
-    - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-default-release-build
-        path: build/linux-default-release.tar.gz
-        if-no-files-found: error
+    - name: Symbol Checks
+      run: make -j4 --output-sync=target symbol-checks
 
  linux-release-tests:
     name: Linux Release Tests
@@ -440,37 +431,6 @@ jobs:
 
     - name: Test
       run: make allunit
-
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-24.04
-    needs:
-      - prepare
-      - linux-release
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Download linux default release artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-default-release-build
-        path: build
-
-    - name: Extract linux default release artifact
-      run: |
-        rm -rf build/release
-        tar -xzf build/linux-default-release.tar.gz -C build
-
-    - name: Symbol Leakage Test
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Banned Symbol Check
-      run: python3 scripts/banned_symbols_check.py --directory build/release/src
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})

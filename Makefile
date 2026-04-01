@@ -491,6 +491,16 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
+.PHONY: symbol-checks symbol-leakage-check banned-symbol-check
+
+symbol-checks: symbol-leakage-check banned-symbol-check
+
+symbol-leakage-check:
+	$(PYTHON) scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+banned-symbol-check:
+	$(PYTHON) scripts/banned_symbols_check.py --directory build/release/src
+
 define ensure_apt_commands
 	missing=0; \
 	for cmd in $(1); do \
