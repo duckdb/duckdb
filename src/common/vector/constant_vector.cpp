@@ -41,7 +41,7 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 			}
 		} else if (internal_type == PhysicalType::VARCHAR) {
 			if (!vector.buffer || vector.buffer->GetBufferType() != VectorBufferType::STRING_BUFFER) {
-				vector.buffer = make_buffer<VectorStringBuffer>(GetTypeIdSize(internal_type));
+				vector.buffer = make_buffer<VectorStringBuffer>(1);
 			}
 		} else {
 			// if we don't have a standard buffer overwrite it

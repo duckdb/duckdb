@@ -12,12 +12,12 @@ VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t data_size)
-    : StandardVectorBuffer(allocator, data_size) {
+VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t capacity)
+    : StandardVectorBuffer(allocator, capacity * sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(idx_t data_size) : StandardVectorBuffer(data_size) {
+VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity * sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
@@ -28,10 +28,6 @@ VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p) : StandardVectorBu
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
     : StandardVectorBuffer(std::move(data_p)), heap(AllocateHeap()) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
-}
-
-VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : StandardVectorBuffer(idx_t(0)) {
-	buffer_type = type;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
@@ -131,16 +127,6 @@ void StringVector::AddHeapReference(Vector &vector, const Vector &other) {
 	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		AddHeapReference(vector, DictionaryVector::Child(other));
 		return;
-	}
-	if (other.auxiliary && other.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER) {
-		// FIXME: temp work-around
-		if (other.GetVectorType() != VectorType::FSST_VECTOR) {
-			throw InternalException("Auxiliary of non-FSST vector is a string!?");
-		}
-		auto data = other.auxiliary->GetAuxiliaryData();
-		if (data) {
-			AddAuxiliaryData(vector, make_uniq<AuxiliaryDataSetHolder>(std::move(data)));
-		}
 	}
 	if (!other.buffer) {
 		return;

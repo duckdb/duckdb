@@ -23,11 +23,10 @@ class VectorStringBuffer : public StandardVectorBuffer {
 public:
 	VectorStringBuffer();
 	explicit VectorStringBuffer(Allocator &allocator);
-	VectorStringBuffer(Allocator &allocator, idx_t data_size);
-	explicit VectorStringBuffer(idx_t data_size);
+	VectorStringBuffer(Allocator &allocator, idx_t capacity);
+	explicit VectorStringBuffer(idx_t capacity);
 	explicit VectorStringBuffer(data_ptr_t data_ptr_p);
 	explicit VectorStringBuffer(AllocatedData &&data_p);
-	explicit VectorStringBuffer(VectorBufferType type);
 	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
 
 public:

@@ -20,7 +20,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, i
 		throw InternalException("VectorBuffer::CreateStandardVector requires full list type");
 	}
 	if (type == PhysicalType::VARCHAR) {
-		return make_buffer<VectorStringBuffer>(capacity * GetTypeIdSize(type));
+		return make_buffer<VectorStringBuffer>(capacity);
 	}
 	return make_buffer<StandardVectorBuffer>(capacity * GetTypeIdSize(type));
 }
@@ -30,7 +30,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 		throw InternalException("VectorBuffer::CreateConstantVector requires full list type");
 	}
 	if (type == PhysicalType::VARCHAR) {
-		return make_buffer<VectorStringBuffer>(GetTypeIdSize(type));
+		return make_buffer<VectorStringBuffer>(1);
 	}
 	return make_buffer<StandardVectorBuffer>(GetTypeIdSize(type));
 }
@@ -47,9 +47,6 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
 	}
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
-}
-
-VectorFSSTStringBuffer::VectorFSSTStringBuffer() : VectorStringBuffer(VectorBufferType::FSST_BUFFER) {
 }
 
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {

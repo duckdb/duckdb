@@ -670,9 +670,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		D_ASSERT(result_offset == 0);
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
-			result.SetVectorType(VectorType::FSST_VECTOR);
 			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
-			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
+			FSSTVector::Create(result, scan_state.duckdb_fsst_decoder, string_block_limit, scan_count);
 			result_data = FSSTVector::GetCompressedData(result);
 		} else {
 			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
