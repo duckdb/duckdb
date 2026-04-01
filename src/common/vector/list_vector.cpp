@@ -137,8 +137,14 @@ void ListVector::ReferenceListOffsets(Vector &list, const Vector &other) {
 	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("ListVector::ReferenceListOffsets called on dictionary vector");
 	}
-	auto &list_buffer = other.buffer->Cast<VectorListBuffer>();
-	list.buffer = make_buffer<VectorListBuffer>(list_buffer.GetData(), list_buffer);
+	auto &other_buffer = other.buffer->Cast<VectorListBuffer>();
+	auto &list_buffer = list.buffer->Cast<VectorListBuffer>();
+	// Use list's own buffer as parent to preserve list's child (correct type), but take data pointer from other
+	list.buffer = make_buffer<VectorListBuffer>(other_buffer.GetData(), list_buffer);
+	// The constructor copies size from list_buffer (parent), so fix it to use other's size
+	list.buffer->Cast<VectorListBuffer>().SetSize(other_buffer.GetSize());
+	// Keep other's data alive since we're pointing into it
+	list.AddHeapReference(other);
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
