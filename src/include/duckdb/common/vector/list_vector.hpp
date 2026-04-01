@@ -56,13 +56,13 @@ public:
 	}
 
 	optional_ptr<Allocator> GetAllocator() const override {
-		return allocated_data.GetAllocator();
+		return allocator;
 	}
 
 private:
 	// data for list offsets
 	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
+	optional_ptr<Allocator> allocator;
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;

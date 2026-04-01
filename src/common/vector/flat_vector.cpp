@@ -6,6 +6,25 @@
 
 namespace duckdb {
 
+StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t data_size)
+    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr), allocator(allocator) {
+	if (data_size > 0) {
+		auto allocated_data = allocator.Allocate(data_size);
+		data_ptr = allocated_data.get();
+		AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(allocated_data)));
+	}
+}
+StandardVectorBuffer::StandardVectorBuffer(idx_t data_size)
+    : StandardVectorBuffer(Allocator::DefaultAllocator(), data_size) {
+}
+StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p)
+    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
+}
+StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p)
+    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocator(data_p.GetAllocator()) {
+	AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(data_p)));
+}
+
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	VerifyFlatVector(vector);
 	if (vector.GetType().InternalType() == PhysicalType::ARRAY) {

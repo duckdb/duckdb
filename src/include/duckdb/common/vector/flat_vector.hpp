@@ -13,6 +13,27 @@
 
 namespace duckdb {
 
+class StandardVectorBuffer : public VectorBuffer {
+public:
+	StandardVectorBuffer(Allocator &allocator, idx_t data_size);
+	explicit StandardVectorBuffer(idx_t data_size);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p);
+	explicit StandardVectorBuffer(AllocatedData &&data_p);
+
+public:
+	data_ptr_t GetData() override {
+		return data_ptr;
+	}
+
+	optional_ptr<Allocator> GetAllocator() const override {
+		return allocator;
+	}
+
+protected:
+	data_ptr_t data_ptr;
+	optional_ptr<Allocator> allocator;
+};
+
 struct FlatVector {
 	static void VerifyFlatVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY

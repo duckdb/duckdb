@@ -9,10 +9,11 @@
 #pragma once
 
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
-struct StringHeapHolder : public AuxiliaryDataHolder {
+struct StringHeapHolder : AuxiliaryDataHolder {
 	explicit StringHeapHolder(Allocator &allocator) : heap(allocator) {
 	}
 

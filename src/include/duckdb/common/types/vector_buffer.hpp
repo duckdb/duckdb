@@ -123,38 +123,4 @@ public:
 	}
 };
 
-class StandardVectorBuffer : public VectorBuffer {
-public:
-	StandardVectorBuffer(Allocator &allocator, idx_t data_size)
-	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr), allocator(allocator) {
-		if (data_size > 0) {
-			auto allocated_data = allocator.Allocate(data_size);
-			data_ptr = allocated_data.get();
-			AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(allocated_data)));
-		}
-	}
-	explicit StandardVectorBuffer(idx_t data_size) : StandardVectorBuffer(Allocator::DefaultAllocator(), data_size) {
-	}
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p)
-	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
-	}
-	explicit StandardVectorBuffer(AllocatedData &&data_p)
-	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocator(data_p.GetAllocator()) {
-		AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(data_p)));
-	}
-
-public:
-	data_ptr_t GetData() override {
-		return data_ptr;
-	}
-
-	optional_ptr<Allocator> GetAllocator() const override {
-		return allocator;
-	}
-
-protected:
-	data_ptr_t data_ptr;
-	optional_ptr<Allocator> allocator;
-};
-
 } // namespace duckdb
