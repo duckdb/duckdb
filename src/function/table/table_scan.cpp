@@ -116,8 +116,8 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
-	//! Shared vacuum lock held during index scan to prevent concurrent checkpoint
-	//! from rebuilding indexes and swapping row groups while we hold row IDs from the ART.
+	//! Synchronize <ART version, SegmentTree<RowGroup>> when experimental_vacuum_rebuild_indexes is enabled (since
+	//! ART indexes are rebuilt during vacuuming with this setting).
 	unique_ptr<StorageLockKey> vacuum_lock;
 
 public:
@@ -702,7 +702,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	// If experimental_vacuum_rebuild_indexes is enabled, grab a shared vacuum lock before
 	// scanning the index. This prevents the checkpoint from rebuilding the index and swapping
 	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
-	// (index, row group) pair.
+	// <ART index, SegmentTree<RowGroup> pairing.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &db = DatabaseInstance::GetDatabase(context);
 	if (Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(db)) {

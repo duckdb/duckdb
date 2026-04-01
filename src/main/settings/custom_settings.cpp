@@ -738,7 +738,7 @@ void ExperimentalVacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, V
 	}
 	auto &connection_manager = ConnectionManager::Get(*info.db);
 	if (connection_manager.GetConnectionCount() > 1) {
-		throw InvalidInputException("Cannot change experimental_vacuum_rebuild_indexes while multiple connections are "
+		throw InvalidInputException("Cannot set experimental_vacuum_rebuild_indexes while multiple connections are "
 		                            "active - this setting can only be changed when there is a single connection");
 	}
 }

@@ -576,8 +576,7 @@
         "default_value": "false",
         "on_callbacks": [
             "set"
-        ],
-        "custom_implementation": true
+        ]
     },
     {
         "name": "explain_output",

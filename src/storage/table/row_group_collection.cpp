@@ -1155,8 +1155,9 @@ private:
 struct VacuumState {
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
-	//! Whether indexes need rebuilding after vacuum (all indexes are bound ART and setting is enabled)
-	bool rebuild_indexes = false;
+	//! Whether we are allowed to rebuild indexes after a vacuum (only true when experimental_vacuum_rebuild_indexes
+	//! setting is enabled and all indexes are bound ART's).
+	bool can_rebuild_indexes = false;
 	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
 	bool row_ids_changed = false;
 	idx_t row_start = 0;
@@ -1302,16 +1303,17 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 
 	// if there are indexes - we cannot change row-ids
 	// this limits what kind of vacuuming we can do
-	// unless vacuum_rebuild_indexes is enabled and all indexes are bound ART indexes,
-	// in which case we allow vacuuming and rebuild the indexes afterward.
 	bool has_indexes = !info->GetIndexes().Empty();
 
-	// If the experimental_vacuum_rebuild_indexes setting is enabled, allow vacuuming only if all the indexes are
-	// bound ART indexes. We still prevent vacuuming for non-ART or unbound indexes.
-	state.rebuild_indexes =
+	// *unless* experimental_vacuum_rebuild_indexes is enabled and all indexes are bound ART indexes,
+	// in which case we allow vacuuming and rebuild the indexes afterward.
+	state.can_rebuild_indexes =
 	    has_indexes && info->GetIndexes().AllBoundART() &&
 	    Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
-	state.can_change_row_ids = !has_indexes || state.rebuild_indexes;
+
+	// We can move around rowids if we either 1) don't have any indexes at all or 2) can_rebuild_indexes is true (in
+	// which case indexes are entirely rebuilt after vacuuming).
+	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes;
 	// obtain the set of committed row counts for each row group
 	auto row_group_count = checkpoint_state.SegmentCount();
 	vector<optional_idx> committed_counts;
@@ -1330,7 +1332,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		if (!state.can_change_row_ids) {
 			idx_t total_count = row_group.count;
 			committed_counts.emplace_back(row_group_count);
-			// we cannot change row ids and this row group has deletes
+			// we cannot change rowids, and this RowGroup has deletes
 			// vacuuming here would alter row ids - so skip it
 			if (total_count != row_group_count) {
 				state.row_group_counts.emplace_back();
@@ -1338,7 +1340,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			}
 		}
 		if (row_group_count == 0) {
-			// empty row group - we can drop it entirely
+			// empty RowGroup - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			dropped_any_rowgroups = true;
@@ -1346,13 +1348,14 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			continue;
 		}
 		if (dropped_any_rowgroups) {
-			// if we dropped any row groups before getting here (a non-empty row group),
+			// if there are any dropped RowGroups before a live RowGroup, all the rowids of the RowGroups following
+			// the dropped RowGroup will have their rowids shifted forward (to keep rowid's contiguous).
 			state.row_ids_changed = true;
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
 	if (!state.can_change_row_ids && options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
-		// if we cannot change row ids we might still be able to vacuum trailing deletions
+		// if we cannot change rowids we might still be able to vacuum trailing deletions
 		// since that would not change the row-ids of any non-deleted rows
 		auto segment_count = state.row_group_counts.size();
 		for (idx_t i = segment_count; i > 0; i--) {
@@ -1761,10 +1764,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
-	// Rebuild the index only if rebuild_indexes is true (which can only be true if the
-	// experimental_vacuum_rebuild_indexes setting is enabled *and* we had row_ids change during vacuuming (so that we
-	// don't unecessarily rebuild the indexes if there were no actual rowid changes.
-	needs_index_rebuild = vacuum_state.rebuild_indexes && vacuum_state.row_ids_changed;
+	// Rebuild indexes if:
+	// 1) can_rebuild_indexes is set (it is set when the experimental_vacuum_rebuild_indexes
+	// setting is enabled and all the indexes are bound ART's),
+	// and
+	// 2) we have changed rowids.
+	needs_index_rebuild = vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed;
 }
 
 //===--------------------------------------------------------------------===//
