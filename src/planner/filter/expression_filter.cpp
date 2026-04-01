@@ -321,12 +321,8 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 		auto &data = func_expr.bind_info->Cast<PrefixRangeFunctionData>();
 		return PrefixRangeScalarFun::ToString(column_name, data.key_column_name);
 	} else if (func_name == DynamicFilterScalarFun::NAME) {
-		auto &data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
-		if (data.filter_data) {
-			return "Dynamic Filter (" + column_name + ")";
-		} else {
-			return "Dynamic Filter";
-		}
+		const auto has_filter_data = func_expr.bind_info && func_expr.bind_info->Cast<DynamicFilterFunctionData>().filter_data;
+		return DynamicFilterScalarFun::ToString(column_name, has_filter_data);
 	} else if (func_name == OptionalFilterScalarFun::NAME) {
 		if (!func_expr.bind_info) {
 			return "optional";

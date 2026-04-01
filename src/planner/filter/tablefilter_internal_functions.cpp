@@ -817,6 +817,13 @@ FilterPropagateResult DynamicFilterScalarFun::FilterPrune(const FunctionStatisti
 	                                          data.filter_data->constant);
 }
 
+string DynamicFilterScalarFun::ToString(const string &column_name, bool has_filter_data) {
+	if (has_filter_data) {
+		return "Dynamic Filter (" + column_name + ")";
+	}
+	return "Dynamic Filter";
+}
+
 //===----------------------------------------------------------------------===//
 // Optional Filter Scalar Function
 //===----------------------------------------------------------------------===//
