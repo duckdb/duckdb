@@ -1055,6 +1055,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/test/unittest
 
+    - name: Test FanOut parallelization of sequential sources
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/parallelize_sequential_sources.json ./build/release/test/unittest
+
     - name: Test block prefetching
       if: success() || failure()
       shell: bash
