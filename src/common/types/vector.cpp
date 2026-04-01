@@ -1179,7 +1179,6 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 			auto &dict_entry = *new_entry;
 			auto &old_dict_buffer = this->buffer->Cast<DictionaryBuffer>();
 			auto new_dict_buffer = make_buffer<DictionaryBuffer>(old_dict_buffer.GetSelVector(), std::move(new_entry));
-			auto &dict_buffer = *new_dict_buffer;
 			this->buffer = std::move(new_dict_buffer);
 
 			format.data = FlatVector::GetData(dict_entry.data);
