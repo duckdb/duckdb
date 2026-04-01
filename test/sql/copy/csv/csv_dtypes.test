@@ -86,6 +86,18 @@ select * from read_csv('{DATA_DIR}/csv/auto/int_bol.csv', columns={'i':'varchar'
 ----
 column types specified by 'columns' and 'types' doesn't match
 
+# columns + struct-style column_types with different key names but matching types: columns' name mapping must be preserved
+query II
+select typeof(i), typeof(b) from read_csv('{DATA_DIR}/csv/auto/int_bol.csv', columns={'i':'varchar', 'b':'varchar'}, column_types={'x': 'VARCHAR', 'y': 'VARCHAR'}) LIMIT 1
+----
+VARCHAR	VARCHAR
+
+# columns + struct-style column_types with different key names and mismatching types
+statement error
+select * from read_csv('{DATA_DIR}/csv/auto/int_bol.csv', columns={'i':'varchar', 'b':'varchar'}, column_types={'x': 'INTEGER', 'y': 'BOOLEAN'})
+----
+column types specified by 'columns' and 'types' doesn't match
+
 # columns types override sniffer auto-detection (sniffer would detect BIGINT, BOOLEAN)
 query II
 select typeof(i), typeof(b) from read_csv('{DATA_DIR}/csv/auto/int_bol.csv', columns={'i':'varchar', 'b':'varchar'}) LIMIT 1

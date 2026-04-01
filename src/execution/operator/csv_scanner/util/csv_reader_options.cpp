@@ -779,14 +779,14 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 			parsed_types.push_back(std::move(def_type));
 		}
 
-		// If columns already set sql_type_list, verify they match
+		// If columns already set sql_type_list, verify they match but keep columns' mappings
 		if (columns_set && !sql_type_list.empty()) {
 			VerifyTypeListsMatch(sql_type_list, parsed_types);
 		} else {
 			sql_type_list = std::move(parsed_types);
-		}
-		if (!parsed_types_per_column.empty()) {
-			sql_types_per_column = std::move(parsed_types_per_column);
+			if (!parsed_types_per_column.empty()) {
+				sql_types_per_column = std::move(parsed_types_per_column);
+			}
 		}
 	} else if (loption == "all_varchar") {
 		all_varchar = GetBooleanValue(loption, val);
