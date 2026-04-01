@@ -26,12 +26,12 @@ public:
 	}
 
 	optional_ptr<Allocator> GetAllocator() const override {
-		return allocator;
+		return allocated_data.GetAllocator();
 	}
 
 protected:
 	data_ptr_t data_ptr;
-	optional_ptr<Allocator> allocator;
+	AllocatedData allocated_data;
 };
 
 struct FlatVector {

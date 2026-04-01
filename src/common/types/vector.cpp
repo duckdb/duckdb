@@ -216,9 +216,8 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
 	} else if (internal_type == PhysicalType::LIST) {
-		auto &list_buffer = other.buffer->Cast<VectorListBuffer>();
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-		buffer = make_buffer<VectorListBuffer>(offset_ptr, list_buffer);
+		buffer = make_buffer<VectorListBuffer>(offset_ptr, other.buffer);
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;
 	} else if (internal_type == PhysicalType::VARCHAR) {
@@ -413,12 +412,7 @@ void Vector::AddHeapReference(const Vector &other) {
 	if (!other.buffer) {
 		return;
 	}
-	auto data = other.buffer->GetAuxiliaryData();
-	if (!data) {
-		// no auxiliary data to reference
-		return;
-	}
-	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(std::move(data)));
+	AddAuxiliaryData(make_uniq<VectorBufferHolder>(other.buffer));
 }
 
 void Vector::Resize(idx_t current_size, idx_t new_size) {
@@ -468,8 +462,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorListBuffer>();
 			new_buffer = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
 		} else if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::VARCHAR) {
-			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorStringBuffer>();
-			new_buffer = make_buffer<VectorStringBuffer>(std::move(new_data), old_buffer);
+			new_buffer = make_buffer<VectorStringBuffer>(std::move(new_data), resize_info_entry.vec.buffer);
 		} else {
 			new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
 		}

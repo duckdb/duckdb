@@ -28,7 +28,7 @@ public:
 	explicit VectorStringBuffer(idx_t capacity);
 	explicit VectorStringBuffer(data_ptr_t data_ptr_p);
 	explicit VectorStringBuffer(AllocatedData &&data_p);
-	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
+	VectorStringBuffer(AllocatedData &&data_p, buffer_ptr<VectorBuffer> other);
 
 public:
 	StringHeap &GetHeap() {

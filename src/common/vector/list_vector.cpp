@@ -7,9 +7,8 @@ VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, unique_
                                    idx_t child_capacity)
     : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(child_capacity) {
 	if (capacity > 0) {
-		auto allocated_data = allocator.Allocate(capacity * sizeof(list_entry_t));
+		allocated_data = allocator.Allocate(capacity * sizeof(list_entry_t));
 		data_ptr = allocated_data.get();
-		AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(allocated_data)));
 	}
 }
 VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
@@ -22,17 +21,27 @@ VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type,
     : VectorListBuffer(Allocator::DefaultAllocator(), capacity, list_type, child_capacity) {
 }
 
-VectorListBuffer::VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data), capacity(parent.capacity), size(parent.size) {
+VectorListBuffer::VectorListBuffer(data_ptr_t data, const Vector &vector, idx_t child_capacity, idx_t child_size)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data) {
+	capacity = child_capacity;
+	size = child_size;
+	child = make_uniq<Vector>(Vector::Ref(vector));
+}
+
+VectorListBuffer::VectorListBuffer(data_ptr_t data, buffer_ptr<VectorBuffer> parent_buffer)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data) {
+	auto &parent = parent_buffer->Cast<VectorListBuffer>();
+	capacity = parent.capacity;
+	size = parent.size;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
-	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(parent.GetAuxiliaryData()));
+	AddAuxiliaryData(make_uniq<VectorBufferHolder>(std::move(parent_buffer)));
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, const VectorListBuffer &parent)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(parent.capacity), size(parent.size) {
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), allocated_data(std::move(allocated_data_p)),
+      capacity(parent.capacity), size(parent.size) {
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
-	data_ptr = allocated_data_p.get();
-	AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(allocated_data_p)));
+	data_ptr = allocated_data.get();
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
@@ -128,23 +137,6 @@ idx_t ListVector::GetListCapacity(const Vector &vec) {
 	}
 	D_ASSERT(vec.buffer);
 	return vec.buffer->Cast<VectorListBuffer>().GetCapacity();
-}
-
-//! References the list offsets / sizes of another vector
-void ListVector::ReferenceListOffsets(Vector &list, const Vector &other) {
-	D_ASSERT(list.GetType().InternalType() == PhysicalType::LIST);
-	D_ASSERT(other.GetType().InternalType() == PhysicalType::LIST);
-	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		throw InternalException("ListVector::ReferenceListOffsets called on dictionary vector");
-	}
-	auto &other_buffer = other.buffer->Cast<VectorListBuffer>();
-	auto &list_buffer = list.buffer->Cast<VectorListBuffer>();
-	// Use list's own buffer as parent to preserve list's child (correct type), but take data pointer from other
-	list.buffer = make_buffer<VectorListBuffer>(other_buffer.GetData(), list_buffer);
-	// The constructor copies size from list_buffer (parent), so fix it to use other's size
-	list.buffer->Cast<VectorListBuffer>().SetSize(other_buffer.GetSize());
-	// Keep other's data alive since we're pointing into it
-	list.AddHeapReference(other);
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {

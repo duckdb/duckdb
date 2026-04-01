@@ -53,9 +53,9 @@ public:
 		auto internal_type = type.InternalType();
 		result.vector_type = VectorType::FLAT_VECTOR;
 		// clear any extra accumulated auxiliary data (reset to only the initial AllocatedData)
-		auto auxiliary = buffer->GetAuxiliaryData();
-		if (auxiliary && auxiliary->data.size() > 1) {
-			auxiliary->data.erase(auxiliary->data.begin() + 1, auxiliary->data.end());
+		auto &auxiliary_data = buffer->GetAuxiliaryDataMutable();
+		if (auxiliary_data.size() > 1) {
+			auxiliary_data.erase(auxiliary_data.begin() + 1, auxiliary_data.end());
 		}
 		AssignSharedPointer(result.buffer, buffer);
 		result.validity.Reset(capacity);

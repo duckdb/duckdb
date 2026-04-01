@@ -30,11 +30,9 @@ VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, buffer_ptr<VectorBuffer> other)
     : StandardVectorBuffer(std::move(data_p)) {
-	if (other.auxiliary_data) {
-		AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(other.auxiliary_data));
-	}
+	AddAuxiliaryData(make_uniq<VectorBufferHolder>(std::move(other)));
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
