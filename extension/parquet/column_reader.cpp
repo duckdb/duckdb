@@ -4,10 +4,7 @@
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
 #include "reader/decimal_column_reader.hpp"
-#include "duckdb.hpp"
-#include "reader/expression_column_reader.hpp"
 #include "reader/interval_column_reader.hpp"
-#include "reader/list_column_reader.hpp"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "reader/null_column_reader.hpp"
@@ -15,10 +12,8 @@
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
 
-#include "reader/row_number_column_reader.hpp"
 #include "snappy.h"
 #include "reader/string_column_reader.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "reader/uuid_column_reader.hpp"
 
@@ -26,7 +21,6 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 #include "parquet_crypto.hpp"

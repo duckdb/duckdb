@@ -1,5 +1,4 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -8,7 +7,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 
 namespace duckdb {

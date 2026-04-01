@@ -3,7 +3,6 @@
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
-#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 

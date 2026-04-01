@@ -14,7 +14,6 @@
 #include "core_functions/scalar/math_functions.hpp"
 #include "core_functions/scalar/operators_functions.hpp"
 #include "core_functions/scalar/random_functions.hpp"
-#include "core_functions/scalar/secret_functions.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
 #include "core_functions/scalar/union_functions.hpp"
