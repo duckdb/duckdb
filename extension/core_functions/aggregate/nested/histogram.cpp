@@ -4,7 +4,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 

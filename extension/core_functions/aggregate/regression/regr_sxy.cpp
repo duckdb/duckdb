@@ -4,7 +4,6 @@
 #include "core_functions/aggregate/regression/regr_count.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 
