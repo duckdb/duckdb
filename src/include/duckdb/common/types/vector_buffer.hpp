@@ -21,18 +21,17 @@ class VectorBuffer;
 class Vector;
 
 enum class VectorBufferType : uint8_t {
-	STANDARD_BUFFER,     // standard buffer, holds a single array of data
-	DICTIONARY_BUFFER,   // dictionary buffer, holds a selection vector
-	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
-	STRING_BUFFER,       // string buffer, holds a string heap
-	FSST_BUFFER,         // fsst compressed string buffer, holds a string heap, fsst symbol table and a string count
-	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER,         // list buffer, holds a single flatvector child
-	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
-	ARRAY_BUFFER,        // array buffer, holds a single flatvector child
-	SHREDDED_BUFFER,     // holds data for a shredded variant vector
-	SEQUENCE_BUFFER      // holds a linear numeric sequence (start, increment)
+	STANDARD_BUFFER,   // standard buffer, holds a single array of data
+	DICTIONARY_BUFFER, // dictionary buffer, holds a selection vector and child vector
+	STRING_BUFFER,     // string buffer, holds a string heap
+	FSST_BUFFER,       // fsst compressed string buffer, holds a string heap, fsst symbol table and a string count
+	STRUCT_BUFFER,     // struct buffer, holds a ordered mapping from name to child vector
+	LIST_BUFFER,       // list buffer, holds a single flatvector child
+	MANAGED_BUFFER,    // managed buffer, holds a buffer managed by the buffermanager
+	OPAQUE_BUFFER,     // opaque buffer, can be created for example by the parquet reader
+	ARRAY_BUFFER,      // array buffer, holds a single flatvector child
+	SHREDDED_BUFFER,   // holds data for a shredded variant vector
+	SEQUENCE_BUFFER    // holds a linear numeric sequence (start, increment)
 };
 
 struct AuxiliaryDataHolder {

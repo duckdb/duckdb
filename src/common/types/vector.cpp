@@ -156,7 +156,14 @@ void Vector::Reinterpret(const Vector &other) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
-		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
+		auto &old_dict = buffer->Cast<DictionaryBuffer>();
+		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
+		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), std::move(new_entry));
+		auto dict_size = old_dict.GetDictionarySize();
+		if (dict_size.IsValid()) {
+			buffer->Cast<DictionaryBuffer>().SetDictionarySize(dict_size.GetIndex());
+		}
+		buffer->Cast<DictionaryBuffer>().SetDictionaryId(old_dict.GetDictionaryId());
 	}
 }
 
@@ -249,18 +256,18 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	}
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
-		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
 		auto dictionary_id = DictionaryVector::DictionaryId(*this);
-		auto sliced_dictionary = current_sel.Slice(sel, count);
-		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
+		auto sliced_dictionary = old_dict.GetSelVector().Slice(sel, count);
+		auto entry = old_dict.GetEntryPtr();
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
-			auto &child_vector = DictionaryVector::Child(*this);
-
+			auto &child_vector = entry->data;
 			Vector new_child(Vector::Ref(child_vector));
 			new_child.buffer = make_buffer<VectorStructBuffer>(new_child, sel, count);
-			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
+			entry = make_shared_ptr<DictionaryEntry>(std::move(new_child));
 		}
+		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
 		if (dictionary_size.IsValid()) {
 			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
 			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
@@ -279,11 +286,10 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (internal_type == PhysicalType::STRUCT) {
 		child_vector.buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
 	}
-	auto child_ref = make_buffer<VectorChildBuffer>(std::move(child_vector));
-	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
+	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
 	vector_type = VectorType::DICTIONARY_VECTOR;
-	buffer = std::move(dict_buffer);
-	auxiliary = std::move(child_ref);
+	auxiliary.reset();
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -298,18 +304,14 @@ void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVect
 	Dictionary(dictionary_size, sel, count);
 }
 
-void Vector::Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel) {
+void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel) {
 	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
 	D_ASSERT(type == reusable_dict->data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	validity.Reset();
 
-	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
-	dict_buffer->SetDictionarySize(reusable_dict->size.GetIndex());
-	dict_buffer->SetDictionaryId(reusable_dict->id);
-	buffer = std::move(dict_buffer);
-
-	auxiliary = std::move(reusable_dict);
+	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
+	auxiliary.reset();
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -320,10 +322,13 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
 		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto target_data = current_sel.data();
-		auto entry = cache.cache.find(target_data);
-		if (entry != cache.cache.end()) {
-			// cached entry exists: use that
-			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
+		auto cache_entry = cache.cache.find(target_data);
+		if (cache_entry != cache.cache.end()) {
+			// cached entry exists: use the cached selection vector with our dictionary entry
+			auto &old_dict = this->buffer->Cast<DictionaryBuffer>();
+			auto dict_entry = old_dict.GetEntryPtr();
+			this->buffer = make_buffer<DictionaryBuffer>(cache_entry->second->Cast<DictionaryBuffer>().GetSelVector(),
+			                                             std::move(dict_entry));
 			vector_type = VectorType::DICTIONARY_VECTOR;
 		} else {
 			Slice(sel, count);
@@ -1158,11 +1163,12 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 			// dictionary with non-flat child: create a new reference to the child and flatten it
 			Vector child_vector(Vector::Ref(child));
 			child_vector.Flatten(sel, count);
-			auto new_aux = make_buffer<VectorChildBuffer>(std::move(child_vector));
+			auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+			auto &dict_buffer = this->buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetEntry(std::move(new_entry));
 
-			format.data = FlatVector::GetData(new_aux->data);
-			format.validity = FlatVector::Validity(new_aux->data);
-			this->auxiliary = std::move(new_aux);
+			format.data = FlatVector::GetData(dict_buffer.GetEntry().data);
+			format.validity = FlatVector::Validity(dict_buffer.GetEntry().data);
 		}
 		break;
 	}
