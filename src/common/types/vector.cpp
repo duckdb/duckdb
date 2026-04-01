@@ -1320,9 +1320,12 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				auto string_write_ptr = byte_data.get();
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
-					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					memcpy(string_write_ptr, strings[idx].GetData(), this_length);
-					string_write_ptr += this_length;
+					if (!vdata.validity.RowIsValid(idx)) {
+						continue;
+					}
+					auto str_len = strings[idx].GetSize();
+					memcpy(string_write_ptr, strings[idx].GetData(), str_len);
+					string_write_ptr += str_len;
 				}
 				serializer.WriteProperty(107, "byte_data_length", optional_idx(byte_data_length));
 				// we do not encode length_data_length because its not required
