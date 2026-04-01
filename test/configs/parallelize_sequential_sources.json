@@ -1,0 +1,91 @@
+{
+  "description": "Enable FanOut parallelization for single-threaded sources",
+  "on_init": "SET parallelize_sequential_sources='enabled';",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "FanOut changes chunk ordering from range(), affecting random() with a seed",
+      "paths": [
+        "test/optimizer/topn/complex_top_n.test",
+        "test/sql/join/iejoin/test_iejoin_events.test",
+        "test/sql/join/inner/test_join_with_nulls.test_slow",
+        "test/sql/window/test_window_wide_frame.test_slow",
+        "test/sql/copy/parquet/hive_timestamps.test",
+        "test/sql/sample/bernoulli_sampling.test_slow",
+        "test/issues/general/test_9399.test_slow",
+        "test/sql/aggregate/aggregates/test_approx_quantile.test"
+      ]
+    },
+    {
+      "reason": "FanOut changes chunk ordering, affecting order-dependent aggregates",
+      "paths": [
+        "test/sql/show_select/test_summarize.test"
+      ]
+    },
+    {
+      "reason": "FanOut changes chunk ordering from generate_series(), affecting sequence nextval order",
+      "paths": [
+        "test/sql/catalog/sequence/sequence_cycle.test",
+        "test/sql/catalog/sequence/sequence_overflow.test",
+        "test/issues/fuzz/sequence_overflow.test"
+      ]
+    },
+    {
+      "reason": "FanOut buffering changes memory usage patterns under tight memory limits",
+      "paths": [
+        "test/sql/storage/temp_directory/max_swap_space_error.test",
+        "test/sql/storage/temp_directory/max_swap_space_explicit.test",
+        "test/sql/storage/temp_directory/max_swap_space_inmemory.test",
+        "test/sql/storage/temp_directory/max_swap_space_persistent.test",
+        "test/sql/storage/temp_directory/test_default_temp_directory.test",
+        "test/sql/storage/buffer_manager_temp_dir.test",
+        "test/sql/outofcore/buffer_managed_query_result.test_slow",
+        "test/parquet/constant_dictionary_vector_parquet.test_slow",
+        "test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow",
+        "test/sql/pragma/profiling/test_custom_profiling_total_memory_allocated.test"
+      ]
+    },
+    {
+      "reason": "FanOut changes batching patterns, affecting compression ratios and row group sizes",
+      "paths": [
+        "test/sql/storage/compression/bitpacking/bitpacking_compression_ratio.test_slow",
+        "test/sql/storage/compression/bitpacking/bitpacking_compression_ratio_hugeint.test_slow",
+        "test/sql/storage/compression/roaring/roaring_compression_ratio.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_compression_ratio.test_slow",
+        "test/sql/storage/compression/roaring/roaring_analyze_array.test",
+        "test/sql/storage/compression/roaring/roaring_analyze_bitset.test",
+        "test/sql/storage/compression/roaring/roaring_analyze_run.test",
+        "test/sql/storage/compression/roaring/roaring_bool_analyze_array.test",
+        "test/sql/storage/compression/roaring/roaring_bool_analyze_bitset.test",
+        "test/sql/storage/compression/roaring/roaring_bool_analyze_run.test",
+        "test/sql/storage/parallel/insert_many_compressible_batches.test_slow",
+        "test/sql/storage/parallel/insert_order_preserving_odd_sized_batches.test_slow",
+        "test/parquet/parquet_combine.test",
+        "test/sql/copy/parquet/alltypes-dictionaries.test",
+        "test/sql/upsert/test_big_insert.test",
+        "test/optimizer/eager_aggregate_execution.test"
+      ]
+    },
+    {
+      "reason": "FanOut adds extra profiling metrics",
+      "paths": [
+        "test/sql/pragma/profiling/test_logging_interaction.test"
+      ]
+    },
+    {
+      "reason": "FanOut changes chunk ordering, affecting string_agg/list accumulation order",
+      "paths": [
+        "test/sql/aggregate/group/test_group_by_nested.test",
+        "test/sql/window/test_streaming_window.test",
+        "test/sql/function/list/list_reverse.test",
+        "test/sql/function/string/test_string_split_large.test_slow"
+      ]
+    },
+    {
+      "reason": "FanOut changes EXPLAIN ANALYZE output format",
+      "paths": [
+        "test/sql/types/geo/geometry_compatability.test"
+      ]
+    }
+  ]
+}
