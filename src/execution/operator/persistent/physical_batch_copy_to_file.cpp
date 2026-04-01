@@ -11,7 +11,6 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 
-
 namespace duckdb {
 
 struct ActiveFlushGuard {

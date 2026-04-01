@@ -8,7 +8,6 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
-
 namespace duckdb {
 
 namespace {

@@ -4,7 +4,6 @@
 
 #include "parquet_statistics.hpp"
 
-
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/main/config.hpp"

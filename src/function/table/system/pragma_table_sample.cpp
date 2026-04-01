@@ -7,7 +7,6 @@
 
 #include "duckdb/common/exception.hpp"
 
-
 namespace duckdb {
 
 struct DuckDBTableSampleFunctionData : public TableFunctionData {

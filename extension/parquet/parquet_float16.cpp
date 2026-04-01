@@ -1,6 +1,5 @@
 #include "parquet_float16.hpp"
 
-
 namespace duckdb {
 
 float Float16ToFloat32(const uint16_t &float16_value) {

@@ -9,7 +9,6 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
 
-
 namespace duckdb {
 
 struct PragmaStorageFunctionData : public TableFunctionData {
