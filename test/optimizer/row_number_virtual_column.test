@@ -1,0 +1,118 @@
+# name: test/optimizer/row_number_virtual_column.test
+# description: Test row_number virtual column
+# group: [optimizer]
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(130000);
+
+# Check that row_number is not accessible
+statement error
+SELECT a, row_number FROM foo;
+----
+Binder Error: Referenced column "row_number" not found in FROM clause
+
+query I
+SELECT a as row_number FROM foo limit 3;
+----
+0
+1
+2
+
+query I
+select row_number() over() from foo where a < 3;
+----
+1
+2
+3
+
+statement ok
+delete from foo where a < 5000;
+
+query III
+select row_number() over(), a, rowid from foo order by a desc limit 1;
+----
+125000	129999	129999
+
+query III
+select a, rowid, row_number() over() from foo order by a desc limit 1;
+----
+129999	129999	125000
+
+query II
+explain select a,rowid, row_number() over() as x from foo order by a desc limit 1;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+statement ok
+select setseed(0.1);
+
+statement ok
+create or replace table test as select (random()*10)::INT a, (random()*5)::INT b  from range(10);
+
+statement ok
+create or replace table test2 as select (random()*100)::INT c, (random()*5)::INT b  from range(10);
+
+# Try with a window function and a Join
+
+query II
+explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+
+statement ok
+create table t1 as select range::FLOAT a, range b, range c, range d from range (3);
+
+query I
+SELECT CASE WHEN row_number() OVER () = 2 THEN 2222::BIGINT ELSE 1111::BIGINT END FROM t1;
+----
+1111
+2222
+1111
+
+statement ok
+CREATE OR REPLACE TABLE numbers AS SELECT range(1, 5) AS num;
+
+query II
+SELECT row_number() OVER(), unnest(num) FROM numbers;
+----
+1	1
+1	2
+1	3
+1	4
+
+query II
+SELECT row_number() OVER (), nums FROM (SELECT unnest(num) AS nums from numbers);
+----
+1	1
+2	2
+3	3
+4	4
+
+# Try with a join on the row_number
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a from range(3);
+
+statement ok
+CREATE OR REPLACE TABLE bar AS SELECT range b from range(2,5);
+
+query II
+EXPLAIN SELECT f.row_num AS foo_row, b.row_num AS bar_row, f.a, b.b FROM (SELECT row_number() OVER () AS row_num, a FROM foo) f
+JOIN (SELECT row_number() OVER () AS row_num, b FROM bar) b ON f.row_num = b.row_num;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+create table tbl as select range a from range(3);
+
+statement ok
+pragma enable_optimizer;
+
+query II
+EXPLAIN SELECT row_number + 1 FROM (SELECT row_number() OVER () AS row_number FROM tbl);
+----
+physical_plan	<!REGEX>:.*WINDOW.*

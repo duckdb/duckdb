@@ -242,6 +242,8 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The row_number base for the current batch (number of committed rows before this batch)
+	idx_t row_number_base;
 	//! The valid selection
 	SelectionVector valid_sel;
 
@@ -335,6 +337,8 @@ struct ParallelCollectionScanState {
 	idx_t max_row;
 	idx_t batch_index;
 	atomic<idx_t> processed_rows;
+	//! Running total of committed rows across assigned row groups (for deterministic row_number)
+	idx_t row_number_base;
 	mutex lock;
 
 	//! Optional state for custom row group ordering

@@ -253,6 +253,7 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
 	state.batch_index = 0;
 	state.processed_rows = 0;
+	state.row_number_base = 0;
 }
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
@@ -295,6 +296,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
+			scan_state.row_number_base = state.row_number_base;
+			state.row_number_base += current_row_group.GetCommittedRowCount();
 		}
 		D_ASSERT(collection);
 		D_ASSERT(row_group);

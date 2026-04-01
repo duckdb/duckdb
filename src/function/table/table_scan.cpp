@@ -44,6 +44,8 @@ struct TableScanLocalState : public LocalTableFunctionState {
 
 	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
+	//! Number of rows emitted in the current row group batch (for deterministic row_number)
+	idx_t row_number_count = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -265,8 +267,6 @@ public:
 	ParallelTableScanState state;
 	//! The index of the row_number column in the output, if any
 	optional_idx row_number_col_index;
-	//! Atomic counter for assigning row numbers across all threads
-	atomic<idx_t> row_number_counter {0};
 
 private:
 	const TableScanBindData &bind_data;
@@ -326,12 +326,13 @@ public:
 					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
 					auto count = output.size();
 
-					// Atomically claim a range of row numbers
-					auto base = row_number_counter.fetch_add(count);
+					// Use the row_number_base from the scan state for deterministic numbering
+					idx_t base = l_state.scan_state.table_state.row_number_base + l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = UnsafeNumericCast<row_t>(base + i + 1);
 					}
+					l_state.row_number_count += count;
 				}
 				return;
 			}
@@ -339,6 +340,8 @@ public:
 			// We have fully processed a row group. Add to scanned_rows
 			l_state.rows_scanned += l_state.rows_in_current_row_group;
 			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
+			// Reset row_number count for the new batch
+			l_state.row_number_count = 0;
 
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
@@ -415,7 +418,6 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 			break;
 		}
 	}
-
 	// Filter out row_number columns before passing to storage layer
 	vector<ColumnIndex> filtered_column_indexes;
 	for (const auto &col_idx : input.column_indexes) {
