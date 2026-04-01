@@ -266,6 +266,14 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 	}
 
+	void ResetCachingState() {
+		cached_chunk.reset();
+		initialized = false;
+		can_cache_chunk = OperatorCachingMode::NONE;
+		must_return_continuation_chunk = false;
+		cached_result = OperatorResultType::NEED_MORE_INPUT;
+	}
+
 	unique_ptr<DataChunk> cached_chunk;
 	bool initialized = false;
 	//! Whether or not the chunk can be cached

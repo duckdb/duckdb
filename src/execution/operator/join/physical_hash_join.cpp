@@ -267,14 +267,6 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
 
-static void ResetHashJoinCachingState(CachingOperatorState &state) {
-	state.cached_chunk.reset();
-	state.initialized = false;
-	state.can_cache_chunk = OperatorCachingMode::NONE;
-	state.must_return_continuation_chunk = false;
-	state.cached_result = OperatorResultType::NEED_MORE_INPUT;
-}
-
 static bool CanUsePerfectHashJoin(const PhysicalHashJoin &op, PerfectHashJoinExecutor &perfect_join_executor) {
 	if (op.conditions.size() != 1 || !op.conditions[0].GetRightStats()) {
 		return false;
@@ -1556,7 +1548,7 @@ bool PhysicalHashJoin::ResetOperatorState(ExecutionContext &context, OperatorSta
 	auto &state = state_p.Cast<HashJoinOperatorState>();
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto &allocator = BufferAllocator::Get(context.client);
-	ResetHashJoinCachingState(state);
+	state.ResetCachingState();
 	state.lhs_join_keys.Reset();
 	state.lhs_probe_data.Reset();
 	state.scan_structure.Reset();

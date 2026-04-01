@@ -151,11 +151,7 @@ unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContex
 
 bool PhysicalCrossProduct::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
 	auto &state = state_p.Cast<CrossProductOperatorState>();
-	state.cached_chunk.reset();
-	state.initialized = false;
-	state.can_cache_chunk = OperatorCachingMode::NONE;
-	state.must_return_continuation_chunk = false;
-	state.cached_result = OperatorResultType::NEED_MORE_INPUT;
+	state.ResetCachingState();
 	state.executor.Reset();
 	return true;
 }

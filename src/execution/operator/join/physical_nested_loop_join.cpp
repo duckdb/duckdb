@@ -7,14 +7,6 @@
 
 namespace duckdb {
 
-static void ResetCachingOperatorState(CachingOperatorState &state) {
-	state.cached_chunk.reset();
-	state.initialized = false;
-	state.can_cache_chunk = OperatorCachingMode::NONE;
-	state.must_return_continuation_chunk = false;
-	state.cached_result = OperatorResultType::NEED_MORE_INPUT;
-}
-
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
                                                PhysicalOperator &left, PhysicalOperator &right,
                                                vector<JoinCondition> conds, JoinType join_type,
@@ -368,7 +360,7 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExecutionCont
 bool PhysicalNestedLoopJoin::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
 	(void)context;
 	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
-	ResetCachingOperatorState(state);
+	state.ResetCachingState();
 	state.fetch_next_left = true;
 	state.fetch_next_right = false;
 	state.left_condition.Reset();
