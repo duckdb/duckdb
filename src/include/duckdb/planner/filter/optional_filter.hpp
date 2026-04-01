@@ -32,6 +32,10 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
+	bool IsOnlyForZoneMapFiltering() const override {
+		return true;
+	}
+
 	virtual void FiltersNullValues(const LogicalType &type, bool &filters_nulls, bool &filters_valid_values,
 	                               TableFilterState &filter_state) const {
 	}

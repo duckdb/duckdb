@@ -100,7 +100,7 @@ FROM pragma_database_size() AS current);
 loop threshold 0 10
 
 statement ok
-DELETE FROM t WHERE i < (${threshold} * 25000);
+DELETE FROM t WHERE i < ({threshold} * 25000);
 
 endloop
 

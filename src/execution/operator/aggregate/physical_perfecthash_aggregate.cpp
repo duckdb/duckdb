@@ -225,6 +225,7 @@ InsertionOrderPreservingMap<string> PhysicalPerfectHashAggregate::ParamsToString
 		}
 	}
 	result["Aggregates"] = aggregate_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

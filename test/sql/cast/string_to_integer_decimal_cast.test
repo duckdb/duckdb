@@ -9,22 +9,22 @@ PRAGMA enable_verification
 foreach type <integral>
 
 query I
-select '0.000005'::${type};
+select '0.000005'::{type};
 ----
 0
 
 query I
-select '1.100004'::${type};
+select '1.100004'::{type};
 ----
 1
 
 query I
-select '0.5'::${type};
+select '0.5'::{type};
 ----
 1
 
 query I
-select '1.50004'::${type};
+select '1.50004'::{type};
 ----
 2
 
@@ -35,22 +35,22 @@ endloop
 foreach type <signed>
 
 query I
-select '-0.000005'::${type};
+select '-0.000005'::{type};
 ----
 0
 
 query I
-select '-1.100004'::${type};
+select '-1.100004'::{type};
 ----
 -1
 
 query I
-select '-0.5'::${type};
+select '-0.5'::{type};
 ----
 -1
 
 query I
-select '-1.50004'::${type};
+select '-1.50004'::{type};
 ----
 -2
 

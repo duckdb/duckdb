@@ -3,10 +3,10 @@
 # group: [string]
 
 statement ok
-ATTACH '__TEST_DIR__/test_blob_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
+ATTACH '{TEST_DIR}/test_blob_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok
-ATTACH '__TEST_DIR__/test_blob_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
+ATTACH '{TEST_DIR}/test_blob_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
 
 foreach compression fsst dictionary dict_fsst
 
@@ -18,7 +18,7 @@ statement ok
 USE db_v13
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='{compression}'
 
 statement ok
 PRAGMA enable_verification
@@ -55,7 +55,7 @@ statement ok
 checkpoint
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('blobs') WHERE segment_type ILIKE 'BLOB' LIMIT 1
+SELECT lower(compression)='{compression}' FROM pragma_storage_info('blobs') WHERE segment_type ILIKE 'BLOB' LIMIT 1
 ----
 1
 
@@ -95,7 +95,7 @@ statement ok
 checkpoint
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('blobs') WHERE segment_type ILIKE 'BLOB' LIMIT 1
+SELECT lower(compression)='{compression}' FROM pragma_storage_info('blobs') WHERE segment_type ILIKE 'BLOB' LIMIT 1
 ----
 1
 

@@ -14,7 +14,7 @@ SET threads=4
 foreach batched true false
 
 statement ok
-SET preserve_insertion_order=${batched}
+SET preserve_insertion_order={batched}
 
 statement error
 SELECT * FROM read_csv('{DATA_DIR}/csv/missing_column.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
@@ -88,13 +88,13 @@ foreach type bool int bigint hugeint float double 'decimal(4,1)' 'decimal(8,1)' 
 
 # the first error is on line 3001
 statement error
-SELECT * FROM read_csv('{DATA_DIR}/csv/error/csv_error.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('{DATA_DIR}/csv/error/csv_error.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': {type}, 'h2': varchar}, header=True)
 ----
 line 3002
 
 # the first error is on line 3001
 statement error
-SELECT * FROM read_csv('{DATA_DIR}/csv/error/csv_error.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('{DATA_DIR}/csv/error/csv_error.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': {type}, 'h2': varchar}, header=True)
 ----
 line 3002
 

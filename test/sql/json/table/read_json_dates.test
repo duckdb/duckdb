@@ -45,7 +45,7 @@ Binder Error
 foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
 
 statement ok
-copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
+copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat {date_format})
 
 # auto-detect
 query II
@@ -55,7 +55,7 @@ DATE	1996-03-27
 
 # forced format read_ndjson
 query II
-select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
+select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat={date_format})
 ----
 DATE	1996-03-27
 
@@ -73,7 +73,7 @@ statement ok
 create table date_copy_test (d date)
 
 statement ok
-copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
+copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat {date_format})
 
 query II
 select typeof(d), d from date_copy_test
@@ -86,7 +86,7 @@ endloop
 foreach a,b,c '%Y-%m-%d,%H:%M:%S.%f,' '%m-%d-%Y,%I:%M:%S,%p' '%m-%d-%y,%I:%M:%S,%p' '%d-%m-%Y,%H:%M:%S,' '%d-%m-%y,%H:%M:%S,' '%Y-%m-%d,%H:%M:%S,' '%y-%m-%d,%H:%M:%S,'
 
 statement ok
-copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat {a} {b} {c})
 
 # auto-detect
 query II
@@ -96,7 +96,7 @@ TIMESTAMP	1996-03-27 07:42:33
 
 # forced format read_ndjson
 query II
-select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
+select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format={a} {b} {c})
 ----
 TIMESTAMP	1996-03-27 07:42:33
 
@@ -114,7 +114,7 @@ statement ok
 create table timestamp_copy_test (t timestamp)
 
 statement ok
-copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat {a} {b} {c})
 
 query II
 select typeof(t), t from timestamp_copy_test

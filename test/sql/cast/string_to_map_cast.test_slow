@@ -273,7 +273,7 @@ SELECT CAST('{True=[true, FALSE, true], False=[false, false, false]}' AS MAP(BOO
 foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
 
 query I
-SELECT CAST('{0={a:1, b: 8.3}, 5.7={a:2, b: 3}}' AS MAP(${type}, STRUCT(a ${type}, b ${type})));
+SELECT CAST('{0={a:1, b: 8.3}, 5.7={a:2, b: 3}}' AS MAP({type}, STRUCT(a {type}, b {type})));
 ----
 {0={'a': 1, 'b': 8}, 6={'a': 2, 'b': 3}}
 
@@ -282,7 +282,7 @@ endloop
 foreach type DOUBLE FLOAT
 
 query I
-SELECT CAST('{-9.01=9.13 ,3=0.00002}' AS MAP(${type}, ${type}));
+SELECT CAST('{-9.01=9.13 ,3=0.00002}' AS MAP({type}, {type}));
 ----
 {-9.01=9.13, 3.0=2e-05}
 
@@ -323,10 +323,10 @@ statement ok
 CREATE TABLE assembled_maps(col1 MAP(INT, VARCHAR));
 
 statement ok
-COPY (SELECT '{8="hello, DuckDB"}') TO '__TEST_DIR__/assembled_maps.csv';
+COPY (SELECT '{8="hello, DuckDB"}') TO '{TEST_DIR}/assembled_maps.csv';
 
 statement ok
-COPY assembled_maps FROM '__TEST_DIR__/assembled_maps.csv';
+COPY assembled_maps FROM '{TEST_DIR}/assembled_maps.csv';
 
 query I
 SELECT * FROM assembled_maps;

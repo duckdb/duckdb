@@ -34,7 +34,7 @@ SELECT quantile_disc(case when r is null then null else {'i': r} end, [0.1, 0.5,
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 query I
-SELECT quantile_disc(d::${type}, [0.1, 0.5, 0.9])
+SELECT quantile_disc(d::{type}, [0.1, 0.5, 0.9])
 FROM range(0,100) tbl(d)
 ----
 [9.0, 49.0, 89.0]

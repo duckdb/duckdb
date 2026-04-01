@@ -68,7 +68,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
 
@@ -119,13 +119,13 @@ jobs:
       - name: Dependencies
         shell: bash
         run: |
-          choco install \
+          python scripts/ci/retry.py -- choco install \
             ccache \
             make \
             ninja \
             zip \
             --no-progress
-          choco install \
+          python scripts/ci/retry.py -- choco install \
             mingw --version 14.2.0 \
             --no-progress
 

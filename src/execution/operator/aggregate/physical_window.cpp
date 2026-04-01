@@ -1148,6 +1148,7 @@ InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
 		projections += select_list[i]->GetName();
 	}
 	result["Projections"] = projections;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 
