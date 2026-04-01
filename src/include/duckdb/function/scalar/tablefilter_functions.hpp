@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-struct InternalTableFilterBloomFilterFun {
+struct TableFilterBloomFilterFun {
 	static constexpr const char *Name = "__internal_tablefilter_bloom_filter";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
@@ -25,7 +25,7 @@ struct InternalTableFilterBloomFilterFun {
 	static ScalarFunction GetFunction();
 };
 
-struct InternalTableFilterDynamicFun {
+struct TableFilterDynamicFun {
 	static constexpr const char *Name = "__internal_tablefilter_dynamic";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
@@ -35,7 +35,7 @@ struct InternalTableFilterDynamicFun {
 	static ScalarFunction GetFunction();
 };
 
-struct InternalTableFilterOptionalFun {
+struct TableFilterOptionalFun {
 	static constexpr const char *Name = "__internal_tablefilter_optional";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
@@ -45,7 +45,7 @@ struct InternalTableFilterOptionalFun {
 	static ScalarFunction GetFunction();
 };
 
-struct InternalTableFilterPerfectHashJoinFun {
+struct TableFilterPerfectHashJoinFun {
 	static constexpr const char *Name = "__internal_tablefilter_perfect_hash_join";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
@@ -55,7 +55,7 @@ struct InternalTableFilterPerfectHashJoinFun {
 	static ScalarFunction GetFunction();
 };
 
-struct InternalTableFilterPrefixRangeFun {
+struct TableFilterPrefixRangeFun {
 	static constexpr const char *Name = "__internal_tablefilter_prefix_range";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
@@ -65,7 +65,7 @@ struct InternalTableFilterPrefixRangeFun {
 	static ScalarFunction GetFunction();
 };
 
-struct InternalTableFilterSelectivityOptionalFun {
+struct TableFilterSelectivityOptionalFun {
 	static constexpr const char *Name = "__internal_tablefilter_selectivity_optional";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";

@@ -29,7 +29,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -514,7 +514,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 			}
 			return true;
 		}
-		if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 			return true;
 		}
 	}

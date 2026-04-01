@@ -1,7 +1,7 @@
 [
     {
         "name": "__internal_tablefilter_bloom_filter",
-        "struct": "InternalTableFilterBloomFilterFun",
+        "struct": "TableFilterBloomFilterFun",
         "parameters": "",
         "description": "",
         "example": "",
@@ -9,7 +9,7 @@
     },
     {
         "name": "__internal_tablefilter_dynamic",
-        "struct": "InternalTableFilterDynamicFun",
+        "struct": "TableFilterDynamicFun",
         "parameters": "",
         "description": "",
         "example": "",
@@ -17,7 +17,7 @@
     },
     {
         "name": "__internal_tablefilter_optional",
-        "struct": "InternalTableFilterOptionalFun",
+        "struct": "TableFilterOptionalFun",
         "parameters": "",
         "description": "",
         "example": "",
@@ -25,7 +25,7 @@
     },
     {
         "name": "__internal_tablefilter_perfect_hash_join",
-        "struct": "InternalTableFilterPerfectHashJoinFun",
+        "struct": "TableFilterPerfectHashJoinFun",
         "parameters": "",
         "description": "",
         "example": "",
@@ -33,7 +33,7 @@
     },
     {
         "name": "__internal_tablefilter_prefix_range",
-        "struct": "InternalTableFilterPrefixRangeFun",
+        "struct": "TableFilterPrefixRangeFun",
         "parameters": "",
         "description": "",
         "example": "",
@@ -41,7 +41,7 @@
     },
     {
         "name": "__internal_tablefilter_selectivity_optional",
-        "struct": "InternalTableFilterSelectivityOptionalFun",
+        "struct": "TableFilterSelectivityOptionalFun",
         "parameters": "",
         "description": "",
         "example": "",

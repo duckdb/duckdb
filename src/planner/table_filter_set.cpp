@@ -20,7 +20,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
-#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 
@@ -32,7 +32,7 @@ struct LegacyStructPathEntry {
 static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 			return true;
 		}
 	}
@@ -279,7 +279,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}

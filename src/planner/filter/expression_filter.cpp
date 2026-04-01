@@ -10,7 +10,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
-#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 
@@ -362,7 +362,7 @@ string ExpressionFilter::ExpressionToFriendlyString(const Expression &expression
 		for (auto &child : conj.children) {
 			if (child->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 				auto &func = child->Cast<BoundFunctionExpression>();
-				if (TableFilterInternalFunctions::IsInternalTableFilterFunction(func.function)) {
+				if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 					has_internal = true;
 					break;
 				}
