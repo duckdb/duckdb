@@ -1105,6 +1105,10 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				// hash table e.g. because they are part of a RIGHT join
 				continue;
 			}
+
+			auto condition_type = op.conditions[join_condition[filter_idx]].GetLHS().return_type;
+			bool has_cast = condition_type != pushdown_column.storage_type;
+
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
 			if (!has_cast && ht && CanUseInFilter(context, ht, cmp)) {
