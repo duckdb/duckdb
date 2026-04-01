@@ -482,16 +482,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	// Validate UPDATE OF columns exist
 	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
-		auto &columns = table.GetColumns();
 		for (const auto &col_name : create_trigger_info.columns) {
-			bool found = false;
-			for (const auto &col : columns.Logical()) {
-				if (StringUtil::CIEquals(col.GetName(), col_name)) {
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
+			if (!table.ColumnExists(col_name)) {
 				throw BinderException("Column \"%s\" does not exist in table \"%s\"", col_name, table.name);
 			}
 		}
