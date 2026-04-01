@@ -12,6 +12,13 @@
 
 namespace duckdb {
 
+static const BoundFunctionExpression *TryGetFunctionExpression(const Expression &expression) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	return &expression.Cast<BoundFunctionExpression>();
+}
+
 static bool TryExpressionFiltersNullValues(const Expression &expression, ExpressionFilterState &state,
                                            bool &filters_nulls, bool &filters_valid_values) {
 	filters_nulls = false;
@@ -87,25 +94,28 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 	case ExpressionFilterFastPath::IS_NOT_NULL:
 		filters_nulls = true;
 		return true;
-	case ExpressionFilterFastPath::BLOOM_FILTER:
-		if (!state.IsSelectivityActive() || !state.bloom_filter) {
+	case ExpressionFilterFastPath::BLOOM_FILTER: {
+		auto func_expr = TryGetFunctionExpression(expression);
+		if (!func_expr || !func_expr->bind_info) {
 			return true;
 		}
-		filters_nulls = state.bloom_filters_null_values;
+		auto &data = func_expr->bind_info->Cast<BloomFilterFunctionData>();
+		if (!data.filter) {
+			return true;
+		}
+		filters_nulls = data.filters_null_values;
 		return true;
+	}
 	case ExpressionFilterFastPath::SELECTIVITY_OPTIONAL: {
-		if (!state.IsSelectivityActive()) {
-			return true;
-		}
 		if (!state.selectivity_child_state) {
 			return false;
 		}
-		auto &func_expr = expression.Cast<BoundFunctionExpression>();
-		if (!func_expr.bind_info) {
+		auto func_expr = TryGetFunctionExpression(expression);
+		if (!func_expr || !func_expr->bind_info) {
 			return false;
 		}
 
-		auto &data = func_expr.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+		auto &data = func_expr->bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 		if (!data.child_filter_expr) {
 			return false;
 		}
@@ -113,18 +123,37 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 		                                      filters_valid_values);
 	}
 	case ExpressionFilterFastPath::PERFECT_HASH_JOIN:
-	case ExpressionFilterFastPath::PREFIX_RANGE:
-		if (!state.IsSelectivityActive()) {
+	case ExpressionFilterFastPath::PREFIX_RANGE: {
+		auto func_expr = TryGetFunctionExpression(expression);
+		if (!func_expr || !func_expr->bind_info) {
+			return true;
+		}
+		if (state.fast_path == ExpressionFilterFastPath::PERFECT_HASH_JOIN) {
+			auto &data = func_expr->bind_info->Cast<PerfectHashJoinFunctionData>();
+			if (!data.executor) {
+				return true;
+			}
+		} else {
+			auto &data = func_expr->bind_info->Cast<PrefixRangeFunctionData>();
+			if (!data.filter || !data.filter->IsInitialized()) {
+				return true;
+			}
+		}
+		filters_nulls = true;
+		return true;
+	}
+	case ExpressionFilterFastPath::DYNAMIC_FILTER: {
+		auto func_expr = TryGetFunctionExpression(expression);
+		if (!func_expr || !func_expr->bind_info) {
+			return true;
+		}
+		auto &data = func_expr->bind_info->Cast<DynamicFilterFunctionData>();
+		if (!data.filter_data || !data.filter_data->initialized.load()) {
 			return true;
 		}
 		filters_nulls = true;
 		return true;
-	case ExpressionFilterFastPath::DYNAMIC_FILTER:
-		if (!state.dynamic_filter_data || !state.dynamic_filter_data->initialized.load()) {
-			return true;
-		}
-		filters_nulls = true;
-		return true;
+	}
 	default:
 		return false;
 	}
