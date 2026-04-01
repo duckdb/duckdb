@@ -482,8 +482,7 @@ void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
 		if (ConstantVector::IsNull(part_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
 			DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());

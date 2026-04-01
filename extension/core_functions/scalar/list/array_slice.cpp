@@ -168,7 +168,7 @@ void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vect
 	auto step_valid = step_vector && !ConstantVector::IsNull(*step_vector);
 
 	if (!str_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -213,7 +213,7 @@ void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vect
 
 	// Try to slice
 	if (!clamp_result) {
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 	} else if (step == 1) {
 		result_data[0] = OP::SliceValue(result, str, begin, end);
 	} else {
@@ -336,8 +336,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
 
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 

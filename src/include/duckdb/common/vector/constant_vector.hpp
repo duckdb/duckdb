@@ -57,6 +57,8 @@ struct ConstantVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return !vector.validity.RowIsValid(0);
 	}
+	//! Sets a vector to be a constant NULL vector
+	DUCKDB_API static void SetNull(Vector &vector);
 	DUCKDB_API static void SetNull(Vector &vector, bool is_null);
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
