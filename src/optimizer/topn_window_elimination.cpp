@@ -187,7 +187,7 @@ bool TopNWindowElimination::IsSetOperator(const LogicalOperatorType &op_type) {
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
 	if (!CanOptimize(*op)) {
-		RestoreValue save_needs_schema(needs_schema);
+		RestoreValue<idx_t> save_needs_schema(needs_schema);
 		if (IsSetOperator(op->type)) {
 			++needs_schema;
 		}
