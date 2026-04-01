@@ -179,7 +179,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -1911,32 +1911,6 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	return static_cast<ExpressionClass>(StringUtil::StringToEnum(GetExpressionClassValues(), 41, "ExpressionClass", value));
-}
-
-const StringUtil::EnumStringLiteral *GetExpressionFilterFastPathValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::NONE), "NONE" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::IS_OPTIONAL), "IS_OPTIONAL" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::CONSTANT_COMPARISON), "CONSTANT_COMPARISON" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::IS_NULL), "IS_NULL" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::IS_NOT_NULL), "IS_NOT_NULL" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::BLOOM_FILTER), "BLOOM_FILTER" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::SELECTIVITY_OPTIONAL), "SELECTIVITY_OPTIONAL" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::PERFECT_HASH_JOIN), "PERFECT_HASH_JOIN" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::PREFIX_RANGE), "PREFIX_RANGE" },
-		{ static_cast<uint32_t>(ExpressionFilterFastPath::DYNAMIC_FILTER), "DYNAMIC_FILTER" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ExpressionFilterFastPath>(ExpressionFilterFastPath value) {
-	return StringUtil::EnumToString(GetExpressionFilterFastPathValues(), 10, "ExpressionFilterFastPath", static_cast<uint32_t>(value));
-}
-
-template<>
-ExpressionFilterFastPath EnumUtil::FromString<ExpressionFilterFastPath>(const char *value) {
-	return static_cast<ExpressionFilterFastPath>(StringUtil::StringToEnum(GetExpressionFilterFastPathValues(), 10, "ExpressionFilterFastPath", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExpressionFilterSelectivityStatusValues() {

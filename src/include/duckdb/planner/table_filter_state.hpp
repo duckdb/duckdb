@@ -10,7 +10,6 @@
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -36,18 +35,6 @@ public:
 	}
 };
 
-enum class ExpressionFilterFastPath : uint8_t {
-	NONE,
-	IS_OPTIONAL,
-	CONSTANT_COMPARISON,
-	IS_NULL,
-	IS_NOT_NULL,
-	BLOOM_FILTER,
-	SELECTIVITY_OPTIONAL,
-	PERFECT_HASH_JOIN,
-	PREFIX_RANGE,
-	DYNAMIC_FILTER
-};
 enum class ExpressionFilterSelectivityStatus : uint8_t { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };
 
 struct SelectivityTrackingState {
@@ -107,42 +94,11 @@ struct ExpressionFilterState : public TableFilterState {
 public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
 
-	bool HasChildFilters() const {
-		return !child_states.empty();
-	}
-	bool HasFastPath() const {
-		return fast_path != ExpressionFilterFastPath::NONE;
-	}
-	bool HasSelectivityTracking() const {
-		return selectivity.HasSelectivityTracking();
-	}
-	bool IsSelectivityActive() const {
-		return selectivity.IsActive();
-	}
-	void EnableSelectivityTracking(float selectivity_threshold_p, idx_t n_vectors_to_check_p) {
-		selectivity.Enable(selectivity_threshold_p, n_vectors_to_check_p);
-	}
-	void UpdateSelectivity(idx_t accepted, idx_t processed) {
-		selectivity.Update(accepted, processed);
-	}
 	ClientContext &GetContext() {
-		if (executor) {
-			return executor->GetContext();
-		}
-		if (selectivity_child_state) {
-			return selectivity_child_state->GetContext();
-		}
-		D_ASSERT(!child_states.empty());
-		return child_states[0]->GetContext();
+		D_ASSERT(executor);
+		return executor->GetContext();
 	}
 
-	ExpressionFilterFastPath fast_path = ExpressionFilterFastPath::NONE;
-	ExpressionType comparison_type = ExpressionType::INVALID;
-	Value constant;
-	SelectivityTrackingState selectivity;
-	vector<unique_ptr<ExpressionFilterState>> child_states;
-	unique_ptr<ExpressionFilterState> selectivity_child_state;
-	unique_ptr<AdaptiveFilter> adaptive_filter;
 	unique_ptr<ExpressionExecutor> executor;
 };
 

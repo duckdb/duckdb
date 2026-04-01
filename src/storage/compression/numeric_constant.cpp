@@ -7,8 +7,11 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
@@ -20,19 +23,61 @@ static optional_ptr<const BoundFunctionExpression> TryGetFunctionExpression(cons
 	return expression.Cast<BoundFunctionExpression>();
 }
 
-static bool TryExpressionFiltersNullValues(const Expression &expression, ExpressionFilterState &state,
-                                           bool &filters_nulls, bool &filters_valid_values) {
+static bool IsSimpleFilterColumnRef(const Expression &expression) {
+	return expression.type == ExpressionType::BOUND_REF ||
+	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+}
+
+static bool TryComparisonFiltersNullValues(const BoundComparisonExpression &comparison, bool &filters_nulls,
+                                           bool &filters_valid_values) {
+	optional_ptr<const BoundConstantExpression> constant_expr;
+	auto comparison_type = comparison.GetExpressionType();
+	if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = comparison.right->Cast<BoundConstantExpression>();
+	} else if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = comparison.left->Cast<BoundConstantExpression>();
+		comparison_type = FlipComparisonExpression(comparison_type);
+	} else {
+		return false;
+	}
+	if (constant_expr->value.IsNull()) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			filters_valid_values = true;
+			break;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			filters_nulls = true;
+			break;
+		default:
+			filters_nulls = true;
+			filters_valid_values = true;
+			break;
+		}
+	} else {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			filters_nulls = false;
+			break;
+		default:
+			filters_nulls = true;
+			break;
+		}
+	}
+	return true;
+}
+
+static bool TryExpressionFiltersNullValues(const Expression &expression, bool &filters_nulls,
+                                           bool &filters_valid_values) {
 	filters_nulls = false;
 	filters_valid_values = false;
 
-	if (state.HasChildFilters()) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
 		if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
-			for (idx_t child_idx = 0; child_idx < conjunction.children.size(); child_idx++) {
+			for (auto &child : conjunction.children) {
 				bool child_filters_nulls = false;
 				bool child_filters_valid_values = false;
-				if (!TryExpressionFiltersNullValues(*conjunction.children[child_idx], *state.child_states[child_idx],
-				                                    child_filters_nulls, child_filters_valid_values)) {
+				if (!TryExpressionFiltersNullValues(*child, child_filters_nulls, child_filters_valid_values)) {
 					return false;
 				}
 				filters_nulls = filters_nulls || child_filters_nulls;
@@ -43,11 +88,10 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 		if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
 			filters_nulls = true;
 			filters_valid_values = true;
-			for (idx_t child_idx = 0; child_idx < conjunction.children.size(); child_idx++) {
+			for (auto &child : conjunction.children) {
 				bool child_filters_nulls = false;
 				bool child_filters_valid_values = false;
-				if (!TryExpressionFiltersNullValues(*conjunction.children[child_idx], *state.child_states[child_idx],
-				                                    child_filters_nulls, child_filters_valid_values)) {
+				if (!TryExpressionFiltersNullValues(*child, child_filters_nulls, child_filters_valid_values)) {
 					return false;
 				}
 				filters_nulls = filters_nulls && child_filters_nulls;
@@ -57,47 +101,40 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 		}
 		return false;
 	}
-	if (!state.HasFastPath()) {
+
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comparison = expression.Cast<BoundComparisonExpression>();
+		return TryComparisonFiltersNullValues(comparison, filters_nulls, filters_valid_values);
+	}
+
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
+		auto &op = expression.Cast<BoundOperatorExpression>();
+		if (op.children.size() != 1 || !IsSimpleFilterColumnRef(*op.children[0])) {
+			return false;
+		}
+		switch (expression.type) {
+		case ExpressionType::OPERATOR_IS_NULL:
+			filters_valid_values = true;
+			return true;
+		case ExpressionType::OPERATOR_IS_NOT_NULL:
+			filters_nulls = true;
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	auto func_expr = TryGetFunctionExpression(expression);
+	if (!func_expr) {
 		return false;
 	}
 
-	switch (state.fast_path) {
-	case ExpressionFilterFastPath::IS_OPTIONAL:
+	auto &function_name = func_expr->function.name;
+	if (function_name == OptionalFilterScalarFun::NAME) {
 		return true;
-	case ExpressionFilterFastPath::CONSTANT_COMPARISON:
-		if (state.constant.IsNull()) {
-			switch (state.comparison_type) {
-			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-				filters_valid_values = true;
-				break;
-			case ExpressionType::COMPARE_DISTINCT_FROM:
-				filters_nulls = true;
-				break;
-			default:
-				filters_nulls = true;
-				filters_valid_values = true;
-				break;
-			}
-		} else {
-			switch (state.comparison_type) {
-			case ExpressionType::COMPARE_DISTINCT_FROM:
-				filters_nulls = false;
-				break;
-			default:
-				filters_nulls = true;
-				break;
-			}
-		}
-		return true;
-	case ExpressionFilterFastPath::IS_NULL:
-		filters_valid_values = true;
-		return true;
-	case ExpressionFilterFastPath::IS_NOT_NULL:
-		filters_nulls = true;
-		return true;
-	case ExpressionFilterFastPath::BLOOM_FILTER: {
-		auto func_expr = TryGetFunctionExpression(expression);
-		if (!func_expr || !func_expr->bind_info) {
+	}
+	if (function_name == BloomFilterScalarFun::NAME) {
+		if (!func_expr->bind_info) {
 			return true;
 		}
 		auto &data = func_expr->bind_info->Cast<BloomFilterFunctionData>();
@@ -107,45 +144,40 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 		filters_nulls = data.filters_null_values;
 		return true;
 	}
-	case ExpressionFilterFastPath::SELECTIVITY_OPTIONAL: {
-		if (!state.selectivity_child_state) {
+	if (function_name == SelectivityOptionalFilterScalarFun::NAME) {
+		if (!func_expr->bind_info) {
 			return false;
 		}
-		auto func_expr = TryGetFunctionExpression(expression);
-		if (!func_expr || !func_expr->bind_info) {
-			return false;
-		}
-
 		auto &data = func_expr->bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 		if (!data.child_filter_expr) {
 			return false;
 		}
-		return TryExpressionFiltersNullValues(*data.child_filter_expr, *state.selectivity_child_state, filters_nulls,
-		                                      filters_valid_values);
+		return TryExpressionFiltersNullValues(*data.child_filter_expr, filters_nulls, filters_valid_values);
 	}
-	case ExpressionFilterFastPath::PERFECT_HASH_JOIN:
-	case ExpressionFilterFastPath::PREFIX_RANGE: {
-		auto func_expr = TryGetFunctionExpression(expression);
-		if (!func_expr || !func_expr->bind_info) {
+	if (function_name == PerfectHashJoinScalarFun::NAME) {
+		if (!func_expr->bind_info) {
 			return true;
 		}
-		if (state.fast_path == ExpressionFilterFastPath::PERFECT_HASH_JOIN) {
-			auto &data = func_expr->bind_info->Cast<PerfectHashJoinFunctionData>();
-			if (!data.executor) {
-				return true;
-			}
-		} else {
-			auto &data = func_expr->bind_info->Cast<PrefixRangeFunctionData>();
-			if (!data.filter || !data.filter->IsInitialized()) {
-				return true;
-			}
+		auto &data = func_expr->bind_info->Cast<PerfectHashJoinFunctionData>();
+		if (!data.executor) {
+			return true;
 		}
 		filters_nulls = true;
 		return true;
 	}
-	case ExpressionFilterFastPath::DYNAMIC_FILTER: {
-		auto func_expr = TryGetFunctionExpression(expression);
-		if (!func_expr || !func_expr->bind_info) {
+	if (function_name == PrefixRangeScalarFun::NAME) {
+		if (!func_expr->bind_info) {
+			return true;
+		}
+		auto &data = func_expr->bind_info->Cast<PrefixRangeFunctionData>();
+		if (!data.filter || !data.filter->IsInitialized()) {
+			return true;
+		}
+		filters_nulls = true;
+		return true;
+	}
+	if (function_name == DynamicFilterScalarFun::NAME) {
+		if (!func_expr->bind_info) {
 			return true;
 		}
 		auto &data = func_expr->bind_info->Cast<DynamicFilterFunctionData>();
@@ -155,9 +187,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, Express
 		filters_nulls = true;
 		return true;
 	}
-	default:
-		return false;
-	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -265,14 +295,10 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ConstantFun::FiltersNullValues");
 	auto &state = filter_state.Cast<ExpressionFilterState>();
-	if (!TryExpressionFiltersNullValues(*expr_filter.expr, state, filters_nulls, filters_valid_values)) {
+	if (!TryExpressionFiltersNullValues(*expr_filter.expr, filters_nulls, filters_valid_values)) {
 		Value val(type);
 		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
-		if (state.executor) {
-			filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
-		} else {
-			filters_nulls = !expr_filter.EvaluateWithConstant(state.GetContext(), val);
-		}
+		filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
 		filters_valid_values = false;
 	}
 }
