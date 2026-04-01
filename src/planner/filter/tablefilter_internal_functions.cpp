@@ -53,6 +53,99 @@ bool TableFilterInternalFunctions::IsInternalTableFilterFunction(const string &n
 }
 // LCOV_EXCL_STOP
 
+void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &selectivity_threshold,
+                                   idx_t &n_vectors_to_check) {
+	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
+	static constexpr float BF_THRESHOLD = 0.5f;
+	static constexpr float PHJ_THRESHOLD = 0.3f;
+	static constexpr float PRF_THRESHOLD = 0.5f;
+
+	static constexpr idx_t MIN_MAX_CHECK_N = 6;
+	static constexpr idx_t BF_CHECK_N = 6;
+	static constexpr idx_t PHJ_CHECK_N = 6;
+	static constexpr idx_t PRF_CHECK_N = 6;
+
+	switch (type) {
+	case SelectivityOptionalFilterType::MIN_MAX:
+		selectivity_threshold = MIN_MAX_THRESHOLD;
+		n_vectors_to_check = MIN_MAX_CHECK_N;
+		return;
+	case SelectivityOptionalFilterType::BF:
+		selectivity_threshold = BF_THRESHOLD;
+		n_vectors_to_check = BF_CHECK_N;
+		return;
+	case SelectivityOptionalFilterType::PHJ:
+		selectivity_threshold = PHJ_THRESHOLD;
+		n_vectors_to_check = PHJ_CHECK_N;
+		return;
+	case SelectivityOptionalFilterType::PRF:
+		selectivity_threshold = PRF_THRESHOLD;
+		n_vectors_to_check = PRF_CHECK_N;
+		return;
+	default:
+		throw NotImplementedException("GetThresholdAndVectorsToCheck");
+	}
+}
+
+static void SelectionToBooleanResult(idx_t count, const SelectionVector &sel, idx_t sel_count, Vector &result) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<bool>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = false;
+	}
+	for (idx_t i = 0; i < sel_count; i++) {
+		result_data[sel.get_index(i)] = true;
+	}
+}
+
+idx_t SelectBloomFilter(Vector &input, const BloomFilterFunctionData &func_data, SelectionVector &result_sel,
+                        idx_t count) {
+	D_ASSERT(func_data.filter);
+	Vector hashes(LogicalType::HASH, count);
+	VectorOperations::Hash(input, hashes, count);
+	hashes.Flatten(count);
+
+	UnifiedVectorFormat input_data;
+	input.ToUnifiedFormat(count, input_data);
+
+	SelectionVector bloom_sel(count);
+	const auto bloom_count = func_data.filter->LookupHashes(hashes, bloom_sel, count);
+
+	idx_t result_count = 0;
+	idx_t bloom_idx = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto matched = bloom_idx < bloom_count && bloom_sel.get_index_unsafe(bloom_idx) == i;
+		if (matched) {
+			bloom_idx++;
+		}
+		const auto input_idx = input_data.sel->get_index(i);
+		bool passed;
+		if (!input_data.validity.RowIsValid(input_idx)) {
+			passed = !func_data.filters_null_values;
+		} else {
+			passed = matched;
+		}
+		if (passed) {
+			result_sel.set_index(result_count++, i);
+		}
+	}
+	return result_count;
+}
+
+idx_t SelectPerfectHashJoin(Vector &input, const PerfectHashJoinFunctionData &func_data, SelectionVector &result_sel,
+                            idx_t count) {
+	D_ASSERT(func_data.executor);
+	idx_t approved_count = 0;
+	func_data.executor->FillSelectionVectorSwitchProbe(input, count, result_sel, approved_count, nullptr);
+	return approved_count;
+}
+
+idx_t SelectPrefixRange(Vector &input, const PrefixRangeFunctionData &func_data, SelectionVector &result_sel,
+                        idx_t count) {
+	D_ASSERT(func_data.filter);
+	return func_data.filter->LookupKeys(input, result_sel, count);
+}
+
 static void TableFilterInternalSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                          const ScalarFunction &function) {
 	// Runtime state cannot be serialized - write nothing

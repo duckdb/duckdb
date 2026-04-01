@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/tablefilter_internal_functions.hpp"
 
 namespace duckdb {
 
@@ -46,8 +47,6 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	    : child_state(std::move(child_state)), stats(n_vectors_to_check, selectivity_threshold) {
 	}
 };
-
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
 
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class SelectivityOptionalFilter final : public OptionalFilter {
