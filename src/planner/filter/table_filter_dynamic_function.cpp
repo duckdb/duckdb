@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "table_filter_function_helpers.hpp"
+#include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"

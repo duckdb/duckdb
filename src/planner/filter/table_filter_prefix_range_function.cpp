@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "table_filter_function_helpers.hpp"
+#include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
