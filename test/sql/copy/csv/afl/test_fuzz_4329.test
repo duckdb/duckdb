@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/afl/test_fuzz_4329.test
+# description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+# Original fuzzer reproduction: escape='\', buffer_size=42, skip=42, strict_mode=false
+# This triggers ProcessOverBufferValue() with escaped values spanning buffer boundaries
+# when cur_col_id >= number_of_columns in non-strict mode.
+statement maybe
+FROM read_csv('{DATA_DIR}/csv/afl/4329/case_1.csv', escape='\', buffer_size=42, skip=42, strict_mode=false);
+----
