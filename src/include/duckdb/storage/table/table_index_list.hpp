@@ -91,6 +91,8 @@ public:
 		lock_guard<mutex> lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns true if all indexes are bound ART indexes (safe to rebuild after vacuum).
+	bool AllBoundART() const;
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other) {
 		D_ASSERT(index_entries.empty());

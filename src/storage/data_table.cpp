@@ -357,6 +357,64 @@ void DataTable::VacuumIndexes() {
 	}
 }
 
+void DataTable::RebuildIndexes() {
+	auto &indexes = info->indexes;
+	auto &types = row_groups->GetTypes();
+
+	for (auto &index : indexes.Indexes()) {
+		if (!index.IsBound()) {
+			continue;
+		}
+		auto &bound_index = index.Cast<BoundIndex>();
+		bound_index.CommitDrop();
+
+		auto &col_ids = bound_index.GetColumnIds();
+
+		vector<StorageIndex> scan_column_ids;
+		vector<LogicalType> scan_types;
+		for (auto col_id : col_ids) {
+			scan_column_ids.emplace_back(col_id);
+			scan_types.push_back(types[col_id]);
+		}
+		scan_column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		scan_types.push_back(LogicalType::ROW_TYPE);
+
+		DataChunk scan_chunk;
+		scan_chunk.Initialize(Allocator::Get(db), scan_types);
+
+		CreateIndexScanState state;
+		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
+		state.Initialize(scan_column_ids, nullptr);
+		QueryContext context;
+		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
+		row_groups->InitializeCreateIndexScan(state);
+
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(types);
+
+		while (true) {
+			scan_chunk.Reset();
+			state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
+			if (scan_chunk.size() == 0) {
+				break;
+			}
+			for (idx_t i = 0; i < col_ids.size(); i++) {
+				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
+			}
+			table_chunk.SetCardinality(scan_chunk);
+			Vector &row_ids = scan_chunk.data[col_ids.size()];
+
+			auto error = bound_index.Append(table_chunk, row_ids);
+			if (error.HasError()) {
+				throw InternalException("Failed to rebuild index '%s' after vacuum: %s", bound_index.GetIndexName(),
+				                        error.Message());
+			}
+		}
+		bound_index.Vacuum();
+		bound_index.Verify();
+	}
+}
+
 void DataTable::VerifyIndexBuffers() {
 	info->VerifyIndexBuffers();
 }
@@ -1688,8 +1746,12 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->Checkpoint(writer, global_stats);
+	bool need_index_rebuild = false;
+	row_groups->Checkpoint(writer, global_stats, need_index_rebuild);
 	row_groups->SetAppendRequiresNewRowGroup();
+	if (need_index_rebuild) {
+		RebuildIndexes();
+	}
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats

@@ -120,6 +120,17 @@ void TableIndexList::CommitDrop(const string &name) {
 	}
 }
 
+bool TableIndexList::AllBoundART() const {
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (!index.IsBound() || index.Cast<BoundIndex>().GetIndexType() != ART::TYPE_NAME) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool TableIndexList::NameIsUnique(const string &name) {
 	// Only covers PK, FK, and UNIQUE indexes.
 	lock_guard<mutex> lock(index_entries_lock);

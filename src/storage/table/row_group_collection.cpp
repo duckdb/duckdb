@@ -1155,6 +1155,10 @@ private:
 struct VacuumState {
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
+	//! Whether indexes need rebuilding after vacuum (all indexes are bound ART and setting is enabled)
+	bool rebuild_indexes = false;
+	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
+	bool row_ids_changed = false;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1298,7 +1302,16 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 
 	// if there are indexes - we cannot change row-ids
 	// this limits what kind of vacuuming we can do
-	state.can_change_row_ids = info->GetIndexes().Empty();
+	// unless vacuum_rebuild_indexes is enabled and all indexes are bound ART indexes,
+	// in which case we allow vacuuming and rebuild the indexes afterward.
+	bool has_indexes = !info->GetIndexes().Empty();
+
+	// If the experimental_vacuum_rebuild_indexes setting is enabled, allow vacuuming only if all the indexes are
+	// bound ART indexes. We still prevent vacuuming for non-ART or unbound indexes.
+	state.rebuild_indexes =
+	    has_indexes && info->GetIndexes().AllBoundART() &&
+	    Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
+	state.can_change_row_ids = !has_indexes || state.rebuild_indexes;
 	// obtain the set of committed row counts for each row group
 	auto row_group_count = checkpoint_state.SegmentCount();
 	vector<optional_idx> committed_counts;
@@ -1310,6 +1323,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		state.can_vacuum_deletes = false;
 		return;
 	}
+	bool dropped_any_rowgroups = false;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
@@ -1327,6 +1341,13 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// empty row group - we can drop it entirely
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
+			dropped_any_rowgroups = true;
+			state.row_group_counts.push_back(row_group_count);
+			continue;
+		}
+		if (dropped_any_rowgroups) {
+			// if we dropped any row groups before getting here (a non-empty row group),
+			state.row_ids_changed = true;
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
@@ -1457,7 +1478,7 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats, bool &needs_index_rebuild) {
 	auto row_groups = GetRowGroups();
 
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
@@ -1475,6 +1496,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (vacuum_tasks) {
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
+				vacuum_state.row_ids_changed = true;
 				continue;
 			}
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
@@ -1739,6 +1761,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
+	// Rebuild the index only if rebuild_indexes is true (which can only be true if the
+	// experimental_vacuum_rebuild_indexes setting is enabled *and* we had row_ids change during vacuuming (so that we
+	// don't unecessarily rebuild the indexes if there were no actual rowid changes.
+	needs_index_rebuild = vacuum_state.rebuild_indexes && vacuum_state.row_ids_changed;
 }
 
 //===--------------------------------------------------------------------===//

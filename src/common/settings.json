@@ -569,6 +569,17 @@
         "default_value": "true"
     },
     {
+        "name": "experimental_vacuum_rebuild_indexes",
+        "description": "Allow vacuum to happen in the presence of all bound ART indexes, and rebuild indexes after vacuuming.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ],
+        "custom_implementation": true
+    },
+    {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",

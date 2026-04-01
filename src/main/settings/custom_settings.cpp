@@ -18,6 +18,7 @@
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -725,6 +726,20 @@ Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Experimental Vacuum Rebuild Indexes
+//===----------------------------------------------------------------------===//
+void ExperimentalVacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		return;
+	}
+	auto &connection_manager = ConnectionManager::Get(*info.db);
+	if (connection_manager.GetConnectionCount() > 1) {
+		throw InvalidInputException("Cannot change experimental_vacuum_rebuild_indexes while multiple connections are "
+		                            "active - this setting can only be changed when there is a single connection");
 	}
 }
 
