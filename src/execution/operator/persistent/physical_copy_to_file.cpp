@@ -7,9 +7,7 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/main/settings.hpp"
-#include "fmt/format.h"
 
-#include <algorithm>
 #include <functional>
 
 namespace duckdb {

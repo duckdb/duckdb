@@ -5,7 +5,6 @@
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
 
 namespace duckdb {

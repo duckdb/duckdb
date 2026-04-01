@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_reset.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 

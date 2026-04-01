@@ -1,7 +1,6 @@
 #include "duckdb/execution/index/art/node.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
@@ -14,7 +13,6 @@
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/prefix_handle.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 

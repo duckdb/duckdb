@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_limit.hpp"

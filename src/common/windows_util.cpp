@@ -1,4 +1,3 @@
-#include "duckdb/common/windows_util.hpp"
 
 namespace duckdb {
 

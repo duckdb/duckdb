@@ -2,19 +2,15 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 
-#include <algorithm>
 
 namespace duckdb {
 

@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"

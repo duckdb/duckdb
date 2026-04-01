@@ -1,4 +1,3 @@
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 

@@ -1,11 +1,7 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 
-#include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/base_leaf.hpp"
-#include "duckdb/execution/index/art/base_node.hpp"
-#include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {

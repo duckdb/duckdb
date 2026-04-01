@@ -1,7 +1,6 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/execution/operator/persistent/physical_export.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
-#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

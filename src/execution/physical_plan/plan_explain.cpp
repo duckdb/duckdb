@@ -1,4 +1,3 @@
-#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"

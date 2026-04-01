@@ -1,9 +1,6 @@
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/parallel/interrupt.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 #include <utility>
