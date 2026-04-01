@@ -260,8 +260,7 @@ void Parser::ParseQuery(const string &query) {
 					continue;
 				}
 			}
-			if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE &&
-			    has_strict_extension_error) {
+			if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE && has_strict_extension_error) {
 				last_strict_extension_error.Throw();
 			}
 		}
