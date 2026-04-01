@@ -5,10 +5,6 @@
 # Alternative verify disables eager aggregate execution
 require no_alternative_verify
 
-# FanOut changes batching patterns, affecting row group statistics
-statement ok
-set disable_fan_out=true;
-
 statement ok
 ATTACH '{TEST_DIR}/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
 

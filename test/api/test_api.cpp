@@ -644,8 +644,6 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// FanOut changes chunk ordering from range(), which affects random() with a seed
-	REQUIRE_NO_FAIL(con.Query("SET disable_fan_out=true"));
 	REQUIRE_NO_FAIL(con.Query("select setseed(0.1); CREATE TABLE T0 AS SELECT DISTINCT (RANDOM()*9999999)::BIGINT "
 	                          "record_nb, 0.0 x_0, 1.0 y_0 FROM range(1000000) tbl"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T1 AS SELECT record_nb, 0.0 x_1, 1.0 y_1 FROM T0"));

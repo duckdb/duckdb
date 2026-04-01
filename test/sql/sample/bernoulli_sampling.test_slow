@@ -2,10 +2,6 @@
 # description: Test reservoir sample crash on large data sets
 # group: [sample]
 
-# FanOut changes chunk ordering from range(), which affects random() with a seed
-statement ok
-set disable_fan_out=true;
-
 statement ok
 create table output (num_rows INT);
 

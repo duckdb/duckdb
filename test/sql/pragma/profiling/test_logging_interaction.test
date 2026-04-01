@@ -4,10 +4,6 @@
 
 require skip_reload
 
-# FanOut adds extra operator nodes, changing profiling metric counts
-statement ok
-set disable_fan_out=true;
-
 statement ok
 PRAGMA enable_profiling = 'json';
 

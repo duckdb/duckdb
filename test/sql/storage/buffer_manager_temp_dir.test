@@ -4,10 +4,6 @@
 
 require noforcestorage
 
-# FanOut buffering changes memory usage patterns under tight memory limits
-statement ok
-set disable_fan_out=true;
-
 # Set the temporary directory to an empty directory.
 statement ok
 PRAGMA temp_directory=''

@@ -2,10 +2,6 @@
 # description: Issue #2678: overflow in sequences
 # group: [sequence]
 
-# FanOut changes chunk ordering from generate_series()
-statement ok
-set disable_fan_out=true;
-
 statement ok
 create sequence seq1 INCREMENT BY 1 MINVALUE 9223372036854775800 MAXVALUE 9223372036854775807 CYCLE;
 

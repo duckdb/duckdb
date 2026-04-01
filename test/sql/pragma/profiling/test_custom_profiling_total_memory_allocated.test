@@ -4,10 +4,6 @@
 
 require json
 
-# FanOut buffering changes memory usage patterns
-statement ok
-set disable_fan_out=true;
-
 statement ok
 PRAGMA enable_profiling = 'json';
 

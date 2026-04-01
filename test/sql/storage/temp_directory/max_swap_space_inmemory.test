@@ -3,10 +3,6 @@
 
 require skip_reload
 
-# FanOut buffering changes memory usage patterns under tight memory limits
-statement ok
-set disable_fan_out=true;
-
 # In in-memory mode, the 'temp_directory' defaults to '.tmp'
 # So there are no guarantees about the value of 'max_temp_directory_size'
 # (if .tmp exists, it's set to the available disk space | if it doesn't exist, it'll stay at 0 bytes)

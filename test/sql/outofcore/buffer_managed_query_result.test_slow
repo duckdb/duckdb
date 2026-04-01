@@ -4,10 +4,6 @@
 
 load {TEST_DIR}/buffer_managed_query_result.db
 
-# FanOut buffering changes memory usage patterns under tight memory limits
-statement ok
-set disable_fan_out=true;
-
 statement ok
 set memory_limit='100mb';
 

@@ -2,10 +2,6 @@
 # description: Test Sequences with cycles
 # group: [sequence]
 
-# FanOut changes chunk ordering from generate_series()
-statement ok
-set disable_fan_out=true;
-
 statement ok
 create sequence minseq INCREMENT BY -1 MINVALUE -5 MAXVALUE 5 CYCLE;
 

@@ -6,10 +6,6 @@
 statement ok
 SET threads=10
 
-# FanOut changes chunk ordering from range(), which affects random() with a seed
-statement ok
-set disable_fan_out=true;
-
 # seed so it's deterministic
 set seed 0.8765309
 
