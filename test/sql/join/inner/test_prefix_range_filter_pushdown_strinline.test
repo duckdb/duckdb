@@ -69,7 +69,7 @@ JOIN prf_build_string b
 analyzed_plan	<REGEX>:.*IN PRF\(k\).*
 
 statement ok
-ATTACH '__TEST_DIR__/prf_string_nul_stats.db' AS prf_string_nul_stats (ROW_GROUP_SIZE 2048);
+ATTACH '{TEST_DIR}/prf_string_nul_stats.db' AS prf_string_nul_stats (ROW_GROUP_SIZE 2048);
 
 statement ok
 CREATE OR REPLACE TABLE prf_string_nul_stats.prf_probe_string_nul_stats (

@@ -1005,11 +1005,6 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 	}
 
 	const auto &key_type = ht->conditions[0].GetLHS().return_type;
-	if (key_type.id() == LogicalTypeId::VARCHAR &&
-	    (!StringType::GetCollation(key_type).empty() || Settings::Get<DefaultCollationSetting>(context).empty())) {
-		return false;
-	}
-
 	return PrefixRangeTableFilter::SupportedType(key_type);
 }
 

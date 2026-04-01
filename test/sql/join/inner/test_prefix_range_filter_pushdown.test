@@ -333,3 +333,40 @@ ORDER BY ALL;
 1	0	0	10
 3	1048576	5	11
 
+statement ok
+ATTACH ':memory:' AS prf_row_group_bug (ROW_GROUP_SIZE 2);
+
+statement ok
+CREATE OR REPLACE TABLE prf_row_group_bug.prf_probe_small (
+	k SMALLINT,
+	g SMALLINT
+);
+
+statement ok
+INSERT INTO prf_row_group_bug.prf_probe_small VALUES
+	(1, 0), (2, 0),
+	(3, 0), (4, 0),
+	(5, 0), (6, 0);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_row_group_bug (
+	k SMALLINT,
+	g SMALLINT
+);
+
+statement ok
+INSERT INTO prf_build_row_group_bug VALUES
+	(-2, 0),
+	(5, 0),
+	(6, 0);
+
+query II
+SELECT b.k, p.k
+FROM prf_row_group_bug.prf_probe_small p
+RIGHT JOIN prf_build_row_group_bug b USING (k)
+ORDER BY ALL;
+----
+-2	NULL
+5	5
+6	6
+

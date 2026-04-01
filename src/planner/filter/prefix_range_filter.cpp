@@ -106,10 +106,12 @@ public:
 	}
 
 	FilterPropagateResult LookupClampedRange(U lower_bound, U upper_bound) const {
-		const auto lb_bit_idx = (lower_bound - min) >> shift;
+		const U lb_y = lower_bound - min;
+		const U lb_bit_idx = lb_y >> shift;
 		const auto lb_word_idx = lb_bit_idx >> WORD_SHIFT;
 
-		const auto ub_bit_idx = (upper_bound - min) >> shift;
+		const U ub_y = upper_bound - min;
+		const U ub_bit_idx = ub_y >> shift;
 		const auto ub_word_idx = ub_bit_idx >> WORD_SHIFT;
 
 		const idx_t lb_bit_off = static_cast<idx_t>(lb_bit_idx & static_cast<U>(WORD_MASK));
