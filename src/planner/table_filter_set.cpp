@@ -405,7 +405,7 @@ bool TableFilterSet::Equals(TableFilterSet &other) {
 		if (other_entry == other.filters.end()) {
 			return false;
 		}
-		if (!entry.second->Equals(*other_entry->second)) {
+		if (!entry.second->Cast<ExpressionFilter>().Equals(other_entry->second->Cast<ExpressionFilter>())) {
 			return false;
 		}
 	}
@@ -430,7 +430,7 @@ bool TableFilterSet::Equals(TableFilterSet *left, TableFilterSet *right) {
 unique_ptr<TableFilterSet> TableFilterSet::Copy() const {
 	auto copy = make_uniq<TableFilterSet>();
 	for (auto &it : filters) {
-		copy->filters.emplace(it.first, it.second->Copy());
+		copy->filters.emplace(it.first, it.second->Cast<ExpressionFilter>().Copy());
 	}
 	for (auto &filter : generic_filters) {
 		copy->generic_filters.push_back(filter->Copy());
@@ -494,7 +494,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
 		for (auto &filter_entry : *existing_filters) {
-			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Copy());
+			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Cast<ExpressionFilter>().Copy());
 		}
 		for (auto &filter : existing_filters->GetGenericFilters()) {
 			result->PushFilter(filter->Copy());
@@ -502,7 +502,7 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	}
 	for (auto &entry : filters) {
 		for (auto &filter_entry : *entry.second) {
-			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Copy());
+			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Cast<ExpressionFilter>().Copy());
 		}
 	}
 	if (!result->HasFilters()) {

@@ -14,22 +14,6 @@ StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<Ta
       child_filter(std::move(child_filter_p)) {
 }
 
-FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) const {
-	TableFilter::ThrowDeprecated("StructFilter");
-}
-
-string StructFilter::ToString(const string &column_name) const {
-	TableFilter::ThrowDeprecated("StructFilter");
-}
-
-bool StructFilter::Equals(const TableFilter &other_p) const {
-	TableFilter::ThrowDeprecated("StructFilter");
-}
-
-unique_ptr<TableFilter> StructFilter::Copy() const {
-	TableFilter::ThrowDeprecated("StructFilter");
-}
-
 unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) const {
 	auto &child_type = StructType::GetChildType(column.return_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;

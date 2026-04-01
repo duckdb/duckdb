@@ -1089,7 +1089,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto result = make_uniq<TableFilterSet>();
 	for (auto &it : filters) {
 		auto &global_index = it.first;
-		auto &global_filter = it.second.get();
+		auto &global_filter = it.second.get().Cast<ExpressionFilter>();
 
 		auto local_it = global_to_local.find(global_index);
 		if (local_it == global_to_local.end()) {

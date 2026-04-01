@@ -1124,7 +1124,7 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 			}
 		}
 	}
-	return filter.CheckStatistics(stats);
+	return filter.Cast<ExpressionFilter>().CheckStatistics(stats);
 }
 
 static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
@@ -1136,10 +1136,10 @@ static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const
 	auto nan_value = Value("nan").DefaultCastAs(type);
 	NumericStats::SetMin(nan_stats, nan_value);
 	NumericStats::SetMax(nan_stats, nan_value);
-	auto nan_prune = filter.CheckStatistics(nan_stats);
+	auto nan_prune = filter.Cast<ExpressionFilter>().CheckStatistics(nan_stats);
 
 	auto min_max_stats = ParquetStatisticsUtils::CreateNumericStats(reader.Type(), reader.Schema(), pq_col_stats);
-	auto prune = filter.CheckStatistics(*min_max_stats);
+	auto prune = filter.Cast<ExpressionFilter>().CheckStatistics(*min_max_stats);
 
 	// if EITHER of them cannot be pruned - we cannot prune
 	if (prune == FilterPropagateResult::NO_PRUNING_POSSIBLE ||
@@ -1202,7 +1202,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				prune_result = CheckParquetFloatFilter(
 				    column_reader, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 			} else {
-				prune_result = filter.CheckStatistics(*stats);
+				prune_result = filter.Cast<ExpressionFilter>().CheckStatistics(*stats);
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&

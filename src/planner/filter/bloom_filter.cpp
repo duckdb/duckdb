@@ -43,21 +43,6 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 	return found_count;
 }
 
-string BFTableFilter::ToString(const string &column_name) const {
-	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-
-FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
-	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-
-bool BFTableFilter::Equals(const TableFilter &other_p) const {
-	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-unique_ptr<TableFilter> BFTableFilter::Copy() const {
-	TableFilter::ThrowDeprecated("BFTableFilter");
-}
-
 unique_ptr<Expression> BFTableFilter::ToExpression(const Expression &column) const {
 	auto func = BloomFilterScalarFun::GetFunction(column.return_type);
 	auto bind_data =

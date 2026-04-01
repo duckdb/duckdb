@@ -511,7 +511,7 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
 	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
 
-	return filter.CheckStatistics(dummy_stats);
+	return filter.Cast<ExpressionFilter>().CheckStatistics(dummy_stats);
 }
 
 bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {

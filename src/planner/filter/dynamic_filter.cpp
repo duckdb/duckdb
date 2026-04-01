@@ -11,14 +11,6 @@ DynamicFilter::DynamicFilter(shared_ptr<DynamicFilterData> filter_data_p)
     : TableFilter(TableFilterType::DYNAMIC_FILTER), filter_data(std::move(filter_data_p)) {
 }
 
-FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) const {
-	TableFilter::ThrowDeprecated("DynamicFilter");
-}
-
-string DynamicFilter::ToString(const string &column_name) const {
-	TableFilter::ThrowDeprecated("DynamicFilter");
-}
-
 unique_ptr<Expression> DynamicFilter::ToExpression(const Expression &column) const {
 	auto func = DynamicFilterScalarFun::GetFunction(column.return_type);
 	auto bind_data = make_uniq<DynamicFilterFunctionData>(filter_data);
@@ -26,14 +18,6 @@ unique_ptr<Expression> DynamicFilter::ToExpression(const Expression &column) con
 	args.push_back(column.Copy());
 	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(func), std::move(args),
 	                                          std::move(bind_data));
-}
-
-bool DynamicFilter::Equals(const TableFilter &other_p) const {
-	TableFilter::ThrowDeprecated("DynamicFilter");
-}
-
-unique_ptr<TableFilter> DynamicFilter::Copy() const {
-	TableFilter::ThrowDeprecated("DynamicFilter");
 }
 
 } // namespace duckdb

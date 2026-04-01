@@ -22,14 +22,6 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 	}
 }
 
-FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
-	TableFilter::ThrowDeprecated("InFilter");
-}
-
-string InFilter::ToString(const string &column_name) const {
-	TableFilter::ThrowDeprecated("InFilter");
-}
-
 unique_ptr<Expression> InFilter::ToExpression(const Expression &column) const {
 	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
 	result->children.push_back(column.Copy());
@@ -37,14 +29,6 @@ unique_ptr<Expression> InFilter::ToExpression(const Expression &column) const {
 		result->children.push_back(make_uniq<BoundConstantExpression>(val));
 	}
 	return std::move(result);
-}
-
-bool InFilter::Equals(const TableFilter &other_p) const {
-	TableFilter::ThrowDeprecated("InFilter");
-}
-
-unique_ptr<TableFilter> InFilter::Copy() const {
-	TableFilter::ThrowDeprecated("InFilter");
 }
 
 } // namespace duckdb

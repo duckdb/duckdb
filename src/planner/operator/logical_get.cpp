@@ -119,7 +119,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	bool first_item = true;
 	for (auto &kv : table_filters) {
 		auto filter_idx = kv.GetIndex();
-		auto &filter = kv.Filter();
+		auto &filter = kv.Filter().Cast<ExpressionFilter>();
 		auto &col_id_entry = column_ids[filter_idx];
 		const auto col_id = col_id_entry.GetPrimaryIndex();
 		if (col_id_entry.IsVirtualColumn()) {

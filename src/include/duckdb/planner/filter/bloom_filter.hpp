@@ -38,13 +38,7 @@ public:
 	      key_column_name(key_column_name_p), key_type(key_type_p) {
 	}
 
-	string ToString(const string &column_name) const override;
-
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-
 private:
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 
 	void Serialize(Serializer &serializer) const override;

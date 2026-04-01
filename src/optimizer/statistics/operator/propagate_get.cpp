@@ -43,7 +43,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	D_ASSERT(physical_index != DConstants::INVALID_INDEX);
 
 	// Check statistics BEFORE HandleFilter (CheckStatistics needs pre-update stats)
-	auto check_result = filter.CheckStatistics(stats);
+	auto check_result = filter.Cast<ExpressionFilter>().CheckStatistics(stats);
 
 	// Save original expression for stats update (HandleFilter may modify filter_expr)
 	auto original_expr = expr_filter.expr->Copy();

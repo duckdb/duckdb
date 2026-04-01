@@ -296,29 +296,6 @@ PrefixRangeTableFilter::PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> f
                                                const string &key_column_name_p, const LogicalType &key_type_p)
     : TableFilter(TYPE), filter(filter_p), key_column_name(key_column_name_p), key_type(key_type_p) {
 }
-string PrefixRangeTableFilter::ToString(const string &column_name) const {
-	TableFilter::ThrowDeprecated("PrefixRangeTableFilter");
-}
-
-idx_t PrefixRangeTableFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const {
-	TableFilter::ThrowDeprecated("PrefixRangeTableFilter");
-}
-
-bool PrefixRangeTableFilter::FilterValue(const Value &value) const {
-	TableFilter::ThrowDeprecated("PrefixRangeTableFilter");
-}
-
-FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &stats) const {
-	TableFilter::ThrowDeprecated("PrefixRangeTableFilter");
-}
-
-bool PrefixRangeTableFilter::Equals(const TableFilter &other_p) const {
-	TableFilter::ThrowDeprecated("PrefixRangeTableFilter");
-}
-
-unique_ptr<TableFilter> PrefixRangeTableFilter::Copy() const {
-	TableFilter::ThrowDeprecated("PrefixRangeTableFilter");
-}
 
 unique_ptr<Expression> PrefixRangeTableFilter::ToExpression(const Expression &column) const {
 	auto func = PrefixRangeScalarFun::GetFunction(column.return_type);

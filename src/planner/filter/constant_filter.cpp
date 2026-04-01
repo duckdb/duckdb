@@ -15,30 +15,10 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
 	}
 }
 
-bool ConstantFilter::Compare(const Value &value) const {
-	TableFilter::ThrowDeprecated("ConstantFilter");
-}
-
-FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) const {
-	TableFilter::ThrowDeprecated("ConstantFilter");
-}
-
-string ConstantFilter::ToString(const string &column_name) const {
-	TableFilter::ThrowDeprecated("ConstantFilter");
-}
-
 unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) const {
 	auto bound_constant = make_uniq<BoundConstantExpression>(constant);
 	auto result = make_uniq<BoundComparisonExpression>(comparison_type, column.Copy(), std::move(bound_constant));
 	return std::move(result);
-}
-
-bool ConstantFilter::Equals(const TableFilter &other_p) const {
-	TableFilter::ThrowDeprecated("ConstantFilter");
-}
-
-unique_ptr<TableFilter> ConstantFilter::Copy() const {
-	TableFilter::ThrowDeprecated("ConstantFilter");
 }
 
 } // namespace duckdb

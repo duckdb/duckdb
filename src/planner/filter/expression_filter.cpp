@@ -460,15 +460,12 @@ unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) 
 	return expr_copy;
 }
 
-bool ExpressionFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
+bool ExpressionFilter::Equals(const ExpressionFilter &other_p) const {
 	auto &other = other_p.Cast<ExpressionFilter>();
 	return other.expr->Equals(*expr);
 }
 
-unique_ptr<TableFilter> ExpressionFilter::Copy() const {
+unique_ptr<ExpressionFilter> ExpressionFilter::Copy() const {
 	return make_uniq<ExpressionFilter>(expr->Copy());
 }
 
