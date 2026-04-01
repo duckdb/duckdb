@@ -59,17 +59,24 @@ static unique_ptr<Expression> ConvertGenericFilterExpression(const Expression &e
 	return result;
 }
 
-static idx_t ApplyGenericFilters(const vector<unique_ptr<ExpressionExecutor>> &executors, DataChunk &chunk) {
+struct GenericFilterLocalState {
+	GenericFilterLocalState() : sel_a(STANDARD_VECTOR_SIZE), sel_b(STANDARD_VECTOR_SIZE) {
+	}
+
+	SelectionVector sel_a;
+	SelectionVector sel_b;
+};
+
+static idx_t ApplyGenericFilters(const vector<unique_ptr<ExpressionExecutor>> &executors,
+                                 GenericFilterLocalState &state, DataChunk &chunk) {
 	if (executors.empty() || chunk.size() == 0) {
 		return chunk.size();
 	}
-	SelectionVector sel_a(STANDARD_VECTOR_SIZE);
-	SelectionVector sel_b(STANDARD_VECTOR_SIZE);
 	optional_ptr<SelectionVector> current_sel;
 	idx_t current_count = chunk.size();
 	bool use_first = true;
 	for (auto &executor : executors) {
-		auto &result_sel = use_first ? sel_a : sel_b;
+		auto &result_sel = use_first ? state.sel_a : state.sel_b;
 		current_count = executor->SelectExpression(chunk, result_sel, current_sel, current_count);
 		if (current_count == 0) {
 			chunk.SetCardinality(0);
@@ -180,11 +187,15 @@ public:
 		for (auto &filter : gstate.generic_filters) {
 			generic_filter_executors.push_back(make_uniq<ExpressionExecutor>(context.client, *filter));
 		}
+		if (!generic_filter_executors.empty()) {
+			generic_filter_state = make_uniq<GenericFilterLocalState>();
+		}
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
 	DataChunk scan_chunk;
 	vector<unique_ptr<ExpressionExecutor>> generic_filter_executors;
+	unique_ptr<GenericFilterLocalState> generic_filter_state;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
@@ -320,7 +331,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 			}
 
 			if (!l_state.generic_filter_executors.empty()) {
-				ApplyGenericFilters(l_state.generic_filter_executors, function_chunk);
+				ApplyGenericFilters(l_state.generic_filter_executors, *l_state.generic_filter_state, function_chunk);
 			}
 			if (g_state.use_intermediate_chunk) {
 				if (function_chunk.size() > 0) {
