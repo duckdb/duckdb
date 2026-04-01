@@ -60,6 +60,15 @@ private:
 	buffer_ptr<AuxiliaryData> auxiliary_data;
 };
 
+class AuxiliaryAllocatedDataHolder : public AuxiliaryDataHolder {
+public:
+	explicit AuxiliaryAllocatedDataHolder(AllocatedData &&data_p) : allocated_data(std::move(data_p)) {
+	}
+
+private:
+	AllocatedData allocated_data;
+};
+
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
@@ -81,9 +90,6 @@ public:
 	}
 	buffer_ptr<AuxiliaryData> GetAuxiliaryData() {
 		return auxiliary_data;
-	}
-	virtual void ClearAuxiliaryData() {
-		auxiliary_data.reset();
 	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
@@ -120,10 +126,11 @@ public:
 class StandardVectorBuffer : public VectorBuffer {
 public:
 	StandardVectorBuffer(Allocator &allocator, idx_t data_size)
-	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
+	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr), allocator(allocator) {
 		if (data_size > 0) {
-			allocated_data = allocator.Allocate(data_size);
+			auto allocated_data = allocator.Allocate(data_size);
 			data_ptr = allocated_data.get();
+			AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(allocated_data)));
 		}
 	}
 	explicit StandardVectorBuffer(idx_t data_size) : StandardVectorBuffer(Allocator::DefaultAllocator(), data_size) {
@@ -132,8 +139,8 @@ public:
 	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
 	}
 	explicit StandardVectorBuffer(AllocatedData &&data_p)
-	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), allocated_data(std::move(data_p)) {
-		data_ptr = allocated_data.get();
+	    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocator(data_p.GetAllocator()) {
+		AddAuxiliaryData(make_uniq<AuxiliaryAllocatedDataHolder>(std::move(data_p)));
 	}
 
 public:
@@ -142,12 +149,12 @@ public:
 	}
 
 	optional_ptr<Allocator> GetAllocator() const override {
-		return allocated_data.GetAllocator();
+		return allocator;
 	}
 
 protected:
 	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
+	optional_ptr<Allocator> allocator;
 };
 
 } // namespace duckdb

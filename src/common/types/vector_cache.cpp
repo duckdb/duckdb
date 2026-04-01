@@ -51,7 +51,11 @@ public:
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
 		result.vector_type = VectorType::FLAT_VECTOR;
-		buffer->ClearAuxiliaryData();
+		// clear any extra accumulated auxiliary data (reset to only the initial AllocatedData)
+		auto auxiliary = buffer->GetAuxiliaryData();
+		if (auxiliary && auxiliary->data.size() > 1) {
+			auxiliary->data.erase(auxiliary->data.begin() + 1, auxiliary->data.end());
+		}
 		AssignSharedPointer(result.buffer, buffer);
 		result.validity.Reset(capacity);
 		switch (internal_type) {
@@ -83,6 +87,12 @@ public:
 				auto &child_cache = *child_caches[i];
 				child_cache.ResetFromCache(children[i]);
 			}
+			break;
+		}
+		case PhysicalType::VARCHAR: {
+			// reset the heap reference for strings
+			auto &string_buffer = result.buffer->Cast<VectorStringBuffer>();
+			string_buffer.ResetHeap();
 			break;
 		}
 		default:

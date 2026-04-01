@@ -32,7 +32,9 @@ VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
     : StandardVectorBuffer(std::move(data_p)) {
-	auxiliary_data = other.auxiliary_data;
+	if (other.auxiliary_data) {
+		AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(other.auxiliary_data));
+	}
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 

@@ -43,8 +43,7 @@ public:
 		return *heap;
 	}
 
-	void ClearAuxiliaryData() override {
-		StandardVectorBuffer::ClearAuxiliaryData();
+	void ResetHeap() {
 		heap = nullptr;
 	}
 
