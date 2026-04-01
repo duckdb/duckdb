@@ -1,30 +1,19 @@
 #include "parquet_extension.hpp"
 
-#include "duckdb.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "parquet_geometry.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_shredding.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
 
-#include <fstream>
-#include <iostream>
-#include <numeric>
 #include <string>
 #include <vector>
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -41,20 +30,11 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/common/primitive_dictionary.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/main/settings.hpp"
 #include "parquet_multi_file_info.hpp"
 
 namespace duckdb {

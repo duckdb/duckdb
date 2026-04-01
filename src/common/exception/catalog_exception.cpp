@@ -1,5 +1,4 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/planner/tableref/bound_at_clause.hpp"

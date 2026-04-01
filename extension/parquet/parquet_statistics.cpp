@@ -1,12 +1,10 @@
 #include "parquet_statistics.hpp"
 
-#include "duckdb.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/blob.hpp"

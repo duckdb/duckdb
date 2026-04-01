@@ -1,7 +1,6 @@
 #include "core_functions/scalar/debug_functions.hpp"
 
 #include "duckdb/common/vector_operations/generic_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/common/thread.hpp"
 

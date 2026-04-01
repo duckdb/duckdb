@@ -1,6 +1,5 @@
 #include "duckdb/main/appender.hpp"
 
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -10,10 +9,8 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -25,8 +22,6 @@
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/expression/parameter_expression.hpp"
-#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {

@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
 #include "duckdb/execution/operator/order/physical_order.hpp"

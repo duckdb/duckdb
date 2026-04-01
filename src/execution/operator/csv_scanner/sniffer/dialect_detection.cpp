@@ -1,6 +1,4 @@
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {

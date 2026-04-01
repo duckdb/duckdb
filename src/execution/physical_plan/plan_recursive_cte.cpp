@@ -4,13 +4,8 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
-#include "duckdb/function/aggregate/distributive_function_utils.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/execution/aggregate_hashtable.hpp"
-#include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
 namespace duckdb {
 

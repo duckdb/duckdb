@@ -1,10 +1,7 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
@@ -14,7 +11,6 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {

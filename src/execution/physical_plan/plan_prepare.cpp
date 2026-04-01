@@ -1,4 +1,3 @@
-#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/execution/operator/helper/physical_prepare.hpp"

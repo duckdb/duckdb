@@ -1,7 +1,6 @@
 #include "duckdb/common/file_buffer.hpp"
 
 #include "duckdb/storage/block_allocator.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"

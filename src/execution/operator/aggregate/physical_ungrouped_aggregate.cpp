@@ -1,9 +1,5 @@
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
@@ -14,7 +10,6 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 
 #include <functional>

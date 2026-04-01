@@ -1,11 +1,9 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include <sstream>
 
 namespace duckdb {

@@ -2,7 +2,6 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 

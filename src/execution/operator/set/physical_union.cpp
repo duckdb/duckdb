@@ -2,7 +2,6 @@
 
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 

@@ -1,7 +1,5 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/vector_cast_helpers.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 
 namespace duckdb {
 

@@ -1,4 +1,3 @@
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -7,10 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
-#include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-
-#include "utf8proc.hpp"
 
 namespace duckdb {
 

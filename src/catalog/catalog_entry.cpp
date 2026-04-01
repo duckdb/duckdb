@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"

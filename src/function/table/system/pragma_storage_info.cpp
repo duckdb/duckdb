@@ -2,19 +2,12 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
-#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/storage/table/column_data.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 

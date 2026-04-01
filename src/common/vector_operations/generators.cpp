@@ -7,7 +7,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 

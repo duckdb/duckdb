@@ -4,7 +4,6 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 

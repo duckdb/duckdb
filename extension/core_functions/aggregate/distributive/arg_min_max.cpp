@@ -4,8 +4,6 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/aggregate/minmax_n_helpers.hpp"

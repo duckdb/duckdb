@@ -1,5 +1,4 @@
 #include "duckdb/common/progress_bar/unscented_kalman_filter.hpp"
-#include "duckdb.hpp"
 namespace duckdb {
 
 UnscentedKalmanFilter::UnscentedKalmanFilter()

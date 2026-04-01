@@ -8,7 +8,6 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/random_engine.hpp"
-#include "duckdb/original/std/sstream.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -17,11 +16,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
-#include <iomanip>
-#include <memory>
 #include <stdarg.h>
 #include <string.h>
-#include <stack>
 
 #include "yyjson.hpp"
 

@@ -1,7 +1,6 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
-#include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"

@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/join/physical_join.hpp"
 
-#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 

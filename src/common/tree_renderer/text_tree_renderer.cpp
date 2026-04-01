@@ -1,14 +1,11 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/typedefs.hpp"
-
-#include <sstream>
 
 namespace duckdb {
 

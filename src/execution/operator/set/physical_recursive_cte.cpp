@@ -1,10 +1,8 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
-#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"

@@ -1,8 +1,6 @@
 #include "duckdb/execution/index/bound_index.hpp"
 
 #include "duckdb/common/array.hpp"
-#include "duckdb/common/radix.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"

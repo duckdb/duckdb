@@ -1,8 +1,6 @@
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp" // VariableReturnBindData
 #include "core_functions/scalar/struct_functions.hpp"
 
 namespace duckdb {

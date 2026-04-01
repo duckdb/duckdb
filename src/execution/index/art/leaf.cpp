@@ -1,6 +1,5 @@
 #include "duckdb/execution/index/art/leaf.hpp"
 
-#include "duckdb/common/types.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"

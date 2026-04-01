@@ -1,6 +1,5 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {

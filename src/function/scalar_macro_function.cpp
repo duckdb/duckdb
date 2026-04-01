@@ -9,7 +9,6 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 
 #include "duckdb/function/macro_function.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {

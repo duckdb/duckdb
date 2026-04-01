@@ -1,14 +1,10 @@
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "parquet_metadata.hpp"
 
 #include "parquet_statistics.hpp"
 
-#include <sstream>
-
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/common/types/blob.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"

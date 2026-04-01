@@ -1,7 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"

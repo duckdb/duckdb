@@ -2,20 +2,12 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "utf8proc_wrapper.hpp"
-#include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/arrow/schema_metadata.hpp"
-#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 

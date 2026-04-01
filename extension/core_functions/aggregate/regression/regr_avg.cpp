@@ -1,8 +1,5 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 

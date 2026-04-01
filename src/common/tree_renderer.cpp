@@ -6,8 +6,6 @@
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/mermaid_tree_renderer.hpp"
 
-#include <sstream>
-
 namespace duckdb {
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ExplainFormat format) {

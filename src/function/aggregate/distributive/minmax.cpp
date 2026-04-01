@@ -1,8 +1,6 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/minmax_n_helpers.hpp"
@@ -10,7 +8,6 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/settings.hpp"
 

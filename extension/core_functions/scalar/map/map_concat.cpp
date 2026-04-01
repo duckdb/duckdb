@@ -1,12 +1,8 @@
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 
 namespace duckdb {

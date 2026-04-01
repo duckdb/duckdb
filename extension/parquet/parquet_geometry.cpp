@@ -2,19 +2,15 @@
 #include "parquet_geometry.hpp"
 
 #include "column_reader.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/scalar/geometry_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "yyjson.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "re2/re2.h"
 #include "reader/string_column_reader.hpp"
 
 namespace duckdb {

@@ -1,5 +1,4 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 

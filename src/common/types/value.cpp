@@ -1,6 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -12,7 +11,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"

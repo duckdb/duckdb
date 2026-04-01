@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/relation_type.hpp"
 
-#include "duckdb/common/exception.hpp"
-
 namespace duckdb {
 
 // LCOV_EXCL_START

@@ -5,7 +5,6 @@
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
-#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/main/client_context.hpp"

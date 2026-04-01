@@ -6,7 +6,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 

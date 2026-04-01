@@ -7,27 +7,17 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/multi_file/union_by_name.hpp"
-#include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
-
-#include <limits>
-#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 

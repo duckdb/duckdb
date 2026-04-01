@@ -1,7 +1,6 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
@@ -12,8 +11,6 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/parallel_destroy_task.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 

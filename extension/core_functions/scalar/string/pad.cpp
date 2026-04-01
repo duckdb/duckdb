@@ -1,8 +1,6 @@
 #include "core_functions/scalar/string_functions.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/pair.hpp"
 

@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/main/database.hpp"
@@ -16,8 +15,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-
-#include <sstream>
 
 namespace duckdb {
 

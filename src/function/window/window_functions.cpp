@@ -1,5 +1,4 @@
 #include "duckdb/function/window/window_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 

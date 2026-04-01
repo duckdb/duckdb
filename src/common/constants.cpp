@@ -2,7 +2,6 @@
 #include "duckdb/common/exception.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 

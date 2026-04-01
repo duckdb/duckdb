@@ -3,7 +3,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list.hpp"

@@ -2,7 +2,6 @@
 
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/logging/logging.hpp"
@@ -11,12 +10,8 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/common/printer.hpp"
-
-#include <complex>
 
 namespace duckdb {
 

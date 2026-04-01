@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 
-#include <algorithm>
 #include <cstring>
 
 namespace duckdb {

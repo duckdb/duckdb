@@ -11,8 +11,6 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/table/arrow.hpp"
 
 #include "duckdb/common/bswap.hpp"

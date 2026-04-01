@@ -1,10 +1,7 @@
 #include "duckdb/function/scalar/system_functions.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/value.hpp"
-
-#include "utf8proc.hpp"
 
 namespace duckdb {
 

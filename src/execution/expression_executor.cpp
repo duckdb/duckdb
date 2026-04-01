@@ -5,7 +5,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {

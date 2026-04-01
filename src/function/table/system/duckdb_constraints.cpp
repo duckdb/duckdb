@@ -1,5 +1,4 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -12,7 +11,6 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {

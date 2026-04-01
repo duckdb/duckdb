@@ -1,9 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {

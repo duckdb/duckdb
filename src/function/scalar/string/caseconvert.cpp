@@ -3,13 +3,10 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "utf8proc_wrapper.hpp"
-
-#include <string.h>
 
 namespace duckdb {
 

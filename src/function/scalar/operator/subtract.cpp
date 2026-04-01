@@ -6,7 +6,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 

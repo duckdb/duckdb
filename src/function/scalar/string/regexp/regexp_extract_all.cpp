@@ -1,12 +1,8 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
-#include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
 #include "re2/re2.h"
 #include "re2/stringpiece.h"
 

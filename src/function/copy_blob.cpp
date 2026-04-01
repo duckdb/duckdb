@@ -1,5 +1,4 @@
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/main/client_context.hpp"

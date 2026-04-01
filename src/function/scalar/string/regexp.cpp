@@ -1,6 +1,5 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
@@ -9,11 +8,9 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 

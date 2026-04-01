@@ -1,7 +1,4 @@
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/progress_bar/progress_bar.hpp"
-#include "duckdb/common/windows_util.hpp"
-#include "duckdb/common/windows.hpp"
 #include <stdio.h>
 
 #ifndef DUCKDB_DISABLE_PRINT

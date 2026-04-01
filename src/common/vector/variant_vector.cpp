@@ -1,8 +1,6 @@
 #include "duckdb/common/vector/variant_vector.hpp"
-#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 

@@ -1,16 +1,9 @@
 #include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
-#include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "utf8proc_wrapper.hpp"
-
-#include <sstream>
 
 namespace duckdb {
 

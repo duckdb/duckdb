@@ -2,10 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/printer.hpp"
 
 #include <cinttypes>
 

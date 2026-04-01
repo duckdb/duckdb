@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_vacuum.hpp"
 
 namespace duckdb {

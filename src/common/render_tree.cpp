@@ -1,5 +1,4 @@
 #include "duckdb/common/render_tree.hpp"
-#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 

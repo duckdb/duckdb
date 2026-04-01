@@ -1,7 +1,5 @@
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 

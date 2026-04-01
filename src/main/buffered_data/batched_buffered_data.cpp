@@ -1,9 +1,7 @@
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
 #include "duckdb/common/stack.hpp"
 
 namespace duckdb {

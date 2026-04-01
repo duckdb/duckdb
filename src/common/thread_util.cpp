@@ -1,6 +1,4 @@
 #include "duckdb/common/thread.hpp"
-#include "duckdb/common/chrono.hpp"
-#include "duckdb/original/std/sstream.hpp"
 
 namespace duckdb {
 

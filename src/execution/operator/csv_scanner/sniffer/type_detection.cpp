@@ -1,4 +1,3 @@
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
