@@ -2,19 +2,19 @@
 # group: [alp]
 
 # load the DB from disk
-load __TEST_DIR__/test_alp_nulls.db
+load {TEST_DIR}/test_alp_nulls.db
 
 foreach compression uncompressed alp
 
 # Set the compression algorithm
 
 statement ok
-pragma force_compression='${compression}'
+pragma force_compression='{compression}'
 
 # Create tables
 
 statement ok
-create table tbl1_${compression}(
+create table tbl1_{compression}(
 	a INTEGER DEFAULT 5,
 	b VARCHAR DEFAULT 'test',
 	c BOOL DEFAULT false,
@@ -24,7 +24,7 @@ create table tbl1_${compression}(
 );
 
 statement ok
-create table tbl2_${compression}(
+create table tbl2_{compression}(
 	a INTEGER DEFAULT 5,
 	b VARCHAR DEFAULT 'test',
 	c BOOL DEFAULT false,
@@ -34,7 +34,7 @@ create table tbl2_${compression}(
 );
 
 statement ok
-create table tbl3_${compression}(
+create table tbl3_{compression}(
 	a INTEGER DEFAULT 5,
 	b VARCHAR DEFAULT 'test',
 	c BOOL DEFAULT false,
@@ -47,7 +47,7 @@ create table tbl3_${compression}(
 
 # Mixed NULLs
 statement ok
-insert into tbl1_${compression}(d,f) VALUES
+insert into tbl1_{compression}(d,f) VALUES
 (NULL, 1.2314234),
 (324213.23123, NULL),
 (NULL, NULL),
@@ -130,7 +130,7 @@ insert into tbl1_${compression}(d,f) VALUES
 
 # Only NULLS
 statement ok
-insert into tbl2_${compression}(d,f) VALUES
+insert into tbl2_{compression}(d,f) VALUES
 (NULL, NULL),
 (NULL, NULL),
 (NULL, NULL),
@@ -207,7 +207,7 @@ insert into tbl2_${compression}(d,f) VALUES
 
 # Starting with NULLS
 statement ok
-insert into tbl3_${compression}(d,f) VALUES
+insert into tbl3_{compression}(d,f) VALUES
 (NULL, NULL),
 (NULL, NULL),
 (NULL, NULL),

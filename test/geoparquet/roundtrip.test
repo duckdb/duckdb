@@ -8,19 +8,19 @@ require parquet
 #------------------------------------------------------------------------------
 
 query II nosort point_result
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-wkt.csv'
 
 query II nosort point_result
-SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet'
+SELECT col, st_astext(geometry) FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-encoding_wkb.parquet'
 
 # Now write it back to parquet
 statement ok
-COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv')
-TO '__TEST_DIR__/data-point-out.parquet' (FORMAT PARQUET)
+COPY (SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-point-wkt.csv')
+TO '{TEST_DIR}/data-point-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort point_result
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-point-out.parquet'
 
 
 
@@ -29,19 +29,19 @@ SELECT col, geometry FROM '__TEST_DIR__/data-point-out.parquet'
 #------------------------------------------------------------------------------
 
 query II nosort linestring_result
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-linestring-wkt.csv'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-linestring-wkt.csv'
 
 query II nosort linestring_result
-SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data-linestring-encoding_wkb.parquet'
+SELECT col, st_astext(geometry) FROM '{WORKING_DIRECTORY}/data/geoparquet/data-linestring-encoding_wkb.parquet'
 
 # Now write it back to parquet
 statement ok
-COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-linestring-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-linestring-out.parquet' (FORMAT PARQUET)
+COPY (SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-linestring-encoding_wkb.parquet')
+TO '{TEST_DIR}/data-linestring-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort linestring_result
-SELECT col, geometry FROM '__TEST_DIR__/data-linestring-out.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-linestring-out.parquet'
 
 
 
@@ -50,19 +50,19 @@ SELECT col, geometry FROM '__TEST_DIR__/data-linestring-out.parquet'
 #------------------------------------------------------------------------------
 
 query II nosort polygon_result
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-polygon-wkt.csv'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-polygon-wkt.csv'
 
 query II nosort polygon_result
-SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data-polygon-encoding_wkb.parquet'
+SELECT col, st_astext(geometry) FROM '{WORKING_DIRECTORY}/data/geoparquet/data-polygon-encoding_wkb.parquet'
 
 # Now write it back to parquet
 statement ok
-COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-polygon-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-polygon-out.parquet' (FORMAT PARQUET)
+COPY (SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-polygon-encoding_wkb.parquet')
+TO '{TEST_DIR}/data-polygon-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort polygon_result
-SELECT col, geometry FROM '__TEST_DIR__/data-polygon-out.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-polygon-out.parquet'
 
 
 
@@ -71,19 +71,19 @@ SELECT col, geometry FROM '__TEST_DIR__/data-polygon-out.parquet'
 #------------------------------------------------------------------------------
 
 query II nosort multipoint_result
-SELECT col, geometry::GEOMETRY FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-wkt.csv'
+SELECT col, geometry::GEOMETRY FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multipoint-wkt.csv'
 
 query II nosort multipoint_result
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-encoding_wkb.parquet'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multipoint-encoding_wkb.parquet'
 
 # Now write it back to parquet
 statement ok
-COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-multipoint-out.parquet' (FORMAT PARQUET)
+COPY (SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multipoint-encoding_wkb.parquet')
+TO '{TEST_DIR}/data-multipoint-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort multipoint_result
-SELECT col, geometry FROM '__TEST_DIR__/data-multipoint-out.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-multipoint-out.parquet'
 
 
 
@@ -92,19 +92,19 @@ SELECT col, geometry FROM '__TEST_DIR__/data-multipoint-out.parquet'
 #------------------------------------------------------------------------------
 
 query II nosort multilinestring_result
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multilinestring-wkt.csv'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multilinestring-wkt.csv'
 
 query II nosort multilinestring_result
-SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multilinestring-encoding_wkb.parquet'
+SELECT col, st_astext(geometry) FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multilinestring-encoding_wkb.parquet'
 
 # Now write it back to parquet
 statement ok
-COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multilinestring-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-multilinestring-out.parquet' (FORMAT PARQUET)
+COPY (SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multilinestring-encoding_wkb.parquet')
+TO '{TEST_DIR}/data-multilinestring-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort multilinestring_result
-SELECT col, geometry FROM '__TEST_DIR__/data-multilinestring-out.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-multilinestring-out.parquet'
 
 
 
@@ -113,19 +113,19 @@ SELECT col, geometry FROM '__TEST_DIR__/data-multilinestring-out.parquet'
 #------------------------------------------------------------------------------
 
 query II nosort multipolygon_result
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipolygon-wkt.csv'
+SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multipolygon-wkt.csv'
 
 query II nosort multipolygon_result
-SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipolygon-encoding_wkb.parquet'
+SELECT col, st_astext(geometry) FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multipolygon-encoding_wkb.parquet'
 
 # Now write it back to parquet
 statement ok
-COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipolygon-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-multipolygon-out.parquet' (FORMAT PARQUET)
+COPY (SELECT col, geometry FROM '{WORKING_DIRECTORY}/data/geoparquet/data-multipolygon-encoding_wkb.parquet')
+TO '{TEST_DIR}/data-multipolygon-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort multipolygon_result
-SELECT col, geometry FROM '__TEST_DIR__/data-multipolygon-out.parquet'
+SELECT col, geometry FROM '{TEST_DIR}/data-multipolygon-out.parquet'
 
 
 #------------------------------------------------------------------------------
@@ -134,6 +134,6 @@ SELECT col, geometry FROM '__TEST_DIR__/data-multipolygon-out.parquet'
 
 query I
 SELECT decode(value) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-multipolygon-out.parquet') WHERE key = 'geo';
+FROM parquet_kv_metadata('{TEST_DIR}/data-multipolygon-out.parquet') WHERE key = 'geo';
 ----
 {"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["MultiPolygon"],"bbox":[5.0,5.0,45.0,45.0]}}}

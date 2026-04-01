@@ -11,13 +11,13 @@ PRAGMA enable_verification
 foreach type <numeric> DECIMAL(4,0) DECIMAL(8,0) DECIMAL(16,0) DECIMAL(32,0)
 
 statement ok
-CREATE TABLE test1 (a ${type}, b ${type});
+CREATE TABLE test1 (a {type}, b {type});
 
 statement ok
 INSERT INTO test1 VALUES (11, 1), (12, 2), (13, 3)
 
 statement ok
-CREATE TABLE test2 (b ${type}, c ${type});
+CREATE TABLE test2 (b {type}, c {type});
 
 statement ok
 INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
@@ -54,13 +54,13 @@ endloop
 foreach type TINYINT SMALLINT INTEGER BIGINT
 
 statement ok
-CREATE OR REPLACE TABLE test3 (a ${type}, b ${type});
+CREATE OR REPLACE TABLE test3 (a {type}, b {type});
 
 statement ok
 INSERT INTO test3 VALUES (-11, -1), (-12, -2), (13, 3)
 
 statement ok
-CREATE OR REPLACE TABLE test4 (b ${type}, c ${type});
+CREATE OR REPLACE TABLE test4 (b {type}, c {type});
 
 statement ok
 INSERT INTO test4 VALUES (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30)
@@ -90,13 +90,13 @@ endloop
 foreach type <integral>
 
 statement ok
-CREATE OR REPLACE TABLE test5 (a ${type}, b ${type});
+CREATE OR REPLACE TABLE test5 (a {type}, b {type});
 
 statement ok
 INSERT INTO test5 VALUES (11, 1), (12, 2), (13, 3), (14, null), (null, 4)
 
 statement ok
-CREATE OR REPLACE TABLE test6 (b ${type}, c ${type});
+CREATE OR REPLACE TABLE test6 (b {type}, c {type});
 
 statement ok
 INSERT INTO test6 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (4, 40), (null, 30), (1, null)
@@ -125,13 +125,13 @@ NULL	4	40
 
 
 statement ok
-CREATE OR REPLACE TABLE test7 (a ${type}, b ${type});
+CREATE OR REPLACE TABLE test7 (a {type}, b {type});
 
 statement ok
 INSERT INTO test7 VALUES (11, 1), (12, 2), (13, 3), (15, 5)
 
 statement ok
-CREATE OR REPLACE TABLE test8 (b ${type}, c ${type});
+CREATE OR REPLACE TABLE test8 (b {type}, c {type});
 
 statement ok
 INSERT INTO test8 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (4, 40)

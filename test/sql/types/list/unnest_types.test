@@ -9,7 +9,7 @@ PRAGMA enable_verification
 foreach type <integral>
 
 statement ok
-create table a as select list(i::${type}) AS l from range(1, 6, 1) t1(i)
+create table a as select list(i::{type}) AS l from range(1, 6, 1) t1(i)
 
 query I
 select l from a order by 1;
@@ -34,7 +34,7 @@ endloop
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-create table a as select list(i::${type}) AS l from range(1, 6, 1) t1(i)
+create table a as select list(i::{type}) AS l from range(1, 6, 1) t1(i)
 
 query I
 select l from a order by 1;
@@ -58,7 +58,7 @@ endloop
 foreach type float double
 
 statement ok
-create table a as select list(('1e'||i::varchar)::${type}) AS l from range(1, 6, 1) t1(i)
+create table a as select list(('1e'||i::varchar)::{type}) AS l from range(1, 6, 1) t1(i)
 
 query I
 select unnest(l) from a order by 1

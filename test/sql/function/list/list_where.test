@@ -92,12 +92,12 @@ SELECT list_where([NULL::VARCHAR], [true])
 foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
 
 query I
-SELECT list_where([1::${type}, NULL, 2::${type}], [true, true, true])
+SELECT list_where([1::{type}, NULL, 2::{type}], [true, true, true])
 ----
 [1, NULL, 2]
 
 query I
-SELECT list_where([NULL::${type}], [true])
+SELECT list_where([NULL::{type}], [true])
 ----
 [NULL]
 
@@ -108,10 +108,10 @@ endloop
 foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 
 statement ok
-SELECT list_where([1::${type}], [true])
+SELECT list_where([1::{type}], [true])
 
 query I
-SELECT list_where([NULL::${type}], [true])
+SELECT list_where([NULL::{type}], [true])
 ----
 [NULL]
 
@@ -176,7 +176,7 @@ SELECT list_where([INTERVAL 1 YEAR], [true])
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
 
 query I
-SELECT list_where([NULL::${type}], [true])
+SELECT list_where([NULL::{type}], [true])
 ----
 [NULL]
 

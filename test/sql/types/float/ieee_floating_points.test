@@ -8,14 +8,14 @@ PRAGMA enable_verification
 foreach type FLOAT DOUBLE
 
 statement ok
-CREATE OR REPLACE TABLE tbl(val ${type})
+CREATE OR REPLACE TABLE tbl(val {type})
 
 statement ok
 INSERT INTO tbl VALUES (1), (-1), (0), ('nan'), ('inf')
 
 # division by zero
 query II
-SELECT val, val / 0::${type} FROM tbl
+SELECT val, val / 0::{type} FROM tbl
 ----
 1.0	inf
 -1.0	-inf
@@ -25,7 +25,7 @@ inf	inf
 
 # modulo by zero
 query II
-SELECT val, val % 0::${type} FROM tbl
+SELECT val, val % 0::{type} FROM tbl
 ----
 1.0	nan
 -1.0	nan
@@ -38,7 +38,7 @@ SET ieee_floating_point_ops = false;
 
 # division by zero
 query II
-SELECT val, val / 0::${type} FROM tbl
+SELECT val, val / 0::{type} FROM tbl
 ----
 1.0	NULL
 -1.0	NULL
@@ -48,7 +48,7 @@ inf	NULL
 
 # modulo by zero
 query II
-SELECT val, val % 0::${type} FROM tbl
+SELECT val, val % 0::{type} FROM tbl
 ----
 1.0	NULL
 -1.0	NULL

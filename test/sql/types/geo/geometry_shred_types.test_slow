@@ -1,7 +1,7 @@
 # name: test/sql/types/geo/geometry_shred_types.test_slow
 # group: [geo]
 
-load __TEST_DIR__/test_shred_types.db readwrite v1.5.0
+load {TEST_DIR}/test_shred_types.db readwrite v1.5.0
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
@@ -56,7 +56,7 @@ foreach has_z FALSE TRUE
 foreach has_m FALSE TRUE
 
 statement ok
-create table t2 as select g from t1 where type='${type}' and has_z=${has_z} and has_m=${has_m};
+create table t2 as select g from t1 where type='{type}' and has_z={has_z} and has_m={has_m};
 
 query I rowsort
 select distinct segment_type from pragma_storage_info('t2') order by all;
@@ -80,7 +80,7 @@ select segment_type from pragma_storage_info('t2') where segment_type = 'GEOMETR
 
 # Should have as many double segments as the number of dimensions (X,Y + Z + M)
 query I rowsort
-select count(*) = (2 + ${has_z}::INT + ${has_m}::INT)
+select count(*) = (2 + {has_z}::INT + {has_m}::INT)
 from pragma_storage_info('t2')
 where segment_type = 'DOUBLE' group by segment_type;
 ----
@@ -101,7 +101,7 @@ select segment_type from pragma_storage_info('t2') where segment_type = 'GEOMETR
 
 # Should have as many double segments as the number of dimensions (X,Y + Z + M)
 query I rowsort
-select count(*) = (2 + ${has_z}::INT + ${has_m}::INT)
+select count(*) = (2 + {has_z}::INT + {has_m}::INT)
 from pragma_storage_info('t2')
 where segment_type = 'DOUBLE' group by segment_type;
 ----

@@ -33,47 +33,47 @@ INSERT INTO timetzs VALUES
 foreach comparison_type timetz_byte_comparable( (
 
 query I
-SELECT ${comparison_type}'09:00:00+00:00'::TIMETZ) >${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'09:00:00+00:00'::TIMETZ) >{comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 True
 
 query I
-SELECT ${comparison_type}'08:00:00+01:00'::TIMETZ) >${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'08:00:00+01:00'::TIMETZ) >{comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 False
 
 query I
-SELECT ${comparison_type}'08:00:00+01:00'::TIMETZ) = ${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'08:00:00+01:00'::TIMETZ) = {comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 False
 
 query I
-SELECT ${comparison_type}'08:01:00+00:00'::TIMETZ) = ${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'08:01:00+00:00'::TIMETZ) = {comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 False
 
 query I
-SELECT ${comparison_type}'08:01:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'08:01:00+00:00'::TIMETZ) > {comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 True
 
 query I
-SELECT ${comparison_type}'08:02:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'08:02:00+00:00'::TIMETZ) > {comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 True
 
 query I
-SELECT ${comparison_type}'08:00:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'08:00:00+00:00'::TIMETZ) > {comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 False
 
 query I
-SELECT ${comparison_type}'10:01:00+02:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+SELECT {comparison_type}'10:01:00+02:00'::TIMETZ) > {comparison_type}'09:01:00+01:00'::TIMETZ);
 ----
 False
 
 query I
-SELECT * FROM timetzs ORDER BY ${comparison_type}ttz)
+SELECT * FROM timetzs ORDER BY {comparison_type}ttz)
 ----
 00:00:00+15:59
 00:00:00+15:58
@@ -92,14 +92,14 @@ query IIIIIIII
 SELECT 
 	lhs.ttz, 
 	rhs.ttz, 
-	${comparison_type}lhs.ttz) < ${comparison_type}rhs.ttz),
-	${comparison_type}lhs.ttz) <= ${comparison_type}rhs.ttz),
-	${comparison_type}lhs.ttz) = ${comparison_type}rhs.ttz),
-	${comparison_type}lhs.ttz) >= ${comparison_type}rhs.ttz),
-	${comparison_type}lhs.ttz) > ${comparison_type}rhs.ttz),
-	${comparison_type}lhs.ttz) <> ${comparison_type}rhs.ttz),
+	{comparison_type}lhs.ttz) < {comparison_type}rhs.ttz),
+	{comparison_type}lhs.ttz) <= {comparison_type}rhs.ttz),
+	{comparison_type}lhs.ttz) = {comparison_type}rhs.ttz),
+	{comparison_type}lhs.ttz) >= {comparison_type}rhs.ttz),
+	{comparison_type}lhs.ttz) > {comparison_type}rhs.ttz),
+	{comparison_type}lhs.ttz) <> {comparison_type}rhs.ttz),
 FROM timetzs lhs, timetzs rhs
-ORDER BY ${comparison_type}lhs.ttz), ${comparison_type}rhs.ttz)
+ORDER BY {comparison_type}lhs.ttz), {comparison_type}rhs.ttz)
 ----
 00:00:00+15:59	00:00:00+15:59	false	true	true	true	false	false
 00:00:00+15:59	00:00:00+15:58	true	true	false	false	false	true

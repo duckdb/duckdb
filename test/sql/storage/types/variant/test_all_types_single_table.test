@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/test_all_types_single_table.test
 # group: [variant]
 
-load __TEST_DIR__/variant_test_all_types_single_table.db readwrite v1.5.0
+load {TEST_DIR}/variant_test_all_types_single_table.db readwrite v1.5.0
 
 # Always shred
 statement ok
@@ -13,7 +13,7 @@ create table tbl (col VARIANT)
 foreach col <all_types_columns>
 
 statement ok
-insert into tbl select "${col}"::VARIANT from test_all_types()
+insert into tbl select "{col}"::VARIANT from test_all_types()
 
 statement ok
 checkpoint
@@ -40,7 +40,7 @@ set variable my_type = (
 		column_type NOT ILIKE '%union%' AND
 		column_type NOT ILIKE '%enum%' AND
 		column_type NOT ILIKE '%map%'
-	limit 1 offset ${i}
+	limit 1 offset {i}
 );
 
 statement ok
