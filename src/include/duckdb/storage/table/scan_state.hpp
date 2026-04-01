@@ -337,7 +337,7 @@ struct ParallelCollectionScanState {
 	idx_t max_row;
 	idx_t batch_index;
 	atomic<idx_t> processed_rows;
-	//! Running total of committed rows across assigned row groups (for deterministic row_number)
+	//! Running total of visible rows across assigned row groups (for deterministic row_number)
 	idx_t row_number_base;
 	mutex lock;
 

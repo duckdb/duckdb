@@ -1138,6 +1138,14 @@ idx_t RowGroup::GetCommittedRowCount() {
 	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return count;
+	}
+	return count - vinfo->GetDeletedCount(transaction, count);
+}
+
 bool RowGroup::HasUnloadedDeletes() const {
 	if (deletes_pointers.empty()) {
 		// no stored deletes at all

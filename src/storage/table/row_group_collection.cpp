@@ -19,6 +19,7 @@
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -297,7 +298,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
 			scan_state.row_number_base = state.row_number_base;
-			state.row_number_base += current_row_group.GetCommittedRowCount();
+			auto &tx = DuckTransaction::Get(context, GetAttached());
+			state.row_number_base += current_row_group.GetVisibleRowCount(tx);
 		}
 		D_ASSERT(collection);
 		D_ASSERT(row_group);

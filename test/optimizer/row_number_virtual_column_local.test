@@ -1,0 +1,112 @@
+# name: test/optimizer/row_number_virtual_column_local.test
+# description: Test row_number virtual column with transaction-local changes
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification;
+
+# -------------------------------------------------------------------
+# (1) Transaction-local insertions
+# -------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t1 (a INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3);
+
+# insert more rows within a transaction and query row_number
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t1 VALUES (4), (5);
+
+query II
+SELECT a, row_number() OVER () FROM t1 ORDER BY a;
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+statement ok
+COMMIT;
+
+# verify after commit
+query II
+SELECT a, row_number() OVER () FROM t1 ORDER BY a;
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+# -------------------------------------------------------------------
+# (2) Transaction-local deletes
+# -------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t2 (a INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES (1), (2), (3), (4), (5);
+
+# delete rows within a transaction and query row_number
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM t2 WHERE a <= 2;
+
+query II
+SELECT a, row_number() OVER () FROM t2 ORDER BY a;
+----
+3	1
+4	2
+5	3
+
+statement ok
+COMMIT;
+
+# verify after commit
+query II
+SELECT a, row_number() OVER () FROM t2 ORDER BY a;
+----
+3	1
+4	2
+5	3
+
+# -------------------------------------------------------------------
+# (3) Combined: insertions and deletes in same transaction
+# -------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t3 (a INTEGER);
+
+statement ok
+INSERT INTO t3 VALUES (10), (20), (30), (40), (50);
+
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM t3 WHERE a = 30;
+
+statement ok
+INSERT INTO t3 VALUES (60), (70);
+
+query II
+SELECT a, row_number() OVER () FROM t3 ORDER BY a;
+----
+10	1
+20	2
+40	3
+50	4
+60	5
+70	6
+
+statement ok
+COMMIT;

@@ -28,6 +28,24 @@ idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
 	return deleted_count;
 }
 
+idx_t RowVersionManager::GetDeletedCount(TransactionData transaction, idx_t count) {
+	lock_guard<mutex> l(version_lock);
+	idx_t deleted_count = 0;
+	ScanOptions options(transaction);
+	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+		if (i >= vector_info.size() || !vector_info[i]) {
+			continue;
+		}
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (max_count == 0) {
+			break;
+		}
+		idx_t visible = vector_info[i]->GetSelVector(options, nullptr, max_count);
+		deleted_count += max_count - visible;
+	}
+	return deleted_count;
+}
+
 optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 	if (vector_idx >= vector_info.size()) {
 		return nullptr;

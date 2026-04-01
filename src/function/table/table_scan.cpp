@@ -326,8 +326,15 @@ public:
 					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
 					auto count = output.size();
 
-					// Use the row_number_base from the scan state for deterministic numbering
-					idx_t base = l_state.scan_state.table_state.row_number_base + l_state.row_number_count;
+					// Use the row_number_base from the active scan state for deterministic numbering
+					// If local_state has an active row group, we are scanning transaction-local data
+					idx_t base;
+					if (l_state.scan_state.local_state.row_group) {
+						base = l_state.scan_state.local_state.row_number_base;
+					} else {
+						base = l_state.scan_state.table_state.row_number_base;
+					}
+					base += l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = UnsafeNumericCast<row_t>(base + i + 1);
