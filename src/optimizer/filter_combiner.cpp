@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
@@ -567,6 +568,59 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+// Try to create a table filter from a single comparison expression (column op constant).
+// Resolves struct_extract chains via TryGetProjectionIndex. Updates proj_id and column_expr
+// to track the column being filtered (all comparisons in an OR must reference the same column).
+// Returns nullptr if the comparison cannot be pushed down.
+static unique_ptr<TableFilter> TryCreateFilterFromComparison(BoundComparisonExpression &comp, ProjectionIndex &proj_id,
+                                                             optional_ptr<Expression> &column_expr) {
+	optional_ptr<Expression> col_side;
+	optional_ptr<BoundConstantExpression> const_val;
+	bool invert = false;
+	if (comp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		col_side = *comp.left;
+		const_val = comp.right->Cast<BoundConstantExpression>();
+	} else if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		col_side = *comp.right;
+		const_val = comp.left->Cast<BoundConstantExpression>();
+		invert = true;
+	} else {
+		return nullptr;
+	}
+	ProjectionIndex this_proj;
+	if (!TryGetProjectionIndex(*col_side, this_proj)) {
+		return nullptr;
+	}
+	if (!proj_id.IsValid()) {
+		proj_id = this_proj;
+		column_expr = col_side;
+	} else if (proj_id != this_proj || !col_side->Equals(*column_expr)) {
+		return nullptr;
+	}
+	auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+	if (const_val->value.IsNull()) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return make_uniq<IsNotNullFilter>();
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return make_uniq<IsNullFilter>();
+		default:
+			return nullptr;
+		}
+	}
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return make_uniq<ConstantFilter>(comparison_type, const_val->value);
+	default:
+		return nullptr;
+	}
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_filters,
                                                          const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
@@ -581,61 +635,46 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	ProjectionIndex proj_id;
+	optional_ptr<Expression> column_expr;
 	for (idx_t i = 0; i < conj.children.size(); i++) {
 		auto &child = conj.children[i];
-		if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-		optional_ptr<BoundColumnRefExpression> column_ref;
-		optional_ptr<BoundConstantExpression> const_val;
-		auto &comp = child->Cast<BoundComparisonExpression>();
-		bool invert = false;
-		if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-		    comp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			column_ref = comp.left->Cast<BoundColumnRefExpression>();
-			const_val = comp.right->Cast<BoundConstantExpression>();
-		} else if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-		           comp.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			column_ref = comp.right->Cast<BoundColumnRefExpression>();
-			const_val = comp.left->Cast<BoundConstantExpression>();
-			invert = true;
+		if (child->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto filter = TryCreateFilterFromComparison(child->Cast<BoundComparisonExpression>(), proj_id, column_expr);
+			if (!filter) {
+				return FilterPushdownResult::NO_PUSHDOWN;
+			}
+			conj_filter->child_filters.push_back(std::move(filter));
+		} else if (child->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+			// AND branch within OR: e.g. (a > 10 AND a < 20) OR (a > 80 AND a < 90)
+			auto &inner_conj = child->Cast<BoundConjunctionExpression>();
+			if (inner_conj.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
+				return FilterPushdownResult::NO_PUSHDOWN;
+			}
+			auto and_filter = make_uniq<ConjunctionAndFilter>();
+			for (idx_t j = 0; j < inner_conj.children.size(); j++) {
+				auto &inner_child = inner_conj.children[j];
+				if (inner_child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+					return FilterPushdownResult::NO_PUSHDOWN;
+				}
+				auto filter =
+				    TryCreateFilterFromComparison(inner_child->Cast<BoundComparisonExpression>(), proj_id, column_expr);
+				if (!filter) {
+					return FilterPushdownResult::NO_PUSHDOWN;
+				}
+				and_filter->child_filters.push_back(std::move(filter));
+			}
+			conj_filter->child_filters.push_back(std::move(and_filter));
 		} else {
-			// child of OR filter is not simple so we do not push the or filter down at all
 			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-		if (!proj_id.IsValid()) {
-			proj_id = column_ref->binding.column_index;
-		} else if (proj_id != column_ref->binding.column_index) {
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-
-		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
-		if (const_val->value.IsNull()) {
-			switch (comparison_type) {
-			case ExpressionType::COMPARE_DISTINCT_FROM: {
-				auto null_filter = make_uniq<IsNotNullFilter>();
-				conj_filter->child_filters.push_back(std::move(null_filter));
-				break;
-			}
-			case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
-				auto null_filter = make_uniq<IsNullFilter>();
-				conj_filter->child_filters.push_back(std::move(null_filter));
-				break;
-			}
-			default:
-				// if any other comparison type (i.e EQUAL, NOT_EQUAL) do not push a table filter - this is a nop
-				// since x = NULL is always falsey, and this is a chain of OR conditions, we can just ignore it
-				break;
-			}
-		} else {
-			auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
-			conj_filter->child_filters.push_back(std::move(const_filter));
 		}
 	}
-	auto optional_filter = make_uniq<OptionalFilter>();
-	optional_filter->child_filter = std::move(conj_filter);
-	table_filters.PushFilter(proj_id, std::move(optional_filter));
-	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+	// Wrap in StructFilter if the column expression involves struct_extract
+	unique_ptr<TableFilter> result_filter = std::move(conj_filter);
+	if (column_expr) {
+		result_filter = PushDownFilterIntoExpr(*column_expr, std::move(result_filter));
+	}
+	table_filters.PushFilter(proj_id, std::move(result_filter));
+	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
 static bool IsGreaterThan(ExpressionType type) {

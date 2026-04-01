@@ -1,0 +1,119 @@
+# name: test/sql/filter/test_or_and_pushdown.test
+# description: Test OR-of-AND filter pushdown into zone maps
+# group: [filter]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# Create table with enough rows for multiple row groups
+statement ok
+CREATE TABLE t1 AS SELECT range a, range * 10 b FROM range(900000);
+
+# Basic: OR-of-AND on the same column should get fully pushed as table filter (no FILTER node)
+query II
+EXPLAIN SELECT * FROM t1 WHERE (a > 10 AND a < 20) OR (a > 800000 AND a < 800010);
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+query I
+SELECT count(*) FROM t1 WHERE (a > 10 AND a < 20) OR (a > 800000 AND a < 800010);
+----
+18
+
+# Cross-column OR-of-AND: per-column filters pushed, original expression remains in FILTER
+query II
+EXPLAIN SELECT * FROM t1 WHERE (a > 10 AND a < 20 AND b > 100 AND b < 200) OR (a > 800000 AND a < 800010 AND b > 8000000 AND b < 8000100);
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+query I
+SELECT count(*) FROM t1 WHERE (a > 10 AND a < 20 AND b > 100 AND b < 200) OR (a > 800000 AND a < 800010 AND b > 8000000 AND b < 8000100);
+----
+18
+
+# Verify correct results for basic case
+query I
+SELECT a FROM t1 WHERE (a > 10 AND a < 15) OR (a > 899995 AND a < 899999) ORDER BY a;
+----
+11
+12
+13
+14
+899996
+899997
+899998
+
+# Mixed: some branches are simple comparisons, some are AND conjunctions
+query II
+EXPLAIN SELECT * FROM t1 WHERE a = 5 OR (a > 800000 AND a < 800010);
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+query I
+SELECT count(*) FROM t1 WHERE a = 5 OR (a > 800000 AND a < 800010);
+----
+10
+
+# IS DISTINCT FROM / IS NOT DISTINCT FROM: should not crash (degrades to no pushdown)
+statement ok
+CREATE TABLE t2(a INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES (1), (2), (NULL);
+
+query I
+SELECT count(*) FROM t2 WHERE a IS DISTINCT FROM 1 OR a = 2;
+----
+2
+
+query I
+SELECT count(*) FROM t2 WHERE a IS NOT DISTINCT FROM 1 OR a = 2;
+----
+2
+
+# Different struct fields from the same struct must not be conflated
+statement ok
+CREATE TABLE ts AS SELECT * FROM (VALUES ({'x': 1, 'y': 0}), ({'x': 0, 'y': 2}), ({'x': 2, 'y': 0})) v(s);
+
+query II
+SELECT s.x, s.y FROM ts WHERE s.x = 1 OR s.y = 2 ORDER BY 1, 2;
+----
+0	2
+1	0
+
+# Branch without column on one side: should degrade gracefully (no crash)
+query I
+SELECT count(*) FROM t1 WHERE (a > 10 AND b > 100) OR (a > 800000);
+----
+899989
+
+require parquet
+
+# Parquet: verify row group pruning works with OR-of-AND
+statement ok
+COPY (SELECT range a, range * 10 b FROM range(100000)) TO '{TEST_DIR}/or_and_test.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 5000);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/or_and_test.parquet') WHERE (a > 10 AND a < 20) OR (a > 99980 AND a < 99990);
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/or_and_test.parquet') WHERE (a > 10 AND a < 20) OR (a > 99980 AND a < 99990);
+----
+18
+
+# Cross-column parquet test
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/or_and_test.parquet') WHERE (a > 10 AND a < 20 AND b > 100 AND b < 200) OR (a > 99980 AND a < 99990 AND b > 999800 AND b < 999900);
+----
+18
+
+# Struct field OR-of-AND
+statement ok
+COPY (SELECT {'x': range, 'y': range * 10} AS s FROM generate_series(100000) AS t(range)) TO '{TEST_DIR}/struct_or_and.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 5000);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/struct_or_and.parquet') WHERE (s.x > 10 AND s.x < 20) OR (s.x > 99980 AND s.x < 99990);
+----
+18

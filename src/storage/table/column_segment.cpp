@@ -19,6 +19,7 @@
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace duckdb {
@@ -443,6 +444,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 				}
 			}
 		}
+		std::sort(result_sel.data(), result_sel.data() + count_total);
 		sel.Initialize(result_sel);
 		approved_tuple_count = count_total;
 		return approved_tuple_count;
