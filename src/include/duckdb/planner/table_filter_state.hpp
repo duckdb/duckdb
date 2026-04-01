@@ -15,9 +15,6 @@
 
 namespace duckdb {
 
-class BloomFilter;
-struct DynamicFilterData;
-
 //! Thread-local state for executing a table filter
 struct TableFilterState {
 public:
@@ -53,23 +50,15 @@ enum class ExpressionFilterFastPath : uint8_t {
 };
 enum class ExpressionFilterSelectivityStatus : uint8_t { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };
 
-struct ExpressionFilterState : public TableFilterState {
+struct SelectivityTrackingState {
 public:
-	ExpressionFilterState(ClientContext &context, const Expression &expression);
-
-	bool HasChildFilters() const {
-		return !child_states.empty();
-	}
-	bool HasFastPath() const {
-		return fast_path != ExpressionFilterFastPath::NONE;
-	}
 	bool HasSelectivityTracking() const {
 		return n_vectors_to_check != 0;
 	}
-	bool IsSelectivityActive() const {
+	bool IsActive() const {
 		return selectivity_status == ExpressionFilterSelectivityStatus::ACTIVE;
 	}
-	void EnableSelectivityTracking(float selectivity_threshold_p, idx_t n_vectors_to_check_p) {
+	void Enable(float selectivity_threshold_p, idx_t n_vectors_to_check_p) {
 		selectivity_threshold = selectivity_threshold_p;
 		n_vectors_to_check = n_vectors_to_check_p;
 	}
@@ -79,7 +68,7 @@ public:
 		}
 		return static_cast<double>(tuples_accepted) / static_cast<double>(tuples_processed);
 	}
-	void UpdateSelectivity(idx_t accepted, idx_t processed) {
+	void Update(idx_t accepted, idx_t processed) {
 		if (!HasSelectivityTracking()) {
 			return;
 		}
@@ -103,6 +92,39 @@ public:
 			}
 		}
 	}
+
+public:
+	float selectivity_threshold = 0;
+	idx_t n_vectors_to_check = 0;
+	idx_t tuples_accepted = 0;
+	idx_t tuples_processed = 0;
+	idx_t vectors_processed = 0;
+	ExpressionFilterSelectivityStatus selectivity_status = ExpressionFilterSelectivityStatus::ACTIVE;
+	idx_t pause_multiplier = 0;
+};
+
+struct ExpressionFilterState : public TableFilterState {
+public:
+	ExpressionFilterState(ClientContext &context, const Expression &expression);
+
+	bool HasChildFilters() const {
+		return !child_states.empty();
+	}
+	bool HasFastPath() const {
+		return fast_path != ExpressionFilterFastPath::NONE;
+	}
+	bool HasSelectivityTracking() const {
+		return selectivity.HasSelectivityTracking();
+	}
+	bool IsSelectivityActive() const {
+		return selectivity.IsActive();
+	}
+	void EnableSelectivityTracking(float selectivity_threshold_p, idx_t n_vectors_to_check_p) {
+		selectivity.Enable(selectivity_threshold_p, n_vectors_to_check_p);
+	}
+	void UpdateSelectivity(idx_t accepted, idx_t processed) {
+		selectivity.Update(accepted, processed);
+	}
 	ClientContext &GetContext() {
 		if (executor) {
 			return executor->GetContext();
@@ -117,16 +139,7 @@ public:
 	ExpressionFilterFastPath fast_path = ExpressionFilterFastPath::NONE;
 	ExpressionType comparison_type = ExpressionType::INVALID;
 	Value constant;
-	optional_ptr<BloomFilter> bloom_filter;
-	bool bloom_filters_null_values = false;
-	shared_ptr<DynamicFilterData> dynamic_filter_data;
-	float selectivity_threshold = 0;
-	idx_t n_vectors_to_check = 0;
-	idx_t tuples_accepted = 0;
-	idx_t tuples_processed = 0;
-	idx_t vectors_processed = 0;
-	ExpressionFilterSelectivityStatus selectivity_status = ExpressionFilterSelectivityStatus::ACTIVE;
-	idx_t pause_multiplier = 0;
+	SelectivityTrackingState selectivity;
 	vector<unique_ptr<ExpressionFilterState>> child_states;
 	unique_ptr<ExpressionFilterState> selectivity_child_state;
 	unique_ptr<AdaptiveFilter> adaptive_filter;
