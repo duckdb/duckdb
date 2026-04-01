@@ -87,7 +87,7 @@ Vector::Vector(const Value &value) : type(value.type()) {
 
 Vector::Vector(Vector &&other) noexcept
     : vector_type(other.vector_type), type(std::move(other.type)), validity(std::move(other.validity)),
-      buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
+      buffer(std::move(other.buffer)) {
 }
 
 Vector Vector::Ref(const Vector &other) {
@@ -118,7 +118,6 @@ void Vector::Reference(const Value &value) {
 		SetValue(0, value);
 	} else {
 		buffer = VectorBuffer::CreateConstantVector(value.type());
-		auxiliary.reset();
 		SetValue(0, value);
 	}
 }
@@ -170,7 +169,6 @@ void Vector::Reinterpret(const Vector &other) {
 void Vector::ConstReference(const Vector &other) const {
 	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);
-	AssignSharedPointer(auxiliary, other.auxiliary);
 	validity = other.validity;
 }
 
@@ -221,7 +219,6 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto &list_buffer = other.buffer->Cast<VectorListBuffer>();
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<VectorListBuffer>(offset_ptr, list_buffer);
-		auxiliary.reset();
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;
 	} else if (internal_type == PhysicalType::VARCHAR) {
@@ -229,13 +226,11 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto string_buffer = make_buffer<VectorStringBuffer>(offset_ptr);
 		buffer = std::move(string_buffer);
 		StringVector::AddHeapReference(*this, other);
-		auxiliary.reset();
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;
 	} else {
 		auto offset_ptr = other.buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
-		auxiliary.reset();
 		validity.Slice(other.validity, offset, end - offset);
 		vector_type = other.vector_type;
 	}
@@ -289,7 +284,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
 	vector_type = VectorType::DICTIONARY_VECTOR;
-	auxiliary.reset();
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -311,7 +305,6 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 	validity.Reset();
 
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
-	auxiliary.reset();
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -345,7 +338,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 }
 
 void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
-	auxiliary.reset();
 	validity.Reset();
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
@@ -1223,7 +1215,6 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
 	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 	validity.Reset();
-	auxiliary.reset();
 }
 
 void Vector::Shred(Vector &shredded_data) {
@@ -1235,7 +1226,7 @@ void Vector::Shred(Vector &shredded_data) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
 	this->vector_type = VectorType::SHREDDED_VECTOR;
-	this->auxiliary = make_buffer<ShreddedVectorBuffer>(shredded_data);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
 	validity.Reset();
 }
 
@@ -1607,10 +1598,6 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 void Vector::SetVectorType(VectorType vector_type_p) {
 	vector_type = vector_type_p;
 	auto physical_type = GetType().InternalType();
-	auto flat_or_const = GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR;
-	if (TypeIsConstantSize(physical_type) && flat_or_const) {
-		auxiliary.reset();
-	}
 	if (vector_type == VectorType::CONSTANT_VECTOR && physical_type == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {
@@ -1719,10 +1706,6 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		sel = &owned_sel;
 		vector = &child;
 		vtype = vector->GetVectorType();
-	}
-	if (TypeIsConstantSize(type.InternalType()) &&
-	    (vtype == VectorType::CONSTANT_VECTOR || vtype == VectorType::FLAT_VECTOR)) {
-		D_ASSERT(!vector->auxiliary);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		// verify that the string is correct unicode

@@ -221,9 +221,6 @@ protected:
 	mutable ValidityMask validity;
 	//! The main buffer holding the data of the vector
 	mutable buffer_ptr<VectorBuffer> buffer;
-	//! The buffer holding auxiliary data of the vector
-	//! e.g. a string vector uses this to store strings
-	mutable buffer_ptr<VectorBuffer> auxiliary;
 };
 
 } // namespace duckdb

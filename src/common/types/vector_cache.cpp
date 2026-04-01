@@ -57,7 +57,6 @@ public:
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer
-			result.auxiliary.reset();
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &list_buffer = result.buffer->Cast<VectorListBuffer>();
@@ -70,8 +69,6 @@ public:
 		}
 		case PhysicalType::ARRAY: {
 			// reinitialize the VectorArrayBuffer
-			result.auxiliary.reset();
-
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &array_child = result.buffer->Cast<VectorArrayBuffer>().GetChild();
@@ -80,7 +77,6 @@ public:
 		}
 		case PhysicalType::STRUCT: {
 			// reinitialize the VectorStructBuffer
-			result.auxiliary.reset();
 			// propagate through children
 			auto &children = result.buffer->Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
@@ -90,8 +86,6 @@ public:
 			break;
 		}
 		default:
-			// regular type: no aux data and reset data to cached data
-			result.auxiliary.reset();
 			break;
 		}
 	}
@@ -107,8 +101,6 @@ private:
 	vector<unique_ptr<VectorCacheEntry>> child_caches;
 	//! Buffer data for the vector (if any)
 	buffer_ptr<VectorBuffer> buffer;
-	//! Aux data for the vector (if any)
-	buffer_ptr<VectorBuffer> auxiliary;
 	//! Capacity of the vector
 	idx_t capacity;
 };
