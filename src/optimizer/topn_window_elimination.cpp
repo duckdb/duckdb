@@ -156,9 +156,42 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
+template <typename T>
+class RestoreValue {
+public:
+	explicit RestoreValue(T &t) : ref(t), val(t) {
+	}
+	~RestoreValue() {
+		ref = std::move(val);
+	}
+
+private:
+	T &ref;
+	T val;
+};
+
+bool TopNWindowElimination::IsSetOperator(const LogicalOperatorType &op_type) {
+	switch (op_type) {
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		return true;
+	default:
+		return false;
+		;
+	}
+}
+
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
 	if (!CanOptimize(*op)) {
+		RestoreValue save_needs_schema(needs_schema);
+		if (IsSetOperator(op->type)) {
+			++needs_schema;
+		}
+
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
 			// If an operator has multiple children, we do not want them to overwrite each other's stop operator.
@@ -187,6 +220,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	// Get bindings and types from filter to use in top-most operator later
 	const auto topmost_bindings = filter.GetColumnBindings();
+	const auto topmost_types = filter.types;
 	vector<ColumnBinding> new_bindings;
 	if (!TraverseProjectionBindings(topmost_bindings, child, new_bindings)) {
 		return op;
@@ -225,6 +259,14 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	}
 
 	UpdateTopmostBindings(window_idx, op, group_projection_idxs, topmost_bindings, new_bindings, replacer);
+
+	//	If we are inside a SET operator, then replacing bindings is insufficient
+	//	because the set operators assume that all the inputs have the same schema.
+	//	To fix this, we have to inject another projection using the new bindings.
+	if (needs_schema) {
+		op = CreateSetProjection(std::move(op), topmost_types, topmost_bindings, new_bindings, replacer);
+	}
+
 	replacer.stop_operator = op.get();
 
 	RemoveUnusedColumns unused_optimizer(optimizer);
@@ -411,6 +453,29 @@ void TopNWindowElimination::AddStructExtractExprs(
 		bound_function->alias = alias;
 		exprs.push_back(std::move(bound_function));
 	}
+}
+
+unique_ptr<LogicalOperator> TopNWindowElimination::CreateSetProjection(unique_ptr<LogicalOperator> op,
+                                                                       const vector<LogicalType> &types,
+                                                                       const vector<ColumnBinding> &topmost_bindings,
+                                                                       vector<ColumnBinding> &new_bindings,
+                                                                       ColumnBindingReplacer &replacer) const {
+	replacer.replacement_bindings.clear();
+	const auto proj_table = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> proj_exprs;
+	for (idx_t i = 0; i < topmost_bindings.size(); ++i) {
+		auto &new_binding = new_bindings[i];
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(types[i], new_binding));
+		new_binding.table_index = proj_table;
+		new_binding.column_index = i;
+		replacer.replacement_bindings.emplace_back(topmost_bindings[i], new_binding);
+	}
+
+	auto set_projection = make_uniq<LogicalProjection>(proj_table, std::move(proj_exprs));
+	set_projection->children.push_back(std::move(op));
+	set_projection->ResolveOperatorTypes();
+
+	return unique_ptr<LogicalOperator>(std::move(set_projection));
 }
 
 unique_ptr<LogicalOperator>
