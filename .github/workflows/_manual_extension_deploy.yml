@@ -179,5 +179,5 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          pip install awscli
+          python3 scripts/ci/retry.py -- pip install awscli
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_ref }} EXTENSION_BUCKET=duckdb-staging

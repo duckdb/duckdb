@@ -139,7 +139,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install Ninja
-      run: brew install ninja
+      run: python3 scripts/ci/retry.py -- brew install ninja
 
     - uses: ./.github/actions/ccache-action
 
@@ -338,7 +338,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install awscli
+        run: python3 scripts/ci/retry.py -- pip install awscli
 
       - uses: ./.github/actions/ccache-action
 
@@ -747,7 +747,7 @@ jobs:
         run: chmod +x build/release/duckdb
 
       - name: Install Python dependencies
-        run: pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
+        run: python3 scripts/ci/retry.py -- pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
 
       - name: Download BWC cache
         if: ${{ vars.ENABLE_BWC_CACHE_DOWNLOAD == 'true' }}

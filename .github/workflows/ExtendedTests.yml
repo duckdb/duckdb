@@ -84,7 +84,9 @@ jobs:
 
      - name: Install
        shell: bash
-       run: brew install ninja llvm && pip install requests
+       run: |
+         python3 scripts/ci/retry.py -- brew install ninja llvm
+         python3 scripts/ci/retry.py -- pip install requests
 
      - uses: ./.github/actions/ccache-action
 
@@ -160,7 +162,9 @@ jobs:
 
      - name: Install
        shell: bash
-       run: brew install ninja llvm && pip install requests
+       run: |
+         python3 scripts/ci/retry.py -- brew install ninja llvm
+         python3 scripts/ci/retry.py -- pip install requests
 
      - uses: ./.github/actions/ccache-action
 

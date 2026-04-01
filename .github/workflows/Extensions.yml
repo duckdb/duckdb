@@ -330,7 +330,7 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          pip install --break-system-packages awscli
+          python3 scripts/ci/retry.py -- pip install --break-system-packages awscli
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository
 
   autoload-tests:
@@ -435,9 +435,7 @@ jobs:
         run: |
           make extension_configuration
           python scripts/generate_extensions_function.py
-          pip install "black>=24"
-          pip install cmake-format
-          pip install "clang_format==11.0.1"
+          python3 scripts/ci/retry.py -- pip install "black>=24" cmake-format "clang_format==11.0.1"
           make format-fix
 
       - uses: actions/upload-artifact@v7
