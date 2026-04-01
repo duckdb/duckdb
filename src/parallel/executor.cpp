@@ -433,20 +433,23 @@ void Executor::CancelTasks() {
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
 		cancelled = true;
-		// destroy all pipelines, events and states
-		for (auto &rec_cte_ref : recursive_ctes) {
-			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
-			rec_cte.recursive_meta_pipeline.reset();
-		}
-		pipelines.clear();
-		root_pipelines.clear();
 		to_be_rescheduled_tasks.clear();
-		events.clear();
 	}
-	// Take all pending tasks and execute them until they cancel
+	// Drain all tasks first — they hold references to pipelines/events/states,
+	// so those must stay alive until all tasks have completed
 	while (executor_tasks > 0) {
 		WorkOnTasks();
 	}
+	// Now safe to destroy pipelines, events and states — no tasks reference them
+	lock_guard<mutex> elock(executor_lock);
+	for (auto &rec_cte_ref : recursive_ctes) {
+		auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
+		rec_cte.recursive_meta_pipeline.reset();
+	}
+	pipelines.clear();
+	root_pipelines.clear();
+	to_be_rescheduled_tasks.clear();
+	events.clear();
 }
 
 void Executor::WorkOnTasks() {
@@ -673,7 +676,7 @@ void Executor::PushError(ErrorData exception) {
 	// push the exception onto the stack
 	error_manager.PushError(std::move(exception));
 	// interrupt execution of any other pipelines that belong to this executor
-	context.interrupted = true;
+	context.interrupt_state = ClientInterruptState::INTERRUPTED;
 }
 
 bool Executor::HasError() {

@@ -18,7 +18,7 @@ statement ok
 SET wal_autocheckpoint = '1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
+ATTACH '{TEST_DIR}/profile_fs.db';
 
 statement ok
 CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(10000);
@@ -27,7 +27,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
@@ -42,7 +42,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.json';
 
 statement ok
 SELECT total_bytes_written FROM metrics_output;
@@ -65,13 +65,13 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
+ATTACH '{TEST_DIR}/profile_fs.db';
 
 statement ok
 SELECT * FROM profile_fs.tbl;
@@ -80,7 +80,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.json';
 
 query I
 SELECT

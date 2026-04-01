@@ -51,137 +51,170 @@ jobs:
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
     outputs:
-      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.select_runner.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.build_runners.outputs.runners }}
-      linux_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_cli_matrix }}
-      linux_musl_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_musl_cli_matrix }}
+      runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
+      runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.config.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.config.outputs.runner_windows_2022_x64 }}
+      runner_macos_arm64: ${{ steps.config.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.config.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.config.outputs.runners }}
+      linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
+      linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
-      extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
+      extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+      # Avoid downloading blobs >50 KB until they are actually needed by git.
+      GIT_FETCH_FILTER: blob:limit=50k
+      GIT_CONFIG_COUNT: 1
+      GIT_CONFIG_KEY_0: checkout.workers
+      GIT_CONFIG_VALUE_0: 4
     steps:
       - uses: actions/checkout@v6
+        with:
+          filter: ${{ env.GIT_FETCH_FILTER }}
 
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
+      - name: Fetch PR base branch history
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          # changed-files needs base branch history for merge-base lookup
+          # and the exact base SHA for comparison.
+          git fetch --no-tags --depth=100 --filter="${GIT_FETCH_FILTER}" origin \
+            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} \
+            ${{ github.event.pull_request.base.sha }}
 
       - name: Detect changes
         id: changed
         uses: tj-actions/changed-files@v47
         with:
+          base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          skip_initial_fetch: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           files_yaml: |
+            github:
+              - .github/**
             extensions:
               - .github/config/**
               - .github/patches/**
               - extensions/**
 
-      - name: Configure extensions
-        id: extensions
+      - name: Check CI
+        if: steps.changed.outputs.github_any_changed == 'true'
+        run: |
+          echo "::add-matcher::.github/actionlint-matcher.json"
+          echo "::group::ShellCheck version"
+          shellcheck --version
+          echo "::endgroup::"
+          echo "::group::Install actionlint"
+          bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "::endgroup::"
+          ./actionlint -color
+          make test_ci
+        shell: bash
+
+      - name: Configure CI
+        id: config
         run: |
           if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
+            extra_exclude_archs=
           else
-            echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+            extra_exclude_archs=windows_amd64\;wasm_eh
           fi
 
-      - name: Select CI runner
-        id: select_runner
-        run: |
+          echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
+
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
-            {
-              echo "runner_linux_small=namespace-profile-linux-small"
-              echo "runner_linux_x64=namespace-profile-linux-x64"
-              echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
-              echo "runner_linux_arm64=namespace-profile-linux-arm64"
-              echo "runner_windows_2022_x64=namespace-profile-windows-x64"
-              echo "runner_macos_arm64=namespace-profile-macos-arm64"
-              echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
-            } >> "$GITHUB_OUTPUT"
+            runner_linux_small=namespace-profile-linux-small
+            runner_linux_x64=namespace-profile-linux-x64
+            runner_linux_22_x64=namespace-profile-linux-22-x64
+            runner_linux_arm64=namespace-profile-linux-arm64
+            runner_windows_2022_x64=namespace-profile-windows-x64
+            runner_macos_arm64=namespace-profile-macos-arm64
+            runner_macos_14_arm64=namespace-profile-macos-14-arm64
           else
-            {
-              echo "runner_linux_small=ubuntu-latest"
-              echo "runner_linux_x64=ubuntu-latest"
-              echo "runner_linux_22_x64=ubuntu-22.04"
-              echo "runner_linux_arm64=ubuntu-24.04-arm"
-              echo "runner_windows_2022_x64=windows-2022"
-              echo "runner_macos_arm64=macos-14"
-              echo "runner_macos_14_arm64=macos-14"
-            } >> "$GITHUB_OUTPUT"
+            runner_linux_small=ubuntu-latest
+            runner_linux_x64=ubuntu-latest
+            runner_linux_22_x64=ubuntu-22.04
+            runner_linux_arm64=ubuntu-24.04-arm
+            runner_windows_2022_x64=windows-2022
+            runner_macos_arm64=macos-14
+            runner_macos_14_arm64=macos-14
           fi
 
-          grep runner_ "$GITHUB_OUTPUT"
-
-      - name: Build runners JSON
-        id: build_runners
-        run: |
-          echo "runners<<EOF" >> "$GITHUB_OUTPUT"
-          cat <<EOF >> "$GITHUB_OUTPUT"
           {
-            "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
-            "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
-            "linux_arm64": "${{ steps.select_runner.outputs.runner_linux_arm64 }}",
-            "windows_2022_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
-            "windows_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
-            "macos_arm64": "${{ steps.select_runner.outputs.runner_macos_arm64 }}",
-            "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
+            echo "runner_linux_small=$runner_linux_small"
+            echo "runner_linux_x64=$runner_linux_x64"
+            echo "runner_linux_22_x64=$runner_linux_22_x64"
+            echo "runner_linux_arm64=$runner_linux_arm64"
+            echo "runner_windows_2022_x64=$runner_windows_2022_x64"
+            echo "runner_macos_arm64=$runner_macos_arm64"
+            echo "runner_macos_14_arm64=$runner_macos_14_arm64"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "runners<<EOF"
+            cat <<EOF
+          {
+            "linux_x64": "$runner_linux_x64",
+            "linux_22_x64": "$runner_linux_22_x64",
+            "linux_arm64": "$runner_linux_arm64",
+            "windows_2022_x64": "$runner_windows_2022_x64",
+            "windows_x64": "$runner_windows_2022_x64",
+            "macos_arm64": "$runner_macos_arm64",
+            "macos_14_arm64": "$runner_macos_14_arm64"
           }
           EOF
-          echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Build Linux CLI matrices
-        id: build_linux_cli_matrices
-        run: |
           linux_cli_matrix=$(
-            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+            jq -nc --arg runner "$runner_linux_x64" \
               '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
           )
 
           linux_musl_cli_matrix=$(
-            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+            jq -nc --arg runner "$runner_linux_arm64" \
               '[{runner: $runner, arch: "arm64"}]'
           )
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
-              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+              jq -c --arg runner "$runner_linux_arm64" \
                 '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
             )
 
             linux_musl_cli_matrix=$(
-              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+              jq -c --arg runner "$runner_linux_x64" \
                 '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
             )
           fi
 
+          grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
           echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
       - name: Install tools
-        run: make format_tools
-
-      - name: List Installed Packages
-        run: pip3 freeze
+        run: |
+          make format_tools
+          echo "::group::Installed Python packages"
+          pip3 freeze
+          echo "::endgroup::"
 
       - name: Check format
         run: |
+          echo "::group::Formatter versions and config"
           clang-format --version
           clang-format --dump-config
           black --version
-          make format-check-silent
-
-      - name: Check generated files
-        run: |
+          echo "::endgroup::"
+          make format-check-silent enum-integrity-check
+          echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
+          echo "::endgroup::"
 
  linux-debug:
     name: Linux Debug
@@ -254,10 +287,10 @@ jobs:
         ls -lh build/relassert/test/unittest
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+      run: echo "DUCKDB_INSTALL_LIB=$(find "$PWD" -name 'libduck*.so' | head -n 1)" >> "$GITHUB_ENV"
 
     - name: Test DUCKDB_INSTALL_LIB variable
-      run: echo $DUCKDB_INSTALL_LIB
+      run: echo "$DUCKDB_INSTALL_LIB"
 
     - name: Test
       run: make unittest_relassert
@@ -270,14 +303,47 @@ jobs:
       - linux-debug
       - linux-release
     with:
-      build_current_release: 'false'
+      build_current_release: false
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
- code-quality:
-    uses: ./.github/workflows/CodeQuality.yml
-    secrets: inherit
+ tidy-check:
+    name: Tidy Check
     needs: prepare
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc
+      CXX: g++
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
+        python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Download clang-tidy-cache
+      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
+      run: |
+        set -e
+        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
+        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
+        chmod +x /tmp/clang-tidy-cache
+
+    - name: Tidy Check
+      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
+      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+
+    - name: Tidy Check Diff
+      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
  extensions:
     uses: ./.github/workflows/Extensions.yml
@@ -288,8 +354,8 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
-      skip_tests: 'false'
-      run_all: 'true'
+      skip_tests: false
+      run_all: true
       runners: ${{ needs.prepare.outputs.runners }}
 
  wasm-eh:
@@ -428,16 +494,17 @@ jobs:
         python3 -m pip install --break-system-packages pytest
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
       run: |
-        export PWD=`pwd`
         docker run                                                             \
-        -v$PWD:$PWD                                                            \
+        -v"$PWD:$PWD"                                                          \
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CXX='ccache g++'                                                    \
-        -e CCACHE_DIR=$PWD/.ccache                                             \
+        -e CCACHE_DIR="$PWD/.ccache"                                           \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
@@ -451,8 +518,8 @@ jobs:
             ccache       \
             ninja-build  \
             perl-IPC-Cmd
-          git config --global --add safe.directory $PWD
-          make -C $PWD
+          git config --global --add safe.directory \"$PWD\"
+          make -C \"$PWD\"
         "
 
     - name: Print platform
@@ -478,11 +545,8 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
-    - name: Test
-      run: make allunit
-
-    - name: Release specific tests
-      run: make unittest_release_tag
+    - name: Release tests
+      run: make alltest_release_tag
 
     - name: Tools Tests
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
@@ -512,17 +576,18 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
       shell: bash
       run: |
-        export PWD=`pwd`
         docker run                                                          \
-        -v$PWD:$PWD                                                         \
+        -v"$PWD:$PWD"                                                       \
         -e GEN=ninja                                                        \
         -e CC='ccache gcc'                                                  \
         -e CXX='ccache g++'                                                 \
-        -e CCACHE_DIR=$PWD/.ccache                                          \
+        -e CCACHE_DIR="$PWD/.ccache"                                        \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
@@ -539,8 +604,8 @@ jobs:
             git     \
             make    \
             samurai
-          git config --global --add safe.directory $PWD
-          make -C $PWD
+          git config --global --add safe.directory \"$PWD\"
+          make -C \"$PWD\"
         "
 
     - name: Deploy
@@ -567,9 +632,8 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        export PWD=`pwd`
         docker run   \
-        -v$PWD:$PWD  \
+        -v"$PWD:$PWD" \
         -e CI=1      \
         alpine:3.22                                                         \
         sh -c "
@@ -579,11 +643,9 @@ jobs:
             make       \
             python3    \
             py3-pytest
-          cd $PWD
-          echo Tests
-          make allunit
-          echo Release specific tests
-          make unittest_release_tag
+          cd \"$PWD\"
+          echo Release tests
+          make alltest_release_tag
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
@@ -690,8 +752,8 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
-      skip_tests: 'false'
-      run_all: 'true'
+      skip_tests: false
+      run_all: true
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks

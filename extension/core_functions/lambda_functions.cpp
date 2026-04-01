@@ -105,16 +105,9 @@ struct ListFilterFunctor {
 	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
-		UnifiedVectorFormat lambda_data;
-		lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
-
-		auto lambda_values = UnifiedVectorFormat::GetData<bool>(lambda_data);
-		auto &lambda_validity = lambda_data.validity;
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (idx_t i = 0; i < elem_cnt; i++) {
-			auto entry_idx = lambda_data.sel->get_index(i);
-
+		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;
@@ -123,8 +116,8 @@ struct ListFilterFunctor {
 			}
 
 			// found a true value
-			if (lambda_validity.RowIsValid(entry_idx) && lambda_values[entry_idx]) {
-				sel.set_index(count++, i);
+			if (entry.is_valid && entry.value) {
+				sel.set_index(count++, entry.index);
 				info.length++;
 			}
 
@@ -385,6 +378,9 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	if (lambda_expr->IsVolatile()) {
+		bound_function.stability = FunctionStability::VOLATILE;
+	}
 
 	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
 }

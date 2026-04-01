@@ -6,6 +6,7 @@ from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
 from typing import Optional, List, Union
 import subprocess
+from pathlib import Path
 
 print = functools.partial(print, flush=True)
 
@@ -79,6 +80,75 @@ NUMBER_REPETITIONS = 5
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
+
+
+def in_ci():
+    return os.getenv('CI') == 'true'
+
+
+def suite_name():
+    return Path(benchmark_file).stem
+
+
+def append_step_summary(lines: List[str]):
+    summary_path = os.getenv("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    with open(summary_path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+        f.write("\n")
+
+
+def format_seconds(value: Union[float, str]) -> str:
+    if isinstance(value, str):
+        return value
+    return f"{value:.3f}s"
+
+
+def regression_delta(old_value: float, new_value: float) -> str:
+    delta_sec = new_value - old_value
+    delta_pct = ((new_value / old_value) - 1.0) * 100.0 if old_value > 0 else math.inf
+    if math.isfinite(delta_pct):
+        return f"+{delta_sec:.3f}s ({delta_pct:.2f}%)"
+    return f"+{delta_sec:.3f}s"
+
+
+def emit_github_error(title: str, message: str):
+    if in_ci():
+        print(f"::error title={title}::{message}")
+
+
+def benchmark_timing_summary(regression: "BenchmarkResult"):
+    old_timing = format_seconds(regression.old_result)
+    new_timing = format_seconds(regression.new_result)
+    return old_timing, new_timing
+
+
+def report_regression(regression: "BenchmarkResult", summary: List[dict], summary_lines: List[str]):
+    print(f"{regression.benchmark}")
+    print(f"Old timing: {regression.old_result}")
+    print(f"New timing: {regression.new_result}")
+    old_timing, new_timing = benchmark_timing_summary(regression)
+    error_title = "Regression benchmark"
+    if not isinstance(regression.old_result, str) and not isinstance(regression.new_result, str):
+        delta = regression_delta(regression.old_result, regression.new_result)
+        print(f"Delta: {delta}")
+        message = f"{suite_name()}: {regression.benchmark} regressed from {old_timing} to {new_timing} ({delta})"
+        summary_delta = delta
+    else:
+        message = f"{suite_name()}: {regression.benchmark} failed while comparing base and PR benchmark runs"
+        summary_delta = "benchmark run failed"
+    emit_github_error(error_title, message)
+    summary_lines.append(f"| `{regression.benchmark}` | `{old_timing}` | `{new_timing}` | `{summary_delta}` |")
+    if regression.old_failure or regression.new_failure:
+        new_data = {
+            "benchmark": regression.benchmark,
+            "old_failure": regression.old_failure,
+            "new_failure": regression.new_failure,
+        }
+        summary.append(new_data)
+    print("")
+
 
 if not os.path.isfile(old_runner_path):
     print(f"Failed to find old runner {old_runner_path}")
@@ -165,18 +235,15 @@ if len(regression_list) > 0:
 ====================================================
 '''
     )
+    summary_lines = [
+        f"## Regression Suite: `{suite_name()}`",
+        "",
+        "| Benchmark | Base | PR | Delta |",
+        "| --- | --- | --- | --- |",
+    ]
     for regression in regression_list:
-        print(f"{regression.benchmark}")
-        print(f"Old timing: {regression.old_result}")
-        print(f"New timing: {regression.new_result}")
-        if regression.old_failure or regression.new_failure:
-            new_data = {
-                "benchmark": regression.benchmark,
-                "old_failure": regression.old_failure,
-                "new_failure": regression.new_failure,
-            }
-            summary.append(new_data)
-        print("")
+        report_regression(regression, summary, summary_lines)
+    append_step_summary(summary_lines + [""])
     print(
         '''====================================================
 ==============     OTHER TIMINGS       =============
@@ -228,7 +295,7 @@ if summary and not no_summary:
 '''
     )
     # check the value is "true" otherwise you'll see the prefix in local run outputs
-    prefix = "::error::" if ('CI' in os.environ and os.getenv('CI') == 'true') else ""
+    prefix = "::error::" if in_ci() else ""
     for i, failure_message in enumerate(summary, start=1):
         prefix_str = f"{prefix}{i}" if len(prefix) > 0 else f"{i}"
         print(f"{prefix_str}: ", failure_message["benchmark"])

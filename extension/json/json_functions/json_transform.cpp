@@ -971,13 +971,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 			vals[i] = docs[i]->root;
 		}
 	}
-
-	auto success = JSONTransform::Transform(vals, alc, result, count, options, nullptr);
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	return success;
+	return JSONTransform::Transform(vals, alc, result, count, options, nullptr);
 }
 
 template <bool strict>

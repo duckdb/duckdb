@@ -208,7 +208,7 @@ struct StandardFixedSizeAppend {
 	                   idx_t offset, idx_t count) {
 		auto sdata = UnifiedVectorFormat::GetData<T>(adata);
 		auto tdata = reinterpret_cast<T *>(target);
-		if (!adata.validity.AllValid()) {
+		if (adata.validity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto source_idx = adata.sel->get_index(offset + i);
 				auto target_idx = target_offset + i;

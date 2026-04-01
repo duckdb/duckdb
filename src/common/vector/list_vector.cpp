@@ -107,36 +107,27 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 }
 
 idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
-	UnifiedVectorFormat unified_list_data;
-	list.ToUnifiedFormat(count, unified_list_data);
-
 	idx_t total_count = 0;
-	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
-	for (idx_t r = 0; r < count; r++) {
-		auto idx = unified_list_data.sel->get_index(r);
-		if (!unified_list_data.validity.RowIsValid(idx)) {
-			continue;
-		}
-		total_count += list_data[idx].length;
+	for (auto entry : list.ValidValues<list_entry_t>(count)) {
+		total_count += entry.value.length;
 	}
 	return total_count;
 }
 
 ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
 	ConsecutiveChildListInfo info;
-	UnifiedVectorFormat unified_list_data;
-	list.ToUnifiedFormat(offset + count, unified_list_data);
-	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
+	auto list_data = list.Values<list_entry_t>(offset + count);
 
 	// find the first non-NULL entry
 	idx_t first_length = 0;
 	for (idx_t i = offset; i < offset + count; i++) {
-		auto idx = unified_list_data.sel->get_index(i);
-		if (!unified_list_data.validity.RowIsValid(idx)) {
+		auto entry = list_data[i];
+		if (!entry.is_valid) {
 			continue;
 		}
-		info.child_list_info.offset = list_data[idx].offset;
-		first_length = list_data[idx].length;
+		auto &list_val = entry.value;
+		info.child_list_info.offset = list_val.offset;
+		first_length = list_val.length;
 		break;
 	}
 
@@ -152,17 +143,18 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 	// this can happen e.g. for UNNESTs
 	bool is_consecutive = true;
 	for (idx_t i = offset; i < offset + count; i++) {
-		auto idx = unified_list_data.sel->get_index(i);
-		if (!unified_list_data.validity.RowIsValid(idx)) {
+		auto entry = list_data[i];
+		if (!entry.is_valid) {
 			continue;
 		}
-		if (list_data[idx].offset != info.child_list_info.offset || list_data[idx].length != first_length) {
+		auto &list_val = entry.value;
+		if (list_val.offset != info.child_list_info.offset || list_val.length != first_length) {
 			info.is_constant = false;
 		}
-		if (list_data[idx].offset != info.child_list_info.offset + info.child_list_info.length) {
+		if (list_val.offset != info.child_list_info.offset + info.child_list_info.length) {
 			is_consecutive = false;
 		}
-		info.child_list_info.length += list_data[idx].length;
+		info.child_list_info.length += list_val.length;
 	}
 
 	if (info.is_constant) {
@@ -176,20 +168,19 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 }
 
 void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count) {
-	UnifiedVectorFormat unified_list_data;
-	list.ToUnifiedFormat(offset + count, unified_list_data);
-	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
+	auto list_data = list.Values<list_entry_t>(offset + count);
 
 	//	SelectionVector child_sel(info.second.length);
 	idx_t entry = 0;
 	for (idx_t i = offset; i < offset + count; i++) {
-		auto idx = unified_list_data.sel->get_index(i);
-		if (!unified_list_data.validity.RowIsValid(idx)) {
+		auto list_entry = list_data[i];
+		if (!list_entry.is_valid) {
 			continue;
 		}
-		for (idx_t k = 0; k < list_data[idx].length; k++) {
+		auto &list_val = list_entry.value;
+		for (idx_t k = 0; k < list_val.length; k++) {
 			//			child_sel.set_index(entry++, list_data[idx].offset + k);
-			sel.set_index(entry++, list_data[idx].offset + k);
+			sel.set_index(entry++, list_val.offset + k);
 		}
 	}
 	//

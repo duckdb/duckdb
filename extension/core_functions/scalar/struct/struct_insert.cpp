@@ -28,11 +28,6 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		result_child_entries[starting_child_entries.size() + i - 1].Reference(args.data[i]);
 	}
-
-	result.Verify(args.size());
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarFunction &bound_function,

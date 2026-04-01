@@ -24,7 +24,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: pip install awscli
+       run: python3 scripts/ci/retry.py -- pip install awscli
 
      - name: Download from staging bucket
        shell: bash

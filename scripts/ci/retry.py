@@ -44,6 +44,12 @@ def format_command(command):
     return subprocess.list2cmdline(command) if os.name == "nt" else " ".join(command)
 
 
+def run_command(command, command_text, timeout):
+    if os.name == "nt":
+        return subprocess.run(command_text, timeout=timeout, shell=True)
+    return subprocess.run(command, timeout=timeout)
+
+
 def main() -> int:
     args = parse_args()
     attempts = args.retries + 1
@@ -51,12 +57,18 @@ def main() -> int:
 
     for attempt in range(1, attempts + 1):
         try:
-            completed = subprocess.run(args.command, timeout=args.timeout)
+            completed = run_command(args.command, command_text, args.timeout)
             exit_code = completed.returncode
         except subprocess.TimeoutExpired:
             exit_code = 124
             print(
                 f"[retry] attempt {attempt}/{attempts} timed out after {args.timeout} sec",
+                flush=True,
+            )
+        except OSError as exc:
+            exit_code = 127
+            print(
+                f"[retry] attempt {attempt}/{attempts} could not start command: {exc}",
                 flush=True,
             )
 

@@ -52,7 +52,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 		member_vector.Flatten(count);
 		union_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
-		if (member_vector.validity.AllValid()) {
+		if (member_vector.validity.CannotHaveNull()) {
 			// if the member vector is all valid, we can set the tag to constant
 			tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 			auto tag_data = ConstantVector::GetData<union_tag_t>(tag_vector);
@@ -114,66 +114,45 @@ bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &resu
 }
 
 //! Raw selection vector passed in (not merged with any other selection vectors)
-UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count, const SelectionVector &sel_p) {
-	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::UNION);
+UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, const SelectionVector &sel) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
 
-	// Will contain the (possibly) merged selection vector
-	const SelectionVector *sel = &sel_p;
-	SelectionVector owned_sel;
-	Vector *vector = &vector_p;
-	if (vector->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// In the case of a dictionary vector, unwrap the Vector, and merge the selection vectors.
-		auto &child = DictionaryVector::Child(*vector);
-		D_ASSERT(child.GetVectorType() != VectorType::DICTIONARY_VECTOR);
-		auto &dict_sel = DictionaryVector::SelVector(*vector);
-		// merge the selection vectors and verify the child
-		auto new_buffer = dict_sel.Slice(*sel, count);
-		owned_sel.Initialize(new_buffer);
-		sel = &owned_sel;
-		vector = &child;
-	} else if (vector->GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-
-	auto member_count = UnionType::GetMemberCount(vector_p.GetType());
+	auto member_count = UnionType::GetMemberCount(vector.GetType());
 	if (member_count == 0) {
 		return UnionInvalidReason::NO_MEMBERS;
 	}
 
-	UnifiedVectorFormat vector_vdata;
-	vector_p.ToUnifiedFormat(count, vector_vdata);
+	auto vector_validity = vector.Validity(count);
 
-	auto &entries = StructVector::GetEntries(vector_p);
-	duckdb::vector<UnifiedVectorFormat> child_vdata(entries.size());
-	for (idx_t entry_idx = 0; entry_idx < entries.size(); entry_idx++) {
+	auto &entries = StructVector::GetEntries(vector);
+	duckdb::vector<VectorValidityIterator> child_validity;
+	for (idx_t entry_idx = 1; entry_idx < entries.size(); entry_idx++) {
 		auto &child = entries[entry_idx];
-		child.ToUnifiedFormat(count, child_vdata[entry_idx]);
+		child_validity.push_back(child.Validity(count));
 	}
-
-	auto &tag_vdata = child_vdata[0];
+	auto tag_data = entries[0].Values<union_tag_t>(count);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto mapped_idx = sel->get_index(row_idx);
+		auto mapped_idx = sel.get_index(row_idx);
 
-		if (!vector_vdata.validity.RowIsValid(mapped_idx)) {
+		if (!vector_validity.IsValid(mapped_idx)) {
 			continue;
 		}
 
-		auto tag_idx = tag_vdata.sel->get_index(sel_p.get_index(row_idx));
-		if (!tag_vdata.validity.RowIsValid(tag_idx)) {
+		auto tag_entry = tag_data[mapped_idx];
+		if (!tag_entry.is_valid) {
 			// we can't have NULL tags!
 			return UnionInvalidReason::NULL_TAG;
 		}
-		auto tag = UnifiedVectorFormat::GetData<union_tag_t>(tag_vdata)[tag_idx];
+		auto tag = tag_entry.value;
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}
 
 		bool found_valid = false;
 		for (idx_t i = 0; i < member_count; i++) {
-			auto &member_vdata = child_vdata[1 + i]; // skip the tag
-			idx_t member_idx = member_vdata.sel->get_index(sel_p.get_index(row_idx));
-			if (!member_vdata.validity.RowIsValid(member_idx)) {
+			auto &member_vdata = child_validity[i];
+			if (!member_vdata.IsValid(mapped_idx)) {
 				continue;
 			}
 			if (found_valid) {

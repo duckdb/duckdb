@@ -5,8 +5,8 @@ on:
       base_hash:
         type: string
       build_current_release:
-        default: 'false'
-        type: string
+        default: false
+        type: boolean
       runner_linux_x64:
         default: ubuntu-latest
         type: string
@@ -20,8 +20,8 @@ on:
         type: string
       build_current_release:
         description: 'Build and upload linux-release-build in this workflow'
-        default: 'true'
-        type: string
+        default: true
+        type: boolean
       runner_linux_x64:
         description: 'Optional x64 runner label override'
         default: ubuntu-latest
@@ -59,7 +59,7 @@ jobs:
       - uses: ./.github/actions/ccache-action
 
       - name: Build current release
-        if: ${{ inputs.build_current_release != 'false' }}
+        if: ${{ inputs.build_current_release }}
         uses: ./.github/actions/linux_release_build
         with:
           artifact_name: linux-release-build
@@ -73,7 +73,8 @@ jobs:
               echo "BASE_REF=${BASE_HASH}" >> "$GITHUB_ENV"
             fi
           else
-            echo "BASE_REF=origin/${BASE_BRANCH}" >> "$GITHUB_ENV"
+            git fetch https://github.com/duckdb/duckdb.git "${BASE_BRANCH}:refs/remotes/duckdb/${BASE_BRANCH}"
+            echo "BASE_REF=duckdb/${BASE_BRANCH}" >> "$GITHUB_ENV"
           fi
 
       - name: Reset workspace to base ref
@@ -111,7 +112,7 @@ jobs:
             benchmarks: .github/regression/realnest.csv
             data_setup: |
               mkdir -p duckdb_benchmark_data
-              wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
+              python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
 
     steps:
       - uses: actions/checkout@v4
@@ -166,6 +167,7 @@ jobs:
               --threads 2 \
               "${extra_args[@]}"; then
               status=1
+              echo "::error title=Regression suite failed::$(basename "$benchmark" .csv) in ${{ matrix.name }}"
             fi
             echo "::endgroup::"
           done

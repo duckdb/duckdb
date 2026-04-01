@@ -61,12 +61,14 @@ jobs:
           EXT_CONFIG: .github/config/extensions/${{ inputs.extension_name }}.cmake
         run: |
           # Set config
-          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
-          ext_config="`cat $EXT_CONFIG`"
-          echo "extension_config<<EOF" >> $GITHUB_OUTPUT
-          echo "$ext_config" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          cat $GITHUB_OUTPUT
+          echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
+          ext_config="$(<"$EXT_CONFIG")"
+          {
+            echo "extension_config<<EOF"
+            echo "$ext_config"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
 
   vars:
     runs-on: ubuntu-24.04
@@ -177,5 +179,5 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          pip install awscli
+          python3 scripts/ci/retry.py -- pip install awscli
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_ref }} EXTENSION_BUCKET=duckdb-staging

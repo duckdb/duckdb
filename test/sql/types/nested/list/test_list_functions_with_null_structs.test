@@ -34,7 +34,7 @@ NULL
 foreach f array_pop_back array_pop_front len list_any_value list_distinct list_grade_up list_reverse_sort list_reverse list_sort list_unique
 
 query I
-SELECT ${f}(str) FROM struct_data;
+SELECT {f}(str) FROM struct_data;
 ----
 NULL
 

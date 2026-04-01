@@ -13,6 +13,7 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.on_conflict = on_conflict;
 	other.temporary = temporary;
 	other.internal = internal;
+	other.extension_name = extension_name;
 	other.sql = sql;
 	other.dependencies = dependencies;
 	other.comment = comment;

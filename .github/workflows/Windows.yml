@@ -7,9 +7,9 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
       run_all:
-        type: string
+        type: boolean
       runner_windows_2022_x64:
         type: string
   workflow_dispatch:
@@ -19,9 +19,11 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
+        default: false
       run_all:
-        type: string
+        type: boolean
+        default: true
       runner_windows_2022_x64:
         type: string
 
@@ -61,33 +63,33 @@ jobs:
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
-      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
+      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
       shell: bash
-      run: echo $DUCKDB_INSTALL_LIB
+      run: echo "$DUCKDB_INSTALL_LIB"
 
     - name: Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        choco install wget -y --no-progress
-        wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
+        python scripts/ci/retry.py -- choco install wget -y --no-progress
+        python scripts/ci/retry.py -- wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test/Release
-        ./test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/Release/unittest.exe
         rm ./test/Release/msvcp140.dll
 
     - name: Tools Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        python -m pip install pytest
+        python scripts/ci/retry.py -- python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
 
     - name: Sign files with Azure Trusted Signing (TM)
@@ -158,19 +160,19 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: python scripts/ci/run_tests.py test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
       run: |
-        python -m pip install pytest
+        python scripts/ci/retry.py -- python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
 
  win-release-arm64:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
    runs-on: windows-latest
 
    steps:
@@ -232,7 +234,7 @@ jobs:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
-     if: ${{ inputs.skip_tests != 'true' }}
+     if: ${{ !inputs.skip_tests }}
      runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
@@ -250,12 +252,12 @@ jobs:
        - name: Dependencies
          shell: bash
          run: |
-           choco install \
+           python scripts/ci/retry.py -- choco install \
              ccache \
              make \
              ninja \
              --no-progress
-           choco install \
+           python scripts/ci/retry.py -- choco install \
              mingw --version 14.2.0 \
              --no-progress
 
@@ -264,12 +266,14 @@ jobs:
        - name: Build Environment
          shell: bash
          run: |
-           # bash from Git
-           echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
-           # make, ninja and ccache from Chocolatey
-           echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
-           # g++ from Chocolatey
-           echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
+           {
+             # bash from Git
+             echo 'C:/Program Files/Git/bin'
+             # make, ninja and ccache from Chocolatey
+             echo 'C:/ProgramData/Chocolatey/bin'
+             # g++ from Chocolatey
+             echo 'C:/ProgramData/mingw64/mingw64/bin'
+           } >> "${GITHUB_PATH}"
 
        - name: Build Environment Check
          shell: bash
@@ -307,7 +311,7 @@ jobs:
            ./build/release/test/unittest.exe --list-tests || true
 
        - name: Build
-         run: make release
+         run: python scripts/ci/retry.py -- make release
 
        - name: Test
          run: make unittest_release SKIP_BUILD=1

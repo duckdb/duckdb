@@ -68,7 +68,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
 
@@ -103,6 +103,7 @@ jobs:
     runs-on: windows-latest
     env:
       GEN: ninja
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
@@ -118,13 +119,13 @@ jobs:
       - name: Dependencies
         shell: bash
         run: |
-          choco install \
+          python scripts/ci/retry.py -- choco install \
             ccache \
             make \
             ninja \
             zip \
             --no-progress
-          choco install \
+          python scripts/ci/retry.py -- choco install \
             mingw --version 14.2.0 \
             --no-progress
 
@@ -133,12 +134,14 @@ jobs:
       - name: Build Environment
         shell: bash
         run: |
-          # bash from Git
-          echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
-          # make, ninja and ccache from Chocolatey
-          echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
-          # g++ from Chocolatey
-          echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
+          {
+            # bash from Git
+            echo 'C:/Program Files/Git/bin'
+            # make, ninja and ccache from Chocolatey
+            echo 'C:/ProgramData/Chocolatey/bin'
+            # g++ from Chocolatey
+            echo 'C:/ProgramData/mingw64/mingw64/bin'
+          } >> "${GITHUB_PATH}"
 
       - name: Build Environment Check
         shell: cmd
@@ -194,11 +197,10 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          export PWD=`pwd`
           docker run                                                             \
-          -v$PWD:$PWD                                                            \
+          -v"$PWD:$PWD"                                                          \
           -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
-          -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
+          -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                      \
           -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
           -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
@@ -214,8 +216,8 @@ jobs:
             export CC=gcc
             export CXX=g++
 
-            git config --global --add safe.directory $PWD
-            make gather-libs -C $PWD
+            git config --global --add safe.directory \"$PWD\"
+            make gather-libs -C \"$PWD\"
           "
       - name: Print platform
         shell: bash

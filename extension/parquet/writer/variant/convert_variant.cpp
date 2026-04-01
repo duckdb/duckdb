@@ -71,11 +71,12 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		auto &metadata_blob = metadata_data[row];
 		auto metadata_blob_data = metadata_blob.GetDataWriteable();
 
-		metadata_blob_data[0] = EncodeMetadataHeader(byte_length);
+		metadata_blob_data[0] = static_cast<char>(EncodeMetadataHeader(byte_length));
 		memcpy(metadata_blob_data + 1, const_data_ptr_cast(&dictionary_count), byte_length);
 
 		auto offset_ptr = metadata_blob_data + 1 + byte_length;
-		auto string_ptr = metadata_blob_data + 1 + byte_length + ((dictionary_count + 1) * byte_length);
+		auto string_ptr =
+		    metadata_blob_data + 1 + byte_length + (NumericCast<idx_t>(dictionary_count + 1) * byte_length);
 		idx_t total_offset = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
 			memcpy(offset_ptr + (i * byte_length), const_data_ptr_cast(&total_offset), byte_length);
@@ -84,8 +85,9 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 			memcpy(string_ptr + total_offset, key.GetData(), key.GetSize());
 			total_offset += key.GetSize();
 		}
-		memcpy(offset_ptr + (dictionary_count * byte_length), const_data_ptr_cast(&total_offset), byte_length);
-		D_ASSERT(offset_ptr + ((dictionary_count + 1) * byte_length) == string_ptr);
+		memcpy(offset_ptr + (NumericCast<idx_t>(dictionary_count) * byte_length), const_data_ptr_cast(&total_offset),
+		       byte_length);
+		D_ASSERT(offset_ptr + (NumericCast<idx_t>(dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
 		metadata_blob.SetSizeAndFinalize(total_length, total_length);
 
@@ -527,19 +529,19 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 			                            decimal_data.scale);
 		} else if (decimal_data.width <= 9) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
-			Store<int8_t>(decimal_data.scale, value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
 			value_data++;
 			memcpy(value_data, decimal_data.value_ptr, sizeof(int32_t));
 			value_data += sizeof(int32_t);
 		} else if (decimal_data.width <= 18) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL8>(value_data);
-			Store<int8_t>(decimal_data.scale, value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
 			value_data++;
 			memcpy(value_data, decimal_data.value_ptr, sizeof(int64_t));
 			value_data += sizeof(int64_t);
 		} else if (decimal_data.width <= 38) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL16>(value_data);
-			Store<int8_t>(decimal_data.scale, value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
 			value_data++;
 			memcpy(value_data, decimal_data.value_ptr, sizeof(hugeint_t));
 			value_data += sizeof(hugeint_t);
@@ -870,10 +872,6 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 
 	ParquetVariantShredding shredding;
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
-
-	if (input.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
@@ -889,7 +887,7 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;
 	top_element.repetition_type = repetition_type;
-	top_element.num_children = child_writers.size();
+	top_element.num_children = NumericCast<int32_t>(child_writers.size());
 	top_element.logicalType.__isset.VARIANT = true;
 	top_element.logicalType.VARIANT.__isset.specification_version = true;
 	top_element.logicalType.VARIANT.specification_version = 1;
@@ -899,7 +897,7 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	top_element.name = name;
 	if (field_id.IsValid()) {
 		top_element.__isset.field_id = true;
-		top_element.field_id = field_id.GetIndex();
+		top_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
 	schemas.push_back(std::move(top_element));
 
