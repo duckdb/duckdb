@@ -102,8 +102,7 @@ private:
 			} else {
 				auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 				result_data[0] = OPWRAPPER::template Operation<FUN, RESULT_TYPE, ARGS...>(
-				    fun, ConstantVector::Validity(result), 0,
-				    *ConstantVector::GetData<ARGS>(inputs[Is].get())...);
+				    fun, ConstantVector::Validity(result), 0, *ConstantVector::GetData<ARGS>(inputs[Is].get())...);
 			}
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
