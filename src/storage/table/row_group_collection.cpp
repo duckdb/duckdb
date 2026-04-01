@@ -1332,7 +1332,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		if (!state.can_change_row_ids) {
 			idx_t total_count = row_group.count;
 			committed_counts.emplace_back(row_group_count);
-			// we cannot change rowids, and this RowGroup has deletes
+			// we cannot change row ids, and this row group has deletes
 			// vacuuming here would alter row ids - so skip it
 			if (total_count != row_group_count) {
 				state.row_group_counts.emplace_back();
@@ -1340,7 +1340,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			}
 		}
 		if (row_group_count == 0) {
-			// empty RowGroup - we can drop it entirely.
+			// empty row group - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			dropped_any_rowgroups = true;
@@ -1348,15 +1348,15 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			continue;
 		}
 		if (dropped_any_rowgroups) {
-			// if there are any dropped RowGroups before a live RowGroup, all the rowids of the RowGroups following
-			// the dropped RowGroup will have their rowids shifted forward (to keep rowid's contiguous).
+			// if there are any dropped row groups before a live row group, all the row ids of the row groups following
+			// the dropped row group will have their row ids shifted forward (to keep row ids contiguous).
 			state.row_ids_changed = true;
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
 	if (!state.can_change_row_ids && options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
-		// if we cannot change rowids we might still be able to vacuum trailing deletions
-		// since that would not change the row-ids of any non-deleted rows
+		// if we cannot change row ids we might still be able to vacuum trailing deletions
+		// since that would not change the row ids of any non-deleted rows
 		auto segment_count = state.row_group_counts.size();
 		for (idx_t i = segment_count; i > 0; i--) {
 			auto segment_idx = i - 1;

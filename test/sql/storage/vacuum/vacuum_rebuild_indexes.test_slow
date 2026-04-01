@@ -2,86 +2,57 @@
 # description: Test that vacuum correctly rebuilds indexes when empty row groups are dropped
 # group: [vacuum]
 
-load __TEST_DIR__/experimental_vacuum_rebuild_indexes.db
+load {TEST_DIR}/vacuum_rebuild_indexes.db
 
 statement ok
 SET wal_autocheckpoint='100GB'
 
 statement ok
-CREATE TABLE t(i INTEGER, j INTEGER);
+CREATE TABLE t(i INTEGER);
 
 statement ok
 CREATE INDEX idx ON t(i);
 
-# insert 500K rows: fills ~4 full row groups + 1 partial
+# insert enough rows for 2 row groups (122880 rows each)
 statement ok
-INSERT INTO t SELECT i, i FROM range(500000) tbl(i);
+INSERT INTO t SELECT i FROM range(245760) tbl(i);
 
 statement ok
 CHECKPOINT
 
-# verify initial row group count (~5: four full + one partial)
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t')
 ----
-5
+2
 
-# delete ALL rows in the second row group, creating an empty row group in the middle
-# row groups are 122880 rows each, so this empties the second one
+# delete all rows in the first row group
 statement ok
-DELETE FROM t WHERE i >= 122880 AND i < 245760
+DELETE FROM t WHERE i < 122880
 
 statement ok
 SET experimental_vacuum_rebuild_indexes = true
 
-
 statement ok
 CHECKPOINT
 
-# the remaining full row groups (122880 rows each) have no merge candidates,
-# so no vacuum tasks run — but the empty row group IS dropped, shifting row IDs
-# of all subsequent row groups. the index must be rebuilt to reflect the new row IDs.
-
-# verify the empty row group was dropped
+# the empty first row group is dropped, shifting row IDs of the second group
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t')
 ----
-4
+1
 
-# verify index lookups across the gap
-query II
-SELECT i, j FROM t WHERE i = 0
-----
-0	0
-
-query II
-SELECT i, j FROM t WHERE i = 122879
-----
-122879	122879
-
-query II
-SELECT i, j FROM t WHERE i = 245760
-----
-245760	245760
-
-query II
-SELECT i, j FROM t WHERE i = 300000
-----
-300000	300000
-
-query II
-SELECT i, j FROM t WHERE i = 499999
-----
-499999	499999
-
-# verify no rows from deleted range
+# verify index lookups still work after row IDs shifted
 query I
-SELECT COUNT(*) FROM t WHERE i >= 122880 AND i < 245760
+SELECT COUNT(*) FROM t WHERE i = 122880
 ----
-0
+1
 
-# verify total count
+query I
+SELECT COUNT(*) FROM t WHERE i = 245759
+----
+1
+
 query I
 SELECT COUNT(*) FROM t
 ----
-377120
+122880

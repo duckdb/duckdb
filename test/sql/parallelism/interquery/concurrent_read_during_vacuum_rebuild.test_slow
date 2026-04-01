@@ -2,7 +2,7 @@
 # description: Test concurrent reads during vacuum index rebuild
 # group: [interquery]
 
-load __TEST_DIR__/concurrent_read_during_vacuum_rebuild.db
+load {TEST_DIR}/concurrent_read_during_vacuum_rebuild.db
 
 statement ok
 SET experimental_vacuum_rebuild_indexes = true
@@ -38,6 +38,7 @@ onlyif threadid=0
 statement ok
 CHECKPOINT
 
+# index scan outside of the deleted range, so we expect 1.
 onlyif threadid>=1
 query I
 SELECT COUNT(*) FROM t WHERE i = (245760 + {threadid} * 50000)
