@@ -629,6 +629,7 @@ InsertionOrderPreservingMap<string> PhysicalTopN::ParamsToString() const {
 		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
 	result["Order By"] = orders_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

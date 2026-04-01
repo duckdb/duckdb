@@ -115,9 +115,9 @@ SELECT
 	 x
 	,y
 	,z
-	, ${nullary}() OVER (PARTITION BY y) AS plain_window
-	, ${nullary}() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
-	, ${nullary}() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+	, {nullary}() OVER (PARTITION BY y) AS plain_window
+	, {nullary}() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+	, {nullary}() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
 ----
@@ -131,9 +131,9 @@ SELECT
 	 x
 	,y
 	,z
-	, ${unary}(x) OVER (PARTITION BY y) AS plain_window
-	, ${unary}(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
-	, ${unary}(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+	, {unary}(x) OVER (PARTITION BY y) AS plain_window
+	, {unary}(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+	, {unary}(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
 ----
@@ -147,9 +147,9 @@ SELECT
 	 x
 	,y
 	,z
-	, ${binary}(x, 1) OVER (PARTITION BY y) AS plain_window
-	, ${binary}(x, 1) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
-	, ${binary}(x, 1) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+	, {binary}(x, 1) OVER (PARTITION BY y) AS plain_window
+	, {binary}(x, 1) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+	, {binary}(x, 1) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
 ----

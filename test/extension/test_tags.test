@@ -12,7 +12,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 query II
 SELECT function_name, tags['ext:author'] FROM duckdb_functions() WHERE tags['ext:name'] = 'loadable_extension_demo' ORDER BY function_name;

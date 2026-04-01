@@ -19,7 +19,7 @@ statement ok
 SET write_buffer_row_group_count = 1;
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_drop_blocks.db' AS db;
+ATTACH '{TEST_DIR}/concurrent_drop_blocks.db' AS db;
 
 # Step 1: Create table with an index and VARCHAR columns.
 # The index is critical: during WAL replay, ReplayRowGroupData scans all
@@ -57,7 +57,7 @@ DETACH db;
 # primary key index. This forces reads from the optimistically written physical blocks that
 # belong to the dropped table.
 statement ok
-ATTACH '__TEST_DIR__/concurrent_drop_blocks.db' AS db;
+ATTACH '{TEST_DIR}/concurrent_drop_blocks.db' AS db;
 
 query I
 SELECT COUNT(*) FROM db.t2;

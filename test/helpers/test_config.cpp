@@ -431,13 +431,23 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 
 void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	path = StringUtil::Replace(path, "{TEST_DIR}", TestDirectoryPath());
+	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", FileSystem::GetWorkingDirectory());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	path = StringUtil::Replace(path, "{TEST_NAME}", test_name);
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
-	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
-	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	if (StringUtil::Contains(path, "__TEST_DIR__")) {
+		Printer::PrintF("Replacing deprecated string __TEST_DIR__ in path \"%s\" - please replace with {TEST_DIR}",
+		                path);
+		path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	}
+	if (StringUtil::Contains(path, "__WORKING_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
+		                "{WORKING_DIRECTORY}",
+		                path);
+		path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	}
 }
 
 template <class T, class VAL_T>

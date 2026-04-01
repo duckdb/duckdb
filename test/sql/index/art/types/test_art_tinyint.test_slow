@@ -50,7 +50,7 @@ SELECT i FROM integers WHERE i=CAST(101 AS tinyint)
 loop i 0 100
 
 query I
-SELECT COUNT(*) FROM integers WHERE i=CAST(${i}+1 AS tinyint)
+SELECT COUNT(*) FROM integers WHERE i=CAST({i}+1 AS tinyint)
 ----
 1
 

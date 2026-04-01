@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_verification
 
 # we need a persistent database because otherwise we are not allowed to restart
-load __TEST_DIR__/dummy_database_for_extension_installation.db
+load {TEST_DIR}/dummy_database_for_extension_installation.db
 
 statement error
 INSTALL 'asdf';
@@ -21,10 +21,10 @@ INSTALL 'asdf/asdf.duckdb_extension';
 ----
 
 statement ok
-INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
-FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+FORCE INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
 LOAD 'loadable_extension_demo';
@@ -37,12 +37,12 @@ restart
 
 # this will succeed on MacOS due to case insensitive filesystem
 statement maybe
-FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_DEMO.duckdb_extension';
+FORCE INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_DEMO.duckdb_extension';
 ----
 IO Error: Failed to install local extension
 
 statement ok
-FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+FORCE INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
 LOAD 'Loadable_Extension_DEMO';
@@ -52,7 +52,7 @@ restart
 
 # can't find extension in non-default extension location
 statement ok
-SET extension_directory='__TEST_DIR__/extension_directory'
+SET extension_directory='{TEST_DIR}/extension_directory'
 
 statement ok
 SET extension_directories=[]
@@ -63,7 +63,7 @@ LOAD 'loadable_extension_demo';
 
 # can install after setting directory, even if the extension directory does not yet exist
 statement ok
-INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 # can load now
 statement ok
@@ -71,7 +71,7 @@ LOAD 'loadable_extension_demo';
 
 # ensure file is there
 query I
-select count(*) from glob('__TEST_DIR__/extension_directory/**/loadable_extension_demo.duckdb_extension')
+select count(*) from glob('{TEST_DIR}/extension_directory/**/loadable_extension_demo.duckdb_extension')
 ----
 1
 
@@ -83,7 +83,7 @@ statement ok
 SET extension_directory=''
 
 statement ok
-SET extension_directories=['__TEST_DIR__/extension_directory_a', '__TEST__DIR__/second_extension_directory_b']
+SET extension_directories=['{TEST_DIR}/extension_directory_a', '__TEST__DIR__/second_extension_directory_b']
 
 statement error
 LOAD 'loadable_extension_demo';
@@ -91,7 +91,7 @@ LOAD 'loadable_extension_demo';
 
 # can install after setting directory, even if the extension directory does not yet exist
 statement ok
-INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 # can load now
 statement ok
@@ -99,7 +99,7 @@ LOAD 'loadable_extension_demo';
 
 # Switching the order shouldn't make a difference
 statement ok
-SET extension_directories=['__TEST_DIR__/extension_directory_b', '__TEST__DIR__/second_extension_directory_a']
+SET extension_directories=['{TEST_DIR}/extension_directory_b', '__TEST__DIR__/second_extension_directory_a']
 
 statement ok
 LOAD 'loadable_extension_demo';
@@ -119,7 +119,7 @@ SET extension_directories=[]
 
 # can't find extension in non-default home location
 statement ok
-SET home_directory='__TEST_DIR__/home_directory'
+SET home_directory='{TEST_DIR}/home_directory'
 
 statement error
 LOAD 'loadable_extension_demo';
@@ -127,18 +127,18 @@ LOAD 'loadable_extension_demo';
 
 # we can't install because we will not create a non-existing home directory
 statement error
-INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 ----
 
 # but this one should exist
 statement ok
-SET home_directory='__TEST_DIR__'
+SET home_directory='{TEST_DIR}'
 
 statement ok
-INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 query I
-select COUNT(*) from glob('__TEST_DIR__/.duckdb/**/loadable_extension_demo.duckdb_extension')
+select COUNT(*) from glob('{TEST_DIR}/.duckdb/**/loadable_extension_demo.duckdb_extension')
 ----
 1
 

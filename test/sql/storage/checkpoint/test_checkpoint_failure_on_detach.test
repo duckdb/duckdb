@@ -6,7 +6,7 @@
 require no_alternative_verify
 
 statement ok
-ATTACH '__TEST_DIR__/fail_detach';
+ATTACH '{TEST_DIR}/fail_detach';
 
 statement ok
 PRAGMA wal_autocheckpoint = '1TB';
