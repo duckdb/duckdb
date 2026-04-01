@@ -1,4 +1,5 @@
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/render_tree.hpp"
@@ -20,6 +21,10 @@ PhysicalOperator::PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperator
                                    idx_t estimated_cardinality)
     : children(physical_plan.ArenaRef()), type(type), types(std::move(types)),
       estimated_cardinality(estimated_cardinality) {
+}
+
+ParallelizeSequentialSource PhysicalOperator::SourceSupportsParallelFanOut() const {
+	return ParallelizeSequentialSource::AUTOMATIC;
 }
 
 string PhysicalOperator::GetName() const {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -24,6 +25,15 @@
 #include "duckdb/common/enums/order_preservation_type.hpp"
 
 namespace duckdb {
+
+//! Controls whether a sequential source should be parallelized by the engine.
+//! Used both as a per-function flag and as a global setting.
+//! Resolution: max(global_setting, func_flag) — DISABLED wins over anything.
+enum class ParallelizeSequentialSource : uint8_t {
+	AUTOMATIC = 0,  //! Engine decides (default)
+	ENABLED = 1,    //! Parallelize this source
+	DISABLED = 2    //! Never parallelize (vetoes everything)
+};
 
 class BaseStatistics;
 class LogicalDependencyList;
@@ -495,7 +505,7 @@ public:
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
 	//! Whether this sequential source should be automatically parallelized by the engine
-	bool parallelize_sequential_source = false;
+	ParallelizeSequentialSource parallelize_sequential_source = ParallelizeSequentialSource::AUTOMATIC;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function

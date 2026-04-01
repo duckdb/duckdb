@@ -81,7 +81,7 @@ public:
 		return true;
 	}
 	bool ParallelSource() const override;
-	bool SourceSupportsParallelFanOut() const override;
+	ParallelizeSequentialSource SourceSupportsParallelFanOut() const override;
 
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 

@@ -28,10 +28,21 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator>
 }
 
 PhysicalOperator &PhysicalPlanGenerator::WrapWithFanOut(PhysicalOperator &source) {
-	if (Settings::Get<DisableFanOutSetting>(context)) {
+	// Resolve: max(global_setting, func_flag) — DISABLED wins
+	auto setting_str = Settings::Get<ParallelizeSequentialSourcesSetting>(context);
+	auto global_flag = ParallelizeSequentialSource::AUTOMATIC;
+	if (setting_str == "enabled") {
+		global_flag = ParallelizeSequentialSource::ENABLED;
+	} else if (setting_str == "disabled") {
+		global_flag = ParallelizeSequentialSource::DISABLED;
+	}
+	auto func_flag = source.SourceSupportsParallelFanOut();
+	auto resolved = MaxValue(global_flag, func_flag);
+	if (resolved == ParallelizeSequentialSource::DISABLED) {
 		return source;
 	}
-	if (!source.SourceSupportsParallelFanOut()) {
+	if (resolved == ParallelizeSequentialSource::AUTOMATIC) {
+		// AUTOMATIC: engine decides — currently no auto-detection, skip
 		return source;
 	}
 	return Make<PhysicalFanOut>(source, source.estimated_cardinality);

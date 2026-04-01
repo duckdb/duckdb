@@ -35,6 +35,7 @@ class MetaPipeline;
 class PhysicalPlan;
 
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+enum class ParallelizeSequentialSource : uint8_t;
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
@@ -146,9 +147,7 @@ public:
 	}
 
 	//! Whether this source supports being wrapped by FanOut for parallel consumption
-	virtual bool SourceSupportsParallelFanOut() const {
-		return false;
-	}
+	virtual ParallelizeSequentialSource SourceSupportsParallelFanOut() const;
 
 	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
 		if (partition_info.AnyRequired()) {

@@ -629,15 +629,16 @@ struct DisableDatabaseInvalidationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct DisableFanOutSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "disable_fan_out";
+struct ParallelizeSequentialSourcesSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "parallelize_sequential_sources";
 	static constexpr const char *Description =
-	    "Disable automatic FanOut injection for parallel consumption of sequential sources";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	    "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "automatic";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DisableTimestamptzCastsSetting {
