@@ -29,6 +29,10 @@ struct BloomFilterFunctionData;
 struct PerfectHashJoinFunctionData;
 struct PrefixRangeFunctionData;
 
+enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
+void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &selectivity_threshold,
+                                   idx_t &n_vectors_to_check);
+
 class BloomFilter {
 public:
 	BloomFilter() = default;
@@ -129,6 +133,13 @@ struct TableFilterInternalFunctions {
 		return IsInternalTableFilterFunction(function.name);
 	}
 };
+
+idx_t SelectBloomFilter(Vector &input, const BloomFilterFunctionData &func_data, SelectionVector &result_sel,
+                        idx_t count);
+idx_t SelectPerfectHashJoin(Vector &input, const PerfectHashJoinFunctionData &func_data, SelectionVector &result_sel,
+                            idx_t count);
+idx_t SelectPrefixRange(Vector &input, const PrefixRangeFunctionData &func_data, SelectionVector &result_sel,
+                        idx_t count);
 
 //! FunctionData for bloom filter internal function
 struct BloomFilterFunctionData : public FunctionData {

@@ -26,6 +26,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
@@ -208,53 +209,28 @@ static unique_ptr<FunctionData> SelectivityOptionalFilterDeserialize(Deserialize
 //===----------------------------------------------------------------------===//
 
 struct SelectivityTrackingLocalState : public FunctionLocalState {
-	enum class FilterStatus { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };
-
-	idx_t n_vectors_to_check;
-	float selectivity_threshold;
-	idx_t tuples_accepted = 0;
-	idx_t tuples_processed = 0;
-	idx_t vectors_processed = 0;
-	FilterStatus status = FilterStatus::ACTIVE;
-	idx_t pause_multiplier = 0;
-
-	SelectivityTrackingLocalState(idx_t n_vectors_to_check_p, float selectivity_threshold_p)
-	    : n_vectors_to_check(n_vectors_to_check_p), selectivity_threshold(selectivity_threshold_p) {
+	SelectivityTrackingLocalState(idx_t n_vectors_to_check_p, float selectivity_threshold_p) : stats() {
+		stats.Enable(selectivity_threshold_p, n_vectors_to_check_p);
 	}
 
 	void Update(idx_t accepted, idx_t processed) {
-		vectors_processed++;
-		tuples_accepted += accepted;
-		tuples_processed += processed;
-
-		static constexpr idx_t VECTOR_PAUSE = 10;
-		D_ASSERT(n_vectors_to_check < VECTOR_PAUSE);
-		if (vectors_processed == MaxValue<idx_t>(pause_multiplier, 1) * VECTOR_PAUSE) {
-			vectors_processed = 0;
-			tuples_accepted = 0;
-			tuples_processed = 0;
-			status = FilterStatus::ACTIVE;
-		} else if (vectors_processed >= n_vectors_to_check) {
-			if (GetSelectivity() >= selectivity_threshold) {
-				status = FilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
-				pause_multiplier++;
-			} else {
-				pause_multiplier = 0;
-			}
-		}
+		stats.Update(accepted, processed);
 	}
 
 	bool IsActive() const {
-		return status == FilterStatus::ACTIVE;
+		return stats.IsActive();
 	}
 
-	double GetSelectivity() const {
-		if (tuples_processed == 0) {
-			return 0.0;
-		}
-		return static_cast<double>(tuples_accepted) / static_cast<double>(tuples_processed);
-	}
+	SelectivityTrackingState stats;
 };
+
+static unique_ptr<FunctionLocalState> InitSelectivityTrackingLocalState(idx_t n_vectors_to_check,
+                                                                        float selectivity_threshold) {
+	if (n_vectors_to_check == 0) {
+		return nullptr;
+	}
+	return make_uniq<SelectivityTrackingLocalState>(n_vectors_to_check, selectivity_threshold);
+}
 
 //===----------------------------------------------------------------------===//
 // BloomFilterFunctionData
@@ -441,15 +417,29 @@ bool SelectivityOptionalFilterFunctionData::Equals(const FunctionData &other_p) 
 static unique_ptr<FunctionLocalState>
 BloomFilterInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
 	auto &data = bind_data->Cast<BloomFilterFunctionData>();
-	if (!data.filter || data.n_vectors_to_check == 0) {
+	if (!data.filter) {
 		return nullptr;
 	}
-	return make_uniq<SelectivityTrackingLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
+	return InitSelectivityTrackingLocalState(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static void SetAllTrue(DataChunk &args, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<bool>(result)[0] = true;
+}
+
+template <class TRACKING_STATE, class EXECUTOR>
+static void ExecuteWithSelectivityTracking(DataChunk &args, Vector &result, TRACKING_STATE *tracking_state,
+                                           EXECUTOR &&execute) {
+	if (tracking_state && !tracking_state->IsActive()) {
+		SetAllTrue(args, result);
+		tracking_state->Update(0, 0);
+		return;
+	}
+	auto approved_count = execute();
+	if (tracking_state) {
+		tracking_state->Update(approved_count, args.size());
+	}
 }
 
 static void BloomFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -461,50 +451,16 @@ static void BloomFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	auto count = args.size();
 	auto &input = args.data[0];
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
-
 	if (!func_data.filter) {
 		SetAllTrue(args, result);
 		return;
 	}
-	if (tracking_state && !tracking_state->IsActive()) {
-		// Paused due to high selectivity - return TRUE for all
-		for (idx_t i = 0; i < count; i++) {
-			result_data[i] = true;
-		}
-		tracking_state->Update(0, 0);
-		return;
-	}
-
-	// Hash the input vector and look up in the bloom filter
-	Vector hashes(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hashes, count);
-	hashes.Flatten(count);
-	auto hash_data = FlatVector::GetData<hash_t>(hashes);
-
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
-
-	idx_t passed = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto input_idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(input_idx)) {
-			result_data[i] = !func_data.filters_null_values;
-			if (result_data[i]) {
-				passed++;
-			}
-		} else {
-			result_data[i] = func_data.filter->LookupOne(hash_data[i]);
-			if (result_data[i]) {
-				passed++;
-			}
-		}
-	}
-
-	if (tracking_state) {
-		tracking_state->Update(passed, count);
-	}
+	ExecuteWithSelectivityTracking(args, result, tracking_state, [&] {
+		SelectionVector result_sel(count);
+		auto passed = SelectBloomFilter(input, func_data, result_sel, count);
+		SelectionToBooleanResult(count, result_sel, passed, result);
+		return passed;
+	});
 }
 
 template <class T>
@@ -598,10 +554,10 @@ FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatistics
 static unique_ptr<FunctionLocalState>
 PerfectHashJoinInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
 	auto &data = bind_data->Cast<PerfectHashJoinFunctionData>();
-	if (!data.executor || data.n_vectors_to_check == 0) {
+	if (!data.executor) {
 		return nullptr;
 	}
-	return make_uniq<SelectivityTrackingLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
+	return InitSelectivityTrackingLocalState(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static void PerfectHashJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -611,36 +567,19 @@ static void PerfectHashJoinFunction(DataChunk &args, ExpressionState &state, Vec
 	auto tracking_state = local_state_ptr ? &local_state_ptr->Cast<SelectivityTrackingLocalState>() : nullptr;
 
 	auto count = args.size();
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
 
-	if ((tracking_state && !tracking_state->IsActive()) || !func_data.executor) {
-		for (idx_t i = 0; i < count; i++) {
-			result_data[i] = true;
-		}
-		if (tracking_state) {
-			tracking_state->Update(0, 0);
-		}
+	if (!func_data.executor) {
+		SetAllTrue(args, result);
 		return;
 	}
 
-	// Probe the perfect hash join using FillSelectionVectorSwitchProbe
 	auto &input = args.data[0];
-	SelectionVector probe_sel(count);
-	idx_t approved_count = 0;
-	func_data.executor->FillSelectionVectorSwitchProbe(input, count, probe_sel, approved_count, nullptr);
-
-	// Convert selection vector to boolean result
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = false;
-	}
-	for (idx_t i = 0; i < approved_count; i++) {
-		result_data[probe_sel.get_index(i)] = true;
-	}
-
-	if (tracking_state) {
-		tracking_state->Update(approved_count, count);
-	}
+	ExecuteWithSelectivityTracking(args, result, tracking_state, [&] {
+		SelectionVector probe_sel(count);
+		auto approved_count = SelectPerfectHashJoin(input, func_data, probe_sel, count);
+		SelectionToBooleanResult(count, probe_sel, approved_count, result);
+		return approved_count;
+	});
 }
 
 template <class T>
@@ -742,10 +681,10 @@ FilterPropagateResult PerfectHashJoinScalarFun::FilterPrune(const FunctionStatis
 static unique_ptr<FunctionLocalState>
 PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
 	auto &data = bind_data->Cast<PrefixRangeFunctionData>();
-	if (!data.filter || data.n_vectors_to_check == 0) {
+	if (!data.filter) {
 		return nullptr;
 	}
-	return make_uniq<SelectivityTrackingLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
+	return InitSelectivityTrackingLocalState(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static void PrefixRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -755,35 +694,19 @@ static void PrefixRangeFunction(DataChunk &args, ExpressionState &state, Vector 
 	auto tracking_state = local_state_ptr ? &local_state_ptr->Cast<SelectivityTrackingLocalState>() : nullptr;
 
 	auto count = args.size();
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
 
-	if ((tracking_state && !tracking_state->IsActive()) || !func_data.filter || !func_data.filter->IsInitialized()) {
-		for (idx_t i = 0; i < count; i++) {
-			result_data[i] = true;
-		}
-		if (tracking_state) {
-			tracking_state->Update(0, 0);
-		}
+	if (!func_data.filter || !func_data.filter->IsInitialized()) {
+		SetAllTrue(args, result);
 		return;
 	}
 
-	// Lookup keys in the prefix range filter
 	auto &input = args.data[0];
-	SelectionVector lookup_sel(count);
-	idx_t found_count = func_data.filter->LookupKeys(input, lookup_sel, count);
-
-	// Convert selection vector to boolean result
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = false;
-	}
-	for (idx_t i = 0; i < found_count; i++) {
-		result_data[lookup_sel.get_index(i)] = true;
-	}
-
-	if (tracking_state) {
-		tracking_state->Update(found_count, count);
-	}
+	ExecuteWithSelectivityTracking(args, result, tracking_state, [&] {
+		SelectionVector lookup_sel(count);
+		auto found_count = SelectPrefixRange(input, func_data, lookup_sel, count);
+		SelectionToBooleanResult(count, lookup_sel, found_count, result);
+		return found_count;
+	});
 }
 
 ScalarFunction PrefixRangeScalarFun::GetFunction(const LogicalType &input_type) {
@@ -936,6 +859,13 @@ struct SelectivityOptionalFilterLocalState : public FunctionLocalState {
 	    : stats(n_vectors_to_check, selectivity_threshold), executor(context, child_filter_expr) {
 	}
 
+	bool IsActive() const {
+		return stats.IsActive();
+	}
+	void Update(idx_t accepted, idx_t processed) {
+		stats.Update(accepted, processed);
+	}
+
 	SelectivityTrackingLocalState stats;
 	ExpressionExecutor executor;
 };
@@ -959,27 +889,12 @@ static void SelectivityOptionalFilterFunction(DataChunk &args, ExpressionState &
 	}
 	auto &local_state = local_state_ptr->Cast<SelectivityOptionalFilterLocalState>();
 	auto count = args.size();
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
-
-	if (!local_state.stats.IsActive()) {
-		for (idx_t i = 0; i < count; i++) {
-			result_data[i] = true;
-		}
-		local_state.stats.Update(0, 0);
-		return;
-	}
-
-	SelectionVector child_sel(count);
-	auto approved_count = local_state.executor.SelectExpression(args, child_sel);
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = false;
-	}
-	for (idx_t i = 0; i < approved_count; i++) {
-		result_data[child_sel.get_index(i)] = true;
-	}
-	local_state.stats.Update(approved_count, count);
+	ExecuteWithSelectivityTracking(args, result, &local_state, [&] {
+		SelectionVector child_sel(count);
+		auto approved_count = local_state.executor.SelectExpression(args, child_sel);
+		SelectionToBooleanResult(count, child_sel, approved_count, result);
+		return approved_count;
+	});
 }
 
 ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
