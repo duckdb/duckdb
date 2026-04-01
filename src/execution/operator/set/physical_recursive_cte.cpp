@@ -1399,15 +1399,12 @@ static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_in
 			recursive_scans.push_back(scan);
 		}
 	}
-	for (auto child : op.GetChildren()) {
-		GatherRecursiveScansInternal(const_cast<PhysicalOperator &>(child.get()), cte_index, recursive_scans, visited);
+	for (auto &child : op.children) {
+		GatherRecursiveScansInternal(child.get(), cte_index, recursive_scans, visited);
 	}
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
 		auto &delim_join = op.Cast<PhysicalDelimJoin>();
-		for (auto &scan : delim_join.delim_scans) {
-			GatherRecursiveScansInternal(const_cast<PhysicalOperator &>(scan.get()), cte_index, recursive_scans,
-			                             visited);
-		}
+		GatherRecursiveScansInternal(delim_join.join, cte_index, recursive_scans, visited);
 	}
 }
 
