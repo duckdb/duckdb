@@ -375,6 +375,8 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - uses: ./.github/actions/ccache-action
+
     - name: Build
       run: make wasm_ci
 
