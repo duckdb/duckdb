@@ -1107,7 +1107,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			}
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
-			if (ht && CanUseInFilter(context, ht, cmp)) {
+			if (!has_cast && ht && CanUseInFilter(context, ht, cmp)) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 			}
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -1144,12 +1144,14 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 					break;
 				}
 
-				if (perfect_join_executor) {
-					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
-				} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val, max_val)) {
-					RegisterPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
-				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
-					PushBloomFilter(op, *ht, info, filter_col_idx);
+				if (!has_cast) {
+					if (perfect_join_executor) {
+						PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
+					} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val, max_val)) {
+						RegisterPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
+					} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
+						PushBloomFilter(op, *ht, info, filter_col_idx);
+					}
 				}
 			}
 		}
