@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/scalar/tablefilter_functions.hpp"
@@ -33,14 +34,44 @@ public:
 	void InsertHashes(const Vector &hashes_v, idx_t count) const;
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 
-	void InsertOne(hash_t hash) const;
-	bool LookupOne(hash_t hash) const;
+	void InsertOne(hash_t hash) const {
+		D_ASSERT(initialized);
+		const uint64_t bf_offset = hash & bitmask;
+		const uint64_t mask = GetMask(hash);
+		atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
+		slot.fetch_or(mask, std::memory_order_relaxed);
+	}
+
+	bool LookupOne(hash_t hash) const {
+		D_ASSERT(initialized);
+		const uint64_t bf_offset = hash & bitmask;
+		const uint64_t mask = GetMask(hash);
+		atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
+		auto bf_entry = slot.load(std::memory_order_relaxed);
+		return (bf_entry & mask) == mask;
+	}
 
 	bool IsInitialized() const {
 		return initialized;
 	}
 
 private:
+	static constexpr idx_t LOG_SECTOR_SIZE = 6;             // a sector is 64 bits, log2(64) = 6
+	static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
+	static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
+
+	static uint64_t GetMask(hash_t hash) {
+		const uint64_t shifts = hash & SHIFT_MASK;
+		const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
+
+		uint64_t mask = 0;
+		for (idx_t bit_idx = 8 - N_BITS; bit_idx < 8; bit_idx++) {
+			const uint8_t bit_pos = shifts_8[bit_idx];
+			mask |= (1ULL << bit_pos);
+		}
+		return mask;
+	}
+
 	idx_t num_sectors;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 
