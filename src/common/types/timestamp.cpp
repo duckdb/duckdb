@@ -10,7 +10,6 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/common/windows.hpp"
 #include <ctime>
 
 namespace duckdb {

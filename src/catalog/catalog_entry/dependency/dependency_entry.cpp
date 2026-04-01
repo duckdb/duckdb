@@ -1,5 +1,4 @@
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 

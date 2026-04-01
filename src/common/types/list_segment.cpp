@@ -1,11 +1,9 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {

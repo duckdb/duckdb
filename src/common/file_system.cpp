@@ -5,13 +5,11 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
-#include "duckdb/common/windows.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
@@ -21,7 +19,6 @@
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
-#include <string.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>

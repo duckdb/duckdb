@@ -6,7 +6,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/original/std/sstream.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {

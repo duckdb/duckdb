@@ -6,7 +6,6 @@
 #include "miniz.hpp"
 #include "miniz_wrapper.hpp"
 
-#include "duckdb/common/limits.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {

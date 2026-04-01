@@ -1,7 +1,5 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 #include <cstring>

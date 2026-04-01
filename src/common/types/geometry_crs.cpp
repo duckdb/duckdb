@@ -1,10 +1,8 @@
 #include "duckdb/common/types/geometry_crs.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/array.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/catalog/catalog.hpp"
 

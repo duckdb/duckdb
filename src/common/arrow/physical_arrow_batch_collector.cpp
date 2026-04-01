@@ -3,7 +3,6 @@
 #include "duckdb/common/arrow/arrow_query_result.hpp"
 #include "duckdb/common/arrow/arrow_merge_event.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/common/arrow/physical_arrow_collector.hpp"
 
 namespace duckdb {
 

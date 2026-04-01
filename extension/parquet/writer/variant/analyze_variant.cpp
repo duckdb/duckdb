@@ -1,6 +1,5 @@
 #include "writer/variant_column_writer.hpp"
 #include "parquet_writer.hpp"
-#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 

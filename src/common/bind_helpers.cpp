@@ -1,5 +1,4 @@
 #include "duckdb/common/bind_helpers.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/value.hpp"

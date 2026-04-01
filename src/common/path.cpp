@@ -1,6 +1,5 @@
 #include "duckdb/common/path.hpp"
 
-#include "duckdb/common/algorithm.hpp" // avoid MSVC warning on find_if_not
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 

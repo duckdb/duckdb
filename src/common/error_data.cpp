@@ -2,7 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/stacktrace.hpp"
 #include "duckdb/parser/parsed_expression.hpp"

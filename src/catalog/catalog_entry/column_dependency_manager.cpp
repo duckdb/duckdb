@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/set.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 

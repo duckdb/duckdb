@@ -12,11 +12,9 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 

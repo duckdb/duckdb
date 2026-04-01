@@ -1,7 +1,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
-#include <memory>
 
 #include "duckdb/common/re2_regex.hpp"
 #include "re2/re2.h"

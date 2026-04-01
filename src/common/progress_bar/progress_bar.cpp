@@ -1,5 +1,4 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 
 namespace duckdb {

@@ -1,6 +1,4 @@
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {
 

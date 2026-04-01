@@ -1,12 +1,8 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/original/std/sstream.hpp"
 
 namespace duckdb {
 

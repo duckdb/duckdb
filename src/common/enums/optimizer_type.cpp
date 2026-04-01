@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 

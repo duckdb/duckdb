@@ -1,7 +1,6 @@
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
-#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 

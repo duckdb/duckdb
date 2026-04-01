@@ -2,7 +2,6 @@
 
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
 namespace duckdb {

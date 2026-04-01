@@ -3,9 +3,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 
-#include <functional>
 #include <cmath>
 
 namespace duckdb {

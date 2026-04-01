@@ -9,7 +9,6 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/function/function_list.hpp"
-#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 

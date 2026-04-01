@@ -8,9 +8,6 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
-#include <algorithm>
-#include <sstream>
-
 namespace duckdb {
 
 constexpr const char *SequenceCatalogEntry::Name;

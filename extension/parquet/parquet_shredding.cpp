@@ -1,6 +1,5 @@
 #include "parquet_shredding.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
