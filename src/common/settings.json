@@ -880,7 +880,10 @@
         "description": "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)",
         "type": "VARCHAR",
         "default_scope": "local",
-        "default_value": "automatic"
+        "default_value": "automatic",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "partitioned_write_flush_threshold",

@@ -174,7 +174,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
     DUCKDB_SETTING_CALLBACK(OrderedAggregateThresholdSetting),
-    DUCKDB_SETTING(ParallelizeSequentialSourcesSetting),
+    DUCKDB_SETTING_CALLBACK(ParallelizeSequentialSourcesSetting),
     DUCKDB_SETTING(PartitionedWriteFlushThresholdSetting),
     DUCKDB_SETTING(PartitionedWriteMaxOpenFilesSetting),
     DUCKDB_SETTING(PasswordSetting),
