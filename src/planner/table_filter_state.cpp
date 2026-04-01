@@ -66,130 +66,196 @@ static bool CanUseConstantComparisonFastPath(const Expression &column, Expressio
 	return HasSupportedFastPathPhysicalType(column.return_type);
 }
 
+static void InitializeExecutor(ClientContext &context, const Expression &expression, ExpressionFilterState &state) {
+	state.executor = make_uniq<ExpressionExecutor>(context);
+	state.executor->AddExpression(expression);
+}
+
+static bool TryInitializeConjunctionState(ClientContext &context, const Expression &expression,
+                                          ExpressionFilterState &state) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	auto &conjunction = expression.Cast<BoundConjunctionExpression>();
+	if (conjunction.type != ExpressionType::CONJUNCTION_AND || conjunction.children.empty()) {
+		return false;
+	}
+	state.child_states.reserve(conjunction.children.size());
+	for (auto &child : conjunction.children) {
+		state.child_states.push_back(make_uniq<ExpressionFilterState>(context, *child));
+	}
+	if (conjunction.children.size() > 1) {
+		state.adaptive_filter = make_uniq<AdaptiveFilter>(expression);
+	}
+	return true;
+}
+
+static bool TryInitializeComparisonState(ClientContext &context, const Expression &expression,
+                                         ExpressionFilterState &state) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+		return false;
+	}
+	auto &comparison = expression.Cast<BoundComparisonExpression>();
+	if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT &&
+	    CanUseConstantComparisonFastPath(*comparison.left, comparison.GetExpressionType(),
+	                                     comparison.right->Cast<BoundConstantExpression>().value)) {
+		state.fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
+		state.comparison_type = comparison.GetExpressionType();
+		state.constant = comparison.right->Cast<BoundConstantExpression>().value;
+		InitializeExecutor(context, expression, state);
+		return true;
+	}
+	if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT &&
+	    CanUseConstantComparisonFastPath(*comparison.right, FlipComparisonExpression(comparison.GetExpressionType()),
+	                                     comparison.left->Cast<BoundConstantExpression>().value)) {
+		state.fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
+		state.comparison_type = FlipComparisonExpression(comparison.GetExpressionType());
+		state.constant = comparison.left->Cast<BoundConstantExpression>().value;
+		InitializeExecutor(context, expression, state);
+		return true;
+	}
+	return false;
+}
+
+static bool TryInitializeOperatorState(ClientContext &context, const Expression &expression,
+                                       ExpressionFilterState &state) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+		return false;
+	}
+	auto &op = expression.Cast<BoundOperatorExpression>();
+	if (op.children.size() != 1 || !IsSimpleFilterColumnRef(*op.children[0])) {
+		return false;
+	}
+	switch (expression.type) {
+	case ExpressionType::OPERATOR_IS_NULL:
+		state.fast_path = ExpressionFilterFastPath::IS_NULL;
+		InitializeExecutor(context, expression, state);
+		return true;
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		state.fast_path = ExpressionFilterFastPath::IS_NOT_NULL;
+		InitializeExecutor(context, expression, state);
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool TryInitializeBloomFilterState(ClientContext &context, const Expression &expression,
+                                          const BoundFunctionExpression &function, ExpressionFilterState &state) {
+	if (function.function.name != BloomFilterScalarFun::NAME || !function.bind_info) {
+		return false;
+	}
+	auto &bind_data = function.bind_info->Cast<BloomFilterFunctionData>();
+	state.fast_path = ExpressionFilterFastPath::BLOOM_FILTER;
+	if (bind_data.filter && bind_data.n_vectors_to_check != 0) {
+		state.EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+	}
+	InitializeExecutor(context, expression, state);
+	return true;
+}
+
+static bool TryInitializeSelectivityOptionalState(ClientContext &context, const Expression &expression,
+                                                  const BoundFunctionExpression &function,
+                                                  ExpressionFilterState &state) {
+	if (function.function.name != SelectivityOptionalFilterScalarFun::NAME || !function.bind_info) {
+		return false;
+	}
+	auto &bind_data = function.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+	if (!bind_data.child_filter_expr) {
+		return false;
+	}
+	state.fast_path = ExpressionFilterFastPath::SELECTIVITY_OPTIONAL;
+	state.EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+	state.selectivity_child_state = make_uniq<ExpressionFilterState>(context, *bind_data.child_filter_expr);
+	InitializeExecutor(context, expression, state);
+	return true;
+}
+
+static bool TryInitializeOptionalState(ClientContext &context, const Expression &expression,
+                                       const BoundFunctionExpression &function, ExpressionFilterState &state) {
+	if (function.function.name != OptionalFilterScalarFun::NAME || !function.bind_info) {
+		return false;
+	}
+	state.fast_path = ExpressionFilterFastPath::IS_OPTIONAL;
+	InitializeExecutor(context, expression, state);
+	return true;
+}
+
+static bool TryInitializePerfectHashJoinState(ClientContext &context, const Expression &expression,
+                                              const BoundFunctionExpression &function, ExpressionFilterState &state) {
+	if (function.function.name != PerfectHashJoinScalarFun::NAME || !function.bind_info) {
+		return false;
+	}
+	auto &bind_data = function.bind_info->Cast<PerfectHashJoinFunctionData>();
+	if (!bind_data.executor) {
+		InitializeExecutor(context, expression, state);
+		return true;
+	}
+	state.fast_path = ExpressionFilterFastPath::PERFECT_HASH_JOIN;
+	if (bind_data.n_vectors_to_check != 0) {
+		state.EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+	}
+	InitializeExecutor(context, expression, state);
+	return true;
+}
+
+static bool TryInitializePrefixRangeState(ClientContext &context, const Expression &expression,
+                                          const BoundFunctionExpression &function, ExpressionFilterState &state) {
+	if (function.function.name != PrefixRangeScalarFun::NAME || !function.bind_info) {
+		return false;
+	}
+	auto &bind_data = function.bind_info->Cast<PrefixRangeFunctionData>();
+	if (!bind_data.filter) {
+		InitializeExecutor(context, expression, state);
+		return true;
+	}
+	state.fast_path = ExpressionFilterFastPath::PREFIX_RANGE;
+	if (bind_data.n_vectors_to_check != 0) {
+		state.EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
+	}
+	InitializeExecutor(context, expression, state);
+	return true;
+}
+
+static bool TryInitializeDynamicFilterState(ClientContext &context, const Expression &expression,
+                                            const BoundFunctionExpression &function, ExpressionFilterState &state) {
+	if (function.function.name != DynamicFilterScalarFun::NAME || !function.bind_info ||
+	    function.children.size() != 1) {
+		return false;
+	}
+	auto &bind_data = function.bind_info->Cast<DynamicFilterFunctionData>();
+	if (!bind_data.filter_data || !HasSupportedFastPathComparisonType(bind_data.filter_data->comparison_type) ||
+	    !HasSupportedFastPathPhysicalType(function.children[0]->return_type)) {
+		InitializeExecutor(context, expression, state);
+		return true;
+	}
+	state.fast_path = ExpressionFilterFastPath::DYNAMIC_FILTER;
+	InitializeExecutor(context, expression, state);
+	return true;
+}
+
+static bool TryInitializeFunctionState(ClientContext &context, const Expression &expression,
+                                       ExpressionFilterState &state) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expression.Cast<BoundFunctionExpression>();
+	return TryInitializeBloomFilterState(context, expression, function, state) ||
+	       TryInitializeSelectivityOptionalState(context, expression, function, state) ||
+	       TryInitializeOptionalState(context, expression, function, state) ||
+	       TryInitializePerfectHashJoinState(context, expression, function, state) ||
+	       TryInitializePrefixRangeState(context, expression, function, state) ||
+	       TryInitializeDynamicFilterState(context, expression, function, state);
+}
+
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
-	auto initialize_executor = [&]() {
-		executor = make_uniq<ExpressionExecutor>(context);
-		executor->AddExpression(expression);
-	};
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
-		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
-		if (conjunction.type == ExpressionType::CONJUNCTION_AND && !conjunction.children.empty()) {
-			child_states.reserve(conjunction.children.size());
-			for (auto &child : conjunction.children) {
-				child_states.push_back(make_uniq<ExpressionFilterState>(context, *child));
-			}
-			if (conjunction.children.size() > 1) {
-				adaptive_filter = make_uniq<AdaptiveFilter>(expression);
-			}
-			return;
-		}
+	if (TryInitializeConjunctionState(context, expression, *this) ||
+	    TryInitializeComparisonState(context, expression, *this) ||
+	    TryInitializeOperatorState(context, expression, *this) ||
+	    TryInitializeFunctionState(context, expression, *this)) {
+		return;
 	}
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comparison = expression.Cast<BoundComparisonExpression>();
-		if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT &&
-		    CanUseConstantComparisonFastPath(*comparison.left, comparison.GetExpressionType(),
-		                                     comparison.right->Cast<BoundConstantExpression>().value)) {
-			fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
-			comparison_type = comparison.GetExpressionType();
-			constant = comparison.right->Cast<BoundConstantExpression>().value;
-			initialize_executor();
-			return;
-		}
-		if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT &&
-		    CanUseConstantComparisonFastPath(*comparison.right,
-		                                     FlipComparisonExpression(comparison.GetExpressionType()),
-		                                     comparison.left->Cast<BoundConstantExpression>().value)) {
-			fast_path = ExpressionFilterFastPath::CONSTANT_COMPARISON;
-			comparison_type = FlipComparisonExpression(comparison.GetExpressionType());
-			constant = comparison.left->Cast<BoundConstantExpression>().value;
-			initialize_executor();
-			return;
-		}
-	}
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
-		auto &op = expression.Cast<BoundOperatorExpression>();
-		if (op.children.size() == 1 && IsSimpleFilterColumnRef(*op.children[0])) {
-			if (expression.type == ExpressionType::OPERATOR_IS_NULL) {
-				fast_path = ExpressionFilterFastPath::IS_NULL;
-				initialize_executor();
-				return;
-			}
-			if (expression.type == ExpressionType::OPERATOR_IS_NOT_NULL) {
-				fast_path = ExpressionFilterFastPath::IS_NOT_NULL;
-				initialize_executor();
-				return;
-			}
-		}
-	}
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &function = expression.Cast<BoundFunctionExpression>();
-		if (function.function.name == BloomFilterScalarFun::NAME && function.bind_info) {
-			auto &bind_data = function.bind_info->Cast<BloomFilterFunctionData>();
-			fast_path = ExpressionFilterFastPath::BLOOM_FILTER;
-			bloom_filter = bind_data.filter;
-			bloom_filters_null_values = bind_data.filters_null_values;
-			if (bind_data.filter && bind_data.n_vectors_to_check != 0) {
-				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
-			}
-			initialize_executor();
-			return;
-		}
-		if (function.function.name == SelectivityOptionalFilterScalarFun::NAME && function.bind_info) {
-			auto &bind_data = function.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-			if (bind_data.child_filter_expr) {
-				fast_path = ExpressionFilterFastPath::SELECTIVITY_OPTIONAL;
-				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
-				selectivity_child_state = make_uniq<ExpressionFilterState>(context, *bind_data.child_filter_expr);
-				initialize_executor();
-				return;
-			}
-		}
-		if (function.function.name == OptionalFilterScalarFun::NAME && function.bind_info) {
-			fast_path = ExpressionFilterFastPath::IS_OPTIONAL;
-			initialize_executor();
-			return;
-		}
-		if (function.function.name == PerfectHashJoinScalarFun::NAME && function.bind_info) {
-			auto &bind_data = function.bind_info->Cast<PerfectHashJoinFunctionData>();
-			if (!bind_data.executor) {
-				initialize_executor();
-				return;
-			}
-			fast_path = ExpressionFilterFastPath::PERFECT_HASH_JOIN;
-			if (bind_data.n_vectors_to_check != 0) {
-				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
-			}
-			initialize_executor();
-			return;
-		}
-		if (function.function.name == PrefixRangeScalarFun::NAME && function.bind_info) {
-			auto &bind_data = function.bind_info->Cast<PrefixRangeFunctionData>();
-			if (!bind_data.filter) {
-				initialize_executor();
-				return;
-			}
-			fast_path = ExpressionFilterFastPath::PREFIX_RANGE;
-			if (bind_data.n_vectors_to_check != 0) {
-				EnableSelectivityTracking(bind_data.selectivity_threshold, bind_data.n_vectors_to_check);
-			}
-			initialize_executor();
-			return;
-		}
-		if (function.function.name == DynamicFilterScalarFun::NAME && function.bind_info &&
-		    function.children.size() == 1) {
-			auto &bind_data = function.bind_info->Cast<DynamicFilterFunctionData>();
-			if (!bind_data.filter_data || !HasSupportedFastPathComparisonType(bind_data.filter_data->comparison_type) ||
-			    !HasSupportedFastPathPhysicalType(function.children[0]->return_type)) {
-				initialize_executor();
-				return;
-			}
-			fast_path = ExpressionFilterFastPath::DYNAMIC_FILTER;
-			dynamic_filter_data = bind_data.filter_data;
-			initialize_executor();
-			return;
-		}
-	}
-	initialize_executor();
+	InitializeExecutor(context, expression, *this);
 }
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
