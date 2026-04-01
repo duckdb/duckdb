@@ -545,46 +545,36 @@ static idx_t ExecuteConstantComparisonSelection(SelectionVector &sel, Vector &ve
 	return approved_tuple_count;
 }
 
-static idx_t ExecuteBloomFilterSelection(SelectionVector &sel, Vector &vector, const ExpressionFilterState &state,
+static void ApplySelectionFromSlicedVector(SelectionVector &sel, const SelectionVector &sliced_sel, idx_t result_count,
+                                           idx_t approved_before) {
+	if (result_count == approved_before) {
+		return;
+	}
+	if (sel.IsSet()) {
+		for (idx_t idx = 0; idx < result_count; idx++) {
+			const auto sliced_sel_idx = sliced_sel.get_index_unsafe(idx);
+			const auto original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
+			sel.set_index(idx, original_sel_idx);
+		}
+	} else {
+		sel.Initialize(sliced_sel);
+	}
+}
+
+static idx_t ExecuteBloomFilterSelection(SelectionVector &sel, Vector &vector, const BoundFunctionExpression &function,
                                          idx_t &approved_tuple_count) {
-	if (!state.bloom_filter) {
+	if (!function.bind_info) {
 		return approved_tuple_count;
 	}
-
+	auto &bind_data = function.bind_info->Cast<BloomFilterFunctionData>();
+	if (!bind_data.filter) {
+		return approved_tuple_count;
+	}
 	const auto approved_before = approved_tuple_count;
 	Vector keys_sliced(vector, sel, approved_before);
-	Vector hashes(LogicalType::HASH, approved_before);
-	VectorOperations::Hash(keys_sliced, hashes, approved_before);
-	hashes.Flatten(approved_before);
-
-	UnifiedVectorFormat sliced_data;
-	keys_sliced.ToUnifiedFormat(approved_before, sliced_data);
-
-	SelectionVector bloom_sel(approved_before);
-	const auto bloom_count = state.bloom_filter->LookupHashes(hashes, bloom_sel, approved_before);
 	SelectionVector result_sel(approved_before);
-	idx_t result_count = 0;
-	idx_t bloom_idx = 0;
-	for (idx_t idx = 0; idx < approved_before; idx++) {
-		const auto matched = bloom_idx < bloom_count && bloom_sel.get_index_unsafe(bloom_idx) == idx;
-		if (matched) {
-			bloom_idx++;
-		}
-		const auto sliced_idx = sliced_data.sel->get_index(idx);
-		bool passed;
-		if (!sliced_data.validity.RowIsValid(sliced_idx)) {
-			passed = !state.bloom_filters_null_values;
-		} else {
-			passed = matched;
-		}
-		if (!passed) {
-			continue;
-		}
-		result_sel.set_index(result_count++, sel.IsSet() ? sel.get_index_unsafe(idx) : idx);
-	}
-	if (result_count != approved_before) {
-		sel.Initialize(result_sel);
-	}
+	auto result_count = SelectBloomFilter(keys_sliced, bind_data, result_sel, approved_before);
+	ApplySelectionFromSlicedVector(sel, result_sel, result_count, approved_before);
 	approved_tuple_count = result_count;
 	return approved_tuple_count;
 }
@@ -621,6 +611,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		return approved_tuple_count;
 	}
 	if (state.HasFastPath()) {
+		// These scan-side fast paths intentionally bypass generic ExpressionExecutor evaluation, but they reuse the
+		// same internal filter helpers as the scalar functions so the actual pruning logic stays aligned.
 		switch (state.fast_path) {
 		case ExpressionFilterFastPath::IS_OPTIONAL:
 			return approved_tuple_count;
@@ -636,8 +628,9 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 				state.UpdateSelectivity(0, 0);
 				return approved_tuple_count;
 			}
+			auto &function = expression.Cast<BoundFunctionExpression>();
 			const auto approved_before = approved_tuple_count;
-			ExecuteBloomFilterSelection(sel, vector, state, approved_tuple_count);
+			ExecuteBloomFilterSelection(sel, vector, function, approved_tuple_count);
 			state.UpdateSelectivity(approved_tuple_count, approved_before);
 			return approved_tuple_count;
 		}
@@ -680,23 +673,10 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			}
 
 			const auto approved_before = approved_tuple_count;
-			approved_tuple_count = 0;
 			Vector keys_sliced(vector, sel, approved_before);
 			SelectionVector probe_sel(approved_before);
-			bind_data.executor->FillSelectionVectorSwitchProbe(keys_sliced, approved_before, probe_sel,
-			                                                   approved_tuple_count, nullptr);
-
-			if (approved_tuple_count != approved_before) {
-				if (sel.IsSet()) {
-					for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
-						const auto sliced_sel_idx = probe_sel.get_index_unsafe(idx);
-						const auto original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
-						sel.set_index(idx, original_sel_idx);
-					}
-				} else {
-					sel.Initialize(probe_sel);
-				}
-			}
+			approved_tuple_count = SelectPerfectHashJoin(keys_sliced, bind_data, probe_sel, approved_before);
+			ApplySelectionFromSlicedVector(sel, probe_sel, approved_tuple_count, approved_before);
 			state.UpdateSelectivity(approved_tuple_count, approved_before);
 			return approved_tuple_count;
 		}
@@ -719,35 +699,29 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			const auto approved_before = approved_tuple_count;
 			Vector keys_sliced(vector, sel, approved_before);
 			SelectionVector result_sel(approved_before);
-			approved_tuple_count = bind_data.filter->LookupKeys(keys_sliced, result_sel, approved_before);
-
-			if (approved_tuple_count != approved_before) {
-				if (sel.IsSet()) {
-					for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
-						const auto sliced_sel_idx = result_sel.get_index_unsafe(idx);
-						const auto original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
-						sel.set_index(idx, original_sel_idx);
-					}
-				} else {
-					sel.Initialize(result_sel);
-				}
-			}
+			approved_tuple_count = SelectPrefixRange(keys_sliced, bind_data, result_sel, approved_before);
+			ApplySelectionFromSlicedVector(sel, result_sel, approved_tuple_count, approved_before);
 			state.UpdateSelectivity(approved_tuple_count, approved_before);
 			return approved_tuple_count;
 		}
 		case ExpressionFilterFastPath::DYNAMIC_FILTER: {
-			if (!state.dynamic_filter_data || !state.dynamic_filter_data->initialized.load()) {
+			auto &function = expression.Cast<BoundFunctionExpression>();
+			if (!function.bind_info) {
+				return approved_tuple_count;
+			}
+			auto &bind_data = function.bind_info->Cast<DynamicFilterFunctionData>();
+			if (!bind_data.filter_data || !bind_data.filter_data->initialized.load()) {
 				return approved_tuple_count;
 			}
 			ExpressionType comparison_type;
 			Value constant;
 			{
-				lock_guard<mutex> l(state.dynamic_filter_data->lock);
-				if (!state.dynamic_filter_data->initialized) {
+				lock_guard<mutex> l(bind_data.filter_data->lock);
+				if (!bind_data.filter_data->initialized) {
 					return approved_tuple_count;
 				}
-				comparison_type = state.dynamic_filter_data->comparison_type;
-				constant = state.dynamic_filter_data->constant;
+				comparison_type = bind_data.filter_data->comparison_type;
+				constant = bind_data.filter_data->constant;
 			}
 			return ExecuteConstantComparisonSelection(sel, vector, vdata, constant, comparison_type,
 			                                          approved_tuple_count);

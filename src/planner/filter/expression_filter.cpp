@@ -89,182 +89,169 @@ static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_th
 	return true;
 }
 
-FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats) {
-	// Check bound function expressions (internal functions with FilterPruneCallback)
-	if (expr.type == ExpressionType::BOUND_FUNCTION) {
-		auto &func_expr = expr.Cast<BoundFunctionExpression>();
-		if (func_expr.function.HasFilterPruneCallback()) {
-			FunctionStatisticsPruneInput input(func_expr.bind_info.get(), stats);
-			return func_expr.function.GetFilterPruneCallback()(input);
-		}
-	}
-
-	// Recognize comparison expressions (from ConstantFilter conversion)
-	// Only apply when left side is a direct column reference — stats are column-level
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		if (IsDirectColumnRef(*comp_expr.left) && comp_expr.right->type == ExpressionType::VALUE_CONSTANT) {
-			auto &constant_expr = comp_expr.right->Cast<BoundConstantExpression>();
-			auto &constant = constant_expr.value;
-			if (constant.IsNull()) {
-				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			}
-			if (!stats.CanHaveNoNull()) {
-				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			}
-			FilterPropagateResult result;
-			switch (constant.type().InternalType()) {
-			case PhysicalType::UINT8:
-			case PhysicalType::UINT16:
-			case PhysicalType::UINT32:
-			case PhysicalType::UINT64:
-			case PhysicalType::UINT128:
-			case PhysicalType::INT8:
-			case PhysicalType::INT16:
-			case PhysicalType::INT32:
-			case PhysicalType::INT64:
-			case PhysicalType::INT128:
-			case PhysicalType::FLOAT:
-			case PhysicalType::DOUBLE:
-				result = NumericStats::CheckZonemap(stats, expr.type, array_ptr<const Value>(&constant, 1));
-				break;
-			case PhysicalType::VARCHAR:
-				if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-					result = StringStats::CheckZonemap(stats, expr.type, array_ptr<const Value>(&constant, 1));
-				} else {
-					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				}
-				break;
-			default:
-				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			}
-			if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
-				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			}
-			return result;
-		}
-	}
-
-	// Recognize IS NULL expressions — only when applied directly to the column
-	if (expr.type == ExpressionType::OPERATOR_IS_NULL) {
-		auto &op_expr = expr.Cast<BoundOperatorExpression>();
-		if (!op_expr.children.empty() && IsDirectColumnRef(*op_expr.children[0])) {
-			if (!stats.CanHaveNull()) {
-				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			}
-			if (!stats.CanHaveNoNull()) {
-				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			}
+static FilterPropagateResult CheckZonemapAgainstConstants(BaseStatistics &stats, ExpressionType comparison_type,
+                                                          array_ptr<const Value> values) {
+	D_ASSERT(values.size() > 0);
+	switch (values[0].type().InternalType()) {
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::UINT128:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		return NumericStats::CheckZonemap(stats, comparison_type, values);
+	case PhysicalType::VARCHAR:
+		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
+			return StringStats::CheckZonemap(stats, comparison_type, values);
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	// Recognize IS NOT NULL expressions — only when applied directly to the column
-	if (expr.type == ExpressionType::OPERATOR_IS_NOT_NULL) {
-		auto &op_expr = expr.Cast<BoundOperatorExpression>();
-		if (!op_expr.children.empty() && IsDirectColumnRef(*op_expr.children[0])) {
-			if (!stats.CanHaveNoNull()) {
-				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			}
-			if (!stats.CanHaveNull()) {
-				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			}
-		}
+	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+}
 
-	// Recognize IN expressions — only when first child is a direct column reference
-	if (expr.type == ExpressionType::COMPARE_IN) {
-		auto &op_expr = expr.Cast<BoundOperatorExpression>();
-		if (op_expr.children.size() > 1 && IsDirectColumnRef(*op_expr.children[0])) {
-			// Collect the non-NULL constant values. NULL list entries never make IN evaluate to TRUE in a filter.
-			vector<Value> values;
-			bool all_constants = true;
-			for (idx_t i = 1; i < op_expr.children.size(); i++) {
-				if (op_expr.children[i]->type == ExpressionType::VALUE_CONSTANT) {
-					auto &const_expr = op_expr.children[i]->Cast<BoundConstantExpression>();
-					if (!const_expr.value.IsNull()) {
-						values.push_back(const_expr.value);
-					}
-				} else {
-					all_constants = false;
-					break;
-				}
-			}
-			if (all_constants) {
-				if (values.empty()) {
-					// x IN (NULL, NULL, ...) cannot produce TRUE for any row in filter context.
-					return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-				}
-				if (!stats.CanHaveNoNull()) {
-					return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-				}
-				FilterPropagateResult result;
-				switch (values[0].type().InternalType()) {
-				case PhysicalType::UINT8:
-				case PhysicalType::UINT16:
-				case PhysicalType::UINT32:
-				case PhysicalType::UINT64:
-				case PhysicalType::UINT128:
-				case PhysicalType::INT8:
-				case PhysicalType::INT16:
-				case PhysicalType::INT32:
-				case PhysicalType::INT64:
-				case PhysicalType::INT128:
-				case PhysicalType::FLOAT:
-				case PhysicalType::DOUBLE:
-					result = NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-					                                    array_ptr<const Value>(values.data(), values.size()));
-					break;
-				case PhysicalType::VARCHAR:
-					if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-						result = StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-						                                   array_ptr<const Value>(values.data(), values.size()));
-						break;
-					}
-					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				default:
-					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				}
-				if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
-					return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				}
-				return result;
-			}
+static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpression &func_expr, BaseStatistics &stats) {
+	if (!func_expr.function.HasFilterPruneCallback()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	FunctionStatisticsPruneInput input(func_expr.bind_info.get(), stats);
+	return func_expr.function.GetFilterPruneCallback()(input);
+}
+
+static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpression &comp_expr,
+                                                       BaseStatistics &stats) {
+	if (!IsDirectColumnRef(*comp_expr.left) || comp_expr.right->type != ExpressionType::VALUE_CONSTANT) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &constant = comp_expr.right->Cast<BoundConstantExpression>().value;
+	if (constant.IsNull()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!stats.CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	auto result = CheckZonemapAgainstConstants(stats, comp_expr.type, array_ptr<const Value>(&constant, 1));
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return result;
+}
+
+static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats,
+                                                         ExpressionType operator_type) {
+	if (op_expr.children.empty() || !IsDirectColumnRef(*op_expr.children[0])) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (operator_type == ExpressionType::OPERATOR_IS_NULL) {
+		if (!stats.CanHaveNull()) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		if (!stats.CanHaveNoNull()) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+	} else {
+		if (!stats.CanHaveNoNull()) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		if (!stats.CanHaveNull()) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
 
-	// Recognize AND conjunctions
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
+static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
+	if (op_expr.children.size() <= 1 || !IsDirectColumnRef(*op_expr.children[0])) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	vector<Value> values;
+	values.reserve(op_expr.children.size() - 1);
+	for (idx_t i = 1; i < op_expr.children.size(); i++) {
+		if (op_expr.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		auto &value = op_expr.children[i]->Cast<BoundConstantExpression>().value;
+		if (!value.IsNull()) {
+			values.push_back(value);
+		}
+	}
+	if (values.empty()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!stats.CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	auto result = CheckZonemapAgainstConstants(stats, ExpressionType::COMPARE_EQUAL,
+	                                           array_ptr<const Value>(values.data(), values.size()));
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return result;
+}
+
+static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
+	switch (op_expr.type) {
+	case ExpressionType::OPERATOR_IS_NULL:
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		return CheckNullOperatorStatistics(op_expr, stats, op_expr.type);
+	case ExpressionType::COMPARE_IN:
+		return CheckInOperatorStatistics(op_expr, stats);
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+}
+
+static FilterPropagateResult CheckConjunctionStatistics(const BoundConjunctionExpression &conj, BaseStatistics &stats) {
+	switch (conj.type) {
+	case ExpressionType::CONJUNCTION_AND: {
 		auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		for (auto &child : conj.children) {
-			auto prune_result = CheckExpressionStatistics(*child, stats);
+			auto prune_result = ExpressionFilter::CheckExpressionStatistics(*child, stats);
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (prune_result != result) {
+			}
+			if (prune_result != result) {
 				result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			}
 		}
 		return result;
 	}
-
-	// Recognize OR conjunctions
-	if (expr.type == ExpressionType::CONJUNCTION_OR) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
+	case ExpressionType::CONJUNCTION_OR:
 		D_ASSERT(!conj.children.empty());
 		for (auto &child : conj.children) {
-			auto prune_result = CheckExpressionStatistics(*child, stats);
+			auto prune_result = ExpressionFilter::CheckExpressionStatistics(*child, stats);
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			}
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			}
 		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+}
 
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_FUNCTION:
+		return CheckFunctionStatistics(expr.Cast<BoundFunctionExpression>(), stats);
+	case ExpressionClass::BOUND_COMPARISON:
+		return CheckComparisonStatistics(expr.Cast<BoundComparisonExpression>(), stats);
+	case ExpressionClass::BOUND_OPERATOR:
+		return CheckOperatorStatistics(expr.Cast<BoundOperatorExpression>(), stats);
+	case ExpressionClass::BOUND_CONJUNCTION:
+		return CheckConjunctionStatistics(expr.Cast<BoundConjunctionExpression>(), stats);
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 }
 
 unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter &filter, const LogicalType &col_type) {
