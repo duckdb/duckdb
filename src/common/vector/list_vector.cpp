@@ -24,6 +24,7 @@ VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 VectorListBuffer::VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent)
     : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data), capacity(parent.capacity), size(parent.size) {
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
+	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(parent.GetAuxiliaryData()));
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, const VectorListBuffer &parent)
@@ -128,13 +129,15 @@ idx_t ListVector::GetListCapacity(const Vector &vec) {
 	return vec.buffer->Cast<VectorListBuffer>().GetCapacity();
 }
 
-void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(other.GetType().id() == LogicalTypeId::LIST);
-	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR || other.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	vector.buffer = other.buffer;
+//! References the list offsets / sizes of another vector
+void ListVector::ReferenceListOffsets(Vector &list, const Vector &other) {
+	D_ASSERT(list.GetType().InternalType() == PhysicalType::LIST);
+	D_ASSERT(other.GetType().InternalType() == PhysicalType::LIST);
+	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		throw InternalException("ListVector::ReferenceListOffsets called on dictionary vector");
+	}
+	auto &list_buffer = other.buffer->Cast<VectorListBuffer>();
+	list.buffer = make_buffer<VectorListBuffer>(list_buffer.GetData(), list_buffer);
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {

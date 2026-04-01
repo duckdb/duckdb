@@ -242,17 +242,8 @@ idx_t VariantColumnData::ScanWithCallback(
 				//! LIST(STRUCT(typed_value <child_type>, untyped_value_index UINTEGER))
 				//! We need to transform this to:
 				//! LIST(<child_type>)
-
-				auto &list_child = ListVector::GetEntry(result);
-				D_ASSERT(list_child.GetType().id() == LogicalTypeId::STRUCT);
-				D_ASSERT(StructType::GetChildCount(list_child.GetType()) == 2);
-
-				auto &typed_value = StructVector::GetEntries(list_child)[TYPED_VALUE_INDEX];
-				auto list_res = Vector(LogicalType::LIST(typed_value.GetType()));
-				ListVector::SetListSize(list_res, ListVector::GetListSize(result));
-				list_res.CopyBuffer(result);
-				ListVector::GetEntry(list_res).Reference(typed_value);
-				return res;
+				// FIXME: this is never called right now
+				throw InternalException("this is never called right");
 			}
 			return res;
 		}

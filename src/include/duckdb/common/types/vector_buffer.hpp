@@ -88,7 +88,7 @@ public:
 		}
 		auxiliary_data->data.push_back(std::move(aux_data_p));
 	}
-	buffer_ptr<AuxiliaryData> GetAuxiliaryData() {
+	buffer_ptr<AuxiliaryData> GetAuxiliaryData() const {
 		return auxiliary_data;
 	}
 

@@ -11,16 +11,11 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto &input_keys = MapVector::GetKeys(input);
 	auto &input_values = MapVector::GetValues(input);
 
-	// Copy the list size
-	const auto list_size = ListVector::GetListSize(input);
-	ListVector::SetListSize(result, list_size);
-
 	// Copy the list validity
 	FlatVector::SetValidity(result, FlatVector::Validity(input));
 
 	// Reference the list data
-	FlatVector::SetData(result, FlatVector::GetData(input));
-	result.AddHeapReference(input);
+	ListVector::ReferenceListOffsets(result, input);
 
 	// Copy the struct validity
 	auto &result_struct = ListVector::GetEntry(result);
