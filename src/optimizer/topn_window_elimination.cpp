@@ -156,42 +156,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
-template <typename T>
-class RestoreValue {
-public:
-	explicit RestoreValue(T &t) : ref(t), val(t) {
-	}
-	~RestoreValue() {
-		ref = std::move(val);
-	}
-
-private:
-	T &ref;
-	T val;
-};
-
-bool TopNWindowElimination::IsSetOperator(const LogicalOperatorType &op_type) {
-	switch (op_type) {
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-		return true;
-	default:
-		return false;
-		;
-	}
-}
-
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
 	if (!CanOptimize(*op)) {
-		RestoreValue<idx_t> save_needs_schema(needs_schema);
-		if (IsSetOperator(op->type)) {
-			++needs_schema;
-		}
-
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
 			// If an operator has multiple children, we do not want them to overwrite each other's stop operator.
@@ -258,14 +225,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		op = ConstructJoin(std::move(late_mat_lhs), std::move(op), group_projection_idxs.size(), params);
 	}
 
-	UpdateTopmostBindings(window_idx, op, group_projection_idxs, topmost_bindings, new_bindings, replacer);
-
-	//	If we are inside a SET operator, then replacing bindings is insufficient
-	//	because the set operators assume that all the inputs have the same schema.
-	//	To fix this, we have to inject another projection using the new bindings.
-	if (needs_schema) {
-		op = CreateSetProjection(std::move(op), topmost_types, topmost_bindings, new_bindings, replacer);
-	}
+	op = UpdateTopmostBindings(window_idx, std::move(op), topmost_types, group_projection_idxs, topmost_bindings,
+	                           new_bindings, replacer);
 
 	replacer.stop_operator = op.get();
 
@@ -453,29 +414,6 @@ void TopNWindowElimination::AddStructExtractExprs(
 		bound_function->alias = alias;
 		exprs.push_back(std::move(bound_function));
 	}
-}
-
-unique_ptr<LogicalOperator> TopNWindowElimination::CreateSetProjection(unique_ptr<LogicalOperator> op,
-                                                                       const vector<LogicalType> &types,
-                                                                       const vector<ColumnBinding> &topmost_bindings,
-                                                                       vector<ColumnBinding> &new_bindings,
-                                                                       ColumnBindingReplacer &replacer) const {
-	replacer.replacement_bindings.clear();
-	const auto proj_table = optimizer.binder.GenerateTableIndex();
-	vector<unique_ptr<Expression>> proj_exprs;
-	for (idx_t i = 0; i < topmost_bindings.size(); ++i) {
-		auto &new_binding = new_bindings[i];
-		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(types[i], new_binding));
-		new_binding.table_index = proj_table;
-		new_binding.column_index = i;
-		replacer.replacement_bindings.emplace_back(topmost_bindings[i], new_binding);
-	}
-
-	auto set_projection = make_uniq<LogicalProjection>(proj_table, std::move(proj_exprs));
-	set_projection->children.push_back(std::move(op));
-	set_projection->ResolveOperatorTypes();
-
-	return unique_ptr<LogicalOperator>(std::move(set_projection));
 }
 
 unique_ptr<LogicalOperator>
@@ -740,16 +678,15 @@ bool TopNWindowElimination::TraverseProjectionBindings(const vector<ColumnBindin
 	return true;
 }
 
-void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const unique_ptr<LogicalOperator> &op,
-                                                  const map<idx_t, idx_t> &group_idxs,
-                                                  const vector<ColumnBinding> &topmost_bindings,
-                                                  vector<ColumnBinding> &new_bindings,
-                                                  ColumnBindingReplacer &replacer) {
+unique_ptr<LogicalOperator>
+TopNWindowElimination::UpdateTopmostBindings(idx_t window_idx, unique_ptr<LogicalOperator> op,
+                                             const vector<LogicalType> &types, const map<idx_t, idx_t> &group_idxs,
+                                             const vector<ColumnBinding> &topmost_bindings,
+                                             vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer) {
 	// The top-most operator's column order is:
 	// [projected groups][aggregate args/value][row number]
 	// Now set the new bindings according to this order and remember replacements in replacer
 	D_ASSERT(topmost_bindings.size() == new_bindings.size());
-	replacer.replacement_bindings.reserve(new_bindings.size());
 	set<idx_t> row_id_binding_idxs;
 
 	const idx_t group_table_idx = GetGroupIdx(op);
@@ -776,8 +713,6 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 		new_bindings[group_referencing_idx].table_index = group_table_idx;
 		new_bindings[group_referencing_idx].column_index = column_idx;
 
-		replacer.replacement_bindings.emplace_back(topmost_bindings[group_referencing_idx],
-		                                           new_bindings[group_referencing_idx]);
 		current_column_idx++;
 	}
 
@@ -802,7 +737,6 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 		}
 		binding.column_index = current_column_idx++;
 		binding.table_index = aggregate_table_idx;
-		replacer.replacement_bindings.emplace_back(topmost_bindings[i], binding);
 	}
 
 	// Project the row number
@@ -810,8 +744,27 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 		// Let all projections on row id point to the last output column
 		auto &binding = new_bindings[row_id_binding_idx];
 		binding = GetRowNumberColumnBinding(op);
-		replacer.replacement_bindings.emplace_back(topmost_bindings[row_id_binding_idx], binding);
 	}
+
+	//	If we are inside a SET operator, then replacing bindings is insufficient
+	//	because the set operators assume that all the inputs have the same schema.
+	//	To fix this, we have to inject another projection using the new bindings.
+	replacer.replacement_bindings.reserve(new_bindings.size());
+	const auto proj_table = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> proj_exprs;
+	for (idx_t i = 0; i < topmost_bindings.size(); ++i) {
+		auto &new_binding = new_bindings[i];
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(types[i], new_binding));
+		new_binding.table_index = proj_table;
+		new_binding.column_index = i;
+		replacer.replacement_bindings.emplace_back(topmost_bindings[i], new_binding);
+	}
+
+	auto set_projection = make_uniq<LogicalProjection>(proj_table, std::move(proj_exprs));
+	set_projection->children.push_back(std::move(op));
+	set_projection->ResolveOperatorTypes();
+
+	return unique_ptr<LogicalOperator>(std::move(set_projection));
 }
 
 TopNWindowEliminationParameters

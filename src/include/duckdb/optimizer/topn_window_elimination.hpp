@@ -32,8 +32,6 @@ struct TopNWindowEliminationParameters {
 
 class TopNWindowElimination : public BaseColumnPruner {
 public:
-	static bool IsSetOperator(const LogicalOperatorType &op_type);
-
 	explicit TopNWindowElimination(ClientContext &context, Optimizer &optimizer,
 	                               optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats_p);
 
@@ -51,10 +49,6 @@ private:
 	                                                     const TopNWindowEliminationParameters &params,
 	                                                     const map<idx_t, idx_t> &group_idxs) const;
 
-	unique_ptr<LogicalOperator> CreateSetProjection(unique_ptr<LogicalOperator> op, const vector<LogicalType> &types,
-	                                                const vector<ColumnBinding> &topmost_bindings,
-	                                                vector<ColumnBinding> &new_bindings,
-	                                                ColumnBindingReplacer &replacer) const;
 	vector<unique_ptr<Expression>> GenerateAggregatePayload(const vector<ColumnBinding> &bindings,
 	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs);
 	bool TraverseProjectionBindings(const vector<ColumnBinding> &old_bindings, reference<LogicalOperator> &op,
@@ -64,10 +58,10 @@ private:
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
-	static void UpdateTopmostBindings(idx_t window_idx, const unique_ptr<LogicalOperator> &op,
-	                                  const map<idx_t, idx_t> &group_idxs,
-	                                  const vector<ColumnBinding> &topmost_bindings,
-	                                  vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
+	unique_ptr<LogicalOperator>
+	UpdateTopmostBindings(idx_t window_idx, unique_ptr<LogicalOperator> op, const vector<LogicalType> &types,
+	                      const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &topmost_bindings,
+	                      vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 	TopNWindowEliminationParameters ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
 	                                                           const vector<ColumnBinding> &bindings,
 	                                                           vector<unique_ptr<Expression>> &aggregate_payload);
@@ -88,6 +82,5 @@ private:
 	ClientContext &context;
 	Optimizer &optimizer;
 	optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats;
-	idx_t needs_schema = 0;
 };
 } // namespace duckdb
