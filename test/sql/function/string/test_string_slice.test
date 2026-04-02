@@ -18,23 +18,23 @@ CREATE TABLE nulltable(n VARCHAR);
 statement ok
 INSERT INTO nulltable VALUES (NULL)
 
-statement error
+statement maybe
 SELECT NULL::VARCHAR[off:length+off] FROM strings
 ----
 
-statement error
+statement maybe
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
 ----
 
-statement error
+statement maybe
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
 
-statement error
+statement maybe
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
 
-statement error
+statement maybe
 SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
 ----
 

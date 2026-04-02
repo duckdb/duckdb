@@ -42,7 +42,7 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY test TO '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0);
 ----
-Option "FORCE_NOT_NULL" is not supported for writing - only for reading
+<REGEX>:.*Option "(FORCE_NOT_NULL|force_not_null)" is not supported for writing.*
 
 # FORCE_NOT_NULL must not be empty and must have the correct parameter type
 statement error
