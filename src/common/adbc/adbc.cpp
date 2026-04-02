@@ -967,15 +967,12 @@ AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcE
 		// Materialize active streams before disconnecting so they remain readable
 		MaterializeActiveStreams(conn_wrapper);
 		// Detach active streams before deleting conn_wrapper to avoid dangling pointers
-		{
-			const duckdb::annotated_lock_guard<duckdb::annotated_mutex> guard(conn_wrapper->stream_mutex);
-			for (auto *stream_wrapper : conn_wrapper->active_streams) {
-				if (stream_wrapper) {
-					stream_wrapper->conn_wrapper = nullptr;
-				}
+		for (auto *stream_wrapper : conn_wrapper->active_streams) {
+			if (stream_wrapper) {
+				stream_wrapper->conn_wrapper = nullptr;
 			}
-			conn_wrapper->active_streams.clear();
 		}
+		conn_wrapper->active_streams.clear();
 		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
 		delete conn_wrapper;
@@ -1077,8 +1074,6 @@ void release(struct ArrowArrayStream *stream) {
 	if (result_wrapper) {
 		// Unregister from connection's active_streams
 		if (result_wrapper->conn_wrapper) {
-			const duckdb::annotated_lock_guard<duckdb::annotated_mutex> guard(
-			    result_wrapper->conn_wrapper->stream_mutex);
 			auto &active = result_wrapper->conn_wrapper->active_streams;
 			auto it = std::find(active.begin(), active.end(), result_wrapper);
 			if (it != active.end()) {
@@ -1515,7 +1510,6 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 // This fetches remaining data from each streaming result into memory, making the
 // streams independent of the connection's active query context.
 static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper) {
-	const duckdb::annotated_lock_guard<duckdb::annotated_mutex> guard(conn_wrapper->stream_mutex);
 	for (auto *result_wrapper : conn_wrapper->active_streams) {
 		if (!result_wrapper || result_wrapper->materialized) {
 			continue;
@@ -1761,7 +1755,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		out->get_last_error = get_last_error;
 		// Register this stream wrapper so it can be materialized if another query runs
 		if (wrapper->conn_wrapper) {
-			const duckdb::annotated_lock_guard<duckdb::annotated_mutex> guard(wrapper->conn_wrapper->stream_mutex);
 			wrapper->conn_wrapper->active_streams.push_back(stream_wrapper);
 		}
 	} else {
