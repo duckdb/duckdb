@@ -382,6 +382,8 @@ jobs:
       - prepare
       - linux-debug
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      GEN: make
 
     steps:
     - uses: actions/checkout@v6
