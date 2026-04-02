@@ -533,7 +533,15 @@ test_ci:
 
 format_tools:
 	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
-	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+	sudo pip3 install --break-system-packages cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+	@echo "::group::Installed Python packages"
+	pip3 freeze
+	@echo "::endgroup::"
+	@echo "::group::Formatter versions and config"
+	clang-format --version
+	clang-format --dump-config
+	black --version
+	@echo "::endgroup::"
 
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h

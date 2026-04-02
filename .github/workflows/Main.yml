@@ -196,20 +196,11 @@ jobs:
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
           echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
-      - name: Install tools
-        run: |
-          make format_tools
-          echo "::group::Installed Python packages"
-          pip3 freeze
-          echo "::endgroup::"
+      - name: Install format tools
+        run: python3 scripts/ci/retry.py -- make format_tools
 
       - name: Check format
         run: |
-          echo "::group::Formatter versions and config"
-          clang-format --version
-          clang-format --dump-config
-          black --version
-          echo "::endgroup::"
           make format-check-silent enum-integrity-check
           echo "::group::Check generated files"
           make generate-files

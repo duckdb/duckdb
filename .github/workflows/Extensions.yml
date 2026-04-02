@@ -289,6 +289,10 @@ jobs:
           find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
           tree build/release/repository
 
+      - name: Install format tools
+        if: ${{ !inputs.skip_tests }}
+        run: python3 scripts/ci/retry.py -- make format_tools
+
       - name: Check if extension_entries.hpp is up to date
         if: ${{ !inputs.skip_tests }}
         env:
@@ -296,7 +300,6 @@ jobs:
         run: |
           make extension_configuration
           python scripts/generate_extensions_function.py
-          python3 scripts/ci/retry.py -- pip install --break-system-packages "black>=24" cmake-format "clang_format==11.0.1"
           make format-fix
 
           if git diff --exit-code src/include/duckdb/main/extension_entries.hpp; then
