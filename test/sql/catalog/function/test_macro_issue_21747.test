@@ -1,0 +1,79 @@
+# name: test/sql/catalog/function/test_macro_issue_21747.test
+# description: Prevent exponential macro expansion for CASE-heavy nested scalar macros
+# group: [function]
+
+statement ok
+CREATE OR REPLACE MACRO dateadd(part, amount, dt) AS (
+  CASE
+    WHEN lower(part) IN ('year', 'y', 'yy', 'yyy', 'yyyy', 'yr', 'years', 'yrs') THEN CAST(dt AS TIMESTAMP) + CAST(amount AS BIGINT) * (INTERVAL 1 YEAR)
+    WHEN lower(part) IN ('month', 'mm', 'mon', 'mons', 'months') THEN CAST(dt AS TIMESTAMP) + CAST(amount AS BIGINT) * (INTERVAL 1 MONTH)
+    WHEN lower(part) IN ('day', 'd', 'dd', 'days', 'dayofmonth') THEN CAST(dt AS TIMESTAMP) + CAST(amount AS BIGINT) * (INTERVAL 1 DAY)
+    ELSE NULL
+  END
+);
+
+statement ok
+CREATE OR REPLACE MACRO snowflake_to_timestamp_ntz(val) AS (
+  CASE WHEN val IS NULL THEN NULL ELSE CAST(val AS TIMESTAMP) END
+);
+
+statement ok
+CREATE OR REPLACE MACRO to_timestamp_tz(arg0) AS (
+  CASE WHEN arg0 IS NULL THEN NULL ELSE CAST(arg0 AS TIMESTAMP) END
+);
+
+statement ok
+CREATE OR REPLACE MACRO to_date_14b34fda(arg0, arg1) AS (
+  CASE
+    WHEN UPPER(arg1) = 'MM/DD/YYYY' THEN STRPTIME(arg0, '%m/%d/%Y')
+    WHEN UPPER(arg1) = 'YYYY-MM-DD' THEN STRPTIME(arg0, '%Y-%m-%d')
+    WHEN UPPER(arg1) = 'DD/MM/YYYY' THEN STRPTIME(arg0, '%d/%m/%Y')
+    WHEN UPPER(arg1) = 'DD-MON-YYYY' THEN STRPTIME(arg0, '%d-%b-%Y')
+    WHEN UPPER(arg1) = 'MON DD, YYYY' THEN STRPTIME(arg0, '%b %d, %Y')
+    WHEN UPPER(arg1) = 'YYYY.MM.DD' THEN STRPTIME(arg0, '%Y.%m.%d')
+    WHEN UPPER(arg1) = 'YYYY-MM-DD HH24:MI:SS' THEN STRPTIME(arg0, '%Y-%m-%d %H:%M:%S')
+    WHEN UPPER(arg1) = 'MM/DD/YYYY HH24:MI:SS' THEN STRPTIME(arg0, '%m/%d/%Y %H:%M:%S')
+    WHEN UPPER(arg1) = 'DD/MM/YYYY HH24:MI:SS' THEN STRPTIME(arg0, '%d/%m/%Y %H:%M:%S')
+    WHEN UPPER(arg1) = 'YYYY-MM-DD"T"HH24:MI:SS' THEN STRPTIME(arg0, '%Y-%m-%dT%H:%M:%S')
+    ELSE STRPTIME(arg0, '%Y-%m-%d')
+  END::DATE
+);
+
+statement ok
+CREATE OR REPLACE MACRO last_day_2189937d(arg0, arg1) AS (
+  CASE lower(arg1)
+    WHEN 'year' THEN (date_trunc('year', arg0::date) + interval '1 year' - interval '1 day')::date
+    WHEN 'month' THEN last_day(arg0::date)
+    WHEN 'quarter' THEN (date_trunc('quarter', arg0::date) + interval '3 months' - interval '1 day')::date
+    WHEN 'week' THEN (date_trunc('week', arg0::date) + interval '6 days')::date
+    ELSE last_day(arg0::date)
+  END
+);
+
+query I
+SELECT datediff('day',
+  to_date_14b34fda('01/01/2016', 'mm/dd/yyyy'),
+  CAST(CAST(snowflake_to_timestamp_ntz(
+    CAST(CAST(to_timestamp_tz(dateadd('day', CAST(1 AS DOUBLE),
+      CAST(to_timestamp_tz(
+        CAST(CAST(CAST(CAST(snowflake_to_timestamp_ntz(
+          CAST(CAST(to_timestamp_tz(dateadd('month', 1,
+            CAST(to_timestamp_tz(
+              CAST(CAST(last_day_2189937d(
+                CAST(CAST(snowflake_to_timestamp_ntz(
+                  CAST(CAST(to_timestamp_tz(dateadd('year', CAST(4 AS DOUBLE),
+                    CAST(to_timestamp_tz(
+                      CAST(CAST(DATE '2016-01-01' AS TIMESTAMP) AS TIMESTAMP)
+                    ) AS TIMESTAMP)
+                  )) AS TIMESTAMP) AS TIMESTAMP)
+                ) AS TIMESTAMP) AS DATE),
+              'year') AS TIMESTAMP) AS TIMESTAMP)
+            ) AS TIMESTAMP)
+          )) AS TIMESTAMP) AS TIMESTAMP)
+        ) AS TIMESTAMP) AS DATE) AS TIMESTAMP) AS TIMESTAMP)
+      ) AS TIMESTAMP)
+    )) AS TIMESTAMP) AS TIMESTAMP)
+  ) AS TIMESTAMP) AS DATE)
+);
+----
+1858
