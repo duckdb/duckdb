@@ -11,13 +11,21 @@ namespace duckdb {
 
 namespace {
 
-void VerifyTypeListsMatch(const vector<LogicalType> &existing, const vector<LogicalType> &incoming) {
-	if (existing.size() != incoming.size()) {
-		throw BinderException("read_csv column types specified by 'columns' and 'types' doesn't match");
+void VerifyTypeListsMatch(const vector<LogicalType> &columns_types, const vector<LogicalType> &override_types) {
+	if (columns_types.size() != override_types.size()) {
+		throw BinderException(
+		    "read_csv: the 'columns' option specifies %d column(s), but 'types'/'dtypes'/'column_types' "
+		    "specifies %d type(s). When both are provided they must agree. "
+		    "Consider removing the 'type' option.",
+		    columns_types.size(), override_types.size());
 	}
-	for (idx_t i = 0; i < incoming.size(); i++) {
-		if (existing[i] != incoming[i]) {
-			throw BinderException("read_csv column types specified by 'columns' and 'types' doesn't match");
+	for (idx_t i = 0; i < override_types.size(); i++) {
+		if (columns_types[i] != override_types[i]) {
+			throw BinderException(
+			    "read_csv: column type mismatch at position %d: 'columns' specifies '%s' but "
+			    "'types'/'dtypes'/'column_types' specifies '%s'. When both are provided they must agree. "
+			    "Consider removing the 'type' option.",
+			    i + 1, columns_types[i].ToString(), override_types[i].ToString());
 		}
 	}
 }
@@ -673,7 +681,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		}
 		// If types were already set by 'types'/'dtypes'/'column_types', verify they match
 		if (!sql_type_list.empty()) {
-			VerifyTypeListsMatch(sql_type_list, parsed_types);
+			VerifyTypeListsMatch(parsed_types, sql_type_list);
 		}
 		name_list = std::move(parsed_names);
 		sql_type_list = std::move(parsed_types);
