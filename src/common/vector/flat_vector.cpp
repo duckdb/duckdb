@@ -46,7 +46,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-	vector.validity.Set(idx, !is_null);
+	vector.buffer->GetValidityMask().Set(idx, !is_null);
 	if (!is_null) {
 		return;
 	}
