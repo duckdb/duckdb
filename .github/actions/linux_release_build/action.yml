@@ -28,6 +28,10 @@ inputs:
     description: Whether to run smoke tests
     required: false
     default: "true"
+  changed_tests_file:
+    description: Path to a newline-delimited list of changed tests to include in smoke tests
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -52,7 +56,7 @@ runs:
     - name: Smoke tests
       if: ${{ inputs.run_smoke_tests == 'true' }}
       shell: bash
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest T="--changed-tests=${{ inputs.changed_tests_file }}"
 
     - name: Prepare release artifact
       shell: bash

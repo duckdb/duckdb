@@ -62,6 +62,7 @@ jobs:
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
     env:
       GEN: ninja
@@ -97,6 +98,8 @@ jobs:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+            tests:
+              - test/**/*.test
 
       - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -235,8 +238,12 @@ jobs:
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - name: Smoke tests
-      run: make smoke
+      run: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
@@ -384,9 +391,14 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build
+        changed_tests_file: ${{ runner.temp }}/changed_tests.txt
 
     - name: Build linux default release
       run: make clean release
