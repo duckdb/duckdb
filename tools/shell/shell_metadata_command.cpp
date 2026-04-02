@@ -6,6 +6,7 @@
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
+#include "shortcuts.hpp"
 #endif
 
 namespace duckdb_shell {
@@ -175,6 +176,15 @@ MetadataResult ToggleEcho(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult ToggleAutoFormat(ShellState &state, const vector<string> &args) {
+	if (state.StringToBool(args[1])) {
+		state.auto_format = AutoFormatMode::AUTO_FORMAT_COMPLETE_STATEMENTS;
+	} else {
+		state.auto_format = AutoFormatMode::NO_AUTO_FORMAT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
 	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
@@ -233,6 +243,25 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
+#ifdef HAVE_LINENOISE
+		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
+			auto shortcuts = duckdb::GetShellShortcuts();
+			const char *current_category = nullptr;
+			for (auto &entry : shortcuts) {
+				if (!current_category || strcmp(current_category, entry.category) != 0) {
+					if (current_category) {
+						state.PrintF("\n");
+					}
+					current_category = entry.category;
+					duckdb_shell::ShellHighlight highlighter(state);
+					highlighter.PrintText(entry.category, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
+					state.PrintF("\n");
+				}
+				state.PrintF("  %-24s %s\n", entry.key_name, entry.description);
+			}
+			return MetadataResult::SUCCESS;
+		}
+#endif
 		idx_t n = state.PrintHelp(args[1].c_str());
 		if (n == 0) {
 			state.PrintF("Nothing matches '%s'\n", args[1].c_str());
@@ -791,6 +820,9 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 
 static const MetadataCommand metadata_commands[] = {
     {"about", 0, ToggleAbout, "", "Show information about DuckDB", 0, ""},
+#ifdef HAVE_LINENOISE
+    {"auto_format", 2, ToggleAutoFormat, "on|off", "Automatically format SQL before execution.  Default OFF", 3, ""},
+#endif
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
@@ -1061,6 +1093,9 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 	}
 	if (!print_extended) {
 		PrintF("\nRun .help --all for extended information\n");
+#ifdef HAVE_LINENOISE
+		PrintF("Run .help shortcuts for keyboard shortcuts\n");
+#endif
 	}
 	return print_info_list.size();
 }

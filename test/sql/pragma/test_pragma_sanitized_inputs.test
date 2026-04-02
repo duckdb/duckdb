@@ -19,7 +19,7 @@ foreach pragma_func table_info storage_info "show"
 
 # Ensure we correctly sanitize the input
 statement error
-PRAGMA ${pragma_func}('test_table''); DROP TABLE test_table; --')
+PRAGMA {pragma_func}('test_table''); DROP TABLE test_table; --')
 ----
 Catalog Error
 

@@ -139,8 +139,6 @@ public:
 public:
 	void InitializeSortedRun(const Sort &sort, ClientContext &context) {
 		D_ASSERT(!sorted_run);
-		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
-		//  so that we can do an approximate sort, but that causes issues in the ART
 		sorted_run = make_uniq<SortedRun>(context, sort, false);
 	}
 

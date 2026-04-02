@@ -11,7 +11,7 @@ statement ok
 DROP TABLE IF EXISTS test
 
 statement ok
-CREATE TABLE test (a ${type}, b ${type});
+CREATE TABLE test (a {type}, b {type});
 
 statement ok
 INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)

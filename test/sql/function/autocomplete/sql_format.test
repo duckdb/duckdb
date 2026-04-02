@@ -1,0 +1,967 @@
+# name: test/sql/function/autocomplete/sql_format.test
+# description: Test duckdb_format_sql pretty-printer
+# group: [autocomplete]
+
+require autocomplete
+
+# ── Basic SELECT with WHERE / GROUP BY / ORDER BY / LIMIT ─────────────────────
+# Default config inlines short clauses (inline_threshold=60).
+query I
+SELECT duckdb_format_sql('select a,b,c from t where x=1 and y=2 group by a,b order by a desc limit 10') = $$SELECT a, b, c
+FROM t
+WHERE x = 1 AND y = 2
+GROUP BY a, b
+ORDER BY a DESC
+LIMIT 10$$
+----
+true
+
+# ── Keyword uppercasing – bare SELECT ────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select 1') = $$SELECT 1$$
+----
+true
+
+# ── Multiple statements separated by semicolon ───────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t; select b from u') = $$SELECT a
+FROM t;
+SELECT b
+FROM u$$
+----
+true
+
+# ── INNER JOIN and qualified column names (schema.table.col) ─────────────────
+query I
+SELECT duckdb_format_sql('select a from t1 inner join t2 on t1.id = t2.id where t1.active = true') = $$SELECT a
+FROM t1
+INNER JOIN t2 ON t1.id = t2.id
+WHERE t1.active = TRUE$$
+----
+true
+
+# ── LEFT JOIN ────────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t1 left join t2 on t1.id = t2.id') = $$SELECT a
+FROM t1
+LEFT JOIN t2 ON t1.id = t2.id$$
+----
+true
+
+# ── CTE (WITH … AS) and HAVING ────────────────────────────────────────────────
+# CTE body is structured (contains SELECT/FROM/WHERE) so it is never inlined.
+query I
+SELECT duckdb_format_sql('WITH cte AS (SELECT id FROM users WHERE active = 1) SELECT id FROM cte GROUP BY id HAVING count(*) > 5') = $$WITH cte AS (
+        SELECT id
+        FROM users
+        WHERE active = 1
+    )
+SELECT id
+FROM cte
+GROUP BY id
+HAVING count(*) > 5$$
+----
+true
+
+# ── Subquery inside WHERE IN ──────────────────────────────────────────────────
+# Outer WHERE is not inlined (content contains a nested SELECT).
+query I
+SELECT duckdb_format_sql('select id from orders where customer_id in (select id from customers where active = 1) and amount > 100') = $$SELECT id
+FROM orders
+WHERE
+    customer_id IN (
+        SELECT id
+        FROM customers
+        WHERE active = 1
+    )
+    AND amount > 100$$
+----
+true
+
+# ── UNION ALL ─────────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t1 union all select a from t2') = $$SELECT a
+FROM t1
+UNION ALL
+SELECT a
+FROM t2$$
+----
+true
+
+# ── CASE expression (stays inline) ───────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('select case when x > 0 then ''pos'' else ''neg'' end as sign from t') = $$SELECT CASE WHEN x > 0 THEN 'pos' ELSE 'neg' END AS sign
+FROM t$$
+----
+true
+
+# ── INSERT INTO ───────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('INSERT INTO t (a, b) VALUES (1, 2)') = $$INSERT INTO t(a, b)
+VALUES (1, 2)$$
+----
+true
+
+# ── UPDATE … SET … WHERE ──────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('update t set a = 1, b = 2 where id = 3') = $$UPDATE t
+SET a = 1, b = 2
+WHERE id = 3$$
+----
+true
+
+# ── DELETE FROM … WHERE ───────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('delete from t where id = 1') = $$DELETE FROM t
+WHERE id = 1$$
+----
+true
+
+# ── AND / OR: short WHERE clause is inlined by default ───────────────────────
+query I
+SELECT duckdb_format_sql('select 1 from t where a = 1 and b = 2 or c = 3') = $$SELECT 1
+FROM t
+WHERE a = 1 AND b = 2 OR c = 3$$
+----
+true
+
+# ── AND / OR: long WHERE — first predicate on WHERE line, conjunctions at +2 ──
+query I
+SELECT duckdb_format_sql('select 1 from t where some_long_column_name = 1 and another_long_column = 2 or yet_another_column = 3') = $$SELECT 1
+FROM t
+WHERE some_long_column_name = 1 AND another_long_column = 2 OR yet_another_column = 3$$
+----
+true
+
+# ── FormatterConfig: inline_threshold = 0 (always multiline) ─────────────────
+query I
+SELECT duckdb_format_sql('select a from t where x = 1', MAP {'inline_threshold': '0'}) = $$SELECT
+    a
+FROM
+    t
+WHERE
+    x = 1$$
+----
+true
+
+# ── FormatterConfig: custom indent_size = 2 ──────────────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t where x = 1', MAP {'inline_threshold': '0', 'indent_size': '2'}) = $$SELECT
+  a
+FROM
+  t
+WHERE
+  x = 1$$
+----
+true
+
+# ── FormatterConfig: small inline_threshold keeps long clauses multiline ──────
+# SELECT list 'a, b, c' = 7 chars but threshold 10 forces multiline for select list.
+query I
+SELECT duckdb_format_sql('select a, b, c from long_table_name', MAP {'inline_threshold': '10'}) = $$SELECT
+    a,
+    b,
+    c
+FROM long_table_name$$
+----
+true
+
+# ── keyword_case = lower ──────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM t WHERE x = 1', MAP {'keyword_case': 'lower'}) = $$select a
+from t
+where x = 1$$
+----
+true
+
+# ── keyword_case = preserve ───────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('Select A From T Where X = 1', MAP {'keyword_case': 'preserve'}) = $$Select A
+From T
+Where X = 1$$
+----
+true
+
+# ── keyword_case = upper (explicit, same as default) ─────────────────────────
+query I
+SELECT duckdb_format_sql('select a from t where x = 1', MAP {'keyword_case': 'upper'}) = $$SELECT a
+FROM t
+WHERE x = 1$$
+----
+true
+
+# ── keyword_case: invalid value raises an error ───────────────────────────────
+statement error
+SELECT duckdb_format_sql('select 1', MAP {'keyword_case': 'mixed'})
+----
+duckdb_format_sql: keyword_case must be 'upper', 'lower', or 'preserve'
+
+# ── FormatterConfig: unknown key raises an error ──────────────────────────────
+statement error
+SELECT duckdb_format_sql('select 1', MAP {'bad_key': 'x'})
+----
+duckdb_format_sql: unknown config key 'bad_key'
+
+# ══ CREATE TABLE / DDL ════════════════════════════════════════════════════════
+
+# ── Short CREATE TABLE — single column stays inline ──────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER PRIMARY KEY)') = $$CREATE TABLE t(id INTEGER PRIMARY KEY)$$
+----
+true
+
+# ── Long CREATE TABLE — one column per line ───────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), amount DECIMAL(10,2) DEFAULT 0, status VARCHAR(20))') = $$CREATE TABLE orders(
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    amount DECIMAL(10, 2) DEFAULT 0,
+    status VARCHAR(20)
+)$$
+----
+true
+
+# ── CREATE TABLE with table-level PRIMARY KEY and FOREIGN KEY constraints ─────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t (a INTEGER, b INTEGER, PRIMARY KEY (a, b), FOREIGN KEY (b) REFERENCES other(id))') = $$CREATE TABLE t(
+    a INTEGER,
+    b INTEGER,
+    PRIMARY KEY (a, b),
+    FOREIGN KEY (b) REFERENCES other(id)
+)$$
+----
+true
+
+# ── CREATE TABLE with UNIQUE, DEFAULT, and inline PRIMARY KEY ─────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t (id INTEGER, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (id))') = $$CREATE TABLE t(
+    id INTEGER,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT current_timestamp,
+    PRIMARY KEY (id)
+)$$
+----
+true
+
+# ── CREATE TABLE IF NOT EXISTS — single column stays inline ───────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE IF NOT EXISTS t (id INTEGER)') = $$CREATE TABLE IF NOT EXISTS t(id INTEGER)$$
+----
+true
+
+# ── CREATE TEMP TABLE ─────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TEMP TABLE t (id INTEGER, name VARCHAR)') = $$CREATE TEMP TABLE t(
+    id INTEGER,
+    name VARCHAR
+)$$
+----
+true
+
+# ── CREATE OR REPLACE TABLE — single column stays inline ─────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE TABLE t (id INTEGER)') = $$CREATE OR REPLACE TABLE t(id INTEGER)$$
+----
+true
+
+# ── CREATE VIEW with SELECT body ──────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE VIEW active_users AS SELECT id, name FROM users WHERE active = true') = $$CREATE VIEW active_users AS
+SELECT id, name
+FROM users
+WHERE active = TRUE$$
+----
+true
+
+# ── CREATE VIEW with schema-qualified name — name fits inline ─────────────────
+query I
+SELECT duckdb_format_sql('CREATE VIEW long_schema_name.long_view_name AS SELECT id, name FROM users WHERE active = true') = $$CREATE VIEW long_schema_name.long_view_name AS
+SELECT id, name
+FROM users
+WHERE active = TRUE$$
+----
+true
+
+# ── CREATE VIEW where full header exceeds threshold — view name on next line ──
+query I
+SELECT duckdb_format_sql('CREATE VIEW a_very_long_schema_name.a_very_long_view_name_here AS SELECT id FROM t') = $$CREATE VIEW a_very_long_schema_name.a_very_long_view_name_here AS
+SELECT id
+FROM t$$
+----
+true
+
+# ── CREATE OR REPLACE VIEW ────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE VIEW analytics.monthly_summary AS SELECT region, sum(amount) AS total FROM orders GROUP BY region') = $$CREATE OR REPLACE VIEW analytics.monthly_summary AS
+SELECT region, sum(amount) AS total
+FROM orders
+GROUP BY region$$
+----
+true
+
+# ── CREATE TEMP VIEW ──────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TEMP VIEW v AS SELECT id FROM t') = $$CREATE TEMP VIEW v AS
+SELECT id
+FROM t$$
+----
+true
+
+# ── CREATE INDEX ──────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE INDEX idx_name ON orders (customer_id)') = $$CREATE INDEX idx_name ON orders(customer_id)$$
+----
+true
+
+# ── CREATE UNIQUE INDEX ───────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE UNIQUE INDEX idx_email ON users (email)') = $$CREATE UNIQUE INDEX idx_email ON users(email)$$
+----
+true
+
+# ── CREATE SCHEMA ─────────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE SCHEMA analytics') = $$CREATE SCHEMA analytics$$
+----
+true
+
+# ── CREATE SEQUENCE ───────────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE SEQUENCE seq_id START 1 INCREMENT 1') = $$CREATE SEQUENCE seq_id START 1 INCREMENT 1$$
+----
+true
+
+# ── CREATE MACRO (scalar) ─────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE MACRO increment(x) AS x + 1') = $$CREATE MACRO increment (x) AS x + 1$$
+----
+true
+
+# ── CREATE OR REPLACE MACRO (body too long to inline) ────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END') = $$CREATE OR REPLACE MACRO clamp(x, lo, hi) AS CASE WHEN x < lo THEN lo WHEN x > hi THEN hi ELSE x END$$
+----
+true
+
+# ── CREATE MACRO AS TABLE (table macro) ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE MACRO range_rows(lo, hi) AS TABLE SELECT * FROM t WHERE id BETWEEN lo AND hi') = $$CREATE MACRO range_rows(lo, hi) AS TABLE
+SELECT *
+FROM t
+WHERE id BETWEEN lo AND hi$$
+----
+true
+
+# ── CREATE TYPE … ENUM ───────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TYPE mood AS ENUM (''happy'', ''sad'', ''neutral'')') = $$CREATE TYPE mood AS ENUM ('happy', 'sad', 'neutral')$$
+----
+true
+
+# ── ALTER TABLE ADD COLUMN — fits inline ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('ALTER TABLE t ADD COLUMN email VARCHAR(100) NOT NULL') = $$ALTER TABLE t ADD COLUMN email VARCHAR(100) NOT NULL$$
+----
+true
+
+# ── ALTER TABLE ADD CONSTRAINT PRIMARY KEY ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('ALTER TABLE orders ADD CONSTRAINT pk PRIMARY KEY (id)') = $$ALTER TABLE orders ADD CONSTRAINT pk PRIMARY KEY (id)$$
+----
+true
+
+# ── ALTER TABLE DROP COLUMN — DROP is its own clause keyword ─────────────────
+query I
+SELECT duckdb_format_sql('ALTER TABLE t DROP COLUMN old_col') = $$ALTER TABLE t
+DROP COLUMN old_col$$
+----
+true
+
+# ── Unicode / grapheme-cluster handling ──────────────────────────────────────
+# inline_threshold is measured in terminal render columns, not bytes.
+# The duck emoji 🦆 is 4 bytes but only 2 render columns.
+# The pirate flag 🏴‍☠️ is a ZWJ sequence: 13 bytes, 2 render columns.
+# Both fit easily within the default threshold.
+query I
+SELECT duckdb_format_sql('select ''🦆'', ''🏴‍☠️'' from t') = $$SELECT '🦆', '🏴‍☠️'
+FROM t$$
+----
+true
+
+# With a threshold of 15 render columns:
+#   SELECT '🏴‍☠️'  →  7 + 1 + 2 + 1 = 11 render cols  ≤ 15  → inline
+#   byte count of the same string = 7 + 1 + 13 + 1 = 22  >  15
+# A byte-counting threshold would fail to inline this; render-width inlines it.
+query I
+SELECT duckdb_format_sql('select ''🏴‍☠️'' from t', MAP {'inline_threshold': '15'}) = $$SELECT '🏴‍☠️'
+FROM t$$
+----
+true
+
+# ── Empty string returns empty string ────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('')
+----
+(empty)
+
+# ── NULL input propagates NULL ────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql(NULL)
+----
+NULL
+
+# ══ Multiple CTEs ═══════════════════════════════════════════════════════════
+
+# ── Two CTEs with JOIN in outer query ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('WITH cte1 AS (SELECT id, name FROM users WHERE active = 1), cte2 AS (SELECT user_id, sum(amount) as total FROM orders GROUP BY user_id) SELECT cte1.name, cte2.total FROM cte1 JOIN cte2 ON cte1.id = cte2.user_id') = $$WITH cte1 AS (
+        SELECT id, name
+        FROM users
+        WHERE active = 1
+    ),
+    cte2 AS (
+        SELECT user_id, sum(amount) AS total
+        FROM orders
+        GROUP BY user_id
+    )
+SELECT cte1.name, cte2.total
+FROM cte1
+JOIN cte2 ON cte1.id = cte2.user_id$$
+----
+true
+
+# ── Three CTEs — last one uses UNION ALL ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('WITH a AS (SELECT 1), b AS (SELECT 2), c AS (SELECT * FROM a UNION ALL SELECT * FROM b) SELECT * FROM c') = $$WITH a AS (
+        SELECT 1
+    ),
+    b AS (
+        SELECT 2
+    ),
+    c AS (
+        SELECT *
+        FROM a
+        UNION ALL
+        SELECT *
+        FROM b
+    )
+SELECT *
+FROM c$$
+----
+true
+
+# ── Recursive CTE with UNION ALL and JOIN ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('WITH RECURSIVE tree AS (SELECT id, parent_id, name, 0 as depth FROM nodes WHERE parent_id IS NULL UNION ALL SELECT n.id, n.parent_id, n.name, t.depth + 1 FROM nodes n INNER JOIN tree t ON n.parent_id = t.id) SELECT * FROM tree ORDER BY depth, name') = $$WITH RECURSIVE tree AS (
+        SELECT id, parent_id, name, 0 AS depth
+        FROM nodes
+        WHERE parent_id IS NULL
+        UNION ALL
+        SELECT n.id, n.parent_id, n.name, t.depth + 1
+        FROM nodes n
+        INNER JOIN tree t ON n.parent_id = t.id
+    )
+SELECT *
+FROM tree
+ORDER BY depth, name$$
+----
+true
+
+# ══ String literals with newlines ═══════════════════════════════════════════
+
+# ── Single-quoted string containing a newline — preserved as-is ───────────────
+query I
+SELECT duckdb_format_sql('SELECT ''hello
+world'' FROM t') = $$SELECT 'hello
+world'
+FROM t$$
+----
+true
+
+# ── Multi-line string literal with surrounding columns ────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT ''line1
+line2
+line3'', 42 FROM t') = $$SELECT 'line1
+line2
+line3',
+    42
+FROM t$$
+----
+true
+
+# ── String with escaped quotes — preserved as-is ─────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT ''it''''s a test'' FROM t') = $$SELECT 'it''s a test'
+FROM t$$
+----
+true
+
+# ══ Big / Long Expressions ══════════════════════════════════════════════════
+
+# ── Many columns — SELECT list exceeds threshold → one per line ───────────────
+query I
+SELECT duckdb_format_sql('SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, coalesce(x, y, z) AS val, case when a > 1 then ''yes'' when a > 0 then ''maybe'' else ''no'' end as result FROM very_long_table_name_here WHERE some_column_name = 1 AND another_column > 2 AND yet_another_column < 100 ORDER BY a, b, c, d') = $$SELECT
+    a,
+    b,
+    c,
+    d,
+    e,
+    f,
+    g,
+    h,
+    i,
+    j,
+    k,
+    l,
+    m,
+    n,
+    coalesce(x, y, z) AS val,
+    CASE WHEN a > 1 THEN 'yes' WHEN a > 0 THEN 'maybe' ELSE 'no' END AS result
+FROM very_long_table_name_here
+WHERE some_column_name = 1 AND another_column > 2 AND yet_another_column < 100
+ORDER BY a, b, c, d$$
+----
+true
+
+# ── Long SELECT list that fits on one line ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q FROM very_long_table_name WHERE x = 1') = $$SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q
+FROM very_long_table_name
+WHERE x = 1$$
+----
+true
+
+# ── Long arithmetic expression exceeding threshold ────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a + b * c - d / e + f % g + h * (i + j) - k * l + m * n * o + p - q + r * s FROM t') = $$SELECT a + b * c - d / e + f % g + h *(i + j) - k * l + m * n * o + p - q + r * s
+FROM t$$
+----
+true
+
+# ── Long WHERE with many conditions — collapsed first, aligned conjunctions ──
+query I
+SELECT duckdb_format_sql('SELECT a, b, very_long_column_name_1, very_long_column_name_2, very_long_column_name_3, very_long_column_name_4 FROM t WHERE very_long_column_name_1 > 100 AND very_long_column_name_2 < 200 AND very_long_column_name_3 = ''test'' AND very_long_column_name_4 IS NOT NULL GROUP BY ALL ORDER BY ALL') = $$SELECT
+    a,
+    b,
+    very_long_column_name_1,
+    very_long_column_name_2,
+    very_long_column_name_3,
+    very_long_column_name_4
+FROM t
+WHERE very_long_column_name_1 > 100
+  AND very_long_column_name_2 < 200
+  AND very_long_column_name_3 = 'test'
+  AND very_long_column_name_4 IS NOT NULL
+GROUP BY ALL
+ORDER BY ALL$$
+----
+true
+
+# ══ Database and Schema Qualifications ══════════════════════════════════════
+
+# ── Three-part name (db.schema.table) in FROM and WHERE ──────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM mydb.myschema.mytable WHERE mydb.myschema.mytable.id = 1') = $$SELECT a
+FROM mydb.myschema.mytable
+WHERE mydb.myschema.mytable.id = 1$$
+----
+true
+
+# ── Catalog-qualified names with JOIN and alias ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM catalog1.schema1.table1 t1 INNER JOIN catalog2.schema2.table2 t2 ON t1.id = t2.id WHERE catalog1.schema1.table1.status = ''active''') = $$SELECT a
+FROM catalog1.schema1.table1 t1
+INNER JOIN catalog2.schema2.table2 t2 ON t1.id = t2.id
+WHERE catalog1.schema1.table1.status = 'active'$$
+----
+true
+
+# ── Schema-qualified name in FROM with alias ──────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT s.id, s.name FROM mydb.information_schema.tables s WHERE s.table_schema = ''main''') = $$SELECT s.id, s.name
+FROM mydb.information_schema.tables s
+WHERE s.table_schema = 'main'$$
+----
+true
+
+# ── CREATE TABLE with schema qualification ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE mydb.myschema.mytable (id INTEGER PRIMARY KEY, name VARCHAR)') = $$CREATE TABLE mydb.myschema.mytable(
+    id INTEGER PRIMARY KEY,
+    name VARCHAR
+)$$
+----
+true
+
+# ══ DuckDB-Specific Syntax ══════════════════════════════════════════════════
+
+# ── GROUP BY ALL / ORDER BY ALL ──────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT name, count(*) FROM users GROUP BY ALL ORDER BY ALL') = $$SELECT name, count(*)
+FROM users
+GROUP BY ALL
+ORDER BY ALL$$
+----
+true
+
+# ── GROUP BY ALL / ORDER BY ALL with LIMIT ───────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT region, product, sum(amount), count(*) FROM sales GROUP BY ALL ORDER BY ALL LIMIT 100') = $$SELECT region, product, sum(amount), count(*)
+FROM sales
+GROUP BY ALL
+ORDER BY ALL
+LIMIT 100$$
+----
+true
+
+# ── Lambda function — list_transform ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT list_transform([1, 2, 3], x -> x + 1)') = $$SELECT list_transform([1, 2, 3], x -> x + 1)$$
+----
+true
+
+# ── Nested lambdas — list_apply(list_filter(…)) ─────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT list_apply(list_filter([1,2,3,4,5], x -> x > 2), y -> y * 10)') = $$SELECT list_apply(list_filter([1, 2, 3, 4, 5], x -> x > 2), y -> y * 10)$$
+----
+true
+
+# ── Dot syntax for method-style function calls ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT [1, 2, 3].list_transform(x -> x + 1)') = $$SELECT [1, 2, 3].list_transform(x -> x + 1)$$
+----
+true
+
+# ── Dot syntax — method call on string literal ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT ''hello
+world''.upper()') = $$SELECT 'hello
+world'.upper()$$
+----
+true
+
+# ── Dot syntax — struct field access ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT struct_pack(a := 1, b := ''hello'').a') = $$SELECT struct_pack(a := 1, b := 'hello').a$$
+----
+true
+
+# ══ Window Functions ═══════════════════════════════════════════════════════
+
+# ── PARTITION BY stays together as a compound keyword on its own line ────────
+query I
+SELECT duckdb_format_sql('SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x_group WHERE v3 IS NOT NULL') = $$SELECT
+    id6,
+    v3,
+    row_number() OVER (
+        PARTITION BY id6
+        ORDER BY v3 DESC
+    ) AS order_v3
+FROM x_group
+WHERE v3 IS NOT NULL$$
+----
+true
+
+# ── Window function with multiple PARTITION BY columns ───────────────────────
+query I
+SELECT duckdb_format_sql('SELECT sum(amount) OVER (PARTITION BY region, year ORDER BY month) FROM sales') = $$SELECT
+    sum(amount) OVER (
+        PARTITION BY region, year
+        ORDER BY month
+    )
+FROM sales$$
+----
+true
+
+# ── Window function with PARTITION BY only (no ORDER BY) ─────────────────────
+query I
+SELECT duckdb_format_sql('SELECT avg(salary) OVER (PARTITION BY department) FROM employees') = $$SELECT
+    avg(salary) OVER (
+        PARTITION BY department
+    )
+FROM employees$$
+----
+true
+
+# ══ CREATE TABLE AS SELECT (CTAS) ═════════════════════════════════════════
+
+# ── Function calls in CTAS SELECT list are not split as column definitions ───
+query I
+SELECT duckdb_format_sql('CREATE TEMP TABLE ans AS SELECT id2, id4, pow(corr(v1, v2), 2) AS r2 FROM x_group GROUP BY id2, id4') = $$CREATE TEMP TABLE ans AS
+SELECT id2, id4, pow(corr(v1, v2), 2) AS r2
+FROM x_group
+GROUP BY id2, id4$$
+----
+true
+
+# ── CTAS with simple columns ─────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE t AS SELECT a, b FROM s') = $$CREATE TABLE t AS
+SELECT a, b
+FROM s$$
+----
+true
+
+# ── CREATE OR REPLACE TABLE AS SELECT ────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE TABLE t AS SELECT a, b FROM s') = $$CREATE OR REPLACE TABLE t AS
+SELECT a, b
+FROM s$$
+----
+true
+
+# ══ Long IN Clauses ════════════════════════════════════════════════════════
+
+# ── Long IN clause is expanded to one value per line ─────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM t WHERE k.keyword IN (''superhero'', ''marvel-comics'', ''based-on-comic'', ''tv-special'', ''fight'', ''violence'', ''magnet'', ''web'', ''claw'', ''laser'') AND kt.kind = ''movie''') = $$SELECT a
+FROM t
+WHERE
+    k.keyword IN (
+        'superhero',
+        'marvel-comics',
+        'based-on-comic',
+        'tv-special',
+        'fight',
+        'violence',
+        'magnet',
+        'web',
+        'claw',
+        'laser')
+    AND kt.kind = 'movie'$$
+----
+true
+
+# ── Short IN clause stays inline ─────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM t WHERE x IN (1, 2, 3)') = $$SELECT a
+FROM t
+WHERE x IN (1, 2, 3)$$
+----
+true
+
+# ══ BETWEEN ... AND ═══════════════════════════════════════════════════════
+
+# ── AND after BETWEEN is not treated as a conjunction ────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM t WHERE cn1.country_code = ''[us]'' AND it1.info = ''rating'' AND t2.production_year BETWEEN 2005 AND 2008 AND lt.id = ml.link_type_id') = $$SELECT a
+FROM t
+WHERE cn1.country_code = '[us]'
+  AND it1.info = 'rating'
+  AND t2.production_year BETWEEN 2005 AND 2008
+  AND lt.id = ml.link_type_id$$
+----
+true
+
+# ── Simple BETWEEN stays inline ──────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a FROM t WHERE x BETWEEN 1 AND 10') = $$SELECT a
+FROM t
+WHERE x BETWEEN 1 AND 10$$
+----
+true
+
+# ══ Semicolons and Statement Separation ══════════════════════════════════
+
+# ── Semicolon starts a new line for the next statement ───────────────────────
+query I
+SELECT duckdb_format_sql('CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (ORDER BY x NULLS LAST); FORCE CHECKPOINT') = $$CREATE FUNCTION V29(x) AS LAST_VALUE(x IGNORE NULLS) OVER (
+        ORDER BY x NULLS LAST
+    );
+FORCE CHECKPOINT$$
+----
+true
+
+# ══ AND/OR Inside Parentheses ════════════════════════════════════════════
+
+# ── AND/OR in expression parens are not split to separate lines ──────────────
+query I
+SELECT duckdb_format_sql('SELECT bt.k, (k = 3 AND k + 1 = 4) OR (k = 2 AND k + 1 = 3) FROM base_table bt(k)') = $$SELECT bt.k, (k = 3 AND k + 1 = 4) OR (k = 2 AND k + 1 = 3)
+FROM base_table bt(k)$$
+----
+true
+
+# ══ Array Literals ═══════════════════════════════════════════════════════
+
+# ── Array brackets have no extra spaces ──────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT [1, 2, 3] FROM base_table bt(k)') = $$SELECT [1, 2, 3]
+FROM base_table bt(k)$$
+----
+true
+
+# ── Array in function call ───────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT list_transform([1, 2, 3], x -> x + 1)') = $$SELECT list_transform([1, 2, 3], x -> x + 1)$$
+----
+true
+
+# ── Array with dot method ────────────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT [1, 2, 3].list_transform(x -> x + 1)') = $$SELECT [1, 2, 3].list_transform(x -> x + 1)$$
+----
+true
+
+# ══ Typecast Operator (::) ══════════════════════════════════════════════
+
+# ── :: binds tightly with no surrounding spaces ──────────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE TABLE strings AS SELECT ((i * 9582398353) % 1000)::VARCHAR AS s1 FROM RANGE(0, 10000000) tbl(i)') = $$CREATE TABLE strings AS
+SELECT ((i * 9582398353) % 1000)::VARCHAR AS s1
+FROM RANGE (0, 10000000) tbl(i)$$
+----
+true
+
+# ── :: with multiple casts in SELECT list ────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT a::INTEGER, b::VARCHAR(100) FROM t') = $$SELECT a::INTEGER, b::VARCHAR(100)
+FROM t$$
+----
+true
+
+# ══ Long Parenthesized Lists ═══════════════════════════════════════════
+
+# ── Long REPLACE argument list is expanded to one value per line ─────────────
+query I
+SELECT duckdb_format_sql('SELECT * REPLACE (make_date(EventDate) AS EventDate, epoch_ms(EventTime * 1000) AS EventTime, epoch_ms(ClientEventTime * 1000) AS ClientEventTime, epoch_ms(LocalEventTime * 1000) AS LocalEventTime) FROM t') = $$SELECT * REPLACE (
+    make_date(EventDate) AS EventDate,
+    epoch_ms(EventTime * 1000) AS EventTime,
+    epoch_ms(ClientEventTime * 1000) AS ClientEventTime,
+    epoch_ms(LocalEventTime * 1000) AS LocalEventTime)
+FROM t$$
+----
+true
+
+# ── Short function calls stay inline ─────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT pow(corr(v1, v2), 2) FROM t') = $$SELECT pow(corr(v1, v2), 2)
+FROM t$$
+----
+true
+
+# ── CASE inside function call breaks after '(' ──────────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT 100.00 * sum(CASE WHEN p_type LIKE ''PROMO%'' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / sum(l_extendedprice * (1 - l_discount)) AS promo_revenue FROM t') = $$SELECT 100.00 * sum(
+    CASE
+        WHEN p_type LIKE 'PROMO%' THEN l_extendedprice *(1 - l_discount)
+        ELSE 0
+    END) / sum(l_extendedprice *(1 - l_discount)) AS promo_revenue
+FROM t$$
+----
+true
+
+# ══ Single-Element Clause Merging ════════════════════════════════════════
+
+# ── FROM with a single long element stays on one line ────────────────────────
+query I
+SELECT duckdb_format_sql('SELECT * FROM read_csv_auto(''https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz'')') = $$SELECT *
+FROM read_csv_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz')$$
+----
+true
+
+# ══ Blank Lines Between Statements ══════════════════════════════════════
+
+# ── Blank lines in input are preserved between statements ────────────────────
+query I
+SELECT duckdb_format_sql('SELECT 1;' || chr(10) || chr(10) || 'SELECT 2;' || chr(10) || 'SELECT 3') = ('SELECT 1;' || chr(10) || chr(10) || 'SELECT 2;' || chr(10) || 'SELECT 3')
+----
+true
+
+# ══ Block Comments ══════════════════════════════════════════════════════
+
+# ── Block comments are preserved ─────────────────────────────────────────────
+query I
+SELECT duckdb_format_sql('/* hello */ SELECT 42') = $$/* hello */
+SELECT 42$$
+----
+true
+
+# ── Multi-line block comments before a statement ─────────────────────────────
+query I
+SELECT duckdb_format_sql('/* Q6. Most authoritative users
+\set tag ''Arnold_Schwarzenegger''
+ */
+SELECT 42') = $$/* Q6. Most authoritative users
+\set tag 'Arnold_Schwarzenegger'
+ */
+SELECT 42$$
+----
+true
+
+# ══ CREATE Name on First Line ═══════════════════════════════════════════
+
+# ── CREATE FUNCTION keeps name on the keyword line ───────────────────────────
+query I
+SELECT duckdb_format_sql('CREATE FUNCTION DeltaPhi(p1, p2) AS (CASE WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) < -Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) + 2 * Pi() WHEN FMod2Pi(p1[''phi''] - p2[''phi'']) > Pi() THEN FMod2Pi(p1[''phi''] - p2[''phi'']) - 2 * Pi() ELSE FMod2Pi(p1[''phi''] - p2[''phi'']) END)') = $$CREATE FUNCTION DeltaPhi(p1, p2) AS (
+    CASE
+        WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) < - Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) + 2 * Pi()
+        WHEN FMod2Pi(p1 ['phi'] - p2 ['phi']) > Pi() THEN FMod2Pi(p1 ['phi'] - p2 ['phi']) - 2 * Pi()
+        ELSE FMod2Pi(p1 ['phi'] - p2 ['phi'])
+    END)$$
+----
+true
+
+# ── CREATE OR REPLACE TABLE keeps name on the keyword line ───────────────────
+query I
+SELECT duckdb_format_sql('CREATE OR REPLACE TABLE lineitem_sf100_random AS (SELECT * FROM lineitem ORDER BY hash(rowid + 42))') = $$CREATE OR REPLACE TABLE lineitem_sf100_random AS (
+        SELECT *
+        FROM lineitem
+        ORDER BY hash(rowid + 42)
+    )$$
+----
+true
+
+# ── Struct literal — short struct inlines with space after colon ─────────────
+query I
+SELECT duckdb_format_sql('SELECT {''key'': ''value'', ''key2'': ''value2'', ''key3'': ''value3''}') = $$SELECT { 'key': 'value', 'key2': 'value2', 'key3': 'value3' }$$
+----
+true
+
+# ── Struct literal — long struct expands to one entry per line ──────────────
+query I
+SELECT duckdb_format_sql('SELECT {''l_orderkey'': 1, ''l_partkey'': 155190, ''l_suppkey'': 7706, ''l_linenumber'': 1, ''l_quantity'': 17.00, ''l_extendedprice'': 21168.23, ''l_discount'': 0.04, ''l_tax'': 0.02, ''l_returnflag'': ''N'', ''l_linestatus'': ''O'', ''l_shipdate'': ''1996-03-13'', ''l_commitdate'': ''1996-02-12'', ''l_receiptdate'': ''1996-03-22'', ''l_shipinstruct'': ''DELIVER IN PERSON'', ''l_shipmode'': ''TRUCK'', ''l_comment'': ''to beans x-ray carefull''}') = $$SELECT
+    {
+            'l_orderkey': 1,
+            'l_partkey': 155190,
+            'l_suppkey': 7706,
+            'l_linenumber': 1,
+            'l_quantity': 17.00,
+            'l_extendedprice': 21168.23,
+            'l_discount': 0.04,
+            'l_tax': 0.02,
+            'l_returnflag': 'N',
+            'l_linestatus': 'O',
+            'l_shipdate': '1996-03-13',
+            'l_commitdate': '1996-02-12',
+            'l_receiptdate': '1996-03-22',
+            'l_shipinstruct': 'DELIVER IN PERSON',
+            'l_shipmode': 'TRUCK',
+            'l_comment': 'to beans x-ray carefull'
+    }$$
+----
+true
+
+# ── MAP literal — long MAP expands to one entry per line ────────────────────
+query I
+SELECT duckdb_format_sql('SELECT MAP {''l_orderkey'': ''1'', ''l_partkey'': ''155190'', ''l_suppkey'': ''7706'', ''l_linenumber'': ''1'', ''l_quantity'': ''17.00'', ''l_extendedprice'': ''21168.23'', ''l_discount'': ''0.04'', ''l_tax'': ''0.02'', ''l_returnflag'': ''N'', ''l_linestatus'': ''O'', ''l_shipdate'': ''1996-03-13'', ''l_commitdate'': ''1996-02-12'', ''l_receiptdate'': ''1996-03-22'', ''l_shipinstruct'': ''DELIVER IN PERSON'', ''l_shipmode'': ''TRUCK'', ''l_comment'': ''to beans x-ray carefull''}') = $$SELECT
+    MAP {
+            'l_orderkey': '1',
+            'l_partkey': '155190',
+            'l_suppkey': '7706',
+            'l_linenumber': '1',
+            'l_quantity': '17.00',
+            'l_extendedprice': '21168.23',
+            'l_discount': '0.04',
+            'l_tax': '0.02',
+            'l_returnflag': 'N',
+            'l_linestatus': 'O',
+            'l_shipdate': '1996-03-13',
+            'l_commitdate': '1996-02-12',
+            'l_receiptdate': '1996-03-22',
+            'l_shipinstruct': 'DELIVER IN PERSON',
+            'l_shipmode': 'TRUCK',
+            'l_comment': 'to beans x-ray carefull'
+    }$$
+----
+true

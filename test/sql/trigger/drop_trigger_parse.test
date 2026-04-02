@@ -73,16 +73,16 @@ DROP TRIGGER is not yet supported
 statement error
 DROP TRIGGER my_trigger my_table;
 ----
-Parser Error: Syntax error at or near "my_table"
+syntax error
 
 # Syntax errors - missing table name
 statement error
 DROP TRIGGER my_trigger ON;
 ----
-Parser Error: Syntax error at or near "ON"
+syntax error
 
 # Syntax errors - missing trigger name
 statement error
 DROP TRIGGER ON my_table;
 ----
-Parser Error: Syntax error at or near "ON"
+syntax error

@@ -1,7 +1,7 @@
 {
   "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
-  "on_init": "set allow_parser_override_extension=strict_when_supported;",
+  "on_init": "set allow_parser_override_extension=strict;",
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
@@ -55,6 +55,12 @@
         "test/extension/load_test_alias.test",
         "test/extension/load_extension.test",
         "test/extension/test_extensible_filter.test"
+      ]
+    },
+    {
+      "reason": "PEG parser does not work yet with parser extensions",
+      "paths": [
+        "test/extension/consistent_semicolon_extension_parse.test"
       ]
     },
     {

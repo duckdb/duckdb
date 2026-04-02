@@ -13,11 +13,11 @@ PRAGMA enable_verification
 
 # Set the repository to the correct one
 statement ok
-set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+set custom_extension_repository='{LOCAL_EXTENSION_REPO}'
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/update_extensions'
+set extension_directory='{TEST_DIR}/update_extensions'
 
 statement error
 with cte as (select 42 AS a) UPDATE EXTENSIONS
@@ -48,7 +48,7 @@ UPDATE EXTENSIONS (foobar);
 Failed to update the extension 'foobar', the extension is not installed!
 
 statement ok
-INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 # The loadable_extension_demo is loaded as a direct URL, these are not considered for updating
 query IIIII rowsort

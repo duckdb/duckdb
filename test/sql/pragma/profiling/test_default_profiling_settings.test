@@ -11,7 +11,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SET profiling_mode='standard';
@@ -57,7 +57,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;

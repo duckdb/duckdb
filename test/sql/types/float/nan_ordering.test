@@ -12,7 +12,7 @@ foreach type FLOAT DOUBLE
 
 # storing nan in a table
 statement ok
-CREATE TABLE floats(f ${type});
+CREATE TABLE floats(f {type});
 
 statement ok
 INSERT INTO floats VALUES ('NAN'), (1), ('infinity'), ('-infinity'), (-1), (NULL)
@@ -53,13 +53,13 @@ SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 2
 
 # top-n with many rows
 statement ok
-INSERT INTO floats SELECT '0'::${type} FROM range(10000)
+INSERT INTO floats SELECT '0'::{type} FROM range(10000)
 
 statement ok
-INSERT INTO floats VALUES ('nan'::${type})
+INSERT INTO floats VALUES ('nan'::{type})
 
 statement ok
-INSERT INTO floats VALUES ('-inf'::${type})
+INSERT INTO floats VALUES ('-inf'::{type})
 
 query I
 SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 4

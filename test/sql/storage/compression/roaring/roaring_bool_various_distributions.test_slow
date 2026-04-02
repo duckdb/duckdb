@@ -20,7 +20,7 @@ WITH cte AS (
    SELECT id, random() r FROM range(10_000_000) t(id)
 )
 INSERT INTO uncompressed_booleans
-SELECT id, case when r < ${null_ratio} then null else r <= ${ratio} end
+SELECT id, case when r < {null_ratio} then null else r <= {ratio} end
 FROM cte;
 
 statement ok
