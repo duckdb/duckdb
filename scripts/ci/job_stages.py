@@ -28,10 +28,12 @@ PULL_REQUEST_JOBS = [
     "linux-configs",
 ]
 
-NIGHTLY_JOBS = [
+NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "valgrind",
 ]
+
+NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
     "linux-debug",
@@ -65,17 +67,9 @@ def enabled_jobs(event_name: str, ref_name: str) -> list[str]:
     if event_name == "merge_group":
         return MERGE_GROUP_JOBS.copy()
 
-    # Keep workflow_dispatch and push aligned.
-    if event_name in {"push", "workflow_dispatch"}:
-        jobs = PULL_REQUEST_JOBS.copy()
-        if ref_name == "main":
-            jobs.extend(NIGHTLY_JOBS)
-        return jobs
-
-    jobs = PULL_REQUEST_JOBS.copy()
     if ref_name == "main":
-        jobs.extend(NIGHTLY_JOBS)
-    return jobs
+        return NIGHTLY_JOBS.copy()
+    return PULL_REQUEST_JOBS.copy()
 
 
 def compute_job_selection(event_name: str, ref_name: str, repository: str) -> JobSelection:
