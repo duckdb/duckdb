@@ -190,10 +190,8 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, column_t column_id) {
-	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-		return nullptr;
-	}
-	if (column_id == COLUMN_IDENTIFIER_ROW_NUMBER) {
+	if (IsVirtualColumn(column_id)) {
+		// no stats for virtual columns (yet?)
 		return nullptr;
 	}
 	auto &column = columns.GetColumn(LogicalIndex(column_id));

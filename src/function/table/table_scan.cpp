@@ -44,8 +44,8 @@ struct TableScanLocalState : public LocalTableFunctionState {
 
 	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
-	//! Number of rows emitted in the current row group batch (for deterministic row_number)
-	idx_t row_number_count = 0;
+	//! The current "row_number" index (if row_number is emitted)
+	idx_t current_row_number_index = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -322,10 +322,6 @@ public:
 				if (row_number_col_index.IsValid()) {
 					auto col_idx = row_number_col_index.GetIndex();
 					auto &row_number_vec = output.data[col_idx];
-					row_number_vec.SetVectorType(VectorType::FLAT_VECTOR);
-					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
-					auto count = output.size();
-
 					// Use the row_number_base from the active scan state for deterministic numbering
 					// If local_state has an active row group, we are scanning transaction-local data
 					idx_t base;
@@ -334,12 +330,9 @@ public:
 					} else {
 						base = l_state.scan_state.table_state.row_number_base;
 					}
-					base += l_state.row_number_count;
-
-					for (idx_t i = 0; i < count; i++) {
-						row_number_data[i] = UnsafeNumericCast<row_t>(base + i + 1);
-					}
-					l_state.row_number_count += count;
+					base += l_state.current_row_number_index;
+					row_number_vec.Sequence(base + 1, 1, output.size());
+					l_state.current_row_number_index += output.size();
 				}
 				return;
 			}
@@ -348,7 +341,7 @@ public:
 			l_state.rows_scanned += l_state.rows_in_current_row_group;
 			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
 			// Reset row_number count for the new batch
-			l_state.row_number_count = 0;
+			l_state.current_row_number_index = 0;
 
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
