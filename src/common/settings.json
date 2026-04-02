@@ -1066,7 +1066,7 @@
     },
     {
         "name": "vacuum_rebuild_indexes",
-        "description": "Row count threshold for vacuum index rebuild. Tables with row count at or below this threshold will have their indexes rebuilt after vacuuming. 0 = disabled.",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0",

@@ -1551,8 +1551,8 @@ struct VacuumRebuildIndexesSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "vacuum_rebuild_indexes";
 	static constexpr const char *Description =
-	    "Row count threshold for vacuum index rebuild. Tables with row count at or below this threshold will have "
-	    "their indexes rebuilt after vacuuming. 0 = disabled.";
+	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
+	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
