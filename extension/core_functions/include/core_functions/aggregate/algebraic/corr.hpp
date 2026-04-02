@@ -51,13 +51,7 @@ struct CorrOperation {
 		} else {
 			auto cov = state.cov_pop.co_moment / state.cov_pop.count;
 			auto std_x = state.dev_pop_x.count > 1 ? sqrt(state.dev_pop_x.dsquared / state.dev_pop_x.count) : 0;
-			if (!Value::DoubleIsFinite(std_x)) {
-				throw OutOfRangeException("STDDEV_POP for X is out of range!");
-			}
 			auto std_y = state.dev_pop_y.count > 1 ? sqrt(state.dev_pop_y.dsquared / state.dev_pop_y.count) : 0;
-			if (!Value::DoubleIsFinite(std_y)) {
-				throw OutOfRangeException("STDDEV_POP for Y is out of range!");
-			}
 			target = std_x * std_y != 0 ? cov / (std_x * std_y) : NAN;
 		}
 	}
