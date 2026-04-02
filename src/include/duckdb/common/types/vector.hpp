@@ -15,7 +15,8 @@
 namespace duckdb {
 
 class VectorCache;
-class VectorChildBuffer;
+class DictionaryBuffer;
+class DictionaryEntry;
 class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
@@ -43,7 +44,7 @@ class Vector {
 	friend struct ShreddedVector;
 
 	friend class DataChunk;
-	friend class VectorCacheBuffer;
+	friend class VectorCacheEntry;
 
 public:
 	//! Create a vector that slices another vector
@@ -104,7 +105,7 @@ public:
 	//! Creates a reference to a dictionary of the other vector
 	DUCKDB_API void Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 	//! Creates a dictionary on the reusable dict
-	DUCKDB_API void Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel);
+	DUCKDB_API void Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
@@ -154,13 +155,12 @@ public:
 	//! Sets the [index] element of the Vector to the specified Value.
 	DUCKDB_API void SetValue(idx_t index, const Value &val);
 
-	inline void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
-		auxiliary = std::move(new_buffer);
-	};
-
 	inline void CopyBuffer(Vector &other) {
 		buffer = other.buffer;
 	}
+
+	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
+	void AddHeapReference(const Vector &other);
 
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
@@ -178,10 +178,6 @@ public:
 	}
 	inline const LogicalType &GetType() const {
 		return type;
-	}
-
-	inline buffer_ptr<VectorBuffer> GetAuxiliary() {
-		return auxiliary;
 	}
 
 	inline buffer_ptr<VectorBuffer> GetBuffer() {
@@ -228,26 +224,6 @@ protected:
 	mutable ValidityMask validity;
 	//! The main buffer holding the data of the vector
 	mutable buffer_ptr<VectorBuffer> buffer;
-	//! The buffer holding auxiliary data of the vector
-	//! e.g. a string vector uses this to store strings
-	mutable buffer_ptr<VectorBuffer> auxiliary;
-};
-
-//! The VectorChildBuffer holds a child Vector
-class VectorChildBuffer : public VectorBuffer {
-public:
-	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
-	}
-
-public:
-	Vector data;
-	//! Optional size/id to uniquely identify re-occurring dictionaries
-	optional_idx size;
-	string id;
-	//! For caching the hashes of a child buffer
-	mutex cached_hashes_lock;
-	unique_ptr<Vector> cached_hashes;
 };
 
 } // namespace duckdb

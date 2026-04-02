@@ -664,7 +664,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	auto &keys = VariantVector::GetKeys(result);
 	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	DataChunk conversion_offsets;
 	conversion_offsets.Initialize(
