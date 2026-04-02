@@ -320,7 +320,7 @@ public:
 
 public:
 	ParallelTableScanState state;
-	optional_ptr<AggregatePushdownInfo> agg_info;
+	optional_ptr<AggregatePushdownInfo> aggregate_info;
 
 private:
 	const TableScanBindData &bind_data;
@@ -360,15 +360,15 @@ public:
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
-		auto &agg_info = l_state.scan_state.aggregates;
+		auto &aggregate_info = l_state.scan_state.aggregates;
 
 		do {
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output);
-			} else if (CanRemoveFilterColumns() || agg_info.IsActive()) {
+			} else if (CanRemoveFilterColumns() || aggregate_info.IsActive()) {
 				l_state.all_columns.Reset();
 				storage.Scan(tx, l_state.all_columns, l_state.scan_state);
-				if (!agg_info.IsActive()) {
+				if (!aggregate_info.IsActive()) {
 					output.ReferenceColumns(l_state.all_columns, projection_ids);
 				}
 			} else {
@@ -385,8 +385,8 @@ public:
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
 				if (l_state.rows_in_current_row_group == 0) {
-					if (agg_info.IsActive() && !l_state.aggrgate_emitted) {
-						agg_info.Finalize(output);
+					if (aggregate_info.IsActive() && !l_state.aggrgate_emitted) {
+						aggregate_info.Finalize(output);
 						l_state.aggrgate_emitted = true;
 					}
 					data_p.async_result = AsyncResultType::FINISHED;
@@ -397,8 +397,8 @@ public:
 			}
 			if (l_state.rows_in_current_row_group == 0) {
 				// All row groups exhausted, then emit the finalized aggregate result.
-				if (agg_info.IsActive() && !l_state.aggrgate_emitted) {
-					agg_info.Finalize(output);
+				if (aggregate_info.IsActive() && !l_state.aggrgate_emitted) {
+					aggregate_info.Finalize(output);
 					l_state.aggrgate_emitted = true;
 				}
 				return;
@@ -462,7 +462,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 
 	if (input.aggregate_info) {
-		g_state->agg_info = input.aggregate_info;
+		g_state->aggregate_info = input.aggregate_info;
 	}
 
 	bool need_scanned_types = input.CanRemoveFilterColumns() || input.aggregate_info;
