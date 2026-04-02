@@ -5,7 +5,8 @@ namespace duckdb {
 
 VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
                                    idx_t child_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(child_capacity) {
+    : StandardVectorBuffer(allocator, capacity), child(std::move(vector)), capacity(child_capacity) {
+	buffer_type = VectorBufferType::LIST_BUFFER;
 	if (capacity > 0) {
 		allocated_data = allocator.Allocate(capacity * sizeof(list_entry_t));
 		data_ptr = allocated_data.get();
@@ -22,22 +23,23 @@ VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 }
 
 VectorListBuffer::VectorListBuffer(data_ptr_t data, const Vector &vector, idx_t child_capacity, idx_t child_size)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data) {
+    : StandardVectorBuffer(data) {
+	buffer_type = VectorBufferType::LIST_BUFFER;
 	capacity = child_capacity;
 	size = child_size;
 	child = make_uniq<Vector>(Vector::Ref(vector));
 }
 
 VectorListBuffer::VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data), capacity(parent.capacity), size(parent.size) {
+    : StandardVectorBuffer(data), capacity(parent.capacity), size(parent.size) {
+	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, const VectorListBuffer &parent)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), allocated_data(std::move(allocated_data_p)),
-      capacity(parent.capacity), size(parent.size) {
+    : StandardVectorBuffer(std::move(allocated_data_p)), capacity(parent.capacity), size(parent.size) {
+	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
-	data_ptr = allocated_data.get();
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
