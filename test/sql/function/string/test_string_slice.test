@@ -18,9 +18,10 @@ CREATE TABLE nulltable(n VARCHAR);
 statement ok
 INSERT INTO nulltable VALUES (NULL)
 
-statement maybe
+statement error
 SELECT NULL::VARCHAR[off:length+off] FROM strings
 ----
+Parser Error
 
 statement error
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
