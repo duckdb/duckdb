@@ -21,8 +21,7 @@ unique_ptr<LogicalOperator> SamplingPushdown::Optimize(unique_ptr<LogicalOperato
 				// For row-count sampling, calculate the sampling rate based on estimated cardinality.
 				// Use EstimateCardinality which can query table function stats if has_estimated_cardinality is not set.
 				row_limit = sample_options.sample_size.GetValue<int64_t>();
-				const idx_t estimated_card =
-				    op->has_estimated_cardinality ? op->estimated_cardinality : get.EstimateCardinality(context);
+				const idx_t estimated_card = get.EstimateCardinality(context);
 				if (estimated_card > 0) {
 					sample_op.sample_options->sample_rate =
 					    static_cast<double>(row_limit) / static_cast<double>(estimated_card);

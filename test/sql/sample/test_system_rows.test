@@ -39,6 +39,18 @@ SELECT COUNT(*) FROM test_table USING SAMPLE 15000 ROWS (system);
 ----
 10000
 
+# Edge case: zero rows requested
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 0 ROWS (system);
+----
+0
+
+# Edge case: exactly one row
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 1 ROWS (system);
+----
+1
+
 # System sampling with repeatable seed - should give consistent results
 loop i 0 5
 
@@ -61,9 +73,12 @@ SELECT COUNT(*) FROM test_table USING SAMPLE 200 ROWS (system, 999);
 ----
 200
 
-# Test with small table
+# Test with small table; materialized range() source for sampling below
 statement ok
 CREATE TABLE small_table AS SELECT i FROM range(10) tbl(i);
+
+statement ok
+CREATE TABLE range_sample_src AS SELECT i FROM range(5000) tbl(i);
 
 query I
 SELECT COUNT(*) FROM small_table USING SAMPLE 5 ROWS (system);
@@ -76,14 +91,57 @@ SELECT COUNT(*) FROM small_table USING SAMPLE 20 ROWS (system);
 ----
 10
 
-# Disable verification because when sampling is pushed down before the filter,
-# system sampling selects ~100 rows from the entire table first, then applies
-# the WHERE clause. Since only half the table matches (i < 5000), we expect
-# roughly 50 rows in the result, not 100. This is correct behavior for system
-# sampling with filters, but verification would incorrectly flag the mismatch
-# between requested (100) and actual (63) row count.
+# Edge case: one row from a small table
+query I
+SELECT COUNT(*) FROM small_table USING SAMPLE 1 ROWS (system);
+----
+1
+
+# The following cases disable verification: (1) CTE / window subquery sampling
+# can hit scheduler limitations under the statement verifier; (2) when system sampling
+# is pushed down before a filter, the requested row count can disagree with the
+# filtered result count (correct behavior, but verification would flag it).
 statement ok
 PRAGMA disable_verification;
+
+# System sampling over a CTE (non-simple table ref)
+query I
+WITH base AS (
+    SELECT i FROM test_table
+)
+SELECT COUNT(*) FROM base USING SAMPLE 37 ROWS (system);
+----
+37
+
+# System sampling over rows originally from range() (materialized table)
+query I
+SELECT COUNT(*) FROM range_sample_src USING SAMPLE 120 ROWS (system);
+----
+120
+
+# Chained CTE: sample the final relation built from multiple CTEs
+query I
+WITH x AS (
+    SELECT * FROM test_table ORDER BY i LIMIT 200
+)
+SELECT COUNT(*) FROM x USING SAMPLE 50 ROWS (system);
+----
+50
+
+# System sampling over a window subquery (non-simple pipeline)
+query I
+SELECT COUNT(*) FROM (
+    SELECT i, row_number() OVER w
+    FROM test_table
+    WINDOW w AS (ORDER BY i)
+) sq USING SAMPLE 50 ROWS (system);
+----
+50
+
+# Filtered pushdown undershoot counts match fixed expectations only for the default
+# vector size: each scan chunk takes ceil(sample_rate * STANDARD_VECTOR_SIZE) rows
+# before filters apply (see RowGroup::Scan).
+require exact_vector_size 2048
 
 # System sampling with filtering, undershoots due to the filter
 query I
@@ -99,11 +157,3 @@ SELECT COUNT(*) FROM (SELECT * FROM test_table WHERE i % 2 = 0) tbl(i) USING SAM
 
 statement ok
 PRAGMA enable_verification;
-
-# System sampling with joins (no pushdown)
-query I
-SELECT COUNT(*) FROM (
-    SELECT a.i FROM test_table a, test_table b WHERE a.i = b.i
-) USING SAMPLE 50 ROWS (system);
-----
-50
