@@ -447,6 +447,18 @@ unittest_relassert:
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
 
+.PHONY: codecov
+codecov: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/codecov && \
+	cd build/codecov && \
+	cmake -E env CFLAGS="-fprofile-instr-generate -fcoverage-mapping" CXXFLAGS="-fprofile-instr-generate -fcoverage-mapping" LDFLAGS="-fprofile-instr-generate" \
+	cmake --fresh $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build . --config Release
+
+.PHONY: compute_smoke_tests
+compute_smoke_tests:
+	$(PYTHON) scripts/ci/compute_smoke_tests.py
+
 unittestarrow:
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) "[arrow]"
 
