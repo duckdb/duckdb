@@ -562,16 +562,18 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bloom_filter = filter.Cast<BFTableFilter>();
-		auto &state = filter_state.Cast<BFTableFilterState>();
+		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
 		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
 	}
 	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
 		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
-		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count);
+		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
+		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count, state);
 	}
-	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
-		return prefix_range_filter.Filter(vector, sel, approved_tuple_count);
+		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
+		return prefix_range_filter.Filter(vector, sel, approved_tuple_count, state);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

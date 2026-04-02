@@ -32,7 +32,8 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 		if (all_values_inlined) {
 			return FSSTPrimitives::DecompressInlinedValue(decoder, str_ptr, string_len);
 		} else {
-			return FSSTPrimitives::DecompressValue(decoder, StringVector::GetStringBuffer(result), str_ptr, string_len);
+			return FSSTPrimitives::DecompressValue(decoder, StringVector::GetStringAllocator(result), str_ptr,
+			                                       string_len);
 		}
 	}
 	default:
@@ -101,12 +102,12 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	}
 
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, dict_count);
-	auto dict_child_data = FlatVector::GetData<string_t>(dictionary->data);
-	auto &validity = FlatVector::Validity(dictionary->data);
+	auto &dict_data = dictionary->data;
+	auto dict_child_data = FlatVector::GetData<string_t>(dict_data);
+	auto &validity = FlatVector::Validity(dict_data);
 	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
 
-	auto &dict_data = dictionary->data;
 	uint32_t offset = 0;
 	for (uint32_t i = 0; i < dict_count; i++) {
 		//! We can uncompress during fetching, we need the length of the string inside the dictionary

@@ -95,6 +95,8 @@ public:
 	static string ExpressionTypeToWindow(ExpressionType expression_type);
 	void SetFunctionName(const string &function_name);
 
+	static ExpressionType WindowToExpressionType(const string &fun_name);
+
 public:
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
 	                             const WindowBoundary groups) {
@@ -278,8 +280,6 @@ public:
 	}
 
 private:
-	static ExpressionType WindowToExpressionType(const string &fun_name);
-
 	//	Backwards-compatible serialization interface
 	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
 	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);

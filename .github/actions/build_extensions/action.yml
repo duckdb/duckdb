@@ -110,7 +110,9 @@ runs:
 
     - name: Setup vcpkg
       if: ${{ inputs.vcpkg_build == 1 }}
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 

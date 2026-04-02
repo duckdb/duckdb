@@ -28,11 +28,17 @@ inputs:
     description: Whether to run smoke tests
     required: false
     default: "true"
+  changed_tests_file:
+    description: Path to a newline-delimited list of changed tests to include in smoke tests
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -50,14 +56,14 @@ runs:
     - name: Smoke tests
       if: ${{ inputs.run_smoke_tests == 'true' }}
       shell: bash
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest T="--changed-tests=${{ inputs.changed_tests_file }}"
 
     - name: Prepare release artifact
       shell: bash
       run: make release-artifact
 
     - name: Upload release build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact_name }}
         path: ${{ inputs.artifact_tarball }}
