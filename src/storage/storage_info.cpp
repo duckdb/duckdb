@@ -95,13 +95,14 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.5.0", 68},
 	{"v1.5.1", 68},
 	{"v1.5.2", 68},
+	{"v2.0.0", 68},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
 static_assert(DEFAULT_STORAGE_VERSION_INFO == VERSION_NUMBER, "Check on VERSION_INFO");
 
 // START OF SERIALIZATION VERSION INFO
-const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 7;
+const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 8;
 const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
 static const SerializationVersionInfo serialization_version_info[] = {
 	{"v0.10.0", 1},
@@ -127,7 +128,8 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.5.0", 7},
 	{"v1.5.1", 7},
 	{"v1.5.2", 7},
-	{"latest", 7},
+	{"v2.0.0", 8},
+	{"latest", 8},
 	{nullptr, 0}
 };
 // END OF SERIALIZATION VERSION INFO

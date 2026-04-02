@@ -110,6 +110,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DETACH:
 		return "DETACH";
+	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
+		return "CREATE_TRIGGER";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
