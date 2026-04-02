@@ -4,9 +4,9 @@
 
 require vacuum_rebuild_indexes
 
-# --- Scenario 1: Partial deletes with merge + empty row group drops ---
-# Tests that vacuum correctly drops an empty row group and compacts
-# a partially-deleted row group, then rebuilds the index.
+# Scenario 1: Empty row group drop + merge of adjacent half-empty row groups.
+# RG0 is fully deleted (dropped), RG1 and RG2 are each half-deleted (61440 live rows),
+# so they merge into 1 row group. RG3 is untouched. Result: 2 row groups, all compacted.
 
 load {TEST_DIR}/vacuum_rebuild_indexes_threshold_1.db
 
@@ -22,7 +22,7 @@ CREATE TABLE t1(i INTEGER);
 statement ok
 CREATE INDEX idx1 ON t1(i);
 
-# insert enough rows for 4 row groups (122880 rows each = 491520 total)
+# insert 4 row groups (122880 rows each = 491520 total)
 statement ok
 INSERT INTO t1 SELECT i FROM range(491520) tbl(i);
 
@@ -34,37 +34,64 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t1')
 ----
 4
 
-# delete all rows in the first row group (empty group drop)
-# and half the rows in the second row group (partial delete)
+# delete all of RG0, first half of RG1, first half of RG2
 statement ok
-DELETE FROM t1 WHERE i < 184320
+DELETE FROM t1 WHERE i < 184320 OR (i >= 245760 AND i < 307200)
 
 statement ok
 CHECKPOINT
 
-# RG0 (all deleted) is dropped. RG1 has 61440 live rows (half), RG2 and RG3 are full.
-# The empty RG0 is dropped, leaving 3 row groups.
+# RG0 dropped, RG1 (61440) + RG2 (61440) merged into 1 row group, RG3 stays.
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t1')
 ----
-3
-
-# verify index lookups still work across the compacted range
-query I
-SELECT COUNT(*) FROM t1 WHERE i = 184320
-----
-1
+2
 
 query I
-SELECT COUNT(*) FROM t1 WHERE i = 245760
+SELECT COUNT(*) FROM t1
 ----
-1
+245760
 
-query I
-SELECT COUNT(*) FROM t1 WHERE i = 491519
+# verify index scan is used after rebuild
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM t1 WHERE i = 184320
 ----
-1
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
+# merged row group: i=184320..245759 (from RG1) then i=307200..368639 (from RG2)
+# starts at rowid 0, fully compacted
+query II
+SELECT i, rowid FROM t1 WHERE i = 184320
+----
+184320	0
+
+query II
+SELECT i, rowid FROM t1 WHERE i = 245759
+----
+245759	61439
+
+query II
+SELECT i, rowid FROM t1 WHERE i = 307200
+----
+307200	61440
+
+query II
+SELECT i, rowid FROM t1 WHERE i = 368639
+----
+368639	122879
+
+# RG3 starts at rowid 122880
+query II
+SELECT i, rowid FROM t1 WHERE i = 368640
+----
+368640	122880
+
+query II
+SELECT i, rowid FROM t1 WHERE i = 491519
+----
+491519	245759
+
+# deleted values not found via index
 query I
 SELECT COUNT(*) FROM t1 WHERE i = 0
 ----
@@ -76,13 +103,12 @@ SELECT COUNT(*) FROM t1 WHERE i = 122879
 0
 
 query I
-SELECT COUNT(*) FROM t1
+SELECT COUNT(*) FROM t1 WHERE i = 260000
 ----
-307200
+0
 
-# Threshold exceeded: vacuum should NOT rebuild indexes.
-# When a table exceeds the threshold, row id changing vacuum operations
-# should be skipped to avoid index rebuilds.
+# Scenario 2: Threshold exceeded - vacuum should not change row IDs.
+# 1M rows exceeds the test config threshold (500000), so no drops or merges.
 
 load {TEST_DIR}/vacuum_rebuild_indexes_threshold_2.db
 
@@ -95,7 +121,7 @@ CREATE TABLE t2(i INTEGER);
 statement ok
 CREATE INDEX idx2 ON t2(i);
 
-# insert 1M rows (~9 row groups) - well above the test config threshold (500000)
+# insert 1M rows (~9 row groups) - above the test config threshold (500000)
 statement ok
 INSERT INTO t2 SELECT i FROM range(1000000) tbl(i);
 
@@ -114,28 +140,36 @@ DELETE FROM t2 WHERE i < 122880
 statement ok
 CHECKPOINT
 
+# row group count unchanged - no vacuum operations
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t2')
 ----
 9
+
+# verify index scan is still used (index was not rebuilt, but still valid)
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM t2 WHERE i = 122880
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# row IDs unchanged
+query II
+SELECT i, rowid FROM t2 WHERE i = 122880
+----
+122880	122880
+
+query II
+SELECT i, rowid FROM t2 WHERE i = 999999
+----
+999999	999999
 
 query I
 SELECT COUNT(*) FROM t2
 ----
 877120
 
-query I
-SELECT COUNT(*) FROM t2 WHERE i = 122880
-----
-1
-
-query I
-SELECT COUNT(*) FROM t2 WHERE i = 999999
-----
-1
-
-# --- Scenario 3: Multiple indexes ---
-# Verify rebuild works when a table has multiple ART indexes.
+# Scenario 3: Multiple indexes with compaction.
+# Verify both indexes return correct row IDs after vacuum + rebuild.
 
 load {TEST_DIR}/vacuum_rebuild_indexes_threshold_3.db
 
@@ -151,6 +185,7 @@ CREATE INDEX idx3a ON t3(i);
 statement ok
 CREATE INDEX idx3b ON t3(j);
 
+# insert 2 row groups
 statement ok
 INSERT INTO t3 SELECT i, i * 10 FROM range(245760) tbl(i);
 
@@ -162,26 +197,56 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t3')
 ----
 2
 
+# delete all rows in the first row group
 statement ok
 DELETE FROM t3 WHERE i < 122880
 
 statement ok
 CHECKPOINT
 
+# RG0 dropped, RG1 shifts to rowid 0 (all rows live, no partial deletes)
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t3')
 ----
 1
 
-query I
-SELECT COUNT(*) FROM t3 WHERE i = 200000
+query II
+EXPLAIN ANALYZE SELECT i, j, rowid FROM t3 WHERE i = 122880
 ----
-1
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
-query I
-SELECT COUNT(*) FROM t3 WHERE j = 2000000
+query II
+EXPLAIN ANALYZE SELECT i, j, rowid FROM t3 WHERE j = 1228800
 ----
-1
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# first row via both indexes
+query III
+SELECT i, j, rowid FROM t3 WHERE i = 122880
+----
+122880	1228800	0
+
+query III
+SELECT i, j, rowid FROM t3 WHERE j = 1228800
+----
+122880	1228800	0
+
+# last row via both indexes
+query III
+SELECT i, j, rowid FROM t3 WHERE i = 245759
+----
+245759	2457590	122879
+
+query III
+SELECT i, j, rowid FROM t3 WHERE j = 2457590
+----
+245759	2457590	122879
+
+# middle row
+query III
+SELECT i, j, rowid FROM t3 WHERE i = 200000
+----
+200000	2000000	77120
 
 query I
 SELECT COUNT(*) FROM t3
