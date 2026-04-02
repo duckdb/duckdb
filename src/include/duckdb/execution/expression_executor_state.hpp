@@ -81,7 +81,7 @@ private:
 	//! This is the case when the input is "practically unary", i.e., only one non-const input column
 	optional_idx input_col_idx;
 	//! Vector holding the expression executed on the entire dictionary
-	buffer_ptr<VectorChildBuffer> output_dictionary;
+	buffer_ptr<DictionaryEntry> output_dictionary;
 	//! ID of the input dictionary Vector
 	string current_input_dictionary_id;
 };

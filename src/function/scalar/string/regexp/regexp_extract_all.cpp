@@ -169,7 +169,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
 	// for the result, all returned strings are substrings of the originals
-	output_child.SetAuxiliary(strings.GetAuxiliary());
+	StringVector::AddHeapReference(output_child, strings);
 
 	unique_ptr<RegexStringPieceArgs> non_const_args;
 	unique_ptr<duckdb_re2::RE2> stored_re;
@@ -301,7 +301,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	// Reference original string buffer for zero-copy substring assignment
 	for (auto &child : child_entries) {
-		child.SetAuxiliary(strings.GetAuxiliary());
+		StringVector::AddHeapReference(child, strings);
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 

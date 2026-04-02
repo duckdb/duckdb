@@ -16,12 +16,22 @@ namespace duckdb {
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(data_ptr_t data, const Vector &vector, idx_t child_capacity, idx_t child_size);
+	explicit VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, const VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
 	Vector &GetChild() {
+		return *child;
+	}
+	const Vector &GetChild() const {
 		return *child;
 	}
 	void Reserve(idx_t to_reserve);
@@ -42,7 +52,18 @@ public:
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
 
+	data_ptr_t GetData() override {
+		return data_ptr;
+	}
+
+	optional_ptr<Allocator> GetAllocator() const override {
+		return allocated_data.GetAllocator();
+	}
+
 private:
+	// data for list offsets
+	data_ptr_t data_ptr;
+	AllocatedData allocated_data;
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;
@@ -52,15 +73,13 @@ private:
 struct ListVector {
 	static inline const list_entry_t *GetData(const Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			return GetData(child);
+			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
 		return FlatVector::GetData<const list_entry_t>(v);
 	}
 	static inline list_entry_t *GetData(Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			return GetData(child);
+			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
 		return FlatVector::GetData<list_entry_t>(v);
 	}
@@ -86,8 +105,6 @@ struct ListVector {
 	DUCKDB_API static ConsecutiveChildListInfo GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count);
 	//! Slice and flatten a child vector to only contain a consecutive subsection of the child entries
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
-	//! Share the entry of the other list vector
-	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
 	//! Returns the total number of entries in the list
 	DUCKDB_API static idx_t GetTotalEntryCount(Vector &list, idx_t count);
 

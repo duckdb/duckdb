@@ -1,7 +1,7 @@
 # name: test/sql/types/geo/geometry_update.test
 # group: [geo]
 
-load __TEST_DIR__/test_update_geo.db readwrite v1.4.4
+load {TEST_DIR}/test_update_geo.db readwrite v1.4.4
 
 statement ok
 CREATE TABLE t (id INT, geo GEOMETRY)
@@ -26,7 +26,7 @@ SELECT id, ST_AsText(geo) FROM t ORDER BY id;
 
 
 # Now lets do it with shredding enabled
-load __TEST_DIR__/test_update_geo_2.db readwrite v1.5.0
+load {TEST_DIR}/test_update_geo_2.db readwrite v1.5.0
 
 statement ok
 CREATE TABLE t (id INT, geo GEOMETRY)

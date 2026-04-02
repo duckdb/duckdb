@@ -332,6 +332,7 @@ void PEGTransformerFactory::RegisterCreateView() {
 void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
 	REGISTER_TRANSFORM(TransformForEachClause);
+	REGISTER_TRANSFORM(TransformTriggerName);
 	REGISTER_TRANSFORM(TransformTriggerTiming);
 	REGISTER_TRANSFORM(TransformTriggerEvent);
 	REGISTER_TRANSFORM(TransformTriggerEventInsert);

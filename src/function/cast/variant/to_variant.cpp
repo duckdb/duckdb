@@ -239,7 +239,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	auto &keys_entry = ListVector::GetEntry(keys);
 
 	//! Initialize the dictionary
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	ToVariantSourceData source_data(source, count);
 

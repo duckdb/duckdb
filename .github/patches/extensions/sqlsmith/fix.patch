@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 72e8f5b..06fc74a 100644
+index 72e8f5b..8eafec0 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -18,6 +18,7 @@
@@ -26,8 +26,46 @@ index 72e8f5b..06fc74a 100644
  	}
 
  	return delete_statement;
+@@ -957,9 +958,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 		case ExpressionType::WINDOW_NTILE:
+ 		case ExpressionType::WINDOW_FIRST_VALUE:
+ 		case ExpressionType::WINDOW_LAST_VALUE:
++			min_parameters = 1;
++			break;
+ 		case ExpressionType::WINDOW_LEAD:
+ 		case ExpressionType::WINDOW_LAG:
+ 			min_parameters = 1;
++			min_parameters = 3;
+ 			break;
+ 		case ExpressionType::WINDOW_NTH_VALUE:
+ 			min_parameters = 2;
+@@ -970,7 +974,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 		max_parameters = min_parameters;
+ 	}
+ 	WindowChecker checker(*this);
+-	auto result = make_uniq<WindowExpression>(type, INVALID_CATALOG, INVALID_SCHEMA, std::move(name));
++	auto result = make_uniq<WindowExpression>(SYSTEM_CATALOG, DEFAULT_SCHEMA, std::move(name));
+ 	result->children = GenerateChildren(min_parameters, max_parameters);
+ 	while (RandomPercentage(50)) {
+ 		result->partitions.push_back(GenerateExpression());
+@@ -1014,15 +1018,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 	default:
+ 		break;
+ 	}
+-	switch (type) {
+-	case ExpressionType::WINDOW_LEAD:
+-	case ExpressionType::WINDOW_LAG:
+-		result->offset_expr = RandomExpression(30);
+-		result->default_expr = RandomExpression(30);
+-		break;
+-	default:
+-		break;
+-	}
+ 	return std::move(result);
+ }
+
 diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
-index 4602928..d728a1c 100644
+index 4602928..3e56aca 100644
 --- a/src/statement_simplifier.cpp
 +++ b/src/statement_simplifier.cpp
 @@ -8,8 +8,11 @@
@@ -42,7 +80,16 @@ index 4602928..d728a1c 100644
  #include "duckdb/parser/statement/select_statement.hpp"
  #endif
 
-@@ -395,17 +398,19 @@ void StatementSimplifier::Simplify(SelectStatement &stmt) {
+@@ -357,8 +360,6 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
+ 		SimplifyChildExpression(expr, window.filter_expr);
+ 		SimplifyChildExpression(expr, window.start_expr);
+ 		SimplifyChildExpression(expr, window.end_expr);
+-		SimplifyChildExpression(expr, window.offset_expr);
+-		SimplifyChildExpression(expr, window.default_expr);
+ 		SimplifyEnum(window.ignore_nulls, false);
+ 		SimplifyEnum(window.distinct, false);
+ 		SimplifyEnum(window.start, WindowBoundary::UNBOUNDED_PRECEDING);
+@@ -395,17 +396,19 @@ void StatementSimplifier::Simplify(SelectStatement &stmt) {
  }
 
  void StatementSimplifier::Simplify(InsertStatement &stmt) {
@@ -70,7 +117,7 @@ index 4602928..d728a1c 100644
  }
 
  void StatementSimplifier::Simplify(UpdateSetInfo &info) {
-@@ -432,11 +437,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
+@@ -432,11 +435,11 @@ void StatementSimplifier::Simplify(PrepareStatement &stmt) {
  }
 
  void StatementSimplifier::Simplify(UpdateStatement &stmt) {
@@ -87,50 +134,3 @@ index 4602928..d728a1c 100644
  }
 
  void StatementSimplifier::Simplify(SQLStatement &stmt) {
-
-diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 72e8f5b..6e33fee 100644
---- a/src/statement_generator.cpp
-+++ b/src/statement_generator.cpp
-@@ -957,9 +957,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
- 		case ExpressionType::WINDOW_NTILE:
- 		case ExpressionType::WINDOW_FIRST_VALUE:
- 		case ExpressionType::WINDOW_LAST_VALUE:
-+			min_parameters = 1;
-+			break;
- 		case ExpressionType::WINDOW_LEAD:
- 		case ExpressionType::WINDOW_LAG:
- 			min_parameters = 1;
-+			max_parameters = 3;
- 			break;
- 		case ExpressionType::WINDOW_NTH_VALUE:
- 			min_parameters = 2;
-@@ -1014,15 +1017,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
- 	default:
- 		break;
- 	}
--	switch (type) {
--	case ExpressionType::WINDOW_LEAD:
--	case ExpressionType::WINDOW_LAG:
--		result->offset_expr = RandomExpression(30);
--		result->default_expr = RandomExpression(30);
--		break;
--	default:
--		break;
--	}
- 	return std::move(result);
- }
-
-diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
-index 4602928..3f4037b 100644
---- a/src/statement_simplifier.cpp
-+++ b/src/statement_simplifier.cpp
-@@ -357,8 +357,6 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
- 		SimplifyChildExpression(expr, window.filter_expr);
- 		SimplifyChildExpression(expr, window.start_expr);
- 		SimplifyChildExpression(expr, window.end_expr);
--		SimplifyChildExpression(expr, window.offset_expr);
--		SimplifyChildExpression(expr, window.default_expr);
- 		SimplifyEnum(window.ignore_nulls, false);
- 		SimplifyEnum(window.distinct, false);
- 		SimplifyEnum(window.start, WindowBoundary::UNBOUNDED_PRECEDING);
