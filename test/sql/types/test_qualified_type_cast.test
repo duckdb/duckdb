@@ -1,0 +1,34 @@
+# name: test/sql/types/test_user_type_errors_18452.test
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+select 'abc'::text;
+
+statement ok
+select 'abc'::main.text;
+
+statement error
+select 'abc'::pg_catalog.text;
+----
+Catalog Error: Type with name VARCHAR does not exist!
+Did you mean "main.VARCHAR"?
+
+statement ok
+select 'abc'::main.char;
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT cast (1 as main.{type})
+
+endloop
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz blob
+
+statement ok 
+SELECT cast('2026-01-01' as main.{type})
+
+endloop

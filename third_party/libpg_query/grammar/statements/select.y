@@ -1698,7 +1698,7 @@ Typename:	SimpleTypename opt_array_bounds
 				}
 			| qualified_typename opt_array_bounds
 				{
-					$$ = makeTypeNameFromNameList($1);
+					$$ = $1;
 					$$->arrayBounds = $2;
 				}
 			| SETOF SimpleTypename opt_array_bounds
@@ -1715,7 +1715,7 @@ Typename:	SimpleTypename opt_array_bounds
 				}
 			| qualified_typename ARRAY '[' Iconst ']'
 				{
-					$$ = makeTypeNameFromNameList($1);
+					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger($4));
 				}
 			| SETOF SimpleTypename ARRAY '[' Iconst ']'
@@ -1726,7 +1726,7 @@ Typename:	SimpleTypename opt_array_bounds
 				}
 			| SETOF qualified_typename ARRAY '[' Iconst ']'
 				{
-					$$ = makeTypeNameFromNameList($2);
+					$$ = $2;
 					$$->arrayBounds = list_make1(makeInteger($5));
 					$$->setof = true;
 				}
@@ -1737,7 +1737,7 @@ Typename:	SimpleTypename opt_array_bounds
 				}
 			| qualified_typename ARRAY
 				{
-					$$ = makeTypeNameFromNameList($1);
+					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger(-1));
 				}
 			| SETOF SimpleTypename ARRAY
@@ -1748,7 +1748,7 @@ Typename:	SimpleTypename opt_array_bounds
 				}
 			| SETOF qualified_typename ARRAY
 				{
-					$$ = makeTypeNameFromNameList($2);
+					$$ = $2;
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
@@ -1776,8 +1776,16 @@ Typename:	SimpleTypename opt_array_bounds
 		;
 
 qualified_typename:
-			IDENT '.' IDENT					{ $$ = list_make2(makeString($1), makeString($3)); }
-			| qualified_typename '.' IDENT	{ $$ = lappend($1, makeString($3)); }
+			IDENT '.' SimpleTypename {
+				$3->names = lcons(makeString($1), $3->names);
+				$$ = $3;
+			}
+			| qualified_typename '.' SimpleTypename {
+				$1->names = list_concat($1->names, $3->names);
+				$1->typmods = $3->typmods;
+				$1->typemod = $3->typemod;
+				$$ = $1;
+			}
 	;
 
 opt_array_bounds:
