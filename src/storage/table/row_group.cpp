@@ -526,7 +526,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+		if (filter.IsOnlyForZoneMapFiltering()) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -867,19 +867,6 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfoIfLoaded() const {
 	return nullptr;
 }
 
-bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
-	if (checkpoint_id == MAX_TRANSACTION_ID) {
-		// no id specified - checkpoint all committed data
-		return true;
-	}
-	// check if this row group was committed as of the current checkpoint id
-	auto vinfo = GetVersionInfoIfLoaded();
-	if (!vinfo) {
-		return true;
-	}
-	return vinfo->ShouldCheckpointRowGroup(checkpoint_id, count);
-}
-
 idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
 	if (options.insert_type == InsertedScanType::ALL_ROWS &&
 	    options.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
@@ -1106,7 +1093,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
-		write_data.should_checkpoint = row_group.get().ShouldCheckpointRowGroup(info.options.transaction_id);
 		result.push_back(std::move(write_data));
 	}
 
@@ -1128,10 +1114,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
-			if (!row_group_write_data.should_checkpoint) {
-				// row group should not be checkpointed - skip
-				continue;
-			}
 			auto &column = row_group.GetColumn(column_idx);
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
@@ -1152,10 +1134,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 		auto &row_group_write_data = result[row_group_idx];
 		auto &row_group = row_groups[row_group_idx].get();
-		if (!row_group_write_data.should_checkpoint) {
-			// row group should not be checkpointed - skip
-			continue;
-		}
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
 		result_row_group->columns = std::move(result_columns[row_group_idx]);
 		result_row_group->version_info = row_group.version_info.load();

@@ -1,0 +1,106 @@
+# name: test/sql/copy/parquet/writer/parquet_dictionary_index_width.test
+# description: Dictionary-encoded Parquet payloads should shrink when the number of distinct values crosses a bit-width boundary.
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (
+	SELECT CASE i % 5
+		WHEN 0 THEN 'A'
+		WHEN 1 THEN 'A'
+		WHEN 2 THEN 'A'
+		WHEN 3 THEN 'B'
+		ELSE 'B'
+	END AS s
+	FROM range(65536) t(i)
+) TO '{TEST_DIR}/dict-two-values.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER FALSE);
+
+statement ok
+COPY (
+	SELECT CASE i % 5
+		WHEN 0 THEN 'A'
+		WHEN 1 THEN 'A'
+		WHEN 2 THEN 'A'
+		WHEN 3 THEN 'B'
+		ELSE 'C'
+	END AS s
+	FROM range(65536) t(i)
+) TO '{TEST_DIR}/dict-three-values.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT encodings, stats_distinct_count
+FROM parquet_metadata('{TEST_DIR}/dict-two-values.parquet');
+----
+PLAIN_DICTIONARY	2
+
+query II
+SELECT encodings, stats_distinct_count
+FROM parquet_metadata('{TEST_DIR}/dict-three-values.parquet');
+----
+PLAIN_DICTIONARY	3
+
+query I
+WITH two AS (
+	SELECT total_uncompressed_size AS sz
+	FROM parquet_metadata('{TEST_DIR}/dict-two-values.parquet')
+), three AS (
+	SELECT total_uncompressed_size AS sz
+	FROM parquet_metadata('{TEST_DIR}/dict-three-values.parquet')
+)
+SELECT CASE WHEN two.sz * 3 < three.sz * 2 THEN 1 ELSE 0 END
+FROM two, three;
+----
+1
+
+statement ok
+COPY (
+	SELECT CASE i % 5
+		WHEN 0 THEN 'A'
+		WHEN 1 THEN 'A'
+		WHEN 2 THEN 'A'
+		WHEN 3 THEN 'B'
+		ELSE 'B'
+	END AS s
+	FROM range(65536) t(i)
+) TO '{TEST_DIR}/dict-two-values-v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, WRITE_BLOOM_FILTER FALSE);
+
+statement ok
+COPY (
+	SELECT CASE i % 5
+		WHEN 0 THEN 'A'
+		WHEN 1 THEN 'A'
+		WHEN 2 THEN 'A'
+		WHEN 3 THEN 'B'
+		ELSE 'C'
+	END AS s
+	FROM range(65536) t(i)
+) TO '{TEST_DIR}/dict-three-values-v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, WRITE_BLOOM_FILTER FALSE);
+
+query II
+SELECT encodings, stats_distinct_count
+FROM parquet_metadata('{TEST_DIR}/dict-two-values-v2.parquet');
+----
+RLE_DICTIONARY	2
+
+query II
+SELECT encodings, stats_distinct_count
+FROM parquet_metadata('{TEST_DIR}/dict-three-values-v2.parquet');
+----
+RLE_DICTIONARY	3
+
+query I
+WITH two AS (
+	SELECT total_uncompressed_size AS sz
+	FROM parquet_metadata('{TEST_DIR}/dict-two-values-v2.parquet')
+), three AS (
+	SELECT total_uncompressed_size AS sz
+	FROM parquet_metadata('{TEST_DIR}/dict-three-values-v2.parquet')
+)
+SELECT CASE WHEN two.sz * 3 < three.sz * 2 THEN 1 ELSE 0 END
+FROM two, three;
+----
+1

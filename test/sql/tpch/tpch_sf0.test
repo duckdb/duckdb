@@ -10,7 +10,7 @@ CALL dbgen(sf=0);
 loop i 1 23
 
 statement ok
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 
 endloop
 

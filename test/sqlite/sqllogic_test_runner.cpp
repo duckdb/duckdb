@@ -195,6 +195,18 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 }
 
+void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement,
+                               const string &test_name) {
+	auto loop_it = "{" + loop_iterator_name + "}";
+	auto deprecated_loop_it = "$" + loop_it;
+	if (StringUtil::Contains(text, deprecated_loop_it)) {
+		Printer::PrintF("Replacing deprecated loop iterator %s in test \"%s\" - please use the new loop iterator %s",
+		                deprecated_loop_it, test_name, loop_it);
+		text = StringUtil::Replace(text, deprecated_loop_it, replacement);
+	}
+	text = StringUtil::Replace(text, loop_it, replacement);
+}
+
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
 	replacement = ReplaceKeywords(replacement);
 	if (StringUtil::Contains(loop_iterator_name, ",")) {
@@ -205,11 +217,12 @@ string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator
 			     ") does not match number of commas in replacement (" + replacement + ")");
 		}
 		for (idx_t i = 0; i < name_splits.size(); i++) {
-			text = StringUtil::Replace(text, "${" + name_splits[i] + "}", replacement_splits[i]);
+			StringReplaceLoopIterator(text, name_splits[i], replacement_splits[i], file_name);
 		}
 		return text;
 	} else {
-		return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+		StringReplaceLoopIterator(text, loop_iterator_name, replacement, file_name);
+		return text;
 	}
 }
 
@@ -227,19 +240,29 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	// TODO: (@benfleis) Remove after ${} syntax replaced (test-env, loop vars, ???), and __BUILD_DIRECTORY__ and
 	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
 	//
 	// Replace environment variables in the SQL
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
-		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
-		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
+		auto legacy_syntax = StringUtil::Format("${%s}", name);
+		auto env_syntax = StringUtil::Format("{%s}", name);
+		if (StringUtil::Contains(input, legacy_syntax)) {
+			Printer::PrintF("Replacing deprecated %s in test %s - please replace with %s", legacy_syntax, file_name,
+			                env_syntax);
+			input = StringUtil::Replace(input, legacy_syntax, value);
+		}
+		input = StringUtil::Replace(input, env_syntax, value);
 	}
 	auto &test_config = TestConfiguration::Get();
 	test_config.ProcessPath(input, file_name);
-	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	input = StringUtil::Replace(input, "{BUILD_DIRECTORY}", DUCKDB_BUILD_DIRECTORY);
+	if (StringUtil::Contains(input, "__BUILD_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated __BUILD_DIRECTORY__ in test %s - please replace with {BUILD_DIRECTORY}",
+		                file_name);
+		input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	}
 
 	return input;
 }
@@ -451,7 +474,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noforcestorage") {
+	if (param == "noforcestorage" || param == "no_force_storage") {
 		if (TestConfiguration::TestForceStorage()) {
 			return RequireResult::MISSING;
 		}
@@ -1198,7 +1221,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
 				parser.Fail("unzip requires 1 argument: <path/to/file.db.gz> [optional: "
-				            "<path/to/unzipped_file.db>, default: __TEST_DIR__/<file.db>]");
+				            "<path/to/unzipped_file.db>, default: {TEST_DIR}/<file.db>]");
 			}
 
 			// set input path
@@ -1212,7 +1235,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);
 
 			// extraction path
-			string default_extraction_path = ReplaceKeywords("__TEST_DIR__/" + filename);
+			string default_extraction_path = ReplaceKeywords("{TEST_DIR}/" + filename);
 			string extraction_path =
 			    (token.parameters.size() == 2) ? ReplaceKeywords(token.parameters[1]) : default_extraction_path;
 			if (extraction_path == "NULL") {
@@ -1225,7 +1248,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// NOTE: tags-before-test-commands is the low bar right now
 			// 1 better: all non-command lines precede command lines
 			// Mo better: parse first, build entire context before execution; allows e.g.
-			// - implicit tag scans of e.g. strings, vars, etc., like '${ENVVAR}', '__TEST_DIR__', 'ATTACH'
+			// - implicit tag scans of e.g. strings, vars, etc., like '{ENVVAR}', '{TEST_DIR}', 'ATTACH'
 			// - faster subset runs
 			// - tag match runs to generate lists
 			if (test_expr_executed) {

@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
@@ -192,7 +196,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	child_result_sel.Initialize(count);
 
 	for (idx_t child_idx = 0; child_idx < shredded_types.size(); child_idx++) {
-		auto &child_vec = *shredded_fields[child_idx];
+		auto &child_vec = shredded_fields[child_idx];
 		D_ASSERT(child_vec.GetType() == shredded_types[child_idx].second);
 
 		//! Prepare the path component to perform the lookup for
@@ -206,7 +210,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity,
 		                              nested_data.get(), all_valid_validity, count);
 
-		if (!lookup_validity.AllValid()) {
+		if (lookup_validity.CanHaveNull()) {
 			optional_ptr<Vector> typed_value_vector;
 			optional_ptr<Vector> untyped_value_vector;
 			if (child_vec.GetType().id() == LogicalTypeId::STRUCT) {

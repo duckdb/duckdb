@@ -272,6 +272,13 @@
         "unit": "milliseconds"
       },
       {
+        "name": "PARSER",
+        "enum_value": 99,
+        "description": "The time to parse the SQL query.",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
         "name": "PLANNER_BINDING",
         "enum_value": 21,
         "description": "The time taken to bind the logical plan.",

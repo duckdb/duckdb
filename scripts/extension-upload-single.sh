@@ -29,21 +29,30 @@ else
 fi
 
 script_dir="$(dirname "$(readlink -f "$0")")"
+private_key_file=""
+
+cleanup() {
+  if [ -n "$private_key_file" ]; then
+    rm -f "$private_key_file"
+  fi
+}
+
+trap cleanup EXIT
 
 # calculate SHA256 hash of extension binary
 cat $ext > $ext.append
 
-( command -v truncate && truncate -s -256 $ext.append ) || ( command -v gtruncate && gtruncate -s -256 $ext.append ) || exit 1
+( command -v truncate >/dev/null 2>&1 && truncate -s -256 $ext.append ) || ( command -v gtruncate >/dev/null 2>&1 && gtruncate -s -256 $ext.append ) || exit 1
 
 # (Optionally) Sign binary
 if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
-  echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+  private_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing.XXXXXX.pem")
+  echo "$DUCKDB_EXTENSION_SIGNING_PK" > "$private_key_file"
   $script_dir/compute-extension-hash.sh $ext.append > $ext.hash
-  openssl pkeyutl -sign -in $ext.hash -inkey private.pem -pkeyopt digest:sha256 -out $ext.sign
-  rm -f private.pem
+  openssl pkeyutl -sign -in $ext.hash -inkey "$private_key_file" -pkeyopt digest:sha256 -out $ext.sign
 else
   # Default to 256 zeros
-  dd if=/dev/zero of=$ext.sign bs=256 count=1
+  dd if=/dev/zero of=$ext.sign bs=256 count=1 status=none
 fi
 
 # append signature to extension binary

@@ -17,7 +17,7 @@ from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', strict_mode=false)
 foreach newline '\r' '\n' '\r\n'
 
 query III
-from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ${newline}, strict_mode = false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = {newline}, strict_mode = false)
 ----
 1	2	3
 4	5	6

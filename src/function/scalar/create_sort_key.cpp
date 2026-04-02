@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 
 #include "duckdb/common/enums/order_type.hpp"
@@ -44,10 +51,6 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		}
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
-	}
-	// push collations
-	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		ExpressionBinder::PushCollation(context, arguments[i], arguments[i]->return_type);
 	}
 	// check if all types are constant
 	bool all_constant = true;
@@ -103,7 +106,7 @@ struct SortKeyVectorData {
 		case PhysicalType::STRUCT: {
 			auto &children = StructVector::GetEntries(input);
 			for (auto &child : children) {
-				child_data.push_back(make_uniq<SortKeyVectorData>(*child, size, child_modifiers));
+				child_data.push_back(make_uniq<SortKeyVectorData>(child, size, child_modifiers));
 			}
 			break;
 		}
@@ -519,7 +522,7 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chun
 	if (chunk.start == chunk.end) {
 		return;
 	}
-	if (vector_data.format.validity.AllValid()) {
+	if (vector_data.format.validity.CannotHaveNull()) {
 		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
 			TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
 		} else {
@@ -789,10 +792,6 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
 	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, result, args.size());
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -980,7 +979,7 @@ void DecodeSortKeyStruct(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVecto
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < child_entries.size(); c++) {
 		auto &child_entry = child_entries[c];
-		DecodeSortKeyRecursive(decode_data_arr, vector_data.child_data[c], *child_entry, result_offset, count);
+		DecodeSortKeyRecursive(decode_data_arr, vector_data.child_data[c], child_entry, result_offset, count);
 	}
 }
 
@@ -1186,7 +1185,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	UnifiedVectorFormat sort_key_vec_format;
 	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
 
-	// When doing aggressive vector verification, the "sort_key_vec_format.validity.AllValid()" is not always true
+	// When doing aggressive vector verification, the "sort_key_vec_format.validity.CannotHaveNull()" is not always true
 	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode
@@ -1227,15 +1226,11 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// Loop through the columns
 	const auto &result_type = result.GetType();
-	const auto &child_vectors = StructVector::GetEntries(result);
+	auto &child_vectors = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
-		auto &child_vector = *child_vectors[c];
+		auto &child_vector = child_vectors[c];
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
 		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

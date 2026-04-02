@@ -35,7 +35,6 @@ class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
 
 enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
-enum class WALReplayState { MAIN_WAL, CHECKPOINT_WAL };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -119,22 +118,7 @@ public:
 	void Flush();
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
-	//! Add a used block to the WAL.
-	void AddBlockInUse(const block_id_t block_id) {
-		D_ASSERT(blocks_in_use.count(block_id) == 0);
-		blocks_in_use.insert(block_id);
-	}
-	bool NewBlockInUse(const block_id_t block_id) const {
-		return blocks_in_use.count(block_id) == 0;
-	}
-	void MarkBlocksInUseAsModified();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
-
-protected:
-	//! Internally replay all WAL entries. QueryContext is passed for metric collection purposes only!!
-	static unique_ptr<WriteAheadLog> ReplayInternal(QueryContext context, StorageManager &storage_manager,
-	                                                unique_ptr<FileHandle> handle,
-	                                                WALReplayState replay_state = WALReplayState::MAIN_WAL);
 
 protected:
 	StorageManager &storage_manager;
@@ -143,9 +127,6 @@ protected:
 	string wal_path;
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
-	// When we write optimistic pointers to the WAL, then we need to prevent these blocks from being
-	// re-used/overwritten, even if the data on them is no longer relevant (e.g., later DROP TABLE).
-	unordered_set<block_id_t> blocks_in_use;
 };
 
 } // namespace duckdb

@@ -2,7 +2,7 @@
 # group: [geo]
 
 statement ok
-attach '__TEST_DIR__/geometry.db' (STORAGE_VERSION 'v1.4.4');
+attach '{TEST_DIR}/geometry.db' (STORAGE_VERSION 'v1.4.4');
 
 statement ok
 use geometry;

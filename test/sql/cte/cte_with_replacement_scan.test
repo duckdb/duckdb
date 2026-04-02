@@ -8,12 +8,12 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-copy (select 42 as answer) to '__TEST_DIR__/df.parquet';
+copy (select 42 as answer) to '{TEST_DIR}/df.parquet';
 
 query I
-WITH '__TEST_DIR__/df.parquet' AS (
-	SELECT answer FROM '__TEST_DIR__/df.parquet'
+WITH '{TEST_DIR}/df.parquet' AS (
+	SELECT answer FROM '{TEST_DIR}/df.parquet'
 )
-SELECT * FROM '__TEST_DIR__/df.parquet';
+SELECT * FROM '{TEST_DIR}/df.parquet';
 ----
 42

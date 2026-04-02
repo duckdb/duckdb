@@ -4,7 +4,7 @@
 
 # NOTE: this test requires specific setup and should probably only by ran through `scripts/run_extension_medata_tests.sh`
 
-load __TEST_DIR__/update_extensions_ci.db
+load {TEST_DIR}/update_extensions_ci.db
 
 # This test expects a specific state, which is marked to be present through setting this env variable.
 require-env RUN_EXTENSION_UPDATE_TEST
@@ -45,7 +45,7 @@ require parquet
 
 # We start by testing some malformed dirs
 statement ok
-set extension_directory='${LOCAL_EXTENSION_DIR_MALFORMED_INFO}'
+set extension_directory='{LOCAL_EXTENSION_DIR_MALFORMED_INFO}'
 
 # this will now throw IOError
 statement error
@@ -61,7 +61,7 @@ IO Error: Failed to read info file for 'tpcds' extension
 
 # lets restore by reinstalling tpcds
 statement ok
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/tpcds.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/tpcds.duckdb_extension';
 
 # Things are back to normal
 query IIII
@@ -82,7 +82,7 @@ restart
 
 # Here the metadata mismatches the actually installed extension
 statement ok
-set extension_directory='${LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION}'
+set extension_directory='{LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION}'
 
 # duckdb_extensions() only reads the metadata. No extension files are opened
 query IIII
@@ -98,7 +98,7 @@ Metadata mismatch detected when loading extension
 
 # Recovery is done by force installing
 statement ok
-FORCE INSTALL tpch FROM '${LOCAL_EXTENSION_REPO_UPDATED}'
+FORCE INSTALL tpch FROM '{LOCAL_EXTENSION_REPO_UPDATED}'
 
 statement ok
 load tpch;
@@ -106,10 +106,10 @@ load tpch;
 restart
 
 statement ok
-set custom_extension_repository='${LOCAL_EXTENSION_REPO_UPDATED}'
+set custom_extension_repository='{LOCAL_EXTENSION_REPO_UPDATED}'
 
 statement ok
-set extension_directory='${LOCAL_EXTENSION_DIR}'
+set extension_directory='{LOCAL_EXTENSION_DIR}'
 
 query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name not in ('jemalloc', 'parquet', 'core_functions')
@@ -187,59 +187,59 @@ tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
 
 ## Try various failing installations and match their error
 statement error
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
 ----
 Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_platform.duckdb_extension'
 The file was built for the platform 'test_platform', but we can only load extensions built for platform
 
 statement error
-FORCE INSTALL json_incorrect_platform FROM '${LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM}'
+FORCE INSTALL json_incorrect_platform FROM '{LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM}'
 ----
 Failed to install 'json_incorrect_platform'
 The file was built for the platform 'test_platform', but we can only load extensions built for platform
 
 statement error
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
 ----
 Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_version.duckdb_extension'
 The file was built specifically for DuckDB version 'v1337' and can only be loaded with that version of DuckDB. (this version of DuckDB is
 
 statement error
-FORCE INSTALL json_incorrect_version FROM '${LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION}';
+FORCE INSTALL json_incorrect_version FROM '{LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION}';
 ----
 Failed to install 'json_incorrect_version'
 The file was built specifically for DuckDB version 'v1337' and can only be loaded with that version of DuckDB. (this version of DuckDB is
 
 # These should print both errors
 statement error
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
 ----
 Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
 
 statement error
-FORCE INSTALL json_incorrect_version_and_platform FROM '${LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT}'
+FORCE INSTALL json_incorrect_version_and_platform FROM '{LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT}'
 ----
 Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
 
 ## Now try the same for loading, this time only with the direct load syntax
 statement error
-LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
+LOAD '{DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
 ----
 Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
 
 statement error
-LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
+LOAD '{DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
 ----
 The file was built for the platform 'test_platform', but we can only load extensions built for platform
 
 statement error
-LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
+LOAD '{DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
 ----
 The file was built specifically for DuckDB version 'v1337' and can only be loaded with that version of DuckDB. (this version of DuckDB is
 
 # Note that this is the json extension with incorrect platform and version
 statement error
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/json.duckdb_extension';
 ----
 Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
 
@@ -250,7 +250,7 @@ set ignore_error_messages
 
 # Set extension dir to a fresh one
 statement ok
-set extension_directory='__TEST_DIR__/update_extensions_ci_fresh'
+set extension_directory='{TEST_DIR}/update_extensions_ci_fresh'
 
 # Nothing installed beforehand
 query IIII
@@ -259,7 +259,7 @@ SELECT extension_name, install_mode, installed_from, extension_version FROM duck
 
 # Install from the remote repo
 statement ok
-force install icu from '${REMOTE_EXTENSION_REPO_UPDATED}'
+force install icu from '{REMOTE_EXTENSION_REPO_UPDATED}'
 
 # Installed from the minio repo now
 query IIII
@@ -275,18 +275,18 @@ icu	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	NO_UPDATE_AVAIL
 
 # Rerunning install with matching origin is a NOP and totally fine
 statement ok
-install icu from '${REMOTE_EXTENSION_REPO_UPDATED}'
+install icu from '{REMOTE_EXTENSION_REPO_UPDATED}'
 
 # Direct installing the same extension is now not allowed
 statement error
-install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz'
+install '{REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz'
 ----
 Invalid Input Error: Installing extension 'icu' failed. The extension is already installed but the origin is different.
 Currently installed extension is from repository 'http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo', while the extension to be installed is from custom_path
 
 # Installing the same extension from a different repository is also not allowed
 statement error
-install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz' FROM './dummy_repo'
+install '{REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz' FROM './dummy_repo'
 ----
 Invalid Input Error: Installing extension 'icu' failed. The extension is already installed but the origin is different.
 Currently installed extension is from repository 'http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo', while the extension to be installed is from repository './dummy_repo'.
@@ -298,7 +298,7 @@ set allow_extensions_metadata_mismatch=true;
 
 # Note that this is a NOP
 statement ok
-install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz'
+install '{REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz'
 
 # icu still the same
 query IIII
@@ -308,7 +308,7 @@ icu	REPOSITORY	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	v0.0
 
 # now we force install to override
 statement ok
-force install '${REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz'
+force install '{REMOTE_EXTENSION_REPO_DIRECT_PATH}/icu.duckdb_extension.gz'
 
 # icu is now from a custom path
 query IIII
@@ -318,7 +318,7 @@ icu	CUSTOM_PATH	icu.duckdb_extension.gz	v0.0.2
 
 # Other way around is fine and still a nop for now
 statement ok
-install icu from '${REMOTE_EXTENSION_REPO_UPDATED}'
+install icu from '{REMOTE_EXTENSION_REPO_UPDATED}'
 
 query IIII
 SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name not in ('jemalloc', 'parquet', 'core_functions')
@@ -343,7 +343,7 @@ statement ok
 set custom_extension_repository='hocus_pocus_this_is_bogus'
 
 statement ok
-FORCE INSTALL tpcds FROM '${LOCAL_EXTENSION_REPO_UPDATED}';
+FORCE INSTALL tpcds FROM '{LOCAL_EXTENSION_REPO_UPDATED}';
 
 # Note: this would trigger the origin check normally, but now 
 statement ok
@@ -360,7 +360,7 @@ tpcds	REPOSITORY	repository	v0.0.1
 restart
 
 statement ok
-set extension_directory='${LOCAL_EXTENSION_DIR}'
+set extension_directory='{LOCAL_EXTENSION_DIR}'
 
 # Now we allow mismatching metadata
 statement ok
@@ -368,7 +368,7 @@ set allow_extensions_metadata_mismatch=true;
 
 # Meaning that now it works
 statement ok
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/json.duckdb_extension';
 
 # We can even load it
 statement ok
@@ -382,12 +382,12 @@ set allow_unsigned_extensions=false
 
 # Installing is not working
 statement error
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+FORCE INSTALL '{DIRECT_INSTALL_DIR}/json.duckdb_extension';
 ----
 IO Error: Attempting to install an extension file that doesn't have a valid signature
 
 # But loading is not
 statement error
-LOAD '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+LOAD '{DIRECT_INSTALL_DIR}/json.duckdb_extension';
 ----
  Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform

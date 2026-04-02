@@ -6,6 +6,8 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 
 namespace duckdb {
 
@@ -48,8 +50,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
-
-	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
+	auto alter_option_list = ExtractParseResultsFromList(list_pr.GetChild(3));
+	if (alter_option_list.size() > 1) {
+		throw ParserException("Only one ALTER command per statement is supported");
+	}
+	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(alter_option_list[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->catalog = table->catalog_name;
 	result->schema = table->schema_name;
@@ -83,6 +88,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 	result->name = base_table->table_name;
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Altering schemas is not yet supported");
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
@@ -126,15 +136,25 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTr
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto option_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	for (auto option : option_list) {
-		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(option);
+	auto &repeat_pr = list_pr.Child<RepeatParseResult>(0);
+	bool has_owned = false;
+	unique_ptr<AlterInfo> owned_info;
+	for (auto &seq_option_pr : repeat_pr.children) {
+		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option_pr);
 		if (seq_option.first == "owned") {
+			if (has_owned) {
+				throw ParserException("Owned by value should be passed at most once");
+			}
+			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
 			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
-			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
-			                                      owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
+			owned_info =
+			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
+			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
 		}
+	}
+	if (owned_info) {
+		return owned_info;
 	}
 	throw NotImplementedException("ALTER SEQUENCE option not yet supported");
 }
@@ -156,18 +176,19 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
                                                       const string &column_name, const AlterEntryData &table_data,
                                                       const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
-	update_statement->prioritize_table_when_binding = true;
+	auto &node = *update_statement->node;
+	node.prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
 	table_ref->catalog_name = table_data.catalog;
 	table_ref->schema_name = table_data.schema;
 	table_ref->table_name = table_data.name;
-	update_statement->table = std::move(table_ref);
+	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
 	set_info->columns.push_back(column_name);
 	set_info->expressions.push_back(original_expression->Copy());
-	update_statement->set_info = std::move(set_info);
+	node.set_info = std::move(set_info);
 
 	multi_statement->statements.push_back(std::move(update_statement));
 }

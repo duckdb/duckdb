@@ -20,10 +20,6 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 	auto &target = input.data[1];
 
 	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);
-
-	if (target_count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunction ListContainsFun::GetFunction() {

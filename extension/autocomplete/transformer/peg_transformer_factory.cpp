@@ -1,4 +1,5 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 #include "matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -26,7 +27,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options) {
+unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+                                                          Matcher &root_matcher) {
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -35,8 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = 0;
 	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
-	MatcherAllocator allocator;
-	auto &matcher = Matcher::RootMatcher(allocator);
+	auto &matcher = root_matcher;
 	auto match_result = matcher.MatchParseResult(state);
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
 		idx_t error_token_idx = state.GetMaxTokenIndex();
@@ -54,7 +55,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		auto error_message = "Syntax error at or near \"" + error_token.text + "\"";
+		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
 	match_result->name = "Statement";
@@ -84,6 +85,7 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterOptions);
 	REGISTER_TRANSFORM(TransformAlterTableStmt);
 	REGISTER_TRANSFORM(TransformAlterViewStmt);
+	REGISTER_TRANSFORM(TransformAlterSchemaStmt);
 	REGISTER_TRANSFORM(TransformAlterDatabaseStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceOptions);
@@ -180,6 +182,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalType);
 	REGISTER_TRANSFORM(TransformIntervalInterval);
 	REGISTER_TRANSFORM(TransformInterval);
+	REGISTER_TRANSFORM(TransformIntervalToInterval);
 	REGISTER_TRANSFORM(TransformSetofType);
 	Register("NumericModType", &TransformDecimalType);
 	Register("DecType", &TransformDecimalType);
@@ -326,6 +329,19 @@ void PEGTransformerFactory::RegisterCreateView() {
 	REGISTER_TRANSFORM(TransformCreateViewStmt);
 }
 
+void PEGTransformerFactory::RegisterCreateTrigger() {
+	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
+	REGISTER_TRANSFORM(TransformForEachClause);
+	REGISTER_TRANSFORM(TransformTriggerTiming);
+	REGISTER_TRANSFORM(TransformTriggerEvent);
+	REGISTER_TRANSFORM(TransformTriggerEventInsert);
+	REGISTER_TRANSFORM(TransformTriggerEventDelete);
+	REGISTER_TRANSFORM(TransformTriggerEventUpdate);
+	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
+	REGISTER_TRANSFORM(TransformTriggerColumnList);
+	REGISTER_TRANSFORM(TransformTriggerBody);
+}
+
 void PEGTransformerFactory::RegisterDeallocate() {
 	// deallocate.gram
 	REGISTER_TRANSFORM(TransformDeallocateStatement);
@@ -374,6 +390,7 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropBehavior);
 	REGISTER_TRANSFORM(TransformDropSecret);
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
+	REGISTER_TRANSFORM(TransformDropTrigger);
 }
 
 void PEGTransformerFactory::RegisterExecute() {
@@ -581,6 +598,7 @@ void PEGTransformerFactory::RegisterInsert() {
 	REGISTER_TRANSFORM(TransformOnConflictClause);
 	REGISTER_TRANSFORM(TransformOnConflictTarget);
 	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
+	REGISTER_TRANSFORM(TransformOnConflictIndexTarget);
 	REGISTER_TRANSFORM(TransformOnConflictAction);
 	REGISTER_TRANSFORM(TransformOnConflictUpdate);
 	REGISTER_TRANSFORM(TransformOnConflictNothing);
@@ -595,6 +613,7 @@ void PEGTransformerFactory::RegisterLoad() {
 	// load.gram
 	REGISTER_TRANSFORM(TransformLoadStatement);
 	REGISTER_TRANSFORM(TransformInstallStatement);
+	REGISTER_TRANSFORM(TransformUpdateExtensionsStatement);
 	REGISTER_TRANSFORM(TransformFromSource);
 	REGISTER_TRANSFORM(TransformVersionNumber);
 }
@@ -773,6 +792,7 @@ void PEGTransformerFactory::RegisterSelect() {
 
 	REGISTER_TRANSFORM(TransformWithClause);
 	REGISTER_TRANSFORM(TransformWithStatement);
+	REGISTER_TRANSFORM(TransformCTEBody);
 	REGISTER_TRANSFORM(TransformMaterialized);
 	REGISTER_TRANSFORM(TransformHavingClause);
 	REGISTER_TRANSFORM(TransformOffsetValue);
@@ -798,6 +818,7 @@ void PEGTransformerFactory::RegisterUse() {
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
 	REGISTER_TRANSFORM(TransformUseTarget);
+	REGISTER_TRANSFORM(TransformUseTargetCatalogSchema);
 }
 
 void PEGTransformerFactory::RegisterSet() {
@@ -833,6 +854,7 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetTuple);
 	REGISTER_TRANSFORM(TransformUpdateSetElementList);
 	REGISTER_TRANSFORM(TransformUpdateSetElement);
+	REGISTER_TRANSFORM(TransformUpdateSetColumnTarget);
 }
 
 void PEGTransformerFactory::RegisterVacuum() {
@@ -919,6 +941,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<CatalogType>("CommentSchema", CatalogType::SCHEMA_ENTRY);
 	RegisterEnum<CatalogType>("CommentType", CatalogType::TYPE_ENTRY);
 	RegisterEnum<CatalogType>("CommentColumn", CatalogType::INVALID);
+
+	RegisterEnum<TriggerTiming>("TriggerBefore", TriggerTiming::BEFORE);
+	RegisterEnum<TriggerTiming>("TriggerAfter", TriggerTiming::AFTER);
+	RegisterEnum<TriggerTiming>("TriggerInsteadOf", TriggerTiming::INSTEAD_OF);
+	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
+	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
 
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");
@@ -1018,6 +1046,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateTable();
 	RegisterCreateType();
 	RegisterCreateView();
+	RegisterCreateTrigger();
 	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDetach();
@@ -1097,7 +1126,7 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 		result.schema = input[1];
 		result.name = input[2];
 	} else {
-		throw ParserException("Too many dots found.");
+		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
 	return result;
 }

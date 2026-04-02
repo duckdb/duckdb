@@ -11,7 +11,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"ALL": "true"}';
@@ -81,6 +81,7 @@ SELECT unnest(res) FROM (
 "OPTIMIZER_UNNEST_REWRITER": "true"
 "OPTIMIZER_UNUSED_COLUMNS": "true"
 "OPTIMIZER_WINDOW_SELF_JOIN": "true"
+"PARSER": "true"
 "PHYSICAL_PLANNER": "true"
 "PHYSICAL_PLANNER_COLUMN_BINDING": "true"
 "PHYSICAL_PLANNER_CREATE_PLAN": "true"
@@ -100,7 +101,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ALL_OPTIMIZERS,
@@ -150,6 +151,7 @@ SELECT ALL_OPTIMIZERS,
 	OPTIMIZER_UNNEST_REWRITER,
 	OPTIMIZER_UNUSED_COLUMNS,
 	OPTIMIZER_WINDOW_SELF_JOIN,
+	PARSER,
 	PHYSICAL_PLANNER,
 	PHYSICAL_PLANNER_COLUMN_BINDING,
 	PHYSICAL_PLANNER_CREATE_PLAN,
@@ -173,7 +175,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CORE": "true"}';
@@ -201,7 +203,7 @@ SELECT unnest(res) FROM (
 "ROWS_RETURNED": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT CPU_TIME,
@@ -218,7 +220,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"DEFAULT": "true"}';
@@ -264,7 +266,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ATTACH_LOAD_STORAGE_LATENCY,
@@ -294,7 +296,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"EXECUTION": "true"}';
@@ -318,7 +320,7 @@ SELECT unnest(res) FROM (
 "TOTAL_MEMORY_ALLOCATED": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT BLOCKED_THREAD_TIME,
@@ -331,7 +333,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"FILE": "true"}';
@@ -360,7 +362,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ATTACH_LOAD_STORAGE_LATENCY,
@@ -378,7 +380,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"OPERATOR": "true"}';
@@ -403,7 +405,7 @@ SELECT unnest(res) FROM (
 "OPERATOR_TYPE": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT OPERATOR_CARDINALITY,
@@ -420,7 +422,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"OPTIMIZER": "true"}';
@@ -475,7 +477,7 @@ SELECT unnest(res) FROM (
 "OPTIMIZER_WINDOW_SELF_JOIN": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
@@ -519,7 +521,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"PHASE_TIMING": "true"}';
@@ -574,6 +576,7 @@ SELECT unnest(res) FROM (
 "OPTIMIZER_UNNEST_REWRITER": "true"
 "OPTIMIZER_UNUSED_COLUMNS": "true"
 "OPTIMIZER_WINDOW_SELF_JOIN": "true"
+"PARSER": "true"
 "PHYSICAL_PLANNER": "true"
 "PHYSICAL_PLANNER_COLUMN_BINDING": "true"
 "PHYSICAL_PLANNER_CREATE_PLAN": "true"
@@ -582,7 +585,7 @@ SELECT unnest(res) FROM (
 "PLANNER_BINDING": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ALL_OPTIMIZERS,
@@ -622,6 +625,7 @@ SELECT ALL_OPTIMIZERS,
 	OPTIMIZER_UNNEST_REWRITER,
 	OPTIMIZER_UNUSED_COLUMNS,
 	OPTIMIZER_WINDOW_SELF_JOIN,
+	PARSER,
 	PHYSICAL_PLANNER,
 	PHYSICAL_PLANNER_COLUMN_BINDING,
 	PHYSICAL_PLANNER_CREATE_PLAN,
@@ -634,7 +638,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"DEFAULT": "true", "FILE": "true"}';
@@ -680,7 +684,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ATTACH_LOAD_STORAGE_LATENCY,
@@ -710,7 +714,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"FILE": "true", "OPTIMIZER": "true"}';
@@ -774,7 +778,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ATTACH_LOAD_STORAGE_LATENCY,
@@ -827,7 +831,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"PHASE_TIMING": "true", "EXECUTION": "true", "FILE": "true"}';
@@ -887,6 +891,7 @@ SELECT unnest(res) FROM (
 "OPTIMIZER_UNNEST_REWRITER": "true"
 "OPTIMIZER_UNUSED_COLUMNS": "true"
 "OPTIMIZER_WINDOW_SELF_JOIN": "true"
+"PARSER": "true"
 "PHYSICAL_PLANNER": "true"
 "PHYSICAL_PLANNER_COLUMN_BINDING": "true"
 "PHYSICAL_PLANNER_CREATE_PLAN": "true"
@@ -903,7 +908,7 @@ SELECT unnest(res) FROM (
 "WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ALL_OPTIMIZERS,
@@ -948,6 +953,7 @@ SELECT ALL_OPTIMIZERS,
 	OPTIMIZER_UNNEST_REWRITER,
 	OPTIMIZER_UNUSED_COLUMNS,
 	OPTIMIZER_WINDOW_SELF_JOIN,
+	PARSER,
 	PHYSICAL_PLANNER,
 	PHYSICAL_PLANNER_COLUMN_BINDING,
 	PHYSICAL_PLANNER_CREATE_PLAN,

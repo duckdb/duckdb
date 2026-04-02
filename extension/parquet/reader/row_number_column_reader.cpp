@@ -7,7 +7,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader
 //===--------------------------------------------------------------------===//
-RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+RowNumberColumnReader::RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
     : ColumnReader(reader, schema) {
 }
 

@@ -61,6 +61,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_UNNEST_REWRITER,
 		MetricType::OPTIMIZER_UNUSED_COLUMNS,
 		MetricType::OPTIMIZER_WINDOW_SELF_JOIN,
+		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
 		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
@@ -316,6 +317,7 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	return {
 		MetricType::ALL_OPTIMIZERS,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
 		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
@@ -329,6 +331,7 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:

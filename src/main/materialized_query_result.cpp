@@ -48,7 +48,8 @@ string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererC
 		return "Internal error - result was successful but there was no collection";
 	}
 	BoxRenderer renderer(config);
-	return renderer.ToString(context, names, Collection());
+	ColumnDataCollectionWrapper wrapper(Collection());
+	return renderer.ToString(context, names, wrapper);
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {

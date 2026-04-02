@@ -566,7 +566,8 @@ bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_refe
 		return true;
 	}
 	case TableFilterType::BLOOM_FILTER:
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {
@@ -666,13 +667,13 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Resolve bound column references in the index_expr against the current input projection
-	column_t updated_index_column;
+	ProjectionIndex updated_index_column;
 	bool found_index_column_in_input = false;
 
 	// Find the indexed column amongst the input columns
 	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
 		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = i;
+			updated_index_column = ProjectionIndex(i);
 			found_index_column_in_input = true;
 			break;
 		}
@@ -688,8 +689,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index.index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index.index = updated_index_column;
+			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
+				bound_column_ref_expr.binding.column_index = updated_index_column;
 			}
 		});
 	}
@@ -699,10 +700,10 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 
 	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
 	// Try to find a filter on the ART column.
-	optional_idx storage_index;
+	ProjectionIndex storage_index;
 	for (idx_t i = 0; i < input.column_indexes.size(); i++) {
 		if (input.column_indexes[i].ToLogical() == col.Logical()) {
-			storage_index = i;
+			storage_index = ProjectionIndex(i);
 			break;
 		}
 	}
@@ -713,7 +714,7 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Try to find a matching filter for the column.
-	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index.GetIndex());
+	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
 	if (!filter) {
 		return false;
 	}
@@ -881,7 +882,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &storage = duck_table.GetStorage();
 	idx_t table_rows = storage.GetTotalRows();
 	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(duck_table.GetStorage());
-	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
+	return make_uniq<NodeStatistics>(estimated_cardinality, estimated_cardinality);
 }
 
 idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {

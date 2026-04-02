@@ -261,10 +261,10 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 			continue;
 		}
 
-		auto sliced = reinterpret_cast<INPUT_TYPE *>(list_data.data)[list_idx];
-		auto begin = begin_is_empty ? 0 : reinterpret_cast<INDEX_TYPE *>(begin_data.data)[begin_idx];
-		auto end = end_is_empty ? OP::ValueLength(sliced) : reinterpret_cast<INDEX_TYPE *>(end_data.data)[end_idx];
-		auto step = step_vector ? reinterpret_cast<INDEX_TYPE *>(step_data.data)[step_idx] : 1;
+		auto sliced = UnifiedVectorFormat::GetData<INPUT_TYPE>(list_data)[list_idx];
+		auto begin = begin_is_empty ? 0 : UnifiedVectorFormat::GetData<INDEX_TYPE>(begin_data)[begin_idx];
+		auto end = end_is_empty ? OP::ValueLength(sliced) : UnifiedVectorFormat::GetData<INDEX_TYPE>(end_data)[end_idx];
+		auto step = step_vector ? UnifiedVectorFormat::GetData<INDEX_TYPE>(step_data)[step_idx] : 1;
 
 		if (step < 0) {
 			swap(begin, end);
@@ -353,8 +353,6 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &info = func_expr.bind_info->Cast<ListSliceBindData>();
 	auto begin_is_empty = info.begin_is_empty;
 	auto end_is_empty = info.end_is_empty;
-
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST: {
 		// Share the value dictionary as we are just going to slice it

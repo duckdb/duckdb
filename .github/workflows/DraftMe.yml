@@ -19,8 +19,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.node_id }}
         run: |
           mkdir -p ./pr
-          echo $PR_NUMBER > ./pr/pr_number
-      - uses: actions/upload-artifact@v4
+          echo "$PR_NUMBER" > ./pr/pr_number
+      - uses: actions/upload-artifact@v7
         with:
           name: pr_number
           path: pr/

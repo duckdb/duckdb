@@ -20,7 +20,7 @@ PRAGMA asof_loop_join_threshold=0;
 foreach debug False True
 
 statement ok 
-PRAGMA debug_asof_iejoin=${debug}
+PRAGMA debug_asof_iejoin={debug}
 
 # 10 dates, 5 keys
 query I

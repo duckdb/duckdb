@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(2)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
+	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -42,6 +44,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
 	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(108, "tags", InsertionOrderPreservingMap<string>());
 	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
+	auto extension_name = deserializer.ReadPropertyWithDefault<string>(110, "extension_name");
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -63,6 +66,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	case CatalogType::TABLE_MACRO_ENTRY:
 		result = CreateMacroInfo::Deserialize(deserializer);
 		break;
+	case CatalogType::TRIGGER_ENTRY:
+		result = CreateTriggerInfo::Deserialize(deserializer);
+		break;
 	case CatalogType::TYPE_ENTRY:
 		result = CreateTypeInfo::Deserialize(deserializer);
 		break;
@@ -82,6 +88,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->comment = comment;
 	result->tags = std::move(tags);
 	result->dependencies = dependencies;
+	result->extension_name = std::move(extension_name);
 	return result;
 }
 
@@ -182,6 +189,30 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", result->partition_keys);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
+	return std::move(result);
+}
+
+void CreateTriggerInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "trigger_name", trigger_name);
+	serializer.WritePropertyWithDefault<unique_ptr<BaseTableRef>>(201, "base_table", base_table);
+	serializer.WriteProperty<TriggerTiming>(204, "timing", timing);
+	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
+	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
+	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
+	serializer.WritePropertyWithDefault<string>(208, "sql_body_text", sql_body_text);
+}
+
+unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "trigger_name", result->trigger_name);
+	auto base_table = deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "base_table");
+	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(std::move(base_table));
+	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
+	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
+	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
+	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
+	deserializer.ReadPropertyWithDefault<string>(208, "sql_body_text", result->sql_body_text);
 	return std::move(result);
 }
 

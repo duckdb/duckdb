@@ -1,0 +1,20 @@
+# name: test/sql/optimizer/window_self_join_optimizer_csv.test
+# group: [optimizer]
+
+statement ok
+COPY (
+    SELECT 'a' AS x, 10 AS a, 20 AS b, 30 AS c
+    UNION ALL BY NAME
+    SELECT 'b' AS x, 11 AS a, 21 AS b, 31 AS c
+    UNION ALL BY NAME
+    SELECT 'c' AS x, 12 AS a, 22 AS b, 32 AS c
+) TO '{TEST_DIR}/window_self_join_src.csv'
+
+query II rowsort
+SELECT
+    x, MAX(a) OVER (PARTITION BY x)
+FROM '{TEST_DIR}/window_self_join_src.csv'
+----
+a	10
+b	11
+c	12

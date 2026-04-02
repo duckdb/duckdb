@@ -29,7 +29,7 @@ DROP TABLE tbl
 foreach type <numeric>
 
 statement ok
-CREATE TABLE five AS SELECT i::${type} AS i FROM range(1, 6, 1) t1(i)
+CREATE TABLE five AS SELECT i::{type} AS i FROM range(1, 6, 1) t1(i)
 
 query I
 SELECT ANY_VALUE(i) FROM five
@@ -64,7 +64,7 @@ endloop
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-CREATE TABLE five AS SELECT i::${type} AS i FROM range(1, 6, 1) t1(i)
+CREATE TABLE five AS SELECT i::{type} AS i FROM range(1, 6, 1) t1(i)
 
 query I
 SELECT ANY_VALUE(i ORDER BY 5-i) FROM five

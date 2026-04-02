@@ -191,6 +191,9 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 }
 
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
+	if (base.binding_mode == CreateViewBindingMode::SKIP_BINDING) {
+		return;
+	}
 	optional_ptr<LogicalDependencyList> dependencies;
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
@@ -470,6 +473,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
 		auto &schema = BindCreateSchema(*stmt.info);
+		if (stmt.info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			CatalogTransaction transaction(schema.ParentCatalog(), context);
+			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.view_name);
+			if (existing_entry && existing_entry->type == CatalogType::VIEW_ENTRY) {
+				// IF EXISTS and the view already exists - avoid binding
+				base.binding_mode = CreateViewBindingMode::SKIP_BINDING;
+			}
+		}
 		BindCreateViewInfo(base);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), &schema);
 		break;
@@ -649,6 +660,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}
+	case CatalogType::TRIGGER_ENTRY:
+		throw NotImplementedException("CREATE TRIGGER is not yet supported");
 	default:
 		throw InternalException("Unrecognized type!");
 	}

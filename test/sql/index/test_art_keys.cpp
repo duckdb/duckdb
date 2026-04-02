@@ -7,7 +7,6 @@
 #include <iostream>
 
 using namespace duckdb;
-using namespace std;
 
 static void TestKeyEqual(ARTKey &left, ARTKey &right) {
 	REQUIRE(left == right);
@@ -214,13 +213,13 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		// positive values
 		duckdb::vector<float> values;
 		float current_value = 0.00001f;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
 		// negative values
 		current_value = -0.00001f;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
@@ -243,13 +242,13 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		// positive values
 		duckdb::vector<double> values;
 		double current_value = 0.0000001;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
 		// negative values
 		current_value = -0.0000001;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
@@ -258,10 +257,10 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		for (idx_t i = 1; i < values.size(); i++) {
 			uint64_t next_encoded = Radix::EncodeDouble(values[i]);
 			if (next_encoded <= current_encoded) {
-				cout << "Failure in Key::EncodeDouble!" << std::endl;
-				cout << "Generated value for key " << values[i - 1] << " (=> %" << current_encoded
-				     << ") is bigger or equal to the generated value for key " << values[i] << "(=> %" << next_encoded
-				     << ")" << std::endl;
+				std::cout << "Failure in Key::EncodeDouble!" << std::endl;
+				std::cout << "Generated value for key " << values[i - 1] << " (=> %" << current_encoded
+				          << ") is bigger or equal to the generated value for key " << values[i] << "(=> %"
+				          << next_encoded << ")" << std::endl;
 			}
 			REQUIRE(next_encoded > current_encoded);
 			current_encoded = next_encoded;
