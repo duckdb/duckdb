@@ -17,8 +17,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 	idx_t child_cardinality = 0;
 	if (op.sample_options->method == SampleMethod::SYSTEM_SAMPLE && !op.sample_options->is_percentage) {
 		auto &first_child = *op.children[0];
-		child_cardinality = first_child.has_estimated_cardinality ? first_child.estimated_cardinality
-		                                                          : first_child.EstimateCardinality(context);
+		child_cardinality = first_child.EstimateCardinality(context);
 	}
 
 	auto &plan = CreatePlan(*op.children[0]);
