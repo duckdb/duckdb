@@ -70,14 +70,11 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		return;
 	}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &validity = FlatVector::Validity(result);
-	auto result_data = FlatVector::GetData<string_t>(result);
-
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		string joined;
 		if (!ProcessRow(row_idx, inputs, col_count, fs, joined)) {
-			validity.SetInvalid(row_idx);
+			result_data.SetInvalid(row_idx);
 			continue;
 		}
 		result_data[row_idx] = StringVector::AddString(result, joined);

@@ -82,7 +82,8 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// sequence to use is hard coded
 	// increment the sequence
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<int64_t>(result);
+
+	auto result_data = FlatVector::Writer<int64_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		// get the next value from the sequence
 		result_data[i] = OP::Operation(lstate.transaction, lstate.sequence);

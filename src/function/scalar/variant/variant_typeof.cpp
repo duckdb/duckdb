@@ -21,7 +21,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 
 	UnifiedVariantVectorData variant(source_format);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!variant.RowIsValid(i)) {
 			result_data[i] = StringVector::AddString(result, "VARIANT_NULL");
