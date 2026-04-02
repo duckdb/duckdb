@@ -410,7 +410,11 @@ else()
           OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (GIT_RESULT)
-      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      if ("$ENV{GITHUB_EVENT_NAME}" STREQUAL "pull_request")
+        message(STATUS "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Continuing with dummy version v0.0.1 for pull_request CI")
+      else()
+        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      endif()
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
   else()
@@ -949,4 +953,3 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
-
