@@ -659,7 +659,7 @@ struct FormatSQLBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<FormatSQLBindData>();
 		result->config = config;
-		return result;
+		return std::move(result);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<FormatSQLBindData>();
@@ -715,7 +715,7 @@ static unique_ptr<FunctionData> FormatSQLBind(ClientContext &context, ScalarFunc
                                               vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = make_uniq<FormatSQLBindData>();
 	bind_data->config = ParseFormatterConfig(context, arguments);
-	return bind_data;
+	return std::move(bind_data);
 }
 
 static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
