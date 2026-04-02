@@ -86,8 +86,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	case VectorType::CONSTANT_VECTOR: {
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		// no null values

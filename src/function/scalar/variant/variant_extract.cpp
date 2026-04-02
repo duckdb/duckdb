@@ -116,11 +116,9 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(unshredded_entry, true);
+			ConstantVector::SetNull(unshredded_entry);
 		}
-		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(unshredded_child, true);
+		ConstantVector::SetNull(unshredded_child);
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 

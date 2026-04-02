@@ -75,8 +75,7 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (!func_expr.bind_info) {
 		// no bind info - return null
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<NextValLocalState>();

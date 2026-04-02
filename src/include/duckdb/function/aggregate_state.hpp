@@ -78,7 +78,7 @@ struct AggregateFinalizeData {
 			FlatVector::SetNull(result, result_idx, true);
 			break;
 		case VectorType::CONSTANT_VECTOR:
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			break;
 		default:
 			throw InternalException("Invalid result vector type for aggregate");

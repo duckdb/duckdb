@@ -1469,8 +1469,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
 				Vector &vec = result.data[i];
-				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(vec, true);
+				ConstantVector::SetNull(vec);
 			}
 		}
 		finished = true;
@@ -1592,8 +1591,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	// set the left side as a constant NULL
 	for (idx_t i = 0; i < left_column_count; i++) {
 		Vector &vec = result.data[i];
-		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(vec, true);
+		ConstantVector::SetNull(vec);
 	}
 
 	// gather the values from the RHS

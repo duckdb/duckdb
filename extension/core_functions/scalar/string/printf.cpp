@@ -82,8 +82,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(args.data[i])) {
 				// constant null! result is always NULL regardless of other input
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 				return;
 			}
 			break;
