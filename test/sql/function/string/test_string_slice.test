@@ -22,21 +22,25 @@ statement maybe
 SELECT NULL::VARCHAR[off:length+off] FROM strings
 ----
 
-statement maybe
+statement error
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
 ----
+Parser Error
 
-statement maybe
+statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
+Parser Error
 
-statement maybe
+statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
+Parser Error
 
-statement maybe
+statement error
 SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
 ----
+Parser Error
 
 # test zero length
 query II
