@@ -44,6 +44,25 @@ endif
 export CMAKE_BUILD_PARALLEL_LEVEL
 endif
 
+# Assume Ninja is the default generator (if missing), but verify ninja exists.
+# Cache Ninja detection so we only probe `ninja --version` once.
+ifeq ($(GEN),)
+NINJA_VERSION_FILE := build/ninja_version.txt
+ifeq ($(wildcard $(NINJA_VERSION_FILE)),)
+NINJA_DETECTED := $(strip $(shell mkdir -p build >/dev/null 2>&1; \
+	v=$$(ninja --version 2>/dev/null | head -n 1); \
+	if [ -n "$$v" ]; then \
+		printf '%s\n' "$$v" > "$(NINJA_VERSION_FILE)"; \
+		echo 1; \
+	fi))
+ifneq ($(NINJA_DETECTED),)
+GEN := ninja
+endif
+else
+GEN := ninja
+endif
+endif
+
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
