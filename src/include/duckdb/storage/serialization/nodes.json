@@ -393,8 +393,8 @@
       {
         "id": 106,
         "name": "tags",
-        "type": "unordered_map<string, string>",
-        "default": "unordered_map<string, string>()"
+        "type": "InsertionOrderPreservingMap<string>",
+        "default": "InsertionOrderPreservingMap<string>()"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],

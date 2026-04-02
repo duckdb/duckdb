@@ -12,7 +12,10 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/planner/planner_extension.hpp"
@@ -804,6 +807,37 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	catalog.CreateTableFunction(client_context, quack_info);
 
 	con.Commit();
+
+	// Table with tagged columns
+	{
+		auto tagged_table_info = make_uniq<CreateTableInfo>();
+		tagged_table_info->schema = DEFAULT_SCHEMA;
+		tagged_table_info->table = "tagged_table";
+		tagged_table_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		tagged_table_info->temporary = false;
+		tagged_table_info->internal = true;
+
+		ColumnDefinition col_a("a", LogicalType::INTEGER);
+		InsertionOrderPreservingMap<string> col_a_tags;
+		col_a_tags["ext:name"] = "loadable_extension_demo";
+		col_a_tags["ext:column_type"] = "primary";
+		col_a.SetTags(std::move(col_a_tags));
+		tagged_table_info->columns.AddColumn(std::move(col_a));
+
+		ColumnDefinition col_b("b", LogicalType::VARCHAR);
+		InsertionOrderPreservingMap<string> col_b_tags;
+		col_b_tags["ext:name"] = "loadable_extension_demo";
+		col_b_tags["ext:column_type"] = "dimension";
+		col_b.SetTags(std::move(col_b_tags));
+		tagged_table_info->columns.AddColumn(std::move(col_b));
+
+		con.BeginTransaction();
+		auto &default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
+		auto &default_catalog = Catalog::GetCatalog(client_context, default_db_name);
+		MetaTransaction::Get(client_context).ModifyDatabase(default_catalog.GetAttached(), DatabaseModificationType());
+		default_catalog.CreateTable(client_context, std::move(tagged_table_info));
+		con.Commit();
+	}
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
