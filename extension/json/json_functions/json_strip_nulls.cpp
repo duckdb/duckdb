@@ -34,33 +34,15 @@ static void StripNullsFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
-	const auto count = args.size();
-	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(count, input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
-
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(idx)) {
-			result_validity.SetInvalid(i);
-			continue;
-		}
-
-		auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
-		auto mut_doc = yyjson_doc_mut_copy(doc, alc);
-		auto root = yyjson_mut_doc_get_root(mut_doc);
-
-		StripNulls(root);
-
-		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+	auto &inputs = args.data[0];
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+	    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+		    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+		    auto root = yyjson_mut_doc_get_root(mut_doc);
+		    StripNulls(root);
+		    return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
+	    });
 
 	JSONAllocator::AddBuffer(result, alc);
 }
