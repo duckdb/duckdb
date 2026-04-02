@@ -296,7 +296,7 @@ jobs:
         run: |
           make extension_configuration
           python scripts/generate_extensions_function.py
-          python3 scripts/ci/retry.py -- pip install "black>=24" cmake-format "clang_format==11.0.1"
+          python3 scripts/ci/retry.py -- pip install --break-system-packages "black>=24" cmake-format "clang_format==11.0.1"
           make format-fix
 
           if git diff --exit-code src/include/duckdb/main/extension_entries.hpp; then
