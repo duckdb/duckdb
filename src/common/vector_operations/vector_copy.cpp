@@ -176,11 +176,12 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(*source);
 		auto tdata = FlatVector::GetData<string_t>(target);
+		auto &buffer = StringVector::GetStringBuffer(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (tmask.RowIsValid(target_idx)) {
-				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
+				tdata[target_idx] = buffer.AddBlob(ldata[source_idx]);
 			}
 		}
 		break;
