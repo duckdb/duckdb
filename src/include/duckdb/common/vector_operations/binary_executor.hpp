@@ -11,6 +11,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -426,6 +427,139 @@ public:
 			    ldata, rdata, sel, count, combined_mask, true_sel, false_sel);
 		}
 	}
+
+	template <class DICTIONARY_TYPE, class CONSTANT_TYPE, class OP, bool DICTIONARY_LEFT, bool SAME_SELECTION,
+	          bool IDENTITY_RESULT, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+	static inline idx_t SelectDictionaryConstantLoop(const DICTIONARY_TYPE *__restrict dictionary_data,
+	                                                 CONSTANT_TYPE constant_data, const SelectionVector &dictionary_sel,
+	                                                 const SelectionVector &result_sel, idx_t count,
+	                                                 ValidityMask &dictionary_validity, SelectionVector *true_sel,
+	                                                 SelectionVector *false_sel) {
+		idx_t true_count = 0, false_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto dictionary_idx = dictionary_sel.get_index(i);
+			auto result_idx = SAME_SELECTION ? dictionary_idx : (IDENTITY_RESULT ? i : result_sel.get_index(i));
+			bool comparison_result = (NO_NULL || dictionary_validity.RowIsValid(dictionary_idx)) &&
+			                         (DICTIONARY_LEFT ? OP::Operation(dictionary_data[dictionary_idx], constant_data)
+			                                          : OP::Operation(constant_data, dictionary_data[dictionary_idx]));
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
+			}
+		}
+		if (HAS_TRUE_SEL) {
+			return true_count;
+		} else {
+			return count - false_count;
+		}
+	}
+
+	template <class DICTIONARY_TYPE, class CONSTANT_TYPE, class OP, bool DICTIONARY_LEFT, bool SAME_SELECTION,
+	          bool IDENTITY_RESULT, bool NO_NULL>
+	static inline idx_t
+	SelectDictionaryConstantLoopSwitch(const DICTIONARY_TYPE *__restrict dictionary_data, CONSTANT_TYPE constant_data,
+	                                   const SelectionVector &dictionary_sel, const SelectionVector &result_sel,
+	                                   idx_t count, ValidityMask &dictionary_validity, SelectionVector *true_sel,
+	                                   SelectionVector *false_sel) {
+		if (true_sel && false_sel) {
+			return SelectDictionaryConstantLoop<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, SAME_SELECTION,
+			                                    IDENTITY_RESULT, NO_NULL, true, true>(
+			    dictionary_data, constant_data, dictionary_sel, result_sel, count, dictionary_validity, true_sel,
+			    false_sel);
+		} else if (true_sel) {
+			return SelectDictionaryConstantLoop<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, SAME_SELECTION,
+			                                    IDENTITY_RESULT, NO_NULL, true, false>(
+			    dictionary_data, constant_data, dictionary_sel, result_sel, count, dictionary_validity, true_sel,
+			    false_sel);
+		} else {
+			D_ASSERT(false_sel);
+			return SelectDictionaryConstantLoop<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, SAME_SELECTION,
+			                                    IDENTITY_RESULT, NO_NULL, false, true>(
+			    dictionary_data, constant_data, dictionary_sel, result_sel, count, dictionary_validity, true_sel,
+			    false_sel);
+		}
+	}
+
+	template <class DICTIONARY_TYPE, class CONSTANT_TYPE, class OP, bool DICTIONARY_LEFT>
+	static inline idx_t SelectDictionaryConstant(Vector &dictionary, Vector &constant,
+	                                             const SelectionVector &result_sel, idx_t count,
+	                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+		if (ConstantVector::IsNull(constant)) {
+			if (false_sel) {
+				for (idx_t i = 0; i < count; i++) {
+					false_sel->set_index(i, result_sel.get_index(i));
+				}
+			}
+			return 0;
+		}
+		auto &dictionary_child = DictionaryVector::Child(dictionary);
+		if (dictionary_child.GetVectorType() != VectorType::FLAT_VECTOR) {
+			return DConstants::INVALID_INDEX;
+		}
+		auto dictionary_data = FlatVector::GetData<DICTIONARY_TYPE>(dictionary_child);
+		auto constant_data = *ConstantVector::GetData<CONSTANT_TYPE>(constant);
+		auto &dictionary_sel = DictionaryVector::SelVector(dictionary);
+		auto &dictionary_validity = FlatVector::Validity(dictionary_child);
+		auto same_selection = dictionary_sel.data() == result_sel.data();
+		auto identity_result = result_sel.data() == FlatVector::IncrementalSelectionVector()->data();
+		if (dictionary_validity.CannotHaveNull()) {
+			if (same_selection) {
+				return SelectDictionaryConstantLoopSwitch<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, true,
+				                                          false, true>(dictionary_data, constant_data, dictionary_sel,
+				                                                       result_sel, count, dictionary_validity, true_sel,
+				                                                       false_sel);
+			}
+			if (identity_result) {
+				return SelectDictionaryConstantLoopSwitch<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, false,
+				                                          true, true>(dictionary_data, constant_data, dictionary_sel,
+				                                                      result_sel, count, dictionary_validity, true_sel,
+				                                                      false_sel);
+			}
+			return SelectDictionaryConstantLoopSwitch<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, false, false,
+			                                          true>(dictionary_data, constant_data, dictionary_sel, result_sel,
+			                                                count, dictionary_validity, true_sel, false_sel);
+		}
+		if (same_selection) {
+			return SelectDictionaryConstantLoopSwitch<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, true, false,
+			                                          false>(dictionary_data, constant_data, dictionary_sel, result_sel,
+			                                                 count, dictionary_validity, true_sel, false_sel);
+		}
+		if (identity_result) {
+			return SelectDictionaryConstantLoopSwitch<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, false, true,
+			                                          false>(dictionary_data, constant_data, dictionary_sel, result_sel,
+			                                                 count, dictionary_validity, true_sel, false_sel);
+		}
+		return SelectDictionaryConstantLoopSwitch<DICTIONARY_TYPE, CONSTANT_TYPE, OP, DICTIONARY_LEFT, false, false,
+		                                          false>(dictionary_data, constant_data, dictionary_sel, result_sel,
+		                                                 count, dictionary_validity, true_sel, false_sel);
+	}
+
+	template <class COLUMN_TYPE, class CONSTANT_TYPE, class OP, bool COLUMN_LEFT>
+	static idx_t SelectFlatColumnConstant(Vector &flat_col, Vector &constant, const SelectionVector &sel, idx_t count,
+	                                      SelectionVector *true_sel, SelectionVector *false_sel) {
+		if (ConstantVector::IsNull(constant)) {
+			if (false_sel) {
+				for (idx_t i = 0; i < count; i++) {
+					false_sel->set_index(i, sel.get_index(i));
+				}
+			}
+			return 0;
+		}
+		D_ASSERT(flat_col.GetVectorType() == VectorType::FLAT_VECTOR);
+		auto col_data = FlatVector::GetData<COLUMN_TYPE>(flat_col);
+		auto const_data = *ConstantVector::GetData<CONSTANT_TYPE>(constant);
+		auto &validity = FlatVector::Validity(flat_col);
+		if (validity.CannotHaveNull()) {
+			return SelectDictionaryConstantLoopSwitch<COLUMN_TYPE, CONSTANT_TYPE, OP, COLUMN_LEFT, true, false, true>(
+			    col_data, const_data, sel, sel, count, validity, true_sel, false_sel);
+		}
+		return SelectDictionaryConstantLoopSwitch<COLUMN_TYPE, CONSTANT_TYPE, OP, COLUMN_LEFT, true, false, false>(
+		    col_data, const_data, sel, sel, count, validity, true_sel, false_sel);
+	}
 #endif
 
 #ifndef DUCKDB_SMALLER_BINARY
@@ -530,6 +664,22 @@ public:
 		    right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			return SelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 #ifndef DUCKDB_SMALLER_BINARY
+		} else if (left.GetVectorType() == VectorType::DICTIONARY_VECTOR &&
+		           right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			auto result = SelectDictionaryConstant<LEFT_TYPE, RIGHT_TYPE, OP, true>(left, right, *sel, count, true_sel,
+			                                                                        false_sel);
+			if (result != DConstants::INVALID_INDEX) {
+				return result;
+			}
+			return SelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
+		} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		           right.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto result = SelectDictionaryConstant<RIGHT_TYPE, LEFT_TYPE, OP, false>(right, left, *sel, count, true_sel,
+			                                                                         false_sel);
+			if (result != DConstants::INVALID_INDEX) {
+				return result;
+			}
+			return SelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 		} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		           right.GetVectorType() == VectorType::FLAT_VECTOR) {
 			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, sel, count, true_sel, false_sel);

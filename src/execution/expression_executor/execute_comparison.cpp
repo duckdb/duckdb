@@ -2,6 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
@@ -78,6 +79,200 @@ template <typename OP>
 static idx_t NestedSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
                                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                                    optional_ptr<ValidityMask> null_mask);
+
+template <class OP>
+static idx_t TemplatedSelectFlatColumnConstant(Vector &col, Vector &constant, bool col_left, const SelectionVector *sel,
+                                               idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+#ifndef DUCKDB_SMALLER_BINARY
+	const SelectionVector *effective_sel = sel ? sel : FlatVector::IncrementalSelectionVector();
+	switch (col.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<int8_t, int8_t, OP, true>(col, constant, *sel, count,
+				                                                                          true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<int8_t, int8_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                   true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<int8_t, int8_t, OP, false>(col, constant, *sel, count,
+			                                                                           true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<int8_t, int8_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                   true_sel, false_sel);
+	case PhysicalType::INT16:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<int16_t, int16_t, OP, true>(col, constant, *sel, count,
+				                                                                            true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<int16_t, int16_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                     true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<int16_t, int16_t, OP, false>(col, constant, *sel, count,
+			                                                                             true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<int16_t, int16_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                     true_sel, false_sel);
+	case PhysicalType::INT32:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<int32_t, int32_t, OP, true>(col, constant, *sel, count,
+				                                                                            true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<int32_t, int32_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                     true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<int32_t, int32_t, OP, false>(col, constant, *sel, count,
+			                                                                             true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<int32_t, int32_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                     true_sel, false_sel);
+	case PhysicalType::INT64:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<int64_t, int64_t, OP, true>(col, constant, *sel, count,
+				                                                                            true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<int64_t, int64_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                     true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<int64_t, int64_t, OP, false>(col, constant, *sel, count,
+			                                                                             true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<int64_t, int64_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                     true_sel, false_sel);
+	case PhysicalType::UINT8:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<uint8_t, uint8_t, OP, true>(col, constant, *sel, count,
+				                                                                            true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<uint8_t, uint8_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                     true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<uint8_t, uint8_t, OP, false>(col, constant, *sel, count,
+			                                                                             true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<uint8_t, uint8_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                     true_sel, false_sel);
+	case PhysicalType::UINT16:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<uint16_t, uint16_t, OP, true>(
+				    col, constant, *sel, count, true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<uint16_t, uint16_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                       true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<uint16_t, uint16_t, OP, false>(col, constant, *sel, count,
+			                                                                               true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<uint16_t, uint16_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                       true_sel, false_sel);
+	case PhysicalType::UINT32:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<uint32_t, uint32_t, OP, true>(
+				    col, constant, *sel, count, true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<uint32_t, uint32_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                       true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<uint32_t, uint32_t, OP, false>(col, constant, *sel, count,
+			                                                                               true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<uint32_t, uint32_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                       true_sel, false_sel);
+	case PhysicalType::UINT64:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<uint64_t, uint64_t, OP, true>(
+				    col, constant, *sel, count, true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<uint64_t, uint64_t, OP, false, true>(col, constant, effective_sel, count,
+			                                                                       true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<uint64_t, uint64_t, OP, false>(col, constant, *sel, count,
+			                                                                               true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<uint64_t, uint64_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                       true_sel, false_sel);
+	case PhysicalType::INT128:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<hugeint_t, hugeint_t, OP, true>(
+				    col, constant, *sel, count, true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<hugeint_t, hugeint_t, OP, false, true>(col, constant, effective_sel,
+			                                                                         count, true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<hugeint_t, hugeint_t, OP, false>(col, constant, *sel, count,
+			                                                                                 true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<hugeint_t, hugeint_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                         true_sel, false_sel);
+	case PhysicalType::UINT128:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<uhugeint_t, uhugeint_t, OP, true>(
+				    col, constant, *sel, count, true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<uhugeint_t, uhugeint_t, OP, false, true>(col, constant, effective_sel,
+			                                                                           count, true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<uhugeint_t, uhugeint_t, OP, false>(
+			    col, constant, *sel, count, true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<uhugeint_t, uhugeint_t, OP, true, false>(constant, col, effective_sel, count,
+		                                                                           true_sel, false_sel);
+	case PhysicalType::FLOAT:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<float, float, OP, true>(col, constant, *sel, count,
+				                                                                        true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<float, float, OP, false, true>(col, constant, effective_sel, count,
+			                                                                 true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<float, float, OP, false>(col, constant, *sel, count,
+			                                                                         true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<float, float, OP, true, false>(constant, col, effective_sel, count, true_sel,
+		                                                                 false_sel);
+	case PhysicalType::DOUBLE:
+		if (col_left) {
+			if (sel) {
+				return BinaryExecutor::SelectFlatColumnConstant<double, double, OP, true>(col, constant, *sel, count,
+				                                                                          true_sel, false_sel);
+			}
+			return BinaryExecutor::SelectFlat<double, double, OP, false, true>(col, constant, effective_sel, count,
+			                                                                   true_sel, false_sel);
+		}
+		if (sel) {
+			return BinaryExecutor::SelectFlatColumnConstant<double, double, OP, false>(col, constant, *sel, count,
+			                                                                           true_sel, false_sel);
+		}
+		return BinaryExecutor::SelectFlat<double, double, OP, true, false>(constant, col, effective_sel, count,
+		                                                                   true_sel, false_sel);
+	default:
+		break;
+	}
+#endif
+	return DConstants::INVALID_INDEX;
+}
 
 template <class OP>
 static idx_t TemplatedSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
@@ -347,7 +542,57 @@ idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, optional_ptr
 idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
-	// resolve the children
+	if (chunk) {
+		bool ref_is_left = expr.left->GetExpressionClass() == ExpressionClass::BOUND_REF &&
+		                   expr.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+		bool ref_is_right = !ref_is_left && expr.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		                    expr.right->GetExpressionClass() == ExpressionClass::BOUND_REF;
+		if (ref_is_left || ref_is_right) {
+			auto &ref = (ref_is_left ? *expr.left : *expr.right).Cast<BoundReferenceExpression>();
+			idx_t const_child_idx = ref_is_left ? 1 : 0;
+			auto *prebuilt = state->child_states[const_child_idx]->prebuilt_constant.get();
+			if (prebuilt && ref.index < chunk->ColumnCount()) {
+				auto &col = chunk->data[ref.index];
+				if (col.GetVectorType() == VectorType::FLAT_VECTOR) {
+					bool col_left = ref_is_left;
+					idx_t result;
+					switch (expr.GetExpressionType()) {
+					case ExpressionType::COMPARE_EQUAL:
+						result = TemplatedSelectFlatColumnConstant<duckdb::Equals>(col, *prebuilt, col_left, sel, count,
+						                                                           true_sel, false_sel);
+						break;
+					case ExpressionType::COMPARE_NOTEQUAL:
+						result = TemplatedSelectFlatColumnConstant<duckdb::NotEquals>(col, *prebuilt, col_left, sel,
+						                                                              count, true_sel, false_sel);
+						break;
+					case ExpressionType::COMPARE_LESSTHAN:
+						result = TemplatedSelectFlatColumnConstant<duckdb::LessThan>(col, *prebuilt, col_left, sel,
+						                                                             count, true_sel, false_sel);
+						break;
+					case ExpressionType::COMPARE_GREATERTHAN:
+						result = TemplatedSelectFlatColumnConstant<duckdb::GreaterThan>(col, *prebuilt, col_left, sel,
+						                                                                count, true_sel, false_sel);
+						break;
+					case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+						result = TemplatedSelectFlatColumnConstant<duckdb::LessThanEquals>(
+						    col, *prebuilt, col_left, sel, count, true_sel, false_sel);
+						break;
+					case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+						result = TemplatedSelectFlatColumnConstant<duckdb::GreaterThanEquals>(
+						    col, *prebuilt, col_left, sel, count, true_sel, false_sel);
+						break;
+					default:
+						result = DConstants::INVALID_INDEX;
+						break;
+					}
+					if (result != DConstants::INVALID_INDEX) {
+						return result;
+					}
+				}
+			}
+		}
+	}
+
 	state->intermediate_chunk.Reset();
 	auto &left = state->intermediate_chunk.data[0];
 	auto &right = state->intermediate_chunk.data[1];

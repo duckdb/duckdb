@@ -31,6 +31,7 @@ struct ExpressionState {
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
 	vector<bool> initialize;
+	unique_ptr<Vector> prebuilt_constant;
 
 public:
 	void AddChild(Expression &child_expr);
