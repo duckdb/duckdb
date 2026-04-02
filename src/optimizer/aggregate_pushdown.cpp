@@ -122,8 +122,6 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 			if (func_name == "min" || func_name == "max") {
 				auto &return_type = aggr_expr.children[0]->return_type;
 				if (return_type != LogicalType::VARCHAR && !return_type.IsNumeric() && !return_type.IsTemporal()) {
-					// Aligned with StatisticsPropagator::GetComparator —
-					// only VARCHAR (exact match), numeric, and temporal types have usable min/max stats.
 					return false;
 				}
 			}
@@ -174,8 +172,7 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 	auto &agg_pushdown = *get.extra_info.aggregate_pushdown_info;
 
 	// Resolve scan_col_position for each aggregate: find or append the needed column
-	// in the existing column_ids list. We must not reorder existing columns because
-	// table_filters reference columns by their position in column_ids (via projection_ids).
+	// in the existing column_ids list. 
 	auto col_ids = get.GetColumnIds(); // copy
 	for (auto &aggr : agg_pushdown.aggregates) {
 		if (aggr.type == PushedAggregateType::COUNT_STAR) {

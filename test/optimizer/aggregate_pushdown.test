@@ -1,0 +1,366 @@
+# name: test/optimizer/aggregate_pushdown.test
+# description: Test Aggregate Pushdown optimization (min/max/count via zonemap statistics)
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t SELECT range, range * 2 FROM range(10000)
+
+# -------------------------------------------------------
+# Plan-level checks: verify pushdown happens or not
+# -------------------------------------------------------
+
+# Basic: count(*) + min + max pushed down into seq_scan
+query II
+EXPLAIN SELECT count(*), min(a), max(b) FROM t
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Aggregates.*count_star.*min\(a\).*max\(b\).*
+
+# GROUP BY prevents pushdown
+query II
+EXPLAIN SELECT a, count(*) FROM t GROUP BY a LIMIT 3
+----
+physical_plan	<REGEX>:.*(AGGREGATE|HASH_GROUP_BY|PERFECT_HASH_GROUP_BY).*
+
+# DISTINCT prevents pushdown
+query II
+EXPLAIN SELECT count(DISTINCT a) FROM t
+----
+physical_plan	<REGEX>:.*(AGGREGATE|UNGROUPED_AGGREGATE).*
+
+# Filter with aggregate pushdown — segment-level skipping
+query II
+EXPLAIN SELECT count(*) FROM t WHERE a > 5
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*Aggregates.*count_star.*
+
+# Aggregate with FILTER clause prevents pushdown
+query II
+EXPLAIN SELECT count(*) FILTER (WHERE a > 0) FROM t
+----
+physical_plan	<REGEX>:.*(AGGREGATE|UNGROUPED_AGGREGATE).*
+
+# Can be disabled via SET disabled_optimizers
+query II
+EXPLAIN (SELECT count(*), min(a), max(b) FROM t)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Aggregates.*count_star.*min\(a\).*max\(b\).*
+
+statement ok
+SET disabled_optimizers='aggregate_pushdown'
+
+query II
+EXPLAIN SELECT count(*), min(a), max(b) FROM t
+----
+physical_plan	<REGEX>:.*(AGGREGATE|UNGROUPED_AGGREGATE).*
+
+statement ok
+RESET disabled_optimizers
+
+# VARCHAR min/max should still be pushed down
+statement ok
+CREATE TABLE varchar_t (s VARCHAR)
+
+statement ok
+INSERT INTO varchar_t SELECT i::VARCHAR FROM range(1, 100) t(i)
+
+query II
+EXPLAIN SELECT min(s), max(s) FROM varchar_t
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Aggregates.*min\(s\).*max\(s\).*
+
+# DATE/TIMESTAMP types should be pushed down
+statement ok
+CREATE TABLE temporal_t (d DATE, ts TIMESTAMP)
+
+statement ok
+INSERT INTO temporal_t SELECT DATE '2020-01-01' + INTERVAL (i) DAY, TIMESTAMP '2020-01-01' + INTERVAL (i) HOUR FROM range(100) t(i)
+
+query II
+EXPLAIN SELECT min(d), max(d), min(ts), max(ts) FROM temporal_t
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Aggregates.*min\(d\).*max\(d\).*min\(ts\).*max\(ts\).*
+
+# Mixed supported + unsupported should prevent pushdown (all-or-nothing)
+query II
+EXPLAIN SELECT count(*), avg(a) FROM t
+----
+physical_plan	<REGEX>:.*(AGGREGATE|UNGROUPED_AGGREGATE).*
+
+# Nested type (STRUCT) should not break pushdown — count(*) doesn't need column stats
+statement ok
+CREATE TABLE struct_t (s STRUCT(x INTEGER, y INTEGER))
+
+statement ok
+INSERT INTO struct_t SELECT {'x': i, 'y': i * 2} FROM range(100) t(i)
+
+query II
+EXPLAIN SELECT count(*) FROM struct_t
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Aggregates.*count_star.*
+
+# -------------------------------------------------------
+# Correctness: basic aggregates
+# -------------------------------------------------------
+
+# count(*)
+query I
+SELECT count(*) FROM t
+----
+10000
+
+# min/max
+query II
+SELECT min(a), max(a) FROM t
+----
+0	9999
+
+query II
+SELECT min(b), max(b) FROM t
+----
+0	19998
+
+# count(*) + min + max together
+query IIII
+SELECT count(*), min(a), max(a), max(b) FROM t
+----
+10000	0	9999	19998
+
+# Multiple aggregates on the same column
+query III
+SELECT min(a), max(a), count(a) FROM t
+----
+0	9999	10000
+
+# -------------------------------------------------------
+# Correctness: empty table
+# -------------------------------------------------------
+
+statement ok
+CREATE TABLE empty_t (a INTEGER, b INTEGER)
+
+query I
+SELECT count(*) FROM empty_t
+----
+0
+
+query I
+SELECT min(a) FROM empty_t
+----
+NULL
+
+query I
+SELECT max(b) FROM empty_t
+----
+NULL
+
+# -------------------------------------------------------
+# Correctness: single row table
+# -------------------------------------------------------
+
+statement ok
+CREATE TABLE single_t AS SELECT 42 AS a, 100 AS b
+
+query II
+SELECT min(a), max(b) FROM single_t
+----
+42	100
+
+# -------------------------------------------------------
+# Correctness: NULLs
+# -------------------------------------------------------
+
+statement ok
+CREATE TABLE nullable_t (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO nullable_t VALUES (1, 2), (NULL, 4), (3, NULL)
+
+query I
+SELECT count(*) FROM nullable_t
+----
+3
+
+# count(col) with NULLs — must correctly exclude NULLs
+query II
+SELECT count(a), count(b) FROM nullable_t
+----
+2	2
+
+# min/max with NULLs — NULLs should be ignored
+query II
+SELECT min(a), max(a) FROM nullable_t
+----
+1	3
+
+query II
+SELECT min(b), max(b) FROM nullable_t
+----
+2	4
+
+# count(*) on table with all NULLs
+statement ok
+CREATE TABLE all_null_t (a INTEGER)
+
+statement ok
+INSERT INTO all_null_t VALUES (NULL), (NULL), (NULL)
+
+query II
+SELECT count(*), count(a) FROM all_null_t
+----
+3	0
+
+# STRUCT column with NULLs: count(*) vs count(col)
+statement ok
+CREATE TABLE struct_null (s STRUCT(x INTEGER, y INTEGER))
+
+statement ok
+INSERT INTO struct_null SELECT CASE WHEN i % 10 = 0 THEN NULL ELSE {'x': i, 'y': i * 2} END FROM range(100) t(i)
+
+query I
+SELECT count(*) FROM struct_null
+----
+100
+
+query I
+SELECT count(s) FROM struct_null
+----
+90
+
+# -------------------------------------------------------
+# Correctness: VARCHAR min/max
+# -------------------------------------------------------
+
+# Short strings (within 8-byte stats buffer)
+query II
+SELECT min(s), max(s) FROM varchar_t
+----
+1	99
+
+# Long strings (exceed 8-byte stats buffer, must fall back to scanning)
+statement ok
+CREATE TABLE long_varchar_t (s VARCHAR)
+
+statement ok
+INSERT INTO long_varchar_t VALUES ('short'), ('this_is_a_very_long_string_that_exceeds_eight_bytes'), ('medium_len')
+
+query II
+SELECT min(s), max(s) FROM long_varchar_t
+----
+medium_len	this_is_a_very_long_string_that_exceeds_eight_bytes
+
+# -------------------------------------------------------
+# Correctness: DATE/TIMESTAMP min/max
+# -------------------------------------------------------
+
+statement ok
+CREATE TABLE date_t AS SELECT (DATE '2020-01-01' + INTERVAL (i) DAY)::DATE AS d FROM range(365) t(i)
+
+query II
+SELECT min(d), max(d) FROM date_t
+----
+2020-01-01	2020-12-30
+
+statement ok
+CREATE TABLE ts_t AS SELECT TIMESTAMP '2020-01-01' + INTERVAL (i) HOUR AS ts FROM range(1000) t(i)
+
+query II
+SELECT min(ts), max(ts) FROM ts_t
+----
+2020-01-01 00:00:00	2020-02-11 15:00:00
+
+# -------------------------------------------------------
+# Correctness: DELETE / UPDATE fallback
+# -------------------------------------------------------
+
+statement ok
+CREATE TABLE del_t AS SELECT range AS a FROM range(100)
+
+statement ok
+DELETE FROM del_t WHERE a >= 50
+
+query I
+SELECT count(*) FROM del_t
+----
+50
+
+query II
+SELECT min(a), max(a) FROM del_t
+----
+0	49
+
+statement ok
+CREATE TABLE upd_t AS SELECT range AS a FROM range(100)
+
+statement ok
+UPDATE upd_t SET a = a + 1000 WHERE a = 99
+
+query II
+SELECT min(a), max(a) FROM upd_t
+----
+0	1099
+
+query I
+SELECT count(*) FROM upd_t
+----
+100
+
+# -------------------------------------------------------
+# Segment-level skipping tests
+# When a row group is "maybe" (filter cannot be resolved at RG level),
+# individual segments within it can still be always-true and use stats.
+# -------------------------------------------------------
+
+statement ok
+CREATE TABLE seg_skip (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO seg_skip SELECT range, range % 1000 FROM range(100000)
+
+# Filter + aggregate pushdown plan check
+query II
+EXPLAIN SELECT count(*), min(b), max(b) FROM seg_skip WHERE a < 90000
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Aggregates.*count_star.*min\(b\).*max\(b\).*
+
+# Correctness: count(*)
+query I
+SELECT count(*) FROM seg_skip WHERE a < 90000
+----
+90000
+
+# Correctness: count(col)
+query I
+SELECT count(b) FROM seg_skip WHERE a < 90000
+----
+90000
+
+# Correctness: min/max on different column than filter
+query II
+SELECT min(b), max(b) FROM seg_skip WHERE a < 90000
+----
+0	999
+
+# Correctness: combined count + min + max
+query III
+SELECT count(*), min(b), max(b) FROM seg_skip WHERE a < 90000
+----
+90000	0	999
+
+# Edge case: filter that matches all rows (all segments always-true)
+query III
+SELECT count(*), min(b), max(b) FROM seg_skip WHERE a < 200000
+----
+100000	0	999
+
+# Edge case: filter that matches no rows (all segments always-false)
+query III
+SELECT count(*), min(b), max(b) FROM seg_skip WHERE a < 0
+----
+0	NULL	NULL
+
