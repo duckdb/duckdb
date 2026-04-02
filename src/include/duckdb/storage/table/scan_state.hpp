@@ -18,9 +18,11 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/optimizer/aggregate_pushdown_info.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
+class ArenaAllocator;
 class ColumnSegment;
 class LocalTableStorage;
 class CollectionScanState;
@@ -207,6 +209,11 @@ public:
 	//! Labels the filters for this specific column as always true
 	//! We do not need to execute them anymore until CheckAllFilters is called
 	void SetFilterAlwaysTrue(idx_t filter_idx);
+	//! Returns true when every filter for the current row group is marked ALWAYS_TRUE
+	//! (i.e. the entire row group satisfies all filters without scanning rows)
+	bool AllFiltersAlwaysTrue() const {
+		return filter_list.empty() || always_true_filters == filter_list.size();
+	}
 
 private:
 	//! The table filters (if any)
@@ -221,6 +228,45 @@ private:
 	unsafe_vector<bool> base_column_has_filter;
 	//! The amount of filters that are always true currently
 	idx_t always_true_filters = 0;
+};
+
+class ScanAggregateInfo {
+public:
+	void Initialize(AggregatePushdownInfo &agg_info_p);
+	~ScanAggregateInfo();
+
+	//! Returns true when aggregate pushdown is active for this scan.
+	bool IsActive() const {
+		return aggregate_info != nullptr;
+	}
+
+	//! Accumulate count/min/max from row-group-level statistics (ALWAYS_TRUE row group).
+	//! Returns false if any aggregate cannot be resolved from stats alone (caller must scan).
+	bool AccumulateRowGroupStats(RowGroup &rg);
+
+	//! Accumulate from a single column segment that is ALWAYS_TRUE for the current filter.
+	//! Returns false if any aggregate cannot be resolved from segment stats alone.
+	bool AccumulateSegmentStats(idx_t segment_count,
+	                                const unsafe_vector<ColumnScanState> &col_scans);
+	//! Accumulate from a chunk.
+	void AccumulateChunk(DataChunk &chunk);
+
+	//! Write the final partial-aggregate result into output (1 row).
+	void Finalize(DataChunk &output) const;
+
+	//! The pushed-down aggregate spec.
+	optional_ptr<AggregatePushdownInfo> aggregate_info;
+
+private:
+	//! Feed a single stat Value into the aggregate state via simple_update.
+	void AccumulateStatValue(const PushedAggregateInfo &aggregate, const Value &stat_val);
+
+	vector<int64_t> counts;
+
+	//! Per-aggregate state buffers for aggregate functions (COUNT_COL/MIN/MAX).
+	vector<unsafe_unique_array<data_t>> aggregate_states;
+	//! Arena allocator for aggregate input data (needed for string aggregates).
+	unique_ptr<ArenaAllocator> arena;
 };
 
 class CollectionScanState {
@@ -260,8 +306,12 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
+	ScanAggregateInfo &GetAggregateInfo();
 
 private:
+	//! Advance to the next row group.
+	void AdvanceRowGroup();
+
 	TableScanState &parent;
 };
 
@@ -303,17 +353,22 @@ public:
 	ScanFilterInfo filters;
 	//! Sampling info
 	ScanSamplingInfo sampling_info;
+	//! Aggregate pushdown info 
+	ScanAggregateInfo aggregates;
 
 public:
 	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
 	                optional_ptr<TableFilterSet> table_filters = nullptr,
-	                optional_ptr<SampleOptions> table_sampling = nullptr);
+	                optional_ptr<SampleOptions> table_sampling = nullptr,
+	                optional_ptr<AggregatePushdownInfo> table_aggregates = nullptr);
 
 	const vector<StorageIndex> &GetColumnIds();
 
 	ScanFilterInfo &GetFilterInfo();
 
 	ScanSamplingInfo &GetSamplingInfo();
+
+	ScanAggregateInfo &GetAggregateInfo();
 
 private:
 	//! The column identifiers of the scan

@@ -8,7 +8,9 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/value_map.hpp"
-#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -44,6 +46,8 @@ struct TableScanLocalState : public LocalTableFunctionState {
 
 	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
+
+	bool aggrgate_emitted = false;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -60,6 +64,13 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	vector<StorageIndex> column_ids;
 	bool in_charge_of_final_stretch {false};
 	idx_t rows_scanned = 0;
+
+	//! Temp chunk for fetching original column data when aggregate pushdown is active
+	DataChunk fetch_chunk;
+	//! Per-thread aggregate accumulator
+	ScanAggregateInfo aggregate_state;
+	//! Whether the aggregate result has been emitted
+	bool aggregate_emitted = false;
 };
 
 class TableScanGlobalState : public GlobalTableFunctionState {
@@ -118,6 +129,10 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
+	//! Aggregate pushdown info.
+	optional_ptr<AggregatePushdownInfo> aggregate_info;
+	//! Original column types for fetching data (when aggregate pushdown rewrites output types).
+	vector<LogicalType> origin_types;
 
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -139,6 +154,15 @@ public:
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
 		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
+
+		// Initialize aggregate pushdown state if active.
+		if (aggregate_info) {
+			l_state->aggregate_state.Initialize(*aggregate_info);
+			if (!origin_types.empty()) {
+				l_state->fetch_chunk.Initialize(context.client, origin_types);
+			}
+		}
+
 		return std::move(l_state);
 	}
 
@@ -148,6 +172,7 @@ public:
 		auto &tx = DuckTransaction::Get(context, duck_table.catalog);
 		auto &storage = duck_table.GetStorage();
 		auto &l_state = data_p.local_state->Cast<IndexScanLocalState>();
+		bool has_agg = aggregate_info.get();
 
 		enum class ExecutionPhase { NONE = 0, STORAGE = 1, LOCAL_STORAGE = 2 };
 
@@ -183,13 +208,28 @@ public:
 
 			switch (phase_to_be_performed) {
 			case ExecutionPhase::NONE: {
-				// No work to be picked up
+				// Emit finalized aggregate result before returning.
+				if (has_agg && !l_state.aggregate_emitted) {
+					l_state.aggregate_state.Finalize(output);
+					l_state.aggregate_emitted = true;
+				}
 				return;
 			}
 			case ExecutionPhase::STORAGE: {
 				// Scan (in parallel) storage
 				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
 				Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
+
+				if (has_agg) {
+					// Fetch into temp chunk with original column types, then accumulate.
+					l_state.fetch_chunk.Reset();
+					storage.Fetch(tx, l_state.fetch_chunk, column_ids, local_vector, scan_count,
+					              l_state.fetch_state);
+					l_state.aggregate_state.AccumulateChunk(l_state.fetch_chunk);
+					l_state.rows_scanned += scan_count;
+					// Don't output yet — loop to pick up more batches.
+					continue;
+				}
 
 				if (CanRemoveFilterColumns()) {
 					l_state.all_columns.Reset();
@@ -216,6 +256,24 @@ public:
 			case ExecutionPhase::LOCAL_STORAGE: {
 				// Scan (sequentially, always same logical thread) local_storage
 				auto &local_storage = LocalStorage::Get(tx);
+
+				if (has_agg) {
+					// Fetch into temp chunk and accumulate.
+					l_state.fetch_chunk.Reset();
+					local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.fetch_chunk);
+					if (l_state.fetch_chunk.size() == 0) {
+						// Local storage exhausted. Emit finalized aggregate result.
+						if (!l_state.aggregate_emitted) {
+							l_state.aggregate_state.Finalize(output);
+							l_state.aggregate_emitted = true;
+						}
+						return;
+					}
+					l_state.aggregate_state.AccumulateChunk(l_state.fetch_chunk);
+					l_state.rows_scanned += l_state.fetch_chunk.size();
+					continue;
+				}
+
 				{
 					if (CanRemoveFilterColumns()) {
 						l_state.all_columns.Reset();
@@ -263,6 +321,7 @@ public:
 
 public:
 	ParallelTableScanState state;
+	optional_ptr<AggregatePushdownInfo> agg_info;
 
 private:
 	const TableScanBindData &bind_data;
@@ -286,10 +345,11 @@ public:
 			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
+		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options,
+		                               input.aggregate_info);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
-		if (input.CanRemoveFilterColumns()) {
+		if (input.CanRemoveFilterColumns() || input.aggregate_info) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
 
@@ -301,13 +361,17 @@ public:
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
+		auto &agg_info = l_state.scan_state.aggregates;
+
 		do {
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output);
-			} else if (CanRemoveFilterColumns()) {
+			} else if (CanRemoveFilterColumns() || agg_info.IsActive()) {
 				l_state.all_columns.Reset();
 				storage.Scan(tx, l_state.all_columns, l_state.scan_state);
-				output.ReferenceColumns(l_state.all_columns, projection_ids);
+				if (!agg_info.IsActive()) {
+					output.ReferenceColumns(l_state.all_columns, projection_ids);
+				}
 			} else {
 				storage.Scan(tx, output, l_state.scan_state);
 			}
@@ -322,6 +386,10 @@ public:
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
 				if (l_state.rows_in_current_row_group == 0) {
+					if (agg_info.IsActive() && !l_state.aggrgate_emitted) {
+						agg_info.Finalize(output);
+						l_state.aggrgate_emitted = true;
+					}
 					data_p.async_result = AsyncResultType::FINISHED;
 				} else {
 					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
@@ -329,6 +397,11 @@ public:
 				return;
 			}
 			if (l_state.rows_in_current_row_group == 0) {
+				// All row groups exhausted, then emit the finalized aggregate result.
+				if (agg_info.IsActive() && !l_state.aggrgate_emitted) {
+					agg_info.Finalize(output);
+					l_state.aggrgate_emitted = true;
+				}
 				return;
 			}
 
@@ -388,11 +461,19 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
-	if (!input.CanRemoveFilterColumns()) {
+
+	if (input.aggregate_info) {
+		g_state->agg_info = input.aggregate_info;
+	}
+
+	bool need_scanned_types = input.CanRemoveFilterColumns() || input.aggregate_info;
+	if (!need_scanned_types) {
 		return std::move(g_state);
 	}
 
-	g_state->projection_ids = input.projection_ids;
+	if (input.CanRemoveFilterColumns()) {
+		g_state->projection_ids = input.projection_ids;
+	}
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
@@ -429,6 +510,10 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		g_state->projection_ids = input.projection_ids;
 	}
 
+	if (input.aggregate_info) {
+		g_state->aggregate_info = input.aggregate_info;
+	}
+
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
 		g_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
@@ -438,6 +523,18 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 			g_state->scanned_types.emplace_back(col_idx.GetScanType());
 		} else {
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
+		}
+	}
+
+	// When aggregate pushdown is active, scanned_types reflect aggregate output types,
+	// but FetchRow needs original column types.
+	if (g_state->aggregate_info) {
+		for (const auto &col_idx : input.column_indexes) {
+			if (col_idx.IsRowIdColumn()) {
+				g_state->origin_types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				g_state->origin_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
+			}
 		}
 	}
 
@@ -879,6 +976,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
 	scan_function.sampling_pushdown = true;
+	scan_function.aggregate_pushdown = true;
 	scan_function.late_materialization = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;

@@ -128,6 +128,8 @@ public:
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
+	//! Returns true if the row group statistics may be stale
+	bool StatsAreStale() const;
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);

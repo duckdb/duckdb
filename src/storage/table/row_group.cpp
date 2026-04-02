@@ -597,6 +597,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
 	const auto &column_ids = state.GetColumnIds();
 	auto &filter_info = state.GetFilterInfo();
+	auto &aggr_info = state.GetAggregateInfo();
 	auto &transaction = options.transaction;
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
@@ -617,6 +618,37 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
+
+		// Stats-based aggregate skip: if the row group stats are not stale (no deletes,
+		// no unserialized updates), we can use segment stats directly.
+		if (aggr_info.IsActive() && !StatsAreStale()) {
+			bool all_segments_true = true;
+			if (filter_info.HasFilters()) {
+				for (auto &entry : filter_info.GetFilterList()) {
+					if (entry.IsAlwaysTrue()) {
+						continue;
+					}
+					auto res = GetColumn(entry.table_column_index)
+					               .CheckZonemap(state.column_scans[entry.scan_column_index], entry.filter);
+					if (res != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+						all_segments_true = false;
+						break;
+					}
+				}
+			}
+			// No filters: all segments are implicitly ALWAYS_TRUE
+			if (all_segments_true) {
+				if (aggr_info.AccumulateSegmentStats(max_count, state.column_scans)) {
+					for (idx_t i = 0; i < column_ids.size(); ++i) {
+						GetColumn(column_ids[i]).Skip(state.column_scans[i]);
+					}
+					state.vector_index++;
+					continue;
+				}
+				// Fall through to normal row-level scanning.
+			}
+		}
+
 		auto &current_row_group = state.row_group->GetNode();
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
@@ -724,8 +756,20 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			count = approved_tuple_count;
 		}
 		result.SetCardinality(count);
+
+		// Accumulate into the per-thread partial aggregate (NO_PRUNING path).
+		// After accumulation suppress the chunk so it doesn't flow to the upper operator.
+		if (aggr_info.IsActive()) {
+			aggr_info.AccumulateChunk(result);
+			result.Reset();
+		}
+
 		state.vector_index++;
-		break;
+		// In normal mode: break after each vector (upper scan loop re-enters).
+		// In aggregate mode: continue to next vector since output is suppressed anyway.
+		if (!aggr_info.IsActive()) {
+			break;
+		}
 	}
 }
 
@@ -1343,6 +1387,18 @@ bool RowGroup::HasChanges() const {
 		}
 	}
 	return false;
+}
+
+bool RowGroup::StatsAreStale() const {
+	// Persisted deletes: rg.count > visible count, min/max may be stale
+	if (!deletes_pointers.empty()) {
+		return true;
+	}
+	// Any in-memory version modifications (unserialized deletes/inserts, or checkpoint race window)
+	if (version_info.load() != nullptr) {
+		return true;
+	}
+	return HasChanges();
 }
 
 bool RowGroup::IsPersistent() const {

@@ -36,6 +36,11 @@
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/function/function_serialization.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -318,6 +323,8 @@ void ExtraOperatorInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<optional_idx>(101, "total_files", total_files);
 	serializer.WriteProperty<optional_idx>(102, "filtered_files", filtered_files);
 	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", sample_options);
+	serializer.WritePropertyWithDefault<unique_ptr<AggregatePushdownInfo>>(104, "aggregate_pushdown_info",
+	                                                                       aggregate_pushdown_info);
 }
 
 ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
@@ -326,6 +333,8 @@ ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<optional_idx>(101, "total_files", result.total_files);
 	deserializer.ReadProperty<optional_idx>(102, "filtered_files", result.filtered_files);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", result.sample_options);
+	deserializer.ReadPropertyWithDefault<unique_ptr<AggregatePushdownInfo>>(104, "aggregate_pushdown_info",
+	                                                                        result.aggregate_pushdown_info);
 	return result;
 }
 
@@ -738,6 +747,45 @@ interval_t interval_t::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<int32_t>(1, "months", result.months);
 	deserializer.ReadPropertyWithDefault<int32_t>(2, "days", result.days);
 	deserializer.ReadPropertyWithDefault<int64_t>(3, "micros", result.micros);
+	return result;
+}
+
+void PushedAggregateInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<PushedAggregateType>(100, "type", type);
+	serializer.WriteProperty<StorageIndex>(101, "col_idx", col_idx);
+	serializer.WriteProperty<LogicalType>(102, "return_type", return_type);
+	serializer.WritePropertyWithDefault<idx_t>(103, "output_idx", output_idx);
+	serializer.WritePropertyWithDefault<idx_t>(104, "scan_col_position", scan_col_position);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(105, "func_arguments", aggregate_function->arguments);
+	FunctionSerializer::Serialize(serializer, *aggregate_function, bind_data.get());
+}
+
+PushedAggregateInfo PushedAggregateInfo::Deserialize(Deserializer &deserializer) {
+	PushedAggregateInfo result;
+	result.type = deserializer.ReadProperty<PushedAggregateType>(100, "type");
+	result.col_idx = deserializer.ReadProperty<StorageIndex>(101, "col_idx");
+	result.return_type = deserializer.ReadProperty<LogicalType>(102, "return_type");
+	deserializer.ReadPropertyWithDefault<idx_t>(103, "output_idx", result.output_idx);
+	deserializer.ReadPropertyWithDefault<idx_t>(104, "scan_col_position", result.scan_col_position);
+	auto func_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(105, "func_arguments");
+	vector<unique_ptr<Expression>> children;
+	for (auto &arg_type : func_arguments) {
+		children.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
+	}
+	auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, result.return_type);
+	result.aggregate_function = make_uniq<AggregateFunction>(std::move(entry.first));
+	result.bind_data = std::move(entry.second);
+	return result;
+}
+
+void AggregatePushdownInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<PushedAggregateInfo>>(100, "aggregates", aggregates);
+}
+
+unique_ptr<AggregatePushdownInfo> AggregatePushdownInfo::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<AggregatePushdownInfo>();
+	deserializer.ReadPropertyWithDefault<vector<PushedAggregateInfo>>(100, "aggregates", result->aggregates);
 	return result;
 }
 

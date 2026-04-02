@@ -40,7 +40,7 @@ public:
 		if (op.function.init_global) {
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
-			                             op.extra_info.sample_options, &op);
+			                             op.extra_info.sample_options, op.extra_info.aggregate_pushdown_info,&op);
 
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
@@ -85,7 +85,8 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options,
+			                             op.extra_info.aggregate_pushdown_info, &op);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -370,6 +371,21 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 
 	if (extra_info.sample_options) {
 		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+	}
+	if (extra_info.aggregate_pushdown_info) {
+		string agg_str;
+		for (auto &agg : extra_info.aggregate_pushdown_info->aggregates) {
+			if (!agg_str.empty()) {
+				agg_str += "\n";
+			}
+			agg_str += agg.aggregate_function->name + "(";
+			auto col_id = agg.col_idx.GetPrimaryIndex();
+			if (col_id < names.size()) {
+				agg_str += names[col_id];
+			}
+			agg_str += ")";
+		}
+		result["Aggregates"] = agg_str;
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;

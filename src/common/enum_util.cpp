@@ -143,6 +143,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/optimizer/aggregate_pushdown_info.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -3190,6 +3191,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN), "OPTIMIZER_WINDOW_SELF_JOIN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PROJECTION_PULLUP), "OPTIMIZER_PROJECTION_PULLUP" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION), "OPTIMIZER_OUTER_JOIN_SIMPLIFICATION" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_AGGREGATE_PUSHDOWN), "OPTIMIZER_AGGREGATE_PUSHDOWN" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
@@ -3204,12 +3206,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 69, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 70, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 69, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 70, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -3468,7 +3470,8 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" },
 		{ static_cast<uint32_t>(OptimizerType::WINDOW_SELF_JOIN), "WINDOW_SELF_JOIN" },
 		{ static_cast<uint32_t>(OptimizerType::PROJECTION_PULLUP), "PROJECTION_PULLUP" },
-		{ static_cast<uint32_t>(OptimizerType::OUTER_JOIN_SIMPLIFICATION), "OUTER_JOIN_SIMPLIFICATION" }
+		{ static_cast<uint32_t>(OptimizerType::OUTER_JOIN_SIMPLIFICATION), "OUTER_JOIN_SIMPLIFICATION" },
+		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_PUSHDOWN), "AGGREGATE_PUSHDOWN" }
 	};
 	return values;
 }
@@ -4021,6 +4024,26 @@ const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames v
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value) {
 	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPushedAggregateTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PushedAggregateType::COUNT_STAR), "COUNT_STAR" },
+		{ static_cast<uint32_t>(PushedAggregateType::COUNT_COL), "COUNT_COL" },
+		{ static_cast<uint32_t>(PushedAggregateType::MIN), "MIN" },
+		{ static_cast<uint32_t>(PushedAggregateType::MAX), "MAX" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PushedAggregateType>(PushedAggregateType value) {
+	return StringUtil::EnumToString(GetPushedAggregateTypeValues(), 4, "PushedAggregateType", static_cast<uint32_t>(value));
+}
+
+template<>
+PushedAggregateType EnumUtil::FromString<PushedAggregateType>(const char *value) {
+	return static_cast<PushedAggregateType>(StringUtil::StringToEnum(GetPushedAggregateTypeValues(), 4, "PushedAggregateType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {

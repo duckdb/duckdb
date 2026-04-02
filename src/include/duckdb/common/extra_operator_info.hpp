@@ -14,15 +14,17 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/optimizer/aggregate_pushdown_info.hpp"
 
 namespace duckdb {
 
 class ExtraOperatorInfo {
 public:
-	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
+	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr), aggregate_pushdown_info(nullptr) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &&extra_info) noexcept
-	    : file_filters(std::move(extra_info.file_filters)), sample_options(std::move(extra_info.sample_options)) {
+	    : file_filters(std::move(extra_info.file_filters)), sample_options(std::move(extra_info.sample_options)),
+	      aggregate_pushdown_info(std::move(extra_info.aggregate_pushdown_info)) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}
@@ -40,13 +42,15 @@ public:
 				filtered_files = extra_info.filtered_files.GetIndex();
 			}
 			sample_options = std::move(extra_info.sample_options);
+			aggregate_pushdown_info = std::move(extra_info.aggregate_pushdown_info);
 		}
 		return *this;
 	}
 
 	bool operator==(const ExtraOperatorInfo &other) const {
 		return file_filters == other.file_filters && total_files == other.total_files &&
-		       filtered_files == other.filtered_files && sample_options == other.sample_options;
+		       filtered_files == other.filtered_files && sample_options == other.sample_options &&
+		       aggregate_pushdown_info.get() == other.aggregate_pushdown_info.get();
 	}
 
 	//! Filters that have been pushed down into the main file list
@@ -57,6 +61,8 @@ public:
 	optional_idx filtered_files;
 	//! Sample options that have been pushed down into the table scan
 	unique_ptr<SampleOptions> sample_options;
+	//! Aggregate pushdown info
+	unique_ptr<AggregatePushdownInfo> aggregate_pushdown_info;
 
 	void Serialize(Serializer &serializer) const;
 	static ExtraOperatorInfo Deserialize(Deserializer &deserializer);

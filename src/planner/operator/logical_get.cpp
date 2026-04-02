@@ -104,6 +104,14 @@ const ColumnIndex &LogicalGet::GetColumnIndex(ProjectionIndex proj_index) const 
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
+	if (extra_info.aggregate_pushdown_info) {
+		vector<ColumnBinding> result;
+		auto n = extra_info.aggregate_pushdown_info->aggregates.size();
+		for (idx_t i = 0; i < n; i++) {
+			result.emplace_back(table_index, ProjectionIndex(i));
+		}
+		return result;
+	}
 	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, ProjectionIndex(0))};
 	}
@@ -171,6 +179,13 @@ column_t LogicalGet::GetAnyColumn() const {
 }
 
 void LogicalGet::ResolveTypes() {
+	if (extra_info.aggregate_pushdown_info) {
+		types.clear();
+		for (auto &agg : extra_info.aggregate_pushdown_info->aggregates) {
+			types.push_back(agg.return_type);
+		}
+		return;
+	}
 	if (column_ids.empty()) {
 		// no projection - we need to push a column
 		column_ids.emplace_back(GetAnyColumn());

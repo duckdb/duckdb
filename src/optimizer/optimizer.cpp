@@ -31,6 +31,7 @@
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
+#include "duckdb/optimizer/aggregate_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -303,6 +304,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		StatisticsPropagator propagator(*this, *plan);
 		propagator.PropagateStatistics(plan);
 		statistics_map = propagator.GetStatisticsMap();
+	});
+
+	// perform aggregate pushdown (min/max/count computed from zonemap statistics)
+	RunOptimizer(OptimizerType::AGGREGATE_PUSHDOWN, [&]() {
+		AggregatePushdown agg_pushdown(*this);
+		plan = agg_pushdown.Optimize(std::move(plan));
 	});
 
 	// rewrite row_number window function + filter on row_number to aggregate
