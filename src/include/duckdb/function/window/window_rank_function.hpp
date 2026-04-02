@@ -19,9 +19,6 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &context, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
 	                                           const ValidityMask &order_mask) const override;
-
-	//! The column indices of any ORDER BY argument expressions
-	vector<column_t> arg_order_idx;
 };
 
 class WindowRankExecutor : public WindowPeerExecutor {

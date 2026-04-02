@@ -21,11 +21,6 @@ public:
 	                                           const ValidityMask &order_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
-	//! The evaluation index of the NTILE column
-	column_t ntile_idx = DConstants::INVALID_INDEX;
-	//! The column indices of any ORDER BY argument expressions
-	vector<column_t> arg_order_idx;
-
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
 	                      OperatorSinkInput &sink) const override;

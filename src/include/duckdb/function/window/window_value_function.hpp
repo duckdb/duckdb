@@ -25,17 +25,6 @@ public:
 	                                           const ValidityMask &partition_mask,
 	                                           const ValidityMask &order_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
-
-	//! The column index of the value column
-	column_t child_idx = DConstants::INVALID_INDEX;
-	//! The column index of the Nth column
-	column_t nth_idx = DConstants::INVALID_INDEX;
-	//! The column index of the offset column
-	column_t offset_idx = DConstants::INVALID_INDEX;
-	//! The column index of the default value column
-	column_t default_idx = DConstants::INVALID_INDEX;
-	//! The column indices of any ORDER BY argument expressions
-	vector<column_t> arg_order_idx;
 };
 
 class WindowLeadLagExecutor : public WindowValueExecutor {

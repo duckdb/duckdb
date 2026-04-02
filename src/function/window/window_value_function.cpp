@@ -25,7 +25,7 @@ public:
 	WindowValueGlobalState(ClientContext &client, const WindowValueExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      ignore_nulls(&all_valid), child_idx(executor.child_idx) {
+	      ignore_nulls(&all_valid), value_idx(executor.child_idx[0]) {
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
 			    make_uniq<WindowIndexTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx, payload_count);
@@ -34,8 +34,8 @@ public:
 
 	void Finalize(CollectionPtr collection) {
 		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (child_idx != DConstants::INVALID_INDEX && executor.IgnoreNulls()) {
-			ignore_nulls = &collection->validities[child_idx];
+		if (value_idx != DConstants::INVALID_INDEX && executor.IgnoreNulls()) {
+			ignore_nulls = &collection->validities[value_idx];
 		}
 	}
 
@@ -44,8 +44,8 @@ public:
 	ValidityMask all_valid;
 	optional_ptr<ValidityMask> ignore_nulls;
 
-	//! Copy of the executor child_idx
-	const column_t child_idx;
+	//! The index of the value collection
+	const column_t value_idx;
 
 	//! Merge sort tree to map unfiltered row number to value
 	unique_ptr<WindowIndexTree> value_tree;
@@ -106,8 +106,8 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 		// If we need to IGNORE NULLS for the child, and there are NULLs,
 		// then build an SV to hold them
 		const auto coll_count = coll_chunk.size();
-		auto &child = coll_chunk.data[gvstate.child_idx];
-		auto validity = child.Validity(coll_count);
+		auto &values = coll_chunk.data[gvstate.value_idx];
+		auto validity = values.Validity(coll_count);
 		if (gvstate.executor.IgnoreNulls() && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
 				if (validity.IsValid(i)) {
@@ -132,8 +132,8 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 	}
 
 	// Prepare to scan
-	if (!cursor && gvstate.child_idx != DConstants::INVALID_INDEX) {
-		cursor = make_uniq<WindowCursor>(*collection, gvstate.child_idx);
+	if (!cursor && gvstate.value_idx != DConstants::INVALID_INDEX) {
+		cursor = make_uniq<WindowCursor>(*collection, gvstate.value_idx);
 	}
 }
 
@@ -155,13 +155,13 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSha
 
 	//	The children have to be handled separately because only the first one is global
 	if (!wexpr.children.empty()) {
-		child_idx = shared.RegisterCollection(wexpr.children[0], IgnoreNulls());
+		child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], IgnoreNulls()));
 
 		if (wexpr.children.size() > 1) {
-			offset_idx = nth_idx = shared.RegisterEvaluate(wexpr.children[1]);
+			child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[1]));
 		}
 		if (wexpr.children.size() > 2) {
-			default_idx = shared.RegisterEvaluate(wexpr.children[2]);
+			child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[2]));
 		}
 	}
 }
@@ -376,11 +376,14 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	auto &llstate = sink.local_state.Cast<WindowLeadLagLocalState>();
 	auto &cursor = *llstate.cursor;
 
+	const bool has_offset = (child_idx.size() > 1);
+	const bool has_default = (child_idx.size() > 2);
+
+	const idx_t offset_idx = has_offset ? child_idx[1] : DConstants::INVALID_INDEX;
+	const idx_t default_idx = has_default ? child_idx[2] : DConstants::INVALID_INDEX;
+
 	WindowInputExpression leadlag_offset(eval_chunk, offset_idx);
 	WindowInputExpression leadlag_default(eval_chunk, default_idx);
-
-	const bool has_offset = (offset_idx != DConstants::INVALID_INDEX);
-	const bool has_default = (default_idx != DConstants::INVALID_INDEX);
 
 	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
 	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
@@ -670,6 +673,7 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
+	const auto nth_idx = child_idx[1];
 	WindowInputExpression nth_col(eval_chunk, nth_idx);
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);

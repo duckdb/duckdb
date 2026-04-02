@@ -16,8 +16,7 @@ public:
 	WindowRowNumberGlobalState(ClientContext &client, const WindowRowNumberExecutor &executor,
 	                           const idx_t payload_count, const ValidityMask &partition_mask,
 	                           const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      ntile_idx(executor.ntile_idx) {
+	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask) {
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
 
@@ -40,9 +39,6 @@ public:
 
 	//! The token tree for ORDER BY arguments
 	unique_ptr<WindowTokenTree> token_tree;
-
-	//! The evaluation index for NTILE
-	const column_t ntile_idx;
 };
 
 //===--------------------------------------------------------------------===//
@@ -184,7 +180,7 @@ WindowFunction NtileFunc::GetFunction() {
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowRowNumberExecutor(wexpr, shared) {
 	// NTILE has one argument
-	ntile_idx = shared.RegisterEvaluate(wexpr.children[0]);
+	child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[0]));
 }
 
 unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocalState(ExecutionContext &context,
@@ -204,6 +200,7 @@ void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk 
 		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
 	}
 	auto rdata = FlatVector::GetData<int64_t>(result);
+	const auto ntile_idx = child_idx[0];
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {
