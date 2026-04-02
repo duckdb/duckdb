@@ -91,6 +91,16 @@ static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
 // Start of the auto-generated list of settings structures
 //===----------------------------------------------------------------------===//
 
+struct DeltaOnlyVariantEncodingEnabledSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "__delta_only_variant_encoding_enabled";
+	static constexpr const char *Description = "Enables the Parquet reader to identify a Variant structurally.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AccessModeSetting {
 	using RETURN_TYPE = AccessMode;
 	static constexpr const char *Name = "access_mode";

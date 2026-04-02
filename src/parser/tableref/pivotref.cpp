@@ -271,33 +271,54 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 	}
 }
 
-void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(7) || !expr) {
-		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
-		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-	} else {
-		// We used to only support constant values in pivot entries, and folded expressions in the
-		// transformer. So we need to seriaize in a backwards compatible way here by trying to fold
-		// the expression back to constant values.
-		vector<Value> dummy_values;
-		if (!TryFoldForBackwardsCompatibility(expr, dummy_values)) {
-			throw SerializationException(
-			    "Cannot serialize arbitrary expression pivot entries when targeting database storage version '%s'",
-			    serializer.GetOptions().serialization_compatibility.duckdb_version);
-			;
-		}
-		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", dummy_values);
-		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", nullptr);
-		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-	}
-}
+vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &serializer) const {
+	vector<PivotColumnEntry> result;
 
-PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
-	PivotColumnEntry result;
-	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
-	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
+	if (serializer.ShouldSerialize(7)) {
+		// Latest version, serialize as is.
+		// Unfortunately, we have to make a deep copy to return vector by value.
+		for (auto &entry : entries) {
+			result.push_back(entry.Copy());
+		}
+		return result;
+	}
+
+	// For PIVOT, We need to potentially transform entries to deal with older serialization versions.
+	const auto is_unpivot = !unpivot_names.empty();
+
+	for (auto &entry : entries) {
+		auto result_entry = entry.Copy();
+		if (!entry.expr) {
+			// No expression, just values, so we can serialize as-is
+			result.push_back(std::move(result_entry));
+			continue;
+		}
+
+		// Try to constant-fold the expression back into values
+		vector<Value> folded_values;
+		if (TryFoldForBackwardsCompatibility(result_entry.expr, folded_values)) {
+			// Set the folded values and clear the expression for serialization
+			result_entry.values = std::move(folded_values);
+			result_entry.expr.reset();
+			result.push_back(std::move(result_entry));
+			continue;
+		}
+
+		// UNPIVOT always supported expressions, so if we didn't fold, that's fine, we can serialize the expr as-is
+		if (is_unpivot) {
+			result.push_back(std::move(result_entry));
+			continue;
+		}
+
+		// Otherwise this is a PIVOT with an expression we could not fold.
+		// Older versions of DuckDB do not support this, so throw an exception.
+		const auto target_version = serializer.GetOptions().serialization_compatibility.duckdb_version;
+
+		throw SerializationException(
+		    "Cannot serialize non-constant expression '%s' in pivot list when targeting database storage version '%s'",
+		    entry.expr->ToString(), target_version);
+	}
+
 	return result;
 }
 

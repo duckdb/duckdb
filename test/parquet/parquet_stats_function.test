@@ -6,40 +6,40 @@ require parquet
 
 # we can derive whether all values in a parquet column are NULL
 statement ok
-copy (select null i) to '__TEST_DIR__/all_null.parquet'
+copy (select null i) to '{TEST_DIR}/all_null.parquet'
 
 # "Has No Null" is "false", meaning there are no non-NULL values
 query II
-SELECT s.has_null, s.has_no_null FROM (select stats(i) s from '__TEST_DIR__/all_null.parquet')
+SELECT s.has_null, s.has_no_null FROM (select stats(i) s from '{TEST_DIR}/all_null.parquet')
 ----
 true	false
 
 # create 0-9 with no NULL
 statement ok
-copy (select range i from range(10)) to '__TEST_DIR__/parquet_stats_function1.parquet'
+copy (select range i from range(10)) to '{TEST_DIR}/parquet_stats_function1.parquet'
 
 query IIII
-select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('__TEST_DIR__/parquet_stats_function1.parquet', union_by_name=true) limit 1)
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('{TEST_DIR}/parquet_stats_function1.parquet', union_by_name=true) limit 1)
 ----
 0	9	false	true
 
 # create 100-109 with NULL
 statement ok
-copy (select range i from range(100, 110) union all select null i) to '__TEST_DIR__/parquet_stats_function2.parquet'
+copy (select range i from range(100, 110) union all select null i) to '{TEST_DIR}/parquet_stats_function2.parquet'
 
 query IIII
-select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('__TEST_DIR__/parquet_stats_function2.parquet', union_by_name=true) limit 1)
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('{TEST_DIR}/parquet_stats_function2.parquet', union_by_name=true) limit 1)
 ----
 100	109	true	true
 
 # query combined WITHOUT union_by_name (should give back no stats)
 query IIII
-select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('__TEST_DIR__/parquet_stats_function*.parquet', union_by_name=false) limit 1)
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('{TEST_DIR}/parquet_stats_function*.parquet', union_by_name=false) limit 1)
 ----
 NULL	NULL	true	true
 
 # now query combined WITH union_by_name (should give back stats)
 query IIII
-select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('__TEST_DIR__/parquet_stats_function*.parquet', union_by_name=true) limit 1)
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(i) s from read_parquet('{TEST_DIR}/parquet_stats_function*.parquet', union_by_name=true) limit 1)
 ----
 0	109	true	true

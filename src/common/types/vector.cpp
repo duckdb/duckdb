@@ -1252,7 +1252,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
 	}
 
-	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
+	const bool has_validity_mask = (count > 0) && vdata.validity.CanHaveNull();
 	serializer.WriteProperty(100, "has_validity_mask", has_validity_mask);
 	if (has_validity_mask) {
 		ValidityMask flat_mask(count);
@@ -1320,7 +1320,10 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				auto string_write_ptr = byte_data.get();
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
-					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
+					if (!vdata.validity.RowIsValid(idx)) {
+						continue;
+					}
+					auto this_length = strings[idx].GetSize();
 					memcpy(string_write_ptr, strings[idx].GetData(), this_length);
 					string_write_ptr += this_length;
 				}

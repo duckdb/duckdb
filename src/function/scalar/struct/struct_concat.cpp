@@ -25,12 +25,6 @@ static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector
 		}
 	}
 	D_ASSERT(offset == result_cols.size());
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(args.size());
 }
 
 static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarFunction &bound_function,

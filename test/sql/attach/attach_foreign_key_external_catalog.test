@@ -4,7 +4,7 @@
 
 # attach an external database file
 statement ok
-ATTACH '__TEST_DIR__/fk_external.duckdb' AS ext;
+ATTACH '{TEST_DIR}/fk_external.duckdb' AS ext;
 
 # create the referenced table in the external catalog
 statement ok

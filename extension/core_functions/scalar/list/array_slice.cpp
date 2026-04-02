@@ -353,8 +353,6 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &info = func_expr.bind_info->Cast<ListSliceBindData>();
 	auto begin_is_empty = info.begin_is_empty;
 	auto end_is_empty = info.end_is_empty;
-
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST: {
 		// Share the value dictionary as we are just going to slice it

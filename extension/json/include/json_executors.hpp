@@ -112,10 +112,6 @@ public:
 				    }
 			    });
 		}
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-
 		JSONAllocator::AddBuffer(result, alc);
 	}
 
@@ -170,11 +166,6 @@ public:
 			offset += num_paths;
 		}
 		ListVector::SetListSize(result, offset);
-
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-
 		JSONAllocator::AddBuffer(result, alc);
 	}
 };

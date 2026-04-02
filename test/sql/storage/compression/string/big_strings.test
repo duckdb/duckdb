@@ -3,10 +3,10 @@
 # group: [string]
 
 statement ok
-ATTACH '__TEST_DIR__/test_big_strings_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
+ATTACH '{TEST_DIR}/test_big_strings_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok
-ATTACH '__TEST_DIR__/test_big_strings_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
+ATTACH '{TEST_DIR}/test_big_strings_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
 
 foreach compression fsst dictionary dict_fsst
 
@@ -18,7 +18,7 @@ statement ok
 USE db_v13
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='{compression}'
 
 # Baseline, non big string, dictionary compression should work
 statement ok
@@ -42,7 +42,7 @@ a	a	3900
 b	b	3900
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT lower(compression)='{compression}' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
 

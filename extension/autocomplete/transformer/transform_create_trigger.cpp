@@ -1,15 +1,34 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
 
+static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
+	switch (stmt->type) {
+	case StatementType::INSERT_STATEMENT:
+		return unique_ptr_cast<InsertQueryNode, QueryNode>(std::move(stmt->Cast<InsertStatement>().node));
+	case StatementType::UPDATE_STATEMENT:
+		return unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(stmt->Cast<UpdateStatement>().node));
+	case StatementType::DELETE_STATEMENT:
+		return unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(stmt->Cast<DeleteStatement>().node));
+	default:
+		throw ParserException("Trigger body must be an INSERT, UPDATE, or DELETE statement");
+	}
+}
+
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
-	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName
+	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName
 	// ForEachClause? TriggerBody
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto trigger_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	auto trigger_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
 	auto timing = transformer.Transform<TriggerTiming>(list_pr.Child<ListParseResult>(3));
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr.Child<ListParseResult>(4));
 	// index 5 is 'ON'
@@ -19,21 +38,18 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	if (for_each_opt.HasResult()) {
 		for_each = transformer.Transform<TriggerForEach>(for_each_opt.optional_result);
 	}
-	auto sql_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
+	auto trigger_action = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = trigger_name.catalog;
-	info->schema = trigger_name.schema;
-	info->trigger_name = trigger_name.name;
+	info->trigger_name = trigger_name;
 	info->timing = timing;
 	info->event_type = trigger_event.event_type;
 	info->columns = std::move(trigger_event.columns);
 	info->base_table = std::move(base_table);
 	info->for_each = for_each;
-	info->sql_body_text = sql_body->ToString();
-	info->sql_body = std::move(sql_body);
+	info->trigger_action = ExtractQueryNode(std::move(trigger_action));
 	result->info = std::move(info);
 	return result;
 }
@@ -43,6 +59,12 @@ TriggerForEach PEGTransformerFactory::TransformForEachClause(PEGTransformer &tra
 	// ForEachClause <- ForEachRow / ForEachStatement
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<TriggerForEach>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+string PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
 TriggerTiming PEGTransformerFactory::TransformTriggerTiming(PEGTransformer &transformer,

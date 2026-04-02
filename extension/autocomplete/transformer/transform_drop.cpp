@@ -249,7 +249,7 @@ string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transfo
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,
                                                                       optional_ptr<ParseResult> parse_result) {
-	// DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
+	// DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -257,10 +257,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransfo
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
-	auto trigger_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
-	info->catalog = trigger_name.catalog;
-	info->schema = trigger_name.schema;
-	info->name = trigger_name.name;
+	info->name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
 
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
 	auto extra_info = make_uniq<ExtraDropTriggerInfo>();

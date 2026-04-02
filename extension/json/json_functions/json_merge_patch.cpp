@@ -69,11 +69,6 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 

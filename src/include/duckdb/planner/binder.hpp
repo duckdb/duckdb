@@ -57,6 +57,7 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateTriggerInfo;
 struct BoundCreateTableInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
@@ -223,9 +224,11 @@ public:
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
-	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults,
+	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
 
@@ -254,6 +257,7 @@ public:
 	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
+	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
@@ -333,6 +337,9 @@ public:
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
 
 	void SetSearchPath(Catalog &catalog, const string &schema);
+
+	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
+	                      const string &catalog = "", const string &schema = "");
 
 private:
 	//! The parent binder (if any)

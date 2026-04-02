@@ -247,10 +247,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			child_vector.Flatten(sel_sorted_idx);
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,

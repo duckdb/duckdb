@@ -475,7 +475,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 			continue;
 		}
 		auto &col_key_data = vector_data[col_idx].unified;
-		if (col_key_data.validity.AllValid()) {
+		if (col_key_data.validity.CannotHaveNull()) {
 			continue;
 		}
 		added_count = FilterNullValues(col_key_data, *current_sel, added_count, sel);
@@ -617,7 +617,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	idx_t remaining_count = count;
 	const auto *remaining_sel = FlatVector::IncrementalSelectionVector();
 
-	const auto all_valid = layout.AllValid();
+	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();
 
 	if (PropagatesBuildSide(ht.join_type)) {
@@ -1335,7 +1335,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 		}
 		UnifiedVectorFormat jdata;
 		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
-		if (!jdata.validity.AllValid()) {
+		if (jdata.validity.CanHaveNull()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
 				if (!jdata.validity.RowIsValidUnsafe(jidx)) {

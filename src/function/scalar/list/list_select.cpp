@@ -145,7 +145,6 @@ void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	result_entry.Flatten(offset);
 	ListVector::SetListSize(result, offset);
 	FlatVector::SetValidity(result_entry, entry_validity_mask);
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 
 } // namespace
