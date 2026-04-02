@@ -1,0 +1,187 @@
+# name: test/sql/json/scalar/test_json_set.test
+# description: Test JSON set (set value at path, create if missing, overwrite if exists)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Basic: add new key to object
+query T
+SELECT json_set('{"a":1}', '$.b', '2'::JSON)
+----
+{"a":1,"b":2}
+
+# Overwrite existing key
+query T
+SELECT json_set('{"a":1}', '$.a', '99'::JSON)
+----
+{"a":99}
+
+# JSON Pointer syntax works too
+query T
+SELECT json_set('{"a":1}', '/b', '2'::JSON)
+----
+{"a":1,"b":2}
+
+# Nested path: set inside nested object
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a.y', '2'::JSON)
+----
+{"a":{"x":1,"y":2}}
+
+# Nested path: overwrite inside nested object
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a.x', '99'::JSON)
+----
+{"a":{"x":99}}
+
+# Create intermediate parents
+query T
+SELECT json_set('{}', '$.a.b.c', '1'::JSON)
+----
+{"a":{"b":{"c":1}}}
+
+# Array index: overwrite element
+query T
+SELECT json_set('[1,2,3]', '$[1]', '99'::JSON)
+----
+[1,99,3]
+
+# Array append with JSON Pointer /- syntax
+query T
+SELECT json_set('[1,2]', '/-', '3'::JSON)
+----
+[1,2,3]
+
+# Set inside object in array
+query T
+SELECT json_set('[{"a":1}]', '$[0].b', '2'::JSON)
+----
+[{"a":1,"b":2}]
+
+# Set different value types
+query T
+SELECT json_set('{}', '$.s', '"hello"'::JSON)
+----
+{"s":"hello"}
+
+query T
+SELECT json_set('{}', '$.b', 'true'::JSON)
+----
+{"b":true}
+
+query T
+SELECT json_set('{}', '$.n', 'null'::JSON)
+----
+{"n":null}
+
+query T
+SELECT json_set('{}', '$.arr', '[1,2,3]'::JSON)
+----
+{"arr":[1,2,3]}
+
+query T
+SELECT json_set('{}', '$.obj', '{"x":1}'::JSON)
+----
+{"obj":{"x":1}}
+
+# Overwrite with different type (number to object)
+query T
+SELECT json_set('{"a":1}', '$.a', '{"nested":true}'::JSON)
+----
+{"a":{"nested":true}}
+
+# Overwrite with different type (object to scalar)
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a', '42'::JSON)
+----
+{"a":42}
+
+# Deeply nested set
+query T
+SELECT json_set('{"a":{"b":{"c":1}}}', '$.a.b.c', '99'::JSON)
+----
+{"a":{"b":{"c":99}}}
+
+# Set on nested array path with JSON Pointer
+query T
+SELECT json_set('{"a":[1,[2,3],4]}', '/a/1/0', '99'::JSON)
+----
+{"a":[1,[99,3],4]}
+
+# NULL handling: NULL in any argument produces NULL
+query T
+SELECT json_set(NULL, '$.a', '1'::JSON)
+----
+NULL
+
+query T
+SELECT json_set('{"a":1}', NULL, '1'::JSON)
+----
+NULL
+
+query T
+SELECT json_set('{"a":1}', '$.a', NULL)
+----
+NULL
+
+# Empty object
+query T
+SELECT json_set('{}', '$.a', '1'::JSON)
+----
+{"a":1}
+
+# Set preserves existing keys
+query T
+SELECT json_set('{"a":1,"b":2,"c":3}', '$.b', '99'::JSON)
+----
+{"a":1,"b":99,"c":3}
+
+# Bare key name (treated as top-level key)
+query T
+SELECT json_set('{"a":1}', 'b', '2'::JSON)
+----
+{"a":1,"b":2}
+
+# Constant vector test
+query T
+SELECT json_set('{"a":1}', '$.b', '2'::JSON) FROM range(3)
+----
+{"a":1,"b":2}
+{"a":1,"b":2}
+{"a":1,"b":2}
+
+# Table-based test
+statement ok
+CREATE TABLE entities (id INTEGER, data JSON, path VARCHAR, val JSON);
+
+statement ok
+INSERT INTO entities VALUES
+    (1, '{"a":1}', '$.b', '2'::JSON),
+    (2, '{"x":{"y":1}}', '$.x.z', '3'::JSON),
+    (3, '{"arr":[1,2]}', '/arr/-', '3'::JSON);
+
+query IT
+SELECT id, json_set(data, path, val) FROM entities ORDER BY id
+----
+1	{"a":1,"b":2}
+2	{"x":{"y":1,"z":3}}
+3	{"arr":[1,2,3]}
+
+# Real-world: add relationship to entity
+query T
+SELECT json_set(
+    '{"typeName":"Column","attributes":{"name":"col1","dataType":"VARCHAR"}}',
+    '$.attributes.table',
+    '{"typeName":"Table","uniqueAttributes":{"qualifiedName":"t1"}}'::JSON
+)
+----
+{"typeName":"Column","attributes":{"name":"col1","dataType":"VARCHAR","table":{"typeName":"Table","uniqueAttributes":{"qualifiedName":"t1"}}}}
+
+# Composability: set then normalize
+query T
+SELECT json_normalize(json_set('{"z":1}', '$.a', '2'::JSON))
+----
+{"a":2,"z":1}
