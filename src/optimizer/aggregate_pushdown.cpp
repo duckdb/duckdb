@@ -172,7 +172,7 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 	auto &agg_pushdown = *get.extra_info.aggregate_pushdown_info;
 
 	// Resolve scan_col_position for each aggregate: find or append the needed column
-	// in the existing column_ids list. 
+	// in the existing column_ids list.
 	auto col_ids = get.GetColumnIds(); // copy
 	for (auto &aggr : agg_pushdown.aggregates) {
 		if (aggr.type == PushedAggregateType::COUNT_STAR) {
