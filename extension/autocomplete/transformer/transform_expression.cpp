@@ -633,10 +633,11 @@ PEGTransformerFactory::TransformLambdaArrowExpression(PEGTransformer &transforme
 	if (!lambda_opt.HasResult()) {
 		return expr;
 	}
+	// Each child is a SingleArrowPair ListParseResult: ['->', LogicalOrExpression]
 	auto inner_lambda_list = lambda_opt.optional_result->Cast<RepeatParseResult>();
-	for (auto lambda_expr : inner_lambda_list.children) {
-		auto &inner_list_pr = lambda_expr->Cast<ListParseResult>();
-		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+	for (auto &pair_node : inner_lambda_list.children) {
+		auto &pair_list = pair_node->Cast<ListParseResult>(); // SingleArrowPair
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(pair_list.Child<ListParseResult>(1));
 		expr = make_uniq<LambdaExpression>(std::move(expr), std::move(right_expr));
 	}
 	return expr;
@@ -1084,7 +1085,12 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto child = list_pr.Child<ChoiceParseResult>(0).result;
+	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
+	if (child->type == ParseResultType::OPERATOR) {
+		return child->Cast<OperatorParseResult>().operator_token;
+	}
+	return transformer.Transform<string>(child);
 }
 
 // QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
@@ -1443,6 +1449,36 @@ PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer,
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 
 	expr->identifier = identifier;
+	return std::move(expr);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
+	// QuestionMarkNumberedParameter <- '?' NumberLiteral
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+
+	auto &const_expr = number->Cast<ConstantExpression>();
+	int32_t param_number = const_expr.value.GetValue<int32_t>();
+
+	if (param_number <= 0) {
+		throw ParserException("Parameter numbers must be greater than 0");
+	}
+
+	auto expr = make_uniq<ParameterExpression>();
+	string identifier = const_expr.value.ToString();
+	idx_t known_param_index = DConstants::INVALID_INDEX;
+
+	transformer.GetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+
+	if (known_param_index == DConstants::INVALID_INDEX) {
+		known_param_index = NumericCast<idx_t>(param_number);
+		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+	}
+
+	expr->identifier = identifier;
+	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
 

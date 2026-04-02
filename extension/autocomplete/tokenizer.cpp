@@ -58,7 +58,6 @@ bool BaseTokenizer::IsSingleByteOperator(char c) {
 	case ',':
 	case '?':
 	case '$':
-	case '+':
 	case '-':
 	case '#':
 		return true;
@@ -300,8 +299,12 @@ bool BaseTokenizer::TokenizeInput() {
 			break;
 		case TokenizeState::NUMERIC:
 			// Check for "always allowed" numeric characters
-			if (CharacterIsInitialNumber(c) || c == '_') {
+			if (CharacterIsInitialNumber(c)) {
 				break; // Continue tokenizing
+			}
+			// Allow underscore only when immediately followed by a digit (no consecutive underscores)
+			if (c == '_' && i + 1 < sql.size() && CharacterIsInitialNumber(sql[i + 1])) {
+				break;
 			}
 
 			// Check for scientific notation marker
@@ -334,8 +337,28 @@ bool BaseTokenizer::TokenizeInput() {
 		case TokenizeState::OPERATOR:
 			// operator literal - check if this is still an operator
 			if (!CharacterIsOperator(c)) {
-				// not an operator - return to standard state
-				PushToken(last_pos, i);
+				// Apply PostgreSQL trimming rule: an operator cannot end in '+' unless
+				// it contains at least one of: ~ ! @ # % ^ & | ` ?
+				idx_t end_pos = i;
+				bool has_special = false;
+				for (idx_t j = last_pos; j < end_pos; j++) {
+					char oc = sql[j];
+					if (oc == '~' || oc == '!' || oc == '@' || oc == '#' || oc == '%' || oc == '^' || oc == '&' ||
+					    oc == '|' || oc == '`' || oc == '?') {
+						has_special = true;
+						break;
+					}
+				}
+				if (!has_special) {
+					while (end_pos > last_pos && sql[end_pos - 1] == '+') {
+						end_pos--;
+					}
+				}
+				PushToken(last_pos, end_pos);
+				// Push any trimmed '+' characters as individual tokens
+				for (idx_t j = end_pos; j < i; j++) {
+					tokens.emplace_back(string(1, sql[j]), j);
+				}
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
