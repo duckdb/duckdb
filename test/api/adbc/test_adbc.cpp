@@ -4470,4 +4470,75 @@ TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)",
 	db.adbc_error.release(&db.adbc_error);
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
 }
+
+TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	AdbcError adbc_error = {};
+	InitializeADBCError(&adbc_error);
+
+	AdbcDatabase adbc_database;
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	AdbcConnection adbc_connection;
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	// Create a table large enough that streaming requires multiple fetch calls.
+	{
+		AdbcStatement setup_stmt;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &setup_stmt, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&setup_stmt, "CREATE TABLE big AS SELECT * FROM range(500000) r(i)",
+		                                         &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&setup_stmt, nullptr, nullptr, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&setup_stmt, &adbc_error)));
+	}
+
+	constexpr int ITERATIONS = 50;
+
+	for (int iter = 0; iter < ITERATIONS; iter++) {
+		AdbcStatement query_stmt;
+		ArrowArrayStream stream;
+		stream.release = nullptr;
+		int64_t rows_affected;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &query_stmt, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&query_stmt, "SELECT * FROM big", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&query_stmt, &stream, &rows_affected, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&query_stmt, &adbc_error)));
+
+		std::thread releaser([&stream]() {
+			if (stream.release) {
+				stream.release(&stream);
+			}
+		});
+
+		{
+			AdbcStatement materialize_stmt;
+			auto status = AdbcStatementNew(&adbc_connection, &materialize_stmt, &adbc_error);
+			if (status == ADBC_STATUS_OK) {
+				AdbcStatementSetSqlQuery(&materialize_stmt, "SELECT 1", &adbc_error);
+				AdbcStatementRelease(&materialize_stmt, &adbc_error);
+			}
+		}
+
+		releaser.join();
+		if (stream.release) {
+			stream.release(&stream);
+		}
+	}
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	if (adbc_error.release) {
+		adbc_error.release(&adbc_error);
+	}
+}
+
 } // namespace duckdb
