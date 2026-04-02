@@ -411,6 +411,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_quote", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_serialize_plan", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_serialize_sql", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_set", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_strip_nulls", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_structure", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
