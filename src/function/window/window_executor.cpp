@@ -39,6 +39,17 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
+
+	if (wexpr.window) {
+		if (wexpr.window->HasChildrenCallback()) {
+			child_idx = wexpr.window->GetChildrenCallback()(wexpr, shared);
+		} else {
+			//	If no one overrides, assume the arguments are only needed at evaluate time (e.g., Ntile)
+			for (auto &child : wexpr.children) {
+				child_idx.emplace_back(shared.RegisterEvaluate(child));
+			}
+		}
+	}
 }
 
 bool WindowExecutor::IgnoreNulls() const {

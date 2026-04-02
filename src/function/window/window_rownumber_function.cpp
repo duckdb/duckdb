@@ -179,8 +179,6 @@ WindowFunction NtileFunc::GetFunction() {
 
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowRowNumberExecutor(wexpr, shared) {
-	// NTILE has one argument
-	child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[0]));
 }
 
 unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocalState(ExecutionContext &context,

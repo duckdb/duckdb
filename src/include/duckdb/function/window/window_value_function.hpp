@@ -17,6 +17,8 @@ class WindowValueExecutor : public WindowExecutor {
 public:
 	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments);
+	static vector<column_t> Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+
 	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;

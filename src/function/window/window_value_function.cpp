@@ -143,26 +143,32 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	function.return_type = arguments[0]->return_type;
+	function.children = WindowValueExecutor::Children;
 
 	return nullptr;
+}
+
+vector<column_t> WindowValueExecutor::Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared) {
+	//	The children have to be handled separately because only the first one is global
+	D_ASSERT(!children.empty());
+
+	vector<column_t> child_idx;
+	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls));
+
+	if (wexpr.children.size() > 1) {
+		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[1]));
+	}
+	if (wexpr.children.size() > 2) {
+		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[2]));
+	}
+
+	return child_idx;
 }
 
 WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
-	}
-
-	//	The children have to be handled separately because only the first one is global
-	if (!wexpr.children.empty()) {
-		child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], IgnoreNulls()));
-
-		if (wexpr.children.size() > 1) {
-			child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[1]));
-		}
-		if (wexpr.children.size() > 2) {
-			child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[2]));
-		}
 	}
 }
 
@@ -306,52 +312,46 @@ unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, Win
 	return nullptr;
 }
 
-WindowFunctionSet LeadFun::GetFunctions() {
-	WindowFunctionSet funcs("lead");
+static WindowFunctionSet GetLeadLagFunctionSet(const ExpressionType &type) {
+	WindowFunctionSet funcs(type == ExpressionType::WINDOW_LEAD ? "lead" : "lag");
 
 	auto bind = WindowLeadLagExecutor::Bind;
 	auto bounds = WindowLeadLagLocalState::GetBounds;
+	auto children = WindowLeadLagExecutor::Children;
 
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LEAD, bind, bounds));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LEAD, bind, bounds));
+	                                 type, bind, bounds, children));
 	funcs.AddFunction(
-	    WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind, bounds));
+	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds, children));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, children));
 
 	return funcs;
+}
+
+WindowFunctionSet LeadFun::GetFunctions() {
+	return GetLeadLagFunctionSet(ExpressionType::WINDOW_LEAD);
 }
 
 WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
-	auto bind = WindowLeadLagExecutor::Bind;
-	auto bounds = WindowLeadLagLocalState::GetBounds;
+	auto funcs = GetLeadLagFunctionSet(ExpressionType::WINDOW_LEAD);
 
-	switch (nargs) {
-	case 1:
-		return WindowFunction("lead", {type}, type, ExpressionType::WINDOW_LEAD, bind, bounds);
-	case 2:
-		return WindowFunction("lead", {type, LogicalType::BIGINT}, type, ExpressionType::WINDOW_LEAD, bind, bounds);
-	case 3:
-		return WindowFunction("lead", {type, LogicalType::BIGINT, type}, type, ExpressionType::WINDOW_LEAD, bind,
-		                      bounds);
-	default:
-		throw InternalException("Invalid number of arguments requested for LEAD: %lld", nargs);
+	for (auto &func : funcs.functions) {
+		if (func.arguments.size() != nargs) {
+			continue;
+		}
+
+		func.arguments[0] = type;
+		if (nargs > 2) {
+			func.arguments[2] = type;
+		}
+		return func;
 	}
+
+	throw InternalException("Invalid number of arguments requested for LEAD: %lld", nargs);
 }
 
 WindowFunctionSet LagFun::GetFunctions() {
-	WindowFunctionSet funcs("lag");
-
-	auto bind = WindowLeadLagExecutor::Bind;
-	auto bounds = WindowLeadLagLocalState::GetBounds;
-
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LAG, bind, bounds));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY,
-	                                 ExpressionType::WINDOW_LAG, bind, bounds));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAG, bind, bounds));
-
-	return funcs;
+	return GetLeadLagFunctionSet(ExpressionType::WINDOW_LAG);
 }
 
 WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
