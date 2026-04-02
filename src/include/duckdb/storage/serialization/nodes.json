@@ -524,13 +524,16 @@
   {
     "class": "TableFilterSet",
     "includes": [
-      "duckdb/planner/table_filter.hpp"
+      "duckdb/planner/table_filter.hpp",
+      "duckdb/planner/expression.hpp"
     ],
     "members": [
       {
         "id": 100,
         "name": "filters",
-        "type": "map<ProjectionIndex, TableFilter*>"
+        "type": "map<ProjectionIndex, TableFilter*>",
+        "serialize_property": "GetTableFiltersForSerialization(serializer)",
+        "deserialize_property": "GetTableFiltersForDeserialization(deserializer)"
       }
     ],
     "pointer_type": "none"

@@ -9,6 +9,7 @@
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -510,7 +511,7 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
 	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
 
-	return filter.CheckStatistics(dummy_stats);
+	return filter.Cast<ExpressionFilter>().CheckStatistics(dummy_stats);
 }
 
 bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
@@ -526,7 +527,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (filter.IsOnlyForZoneMapFiltering()) {
+		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -569,7 +570,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		}
 		D_ASSERT(target_row >= row_start);
 		D_ASSERT(target_row <= row_start + this->count);
-		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
+		// current_segment->GetRowStart() is already row-group-relative, and state.vector_index uses the same
+		// coordinate space. Subtracting row_start here would incorrectly make the target segment-local.
+		idx_t target_vector_index = target_row / STANDARD_VECTOR_SIZE;
 
 		if (!target_vector_index_max.IsValid() || target_vector_index_max.GetIndex() < target_vector_index) {
 			target_vector_index_max = target_vector_index;

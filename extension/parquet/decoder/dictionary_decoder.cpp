@@ -1,7 +1,6 @@
 #include "decoder/dictionary_decoder.hpp"
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -134,48 +133,12 @@ void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 }
 
 bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, TableFilterState &filter_state) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction = filter.Cast<ConjunctionOrFilter>();
-		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
-		for (idx_t child_idx = 0; child_idx < conjunction.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction.child_filters[child_idx];
-			auto &child_state = *state.child_states[child_idx];
-			if (!DictionarySupportsFilter(child_filter, child_state)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = filter.Cast<ConjunctionAndFilter>();
-		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
-		for (idx_t child_idx = 0; child_idx < conjunction.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction.child_filters[child_idx];
-			auto &child_state = *state.child_states[child_idx];
-			if (!DictionarySupportsFilter(child_filter, child_state)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	case TableFilterType::CONSTANT_COMPARISON:
-	case TableFilterType::IS_NOT_NULL:
-		return true;
-	case TableFilterType::EXPRESSION_FILTER: {
-		// expression filters can only be pushed into the dictionary if they filter out NULL values
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		auto &state = filter_state.Cast<ExpressionFilterState>();
-		auto emits_nulls = expr_filter.EvaluateWithConstant(state.executor, Value(reader.Type()));
-		return !emits_nulls;
-	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::DYNAMIC_FILTER:
-	case TableFilterType::OPTIONAL_FILTER:
-	case TableFilterType::STRUCT_EXTRACT:
-	default:
-		return false;
-	}
+	// expression filters can only be pushed into the dictionary if they filter out NULL values
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "DictionaryDecoder::DictionarySupportsFilter");
+	auto &state = filter_state.Cast<ExpressionFilterState>();
+	auto emits_nulls = state.executor ? expr_filter.EvaluateWithConstant(*state.executor, Value(reader.Type()))
+	                                  : expr_filter.EvaluateWithConstant(state.GetContext(), Value(reader.Type()));
+	return !emits_nulls;
 }
 
 bool DictionaryDecoder::CanFilter(const TableFilter &filter, TableFilterState &filter_state) {

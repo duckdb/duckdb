@@ -6,6 +6,9 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -389,11 +392,15 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// for dynamic filters we never consider the segment being "checked" as it can always change
-	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	// Recursively check if any sub-expression is a dynamic filter
+	// (dynamic may be nested inside optional/conjunction wrappers)
+	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
+	state.segment_checked = !is_dynamic;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		prune_result = filter.CheckStatistics(state.current->GetNode().stats.statistics);
+		prune_result = expr_filter.CheckStatistics(state.current->GetNode().stats.statistics);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -405,7 +412,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	}
 	auto update_stats = updates->GetStatistics();
 	// combine the update and original prune result
-	FilterPropagateResult update_result = filter.CheckStatistics(*update_stats);
+	FilterPropagateResult update_result = expr_filter.CheckStatistics(*update_stats);
 	if (prune_result == update_result) {
 		return prune_result;
 	}
@@ -422,9 +429,9 @@ FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableF
 		if (!child_stats) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return filter.CheckStatistics(*child_stats);
+		return filter.Cast<ExpressionFilter>().CheckStatistics(*child_stats);
 	}
-	return filter.CheckStatistics(stats->statistics);
+	return filter.Cast<ExpressionFilter>().CheckStatistics(stats->statistics);
 }
 
 const BaseStatistics &ColumnData::GetStatisticsRef() const {

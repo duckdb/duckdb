@@ -223,7 +223,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
-				auto col_filter_result = filter.get().CheckStatistics(*column_stats);
+				auto col_filter_result = filter.get().Cast<ExpressionFilter>().CheckStatistics(*column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;

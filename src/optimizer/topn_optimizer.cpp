@@ -5,17 +5,37 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+static unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
+                                                            const LogicalType &type) {
+	auto dynamic_func = DynamicFilterScalarFun::GetFunction(type);
+	auto dynamic_bind = make_uniq<DynamicFilterFunctionData>(std::move(filter_data));
+	vector<unique_ptr<Expression>> args;
+	args.push_back(make_uniq<BoundReferenceExpression>(type, storage_t(0)));
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(dynamic_func), std::move(args),
+	                                          std::move(dynamic_bind));
+}
+
+static unique_ptr<Expression> WrapOptionalFilter(unique_ptr<Expression> child_expr, const LogicalType &type) {
+	auto opt_func = OptionalFilterScalarFun::GetFunction(type);
+	auto opt_bind = make_uniq<OptionalFilterFunctionData>(std::move(child_expr));
+	vector<unique_ptr<Expression>> args;
+	args.push_back(make_uniq<BoundReferenceExpression>(type, storage_t(0)));
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(opt_func), std::move(args),
+	                                          std::move(opt_bind));
+}
 
 TopN::TopN(ClientContext &context_p) : context(context_p) {
 }
@@ -105,9 +125,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
 	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
-	auto base_filter = make_uniq<ConstantFilter>(comparison_type, std::move(minimum_value));
-	auto filter_data = make_shared_ptr<DynamicFilterData>();
-	filter_data->filter = std::move(base_filter);
+	auto filter_data = make_shared_ptr<DynamicFilterData>(comparison_type, std::move(minimum_value));
 
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
@@ -117,19 +135,21 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		D_ASSERT(target.columns.size() == 1);
 		auto col_binding = target.columns[0].probe_column_index;
 
-		// create the actual dynamic filter
-		auto dynamic_filter = make_uniq<DynamicFilter>(filter_data);
-		unique_ptr<TableFilter> pushed_filter = std::move(dynamic_filter);
-		if (nulls_first) {
-			auto or_filter = make_uniq<ConjunctionOrFilter>();
-			or_filter->child_filters.push_back(make_uniq<IsNullFilter>());
-			or_filter->child_filters.push_back(std::move(pushed_filter));
-			pushed_filter = std::move(or_filter);
-		}
-		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
+		unique_ptr<Expression> pushed_expr = CreateDynamicFilterExpression(filter_data, type);
 
-		// push the filter into the table scan
-		get.table_filters.PushFilter(col_binding.column_index, std::move(optional_filter));
+		if (nulls_first) {
+			// Create OR(IS_NULL(col), dynamic_filter(col))
+			auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+			is_null->children.push_back(make_uniq<BoundReferenceExpression>(type, idx_t(0)));
+
+			auto or_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+			or_expr->children.push_back(std::move(is_null));
+			or_expr->children.push_back(std::move(pushed_expr));
+			pushed_expr = std::move(or_expr);
+		}
+
+		auto expr_filter = make_uniq<ExpressionFilter>(WrapOptionalFilter(std::move(pushed_expr), type));
+		get.table_filters.PushFilter(col_binding.column_index, std::move(expr_filter));
 	}
 }
 

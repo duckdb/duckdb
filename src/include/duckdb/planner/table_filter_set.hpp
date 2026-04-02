@@ -16,12 +16,12 @@
 
 namespace duckdb {
 
-//! The filters in here are non-composite (only need a single column to be evaluated)
-//! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
+//! A TableFilterSet stores both column-local table filters and generic pushed-down expressions.
 class TableFilterSet {
 public:
 	void PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
 	bool HasFilters() const;
+	bool HasColumnFilters() const;
 	idx_t FilterCount() const;
 	bool HasFilter(ProjectionIndex col_idx) const;
 	TableFilter &GetFilterByColumnIndexMutable(ProjectionIndex col_idx);
@@ -39,6 +39,9 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static TableFilterSet Deserialize(Deserializer &deserializer);
+
+	map<ProjectionIndex, unique_ptr<TableFilter>> GetTableFiltersForSerialization(Serializer &serializer) const;
+	map<ProjectionIndex, unique_ptr<TableFilter>> &GetTableFiltersForDeserialization(Deserializer &deserializer);
 
 public:
 	class TableFilterIteratorEntry {

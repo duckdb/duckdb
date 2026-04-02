@@ -1,0 +1,50 @@
+[
+    {
+        "name": "__internal_tablefilter_bloom_filter",
+        "struct": "TableFilterBloomFilterFun",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_tablefilter_dynamic",
+        "struct": "TableFilterDynamicFun",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_tablefilter_optional",
+        "struct": "TableFilterOptionalFun",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_tablefilter_perfect_hash_join",
+        "struct": "TableFilterPerfectHashJoinFun",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_tablefilter_prefix_range",
+        "struct": "TableFilterPrefixRangeFun",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_tablefilter_selectivity_optional",
+        "struct": "TableFilterSelectivityOptionalFun",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    }
+]

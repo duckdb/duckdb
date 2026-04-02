@@ -71,7 +71,7 @@ JOIN build_timestamp b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:.*IN PRF.*\(k\).*
 
 statement ok
 CREATE OR REPLACE TABLE probe_hugeint AS

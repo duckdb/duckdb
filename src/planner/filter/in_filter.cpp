@@ -22,45 +22,6 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 	}
 }
 
-FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!stats.CanHaveNoNull()) {
-		// no non-null values are possible: always false
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	switch (values[0].type().InternalType()) {
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::UINT128:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                  array_ptr<const Value>(values.data(), values.size()));
-	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                 array_ptr<const Value>(values.data(), values.size()));
-	default:
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-}
-
-string InFilter::ToString(const string &column_name) const {
-	string in_list;
-	for (auto &val : values) {
-		if (!in_list.empty()) {
-			in_list += ", ";
-		}
-		in_list += val.ToSQLString();
-	}
-	return column_name + " IN (" + in_list + ")";
-}
-
 unique_ptr<Expression> InFilter::ToExpression(const Expression &column) const {
 	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
 	result->children.push_back(column.Copy());
@@ -68,18 +29,6 @@ unique_ptr<Expression> InFilter::ToExpression(const Expression &column) const {
 		result->children.push_back(make_uniq<BoundConstantExpression>(val));
 	}
 	return std::move(result);
-}
-
-bool InFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<InFilter>();
-	return other.values == values;
-}
-
-unique_ptr<TableFilter> InFilter::Copy() const {
-	return make_uniq<InFilter>(values);
 }
 
 } // namespace duckdb

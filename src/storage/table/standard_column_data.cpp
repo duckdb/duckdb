@@ -5,9 +5,30 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
+
+static bool IsSimpleNullCheckFilter(const TableFilter &filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StandardColumnData::CheckZonemap");
+	if (expr_filter.expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+		return false;
+	}
+	auto &op = expr_filter.expr->Cast<BoundOperatorExpression>();
+	if (op.children.size() != 1) {
+		return false;
+	}
+	switch (op.type) {
+	case ExpressionType::OPERATOR_IS_NULL:
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF ||
+		       op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+	default:
+		return false;
+	}
+}
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                        LogicalType type, ColumnDataType data_type, optional_ptr<ColumnData> parent)
@@ -71,6 +92,16 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 	auto scan_count = ColumnData::ScanCount(state, result, count, result_offset);
 	validity->ScanCount(state.child_states[0], result, count, result_offset);
 	return scan_count;
+}
+
+FilterPropagateResult StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+	if (state.child_states.empty() || !IsSimpleNullCheckFilter(filter)) {
+		return ColumnData::CheckZonemap(state, filter);
+	}
+	// Older storage files only tracked NULL-ness in the validity child segment statistics. When segment-level pruning
+	// checks a direct IS NULL/IS NOT NULL filter, route the decision through the validity stats so both old and new
+	// files behave consistently.
+	return validity->ColumnData::CheckZonemap(state.child_states[0], filter);
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

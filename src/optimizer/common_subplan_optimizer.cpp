@@ -317,10 +317,8 @@ private:
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.Cast<LogicalGet>();
 			for (auto &entry : get.table_filters) {
-				if (entry.Filter().filter_type != TableFilterType::EXPRESSION_FILTER) {
-					continue;
-				}
-				auto &expression_filter = entry.Filter().Cast<ExpressionFilter>();
+				auto &expression_filter =
+				    ExpressionFilter::GetExpressionFilter(entry.Filter(), "CommonSubplanOptimizer::ConvertOperator");
 				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
 			}
 		}

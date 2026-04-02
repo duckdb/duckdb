@@ -46,14 +46,6 @@ public:
 	TableFilterType filter_type;
 
 public:
-	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
-	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) const = 0;
-	virtual string ToString(const string &column_name) const = 0;
-	string DebugToString() const;
-	virtual unique_ptr<TableFilter> Copy() const = 0;
-	virtual bool Equals(const TableFilter &other) const {
-		return filter_type == other.filter_type;
-	}
 	virtual unique_ptr<Expression> ToExpression(const Expression &column) const = 0;
 
 	virtual bool IsOnlyForZoneMapFiltering() const {
