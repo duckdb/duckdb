@@ -38,16 +38,14 @@ void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	const auto row_count = args.size();
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<T>(result);
-	auto result_validity = &FlatVector::Validity(result);
-
+	auto result_data = FlatVector::Writer<T>(result, row_count);
 	auto unified_format = args.ToUnifiedFormat();
 	for (idx_t row = 0; row < row_count; row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			auto input_idx = unified_format[col].sel->get_index(row);
 			auto result_idx = row * column_count + col;
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_validity->SetInvalid(result_idx);
+				result_data.SetInvalid(result_idx);
 				continue;
 			}
 			const auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[col]);
@@ -59,7 +57,7 @@ void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 
 void PopulateChildFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
@@ -167,15 +165,14 @@ void ListFunction(DataChunk &args, Vector &result) {
 	}
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
-	auto result_validity = &FlatVector::Validity(result);
 
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);
 			const auto result_idx = row * column_count + col;
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_validity->SetInvalid(result_idx);
+				result_data.SetInvalid(result_idx);
 				continue;
 			}
 			const auto input = col_data[col][input_idx];
@@ -236,19 +233,13 @@ bool StructFunction(DataChunk &args, Vector &result) {
 void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	if (args.ColumnCount() == 0) {
 		// Early out because the result is a constant empty list.
-		auto result_data = FlatVector::GetData<list_entry_t>(result);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto result_data = ConstantVector::GetData<list_entry_t>(result);
 		result_data[0].length = 0;
 		result_data[0].offset = 0;
 		return;
-	}
-
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
 	}
 
 	ListVector::Reserve(result, args.size() * args.ColumnCount());
@@ -259,7 +250,7 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	}
 
 	const idx_t column_count = args.ColumnCount();
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
 		result_data[row].offset = row * column_count;
 		result_data[row].length = column_count;

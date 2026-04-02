@@ -185,7 +185,7 @@ struct UniqueFunctor {
 		state_vector.ToUnifiedFormat(count, sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 
-		auto result_data = FlatVector::GetData<uint64_t>(result);
+		auto result_data = FlatVector::Writer<uint64_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
 			auto state = states[sdata.sel->get_index(i)];
 

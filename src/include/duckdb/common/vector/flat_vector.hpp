@@ -91,6 +91,35 @@ struct FlatVector {
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
+
+private:
+	template <class T>
+	struct FlatVectorWriter {
+		FlatVectorWriter(Vector &vector, idx_t count)
+		    : data(FlatVector::GetData<T>(vector)), validity(FlatVector::Validity(vector)), count(count) {
+		}
+
+		void SetInvalid(idx_t idx) {
+			D_ASSERT(idx < count);
+			validity.SetInvalid(idx);
+		}
+
+		T &operator[](idx_t idx) {
+			D_ASSERT(idx < count);
+			return data[idx];
+		}
+
+	private:
+		T *data;
+		ValidityMask &validity;
+		idx_t count;
+	};
+
+public:
+	template <class T>
+	static FlatVectorWriter<T> Writer(Vector &vector, idx_t count) {
+		return FlatVectorWriter<T>(vector, count);
+	}
 };
 
 } // namespace duckdb
