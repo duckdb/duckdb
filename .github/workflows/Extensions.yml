@@ -218,18 +218,29 @@ jobs:
         with:
           pattern: main-extensions*
           path: /tmp/repository_generation/main-extensions
+          # When multiple artifacts are matched:
+          # - if true: the downloaded artifacts will be in the same directory
+          #   specified by path.
+          # - if false: the downloaded artifacts will be extracted into
+          #   individual named directories within the specified path.
+          #
+          # Note: When downloading a single artifact (by name or ID), it will
+          # always be extracted directly to the specified path.
+          merge-multiple: true
 
       - uses: actions/download-artifact@v5
         name: Download rust-based extensions
         with:
           pattern: rust-based-extensions*
           path: /tmp/repository_generation/rust-based-extensions
+          merge-multiple: true
 
       - uses: actions/download-artifact@v5
         name: Download external extensions
         with:
           pattern: external-extensions*
           path: /tmp/repository_generation/external-extensions
+          merge-multiple: true
 
       - name: Print all extensions
         run: |
