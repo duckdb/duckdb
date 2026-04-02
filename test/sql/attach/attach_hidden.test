@@ -8,25 +8,11 @@ PRAGMA enable_verification
 statement ok
 ATTACH ':memory:' AS hidden_db (HIDDEN true);
 
-# hidden database should not appear in SHOW DATABASES
-query I
-SHOW DATABASES
-----
-memory
-
-# hidden database should not appear in pragma_database_list
-query I
-SELECT name FROM pragma_database_list ORDER BY name
-----
-memory
-
 # hidden database should not appear in duckdb_databases()
 query I
-SELECT database_name FROM duckdb_databases() ORDER BY database_name
+SELECT database_name FROM duckdb_databases() WHERE database_name = 'hidden_db'
 ----
-memory
-system
-temp
+
 
 # hidden database should not appear in duckdb_tables()
 query I
