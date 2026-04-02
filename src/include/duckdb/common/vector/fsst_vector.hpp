@@ -51,7 +51,7 @@ struct FSSTVector {
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();;
+		auto &validity = vector.buffer->GetValidityMask();
 		validity.Initialize(new_validity);
 	}
 	static inline const string_t *GetCompressedData(const Vector &vector) {
