@@ -2,7 +2,7 @@
 # description: Test that vacuum correctly rebuilds indexes when empty row groups are dropped
 # group: [vacuum]
 
-require experimental_vacuum_rebuild_indexes
+require vacuum_rebuild_indexes
 
 load {TEST_DIR}/vacuum_rebuild_indexes.db
 
@@ -58,6 +58,6 @@ SELECT COUNT(*) FROM t
 
 # verify that the setting cannot be changed while the database is running
 statement error
-SET experimental_vacuum_rebuild_indexes = true
+SET vacuum_rebuild_indexes = 100
 ----
-Cannot change experimental_vacuum_rebuild_indexes setting while database is running
+Cannot change vacuum_rebuild_indexes setting while database is running

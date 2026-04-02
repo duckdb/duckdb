@@ -609,8 +609,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::MISSING;
 	}
-	if (param == "experimental_vacuum_rebuild_indexes") {
-		if (Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(*config)) {
+	if (param == "vacuum_rebuild_indexes") {
+		if (Settings::Get<VacuumRebuildIndexesSetting>(*config) > 0) {
 			return RequireResult::PRESENT;
 		}
 		return RequireResult::MISSING;

@@ -117,7 +117,7 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
-	//! Synchronize <ART version, SegmentTree<RowGroup>> when experimental_vacuum_rebuild_indexes is enabled (since
+	//! Synchronize <ART version, SegmentTree<RowGroup>> when vacuum_rebuild_indexes is enabled (since
 	//! ART indexes are rebuilt during vacuuming with this setting).
 	unique_ptr<StorageLockKey> vacuum_lock;
 
@@ -700,13 +700,13 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
-	// If experimental_vacuum_rebuild_indexes is enabled, grab a shared vacuum lock before
+	// If vacuum_rebuild_indexes is enabled, grab a shared vacuum lock before
 	// scanning the index. This prevents the checkpoint from rebuilding the index and swapping
 	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
 	// <ART index, SegmentTree<RowGroup> pairing.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &db = DatabaseInstance::GetDatabase(context);
-	if (Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(db)) {
+	if (Settings::Get<VacuumRebuildIndexesSetting>(db) > 0) {
 		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
 		vacuum_lock = transaction_manager.SharedVacuumLock();
 	}

@@ -2,7 +2,7 @@
 # description: Test concurrent reads during vacuum index rebuild
 # group: [interquery]
 
-require experimental_vacuum_rebuild_indexes
+require vacuum_rebuild_indexes
 
 load {TEST_DIR}/concurrent_read_during_vacuum_rebuild.db
 
@@ -66,6 +66,6 @@ SELECT COUNT(*) FROM t
 
 # verify that the setting cannot be changed while the database is running
 statement error
-SET experimental_vacuum_rebuild_indexes = true
+SET vacuum_rebuild_indexes = 100
 ----
-Cannot change experimental_vacuum_rebuild_indexes setting while database is running
+Cannot change vacuum_rebuild_indexes setting while database is running

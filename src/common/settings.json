@@ -569,16 +569,6 @@
         "default_value": "true"
     },
     {
-        "name": "experimental_vacuum_rebuild_indexes",
-        "description": "Allow vacuum to happen in the presence of all bound ART indexes, and rebuild indexes after vacuuming.",
-        "type": "BOOLEAN",
-        "default_scope": "global",
-        "default_value": "false",
-        "on_callbacks": [
-            "set"
-        ]
-    },
-    {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
@@ -1072,6 +1062,16 @@
         "default_value": "",
         "aliases": [
             "user"
+        ]
+    },
+    {
+        "name": "vacuum_rebuild_indexes",
+        "description": "Row count threshold for vacuum index rebuild. Tables with row count at or below this threshold will have their indexes rebuilt after vacuuming. 0 = disabled.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
+        "on_callbacks": [
+            "set"
         ]
     },
     {

@@ -1,10 +1,10 @@
 {
   "base_config": "test/configs/force_storage.json",
-  "description": "Run tests on persistent storage with experimental vacuum rebuild indexes enabled",
+  "description": "Run tests on persistent storage with vacuum rebuild indexes enabled",
   "settings": [
     {
-      "name": "experimental_vacuum_rebuild_indexes",
-      "value": "true"
+      "name": "vacuum_rebuild_indexes",
+      "value": "500000"
     }
   ],
   "skip_tests": [

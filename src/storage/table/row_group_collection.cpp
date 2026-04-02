@@ -1155,8 +1155,8 @@ private:
 struct VacuumState {
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
-	//! Whether we are allowed to rebuild indexes after a vacuum (only true when experimental_vacuum_rebuild_indexes
-	//! setting is enabled and all indexes are bound ART's).
+	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
+	//! threshold is set, the table's row count is within the threshold, and all indexes are bound ART's).
 	bool can_rebuild_indexes = false;
 	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
 	bool row_ids_changed = false;
@@ -1305,11 +1305,12 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// this limits what kind of vacuuming we can do
 	bool has_indexes = !info->GetIndexes().Empty();
 
-	// *unless* experimental_vacuum_rebuild_indexes is enabled and all indexes are bound ART indexes,
+	// *unless* vacuum_rebuild_indexes threshold is set and the table's row count
+	// is within the threshold, and all indexes are bound ART indexes,
 	// in which case we allow vacuuming and rebuild the indexes afterward.
-	state.can_rebuild_indexes =
-	    has_indexes && info->GetIndexes().AllBoundART() &&
-	    Settings::Get<ExperimentalVacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
+	auto vacuum_rebuild_threshold = Settings::Get<VacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
+	state.can_rebuild_indexes = has_indexes && info->GetIndexes().AllBoundART() && vacuum_rebuild_threshold > 0 &&
+	                            GetTotalRows() <= vacuum_rebuild_threshold;
 
 	// We can move around rowids if we either 1) don't have any indexes at all or 2) can_rebuild_indexes is true (in
 	// which case indexes are entirely rebuilt after vacuuming).
@@ -1765,8 +1766,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
 	// Rebuild indexes if:
-	// 1) can_rebuild_indexes is set (it is set when the experimental_vacuum_rebuild_indexes
-	// setting is enabled and all the indexes are bound ART's),
+	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes
+	// threshold is set, the table's row count is within the threshold,
+	// and all the indexes are bound ART's),
 	// and
 	// 2) we have changed rowids.
 	writer.SetNeedsIndexRebuild(vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed);

@@ -729,13 +729,11 @@ void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
-// Experimental Vacuum Rebuild Indexes
+// Vacuum Rebuild Indexes
 //===----------------------------------------------------------------------===//
-void ExperimentalVacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+void VacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.db || info.context) {
-		throw InvalidInputException(
-		    "Cannot change experimental_vacuum_rebuild_indexes setting while database is running "
-		    "- it must be set when opening or attaching the database");
+		throw InvalidInputException("Cannot change vacuum_rebuild_indexes setting while database is running");
 	}
 }
 

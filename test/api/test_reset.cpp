@@ -166,14 +166,14 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",                  // cant change this while db is running
-	    "disabled_filesystems",                // cant change this while db is running
-	    "enable_external_access",              // cant change this while db is running
-	    "allow_unsigned_extensions",           // cant change this while db is running
-	    "allow_community_extensions",          // cant change this while db is running
-	    "allow_unredacted_secrets",            // cant change this while db is running
-	    "disable_database_invalidation",       // cant change this while db is running
-	    "experimental_vacuum_rebuild_indexes", // cant change this while db is running
+	    "lock_configuration",            // cant change this while db is running
+	    "disabled_filesystems",          // cant change this while db is running
+	    "enable_external_access",        // cant change this while db is running
+	    "allow_unsigned_extensions",     // cant change this while db is running
+	    "allow_community_extensions",    // cant change this while db is running
+	    "allow_unredacted_secrets",      // cant change this while db is running
+	    "disable_database_invalidation", // cant change this while db is running
+	    "vacuum_rebuild_indexes",        // cant change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
