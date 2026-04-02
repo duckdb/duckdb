@@ -12,8 +12,61 @@ CREATE VIEW vintegers AS SELECT 42;
 statement error
 CREATE OR REPLACE VIEW integers AS SELECT 42;
 ----
-<REGEX>:.*Catalog Error: Existing object integers.*
+<REGEX>:Catalog Error: Existing object integers is of type Table, trying to replace with type View\. Use 'DROP TABLE integers;' instead\.
 
+statement ok
+CREATE TABLE "view with spaces"(i INTEGER);
+
+# quoted identifiers in CREATE OR REPLACE type mismatch errors remain quoted
+statement error
+CREATE OR REPLACE VIEW "view with spaces" AS SELECT 42;
+----
+<REGEX>:Catalog Error: Existing object "view with spaces" is of type Table, trying to replace with type View\. Use 'DROP TABLE "view with spaces";' instead\.
+
+statement ok
+CREATE SCHEMA "replace schema";
+
+statement ok
+CREATE TABLE "replace schema"."replace table"(i INTEGER);
+
+# CREATE OR REPLACE mismatch errors include schema-qualified quoted names
+statement error
+CREATE OR REPLACE VIEW "replace schema"."replace table" AS SELECT 42;
+----
+<REGEX>:Catalog Error: Existing object "replace schema"\."replace table" is of type Table, trying to replace with type View\. Use 'DROP TABLE "replace schema"\."replace table";' instead\.
+
+statement ok
+CREATE TABLE "table with spaces"(i INTEGER);
+
+# quoted identifiers in type mismatch hints remain quoted
+statement error
+DROP VIEW "table with spaces"
+----
+<REGEX>:Catalog Error: Existing object "table with spaces" is of type Table, not View\. Use 'DROP TABLE "table with spaces";' instead\.
+
+statement error
+DROP VIEW IF EXISTS "table with spaces"
+----
+<REGEX>:Catalog Error: Existing object "table with spaces" is of type Table, not View\. Use 'DROP TABLE IF EXISTS "table with spaces";' instead\.
+
+
+statement ok
+CREATE SCHEMA "schema with spaces";
+
+statement ok
+CREATE TABLE "schema with spaces"."table with spaces 2"(i INTEGER);
+
+# schema-qualified CREATE OR REPLACE mismatch errors include quoted schema and name
+statement error
+CREATE OR REPLACE VIEW "schema with spaces"."table with spaces 2" AS SELECT 42;
+----
+<REGEX>:Catalog Error: Existing object "schema with spaces"\."table with spaces 2" is of type Table, trying to replace with type View\. Use 'DROP TABLE "schema with spaces"\."table with spaces 2";' instead\.
+
+# mismatch errors include schema-qualified quoted names
+statement error
+DROP VIEW "schema with spaces"."table with spaces 2"
+----
+<REGEX>:Catalog Error: Existing object "schema with spaces"\."table with spaces 2" is of type Table, not View\. Use 'DROP TABLE "schema with spaces"\."table with spaces 2";' instead\.
 # cannot use DROP VIEW to drop a table
 statement error
 DROP VIEW integers
@@ -36,7 +89,7 @@ ALTER TABLE blabla RENAME COLUMN i TO k
 statement error
 DROP TABLE IF EXISTS vintegers
 ----
-<REGEX>:.*Catalog Error: Existing object vintegers.*
+<REGEX>:Catalog Error: Existing object vintegers is of type View, not Table\. Use 'DROP VIEW IF EXISTS vintegers;' instead\.
 
 statement ok
 CREATE INDEX i_index ON integers(i);

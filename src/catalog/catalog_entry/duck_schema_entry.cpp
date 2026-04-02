@@ -23,6 +23,7 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
@@ -129,8 +130,15 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 				throw CatalogException("CREATE OR REPLACE is not allowed to depend on itself");
 			}
 			if (old_entry->type != entry_type) {
-				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
-				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
+				DropInfo suggested_drop;
+				suggested_drop.type = old_entry->type;
+				suggested_drop.schema = name;
+				suggested_drop.name = entry_name;
+				auto entry_qualifier = ParseInfo::QualifierToString("", name, entry_name);
+				throw CatalogException(
+				    "Existing object %s is of type %s, trying to replace with type %s. Use '%s' instead.",
+				    entry_qualifier, CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type),
+				    suggested_drop.ToString());
 			}
 			OnDropEntry(transaction, *old_entry);
 			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
@@ -327,8 +335,12 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
 	}
 	if (existing_entry->type != info.type) {
-		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.name,
-		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
+		auto suggested_drop = info.Copy();
+		suggested_drop->type = existing_entry->type;
+		auto entry_qualifier = ParseInfo::QualifierToString(info.catalog, info.schema, info.name);
+		throw CatalogException("Existing object %s is of type %s, not %s. Use '%s' instead.", entry_qualifier,
+		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type),
+		                       suggested_drop->ToString());
 	}
 
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
