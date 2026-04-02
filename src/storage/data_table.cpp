@@ -410,7 +410,6 @@ void DataTable::RebuildIndexes() {
 				                        error.Message());
 			}
 		}
-		bound_index.Vacuum();
 		bound_index.Verify();
 	}
 }
@@ -1748,7 +1747,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetAppendRequiresNewRowGroup();
-	if (writer.NeedsIndexRebuild()) {
+	if (writer.GetRebuildIndexes()) {
 		RebuildIndexes();
 	}
 	// The row group payload data has been written. Now write:

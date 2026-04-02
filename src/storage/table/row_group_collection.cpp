@@ -1306,10 +1306,12 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	bool has_indexes = !info->GetIndexes().Empty();
 
 	// *unless* vacuum_rebuild_indexes threshold is set and the table's row count
-	// is within the threshold, and all indexes are bound ART indexes,
+	// is within the threshold, and all indexes are ART indexes,
 	// in which case we allow vacuuming and rebuild the indexes afterward.
 	auto vacuum_rebuild_threshold = Settings::Get<VacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
-	state.can_rebuild_indexes = has_indexes && info->GetIndexes().AllBoundART() && vacuum_rebuild_threshold > 0 &&
+	auto index_types = info->GetIndexes().DistinctIndexTypes();
+	state.can_rebuild_indexes = has_indexes && !info->GetIndexes().HasUnbound() && index_types.size() == 1 &&
+	                            index_types.count(ART::TYPE_NAME) && vacuum_rebuild_threshold > 0 &&
 	                            GetTotalRows() <= vacuum_rebuild_threshold;
 
 	// We can move around rowids if we either 1) don't have any indexes at all or 2) can_rebuild_indexes is true (in
@@ -1771,7 +1773,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// and all the indexes are bound ART's),
 	// and
 	// 2) we have changed rowids.
-	writer.SetNeedsIndexRebuild(vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed);
+	if (vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed) {
+		writer.SetRebuildIndexes();
+	}
 }
 
 //===--------------------------------------------------------------------===//

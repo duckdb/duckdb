@@ -45,11 +45,11 @@ public:
 	void SetRowGroupCount(optional_idx row_group_count_p) {
 		row_group_count = row_group_count_p;
 	}
-	bool NeedsIndexRebuild() const {
-		return needs_index_rebuild;
+	bool GetRebuildIndexes() const {
+		return rebuild_indexes;
 	}
-	void SetNeedsIndexRebuild(bool needs_index_rebuild_p) {
-		needs_index_rebuild = needs_index_rebuild_p;
+	void SetRebuildIndexes() {
+		rebuild_indexes = true;
 	}
 
 	DatabaseInstance &GetDatabase();
@@ -62,7 +62,7 @@ protected:
 	vector<RowGroupPointer> row_group_pointers;
 
 	optional_idx row_group_count;
-	bool needs_index_rebuild = false;
+	bool rebuild_indexes = false;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {

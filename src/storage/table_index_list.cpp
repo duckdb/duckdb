@@ -120,15 +120,13 @@ void TableIndexList::CommitDrop(const string &name) {
 	}
 }
 
-bool TableIndexList::AllBoundART() const {
+unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 	lock_guard<mutex> lock(index_entries_lock);
+	unordered_set<string> result;
 	for (auto &entry : index_entries) {
-		auto &index = *entry->index;
-		if (!index.IsBound() || index.Cast<BoundIndex>().GetIndexType() != ART::TYPE_NAME) {
-			return false;
-		}
+		result.insert(entry->index->GetIndexType());
 	}
-	return true;
+	return result;
 }
 
 bool TableIndexList::NameIsUnique(const string &name) {
