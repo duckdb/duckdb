@@ -1167,8 +1167,7 @@ void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t co
 	    TemplatedDistinctSelectOperation<OP>(left, right, nullptr, count, &true_sel, &false_sel, nullptr);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
-
+	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < match_count; ++i) {
 		const auto idx = true_sel.get_index(i);
 		result_data[idx] = true;

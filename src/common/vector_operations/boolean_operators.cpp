@@ -39,15 +39,16 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	auto right_data = right.Values<uint8_t>(count);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<bool>(result, count);
 	if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto left_entry = left_data[i];
 			auto right_entry = right_data[i];
 			bool is_null = OP::Operation(left_entry.value > 0, right_entry.value > 0, !left_entry.IsValid(),
 			                             !right_entry.IsValid(), result_data[i]);
-			result_mask.Set(i, !is_null);
+			if (is_null) {
+				result_data.SetInvalid(i);
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
