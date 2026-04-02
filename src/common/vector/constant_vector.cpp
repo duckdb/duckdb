@@ -240,7 +240,7 @@ void ConstantVector::Flatten(const Vector &const_vector, Vector &result, idx_t c
 			auto &validity = FlatVector::Validity(result);
 			validity.SetAllInvalid(count);
 			// Also invalidate the new child array
-			new_child.validity.SetAllInvalid(count * array_size);
+			FlatVector::Validity(new_child).SetAllInvalid(count * array_size);
 			// Recurse
 			new_child.Flatten(count * array_size);
 			// TODO: the fast path should exit here, but the part below it is somehow required for correctness
