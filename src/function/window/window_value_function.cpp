@@ -987,6 +987,14 @@ void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &functi
 	}
 }
 
+vector<column_t> WindowFillExecutor::Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared) {
+	//! Never ignore nulls (that's the point!)
+	vector<column_t> child_idx;
+	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], false));
+
+	return child_idx;
+}
+
 WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
                                        WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
@@ -1076,6 +1084,7 @@ WindowFunction FillFun::GetFunction() {
 	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
+	fun.SetChildrenCallback(WindowFillExecutor::Children);
 
 	return fun;
 }

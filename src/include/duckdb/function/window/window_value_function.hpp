@@ -80,6 +80,8 @@ public:
 	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
 	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 
+	static vector<column_t> Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+
 	WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
 
 	//! Never ignore nulls (that's the point!)
