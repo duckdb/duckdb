@@ -93,6 +93,7 @@ jobs:
         uses: ./.github/actions/linux_release_build
         with:
           artifact_name: linux-base-build
+          run_smoke_tests: false
 
   regression-bench:
     name: Bench ${{ matrix.name }}
