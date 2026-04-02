@@ -14,7 +14,7 @@
 namespace duckdb {
 
 //! Try to extract a min or max Value from statistics.
-//! Returns true and sets result on success. Returns false if stats are unavailable or inexact.
+//! Returns true and sets |result| on success. Returns false if stats are unavailable or inexact.
 static bool TryGetStatValue(const BaseStatistics &stats, bool is_min, Value &result) {
 	if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS) {
 		if (is_min) {
@@ -94,9 +94,8 @@ void ScanAggregateInfo::AccumulateStatValue(const PushedAggregateInfo &aggregate
 	// Feed the stat value into the native aggregate state via simple_update.
 	Vector input(stat_val);
 	input.Flatten(1);
-	Vector inputs[] = {input};
 	AggregateInputData aggr_input_data(aggregate.bind_data.get(), *arena);
-	aggregate.aggregate_function->simple_update(inputs, aggr_input_data, 1, aggregate_states[idx].get(), 1);
+	aggregate.aggregate_function->simple_update(&input, aggr_input_data, 1, aggregate_states[idx].get(), 1);
 }
 
 bool ScanAggregateInfo::AccumulateRowGroupStats(RowGroup &rg) {
@@ -226,9 +225,8 @@ void ScanAggregateInfo::AccumulateChunk(DataChunk &chunk) {
 		case PushedAggregateType::COUNT_COL:
 		case PushedAggregateType::MIN:
 		case PushedAggregateType::MAX: {
-			Vector inputs[] = {chunk.data[agg.scan_col_position]};
 			AggregateInputData aggr_input_data(agg.bind_data.get(), *arena);
-			agg.aggregate_function->simple_update(inputs, aggr_input_data, 1,
+			agg.aggregate_function->simple_update(&chunk.data[agg.scan_col_position], aggr_input_data, 1,
 			                                aggregate_states[agg.output_idx].get(), chunk.size());
 			break;
 		}

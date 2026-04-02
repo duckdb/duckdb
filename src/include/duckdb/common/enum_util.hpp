@@ -364,9 +364,9 @@ enum class ProfilingCoverage : uint8_t;
 
 enum class ProfilingParameterNames : uint8_t;
 
-enum class PushedAggregateType : uint8_t;
-
 enum class PushdownExtractSupport : uint8_t;
+
+enum class PushedAggregateType : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
 
@@ -1022,10 +1022,10 @@ template<>
 const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
 
 template<>
-const char* EnumUtil::ToChars<PushedAggregateType>(PushedAggregateType value);
+const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
 
 template<>
-const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
+const char* EnumUtil::ToChars<PushedAggregateType>(PushedAggregateType value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -1758,10 +1758,10 @@ template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
 
 template<>
-PushedAggregateType EnumUtil::FromString<PushedAggregateType>(const char *value);
+PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
 
 template<>
-PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
+PushedAggregateType EnumUtil::FromString<PushedAggregateType>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);

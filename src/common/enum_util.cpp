@@ -3291,12 +3291,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 70, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 71, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 70, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 71, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -3563,12 +3563,12 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 36, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 37, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 36, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 37, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -4111,6 +4111,25 @@ ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char
 	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PushdownExtractSupport::UNCHECKED), "UNCHECKED" },
+		{ static_cast<uint32_t>(PushdownExtractSupport::DISABLED), "DISABLED" },
+		{ static_cast<uint32_t>(PushdownExtractSupport::ENABLED), "ENABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value) {
+	return StringUtil::EnumToString(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", static_cast<uint32_t>(value));
+}
+
+template<>
+PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value) {
+	return static_cast<PushdownExtractSupport>(StringUtil::StringToEnum(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPushedAggregateTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PushedAggregateType::COUNT_STAR), "COUNT_STAR" },
@@ -4129,25 +4148,6 @@ const char* EnumUtil::ToChars<PushedAggregateType>(PushedAggregateType value) {
 template<>
 PushedAggregateType EnumUtil::FromString<PushedAggregateType>(const char *value) {
 	return static_cast<PushedAggregateType>(StringUtil::StringToEnum(GetPushedAggregateTypeValues(), 4, "PushedAggregateType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PushdownExtractSupport::UNCHECKED), "UNCHECKED" },
-		{ static_cast<uint32_t>(PushdownExtractSupport::DISABLED), "DISABLED" },
-		{ static_cast<uint32_t>(PushdownExtractSupport::ENABLED), "ENABLED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value) {
-	return StringUtil::EnumToString(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", static_cast<uint32_t>(value));
-}
-
-template<>
-PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value) {
-	return static_cast<PushdownExtractSupport>(StringUtil::StringToEnum(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {

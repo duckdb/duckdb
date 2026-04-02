@@ -63,8 +63,6 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 		return false;
 	}
 	if (get.dynamic_filters) {
-		// Dynamic filters (e.g., from joins) are evaluated at runtime and not accounted
-		// for by the stats-based accumulation paths.
 		return false;
 	}
 	// Expression filters (e.g., constant_or_null) are evaluated per-row during scanning.
@@ -138,14 +136,14 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 				return false;
 			}
 			const auto &col_ids = get.GetColumnIds();
-			if (col_ids.empty() || resolved.column_index.index >= col_ids.size()) {
+			if (col_ids.empty() || resolved.column_index.GetIndex() >= col_ids.size()) {
 				return false;
 			}
 			const auto &col_index = get.GetColumnIndex(resolved);
 			if (!get.TryGetStorageIndex(col_index, info.col_idx)) {
 				return false;
 			}
-			info.scan_col_position = resolved.column_index.index;
+			info.scan_col_position = resolved.column_index.GetIndex();
 			if (func_name == "count") {
 				info.type = PushedAggregateType::COUNT_COL;
 				info.return_type = LogicalType::BIGINT;
@@ -175,54 +173,45 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 	get.extra_info.aggregate_pushdown_info = std::move(pushdown_info);
 
 	auto &agg_pushdown = *get.extra_info.aggregate_pushdown_info;
-	const auto &old_col_ids = get.GetColumnIds();
-	vector<ColumnIndex> new_col_ids;
 
-	// Build deduplicated column list: multiple aggregates on the same column share the same one.
+	// Resolve scan_col_position for each aggregate: find or append the needed column
+	// in the existing column_ids list. We must not reorder existing columns because
+	// table_filters reference columns by their position in column_ids (via projection_ids).
+	auto col_ids = get.GetColumnIds(); // copy
 	for (auto &aggr : agg_pushdown.aggregates) {
-		// COUNT_STAR doesn't read column values, use ROW_ID to avoid scanning a real column.
-		auto col = aggr.type == PushedAggregateType::COUNT_STAR ? ColumnIndex(COLUMN_IDENTIFIER_ROW_ID)
-		                                                       : old_col_ids[aggr.scan_col_position];
-		bool found = false;
-		for (idx_t i = 0; i < new_col_ids.size(); i++) {
-			if (new_col_ids[i] == col) {
-				aggr.scan_col_position = i;
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			aggr.scan_col_position = new_col_ids.size();
-			new_col_ids.push_back(col);
-		}
-	}
-	// Make sure columns referenced by filters also in the scan column ids.
-	for (auto &filter_entry : get.table_filters) {
-		const idx_t filter_col = filter_entry.ColumnIndex();
-		bool already_present = false;
-		for (idx_t i = 0; i < new_col_ids.size(); i++) {
-			if (new_col_ids[i].GetPrimaryIndex() == filter_col) {
-				already_present = true;
-				break;
-			}
-		}
-		if (!already_present) {
+		if (aggr.type == PushedAggregateType::COUNT_STAR) {
+			// COUNT_STAR doesn't read column values, use ROW_ID to avoid scanning a real column.
+			auto row_id_col = ColumnIndex(COLUMN_IDENTIFIER_ROW_ID);
 			bool found = false;
-			for (const auto &old_id : old_col_ids) {
-				if (old_id.GetPrimaryIndex() == filter_col) {
-					new_col_ids.push_back(old_id);
+			for (idx_t i = 0; i < col_ids.size(); i++) {
+				if (col_ids[i] == row_id_col) {
+					aggr.scan_col_position = i;
 					found = true;
 					break;
 				}
 			}
 			if (!found) {
-				new_col_ids.push_back(ColumnIndex(filter_col));
+				aggr.scan_col_position = col_ids.size();
+				col_ids.push_back(row_id_col);
 			}
+		} else {
+			// scan_col_position was set to the column's index in the original column_ids,
+			// which is still valid since we don't reorder. Deduplicate if needed.
+			auto &col = col_ids[aggr.scan_col_position];
+			// Check if an earlier aggregate already references the same column at a different position.
+			bool found = false;
+			for (idx_t i = 0; i < aggr.scan_col_position; i++) {
+				if (col_ids[i] == col) {
+					aggr.scan_col_position = i;
+					found = true;
+					break;
+				}
+			}
+			// Position is already correct, no change needed.
+			(void)found;
 		}
 	}
-
-	get.SetColumnIds(std::move(new_col_ids));
-	get.projection_ids.clear();
+	get.SetColumnIds(std::move(col_ids));
 
 	// Rewrite the aggregate expressions to operate on partial columns:
 	//   count(*) / count(col)  →  sum(partial_count_col) + CAST projection above
