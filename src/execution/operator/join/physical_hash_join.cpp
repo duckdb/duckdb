@@ -1026,7 +1026,8 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
                                                        const JoinFilterPushdownFilter &info,
                                                        ProjectionIndex filter_col_idx) const {
 	const auto key_name = op.Cast<PhysicalHashJoin>().conditions[0].GetRHS().ToString();
-	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name);
+	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name,
+	                                                                 perfect_join_executor.GetKeyType());
 	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::PHJ);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
@@ -1087,11 +1088,13 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
 
-			auto min_val = final_min_max->data[min_idx].GetValue(0);
-			auto max_val = final_min_max->data[max_idx].GetValue(0);
+			auto min_val_before_cast = final_min_max->data[min_idx].GetValue(0);
+			auto max_val_before_cast = final_min_max->data[max_idx].GetValue(0);
 
 			// Cast to storage type, skip if fails
 			D_ASSERT(pushdown_column.storage_type.IsValid());
+			auto min_val = min_val_before_cast;
+			auto max_val = max_val_before_cast;
 			if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
 				continue;
 			}
@@ -1107,11 +1110,10 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			}
 
 			auto condition_type = op.conditions[join_condition[filter_idx]].GetLHS().return_type;
-			bool has_cast = condition_type != pushdown_column.storage_type;
 
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
-			if (!has_cast && ht && CanUseInFilter(context, ht, cmp)) {
+			if (ht && CanUseInFilter(context, ht, cmp)) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 			}
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -1148,14 +1150,14 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 					break;
 				}
 
-				if (!has_cast) {
-					if (perfect_join_executor) {
-						PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
-					} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val, max_val)) {
-						RegisterPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
-					} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
-						PushBloomFilter(op, *ht, info, filter_col_idx);
-					}
+				if (perfect_join_executor) {
+					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
+				} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val_before_cast, max_val_before_cast)) {
+					// It's important that these get the min/max val before casting
+					RegisterPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val_before_cast,
+					                          max_val_before_cast);
+				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
+					PushBloomFilter(op, *ht, info, filter_col_idx);
 				}
 			}
 		}
@@ -1259,7 +1261,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	if (use_perfect_hash) {
 		D_ASSERT(ht.equality_types.size() == 1);
 		auto key_type = ht.equality_types[0];
-		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
+		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable();
 	}
 
 	if (!use_perfect_hash) {

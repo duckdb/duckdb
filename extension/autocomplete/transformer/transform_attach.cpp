@@ -28,7 +28,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	}
 
-	info->path = transformer.Transform<string>(list_pr.Child<ListParseResult>(4));
+	info->parsed_path = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(4));
 	transformer.TransformOptional<string>(list_pr, 5, info->name);
 	vector<GenericCopyOption> copy_options;
 	transformer.TransformOptional<vector<GenericCopyOption>>(list_pr, 6, copy_options);
@@ -134,10 +134,10 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 	return copy_option;
 }
 
-string PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
-                                                    optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<string>(list_pr.Child<StringLiteralParseResult>(0));
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 }
 
 } // namespace duckdb

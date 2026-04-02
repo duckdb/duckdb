@@ -159,6 +159,10 @@ void ColumnDataCollectionSegment::SetChildIndex(VectorChildIndex base_idx, idx_t
 	child_indices[base_idx.index + child_number] = index;
 }
 
+bool TypeHasData(const LogicalType &type) {
+	return type.InternalType() != PhysicalType::STRUCT && type.InternalType() != PhysicalType::ARRAY;
+}
+
 idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &state, VectorDataIndex vector_index,
                                                       Vector &result) {
 	auto &vector_type = result.GetType();
@@ -170,7 +174,9 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	auto validity_data = GetValidityPointer(base_ptr, type_size, vdata.count);
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
-		FlatVector::SetData(result, base_ptr);
+		if (TypeHasData(result.GetType())) {
+			FlatVector::SetData(result, base_ptr);
+		}
 		FlatVector::Validity(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
 	}

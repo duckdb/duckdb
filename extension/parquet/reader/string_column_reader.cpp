@@ -56,10 +56,9 @@ void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) co
 	}
 }
 
-class ParquetStringVectorBuffer : public VectorBuffer {
+class ParquetStringVectorBuffer : public AuxiliaryDataHolder {
 public:
-	explicit ParquetStringVectorBuffer(shared_ptr<ResizeableBuffer> buffer_p)
-	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(std::move(buffer_p)) {
+	explicit ParquetStringVectorBuffer(shared_ptr<ResizeableBuffer> buffer_p) : buffer(std::move(buffer_p)) {
 	}
 
 private:
@@ -67,7 +66,7 @@ private:
 };
 
 void StringColumnReader::ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block) {
-	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(block));
+	StringVector::AddAuxiliaryData(result, make_uniq<ParquetStringVectorBuffer>(block));
 }
 
 void StringColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,

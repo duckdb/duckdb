@@ -384,7 +384,8 @@ private:
 	                                                                optional_ptr<ParseResult> parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
-	static string TransformDatabasePath(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 
 	// analyze.gram
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
@@ -665,6 +666,7 @@ private:
 	static unique_ptr<CreateStatement> TransformCreateTriggerStmt(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static TriggerForEach TransformForEachClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformTriggerName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static TriggerTiming TransformTriggerTiming(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static TriggerEventInfo TransformTriggerEvent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static TriggerEventInfo TransformTriggerEventInsert(PEGTransformer &transformer,
