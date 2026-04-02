@@ -1,0 +1,27 @@
+# name: test/sql/catalog/sequence/sequence_currval_before_nextval.test
+# group: [sequence]
+
+load {TEST_DIR}/mydb.db
+
+statement ok
+CREATE SEQUENCE IF NOT EXISTS scenario_id START 1 INCREMENT BY 1;
+
+statement error
+SELECT currval('scenario_id');
+----
+Sequence Error: currval: sequence is not yet defined in this session
+
+query I
+SELECT nextval('scenario_id');
+----
+1
+
+statement ok
+checkpoint;
+
+restart
+
+statement error
+SELECT currval('scenario_id');
+----
+Sequence Error: currval: sequence is not yet defined in this session

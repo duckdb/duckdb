@@ -527,6 +527,7 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
+	sequence_info.usage_count = 0;
 	catalog.CreateSequence(transaction, sequence_info);
 }
 
