@@ -21,17 +21,15 @@ class VectorBuffer;
 class Vector;
 
 enum class VectorBufferType : uint8_t {
-	STANDARD_BUFFER,   // standard buffer, holds a single array of data
-	DICTIONARY_BUFFER, // dictionary buffer, holds a selection vector and child vector
-	STRING_BUFFER,     // string buffer, holds a string heap
-	FSST_BUFFER,       // fsst compressed string buffer, holds a string heap, fsst symbol table and a string count
-	STRUCT_BUFFER,     // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER,       // list buffer, holds a single flatvector child
-	MANAGED_BUFFER,    // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER,     // opaque buffer, can be created for example by the parquet reader
-	ARRAY_BUFFER,      // array buffer, holds a single flatvector child
-	SHREDDED_BUFFER,   // holds data for a shredded variant vector
-	SEQUENCE_BUFFER    // holds a linear numeric sequence (start, increment)
+	STANDARD_BUFFER,   // VectorType::FLAT/CONSTANT - Fixed-Size Type - Holds a single array of data
+	STRING_BUFFER,     // VectorType::FLAT/CONSTANT - String          - Holds string_t array and StringHeap
+	STRUCT_BUFFER,     // VectorType::FLAT/CONSTANT - Struct          - Holds struct child vectors
+	LIST_BUFFER,       // VectorType::FLAT/CONSTANT - List            - Holds list_entry_t array and list child vector
+	ARRAY_BUFFER,      // VectorType::FLAT/CONSTANT - Array           - Holds array child vector
+	DICTIONARY_BUFFER, // VectorType::DICTIONARY    - Any             - Holds SelectionVector and dict child vector
+	FSST_BUFFER,       // VectorType::FSST          - String          - Holds string_t array, StringHeap and FSST table
+	SHREDDED_BUFFER,   // VectorType::SHREDDED      - Variant         - Holds shredded variant
+	SEQUENCE_BUFFER    // VectorType::SEQUENCE      - Any             - Holds linear numeric sequence (start, increment)
 };
 
 struct AuxiliaryDataHolder {
