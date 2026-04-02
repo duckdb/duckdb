@@ -181,7 +181,11 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (tmask.RowIsValid(target_idx)) {
-				tdata[target_idx] = buffer.AddBlob(ldata[source_idx]);
+				if (ldata[source_idx].IsInlined()) {
+					tdata[target_idx] = ldata[source_idx];
+				} else {
+					tdata[target_idx] = buffer.AddBlob(ldata[source_idx]);
+				}
 			}
 		}
 		break;
