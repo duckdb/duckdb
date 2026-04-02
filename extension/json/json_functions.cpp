@@ -184,6 +184,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	functions.push_back(GetPrettyPrintFunction());
 	functions.push_back(GetNormalizeFunction());
+	functions.push_back(GetStripNullsFunction());
 
 	return functions;
 }
