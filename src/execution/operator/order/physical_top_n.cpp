@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -290,6 +291,7 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 
 	SelectionVector remaining_sel(nullptr);
 	idx_t remaining_count = sort_chunk.size();
+	sort_chunk.Flatten();
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (remaining_sel.data()) {
 			compare_chunk.data[i].Slice(sort_chunk.data[i], remaining_sel, remaining_count);
@@ -589,7 +591,7 @@ SourceResultType PhysicalTopN::GetDataInternal(ExecutionContext &context, DataCh
 
 	if (lstate.pos == lstate.end) {
 		// Obtain new scan indices from the global state
-		auto guard = gstate.Lock();
+		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 		lstate.pos = gstate.state.pos;
 		gstate.state.pos += TopNGlobalSourceState::TUPLES_PER_BATCH;
 		lstate.end = gstate.state.pos;
@@ -627,6 +629,7 @@ InsertionOrderPreservingMap<string> PhysicalTopN::ParamsToString() const {
 		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
 	result["Order By"] = orders_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

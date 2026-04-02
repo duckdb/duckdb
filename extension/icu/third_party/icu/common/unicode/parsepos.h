@@ -97,22 +97,22 @@ public:
 
     /**
      * Equality operator.
-     * @return TRUE if the two parse positions are equal, FALSE otherwise.
+     * @return true if the two parse positions are equal, false otherwise.
      * @stable ICU 2.0
      */
-    inline bool              operator==(const ParsePosition& that) const;
+    inline bool               operator==(const ParsePosition& that) const;
 
     /**
      * Equality operator.
-     * @return TRUE if the two parse positions are not equal, FALSE otherwise.
+     * @return true if the two parse positions are not equal, false otherwise.
      * @stable ICU 2.0
      */
-    inline bool              operator!=(const ParsePosition& that) const;
+    inline bool               operator!=(const ParsePosition& that) const;
 
     /**
      * Clone this object.
      * Clones can be used concurrently in multiple threads.
-     * If an error occurs, then NULL is returned.
+     * If an error occurs, then nullptr is returned.
      * The caller must delete the clone.
      *
      * @return a clone of this object
@@ -129,7 +129,7 @@ public:
      * @return the current index.
      * @stable ICU 2.0
      */
-    inline int32_t getIndex(void) const;
+    inline int32_t getIndex() const;
 
     /**
      * Set the current parse position.
@@ -152,7 +152,7 @@ public:
      * error index has not been set.
      * @stable ICU 2.0
      */
-    inline int32_t getErrorIndex(void) const;
+    inline int32_t getErrorIndex() const;
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for this class.
@@ -166,7 +166,7 @@ public:
      *
      * @stable ICU 2.2
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
 private:
     /**
@@ -196,9 +196,9 @@ inline bool
 ParsePosition::operator==(const ParsePosition& copy) const
 {
   if(index != copy.index || errorIndex != copy.errorIndex)
-  return FALSE;
+  return false;
   else
-  return TRUE;
+  return true;
 }
 
 inline bool

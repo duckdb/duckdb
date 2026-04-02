@@ -40,6 +40,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	switch (op.join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:
+		can_merge = can_merge && op.conditions.size() == 1;
+		break;
 	case JoinType::RIGHT_ANTI:
 	case JoinType::RIGHT_SEMI:
 	case JoinType::MARK:
@@ -58,7 +60,6 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
-		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
 		return join;
 	}
 

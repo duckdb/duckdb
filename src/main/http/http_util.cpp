@@ -88,8 +88,11 @@ const string &HTTPResponse::GetError() const {
 	return request_error.empty() ? reason : request_error;
 }
 
+HTTPUtil::HTTPUtil() {
+}
+
 HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
-	return *db.config.http_util;
+	return db.config.GetHTTPUtil();
 }
 
 string HTTPUtil::GetName() const {
@@ -513,6 +516,15 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 		return Post(request.Cast<PostRequestInfo>());
 	default:
 		throw InternalException("Unsupported request type");
+	}
+}
+
+bool HTTPUtil::IsHTTPProtocol(const string &url) {
+	return StringUtil::StartsWith(url, "http://");
+}
+void HTTPUtil::BumpToSecureProtocol(string &url) {
+	if (IsHTTPProtocol(url)) {
+		url = "https://" + url.substr(7);
 	}
 }
 

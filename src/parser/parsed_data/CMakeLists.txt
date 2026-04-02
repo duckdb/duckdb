@@ -14,17 +14,20 @@ add_library_unity(
   create_index_info.cpp
   create_aggregate_function_info.cpp
   create_collation_info.cpp
+  create_coordinate_system_info.cpp
   create_copy_function_info.cpp
   create_macro_info.cpp
   create_pragma_function_info.cpp
   create_secret_info.cpp
   create_sequence_info.cpp
+  create_trigger_info.cpp
   create_schema_info.cpp
   create_scalar_function_info.cpp
   create_table_function_info.cpp
   create_table_info.cpp
   create_type_info.cpp
   create_view_info.cpp
+  create_window_function_info.cpp
   detach_info.cpp
   drop_info.cpp
   exported_table_data.cpp

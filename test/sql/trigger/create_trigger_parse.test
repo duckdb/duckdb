@@ -1,0 +1,94 @@
+# name: test/sql/trigger/create_trigger_parse.test
+# description: Test parsing of CREATE TRIGGER statements
+# group: [trigger]
+
+require autocomplete
+
+statement ok
+call enable_peg_parser();
+
+# Parsing succeeds - bind fails because tables do not exist
+
+# Basic AFTER INSERT trigger - table does not exist
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# Basic BEFORE DELETE trigger
+statement error
+CREATE TRIGGER my_trigger BEFORE DELETE ON my_table INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# INSTEAD OF trigger
+statement error
+CREATE TRIGGER my_trigger INSTEAD OF INSERT ON my_table INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# AFTER UPDATE trigger
+statement error
+CREATE TRIGGER my_trigger AFTER UPDATE ON my_table INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# AFTER UPDATE OF specific columns - table does not exist
+statement error
+CREATE TRIGGER my_trigger AFTER UPDATE OF col1, col2 ON my_table INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# FOR EACH ROW
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH ROW INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# FOR EACH STATEMENT - table check happens first
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH STATEMENT INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# IF NOT EXISTS
+statement error
+CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
+----
+Table with name my_table does not exist
+
+# Schema-qualified trigger name is not allowed (triggers inherit schema from the table)
+statement error
+CREATE TRIGGER my_schema.my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
+----
+<REGEX>:.*yntax error.*
+
+# Schema-qualified table name - schema may not exist
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_schema.my_table INSERT INTO log_table VALUES (1);
+----
+schema "my_schema" does not exist
+
+# DELETE as trigger body - my_table does not exist
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_table DELETE FROM other_table WHERE id = 1;
+----
+Table with name my_table does not exist
+
+# UPDATE as trigger body
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_table UPDATE other_table SET col = 1;
+----
+Table with name my_table does not exist
+
+# Syntax errors - missing ON keyword
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT my_table INSERT INTO log_table VALUES (1);
+----
+yntax error
+
+# Syntax errors - missing timing
+statement error
+CREATE TRIGGER my_trigger INSERT ON my_table INSERT INTO log_table VALUES (1);
+----
+yntax error

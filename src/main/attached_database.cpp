@@ -2,9 +2,11 @@
 
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -12,6 +14,8 @@
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
 
@@ -104,7 +108,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      close_lock(make_shared_ptr<mutex>()), attach_options(options.options) {
+      close_lock(make_shared_ptr<mutex>()) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -118,13 +122,14 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	stored_database_path = std::move(options.stored_database_path);
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), options);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
+	attach_options = options.options;
 	internal = true;
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
                                    ClientContext &context, string name_p, AttachInfo &info, AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      storage_extension(&storage_extension_p), close_lock(make_shared_ptr<mutex>()), attach_options(options.options) {
+      storage_extension(&storage_extension_p), close_lock(make_shared_ptr<mutex>()) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -148,6 +153,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		throw InternalException(
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
 	}
+	attach_options = options.options;
 	internal = true;
 }
 
@@ -198,11 +204,21 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {
+	auto close_action = DatabaseCloseAction::CHECKPOINT;
+	auto checkpoint_on_detach = Settings::Get<CheckpointOnDetachSetting>(context);
+	if (checkpoint_on_detach == CheckpointOnDetach::ENABLED) {
+		close_action = DatabaseCloseAction::CHECKPOINT;
+	} else if (checkpoint_on_detach == CheckpointOnDetach::DISABLED) {
+		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
+	} else if (!DBConfig::GetConfig(context).options.checkpoint_on_shutdown) {
+		close_action = DatabaseCloseAction::SKIP_CHECKPOINT;
+	}
+
 	auto close_lock = attached_db->close_lock;
 	lock_guard<mutex> guard(*close_lock);
 	if (attached_db.use_count() == 1) {
-		attached_db->Close(DatabaseCloseAction::CHECKPOINT);
+		attached_db->Close(close_action);
 	}
 	attached_db.reset();
 }
@@ -227,6 +243,13 @@ bool AttachedDatabase::HasStorageManager() const {
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
+	if (!storage) {
+		throw InternalException("Internal system catalog does not have storage");
+	}
+	return *storage;
+}
+
+const StorageManager &AttachedDatabase::GetStorageManager() const {
 	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");
 	}
@@ -286,8 +309,14 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 		}
 
 		if (create_checkpoint) {
-			auto &config = DBConfig::GetConfig(db);
-			if (config.options.checkpoint_on_shutdown) {
+			auto should_checkpoint = false;
+			if (action == DatabaseCloseAction::CHECKPOINT) {
+				should_checkpoint = true;
+			} else if (action == DatabaseCloseAction::TRY_CHECKPOINT) {
+				auto &config = DBConfig::GetConfig(db);
+				should_checkpoint = config.options.checkpoint_on_shutdown;
+			}
+			if (should_checkpoint) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
 				storage->CreateCheckpoint(QueryContext(), options);

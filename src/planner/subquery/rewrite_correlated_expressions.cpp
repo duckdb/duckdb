@@ -38,7 +38,8 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 		for (auto &corr : plan.correlated_columns) {
 			auto entry = correlated_map.find(corr.binding);
 			if (entry != correlated_map.end()) {
-				corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+				corr.binding =
+				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + entry->second));
 			}
 		}
 	}
@@ -59,7 +60,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	auto entry = correlated_map.find(expr.binding);
 	D_ASSERT(entry != correlated_map.end());
 
-	expr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+	expr.binding = ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + entry->second));
 	if (recursive_rewrite) {
 		D_ASSERT(expr.depth > 1);
 		expr.depth--;
@@ -107,7 +108,8 @@ void RewriteCorrelatedRecursive::VisitOperator(LogicalOperator &op) {
 		for (auto &corr : dep_join.correlated_columns) {
 			auto entry = correlated_map.find(corr.binding);
 			if (entry != correlated_map.end()) {
-				corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+				corr.binding =
+				    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + entry->second));
 			}
 		}
 	}
@@ -134,7 +136,8 @@ void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> *express
 		if (entry != correlated_map.end()) {
 			// we found the column in the correlated map!
 			// update the binding and reduce the depth by 1
-			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+			bound_colref.binding =
+			    ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + entry->second));
 			bound_colref.depth--;
 		}
 	} else if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {

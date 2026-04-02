@@ -62,7 +62,7 @@ public:
 
 	// Main Logging interface. In most cases the macros above should be used instead of calling these directly
 	DUCKDB_API virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
-	DUCKDB_API virtual void WriteLog(const char *log_type, LogLevel log_level, const char *message) = 0;
+	DUCKDB_API void WriteLog(const char *log_type, LogLevel log_level, const char *message);
 
 	// Some more string types for easy logging
 	DUCKDB_API void WriteLog(const char *log_type, LogLevel log_level, const string &message);
@@ -102,6 +102,9 @@ public:
 	DUCKDB_API virtual const LogConfig &GetConfig() const = 0;
 
 protected:
+	virtual void WriteLogInternal(const char *log_type, LogLevel log_level, const char *message) = 0;
+
+protected:
 	LogManager &manager;
 };
 
@@ -113,7 +116,7 @@ public:
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
+	void WriteLogInternal(const char *log_type, LogLevel log_level, const char *message) override;
 
 	void Flush() override;
 	bool IsThreadSafe() override {
@@ -138,7 +141,7 @@ public:
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
+	void WriteLogInternal(const char *log_type, LogLevel log_level, const char *message) override;
 	void Flush() override;
 
 	bool IsThreadSafe() override {
@@ -161,7 +164,7 @@ public:
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
+	void WriteLogInternal(const char *log_type, LogLevel log_level, const char *message) override;
 
 	void Flush() override;
 	bool IsThreadSafe() override {
@@ -194,7 +197,7 @@ public:
 	bool ShouldLog(const char *log_type, LogLevel log_level) override {
 		return false;
 	}
-	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override {};
+	void WriteLogInternal(const char *log_type, LogLevel log_level, const char *message) override {};
 	void Flush() override {
 	}
 	bool IsThreadSafe() override {

@@ -12,7 +12,7 @@ require icu
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/autoloading_types'
+set extension_directory='{TEST_DIR}/autoloading_types'
 
 ### No autoloading nor installing: throw error with installation hint
 statement ok
@@ -34,7 +34,7 @@ statement ok
 set autoinstall_known_extensions=true
 
 statement ok
-set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+set autoinstall_extension_repository='{LOCAL_EXTENSION_REPO}';
 
 query I
 SELECT '{}'::JSON;

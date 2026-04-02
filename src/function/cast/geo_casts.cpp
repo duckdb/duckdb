@@ -25,8 +25,8 @@ BoundCastInfo DefaultCasts::GeoCastSwitch(BindCastInput &input, const LogicalTyp
 			// TODO: Use client context (and allow extensions) to determine if the cast is okay (crs's are equivalent)
 
 			if (!source_crs.Equals(target_crs)) {
-				throw BinderException("Cannot cast GEOMETRY with CRS '" + source_crs.GetDisplayName() +
-				                      "' to GEOMETRY with different CRS '" + target_crs.GetDisplayName() + "'");
+				throw BinderException("Cannot cast GEOMETRY with CRS '" + source_crs.GetIdentifier() +
+				                      "' to GEOMETRY with different CRS '" + target_crs.GetIdentifier() + "'");
 			}
 		}
 		// The actual data representation stays the same, so we can do a reinterpret cast

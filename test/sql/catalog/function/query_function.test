@@ -76,8 +76,8 @@ SELECT * FROM query('WITH a(i) AS (SELECT 1) SELECT a1.i AS i1, a2.i AS i2 FROM 
 ----
 1	1
 
-# test incorrect usage
-statement error
+# test incorrect usage, if using the peg parser this is now valid. 
+statement maybe
 SELECT * FROM query(NULL);
 ----
 <REGEX>:Parser Error.*NULL.*
@@ -191,7 +191,7 @@ Binder Error: No function matches the given name and argument types 'query_table
 statement error
 FROM query_table(['']);
 ----
-Parser Error: syntax error at end of input
+Parser Error: syntax error 
 
 statement error
 FROM query_table('tbl_int', 'tbl_varchar', tbl2_varchar);

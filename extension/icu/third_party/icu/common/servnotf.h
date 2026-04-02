@@ -40,7 +40,7 @@ public:
 public:
     static UClassID U_EXPORT2 getStaticClassID();
 
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
 public:
 #ifdef SERVICE_DEBUG
@@ -75,14 +75,14 @@ class U_COMMON_API ICUNotifier : public UMemory  {
 private: UVector* listeners;
          
 public: 
-    ICUNotifier(void);
+    ICUNotifier();
     
-    virtual ~ICUNotifier(void);
+    virtual ~ICUNotifier();
     
     /**
      * Add a listener to be notified when notifyChanged is called.
      * The listener must not be null. AcceptsListener must return
-     * true for the listener.  Attempts to concurrently
+     * true for the listener. Attempts to concurrently
      * register the identical listener more than once will be
      * silently ignored.  
      */
@@ -90,7 +90,7 @@ public:
     
     /**
      * Stop notifying this listener.  The listener must
-     * not be null.  Attemps to remove a listener that is
+     * not be null. Attempts to remove a listener that is
      * not registered will be silently ignored.
      */
     virtual void removeListener(const EventListener* l, UErrorCode& status);
@@ -101,11 +101,11 @@ public:
      * indefinitely block the calling thread.  Callers should beware of
      * deadlock situations.  
      */
-    virtual void notifyChanged(void);
+    virtual void notifyChanged();
     
 protected: 
     /**
-     * Subclasses implement this to return TRUE if the listener is
+     * Subclasses implement this to return true if the listener is
      * of the appropriate type.
      */
     virtual UBool acceptsListener(const EventListener& l) const = 0;

@@ -10,7 +10,9 @@ static void ParseSchemaTableNameFK(duckdb_libpgquery::PGRangeVar &input, Foreign
 	if (input.catalogname) {
 		throw ParserException("FOREIGN KEY constraints cannot be defined cross-database");
 	}
-	fk_info.schema = input.schemaname ? input.schemaname : "";
+	if (input.schemaname) {
+		fk_info.schema = input.schemaname;
+	}
 	fk_info.table = input.relname;
 }
 
@@ -89,7 +91,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
 		}
-		return make_uniq<CheckConstraint>(TransformExpression(constraint.raw_expr));
+		return make_uniq<CheckConstraint>(std::move(expression));
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 		return TransformForeignKeyConstraint(constraint);

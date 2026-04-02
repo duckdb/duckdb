@@ -95,8 +95,8 @@ void FileBuffer::ResizeInternal(uint64_t new_size, uint64_t block_header_size) {
 	}
 }
 
-void FileBuffer::Resize(uint64_t new_size, BlockManager &block_manager) {
-	ResizeInternal(new_size, block_manager.GetBlockHeaderSize());
+void FileBuffer::Resize(uint64_t new_size, idx_t block_header_size) {
+	ResizeInternal(new_size, block_header_size);
 }
 
 void FileBuffer::Resize(BlockManager &block_manager) {

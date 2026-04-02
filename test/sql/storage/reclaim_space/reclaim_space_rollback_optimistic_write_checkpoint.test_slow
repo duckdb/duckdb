@@ -2,7 +2,7 @@
 # description: Test rolling back optimistic writes while checkpointing concurrently
 # group: [reclaim_space]
 
-load __TEST_DIR__/reclaim_space_rollback_optimistic_write_checkpoint.db
+load {TEST_DIR}/reclaim_space_rollback_optimistic_write_checkpoint.db
 
 statement ok
 CREATE OR REPLACE TABLE tbl(i INTEGER, v VARCHAR);
@@ -18,7 +18,7 @@ statement ok con1
 INSERT INTO tbl SELECT i, concat('thisisalongstring', i) FROM range(1_000_000) t(i);
 
 statement ok con2
-INSERT INTO tbl VALUES (${k}, concat('str', ${k}))
+INSERT INTO tbl VALUES ({k}, concat('str', {k}))
 
 statement ok con2
 CHECKPOINT
@@ -54,6 +54,6 @@ CHECKPOINT
 
 # expected almost no blocks here - the table was cleared
 query I
-SELECT case when total_blocks < 5 then NULL else t end FROM pragma_database_size() t
+SELECT case when total_blocks - free_blocks < 5 then NULL else t end FROM pragma_database_size() t
 ----
 NULL

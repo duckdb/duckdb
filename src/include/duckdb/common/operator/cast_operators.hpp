@@ -20,6 +20,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
@@ -1069,6 +1070,24 @@ template <>
 bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters);
 template <>
 bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict);
+
+struct CastFromUUIDToUHugeint {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast from uuid to uhugeint could not be performed!");
+	}
+};
+template <>
+duckdb::uhugeint_t CastFromUUIDToUHugeint::Operation(duckdb::hugeint_t input);
+
+struct CastFromUHugeintToUUID {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast from uhugeint to uuid could not be performed!");
+	}
+};
+template <>
+duckdb::hugeint_t CastFromUHugeintToUUID::Operation(duckdb::uhugeint_t input);
 
 //===--------------------------------------------------------------------===//
 // GEOMETRY

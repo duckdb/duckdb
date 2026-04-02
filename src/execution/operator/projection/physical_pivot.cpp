@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/operator/projection/physical_pivot.hpp"
 
 #include "duckdb/execution/physical_plan_generator.hpp"

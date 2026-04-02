@@ -463,7 +463,7 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->recursive_keys = $3;
+				n->using_key_list = $3;
 				n->ctematerialized = $5;
 				n->ctequery = $7;
 				n->location = @1;
@@ -472,8 +472,8 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
-		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		USING KEY '(' target_list_opt_comma ')' 				{ $$ = $4; }
+		| /*EMPTY*/												{ $$ = NULL; }
 		;
 
 column_ref_list_opt_comma:
@@ -1696,6 +1696,11 @@ Typename:	SimpleTypename opt_array_bounds
 					$$ = $1;
 					$$->arrayBounds = $2;
 				}
+			| qualified_typename opt_array_bounds
+				{
+					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = $2;
+				}
 			| SETOF SimpleTypename opt_array_bounds
 				{
 					$$ = $2;
@@ -1708,9 +1713,20 @@ Typename:	SimpleTypename opt_array_bounds
 					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger($4));
 				}
+			| qualified_typename ARRAY '[' Iconst ']'
+				{
+					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = list_make1(makeInteger($4));
+				}
 			| SETOF SimpleTypename ARRAY '[' Iconst ']'
 				{
 					$$ = $2;
+					$$->arrayBounds = list_make1(makeInteger($5));
+					$$->setof = true;
+				}
+			| SETOF qualified_typename ARRAY '[' Iconst ']'
+				{
+					$$ = makeTypeNameFromNameList($2);
 					$$->arrayBounds = list_make1(makeInteger($5));
 					$$->setof = true;
 				}
@@ -1719,16 +1735,22 @@ Typename:	SimpleTypename opt_array_bounds
 					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger(-1));
 				}
+			| qualified_typename ARRAY
+				{
+					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = list_make1(makeInteger(-1));
+				}
 			| SETOF SimpleTypename ARRAY
 				{
 					$$ = $2;
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| qualified_typename opt_array_bounds
+			| SETOF qualified_typename ARRAY
 				{
-					$$ = makeTypeNameFromNameList($1);
-					$$->arrayBounds = $2;
+					$$ = makeTypeNameFromNameList($2);
+					$$->arrayBounds = list_make1(makeInteger(-1));
+					$$->setof = true;
 				}
 			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
 				{

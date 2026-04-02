@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "transformer/peg_transformer.hpp"
 
 namespace duckdb {
@@ -7,15 +8,16 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<UpdateStatement>();
+	auto &node = *result->node;
 	auto with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
-		result->cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
+		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
 	}
-	result->table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(2));
-	result->set_info = transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ListParseResult>(3));
-	transformer.TransformOptional<unique_ptr<TableRef>>(list_pr, 4, result->from_table);
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, result->set_info->condition);
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 6, result->returning_list);
+	node.table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(2));
+	node.set_info = transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ListParseResult>(3));
+	transformer.TransformOptional<unique_ptr<TableRef>>(list_pr, 4, node.from_table);
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, node.set_info->condition);
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 6, node.returning_list);
 	return std::move(result);
 }
 
@@ -104,8 +106,20 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(P
 pair<string, unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto column_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto column_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	return make_pair(column_name, std::move(expr));
+}
+
+// UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto column_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto &extra_opt = list_pr.Child<OptionalParseResult>(1);
+	if (extra_opt.HasResult()) {
+		throw ParserException("Qualified column names in UPDATE .. SET not supported");
+	}
+	return column_name;
 }
 } // namespace duckdb

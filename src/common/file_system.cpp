@@ -174,11 +174,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	return path;
-}
-
 #else
 
 string FileSystem::GetEnvVariable(const string &env) {
@@ -194,11 +189,14 @@ string FileSystem::GetEnvVariable(const string &env) {
 }
 
 static bool StartsWithSingleBackslash(const string &path) {
-	if (path.size() < 2) {
+	if (path.empty()) {
 		return false;
 	}
 	if (path[0] != '/' && path[0] != '\\') {
 		return false;
+	}
+	if (path.size() == 1) {
+		return true;
 	}
 	if (path[1] == '/' || path[1] == '\\') {
 		return false;
@@ -226,17 +224,6 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 		return true;
 	}
 	return false;
-}
-
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	auto result = FileSystem::ConvertSeparators(path);
-	if (StartsWithSingleBackslash(result)) {
-		// Path starts with a single backslash or forward slash
-		// prepend drive letter
-		return GetWorkingDirectory().substr(0, 2) + result;
-	}
-	return result;
 }
 
 string FileSystem::PathSeparator(const string &path) {
@@ -297,8 +284,7 @@ string FileSystem::GetWorkingDirectory() {
 #endif
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	// FIXME: sanitize paths
-	return a.empty() ? b : a + PathSeparator(a) + b;
+	return Path::FromString(a).Join(b).ToString();
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
@@ -365,12 +351,54 @@ string FileSystem::GetHomeDirectory() {
 	return GetHomeDirectory(nullptr);
 }
 
+// Helper function to handle file:/ URLs
+static idx_t GetFileUrlOffset(const string &path) {
+	if (!StringUtil::StartsWith(path, "file:/")) {
+		return 0;
+	}
+
+	// Url without host: file:/some/path
+	if (path[6] != '/') {
+#ifdef _WIN32
+		return 6;
+#else
+		return 5;
+#endif
+	}
+
+	// Url with empty host: file:///some/path
+	if (path[7] == '/') {
+#ifdef _WIN32
+		return 8;
+#else
+		return 7;
+#endif
+	}
+
+	// Url with localhost: file://localhost/some/path
+	if (path.compare(7, 10, "localhost/") == 0) {
+#ifdef _WIN32
+		return 17;
+#else
+		return 16;
+#endif
+	}
+
+	// unkown file:/ url format
+	return 0;
+}
+
 string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
 	if (path[0] == '~') {
 		return GetHomeDirectory(opener) + path.substr(1);
+	}
+	// handle file URIs
+	auto file_offset = GetFileUrlOffset(path);
+	if (file_offset > 0) {
+		return path.substr(file_offset);
 	}
 	return path;
 }
@@ -477,35 +505,25 @@ void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<Fil
 	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
 	// dir that is not in the allowed_directories list
 
-	auto sep = PathSeparator(path);
+	// Walk up from the full path until we find a prefix that already exists, collecting
+	// non-existing ancestors along the way. Stop descending when segments are exhausted
+	// (to avoid Path::Parent() generating ".." paths past the root/base).
+	auto parsed = Path::FromString(path);
 	vector<string> dirs_to_create;
-
-	string current_prefix = path;
-
-	StringUtil::RTrim(current_prefix, sep);
-
-	// Strip directories from the path until we hit a directory that exists
-	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
-		auto found = current_prefix.find_last_of(sep);
-
-		// Push back the root dir
-		if (found == string::npos || found == 0) {
-			dirs_to_create.push_back(current_prefix);
-			current_prefix = "";
-			break;
-		}
-
-		// Add the directory to the directories to be created
-		dirs_to_create.push_back(current_prefix.substr(found, current_prefix.size() - found));
-
-		// Update the current prefix to remove the current dir
-		current_prefix = current_prefix.substr(0, found);
+	while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
+		parsed = parsed.Parent();
+	}
+	// If all segments were non-existing, also check the base itself (e.g. "C:/" on an unknown drive)
+	if (!parsed.GetPathSegments().empty()) {
+		// broke because DirectoryExists returned true — nothing more needed
+	} else if (!DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
 	}
 
-	// Create the directories one by one
-	for (vector<string>::reverse_iterator riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
-		current_prefix += *riter;
-		CreateDirectory(current_prefix);
+	// Create directories shallowest to deepest
+	for (auto riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
+		CreateDirectory(*riter);
 	}
 }
 
@@ -669,16 +687,14 @@ unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const 
 	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
-			if (!HasGlob(pattern)) {
-				if (input.extension.empty()) {
-					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
-				}
-				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
-				if (!result->IsEmpty()) {
-					// we found files by globbing the target as if it was a directory - return them
-					return result;
-				}
+			if (input.extension.empty()) {
+				throw InternalException("FALLBACK_GLOB requires an extension to be specified");
+			}
+			string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
+			result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
+			if (!result->IsEmpty()) {
+				// we found files by globbing the target as if it was a directory - return them
+				return result;
 			}
 		}
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
@@ -751,7 +767,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -887,6 +903,46 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 		}
 	}
 	return false;
+}
+
+string FileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	// TODO: @benfleis - integrate this properly with Path (needs additional work)
+	if (IsRemoteFile(path_p) || !Path::FromString(path_p).IsLocal()) {
+		// don't canonicalize remote paths
+		return path_p;
+	}
+	auto path_sep = PathSeparator(path_p);
+	auto elements = StringUtil::Split(path_p, path_sep);
+
+	deque<string> path_stack;
+	string result;
+	for (idx_t i = 0; i < elements.size(); i++) {
+		if (elements[i].empty() || elements[i] == ".") {
+			// we ignore empty and `.`
+			continue;
+		}
+		if (elements[i] == "..") {
+			// .. pops from stack if possible, if already at root its ignored
+			if (!path_stack.empty()) {
+				path_stack.pop_back();
+			}
+		} else {
+			path_stack.push_back(elements[i]);
+		}
+	}
+	// we lost the leading / in the split/loop so lets put it back
+	if (path_p[0] == '/') {
+		result = "/";
+	}
+	while (!path_stack.empty()) {
+		result += path_stack.front();
+		path_stack.pop_front();
+		if (!path_stack.empty()) {
+			result += path_sep;
+		}
+	}
+
+	return result;
 }
 
 } // namespace duckdb

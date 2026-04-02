@@ -1,12 +1,11 @@
 // © 2018 and later: Unicode, Inc. and others.
 // License & terms of use: http://www.unicode.org/copyright.html
 
-#ifndef __SOURCE_NUMPARSE_COMPOSITIONS_H_
-#define __SOURCE_NUMPARSE_COMPOSITIONS_H_
-
 #include "unicode/utypes.h"
 
 #if !UCONFIG_NO_FORMATTING
+#ifndef __SOURCE_NUMPARSE_COMPOSITIONS__
+#define __SOURCE_NUMPARSE_COMPOSITIONS__
 
 #include "numparse_types.h"
 
@@ -19,8 +18,7 @@ U_NAMESPACE_BEGIN
 template class U_I18N_API MaybeStackArray<const numparse::impl::NumberParseMatcher*, 3>;
 #endif
 
-namespace numparse {
-namespace impl {
+namespace numparse::impl {
 
 /**
  * Base class for AnyMatcher and SeriesMatcher.
@@ -116,9 +114,8 @@ class U_I18N_API ArraySeriesMatcher : public SeriesMatcher {
     int32_t fMatchersLen;
 };
 
+} // namespace numparse::impl
 
-} // namespace impl
-} // namespace numparse
 U_NAMESPACE_END
 
 #endif //__SOURCE_NUMPARSE_COMPOSITIONS__

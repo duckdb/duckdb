@@ -22,12 +22,13 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -36,6 +37,8 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -103,6 +106,22 @@ void AllocatorBulkDeallocationFlushThresholdSetting::ResetGlobal(DatabaseInstanc
 Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_bulk_deallocation_flush_threshold));
+}
+
+//===----------------------------------------------------------------------===//
+// Delta Only Variant Legacy Encoding
+//===----------------------------------------------------------------------===//
+void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.variant_legacy_encoding);
 }
 
 //===----------------------------------------------------------------------===//
@@ -178,6 +197,30 @@ void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &inp
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Allowed Configs
+//===----------------------------------------------------------------------===//
+void AllowedConfigsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allowed_configs.clear();
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.AddAllowedConfig(val.GetValue<string>());
+	}
+}
+
+void AllowedConfigsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allowed_configs = DBConfigOptions().allowed_configs;
+}
+
+Value AllowedConfigsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> configs;
+	for (auto &cfg : config.options.allowed_configs) {
+		configs.emplace_back(cfg);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(configs));
 }
 
 //===----------------------------------------------------------------------===//
@@ -296,7 +339,7 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Custom Profiling Settings
+// Configure Profiling
 //===----------------------------------------------------------------------===//
 bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
 	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
@@ -411,7 +454,7 @@ void ConstructInvalidSettingsAndThrow(const vector<string> &invalid_settings) {
 	throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings_str);
 }
 
-void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
+void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	auto &db_config = DBConfig::GetConfig(context);
@@ -439,14 +482,14 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	config.profiler_settings = enabled_metrics;
 }
 
-void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
+void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
 	config.profiler_settings_type = LogicalTypeId::VARCHAR;
 }
 
-Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
+Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	set<string> enabled_settings;
@@ -807,7 +850,7 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 	});
 
 	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-		return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
+		return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
 	});
 	force_variant_shredding =
 	    LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
@@ -1151,6 +1194,44 @@ void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
 Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.enable_http_logging);
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Mbedtls
+//===----------------------------------------------------------------------===//
+
+void ForceMbedtlsUnsafeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.force_mbedtls = input.GetValue<bool>();
+
+	if (!config.options.force_mbedtls) {
+		// check if there are attached databases encrypted that are not read only
+		bool encrypted_db_attached = false;
+		for (auto &database : db->GetDatabaseManager().GetDatabases()) {
+			if (database->HasStorageManager() && database->GetStorageManager().IsEncrypted() &&
+			    !database->IsReadOnly()) {
+				encrypted_db_attached = true;
+				break;
+			};
+		};
+
+		if (encrypted_db_attached) {
+			// autoload httpfs if any attached db uses encryption
+			if (!ExtensionHelper::TryAutoLoadExtension(*db, "httpfs")) {
+				throw InvalidConfigurationException("Failed to autoload HTTPFS. Cannot disable MbedTLS, HTTPFS "
+				                                    "extension is required to write encrypted databases.");
+			};
+		}
+	}
+}
+
+void ForceMbedtlsUnsafeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	// If encryption is initialized, httpfs will be attempted to autoload again
+	SetGlobal(db, config, false);
+}
+
+Value ForceMbedtlsUnsafeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.force_mbedtls);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1609,4 +1690,25 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
 }
 
+//===----------------------------------------------------------------------===//
+// Warnings As Errors
+//===----------------------------------------------------------------------===//
+
+void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto &log_manager = LogManager::Get(*info.context);
+	if (input == Value(true) && !log_manager.GetConfig().enabled) {
+		throw Exception(
+		    ExceptionType::SETTINGS,
+		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
+	}
+}
+
+void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.context) {
+		throw InvalidInputException(
+		    "current_transaction_invalidaton_policy can only be set when there is an active client context");
+	}
+	info.context->transaction.SetInvalidationPolicy(
+	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
+}
 } // namespace duckdb

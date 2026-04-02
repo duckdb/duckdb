@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -105,15 +109,15 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 			}
 		}
 	} else {
-		UnifiedVectorFormat vdata;
-		vector.ToUnifiedFormat(count, vdata);
-		auto data = UnifiedVectorFormat::GetData<T>(vdata);
+		auto entries = vector.Values<T>(count);
 		for (idx_t i = 0; i < count; i++) {
-			auto source_idx = vdata.sel->get_index(i);
+			auto entry = entries[i];
 			auto res_idx = sel.get_index(i);
-
-			res[res_idx] = data[source_idx];
-			result_mask.Set(res_idx, vdata.validity.RowIsValid(source_idx));
+			if (entry.IsValid()) {
+				res[res_idx] = entry.value;
+			} else {
+				result_mask.SetInvalid(res_idx);
+			}
 		}
 	}
 }
@@ -128,14 +132,12 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 			}
 		}
 	} else {
-		UnifiedVectorFormat vdata;
-		vector.ToUnifiedFormat(count, vdata);
-		if (vdata.validity.AllValid()) {
+		auto entries = vector.Validity(count);
+		if (!entries.CanHaveNull()) {
 			return;
 		}
 		for (idx_t i = 0; i < count; i++) {
-			auto source_idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(source_idx)) {
+			if (!entries.IsValid(i)) {
 				result_mask.SetInvalid(sel.get_index(i));
 			}
 		}
@@ -189,12 +191,16 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 		StringVector::AddHeapReference(result, vector);
 		break;
 	case PhysicalType::STRUCT: {
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			// below code needs constant or flat structs
+			vector.Flatten(count);
+		}
 		auto &vector_entries = StructVector::GetEntries(vector);
 		auto &result_entries = StructVector::GetEntries(result);
 		ValidityFillLoop(vector, result, sel, count);
 		D_ASSERT(vector_entries.size() == result_entries.size());
 		for (idx_t i = 0; i < vector_entries.size(); i++) {
-			FillSwitch(*vector_entries[i], *result_entries[i], sel, count);
+			FillSwitch(vector_entries[i], result_entries[i], sel, count);
 		}
 		break;
 	}

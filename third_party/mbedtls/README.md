@@ -14,5 +14,5 @@ It is recommended to test regular compilation, as well as the amalgamation path:
 
 ```
 python scripts/amalgamation.py
-clang++ -std=c++11 -Isrc/amalgamation src/amalgamation/duckdb.cpp
+clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp
 ```

@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {

@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -186,8 +187,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
-			auto guard = g_state.Lock();
-			if (g_state.CanBlock(guard)) {
+			annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+			if (g_state.CanBlock()) {
 				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
 			}
@@ -215,8 +216,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
 	case OperatorResultType::BLOCKED: {
-		auto guard = g_state.Lock();
-		return g_state.BlockSource(guard, input.interrupt_state);
+		annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+		return g_state.BlockSource(input.interrupt_state);
 	}
 	default:
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
@@ -307,27 +308,29 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 	}
 }
 
-static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<TableFilterSet> &filter_set) {
+string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const {
 	string filters_info;
 	bool first_item = true;
-	for (auto &f : filter_set->filters) {
-		auto &column_index = f.first;
-		auto &filter = f.second;
-		if (column_index < scan->names.size()) {
+	for (auto &f : filter_set) {
+		auto filter_idx = f.GetIndex();
+		auto &filter = f.Filter();
+		if (filter_idx < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
 
-			const auto col_id = scan->column_ids[column_index].GetPrimaryIndex();
+			auto &column_id = column_ids[filter_idx];
+			const auto col_id = column_id.GetPrimaryIndex();
 			if (IsVirtualColumn(col_id)) {
-				auto entry = scan->virtual_columns.find(col_id);
-				if (entry == scan->virtual_columns.end()) {
+				auto entry = virtual_columns.find(col_id);
+				if (entry == virtual_columns.end()) {
 					throw InternalException("Virtual column not found");
 				}
-				filters_info += filter->ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name);
 			} else {
-				filters_info += filter->ToString(scan->names[col_id]);
+				auto column_name = column_id.GetName(names[col_id]);
+				filters_info += filter.ToString(column_name);
 			}
 		}
 	}
@@ -360,11 +363,11 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		result["Projections"] = projections;
 	}
 	if (function.filter_pushdown && table_filters) {
-		result["Filters"] = GetFilterInfo(this, table_filters);
+		result["Filters"] = GetFilterInfo(*table_filters);
 	}
 
 	if (function.filter_pushdown && dynamic_filters && dynamic_filters->HasFilters()) {
-		result["Dynamic Filters"] = GetFilterInfo(this, dynamic_filters->GetFinalTableFilters(*this, nullptr));
+		result["Dynamic Filters"] = GetFilterInfo(*dynamic_filters->GetFinalTableFilters(*this, nullptr));
 	}
 
 	if (extra_info.sample_options) {

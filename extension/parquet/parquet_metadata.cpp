@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "parquet_metadata.hpp"
 
 #include "parquet_statistics.hpp"
@@ -76,13 +79,14 @@ public:
 	template <ParquetMetadataOperatorType OP_TYPE>
 	static unique_ptr<LocalTableFunctionState> InitLocal(ExecutionContext &context, TableFunctionInitInput &input,
 	                                                     GlobalTableFunctionState *global_state);
-	template <ParquetMetadataOperatorType OP_TYPE>
 	static void Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output);
 	static double Progress(ClientContext &context, const FunctionData *bind_data_p,
 	                       const GlobalTableFunctionState *global_state);
 
 	template <ParquetMetadataOperatorType OP_TYPE>
 	static void BindSchema(vector<LogicalType> &return_types, vector<string> &names);
+
+	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 };
 
 struct ParquetMetadataGlobalState : public GlobalTableFunctionState {
@@ -107,11 +111,14 @@ struct ParquetMetadataGlobalState : public GlobalTableFunctionState {
 	double GetProgress() const {
 		// Not the most accurate, instantly assumes all files are done and equal
 		unique_lock<mutex> lock(file_paths->file_lock);
-		return static_cast<double>(file_paths->scan_data.current_file_idx) / file_paths->file_list->GetTotalFileCount();
+		return static_cast<double>(file_paths->scan_data.current_file_idx) /
+		       static_cast<double>(file_paths->file_list->GetTotalFileCount());
 	}
 
 	unique_ptr<ParquetMetadataFilePaths> file_paths;
 	idx_t max_threads;
+	mutex lock;
+	idx_t current_file = 0;
 };
 
 struct ParquetMetadataLocalState : public LocalTableFunctionState {
@@ -120,13 +127,15 @@ struct ParquetMetadataLocalState : public LocalTableFunctionState {
 	bool file_exhausted = true;
 	idx_t row_idx = 0;
 	idx_t total_rows = 0;
+	optional_idx file_idx;
 
-	void Initialize(ClientContext &context, OpenFileInfo &file_info) {
+	void Initialize(ClientContext &context, OpenFileInfo &file_info, idx_t next_file_idx) {
 		ParquetOptions parquet_options(context);
 		reader = make_uniq<ParquetReader>(context, file_info, parquet_options);
 		processor->Initialize(context, *reader);
 		total_rows = processor->TotalRowCount(*reader);
 		row_idx = 0;
+		file_idx = next_file_idx;
 		file_exhausted = false;
 	}
 };
@@ -877,9 +886,9 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 
 	vector<reference<Vector>> vectors;
 	for (auto &entry : result_struct_entries) {
-		vectors.push_back(std::ref(*entry.get()));
-		entry->SetVectorType(VectorType::FLAT_VECTOR);
-		auto &validity = FlatVector::Validity(*entry);
+		vectors.push_back(std::ref(entry));
+		entry.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &validity = FlatVector::Validity(entry);
 		validity.Initialize(count);
 	}
 	for (idx_t i = 0; i < count; i++) {
@@ -1025,7 +1034,6 @@ unique_ptr<LocalTableFunctionState> ParquetMetaDataOperator::InitLocal(Execution
 	return unique_ptr_cast<LocalTableFunctionState, ParquetMetadataLocalState>(std::move(res));
 }
 
-template <ParquetMetadataOperatorType OP_TYPE>
 void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &global_state = data_p.global_state->Cast<ParquetMetadataGlobalState>();
 	auto &local_state = data_p.local_state->Cast<ParquetMetadataLocalState>();
@@ -1040,12 +1048,21 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 	while (output_count < STANDARD_VECTOR_SIZE) {
 		// Check if we need a new file
 		if (local_state.file_exhausted) {
+			if (output_count > 0) {
+				// we already have rows - emit them first
+				break;
+			}
+			idx_t next_file_idx;
 			OpenFileInfo next_file;
-			if (!global_state.file_paths->NextFile(next_file)) {
-				break; // No more files to process
+			{
+				lock_guard<mutex> guard(global_state.lock);
+				if (!global_state.file_paths->NextFile(next_file)) {
+					break; // No more files to process
+				}
+				next_file_idx = global_state.current_file++;
 			}
 
-			local_state.Initialize(context, next_file);
+			local_state.Initialize(context, next_file, next_file_idx);
 		}
 
 		idx_t left_in_vector = STANDARD_VECTOR_SIZE - output_count;
@@ -1073,6 +1090,12 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 	}
 }
 
+OperatorPartitionData ParquetMetaDataOperator::GetPartitionData(ClientContext &context,
+                                                                TableFunctionGetPartitionInput &input) {
+	auto &local_state = input.local_state->Cast<ParquetMetadataLocalState>();
+	return OperatorPartitionData(local_state.file_idx.GetIndex());
+}
+
 double ParquetMetaDataOperator::Progress(ClientContext &context, const FunctionData *bind_data_p,
                                          const GlobalTableFunctionState *global_state) {
 	auto &global_data = global_state->Cast<ParquetMetadataGlobalState>();
@@ -1080,56 +1103,57 @@ double ParquetMetaDataOperator::Progress(ClientContext &context, const FunctionD
 }
 
 ParquetMetaDataFunction::ParquetMetaDataFunction()
-    : TableFunction("parquet_metadata", {LogicalType::VARCHAR},
-                    ParquetMetaDataOperator::Function<ParquetMetadataOperatorType::META_DATA>,
+    : TableFunction("parquet_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::META_DATA>) {
 	table_scan_progress = ParquetMetaDataOperator::Progress;
+	get_partition_data = ParquetMetaDataOperator::GetPartitionData;
 }
 
 ParquetSchemaFunction::ParquetSchemaFunction()
-    : TableFunction("parquet_schema", {LogicalType::VARCHAR},
-                    ParquetMetaDataOperator::Function<ParquetMetadataOperatorType::SCHEMA>,
+    : TableFunction("parquet_schema", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::SCHEMA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::SCHEMA>) {
 	table_scan_progress = ParquetMetaDataOperator::Progress;
+	get_partition_data = ParquetMetaDataOperator::GetPartitionData;
 }
 
 ParquetKeyValueMetadataFunction::ParquetKeyValueMetadataFunction()
-    : TableFunction("parquet_kv_metadata", {LogicalType::VARCHAR},
-                    ParquetMetaDataOperator::Function<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>,
+    : TableFunction("parquet_kv_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>) {
 	table_scan_progress = ParquetMetaDataOperator::Progress;
+	get_partition_data = ParquetMetaDataOperator::GetPartitionData;
 }
 
 ParquetFileMetadataFunction::ParquetFileMetadataFunction()
-    : TableFunction("parquet_file_metadata", {LogicalType::VARCHAR},
-                    ParquetMetaDataOperator::Function<ParquetMetadataOperatorType::FILE_META_DATA>,
+    : TableFunction("parquet_file_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::FILE_META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::FILE_META_DATA>) {
 	table_scan_progress = ParquetMetaDataOperator::Progress;
+	get_partition_data = ParquetMetaDataOperator::GetPartitionData;
 }
 
 ParquetBloomProbeFunction::ParquetBloomProbeFunction()
     : TableFunction("parquet_bloom_probe", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
-                    ParquetMetaDataOperator::Function<ParquetMetadataOperatorType::BLOOM_PROBE>,
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::BLOOM_PROBE>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::BLOOM_PROBE>) {
 	table_scan_progress = ParquetMetaDataOperator::Progress;
+	get_partition_data = ParquetMetaDataOperator::GetPartitionData;
 }
 
 ParquetFullMetadataFunction::ParquetFullMetadataFunction()
-    : TableFunction("parquet_full_metadata", {LogicalType::VARCHAR},
-                    ParquetMetaDataOperator::Function<ParquetMetadataOperatorType::FULL_METADATA>,
+    : TableFunction("parquet_full_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::FULL_METADATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::FULL_METADATA>) {
 	table_scan_progress = ParquetMetaDataOperator::Progress;
+	get_partition_data = ParquetMetaDataOperator::GetPartitionData;
 }
 } // namespace duckdb

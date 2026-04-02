@@ -7,7 +7,7 @@ namespace duckdb {
 LogicalPivot::LogicalPivot() : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT) {
 }
 
-LogicalPivot::LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info_p)
+LogicalPivot::LogicalPivot(TableIndex pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT), pivot_index(pivot_idx), bound_pivot(std::move(info_p)) {
 	D_ASSERT(plan);
 	children.push_back(std::move(plan));
@@ -15,14 +15,14 @@ LogicalPivot::LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, Bo
 
 vector<ColumnBinding> LogicalPivot::GetColumnBindings() {
 	vector<ColumnBinding> result;
-	for (idx_t i = 0; i < bound_pivot.types.size(); i++) {
-		result.emplace_back(pivot_index, i);
+	for (auto pivot_col_idx : ProjectionIndex::GetIndexes(bound_pivot.types.size())) {
+		result.emplace_back(pivot_index, pivot_col_idx);
 	}
 	return result;
 }
 
-vector<idx_t> LogicalPivot::GetTableIndex() const {
-	return vector<idx_t> {pivot_index};
+vector<TableIndex> LogicalPivot::GetTableIndex() const {
+	return vector<TableIndex> {pivot_index};
 }
 
 void LogicalPivot::ResolveTypes() {
@@ -32,7 +32,7 @@ void LogicalPivot::ResolveTypes() {
 string LogicalPivot::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", pivot_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", pivot_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

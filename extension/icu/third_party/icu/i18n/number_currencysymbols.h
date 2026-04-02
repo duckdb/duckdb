@@ -11,9 +11,8 @@
 #include "charstr.h"
 #include "number_decimfmtprops.h"
 
-U_NAMESPACE_BEGIN namespace number {
-namespace impl {
-
+U_NAMESPACE_BEGIN
+namespace number::impl {
 
 // Exported as U_I18N_API for tests
 class U_I18N_API CurrencySymbols : public UMemory {
@@ -31,11 +30,17 @@ class U_I18N_API CurrencySymbols : public UMemory {
 
     UnicodeString getNarrowCurrencySymbol(UErrorCode& status) const;
 
+    UnicodeString getFormalCurrencySymbol(UErrorCode& status) const;
+
+    UnicodeString getVariantCurrencySymbol(UErrorCode& status) const;
+
     UnicodeString getCurrencySymbol(UErrorCode& status) const;
 
     UnicodeString getIntlCurrencySymbol(UErrorCode& status) const;
 
     UnicodeString getPluralName(StandardPlural::Form plural, UErrorCode& status) const;
+
+    bool hasEmptyCurrencySymbol() const;
 
   protected:
     // Required fields:
@@ -56,9 +61,7 @@ class U_I18N_API CurrencySymbols : public UMemory {
 CurrencyUnit
 resolveCurrency(const DecimalFormatProperties& properties, const Locale& locale, UErrorCode& status);
 
-
-} // namespace impl
-} // namespace numparse
+} // namespace number::impl
 U_NAMESPACE_END
 
 #endif //__SOURCE_NUMBER_CURRENCYSYMBOLS_H__

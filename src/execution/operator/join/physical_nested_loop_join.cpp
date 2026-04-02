@@ -29,15 +29,12 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
 
 bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		UnifiedVectorFormat vdata;
-		chunk.data[col_idx].ToUnifiedFormat(chunk.size(), vdata);
-
-		if (vdata.validity.AllValid()) {
+		auto entries = chunk.data[col_idx].Validity(chunk.size());
+		if (!entries.CanHaveNull()) {
 			continue;
 		}
 		for (idx_t i = 0; i < chunk.size(); i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
+			if (!entries.IsValid(i)) {
 				return true;
 			}
 		}
@@ -89,13 +86,12 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
 	auto &mask = FlatVector::Validity(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
-		if (!jdata.validity.AllValid()) {
-			for (idx_t i = 0; i < join_keys.size(); i++) {
-				auto jidx = jdata.sel->get_index(i);
-				mask.Set(i, jdata.validity.RowIsValid(jidx));
-			}
+		auto entries = join_keys.data[col_idx].Validity(join_keys.size());
+		if (!entries.CanHaveNull()) {
+			continue;
+		}
+		for (idx_t i = 0; i < join_keys.size(); i++) {
+			mask.Set(i, entries.IsValid(i));
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
@@ -255,7 +251,7 @@ SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &eve
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gsink = input.global_state.Cast<NestedLoopJoinGlobalState>();
 	if (filter_pushdown && !gsink.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(context, nullptr, *gsink.global_filter_state, *this);
+		(void)filter_pushdown->Finalize(context, *gsink.global_filter_state, *this);
 	}
 
 	gsink.right_outer.Initialize(gsink.right_payload_data.Count());
@@ -444,9 +440,9 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		auto &right_payload = state.right_payload;
 
 		// sanity check
-		left_chunk.Verify();
-		right_condition.Verify();
-		right_payload.Verify();
+		left_chunk.Verify(context.client.db);
+		right_condition.Verify(context.client.db);
+		right_payload.Verify(context.client.db);
 
 		// now perform the join
 		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);

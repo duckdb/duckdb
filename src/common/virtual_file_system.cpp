@@ -5,7 +5,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
@@ -265,6 +265,10 @@ void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_pt
 
 string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path, nullptr).PathSeparator(path);
+}
+
+string VirtualFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path_p, opener).CanonicalizePath(path_p, opener);
 }
 
 unique_ptr<MultiFileList> VirtualFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,

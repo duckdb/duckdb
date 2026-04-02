@@ -76,6 +76,8 @@ public:
 	void Unpin();
 	//! Sets the partition index of this tuple data collection
 	void SetPartitionIndex(idx_t index);
+	//! Get chunk ranges that belong to a specific partition index
+	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
 	vector<data_ptr_t> GetRowBlockPointers() const;
 	//! Destroy the blocks corresponding to the chunk indices

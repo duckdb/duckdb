@@ -547,31 +547,32 @@ void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &resul
 	});
 }
 
-string NumericStats::ToString(const BaseStatistics &stats) {
-	return StringUtil::Format("[Min: %s, Max: %s]", NumericStats::MinOrNull(stats).ToString(),
-	                          NumericStats::MaxOrNull(stats).ToString());
+child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
+	if (NumericStats::HasMinMax(stats)) {
+		result.emplace_back("min", NumericStats::MinOrNull(stats));
+		result.emplace_back("max", NumericStats::MaxOrNull(stats));
+	}
+	return result;
 }
 
 template <class T>
 void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel,
                                    idx_t count) {
-	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	auto entries = vector.Values<T>(count);
 	auto min_value = NumericStats::MinOrNull(stats);
 	auto max_value = NumericStats::MaxOrNull(stats);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		auto index = vdata.sel->get_index(idx);
-		if (!vdata.validity.RowIsValid(index)) {
+		auto entry = entries[idx];
+		if (!entry.IsValid()) {
 			continue;
 		}
-		if (!min_value.IsNull() && LessThan::Operation(data[index], min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
+		if (!min_value.IsNull() && LessThan::Operation(entry.value, min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		} // LCOV_EXCL_STOP
-		if (!max_value.IsNull() && GreaterThan::Operation(data[index], max_value.GetValueUnsafe<T>())) {
+		if (!max_value.IsNull() && GreaterThan::Operation(entry.value, max_value.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}
@@ -624,4 +625,6 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 	}
 }
 
+template uint32_t NumericStats::GetMinUnsafe(const BaseStatistics &stats);
+template uint32_t NumericStats::GetMaxUnsafe(const BaseStatistics &stats);
 } // namespace duckdb

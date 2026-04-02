@@ -12,7 +12,7 @@ foreach col <all_types_columns>
 
 query II
 SELECT histogram[min], histogram[max] FROM (
-	SELECT HISTOGRAM("${col}") histogram, MIN("${col}") min, MAX("${col}") max
+	SELECT HISTOGRAM("{col}") histogram, MIN("{col}") min, MAX("{col}") max
 	FROM all_types
 )
 ----
@@ -21,7 +21,7 @@ SELECT histogram[min], histogram[max] FROM (
 # binned histogram
 query II
 SELECT histogram[min], histogram[max] FROM (
-	SELECT HISTOGRAM("${col}", [(select min("${col}") from all_types), ((select max("${col}") from all_types))]) histogram, MIN("${col}") min, MAX("${col}") max
+	SELECT HISTOGRAM("{col}", [(select min("{col}") from all_types), ((select max("{col}") from all_types))]) histogram, MIN("{col}") min, MAX("{col}") max
 	FROM all_types
 )
 ----

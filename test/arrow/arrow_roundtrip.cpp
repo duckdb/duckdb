@@ -89,6 +89,30 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
+TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
+	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
+	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons
+	// in extension metadata (e.g. CRS strings like "ogc:crs84"), causing std::stoi to crash.
+	{
+		string format = "w:16";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+	{
+		string format = "w:1";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+	{
+		string format = "w:128";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+}
+
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
@@ -100,6 +124,21 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UHUGEINT
 	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)", false,
 	                   true);
+
+	// UHUGEINT (lossy - should export as Decimal(38,0), not extension type)
+	{
+		DuckDB db;
+		Connection con(db);
+		auto client_properties = con.context->GetClientProperties();
+		ArrowSchema schema;
+		schema.Init();
+		vector<LogicalType> types = {LogicalType::UHUGEINT};
+		vector<string> names = {"col"};
+		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+		REQUIRE(schema.n_children == 1);
+		REQUIRE(string(schema.children[0]->format) == "d:38,0");
+		schema.release(&schema);
+	}
 
 	// BIT
 	TestArrowRoundtrip("SELECT '0101011'::BIT str FROM range(5) tbl(i)", false, true);

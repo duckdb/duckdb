@@ -2,6 +2,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb_shell {
 

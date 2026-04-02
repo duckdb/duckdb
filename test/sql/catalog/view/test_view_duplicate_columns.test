@@ -1,0 +1,35 @@
+# name: test/sql/catalog/view/test_view_duplicate_columns.test
+# group: [view]
+
+statement ok
+create or replace table basic_table_a as select 42 as column_a;
+
+statement ok
+create or replace table basic_table_b as select 37 as column_a;
+
+statement ok
+create or replace view duplicate_column_view as (
+  from basic_table_a t1
+  cross join basic_table_b t2
+  select
+    t1.*,
+    t2.*
+);
+
+query II
+from duplicate_column_view;
+----
+42	37
+
+query I
+select column_name FROM (describe from duplicate_column_view) order by all;
+----
+column_a
+column_a_1
+
+
+query I
+select column_name from duckdb_columns() where table_name = 'duplicate_column_view' order by all;
+----
+column_a
+column_a_1

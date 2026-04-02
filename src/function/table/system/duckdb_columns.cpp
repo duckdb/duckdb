@@ -8,6 +8,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/query_result.hpp"
 
 #include <set>
 
@@ -102,7 +103,7 @@ public:
 
 	virtual StandardEntry &Entry() = 0;
 	virtual idx_t NumColumns() = 0;
-	virtual const string &ColumnName(idx_t col) = 0;
+	virtual Value ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
 	virtual const Value ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
@@ -128,8 +129,8 @@ public:
 	idx_t NumColumns() override {
 		return entry.GetColumns().LogicalColumnCount();
 	}
-	const string &ColumnName(idx_t col) override {
-		return entry.GetColumn(LogicalIndex(col)).Name();
+	Value ColumnName(idx_t col) override {
+		return Value(entry.GetColumn(LogicalIndex(col)).Name());
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return entry.GetColumn(LogicalIndex(col)).Type();
@@ -158,21 +159,37 @@ private:
 class ViewColumnHelper : public ColumnHelper {
 public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
-		entry.BindView(context);
-		view_columns = entry.GetColumnInfo();
+		try {
+			// try to bind the view if it is not yet bound
+			entry.BindView(context);
+		} catch (std::exception &ex) {
+		}
+		auto view_columns = entry.GetColumnInfo();
+		if (view_columns) {
+			column_names = view_columns->names;
+			types = view_columns->types;
+			QueryResult::DeduplicateColumns(column_names);
+			bound_view = true;
+		} else {
+			// view is not bound - emit a single placeholder column
+			types.push_back(LogicalTypeId::INVALID);
+		}
 	}
 
 	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return view_columns->types.size();
+		return types.size();
 	}
-	const string &ColumnName(idx_t col) override {
-		return col < entry.aliases.size() ? entry.aliases[col] : view_columns->names[col];
+	Value ColumnName(idx_t col) override {
+		if (types[0].id() == LogicalTypeId::INVALID) {
+			return Value();
+		}
+		return Value(col < entry.aliases.size() ? entry.aliases[col] : column_names[col]);
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return view_columns->types[col];
+		return types[col];
 	}
 	const Value ColumnDefault(idx_t col) override {
 		return Value();
@@ -181,12 +198,14 @@ public:
 		return true;
 	}
 	const Value ColumnComment(idx_t col) override {
-		return entry.GetColumnComment(col);
+		return bound_view ? entry.GetColumnComment(col) : Value();
 	}
 
 private:
 	ViewCatalogEntry &entry;
-	shared_ptr<ViewColumnInfo> view_columns;
+	vector<string> column_names;
+	vector<LogicalType> types;
+	bool bound_view = false;
 };
 
 unique_ptr<ColumnHelper> ColumnHelper::Create(ClientContext &context, CatalogEntry &entry) {
@@ -220,7 +239,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// table_oid, BIGINT
 		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.oid)));
 		// column_name, VARCHAR
-		output.SetValue(col++, index, Value(ColumnName(i)));
+		output.SetValue(col++, index, ColumnName(i));
 		// column_index, INTEGER
 		output.SetValue(col++, index, Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1)));
 		// comment, VARCHAR
@@ -228,14 +247,14 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// internal, BOOLEAN
 		output.SetValue(col++, index, Value::BOOLEAN(entry.internal));
 		// column_default, VARCHAR
-		output.SetValue(col++, index, Value(ColumnDefault(i)));
+		output.SetValue(col++, index, ColumnDefault(i));
 		// is_nullable, BOOLEAN
 		output.SetValue(col++, index, Value::BOOLEAN(IsNullable(i)));
 		// data_type, VARCHAR
 		const LogicalType &type = ColumnType(i);
-		output.SetValue(col++, index, Value(type.ToString()));
+		output.SetValue(col++, index, type.id() == LogicalTypeId::INVALID ? Value() : Value(type.ToString()));
 		// data_type_id, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(int(type.id())));
+		output.SetValue(col++, index, type.id() == LogicalTypeId::INVALID ? Value() : Value::BIGINT(int(type.id())));
 		if (type == LogicalType::VARCHAR) {
 			// FIXME: need check constraints in place to set this correctly
 			// character_maximum_length, INTEGER

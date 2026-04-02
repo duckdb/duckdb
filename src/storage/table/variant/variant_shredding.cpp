@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
@@ -241,7 +247,8 @@ public:
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
-	void AnalyzeVariantValues(UnifiedVariantVectorData &variant, Vector &value, optional_ptr<const SelectionVector> sel,
+	void AnalyzeVariantValues(UnifiedVariantVectorData &variant, optional_ptr<Vector> untyped_values,
+	                          optional_ptr<const SelectionVector> sel,
 	                          optional_ptr<const SelectionVector> value_index_sel,
 	                          optional_ptr<const SelectionVector> result_sel,
 	                          DuckDBVariantShreddingState &shredding_state, idx_t count);
@@ -367,29 +374,50 @@ static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
 	}
 }
 
-static LogicalType SetShreddedType(const LogicalType &typed_value) {
+static bool CanFlattenShreddedType(const LogicalType &type) {
+	if (type.IsNested()) {
+		// cannot flatten nested types
+		return false;
+	}
+	return true;
+}
+
+static LogicalType SetShreddedType(const LogicalType &typed_value, bool fully_consistent) {
+	if (fully_consistent && CanFlattenShreddedType(typed_value)) {
+		// fully consistent and this is a primitive type - we can flatten the type entirely
+		return typed_value;
+	}
 	child_list_t<LogicalType> child_types;
-	child_types.emplace_back("untyped_value_index", LogicalType::UINTEGER);
 	child_types.emplace_back("typed_value", typed_value);
+	if (!fully_consistent) {
+		child_types.emplace_back("untyped_value_index", LogicalType::UINTEGER);
+	}
 	return LogicalType::STRUCT(child_types);
 }
 
-bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type) const {
-	idx_t max_count = 0;
-	uint8_t type_index = 0;
-	if (column.type_counts[0] == column.total_count) {
+bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
+                                                    optional_idx parent_count) const {
+	if (parent_count.IsValid() && column.total_count > parent_count.GetIndex()) {
+		throw InternalException("Column count is larger than parent count - this should not be possible");
+	}
+	auto total_value_count = parent_count.IsValid() ? parent_count.GetIndex() : column.total_count;
+	const auto null_count = column.type_counts[0];
+	if (null_count == column.total_count) {
 		//! All NULL, emit INT32
-		out_type = SetShreddedType(LogicalTypeId::INTEGER);
+		auto fully_consistent = null_count == total_value_count;
+		out_type = SetShreddedType(LogicalTypeId::INTEGER, fully_consistent);
 		return true;
 	}
 
+	idx_t max_count = 0;
+	uint8_t type_index = 0;
 	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
 	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
 		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL) && !column.decimal_consistent) {
 			//! Can't shred on DECIMAL, not consistent
 			continue;
 		}
-		idx_t count = column.type_counts[i];
+		idx_t count = column.type_counts[i] + null_count;
 		if (!max_count || count > max_count) {
 			max_count = count;
 			type_index = i;
@@ -400,20 +428,23 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 		return false;
 	}
 
+	bool fully_consistent = max_count == total_value_count;
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
 		child_list_t<LogicalType> child_types;
 		for (auto &entry : column.field_stats) {
 			auto &child_column = GetColumnStats(entry.second);
 			LogicalType child_type;
-			if (GetShreddedTypeInternal(child_column, child_type)) {
+			if (GetShreddedTypeInternal(child_column, child_type, total_value_count)) {
 				child_types.emplace_back(entry.first, child_type);
 			}
 		}
 		if (child_types.empty()) {
 			return false;
 		}
+		// always set objects as not being fully consistent
+		fully_consistent = false;
 		auto shredded_type = LogicalType::STRUCT(child_types);
-		out_type = SetShreddedType(shredded_type);
+		out_type = SetShreddedType(shredded_type, fully_consistent);
 		return true;
 	}
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::ARRAY)) {
@@ -424,19 +455,19 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 			return false;
 		}
 		auto shredded_type = LogicalType::LIST(element_type);
-		out_type = SetShreddedType(shredded_type);
+		out_type = SetShreddedType(shredded_type, fully_consistent);
 		return true;
 	}
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::DECIMAL)) {
 		auto shredded_type = LogicalType::DECIMAL(static_cast<uint8_t>(column.decimal_width),
 		                                          static_cast<uint8_t>(column.decimal_scale));
-		out_type = SetShreddedType(shredded_type);
+		out_type = SetShreddedType(shredded_type, fully_consistent);
 		return true;
 	}
 	auto type_id = static_cast<VariantLogicalType>(type_index);
 
 	auto shredded_type = ProduceShreddedType(type_id);
-	out_type = SetShreddedType(shredded_type);
+	out_type = SetShreddedType(shredded_type, fully_consistent);
 	return true;
 }
 
@@ -522,13 +553,18 @@ static vector<uint32_t> UnshreddedObjectChildren(UnifiedVariantVectorData &varia
 
 //! ~~Write the unshredded values~~, also receiving the 'untyped_value_index' Vector to populate
 //! Marking the rows that are shredded in the shredding state
-void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &variant, Vector &value,
+void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &variant,
+                                                  optional_ptr<Vector> untyped_values,
                                                   optional_ptr<const SelectionVector> sel,
                                                   optional_ptr<const SelectionVector> value_index_sel,
                                                   optional_ptr<const SelectionVector> result_sel,
                                                   DuckDBVariantShreddingState &shredding_state, idx_t count) {
-	auto &validity = FlatVector::Validity(value);
-	auto untyped_data = FlatVector::GetData<uint32_t>(value);
+	//
+	// auto &validity = FlatVector::Validity(value);
+	uint32_t *untyped_data = nullptr;
+	if (untyped_values) {
+		untyped_data = FlatVector::GetData<uint32_t>(*untyped_values);
+	}
 
 	for (uint32_t i = 0; i < static_cast<uint32_t>(count); i++) {
 		uint32_t value_index = 0;
@@ -549,8 +585,10 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 		if (variant.RowIsValid(row) && shredding_state.ValueIsShredded(variant, row, value_index)) {
 			shredding_state.SetShredded(row, value_index, result_index);
 			if (shredding_state.type.id() != LogicalTypeId::STRUCT) {
-				//! Value is shredded, directly write a NULL to the 'value' if the type is not an OBJECT
-				validity.SetInvalid(result_index);
+				//! Value is shredded, directly write a `NULL` to the 'value' if the type is not an OBJECT
+				if (untyped_values) {
+					FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+				}
 				continue;
 			}
 
@@ -558,9 +596,15 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			auto unshredded_children = UnshreddedObjectChildren(variant, row, value_index, shredding_state);
 			if (unshredded_children.empty()) {
 				//! Fully shredded object
-				validity.SetInvalid(result_index);
+				if (untyped_values) {
+					FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+				}
 			} else {
 				//! Deal with partially shredded objects
+				if (!untyped_data) {
+					throw InvalidInputException(
+					    "Failed to shred variant value - untyped_value was not set but inconsistent values were found");
+				}
 				unshredded_values[row].emplace_back(value_index, untyped_data[result_index],
 				                                    std::move(unshredded_children));
 			}
@@ -569,29 +613,43 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 
 		//! Deal with unshredded values
 		if (!variant.RowIsValid(row) || variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
-			//! 0 is reserved for NULL
-			untyped_data[result_index] = 0;
+			//! NULL is reserved for NULL Variant values
+			if (untyped_values) {
+				FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+			}
 		} else {
+			if (!untyped_data) {
+				throw InvalidInputException(
+				    "Failed to shred variant value - untyped_value was not set but inconsistent values were found");
+			}
 			unshredded_values[row].emplace_back(value_index, untyped_data[result_index]);
 		}
 	}
 }
 
-//! Receive a 'shredded' result Vector, consisting of the 'untyped_value_index' and the 'typed_value' Vector
+//! Receive a 'shredded' result Vector, consisting of the 'typed_value' and the 'untyped_value_index' Vector
 void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
                                                 optional_ptr<const SelectionVector> sel,
                                                 optional_ptr<const SelectionVector> value_index_sel,
                                                 optional_ptr<const SelectionVector> result_sel, idx_t count) {
-	auto &child_vectors = StructVector::GetEntries(result);
+	reference<Vector> typed_value_ref(result);
+	optional_ptr<Vector> untyped_value_index;
+	if (result.GetType().id() == LogicalTypeId::STRUCT) {
+		// "typed_value", "untyped_value"
+		auto &child_vectors = StructVector::GetEntries(result);
 #ifdef D_ASSERT_IS_ENABLED
-	auto &result_type = result.GetType();
-	D_ASSERT(result_type.id() == LogicalTypeId::STRUCT);
-	auto &child_types = StructType::GetChildTypes(result_type);
-	D_ASSERT(child_types.size() == child_vectors.size());
+		auto &result_type = result.GetType();
+		D_ASSERT(result_type.id() == LogicalTypeId::STRUCT);
+		auto &child_types = StructType::GetChildTypes(result_type);
+		D_ASSERT(child_types.size() == child_vectors.size());
 #endif
-
-	auto &untyped_value_index = *child_vectors[0];
-	auto &typed_value = *child_vectors[1];
+		typed_value_ref = child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
+		if (child_vectors.size() > 1) {
+			D_ASSERT(child_vectors.size() == 2);
+			untyped_value_index = child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
+		}
+	}
+	auto &typed_value = typed_value_ref.get();
 
 	DuckDBVariantShreddingState shredding_state(typed_value.GetType(), count);
 	AnalyzeVariantValues(variant, untyped_value_index, sel, value_index_sel, result_sel, shredding_state, count);
@@ -627,10 +685,10 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	//! First traverse the Variant to write the shredded values and collect the 'untyped_value_index'es
 	DuckDBVariantShredding shredding(count);
-	shredding.WriteVariantValues(variant, *child_vectors[1], nullptr, nullptr, nullptr, count);
+	shredding.WriteVariantValues(variant, child_vectors[1], nullptr, nullptr, nullptr, count);
 
 	//! Now we can write the unshredded values
-	auto &unshredded = *child_vectors[0];
+	auto &unshredded = child_vectors[0];
 	auto original_keys_size = ListVector::GetListSize(VariantVector::GetKeys(input));
 	auto original_children_size = ListVector::GetListSize(VariantVector::GetChildren(input));
 	auto original_values_size = ListVector::GetListSize(VariantVector::GetValues(input));
@@ -713,7 +771,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 #ifdef DEBUG
 	Vector roundtrip_result(LogicalType::VARIANT(), count);
-	VariantColumnData::UnshredVariantData(output, roundtrip_result, count);
+	VariantUtils::UnshredVariantData(output, roundtrip_result, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto input_val = input.GetValue(i);

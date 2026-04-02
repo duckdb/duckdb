@@ -112,7 +112,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = op.Cast<LogicalCreateIndex>();
-		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.GetColumns().LogicalColumnCount());
+		bindings = LogicalOperator::GenerateColumnBindings(TableIndex(0),
+		                                                   create_index.table.GetColumns().LogicalColumnCount());
 		// TODO: fill types in too (clearing skips type checks)
 		types.clear();
 		VisitOperatorExpressions(op);
@@ -163,13 +164,12 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		auto &rec = op.Cast<LogicalRecursiveCTE>();
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
+
+		types.clear();
+		VisitOperatorExpressions(op);
 		types = op.types;
-		for (auto &expr : rec.key_targets) {
-			VisitExpression(&expr);
-		}
 		return;
 	}
 	default:
@@ -196,12 +196,12 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 				if (bindings.size() != types.size()) {
 					throw InternalException(
 					    "Failed to bind column reference \"%s\" [%d.%d]: inequal num bindings/types (%llu != %llu)",
-					    expr.GetAlias(), expr.binding.table_index, expr.binding.column_index, bindings.size(),
+					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index, bindings.size(),
 					    types.size());
 				}
 				if (expr.return_type != types[i]) {
 					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
-					                        expr.GetAlias(), expr.binding.table_index, expr.binding.column_index,
+					                        expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index,
 					                        expr.return_type.ToString(), types[i].ToString());
 				}
 			}
@@ -216,28 +216,28 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.GetAlias(),
-	                        expr.binding.table_index, expr.binding.column_index,
+	                        expr.binding.table_index.index, expr.binding.column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }
 
-unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
-	unordered_set<idx_t> result;
+unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
+	unordered_set<TableIndex> result;
 	for (auto &child : op.children) {
 		auto child_indexes = VerifyInternal(*child);
 		for (auto index : child_indexes) {
-			D_ASSERT(index != DConstants::INVALID_INDEX);
+			D_ASSERT(index.IsValid());
 			if (result.find(index) != result.end()) {
-				throw InternalException("Duplicate table index \"%lld\" found", index);
+				throw InternalException("Duplicate table index \"%lld\" found", index.index);
 			}
 			result.insert(index);
 		}
 	}
 	auto indexes = op.GetTableIndex();
 	for (auto index : indexes) {
-		D_ASSERT(index != DConstants::INVALID_INDEX);
+		D_ASSERT(index.IsValid());
 		if (result.find(index) != result.end()) {
-			throw InternalException("Duplicate table index \"%lld\" found", index);
+			throw InternalException("Duplicate table index \"%lld\" found", index.index);
 		}
 		result.insert(index);
 	}

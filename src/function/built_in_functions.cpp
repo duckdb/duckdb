@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -87,6 +88,18 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 	CreateCopyFunctionInfo info(std::move(function));
 	info.internal = true;
 	catalog.CreateCopyFunction(transaction, info);
+}
+
+void BuiltinFunctions::AddFunction(WindowFunction function) {
+	CreateWindowFunctionInfo info(std::move(function));
+	info.internal = true;
+	catalog.CreateFunction(transaction, info);
+}
+
+void BuiltinFunctions::AddFunction(WindowFunctionSet set) {
+	CreateWindowFunctionInfo info(std::move(set));
+	info.internal = true;
+	catalog.CreateFunction(transaction, info);
 }
 
 struct ExtensionFunctionInfo : public ScalarFunctionInfo {

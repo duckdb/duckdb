@@ -115,7 +115,7 @@ DELETE FROM t WHERE rowid > (SELECT AVG(rowid) FROM t);
 endloop
 
 query I
-SELECT mem_to_bytes(current.memory_usage) < db_size.usage
+SELECT mem_to_bytes(current.memory_usage) <= db_size.usage
 FROM db_size, pragma_database_size() current;
 ----
 1

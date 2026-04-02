@@ -179,6 +179,9 @@ UndoBufferProperties DuckTransaction::GetUndoProperties() {
 }
 
 bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
+	if (is_checkpoint_transaction) {
+		return false;
+	}
 	if (!ChangesMade()) {
 		// read-only transactions cannot trigger an automated checkpoint
 		return false;
@@ -198,6 +201,10 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 		return false;
 	}
 	if (db.IsSystem()) {
+		return false;
+	}
+	if (db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
+		// WAL writes are explicitly disabled
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();

@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/test_window_self_join.test
-# description: Test Window Self-Join "constant aggrgate" optimizer
+# description: Test Window Self-Join "constant aggregate" optimizer
 # group: [optimizer]
 
 statement ok
@@ -150,3 +150,56 @@ QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
     AND count(*) OVER(PARTITION BY date, train_number) = 1;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# 12. Case ORDER BY clause
+query II
+EXPLAIN 
+SELECT *, 
+	list(train_number) OVER(
+		PARTITION BY date 
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+		
+FROM services 
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III
+SELECT 
+	*,
+	list(train_number) OVER(
+		PARTITION BY date 
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+		
+FROM services 
+----
+2024-01-01	100	[101, 100, 100]
+2024-01-01	100	[101, 100, 100]
+2024-01-01	101	[101, 100, 100]
+2024-01-02	100	[100]
+
+# 13. ROWS framing should not apply
+query II
+explain
+SELECT seq,
+       sum(seq) OVER (PARTITION BY grp ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumsum
+FROM (VALUES (1,'A'),(2,'A'),(3,'A'),(1,'B'),(2,'B')) AS t(seq, grp)
+ORDER BY grp, seq;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+foreach framing RANGE GROUPS
+
+query II
+explain
+SELECT seq,
+       sum(seq) OVER (PARTITION BY grp {framing} BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumsum
+FROM (VALUES (1,'A'),(2,'A'),(3,'A'),(1,'B'),(2,'B')) AS t(seq, grp)
+ORDER BY grp, seq;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+endloop

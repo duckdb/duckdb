@@ -1,0 +1,38 @@
+# name: test/optimizer/joins/delim_left_join_pushdown.test
+# description: Verify left-join pushdown into lateral joins is not over-eager
+# group: [joins]
+
+statement ok
+create or replace table c(id int, u_id int);
+
+statement ok
+insert into c values (1, 1), (2,2), (3,3), (4, null);
+
+statement ok
+create or replace table t(id int, name text, u_ids int[]);
+
+statement ok
+insert into t values (1, 'one', [1]), (2, 'two', [1, 2]), (3, 'three', null);
+
+query II
+select c.id, ts.names
+from c LEFT JOIN (
+  select array_agg(t.name)
+  from t where c.u_id = any(t.u_ids)
+) as ts(names) on true
+where ts.names IS NOT NULL;
+----
+1	[one, two]
+2	[two]
+
+query II
+select c.id, ts.names
+from c LEFT JOIN (
+  select array_agg(t.name)
+  from t where c.u_id = any(t.u_ids)
+) as ts(names) on true
+where c.id>=2
+----
+2	[two]
+3	NULL
+4	NULL

@@ -1,0 +1,510 @@
+# name: test/sql/cte/recursive_cte_key_aggregation.test
+# description: Recursive CTEs with USING KEY and aggregations
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification;
+
+query II
+WITH RECURSIVE tbl(a, b) USING KEY (a , max(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT a, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+1	5
+
+query II
+WITH RECURSIVE tbl(a, b) USING KEY (a , avg(b)) AS (
+	SELECT 1, 5
+	  UNION
+	SELECT a, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+1	2.5
+
+query III
+WITH RECURSIVE tbl(a, b, c) USING KEY (a , avg(b), list(c)) AS (
+	SELECT 1, 5, NULL :: DOUBLE
+	  UNION
+	SELECT tbl.a, tbl.b - 1, rec.b
+	FROM tbl, recurring.tbl AS rec
+	WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	2.5	[NULL, 5.0, 4.5, 4.0, 3.5, 3.0]
+
+statement ok
+CREATE TABLE knows(person1id INT, person2id INT);
+
+statement ok
+INSERT INTO  knows VALUES (1, 2), (2, 3), (1, 3);
+
+query IIII
+WITH RECURSIVE dvr(here, there, via, len) USING KEY (here, there , arg_min(via, len), min(len)) AS (
+	SELECT n.person1id AS here, n.person2id AS there, n.person2id AS via, 1 AS len
+	FROM knows AS n
+		UNION
+	SELECT n.person1id AS here, dvr.there, dvr.here AS via, 1 + dvr.len AS len
+	FROM dvr
+	JOIN knows AS n ON
+	(n.person2id = dvr.here AND n.person1id <> dvr.there))
+TABLE dvr
+ORDER BY here, there;
+----
+1	2	2	1
+1	3	3	1
+2	3	3	1
+
+# use correlated column in recursive CTE with aggregation
+query IIII
+SELECT  *
+FROM    range(1, 4) AS _(l),
+   LATERAL (
+     WITH RECURSIVE cte(a, b, c) USING KEY (a , list(b)) AS (
+       SELECT 1, l, 3
+         union
+       SELECT a, l + 1, c - 1
+       FROM   recurring.cte
+       WHERE  c > 0)
+	TABLE cte) ORDER BY l;
+----
+1	1	[1, 2, 2, 2]	0
+2	1	[2, 3, 3, 3]	0
+3	1	[3, 4, 4, 4]	0
+
+#######################################################################
+# Every column reference in the aggregate list must be unique
+
+# Duplicate column reference in aggregate list
+statement error
+WITH RECURSIVE tbl(a,b,c) USING KEY (a, b , list(c), max(c)) AS (
+	SELECT 1, 1, NULL
+    	UNION
+    SELECT tbl.a, tbl.b - 1, a.b
+	FROM tbl, recurring.tbl AS a
+	WHERE tbl.b > 0)
+SELECT * FROM tbl;
+----
+<REGEX>:.*referenced multiple times.*
+
+# Duplicate column reference in aggregate list and key list
+statement error
+WITH RECURSIVE tbl(a,b,c) USING KEY (a, c , list(b), max(c)) AS (
+	SELECT 1, 1, NULL
+    	UNION
+    SELECT tbl.a, tbl.b - 1, a.b
+	FROM tbl, recurring.tbl AS a
+	WHERE tbl.b > 0)
+SELECT * FROM tbl;
+----
+<REGEX>:.*cannot be used as both key and aggregate.*
+
+statement error
+WITH RECURSIVE tbl(a,b,c) USING KEY (list(c)) AS (
+	SELECT 1, 4, NULL
+		UNION
+	SELECT a, b - 1, b
+	FROM tbl
+	WHERE tbl.b > 0)
+SELECT * FROM tbl;
+----
+<REGEX>:.*requires at least one key column.*
+
+# Duplicate column reference in key list
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (a, a , list(b)) AS (
+	SELECT 1, 1, NULL :: INT[]
+    	UNION
+    SELECT tbl.a, tbl.b - 1, a.b
+	FROM tbl, recurring.tbl AS a
+	WHERE tbl.b > 0)
+SELECT * FROM tbl;
+----
+1	[1, 0]	[1]
+
+# Use alias to set aggregation destination
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a , string_agg(':a') AS b) AS (
+	VALUES (1,2), (1,3)
+		UNION
+	SELECT a, b + 1
+	FROM tbl
+	WHERE b < 4)
+SELECT * FROM tbl;
+----
+1	:a,:a,:a,:a,:a
+
+# constant as an aggregate argument
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a , string_agg(b, ', ') ) AS (
+    SELECT 1, 5
+		UNION
+	SELECT tbl.a, tbl.b - 1
+    FROM tbl
+    WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	5, 4, 3, 2, 1, 0
+
+# All aggregate functions
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a , any_value(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT tbl.a, tbl.b - 1
+	FROM tbl
+	WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	5
+
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a , arbitrary(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT tbl.a, tbl.b - 1
+	FROM tbl
+	WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	5
+
+query III
+WITH RECURSIVE tbl(key,b,c) USING KEY (key, arg_max(c, b) AS c) AS (
+	SELECT 1, 5, 5/5
+		UNION
+	SELECT key, b - 1, 5 / b
+	FROM tbl
+	WHERE b > 0
+) TABLE tbl;
+----
+1	0	1.0
+
+query II
+WITH RECURSIVE tbl(key,b) USING KEY (key , bit_or(b)) AS (
+	SELECT 1, '0001' :: BIT
+		UNION
+	SELECT key, b << 1
+	FROM tbl
+	WHERE b < '1000' :: BIT
+) TABLE tbl;
+----
+1	1111
+
+query II
+WITH RECURSIVE tbl(key,b) USING KEY (key, bit_and(b)) AS (
+	SELECT 1, '1111' :: BIT
+		UNION
+	SELECT key, b << 1
+	FROM tbl
+	WHERE b > '0000' :: BIT
+) TABLE tbl;
+----
+1	0000
+
+query II
+WITH RECURSIVE tbl(key,b) USING KEY (key , bit_xor(b)) AS (
+	SELECT 1, '1111' :: BIT
+		UNION
+	SELECT key, b << 1
+	FROM tbl
+	WHERE b > '0000' :: BIT
+) TABLE tbl;
+----
+1	0101
+
+statement ok
+CREATE TABLE tinyints(c TINYINT, d TINYINT);
+
+statement ok
+INSERT INTO tinyints VALUES(1, 1), (2, 8), (3, 3), (4, 12), (5, 7), (6, 1), (7, 2), (8, 8);
+
+query I
+WITH RECURSIVE tbl(key, iter, acc) USING KEY (key, bitstring_agg(acc, 1, 12)) AS (
+	SELECT c, 1, d
+	FROM tinyints
+	WHERE c = 1
+		UNION
+	SELECT key, iter + 1, d
+	FROM tbl, tinyints AS t(c,d)
+	WHERE c = iter AND iter < 8
+) SELECT acc FROM tbl;
+----
+111000110001
+
+query IIII
+WITH RECURSIVE tbl(key, iter, b, c) USING KEY (key, bool_and(b), bool_or(c)) AS (
+	SELECT 1, 1, TRUE, TRUE
+		UNION
+	SELECT key, iter + 1, NOT b, NOT c
+	FROM tbl
+	WHERE iter < 8
+) TABLE tbl;
+----
+1	8	FALSE	TRUE
+
+query III
+WITH RECURSIVE tbl(key, iter, c) USING KEY (key, count() AS iter, count(c)) AS (
+	SELECT 1, 1, 1
+		UNION
+	SELECT key, iter + 1, c
+	FROM tbl
+	WHERE iter < 8
+) TABLE tbl;
+----
+1	8	8
+
+query II
+WITH RECURSIVE tbl(key,b) USING KEY (key, countif(b % 2 = 0) AS b) AS (
+	SELECT 1, 0
+		UNION
+	SELECT key, b + 1
+	FROM tbl
+	WHERE b < 10)
+TABLE tbl;
+----
+1	6
+
+query I
+WITH RECURSIVE tbl(key,b) USING KEY (key, histogram(b, [0, 1, 10]) AS b) AS (
+	SELECT 1, 0 :: DOUBLE
+		UNION
+	SELECT key, tbl.b + 0.5
+	FROM tbl
+	WHERE tbl.b < 10)
+	SELECT b FROM tbl;
+----
+{0.0=1, 1.0=2, 10.0=18}
+
+query II
+WITH RECURSIVE tbl(key,b) USING KEY (key, min(b, 3) AS b) AS (
+	SELECT 1, 5
+		UNION
+	SELECT key, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+1	[0, 1, 2]
+
+query II
+WITH RECURSIVE tbl(key, b) USING KEY (key, product(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT key, b - 1
+	FROM tbl
+	WHERE b > 1)
+TABLE tbl;
+----
+1	120
+
+query I
+WITH RECURSIVE tbl(key, iter, b) USING KEY (key, approx_quantile(b, [0.5, 0.4, 0.1]) AS b) AS (
+	SELECT 1, 1, 0
+		UNION
+	SELECT key, iter + 1, iter
+	FROM tbl, VALUES (2, 1), (3, 2), (4, 10) AS tab(id, col)
+	WHERE iter + 1 = id)
+SELECT b FROM tbl;
+----
+[2, 1, 0]
+
+statement ok
+CREATE TABLE alternating_sequences(it, i) AS SELECT 1, 0 FROM range(10000) UNION ALL SELECT 2, 1 FROM range(100000) UNION ALL SELECT 3, 2 FROM range(10);
+
+query I
+WITH RECURSIVE tbl(key, iter, i) USING KEY (key, approx_top_k(i, 3) AS i) AS (
+	SELECT 1, 0, 0
+		UNION
+	SELECT key, iter + 1, i
+	FROM tbl, alternating_sequences AS a
+	WHERE iter + 1 = a.it)
+SELECT approx_top_k(i, 3) FROM alternating_sequences;
+----
+[1, 0, 2]
+
+
+statement ok
+CREATE TABLE aggr(it int, k int, v decimal(10,2), v2 decimal(10, 2));
+
+statement ok
+INSERT INTO aggr values(1, 1, 10, null),(1, 2, 10, 11), (2, 2, 20, 22), (3, 2, 25, null), (4, 2, 30, 35);
+
+query II
+WITH RECURSIVE tbl(iter, k, v, v2) USING KEY (k, corr(v, v2) AS v2) AS (
+	SELECT it, k, v, v2
+	FROM aggr
+	WHERE it = 1
+		UNION
+	SELECT tbl.iter + 1, tbl.k, a.v, a.v2
+	FROM tbl, aggr AS a
+	WHERE tbl.iter + 1 = a.it AND tbl.k = a.k
+) SELECT k, v2 FROM tbl;
+----
+1	NULL
+2	0.9988445981
+
+statement ok
+CREATE TABLE integers(iter INTEGER, x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 10,NULL), (2, 10,11), (3, 20,22), (4, 25,NULL), (5, 30,35);
+
+query II
+WITH RECURSIVE tbl(key, iter, x, y) USING KEY (key, covar_samp(x,y) AS x, covar_pop(x, y) AS y) AS (
+	SELECT 1, iter, x, y
+	FROM integers
+	WHERE iter = 1
+		UNION
+	SELECT tbl.key, tbl.iter + 1, a.x, a.y
+	FROM tbl, integers AS a
+	WHERE tbl.iter + 1 = a.iter
+) SELECT x, y FROM tbl;
+----
+120.0	80.0
+
+statement ok
+CREATE TABLE names (it int, name string)
+
+statement ok
+INSERT INTO names VALUES (1, 'pedro'), (2, 'pedro'), (3, 'pedro'),(4, 'hannes'),(5, 'hannes'),(6, 'mark'),(7, null);
+
+query I
+WITH RECURSIVE tbl (key, iter, name) USING KEY (key, entropy(name) AS name) AS (
+	SELECT 1, it, name
+	FROM names
+	WHERE it = 1
+		UNION
+	SELECT tbl.key, tbl.iter + 1, n.name
+	FROM tbl, names AS n
+	WHERE tbl.iter + 1 = n.it)
+SELECT name FROM tbl;
+----
+1.459148
+
+statement ok
+create table kur(it int, k int, v int, v2 int);
+
+statement ok
+insert into kur values
+    (1, 1, 10, null),
+    (2, 2, 10, 11),
+    (3, 2, 10, 15),
+    (4, 2, 10, 18),
+    (5, 2, 20, 22),
+    (6, 2, 20, 25),
+    (7, 2, 25, null),
+    (8, 2, 30, 35),
+    (9, 2, 30, 40),
+    (10, 2, 30, 50),
+    (11, 2, 30, 51);
+
+query III
+WITH RECURSIVE tbl(key, iter, k, v, v2) USING KEY (key, kurtosis(k) AS k, kurtosis(v) AS v, kurtosis(v2) AS v2) AS (
+	SELECT 1, it, k, v, v2
+	FROM kur
+	WHERE it = 1
+		UNION
+	SELECT 1, tbl.iter + 1, a.k, a.v, a.v2
+	FROM tbl, kur AS a
+	WHERE tbl.iter + 1 = a.it
+) SELECT k, v, v2 FROM tbl;
+----
+11.000000	-1.961428	-1.445120
+
+# Use of non-aggregate function in USING KEY
+statement error
+WITH RECURSIVE tbl (a,b) USING KEY (a, b+1) AS (
+	SELECT 1, 1
+   		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*can't be used in the USING KEY clause.*
+
+# Use of other subexpressions in USING KEY
+statement error
+WITH RECURSIVE tbl (a,b) USING KEY (a, avg(b) :: INT) AS (
+	SELECT 1, 1
+   		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*can't be used in the USING KEY clause.*
+
+# Use of window function in USING KEY not allowed
+statement error
+WITH RECURSIVE tbl (a,b) USING KEY (a, sum(b) OVER ()) AS (
+	SELECT 1, 1
+   		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*can't be used in the USING KEY clause.*
+
+# star expression
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a, avg(*)) AS (
+	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*USING KEY, an aggregate must either have a column reference.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a, avg(*) AS b) AS (
+  	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*No function matches the given name and argument types.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a, avg(* :: Int) AS b) AS (
+  	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*STAR expression is not supported here.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a AS b, sum(b) AS b) AS (
+	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*only direct calls to an aggregate function can have an alias.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a AS b, max(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT a, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+<REGEX>:.*only direct calls to an aggregate function can have an alias.*

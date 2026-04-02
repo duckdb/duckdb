@@ -1,4 +1,6 @@
 #include "duckdb/parser/statement/load_statement.hpp"
+#include "duckdb/parser/statement/update_extensions_statement.hpp"
+#include "duckdb/parser/parsed_data/update_extensions_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "ast/extension_repository_info.hpp"
 
@@ -23,7 +25,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(PEGTra
 	auto info = make_uniq<LoadInfo>();
 	auto opt_force = list_pr.Child<OptionalParseResult>(0).HasResult();
 	info->load_type = opt_force ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
-	info->filename = list_pr.Child<IdentifierParseResult>(2).identifier;
+	auto extension_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	info->filename = extension_name.name;
 	info->repo_is_alias = false;
 	auto &from_source_opt = list_pr.Child<OptionalParseResult>(3);
 	if (from_source_opt.HasResult()) {
@@ -52,10 +55,33 @@ ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSource(PEGTransforme
 	return result;
 }
 
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
+	// UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
+	// child 0: 'UPDATE', child 1: 'EXTENSIONS', child 2: optional Parens(List(Identifier))
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<UpdateExtensionsStatement>();
+	auto info = make_uniq<UpdateExtensionsInfo>();
+
+	auto &opt = list_pr.Child<OptionalParseResult>(2);
+	if (opt.HasResult()) {
+		auto inner = ExtractResultFromParens(opt.optional_result);
+		auto ext_list = ExtractParseResultsFromList(inner);
+		for (auto &ext : ext_list) {
+			info->extensions_to_update.emplace_back(ext->Cast<IdentifierParseResult>().identifier);
+		}
+	}
+
+	result->info = std::move(info);
+	return std::move(result);
+}
+
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(1).identifier;
+	auto version = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
+	return version.name;
 }
 
 } // namespace duckdb

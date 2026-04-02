@@ -1,0 +1,44 @@
+# name: test/sql/aggregate/aggregates/test_stddev_export_state.test
+# description: STDDEV aggregations state export
+# group: [aggregates]
+
+statement ok
+create table stddev_test(val integer, grp integer)
+
+statement ok
+insert into stddev_test values (42, 1), (43, 1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)
+
+# test struct-based state export
+statement ok
+CREATE TABLE stddev_state AS SELECT
+    STDDEV_POP(val) EXPORT_STATE pop_state,
+    VAR_SAMP(val) EXPORT_STATE samp_state,
+    STDDEV_SAMP(val) EXPORT_STATE stddev_samp_state,
+    VAR_POP(val) EXPORT_STATE var_pop_state,
+    SEM(val) EXPORT_STATE sem_state
+FROM stddev_test;
+
+query T
+SELECT pop_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT samp_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT stddev_samp_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT var_pop_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT sem_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}

@@ -2,7 +2,7 @@
 # description: Test nested struct projection pushdown
 # group: [struct]
 
-load __TEST_DIR__/nested_struct_projection_pushdown.db
+load {TEST_DIR}/nested_struct_projection_pushdown.db readwrite v1.5.0
 
 require parquet
 
@@ -53,12 +53,12 @@ checkpoint
 restart
 
 statement ok
-COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
+COPY test_structs TO '{TEST_DIR}/test_structs.parquet'
 
-foreach source test_structs read_parquet('__TEST_DIR__/test_structs.parquet')
+foreach source test_structs read_parquet('{TEST_DIR}/test_structs.parquet')
 
 query I
-SELECT s.nested_struct FROM ${source}
+SELECT s.nested_struct FROM {source}
 ----
 {'a': 42, 'b': true}
 NULL
@@ -67,7 +67,7 @@ NULL
 
 # Add a cast to shuffle the fields
 query I
-SELECT s.nested_struct::STRUCT(b BOOL, a INTEGER) FROM ${source}
+SELECT s.nested_struct::STRUCT(b BOOL, a INTEGER) FROM {source}
 ----
 {'b': true, 'a': 42}
 NULL
@@ -76,7 +76,7 @@ NULL
 
 # Add a cast to change the types of the shuffled fields
 query I
-select s.nested_struct::STRUCT(b INTEGER, a BIGINT) from ${source}
+select s.nested_struct::STRUCT(b INTEGER, a BIGINT) from {source}
 ----
 {'b': 1, 'a': 42}
 NULL
@@ -84,7 +84,7 @@ NULL
 {'b': 0, 'a': NULL}
 
 query I
-SELECT s.nested_struct.a FROM ${source}
+SELECT s.nested_struct.a FROM {source}
 ----
 42
 NULL
@@ -93,7 +93,7 @@ NULL
 
 # Add a cast
 query I
-SELECT s.nested_struct.a::BIGINT FROM ${source}
+SELECT s.nested_struct.a::BIGINT FROM {source}
 ----
 42
 NULL
@@ -101,7 +101,7 @@ NULL
 NULL
 
 query II
-SELECT s.nested_struct.a, s.name.v FROM ${source}
+SELECT s.nested_struct.a, s.name.v FROM {source}
 ----
 42	Row 1
 NULL	NULL
@@ -109,7 +109,7 @@ NULL	NULL
 NULL	NULL
 
 query IIIII
-SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct.a, s.nested_struct, id FROM ${source}
+SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct.a, s.nested_struct, id FROM {source}
 ----
 42	true	42	{'a': 42, 'b': true}	1
 NULL	NULL	NULL	NULL	2
@@ -118,7 +118,7 @@ NULL	false	NULL	{'a': NULL, 'b': false}	4
 
 # Add a cast on the fields
 query IIII
-SELECT s.nested_struct.a::BIGINT, s.nested_struct.b, s.nested_struct.a::TINYINT, id FROM ${source}
+SELECT s.nested_struct.a::BIGINT, s.nested_struct.b, s.nested_struct.a::TINYINT, id FROM {source}
 ----
 42	true	42	1
 NULL	NULL	NULL	2
@@ -126,7 +126,7 @@ NULL	NULL	NULL	2
 NULL	false	NULL	4
 
 query II
-SELECT s.nested_struct.a, s.nested_struct FROM ${source}
+SELECT s.nested_struct.a, s.nested_struct FROM {source}
 ----
 42	{'a': 42, 'b': true}
 NULL	NULL
@@ -134,7 +134,7 @@ NULL	NULL
 NULL	{'a': NULL, 'b': false}
 
 query II
-SELECT s.nested_struct, s.nested_struct.a FROM ${source}
+SELECT s.nested_struct, s.nested_struct.a FROM {source}
 ----
 {'a': 42, 'b': true}	42
 NULL	NULL
@@ -143,7 +143,7 @@ NULL	NULL
 
 # Add a cast
 query II
-SELECT s.nested_struct, s.nested_struct.a::VARCHAR FROM ${source}
+SELECT s.nested_struct, s.nested_struct.a::VARCHAR FROM {source}
 ----
 {'a': 42, 'b': true}	42
 NULL	NULL
@@ -151,7 +151,7 @@ NULL	NULL
 {'a': NULL, 'b': false}	NULL
 
 query II
-SELECT s.name.id, s.nested_struct.b,  FROM ${source}
+SELECT s.name.id, s.nested_struct.b,  FROM {source}
 ----
 1	true
 NULL	NULL
@@ -159,7 +159,7 @@ NULL	NULL
 NULL	false
 
 query I
-SELECT s.name.v FROM ${source} WHERE s.nested_struct.b
+SELECT s.name.v FROM {source} WHERE s.nested_struct.b
 ----
 Row 1
 
@@ -189,12 +189,12 @@ checkpoint
 restart
 
 statement ok
-COPY test_structs_nested TO '__TEST_DIR__/test_structs.parquet'
+COPY test_structs_nested TO '{TEST_DIR}/test_structs.parquet'
 
-foreach source test_structs_nested read_parquet('__TEST_DIR__/test_structs.parquet')
+foreach source test_structs_nested read_parquet('{TEST_DIR}/test_structs.parquet')
 
 query I
-SELECT base.s.nested_struct FROM ${source}
+SELECT base.s.nested_struct FROM {source}
 ----
 {'a': 42, 'b': true}
 NULL
@@ -202,7 +202,7 @@ NULL
 {'a': NULL, 'b': false}
 
 query I
-SELECT base.s.nested_struct.a FROM ${source}
+SELECT base.s.nested_struct.a FROM {source}
 ----
 42
 NULL
@@ -210,7 +210,7 @@ NULL
 NULL
 
 query II
-SELECT base.s.nested_struct.a, base.s.name.v FROM ${source}
+SELECT base.s.nested_struct.a, base.s.name.v FROM {source}
 ----
 42	Row 1
 NULL	NULL
@@ -218,7 +218,7 @@ NULL	NULL
 NULL	NULL
 
 query III
-SELECT base.s.nested_struct.a, base.s.nested_struct.b, base.s.nested_struct FROM ${source}
+SELECT base.s.nested_struct.a, base.s.nested_struct.b, base.s.nested_struct FROM {source}
 ----
 42	true	{'a': 42, 'b': true}
 NULL	NULL	NULL
@@ -226,7 +226,7 @@ NULL	NULL	NULL
 NULL	false	{'a': NULL, 'b': false}
 
 query II
-SELECT base.s.nested_struct.a, base.s.nested_struct FROM ${source}
+SELECT base.s.nested_struct.a, base.s.nested_struct FROM {source}
 ----
 42	{'a': 42, 'b': true}
 NULL	NULL
@@ -235,7 +235,7 @@ NULL	{'a': NULL, 'b': false}
 
 onlyif type=struct
 query II
-SELECT base.s.nested_struct.a, base.s FROM ${source}
+SELECT base.s.nested_struct.a, base.s FROM {source}
 ----
 42	{'name': {'v': Row 1, 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}
 NULL	NULL
@@ -244,7 +244,7 @@ NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
 
 onlyif type=variant
 query II
-SELECT base.s.nested_struct.a, variant_normalize(base.s) FROM ${source}
+SELECT base.s.nested_struct.a, variant_normalize(base.s) FROM {source}
 ----
 42	{'name': {'id': 1, 'v': Row 1}, 'nested_struct': {'a': 42, 'b': true}}
 NULL	NULL
@@ -252,7 +252,7 @@ NULL	NULL
 NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
 
 query II
-SELECT base.s.nested_struct, base.s.nested_struct.a FROM ${source}
+SELECT base.s.nested_struct, base.s.nested_struct.a FROM {source}
 ----
 {'a': 42, 'b': true}	42
 NULL	NULL
@@ -260,7 +260,7 @@ NULL	NULL
 {'a': NULL, 'b': false}	NULL
 
 query II
-SELECT base.s.name.id, base.s.nested_struct.b,  FROM ${source}
+SELECT base.s.name.id, base.s.nested_struct.b,  FROM {source}
 ----
 1	true
 NULL	NULL
@@ -268,7 +268,7 @@ NULL	NULL
 NULL	false
 
 query I
-SELECT base.s.name.v FROM ${source} WHERE base.s.nested_struct.b
+SELECT base.s.name.v FROM {source} WHERE base.s.nested_struct.b
 ----
 Row 1
 

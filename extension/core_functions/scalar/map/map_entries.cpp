@@ -19,13 +19,7 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-
 	MapUtil::ReinterpretMap(result, map, count);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 ScalarFunction MapEntriesFun::GetFunction() {

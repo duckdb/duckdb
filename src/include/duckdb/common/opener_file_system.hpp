@@ -227,6 +227,11 @@ protected:
 		return true;
 	}
 
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener = nullptr) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().CanonicalizePath(path_p, GetOpener());
+	}
+
 private:
 	void VerifyCanAccessFileInternal(const string &path, FileType type);
 };

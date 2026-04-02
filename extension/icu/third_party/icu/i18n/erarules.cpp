@@ -31,8 +31,8 @@ static const int32_t DAY_MASK = 0x000000FF;
 static const int32_t MAX_INT32 = 0x7FFFFFFF;
 static const int32_t MIN_INT32 = 0xFFFFFFFF;
 
-static const UChar VAL_FALSE[] = {0x66, 0x61, 0x6c, 0x73, 0x65};    // "false"
-static const UChar VAL_FALSE_LEN = 5;
+static const char16_t VAL_FALSE[] = {0x66, 0x61, 0x6c, 0x73, 0x65};    // "false"
+static const char16_t VAL_FALSE_LEN = 5;
 
 static UBool isSet(int startDate) {
     return startDate != 0;
@@ -54,7 +54,7 @@ static UBool isValidRuleStartDate(int32_t year, int32_t month, int32_t day) {
  * @return  an encoded date.
  */
 static int32_t encodeDate(int32_t year, int32_t month, int32_t day) {
-	return ((uint32_t)year) << 16 | month << 8 | day;
+    return static_cast<int32_t>(static_cast<uint32_t>(year) << 16) | month << 8 | day;
 }
 
 static void decodeDate(int32_t encodedDate, int32_t (&fields)[3]) {
@@ -141,8 +141,8 @@ EraRules* EraRules::createInstance(const char *calType, UBool includeTentativeEr
         }
         const char *eraIdxStr = ures_getKey(eraRuleRes.getAlias());
         char *endp;
-        int32_t eraIdx = (int32_t)strtol(eraIdxStr, &endp, 10);
-        if ((size_t)(endp - eraIdxStr) != uprv_strlen(eraIdxStr)) {
+        int32_t eraIdx = static_cast<int32_t>(strtol(eraIdxStr, &endp, 10));
+        if (static_cast<size_t>(endp - eraIdxStr) != uprv_strlen(eraIdxStr)) {
             status = U_INVALID_FORMAT_ERROR;
             return nullptr;
         }
@@ -156,8 +156,8 @@ EraRules* EraRules::createInstance(const char *calType, UBool includeTentativeEr
             return nullptr;
         }
 
-        UBool hasName = TRUE;
-        UBool hasEnd = TRUE;
+        UBool hasName = true;
+        UBool hasEnd = true;
         int32_t len;
         while (ures_hasNext(eraRuleRes.getAlias())) {
             LocalUResourceBundlePointer res(ures_getNextResource(eraRuleRes.getAlias(), nullptr, &status));
@@ -176,12 +176,12 @@ EraRules* EraRules::createInstance(const char *calType, UBool includeTentativeEr
                 }
                 startDates[eraIdx] = encodeDate(fields[0], fields[1], fields[2]);
             } else if (uprv_strcmp(key, "named") == 0) {
-                const UChar *val = ures_getString(res.getAlias(), &len, &status);
+                const char16_t *val = ures_getString(res.getAlias(), &len, &status);
                 if (u_strncmp(val, VAL_FALSE, VAL_FALSE_LEN) == 0) {
-                    hasName = FALSE;
+                    hasName = false;
                 }
             } else if (uprv_strcmp(key, "end") == 0) {
-                hasEnd = TRUE;
+                hasEnd = true;
             }
         }
 
@@ -300,13 +300,15 @@ void EraRules::initCurrentEra() {
     // If we failed to create the default time zone, we are in a bad state and don't
     // really have many options. Carry on using UTC millis as a fallback.
     if (zone != nullptr) {
-        zone->getOffset(localMillis, FALSE, rawOffset, dstOffset, ec);
+        zone->getOffset(localMillis, false, rawOffset, dstOffset, ec);
         delete zone;
         localMillis += (rawOffset + dstOffset);
     }
 
-    int year, month0, dom, dow, doy, mid;
-    Grego::timeToFields(localMillis, year, month0, dom, dow, doy, mid);
+    int32_t year, mid;
+    int8_t  month0, dom;
+    Grego::timeToFields(localMillis, year, month0, dom, mid, ec);
+    if (U_FAILURE(ec)) return;
     int currentEncodedDate = encodeDate(year, month0 + 1 /* changes to 1-base */, dom);
     int eraIdx = numEras - 1;
     while (eraIdx > 0) {

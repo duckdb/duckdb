@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "json_transform.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -507,13 +514,13 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		projected_indices.insert(actual_i);
 
 		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
-		child_vectors.push_back(child_vs[actual_i].get());
+		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
 	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
 		if (projected_indices.find(child_i) == projected_indices.end()) {
-			child_vs[child_i]->SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(*child_vs[child_i], true);
+			child_vs[child_i].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(child_vs[child_i], true);
 		}
 	}
 
@@ -765,7 +772,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	return success;
 }
 
-bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
+static bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
 	auto data = FlatVector::GetData<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -780,8 +787,8 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 	return true;
 }
 
-bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result, const idx_t count,
-                             JSONTransformOptions &options) {
+static bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result, const idx_t count,
+                                    JSONTransformOptions &options) {
 	auto type = result.GetType();
 
 	auto fields = UnionType::CopyMemberTypes(type);
@@ -923,6 +930,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
+	case LogicalTypeId::GEOMETRY:
 		return TransformFromString(vals, result, count, options);
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
@@ -963,13 +971,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 			vals[i] = docs[i]->root;
 		}
 	}
-
-	auto success = JSONTransform::Transform(vals, alc, result, count, options, nullptr);
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	return success;
+	return JSONTransform::Transform(vals, alc, result, count, options, nullptr);
 }
 
 template <bool strict>
@@ -1024,7 +1026,7 @@ static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 	return success;
 }
 
-BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+static BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	return BoundCastInfo(JSONToAnyCast, nullptr, JSONFunctionLocalState::InitCastLocalState);
 }
 

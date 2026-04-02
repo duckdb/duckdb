@@ -27,8 +27,13 @@ Statement <-
 	TruncateStatement /
 	LoadStatement /
 	InstallStatement /
+	UpdateExtensionsStatement /
 	AnalyzeStatement /
-	MergeIntoStatement
+	MergeIntoStatement /
+	ExpressionStatement
+
+ExpressionStatement <- List(ExpressionAlias)
+ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -46,6 +51,7 @@ ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
+TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 SecretName <- ColId
@@ -54,7 +60,7 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
@@ -80,7 +86,8 @@ DecadeKeyword       <- 'DECADE' / 'DECADES'
 CenturyKeyword      <- 'CENTURY' / 'CENTURIES'
 MillenniumKeyword   <- 'MILLENNIUM' / 'MILLENNIA'
 
-Interval <- YearKeyword /
+Interval <- IntervalToInterval /
+    YearKeyword /
     MonthKeyword /
     DayKeyword /
     HourKeyword /
@@ -92,8 +99,9 @@ Interval <- YearKeyword /
     QuarterKeyword /
     DecadeKeyword /
     CenturyKeyword /
-    MillenniumKeyword /
-    (YearKeyword 'TO' MonthKeyword) /
+    MillenniumKeyword
+
+IntervalToInterval <- (YearKeyword 'TO' MonthKeyword) /
     (DayKeyword 'TO' HourKeyword) /
     (DayKeyword 'TO' MinuteKeyword) /
     (DayKeyword 'TO' SecondKeyword) /
@@ -102,7 +110,7 @@ Interval <- YearKeyword /
     (MinuteKeyword 'TO' SecondKeyword)
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
-GeometryType <- 'GEOMETRY'
+GeometryType <- 'GEOMETRY' Parens(Expression)?
 VariantType <- 'VARIANT'
 
 NumericType <- SimpleNumericType / DecimalNumericType
@@ -123,7 +131,7 @@ DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
+QualifiedTypeName <- (Identifier '.')* TypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList
 SetofType <- 'SETOF' Type
@@ -133,7 +141,7 @@ MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / 'ARRAY'
 ArrayKeyword <- 'ARRAY'
-SquareBracketsArray <- '[' NumberLiteral? ']'
+SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
 TimeTypeId <- 'TIME'

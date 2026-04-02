@@ -1,4 +1,6 @@
 #pragma once
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 

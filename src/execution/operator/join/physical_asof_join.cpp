@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_asof_join.hpp"
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
@@ -60,14 +61,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	children.push_back(right);
 
 	//	Fill out the right projection map.
-	right_projection_map = op.right_projection_map;
-	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
-		right_projection_map.reserve(right_count);
-		for (column_t i = 0; i < right_count; ++i) {
-			right_projection_map.emplace_back(i);
-		}
-	}
+	right_projection_map = FillProjectionMap(children[1].get(), op.right_projection_map);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1038,7 +1032,7 @@ void AsOfProbeBuffer::ScanLeft() {
 	}
 
 	// Filter out NULL matches
-	if (!lhs_valid_mask.AllValid()) {
+	if (lhs_valid_mask.CanHaveNull()) {
 		const auto count = lhs_match_count;
 		lhs_match_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
@@ -1452,7 +1446,7 @@ bool AsOfLocalSourceState::TryAssignTask() {
 }
 
 bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	auto guard = Lock();
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1464,7 +1458,7 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	for (const auto &group_idx : active_groups) {
 		auto &asof_group = asof_groups[group_idx];
 		if (asof_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (asof_group->TryNextTask(task_local)) {
 			task = task_local;
@@ -1480,7 +1474,7 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 
 		auto &asof_group = asof_groups[group_idx];
 		if (asof_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (!asof_group->TryNextTask(task_local)) {
 			//	Group has no tasks (empty?)
@@ -1592,13 +1586,14 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 				throw;
 			}
 		} else {
-			auto guard = gsource.Lock();
+			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
 			if (!gsource.HasMoreTasks()) {
-				gsource.UnblockTasks(guard);
+				gsource.UnblockTasks();
+				break;
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
-				return gsource.BlockSource(guard, input.interrupt_state);
+				return gsource.BlockSource(input.interrupt_state);
 			}
 		}
 	}

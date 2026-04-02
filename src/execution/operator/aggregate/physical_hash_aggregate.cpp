@@ -129,7 +129,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
                                              vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
-                                             vector<unsafe_vector<idx_t>> grouping_functions_p,
+                                             vector<unsafe_vector<ProjectionIndex>> grouping_functions_p,
                                              idx_t estimated_cardinality, TupleDataValidityType group_validity,
                                              TupleDataValidityType distinct_validity)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
@@ -139,7 +139,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	if (grouping_sets.empty()) {
 		GroupingSet set;
 		for (idx_t i = 0; i < group_count; i++) {
-			set.insert(i);
+			set.insert(ProjectionIndex(i));
 		}
 		grouping_sets.push_back(std::move(set));
 	}
@@ -392,7 +392,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	}
 
 	aggregate_input_chunk.SetCardinality(chunk.size());
-	aggregate_input_chunk.Verify();
+	aggregate_input_chunk.Verify(context.client.db);
 
 	// For every grouping set there is one radix_table
 	for (idx_t i = 0; i < groupings.size(); i++) {
@@ -887,7 +887,7 @@ SourceResultType PhysicalHashAggregate::GetDataInternal(ExecutionContext &contex
 		}
 
 		// move to the next table
-		auto guard = gstate.Lock();
+		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 		lstate.radix_idx = lstate.radix_idx.GetIndex() + 1;
 		if (lstate.radix_idx.GetIndex() > gstate.state_index) {
 			// we have not yet worked on the table

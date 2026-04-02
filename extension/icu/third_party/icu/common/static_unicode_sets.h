@@ -26,53 +26,53 @@ U_NAMESPACE_BEGIN
 namespace unisets {
 
 enum Key {
-    // UNISET_KEY_NONE is used to indicate null in chooseFrom().
-    // UNISET_KEY_EMPTY is used to get an empty UnicodeSet.
-    UNISET_KEY_NONE = -1,
-    UNISET_KEY_EMPTY = 0,
+    // NONE is used to indicate null in chooseFrom().
+    // EMPTY is used to get an empty UnicodeSet.
+    NONE = -1,
+    EMPTY = 0,
 
     // Ignorables
-    UNISET_KEY_DEFAULT_IGNORABLES,
-    UNISET_KEY_STRICT_IGNORABLES,
+    DEFAULT_IGNORABLES,
+    STRICT_IGNORABLES,
 
     // Separators
     // Notes:
-    // - UNISET_KEY_COMMA is a superset of UNISET_KEY_STRICT_COMMA
-    // - UNISET_KEY_PERIOD is a superset of SCRICT_UNISET_KEY_PERIOD
-    // - UNISET_KEY_ALL_SEPARATORS is the union of UNISET_KEY_COMMA, UNISET_KEY_PERIOD, and UNISET_KEY_OTHER_GROUPING_SEPARATORS
-    // - UNISET_KEY_STRICT_ALL_SEPARATORS is the union of UNISET_KEY_STRICT_COMMA, UNISET_KEY_STRICT_PERIOD, and OTHER_GRP_SEPARATORS
-    UNISET_KEY_COMMA,
-    UNISET_KEY_PERIOD,
-    UNISET_KEY_STRICT_COMMA,
-    UNISET_KEY_STRICT_PERIOD,
-    UNISET_KEY_APOSTROPHE_SIGN,
-    UNISET_KEY_OTHER_GROUPING_SEPARATORS,
-    UNISET_KEY_ALL_SEPARATORS,
-    UNISET_KEY_STRICT_ALL_SEPARATORS,
+    // - COMMA is a superset of STRICT_COMMA
+    // - PERIOD is a superset of SCRICT_PERIOD
+    // - ALL_SEPARATORS is the union of COMMA, PERIOD, and OTHER_GROUPING_SEPARATORS
+    // - STRICT_ALL_SEPARATORS is the union of STRICT_COMMA, STRICT_PERIOD, and OTHER_GRP_SEPARATORS
+    COMMA,
+    PERIOD,
+    STRICT_COMMA,
+    STRICT_PERIOD,
+    APOSTROPHE_SIGN,
+    OTHER_GROUPING_SEPARATORS,
+    ALL_SEPARATORS,
+    STRICT_ALL_SEPARATORS,
 
     // Symbols
-    UNISET_KEY_MINUS_SIGN,
-    UNISET_KEY_PLUS_SIGN,
-    UNISET_KEY_PERCENT_SIGN,
-    UNISET_KEY_PERMILLE_SIGN,
-    UNISET_KEY_INFINITY_SIGN,
+    MINUS_SIGN,
+    PLUS_SIGN,
+    PERCENT_SIGN,
+    PERMILLE_SIGN,
+    INFINITY_SIGN,
 
     // Currency Symbols
-    UNISET_KEY_DOLLAR_SIGN,
-    UNISET_KEY_POUND_SIGN,
-    UNISET_KEY_RUPEE_SIGN,
-    UNISET_KEY_YEN_SIGN,
-    UNISET_KEY_WON_SIGN,
+    DOLLAR_SIGN,
+    POUND_SIGN,
+    RUPEE_SIGN,
+    YEN_SIGN,
+    WON_SIGN,
 
     // Other
-    UNISET_KEY_DIGITS,
+    DIGITS,
 
     // Combined Separators with Digits (for lead code points)
-    UNISET_KEY_DIGITS_OR_ALL_SEPARATORS,
-    UNISET_KEY_DIGITS_OR_STRICT_ALL_SEPARATORS,
+    DIGITS_OR_ALL_SEPARATORS,
+    DIGITS_OR_STRICT_ALL_SEPARATORS,
 
     // The number of elements in the enum.
-    UNISET_KEY_UNISETS_KEY_COUNT
+    UNISETS_KEY_COUNT
 };
 
 /**
@@ -83,10 +83,10 @@ enum Key {
  *
  * This method is always safe and OK to chain: in the case of a memory or other
  * error, it returns an empty set from static memory.
- *
+ * 
  * Example:
- *
- *     UBool hasIgnorables = unisets::get(unisets::UNISET_KEY_DEFAULT_IGNORABLES)->contains(...);
+ * 
+ *     UBool hasIgnorables = unisets::get(unisets::DEFAULT_IGNORABLES)->contains(...);
  *
  * @param key The desired UnicodeSet according to the enum in this file.
  * @return The requested UnicodeSet. Guaranteed to be frozen and non-null, but
@@ -101,7 +101,7 @@ U_COMMON_API const UnicodeSet* get(Key key);
  *
  * @param str The string to check.
  * @param key1 The set to check.
- * @return key1 if the set contains str, or UNISET_KEY_NONE if not.
+ * @return key1 if the set contains str, or NONE if not.
  */
 U_COMMON_API Key chooseFrom(UnicodeString str, Key key1);
 
@@ -114,7 +114,7 @@ U_COMMON_API Key chooseFrom(UnicodeString str, Key key1);
  * @param key1 The first set to check.
  * @param key2 The second set to check.
  * @return key1 if that set contains str; key2 if that set contains str; or
- *         UNISET_KEY_NONE if neither set contains str.
+ *         NONE if neither set contains str.
  */
 U_COMMON_API Key chooseFrom(UnicodeString str, Key key1, Key key2);
 
@@ -126,11 +126,11 @@ static const struct {
     Key key;
     UChar32 exemplar;
 } kCurrencyEntries[] = {
-	{UNISET_KEY_DOLLAR_SIGN, u'\x24'}, // u'$'
-	{UNISET_KEY_POUND_SIGN, u'\xa3'}, // u'£'
-	{UNISET_KEY_RUPEE_SIGN, u'\x20b9'}, // u'₹'
-	{UNISET_KEY_YEN_SIGN, u'\xa5'}, // u'¥'
-	{UNISET_KEY_WON_SIGN, u'\x20a9'}, // u'₩'
+    {DOLLAR_SIGN, u'$'},
+    {POUND_SIGN, u'£'},
+    {RUPEE_SIGN, u'₹'},
+    {YEN_SIGN, u'¥'},
+    {WON_SIGN, u'₩'},
 };
 
 } // namespace unisets

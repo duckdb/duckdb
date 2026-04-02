@@ -1469,7 +1469,9 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 	}
 
 	result = StringVector::EmptyString(result_vector, result_size);
-	Bit::ToBit(input, result);
+	if (!Bit::ToBit(input, result, parameters.error_message)) {
+		return false;
+	}
 	result.Finalize();
 	return true;
 }
@@ -1576,6 +1578,22 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict
 	result = BaseUUID::FromBlob(data);
 
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From UUID To UHUGEINT
+//===--------------------------------------------------------------------===//
+template <>
+uhugeint_t CastFromUUIDToUHugeint::Operation(hugeint_t input) {
+	return BaseUUID::ToUHugeint(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From UHUGEINT To UUID
+//===--------------------------------------------------------------------===//
+template <>
+hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
+	return BaseUUID::FromUHugeint(input);
 }
 
 //===--------------------------------------------------------------------===//

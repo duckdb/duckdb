@@ -333,12 +333,11 @@ public:
 	static constexpr auto TYPE = ExtraPersistentColumnDataType::GEOMETRY;
 	GeometryPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
 	}
-	GeometryPersistentColumnData(GeometryType type, VertexType vert)
-	    : ExtraPersistentColumnData(TYPE), geom_type(type), vert_type(vert) {
+	explicit GeometryPersistentColumnData(GeometryStorageType storage_type)
+	    : ExtraPersistentColumnData(TYPE), storage_type(storage_type) {
 	}
 
-	GeometryType geom_type = GeometryType::INVALID;
-	VertexType vert_type = VertexType::XY;
+	GeometryStorageType storage_type;
 };
 
 struct PersistentColumnData {
@@ -406,6 +405,7 @@ struct PersistentCollectionData {
 	void Serialize(Serializer &serializer) const;
 	static PersistentCollectionData Deserialize(Deserializer &deserializer);
 	bool HasUpdates() const;
+	vector<block_id_t> GetBlockIds() const;
 };
 
 } // namespace duckdb

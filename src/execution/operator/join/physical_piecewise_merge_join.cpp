@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 
+#include <numeric>
+
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
@@ -157,7 +159,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
                                                       OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	if (filter_pushdown && !gstate.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(client, nullptr, *gstate.global_filter_state, *this);
+		(void)filter_pushdown->Finalize(client, *gstate.global_filter_state, *this);
 	}
 
 	gstate.table->Finalize(client, input.interrupt_state);
@@ -427,7 +429,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		for (auto &key : lhs_keys.data) {
 			key.Flatten(lhs_keys.size());
 			auto &mask = FlatVector::Validity(key);
-			if (mask.AllValid()) {
+			if (mask.CannotHaveNull()) {
 				continue;
 			}
 			mask.SetAllValid(lhs_not_null);
@@ -485,49 +487,50 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 		return result_count;
 	}
 
-	BLOCK_ITERATOR l_ptr(l.state);
-	BLOCK_ITERATOR r_ptr(r.state);
+	auto *const lhs_sel = l.lhs.data();
 	while (true) {
+		// Phase 1: bulk-emit known matches (l.entry_idx < prev_left_index already matched current r)
 		if (l.entry_idx < prev_left_index) {
-			// left side smaller: found match
-			l.lhs.set_index(result_count, sel_t(l.entry_idx));
-			r.rhs.emplace_back(r.entry_idx);
-			result_count++;
-			// move left side forward
-			l.entry_idx++;
-			++l_ptr;
+			const idx_t batch = MinValue(prev_left_index - l.entry_idx, STANDARD_VECTOR_SIZE - result_count);
+			std::iota(lhs_sel + result_count, lhs_sel + result_count + batch, NumericCast<sel_t>(l.entry_idx));
+			r.rhs.resize(r.rhs.size() + batch, r.entry_idx);
+			result_count += batch;
+			l.entry_idx += batch;
 			if (result_count == STANDARD_VECTOR_SIZE) {
-				// out of space!
 				break;
 			}
-			continue;
 		}
+
+		// Phase 2: binary search for the new boundary on the left side
 		if (l.entry_idx < l.not_null) {
-			if (MergeJoinBefore(l_ptr[l.GetIndex()], r_ptr[r.GetIndex()], strict)) {
-				// left side smaller: found match
-				l.lhs.set_index(result_count, sel_t(l.entry_idx));
-				r.rhs.emplace_back(r.entry_idx);
-				result_count++;
-				// move left side forward
-				l.entry_idx++;
-				++l_ptr;
+			const BLOCK_ITERATOR search_begin(l.state, l.entry_idx);
+			const BLOCK_ITERATOR search_end(l.state, l.not_null);
+
+			const auto &r_val = r.state.template GetValueAtIndex<SORT_KEY>(r.block_idx, r.entry_idx);
+			const auto new_boundary_itr = std::lower_bound(search_begin, search_end, r_val,
+			                                               [strict](const SORT_KEY &lhs_val, const SORT_KEY &rhs_val) {
+				                                               return MergeJoinBefore(lhs_val, rhs_val, strict);
+			                                               });
+
+			const auto new_boundary = l.entry_idx + NumericCast<idx_t>(new_boundary_itr - search_begin);
+			if (new_boundary > l.entry_idx) {
+				const idx_t batch = MinValue(new_boundary - l.entry_idx, STANDARD_VECTOR_SIZE - result_count);
+				std::iota(lhs_sel + result_count, lhs_sel + result_count + batch, sel_t(l.entry_idx));
+				r.rhs.resize(r.rhs.size() + batch, r.entry_idx);
+				result_count += batch;
+				l.entry_idx += batch;
 				if (result_count == STANDARD_VECTOR_SIZE) {
-					// out of space!
+					prev_left_index = new_boundary;
 					break;
 				}
-				continue;
 			}
 		}
 
 		prev_left_index = l.entry_idx;
-		// right side smaller or equal, or left side exhausted: move
-		// right pointer forward reset left side to start
 		r.entry_idx++;
 		if (r.entry_idx >= r.not_null) {
 			break;
 		}
-		++r_ptr;
-
 		l.entry_idx = 0;
 	}
 
@@ -572,7 +575,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
-			state.lhs_payload.Verify();
+			state.lhs_payload.Verify(context.client.db);
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
@@ -644,7 +647,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
-					Vector left(state.lhs_local_table->keys.data[cmp_idx]);
+					Vector left(Vector::Ref(state.lhs_local_table->keys.data[cmp_idx]));
 					left.Slice(left_info.lhs, result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
@@ -690,7 +693,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
-			chunk.Verify();
+			chunk.Verify(context.client.db);
 		}
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -711,7 +714,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 		}
 	}
 
-	input.Verify();
+	input.Verify(context.client.db);
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:

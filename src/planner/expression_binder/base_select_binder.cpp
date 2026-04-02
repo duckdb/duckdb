@@ -24,7 +24,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr);
-	if (group_index != DConstants::INVALID_INDEX) {
+	if (group_index.IsValid()) {
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.GetExpressionClass()) {
@@ -39,7 +39,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	}
 }
 
-idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
+ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
@@ -63,7 +63,7 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 		D_ASSERT(!expr.Equals(map_entry.first.get()));
 	}
 #endif
-	return DConstants::INVALID_INDEX;
+	return ProjectionIndex();
 }
 
 BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -80,23 +80,23 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	if (op.children.size() >= 64) {
 		return BindResult(BinderException(op, "GROUPING statement cannot have more than 64 groups"));
 	}
-	vector<idx_t> group_indexes;
+	vector<ProjectionIndex> group_indexes;
 	group_indexes.reserve(op.children.size());
 	for (auto &child : op.children) {
 		ExpressionBinder::QualifyColumnNames(binder, child);
 		auto idx = TryBindGroup(*child);
-		if (idx == DConstants::INVALID_INDEX) {
+		if (!idx.IsValid()) {
 			return BindResult(BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
 		}
 		group_indexes.push_back(idx);
 	}
-	auto col_idx = node.grouping_functions.size();
+	ProjectionIndex col_idx(node.grouping_functions.size());
 	node.grouping_functions.push_back(std::move(group_indexes));
 	return BindResult(make_uniq<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
 	                                                      ColumnBinding(node.groupings_index, col_idx), depth));
 }
 
-BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
+BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index) {
 	auto it = info.collated_groups.find(group_index);
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate

@@ -150,24 +150,22 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
 	for (auto &arg : args.data) {
-		UnifiedVectorFormat arg_data;
-		arg.ToUnifiedFormat(count, arg_data);
-
+		auto entries = arg.Validity(count);
+		if (!entries.CanHaveNull()) {
+			continue;
+		}
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = arg_data.sel->get_index(i);
-			if (!arg_data.validity.RowIsValid(idx)) {
+			if (!entries.IsValid(i)) {
 				combined_mask.SetInvalid(i);
 			}
 		}
 	}
 
 	// Default is that if any of the arguments are NULL, the result is also NULL
-	UnifiedVectorFormat result_data;
-	result.ToUnifiedFormat(count, result_data);
+	auto result_validity = result.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i)) {
-			auto idx = result_data.sel->get_index(i);
-			D_ASSERT(!result_data.validity.RowIsValid(idx));
+			D_ASSERT(!result_validity.IsValid(i));
 		}
 	}
 #endif
@@ -177,10 +175,19 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
+	// if the input is constant and there function is non-volatile we only need to run it on one value
+	bool all_constant = true;
+	if (expr.function.stability == FunctionStability::VOLATILE) {
+		// we cannot optimize away constant vectors for volatile functions
+		all_constant = false;
+	}
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				all_constant = false;
+			}
 #ifdef DEBUG
 			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
 				arguments.data[i].UTFVerify(count);
@@ -188,13 +195,22 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 #endif
 		}
 	}
-	arguments.SetCardinality(count);
-	arguments.Verify();
+	arguments.SetCardinality(all_constant ? 1 : count);
+	arguments.Verify(context ? context->db : nullptr);
 
 	D_ASSERT(expr.function.HasFunctionCallback());
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	if (!execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
+	if (all_constant || !execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
 		expr.function.GetFunctionCallback()(arguments, *state, result);
+	}
+	if (all_constant) {
+		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
+		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			throw InternalException(
+			    "Error while executing function %s - function must return a flat or constant vector for count = 1",
+			    expr.function.name);
+		}
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
 	VerifyNullHandling(expr, arguments, result);

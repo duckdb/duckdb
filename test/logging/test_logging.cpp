@@ -10,7 +10,6 @@
 #include "duckdb/logging/log_manager.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 template <class SOURCE, typename FUN>
 void LogSimpleCustomType(SOURCE &src, FUN f) {
@@ -40,19 +39,13 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level +
-	                          ""
-	                          "';"));
+	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level + "';"));
 	if (!enabled_log_types.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set enabled_log_types='" + enabled_log_types +
-		                          ""
-		                          "';"));
+		REQUIRE_NO_FAIL(con.Query("set enabled_log_types='" + enabled_log_types + "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='enable_selected';"));
 	}
 	if (!disabled_log_types.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set disabled_log_types='" + disabled_log_types +
-		                          ""
-		                          "';"));
+		REQUIRE_NO_FAIL(con.Query("set disabled_log_types='" + disabled_log_types + "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='disable_selected';"));
 	}
 

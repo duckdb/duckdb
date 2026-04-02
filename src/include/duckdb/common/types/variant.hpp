@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/variant.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
@@ -18,6 +26,11 @@ struct RecursiveUnifiedVectorFormat;
 struct UnifiedVectorFormat;
 
 enum class VariantChildLookupMode : uint8_t { INVALID, BY_KEY, BY_INDEX };
+
+struct Variant {
+public:
+	static constexpr idx_t VERSION_ADDED = 7; // Added to core in DuckDB v1.5.0
+};
 
 struct VariantPathComponent {
 public:
@@ -131,13 +144,14 @@ public:
 	list_entry_t GetChildrenListEntry(idx_t row) const;
 	list_entry_t GetValuesListEntry(idx_t row) const;
 	const string_t &GetKey(idx_t row, idx_t index) const;
+	idx_t GetKeysCount(idx_t row) const;
 	uint32_t GetKeysIndex(idx_t row, idx_t child_index) const;
 	uint32_t GetValuesIndex(idx_t row, idx_t child_index) const;
 	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) const;
 	uint32_t GetByteOffset(idx_t row, idx_t value_index) const;
 	const string_t &GetData(idx_t row) const;
 
-public:
+private:
 	const RecursiveUnifiedVectorFormat &variant;
 	const UnifiedVectorFormat &keys;
 	const UnifiedVectorFormat &keys_entry;
@@ -164,7 +178,7 @@ public:
 
 struct VariantCasts {
 	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
-	                                                           const RecursiveUnifiedVectorFormat &source, idx_t row,
+	                                                           const UnifiedVariantVectorData &source, idx_t row,
 	                                                           uint32_t values_idx);
 };
 

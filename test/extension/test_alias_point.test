@@ -12,7 +12,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
 CREATE TABLE points(i INTEGER, point POINT, pt STRUCT(i INTEGER, j INTEGER));

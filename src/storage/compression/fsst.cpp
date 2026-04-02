@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/fsst_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/fsst.hpp"
 
 #include "duckdb/common/bitpacking.hpp"
@@ -398,7 +401,7 @@ public:
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
@@ -670,7 +673,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			result.SetVectorType(VectorType::FSST_VECTOR);
 			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
 			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
-			result_data = FSSTVector::GetCompressedData<string_t>(result);
+			result_data = FSSTVector::GetCompressedData(result);
 		} else {
 			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 			result_data = FlatVector::GetData<string_t>(result);

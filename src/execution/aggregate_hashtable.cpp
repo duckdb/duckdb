@@ -66,7 +66,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 
 	// Predicates
 	const auto expr_type =
-	    layout_ptr->AllValid() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	    layout_ptr->CannotHaveNull() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	predicates.resize(layout_ptr->ColumnCount() - 1, expr_type);
 	row_matcher.Initialize(true, *layout_ptr, predicates);
 }
@@ -160,14 +160,24 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 }
 
 void GroupedAggregateHashTable::Destroy() {
-	if (!partitioned_data || partitioned_data->Count() == 0 || !layout_ptr->HasDestructor()) {
+	if (!layout_ptr->HasDestructor()) {
 		return;
 	}
 
-	// There are aggregates with destructors: Call the destructor for each of the aggregates
-	// Currently does not happen because aggregate destructors are called while scanning in RadixPartitionedHashTable
-	// LCOV_EXCL_START
-	for (auto &data_collection : partitioned_data->GetPartitions()) {
+	// There are aggregates with destructors
+	if (unpartitioned_data) {
+		DestroyAggregateData(*unpartitioned_data, state.unpartitioned_append_state);
+	}
+	if (partitioned_data) {
+		DestroyAggregateData(*partitioned_data, state.partitioned_append_state);
+	}
+}
+
+void GroupedAggregateHashTable::DestroyAggregateData(PartitionedTupleData &data,
+                                                     PartitionedTupleDataAppendState &append_state) {
+	// Call the destructor for each of the aggregates
+	data.FlushAppendState(append_state);
+	for (auto &data_collection : data.GetPartitions()) {
 		if (data_collection->Count() == 0) {
 			continue;
 		}
@@ -178,7 +188,6 @@ void GroupedAggregateHashTable::Destroy() {
 		} while (iterator.Next());
 		data_collection->Reset();
 	}
-	// LCOV_EXCL_STOP
 }
 
 shared_ptr<TupleDataLayout> GroupedAggregateHashTable::GetLayoutPtr() {
@@ -584,7 +593,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 #ifdef DEBUG
-	groups.Verify();
+	groups.Verify(context.db);
 	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
 	for (idx_t i = 0; i < result.ColumnCount(); i++) {
 		D_ASSERT(result.data[i].GetType() == payload_types[i]);

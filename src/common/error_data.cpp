@@ -65,7 +65,7 @@ string ErrorData::ConstructFinalMessage() const {
 		error = Exception::ExceptionTypeToString(type) + " ";
 	}
 	error += "Error: " + raw_message;
-	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL) {
+	if (type == ExceptionType::INTERNAL) {
 		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
 		         "https://duckdb.org/docs/stable/dev/internal_errors";
@@ -101,6 +101,10 @@ void ErrorData::Merge(const ErrorData &other) {
 	if (!HasError()) {
 		*this = other;
 		return;
+	}
+	if (Exception::InvalidatesDatabase(other.Type()) || other.type == ExceptionType::INTERNAL) {
+		// inherit severe types
+		type = other.type;
 	}
 	final_message += "\n\n" + other.Message();
 }
@@ -138,6 +142,7 @@ void ErrorData::AddErrorLocation(const string &query) {
 		auto entry = extra_info.find("position");
 		if (entry != extra_info.end()) {
 			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+			extra_info.erase(entry);
 		}
 	}
 	{

@@ -1,6 +1,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
@@ -111,14 +112,12 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 			return false;
 		}
 		case OperatorResultType::NEED_MORE_INPUT:
-			continue;
 		case OperatorResultType::FINISHED:
 			break;
 		default:
 			throw InternalException("Unexpected OperatorResultType (%s) in TryFlushCachingOperators",
 			                        EnumUtil::ToString(push_result));
 		}
-		break;
 	}
 	return true;
 }
@@ -285,14 +284,14 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	in_process_operators = stack<idx_t>();
 
 	if (pipeline.GetSource()) {
-		auto guard = pipeline.source_state->Lock();
-		pipeline.source_state->PreventBlocking(guard);
-		pipeline.source_state->UnblockTasks(guard);
+		annotated_lock_guard<annotated_mutex> guard(pipeline.source_state->lock);
+		pipeline.source_state->PreventBlocking();
+		pipeline.source_state->UnblockTasks();
 	}
 	if (pipeline.GetSink()) {
-		auto guard = pipeline.GetSink()->sink_state->Lock();
-		pipeline.GetSink()->sink_state->PreventBlocking(guard);
-		pipeline.GetSink()->sink_state->UnblockTasks(guard);
+		annotated_lock_guard<annotated_mutex> guard(pipeline.GetSink()->sink_state->lock);
+		pipeline.GetSink()->sink_state->PreventBlocking();
+		pipeline.GetSink()->sink_state->UnblockTasks();
 	}
 }
 
@@ -451,7 +450,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				FinishProcessing(NumericCast<int32_t>(current_idx));
 				return OperatorResultType::FINISHED;
 			}
-			current_chunk.Verify();
+			current_chunk.Verify(context.client.db);
 		}
 
 		if (current_chunk.size() == 0) {
@@ -552,7 +551,7 @@ void PipelineExecutor::EndOperator(PhysicalOperator &op, optional_ptr<DataChunk>
 	context.thread.profiler.EndOperator(chunk);
 
 	if (chunk) {
-		chunk->Verify();
+		chunk->Verify(context.client.db);
 	}
 }
 

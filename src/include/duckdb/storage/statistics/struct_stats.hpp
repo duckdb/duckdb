@@ -10,11 +10,13 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 class Vector;
+class Value;
 struct StorageIndex;
 
 struct StructStats {
@@ -31,7 +33,7 @@ struct StructStats {
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
 	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
-	DUCKDB_API static string ToString(const BaseStatistics &stats);
+	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats);
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);

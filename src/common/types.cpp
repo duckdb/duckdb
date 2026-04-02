@@ -162,8 +162,12 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::UNBOUND:
 		return PhysicalType::UNKNOWN;
-	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
+		// Legacy aggregate state - opaque BLOB,
 		return PhysicalType::VARCHAR;
+	}
+	case LogicalTypeId::AGGREGATE_STATE:
+		return PhysicalType::STRUCT;
 	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
 	default:
@@ -248,14 +252,20 @@ const vector<LogicalType> LogicalType::Real() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,  LogicalType::TINYINT,      LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,   LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,    LogicalType::VARCHAR,      LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::BIGNUM,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
-	    LogicalType::UTINYINT, LogicalType::USMALLINT,    LogicalType::UINTEGER,  LogicalType::UBIGINT,
-	    LogicalType::UHUGEINT, LogicalType::TIME,         LogicalTypeId::LIST,    LogicalTypeId::STRUCT,
-	    LogicalType::TIME_TZ,  LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,     LogicalTypeId::UNION,
-	    LogicalType::UUID,     LogicalTypeId::ARRAY};
+	    LogicalTypeId::BOOLEAN,   LogicalTypeId::TINYINT,       LogicalTypeId::SMALLINT,
+	    LogicalTypeId::INTEGER,   LogicalTypeId::BIGINT,        LogicalTypeId::DATE,
+	    LogicalTypeId::TIME,      LogicalTypeId::TIMESTAMP_SEC, LogicalTypeId::TIMESTAMP_MS,
+	    LogicalTypeId::TIMESTAMP, LogicalTypeId::TIMESTAMP_NS,  LogicalTypeId::DECIMAL,
+	    LogicalTypeId::FLOAT,     LogicalTypeId::DOUBLE,        LogicalTypeId::CHAR,
+	    LogicalTypeId::VARCHAR,   LogicalTypeId::BLOB,          LogicalTypeId::INTERVAL,
+	    LogicalTypeId::UTINYINT,  LogicalTypeId::USMALLINT,     LogicalTypeId::UINTEGER,
+	    LogicalTypeId::UBIGINT,   LogicalTypeId::TIMESTAMP_TZ,  LogicalTypeId::TIME_TZ,
+	    LogicalTypeId::TIME_NS,   LogicalTypeId::BIT,           LogicalTypeId::BIGNUM,
+	    LogicalTypeId::UHUGEINT,  LogicalTypeId::HUGEINT,       LogicalTypeId::UUID,
+	    LogicalTypeId::GEOMETRY,  LogicalTypeId::STRUCT,        LogicalTypeId::LIST,
+	    LogicalTypeId::MAP,       LogicalTypeId::ENUM,          LogicalTypeId::UNION,
+	    LogicalTypeId::ARRAY,     LogicalTypeId::VARIANT,
+	};
 	return types;
 }
 
@@ -496,6 +506,9 @@ string LogicalType::ToString() const {
 			return expr->ToString();
 		}
 	}
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
+		return LegacyAggregateStateType::GetTypeName(*this);
+	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
 	}
@@ -513,8 +526,8 @@ string LogicalType::ToString() const {
 			return "GEOMETRY";
 		}
 		auto &crs = GeoType::GetCRS(*this);
-		auto crs_name = KeywordHelper::WriteQuoted(crs.GetDisplayName(), '\'');
-		return StringUtil::Format("GEOMETRY(%s)", crs_name);
+		auto crs_text = KeywordHelper::WriteQuoted(crs.GetDefinition(), '\'');
+		return StringUtil::Format("GEOMETRY(%s)", crs_text);
 	}
 	default:
 		return EnumUtil::ToString(id_);
@@ -704,6 +717,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(*this);
@@ -1129,7 +1143,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 }
 
 template <class OP>
-bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
@@ -1263,6 +1277,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 150;
 	// weirdo types
 	case LogicalTypeId::LAMBDA:
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
@@ -1359,6 +1374,14 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 }
 
 void LogicalType::Serialize(Serializer &serializer) const {
+	// Serialize geometry as old extension geometry type if required
+	if (id_ == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(7)) {
+		// This will drop the CRS information, but that's better than throwing an error.
+		auto legacy_geom = Geometry::GetSpatialGeometryType();
+		legacy_geom.Serialize(serializer);
+		return;
+	}
+
 	// This is a UNBOUND type and we are writing to older storage.
 	// 1. try to default-bind into a concrete logical type, and serialize that
 	// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
@@ -1381,7 +1404,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
 	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+
 	LogicalType result(id, std::move(type_info));
+
+	if (Geometry::IsSpatialGeometryType(result)) {
+		// This is a legacy geometry type, deserialize as geometry
+		return LogicalType::GEOMETRY();
+	}
+
 	return result;
 }
 
@@ -1521,30 +1551,58 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 }
 
 //===--------------------------------------------------------------------===//
-// Aggregate State Type
+// Legacy Aggregate State Type
 //===--------------------------------------------------------------------===//
+const aggregate_state_t &LegacyAggregateStateType::GetStateType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<LegacyAggregateStateTypeInfo>().state_type;
+}
+
+const string LegacyAggregateStateType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return "LEGACY_AGGREGATE_STATE<?>";
+	}
+	auto aggr_state = info->Cast<LegacyAggregateStateTypeInfo>().state_type;
+	return "LEGACY_AGGREGATE_STATE<" + aggr_state.function_name + "(" +
+	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
+	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
+	       ")" + "::" + aggr_state.return_type.ToString() + ">";
+}
+
+//===--------------------------------------------------------------------===//
+// Aggregate State Type (Struct Based)
+//===--------------------------------------------------------------------===//
+
 const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	if (type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
+		return LegacyAggregateStateType::GetStateType(type);
+	}
+	D_ASSERT(type.IsAggregateStateStructType());
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return info->Cast<AggregateStateTypeInfo>().state_type;
 }
 
 const string AggregateStateType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
+	D_ASSERT(type.IsAggregateStateStructType());
 	auto info = type.AuxInfo();
 	if (!info) {
 		return "AGGREGATE_STATE<?>";
 	}
 	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
-	bool is_nested_type = aggr_state.state_type.IsValid();
+	auto struct_type = LogicalType::STRUCT(GetChildTypes(type));
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
 	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
 	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
-	       ")" + "::" +
-	       (is_nested_type ? aggr_state.return_type.ToString() + ", " + aggr_state.state_type.ToString()
-	                       : aggr_state.return_type.ToString()) +
-	       ">";
+	       ")" + "::" + aggr_state.return_type.ToString() + ", " + struct_type.ToString() + ">";
+}
+
+bool LogicalType::IsAggregateStateStructType() const {
+	return id() == LogicalTypeId::AGGREGATE_STATE && InternalType() == PhysicalType::STRUCT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1552,7 +1610,7 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	         type.id() == LogicalTypeId::VARIANT);
+	         type.id() == LogicalTypeId::VARIANT || type.IsAggregateStateStructType());
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1597,9 +1655,15 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
-LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
-	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type));
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type, child_list_t<LogicalType> struct_child_types) {
+	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type), std::move(struct_child_types));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
+}
+
+LogicalType LogicalType::LEGACY_AGGREGATE_STATE(aggregate_state_t state_type) {
+	// Legacy BLOB aggregate state
+	auto info = make_shared_ptr<LegacyAggregateStateTypeInfo>(std::move(state_type));
+	return LogicalType(LogicalTypeId::LEGACY_AGGREGATE_STATE, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//

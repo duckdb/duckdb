@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -26,6 +27,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -81,14 +83,14 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
-	case StatementType::INSERT_STATEMENT:
-		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
+	case StatementType::INSERT_STATEMENT:
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::DELETE_STATEMENT:
-		return BindWithCTE(statement.Cast<DeleteStatement>());
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return BindWithCTE(statement.Cast<UpdateStatement>());
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
@@ -223,8 +225,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	bound_views.insert(view);
 }
 
-idx_t Binder::GenerateTableIndex() {
-	return global_binder_state->bound_tables++;
+TableIndex Binder::GenerateTableIndex() {
+	return TableIndex(global_binder_state->bound_tables++);
 }
 
 StatementProperties &Binder::GetStatementProperties() {
@@ -443,13 +445,12 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 
 	// Collect column IDs from unique indexes
 	unordered_set<column_t> indexed_column_ids;
-	indexes.Scan([&](Index &index) {
+	for (auto &index : indexes.Indexes()) {
 		if (index.IsUnique()) {
 			auto &col_ids = index.GetColumnIdSet();
 			indexed_column_ids.insert(col_ids.begin(), col_ids.end());
 		}
-		return false;
-	});
+	}
 
 	if (indexed_column_ids.empty()) {
 		return;
@@ -506,7 +507,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, idx_t update_table_index,
+                                     const string &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
 	vector<string> names;
@@ -561,6 +562,20 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const 
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
 	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
+}
+
+//! Create a binder whose catalog search path is anchored to the table's catalog+schema
+shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name) {
+	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
+
+	vector<CatalogSearchEntry> search_path;
+
+	search_path.emplace_back(catalog_name, schema_name);
+	if (schema_name != DEFAULT_SCHEMA) {
+		search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
+	}
+	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
+	return new_binder;
 }
 
 } // namespace duckdb

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -17,11 +18,7 @@
 
 namespace duckdb {
 
-struct LambdaFunctionData : public FunctionData {
-	DUCKDB_API virtual const unique_ptr<Expression> &GetLambdaExpression() const = 0;
-};
-
-struct ListLambdaBindData final : public LambdaFunctionData {
+struct ListLambdaBindData final : public FunctionData {
 public:
 	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false,
 	                   const bool has_initial = false)
@@ -53,10 +50,6 @@ public:
 	                      const ScalarFunction &function);
 	//! Deserializes a lambda function's bind data
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &);
-
-	const unique_ptr<Expression> &GetLambdaExpression() const override {
-		return lambda_expr;
-	}
 };
 
 class LambdaFunctions {

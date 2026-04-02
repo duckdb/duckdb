@@ -323,23 +323,121 @@ statement ok
 DROP TABLE test_where_returning;
 
 # ============================================================
-# Virtual columns like rowid are not supported in RETURNING
+# Virtual columns like rowid ARE supported in RETURNING
 # ============================================================
 
 statement ok
-CREATE TABLE test_rowid_not_supported (id INTEGER, name VARCHAR);
+CREATE TABLE test_rowid_supported (id INTEGER, name VARCHAR);
 
 statement ok
-INSERT INTO test_rowid_not_supported VALUES (1, 'one');
+INSERT INTO test_rowid_supported VALUES (1, 'one'), (2, 'two'), (3, 'three');
 
-# rowid is not supported in DELETE RETURNING
-statement error
-DELETE FROM test_rowid_not_supported WHERE id = 1 RETURNING rowid;
+# rowid can be returned in DELETE RETURNING
+query I
+DELETE FROM test_rowid_supported WHERE id = 1 RETURNING rowid;
 ----
-<REGEX>:Binder Error.*Referenced column "rowid" not found.*
+0
+
+# rowid with other columns
+query III
+DELETE FROM test_rowid_supported WHERE id = 2 RETURNING id, name, rowid;
+----
+2	two	1
+
+# rowid with star (rowid is not included in *, must be explicit)
+query III
+DELETE FROM test_rowid_supported WHERE id = 3 RETURNING *, rowid;
+----
+3	three	2
 
 statement ok
-DROP TABLE test_rowid_not_supported;
+DROP TABLE test_rowid_supported;
+
+# ============================================================
+# Tests for DELETE RETURNING rowid with generated columns
+# This tests the virtual_column_offset mechanism
+# ============================================================
+
+statement ok
+CREATE TABLE test_rowid_generated (
+    id INTEGER,
+    val INTEGER,
+    computed INTEGER GENERATED ALWAYS AS (val * 2) VIRTUAL
+);
+
+statement ok
+INSERT INTO test_rowid_generated (id, val) VALUES (1, 10), (2, 20), (3, 30);
+
+# Return rowid with generated column table
+query I
+DELETE FROM test_rowid_generated WHERE id = 1 RETURNING rowid;
+----
+0
+
+# Return all columns plus rowid (rowid should be at correct position)
+query IIII
+DELETE FROM test_rowid_generated WHERE id = 2 RETURNING *, rowid;
+----
+2	20	40	1
+
+# Return specific columns including generated and rowid
+query III
+DELETE FROM test_rowid_generated WHERE id = 3 RETURNING computed, id, rowid;
+----
+60	3	2
+
+statement ok
+DROP TABLE test_rowid_generated;
+
+# Test rowid with multiple generated columns
+statement ok
+CREATE TABLE test_rowid_multi_gen (
+    id INTEGER,
+    a INTEGER,
+    b INTEGER,
+    sum_ab INTEGER GENERATED ALWAYS AS (a + b) VIRTUAL,
+    prod_ab INTEGER GENERATED ALWAYS AS (a * b) VIRTUAL
+);
+
+statement ok
+INSERT INTO test_rowid_multi_gen (id, a, b) VALUES (1, 2, 3), (2, 4, 5);
+
+query IIIIII
+DELETE FROM test_rowid_multi_gen WHERE id = 1 RETURNING *, rowid;
+----
+1	2	3	5	6	0
+
+query III
+DELETE FROM test_rowid_multi_gen WHERE id = 2 RETURNING rowid, sum_ab, prod_ab;
+----
+1	9	20
+
+statement ok
+DROP TABLE test_rowid_multi_gen;
+
+# Test rowid with generated column in middle of table definition
+statement ok
+CREATE TABLE test_rowid_gen_middle (
+    a INTEGER,
+    gen INTEGER GENERATED ALWAYS AS (a + c) VIRTUAL,
+    c INTEGER
+);
+
+statement ok
+INSERT INTO test_rowid_gen_middle (a, c) VALUES (1, 100), (2, 200);
+
+query IIII
+DELETE FROM test_rowid_gen_middle WHERE a = 1 RETURNING *, rowid;
+----
+1	101	100	0
+
+query II
+DELETE FROM test_rowid_gen_middle WHERE a = 2 RETURNING rowid, gen;
+----
+1	202
+
+statement ok
+DROP TABLE test_rowid_gen_middle;
 
 # ============================================================
 # Tests for DELETE RETURNING with generated columns

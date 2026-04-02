@@ -87,11 +87,16 @@ struct ArrowBuffer {
 
 private:
 	void ReserveInternal(idx_t bytes) {
+		data_ptr_t new_ptr;
 		if (dataptr) {
-			dataptr = data_ptr_cast(realloc(dataptr, bytes));
+			new_ptr = data_ptr_cast(realloc(dataptr, bytes));
 		} else {
-			dataptr = data_ptr_cast(malloc(bytes));
+			new_ptr = data_ptr_cast(malloc(bytes));
 		}
+		if (!new_ptr) {
+			throw OutOfMemoryException("ArrowBuffer: failed to allocate %llu bytes", bytes);
+		}
+		dataptr = new_ptr;
 		capacity = bytes;
 	}
 

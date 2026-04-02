@@ -36,6 +36,8 @@ class WindowNtileExecutor : public WindowRowNumberExecutor {
 public:
 	WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
 	                      OperatorSinkInput &sink) const override;

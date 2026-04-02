@@ -1,0 +1,244 @@
+# name: test/sql/join/inner/test_prefix_range_filter_pushdown.test
+# description: Test prefix range filter join pushdown selection and correctness
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side';
+
+statement ok
+CREATE OR REPLACE TABLE probe AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build AS
+SELECT (i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 30000) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+JOIN build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+statement ok
+SELECT count(*)
+FROM probe p
+JOIN build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+
+statement ok
+CREATE OR REPLACE TABLE probe_with_null AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 20480) t(i)
+UNION ALL
+SELECT NULL::BIGINT as k, (i % 7)::INTEGER AS g
+FROM range(20480, 24576) t2(i)
+UNION ALL
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(24576, 100000) t3(i)
+
+statement ok
+SELECT count(*)
+FROM probe_with_null p
+JOIN build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+
+statement ok
+CREATE OR REPLACE TABLE probe_timestamp AS
+SELECT make_timestamp(i * 1000) AS k, (i % 7)::INTEGER AS g
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build_timestamp AS
+SELECT make_timestamp(i * 2000) AS k, (i % 7)::INTEGER AS g
+FROM range(0, 30000) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_timestamp p
+JOIN build_timestamp b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE probe_hugeint AS
+SELECT i::HUGEINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build_hugeint AS
+SELECT (i * 2)::HUGEINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 30000) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_hugeint p
+JOIN build_hugeint b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+
+# COMPARE_NOT_DISTINCT_FROM would be the path where filters_null_values could be false,
+# but join filter pushdown does not currently generate PRF filters for it.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+JOIN build b
+  ON p.k IS NOT DISTINCT FROM b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+
+statement ok
+SET disabled_optimizers = '';
+
+foreach type TINYINT SMALLINT INTEGER BIGINT
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_small (
+	id INTEGER,
+	k {type},
+	g {type}
+);
+
+statement ok
+INSERT INTO prf_probe_small VALUES
+	(1, -3, 1),
+	(2, -1, 5),
+	(3, 0, 0),
+	(4, 2, 2),
+	(5, 7, 1),
+	(6, NULL, 4),
+	(7, 9, NULL),
+	(8, 11, 3),
+	(9, 12, 6);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_small (
+	k {type},
+	g {type},
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO prf_build_small VALUES
+	(-3, 0, 100),
+	(-1, 4, 101),
+	(-1, 6, 102),
+	(0, 0, 103),
+	(2, 3, 104),
+	(7, 1, 105),
+	(11, 4, 106),
+	(11, 2, 107),
+	(NULL, 0, 108),
+	(12, NULL, 109);
+
+query IIII
+SELECT p.id, p.k, p.g, b.payload
+FROM prf_probe_small p
+JOIN prf_build_small b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	-3	1	100
+2	-1	5	101
+3	0	0	103
+5	7	1	105
+8	11	3	107
+
+statement ok
+SET disabled_optimizers = 'join_filter_pushdown';
+
+query IIII
+SELECT p.id, p.k, p.g, b.payload
+FROM prf_probe_small p
+JOIN prf_build_small b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	-3	1	100
+2	-1	5	101
+3	0	0	103
+5	7	1	105
+8	11	3	107
+
+statement ok
+SET disabled_optimizers = '';
+
+endloop
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_span (
+	id INTEGER,
+	k BIGINT,
+	g INTEGER
+);
+
+statement ok
+INSERT INTO prf_probe_span VALUES
+	(1, 0, 0),
+	(2, 1, 0),
+	(3, 1048576, 5),
+	(4, 1048577, 5),
+	(5, 2097152, 2),
+	(6, 3145728, 9);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_span (
+	k BIGINT,
+	g INTEGER,
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO prf_build_span VALUES
+	(0, 0, 10),
+	(1048576, 3, 11),
+	(2097152, 4, 12),
+	(3145728, 10, 13);
+
+query IIII
+SELECT p.id, p.k, p.g, b.payload
+FROM prf_probe_span p
+JOIN prf_build_span b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	0	0	10
+3	1048576	5	11
+
+statement ok
+SET disabled_optimizers = 'join_filter_pushdown';
+
+query IIII
+SELECT p.id, p.k, p.g, b.payload
+FROM prf_probe_span p
+JOIN prf_build_span b
+  ON p.k = b.k
+ AND p.g >= b.g
+ORDER BY ALL;
+----
+1	0	0	10
+3	1048576	5	11
+
+statement ok
+SET disabled_optimizers = '';

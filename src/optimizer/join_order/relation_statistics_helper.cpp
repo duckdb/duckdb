@@ -84,7 +84,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 	auto base_table_cardinality = get.EstimateCardinality(context);
 	auto cardinality_after_filters = base_table_cardinality;
-	unique_ptr<BaseStatistics> column_statistics;
 
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
@@ -116,28 +115,29 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		}
 	}
 
-	if (!get.table_filters.filters.empty()) {
-		column_statistics = nullptr;
+	if (get.table_filters.HasFilters()) {
+		unique_ptr<BaseStatistics> column_statistics;
 		bool has_non_optional_filters = false;
-		for (auto &it : get.table_filters.filters) {
+		for (auto &entry : get.table_filters) {
+			auto &column_index = get.GetColumnIndex(entry.GetIndex());
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
 				if (get.function.statistics_extended) {
-					auto column_index = ColumnIndex(it.first);
 					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
 					column_statistics = get.function.statistics_extended(context, input);
 				} else {
 					D_ASSERT(get.function.statistics);
-					column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+					column_statistics =
+					    get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
 				}
 			}
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				    InspectTableFilter(base_table_cardinality, entry.Filter(), *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
-			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
 				has_non_optional_filters = true;
 			}
 		}
@@ -363,11 +363,12 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	for (auto &g_set : aggr.grouping_sets) {
 		vector<double> set_distinct_counts;
 		for (auto &ind : g_set) {
-			if (aggr.groups[ind]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			auto &group = aggr.GetGroupExpression(ind);
+			if (group.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
-			auto col_index = bound_col->binding.column_index;
+			auto &bound_col = group.Cast<BoundColumnRefExpression>();
+			auto col_index = bound_col.binding.column_index;
 			if (col_index >= child_stats.column_distinct_count.size()) {
 				// it is possible the column index of the grouping_set is not in the child stats.
 				// this can happen when delim joins are present, since delim scans are not currently
@@ -443,15 +444,15 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 	return stats;
 }
 
-idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
+idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const TableFilter &filter,
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
-			cardinality_after_filters = MinValue(
-			    cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter, base_stats));
+			cardinality_after_filters =
+			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, *child_filter, base_stats));
 		}
 		return cardinality_after_filters;
 	}

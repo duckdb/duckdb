@@ -4,6 +4,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ZstdStreamWrapper : public StreamWrapper {
 	~ZstdStreamWrapper() override;
 
@@ -166,7 +168,11 @@ void ZstdStreamWrapper::Close() {
 	zstd_compress_ptr = nullptr;
 }
 
-class ZStdFile : public CompressedFile {
+struct ZStdFileSystemHolder {
+	ZStdFileSystem zstd_fs;
+};
+
+class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
 	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
@@ -176,9 +182,9 @@ public:
 	FileCompressionType GetFileCompressionType() override {
 		return FileCompressionType::ZSTD;
 	}
-
-	ZStdFileSystem zstd_fs;
 };
+
+} // namespace
 
 unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                           bool write) {

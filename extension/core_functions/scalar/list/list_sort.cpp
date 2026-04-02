@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -80,7 +81,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
 	chunk.SetCardinality(offset_lists_indices);
-	chunk.Verify();
+	chunk.Verify(context.client.db);
 
 	// sink
 	chunk.Flatten();
@@ -112,7 +113,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	InterruptState interrupt_state;
 	OperatorSinkInput sink_input {*global_sink_state, *local_sink_state, interrupt_state};
 
-	Vector sort_result_vec = info.is_grade_up ? Vector(input_lists.GetType()) : result;
+	Vector sort_result_vec = info.is_grade_up ? Vector(input_lists.GetType()) : Vector::Ref(result);
 
 	// this ensures that we do not change the order of the entries in the input chunk
 	VectorOperations::Copy(input_lists, sort_result_vec, count, 0, 0);
@@ -122,9 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetEntry(sort_result_vec);
 
 	// get the lists data
-	UnifiedVectorFormat lists_data;
-	sort_result_vec.ToUnifiedFormat(count, lists_data);
-	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
+	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -147,14 +146,15 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	bool data_to_sort = false;
 
 	for (idx_t i = 0; i < count; i++) {
-		auto lists_index = lists_data.sel->get_index(i);
-		const auto &list_entry = list_entries[lists_index];
+		auto entry = list_entries[i];
 
 		// nothing to do for this list
-		if (!lists_data.validity.RowIsValid(lists_index)) {
+		if (!entry.IsValid()) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
+
+		const auto &list_entry = entry.value;
 
 		// empty list, no sorting required
 		if (list_entry.length == 0) {
@@ -187,7 +187,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ListVector::Reserve(result, lists_size);
 		ListVector::SetListSize(result, lists_size);
 		auto result_data = ListVector::GetData(result);
-		memcpy(result_data, list_entries, count * sizeof(list_entry_t));
+		for (idx_t i = 0; i < count; i++) {
+			result_data[i] = list_entries.GetValueUnsafe(i);
+		}
 	}
 
 	if (data_to_sort) {
@@ -216,7 +218,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 
 			// construct the selection vector with the new order from the result vectors
-			Vector result_vector(result_chunk.data[0]);
+			Vector result_vector(Vector::Ref(result_chunk.data[0]));
 			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
 			auto row_count = result_chunk.size();
 
@@ -244,10 +246,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			child_vector.Slice(sel_sorted, sel_sorted_idx);
 			child_vector.Flatten(sel_sorted_idx);
 		}
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

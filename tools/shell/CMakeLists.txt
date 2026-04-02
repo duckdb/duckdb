@@ -1,12 +1,4 @@
 include_directories(include)
-add_subdirectory(linenoise)
-add_definitions(-DHAVE_LINENOISE=1)
-include_directories(../../third_party/utf8proc/include)
-include_directories(linenoise/include)
-add_definitions(-DSQLITE_SHELL_IS_UTF8)
-add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
-
-include_directories(../../third_party/utf8proc/include)
 
 if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
   include_directories(../../extension/autocomplete/include)
@@ -14,6 +6,15 @@ if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
                        ../../extension/autocomplete/autocomplete_extension.cpp)
   add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
 endif()
+
+add_subdirectory(linenoise)
+add_definitions(-DHAVE_LINENOISE=1)
+include_directories(../../third_party/utf8proc/include)
+include_directories(linenoise/include)
+add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
+
+include_directories(../../third_party/utf8proc/include)
+
 set(SHELL_SOURCES
     ${SHELL_SOURCES}
     shell_command_line_option.cpp

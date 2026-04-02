@@ -20,16 +20,16 @@ insert into t values
 	(ROW('c1', 1));
 
 statement ok
-COPY t TO '__TEST_DIR__/test_structs.parquet'
+COPY t TO '{TEST_DIR}/test_structs.parquet'
 
-foreach source t read_parquet('__TEST_DIR__/test_structs.parquet')
+foreach source t read_parquet('{TEST_DIR}/test_structs.parquet')
 
 # View created without any projection pushdown
 statement ok
 create or replace view test as
 	select
 		*
-	from ${source};
+	from {source};
 
 # Projection on the view performs projection pushdown
 query II
@@ -51,7 +51,7 @@ create or replace view test as
 		s.c1,
 		s.c2,
 		s
-	from ${source};
+	from {source};
 
 # Because the child projection only references certain fields, projection pushdown gets applied regardless
 query II
@@ -93,7 +93,7 @@ create or replace view test as
 	select
 		s s1,
 		s s2
-	from ${source};
+	from {source};
 
 # Projection pushdown is applied to both 's1' and 's2'
 query II
@@ -118,7 +118,7 @@ create or replace view test as select
 	upper(s.c1),
 	s.c2,
 	s
-from ${source};
+from {source};
 
 # Projection pushdown gets applied because only individual fields are referenced
 query II
@@ -154,9 +154,9 @@ insert into t2 values
 	(ROW('c1', 2), 3);
 
 statement ok
-COPY t2 TO '__TEST_DIR__/test_structs2.parquet'
+COPY t2 TO '{TEST_DIR}/test_structs2.parquet'
 
-foreach source t2 read_parquet('__TEST_DIR__/test_structs2.parquet')
+foreach source t2 read_parquet('{TEST_DIR}/test_structs2.parquet')
 
 query I
 select
@@ -165,7 +165,7 @@ from (
 	select struct_pack(
 		s:=s,
 		c3:=c3
-	) as pack from ${source}
+	) as pack from {source}
 ) as sub;
 ----
 3
@@ -177,7 +177,7 @@ from (
 	select struct_pack(
 		s:=s,
 		c3:=c3
-	) as pack from ${source}
+	) as pack from {source}
 ) as sub;
 ----
 physical_plan	<REGEX>:.*Projections:.*s.*c3.*
@@ -192,7 +192,7 @@ from (
 		v2:=s.c1,
 		v3:='test',
 		v4:=s.c2
-	) as pack from ${source}
+	) as pack from {source}
 ) as sub;
 ----
 physical_plan	<REGEX>:.*Projections:.*s.c1.*s.c2.*
@@ -204,7 +204,7 @@ from (
 		'a': 42,
 		'v2': s.c2,
 		'b': 21
-	} as pack from ${source}
+	} as pack from {source}
 ) as sub
 ----
 2

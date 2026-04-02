@@ -117,8 +117,8 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		for (const auto &filter : get.table_filters.filters) {
-			if (filter.second->filter_type != TableFilterType::IS_NOT_NULL) {
+		for (const auto &entry : get.table_filters) {
+			if (entry.Filter().filter_type != TableFilterType::IS_NOT_NULL) {
 				return true;
 			}
 		}
@@ -438,8 +438,8 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 	}
 
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(), ColumnBinding(aggr.group_index, group_idx)) ==
-		    join_bindings.end()) {
+		if (std::find(join_bindings.begin(), join_bindings.end(),
+		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
 			return;
 		}
 	}

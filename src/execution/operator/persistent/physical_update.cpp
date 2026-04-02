@@ -8,6 +8,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
@@ -167,7 +168,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	// The update chunk now contains exactly those rows that we are deleting.
-	Vector del_row_ids(row_ids);
+	Vector del_row_ids(Vector::Ref(row_ids));
 	if (update_count != update_chunk.size()) {
 		update_chunk.Slice(sel, update_count);
 		del_row_ids.Slice(row_ids, sel, update_count);

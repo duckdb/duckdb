@@ -6,33 +6,82 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/common/thread.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
+
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db_p,
+                                                 DuckTransactionManager &transaction_manager_p)
+    : db(db_p), transaction_manager(transaction_manager_p) {
+	if (!context) {
+		return;
+	}
+	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
+	checkpoint_context = checkpoint_connection->context.get();
+}
+
+ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
+	// This happens on failure before we commit the transaction.
+	if (checkpoint_transaction) {
+		transaction_manager.RollbackTransaction(*checkpoint_transaction);
+		checkpoint_transaction = nullptr;
+	}
+	if (checkpoint_context) {
+		checkpoint_context->transaction.ClearTransaction();
+	}
+}
+
+void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
+	checkpoint_context->transaction.BeginTransaction();
+	checkpoint_context->transaction.SetReadOnly();
+	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
+	transaction.SetIsCheckpointTransaction();
+	checkpoint_transaction = &transaction;
+	options.transaction_id = transaction.start_time;
+	transaction_manager.SetActiveCheckpoint(transaction.start_time);
+}
+
+void ActiveCheckpointWrapper::Commit() {
+	transaction_manager.ResetActiveCheckpoint();
+	if (!checkpoint_transaction) {
+		return;
+	}
+	checkpoint_context->transaction.Commit();
+	checkpoint_transaction = nullptr;
+}
+
+bool ActiveCheckpointWrapper::HasCheckpointContext() const {
+	return checkpoint_context;
+}
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
@@ -101,6 +150,20 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 			entries.push_back(view.get());
 		}
 
+		// Scan triggers from each table directly (triggers are nested under their table)
+		for (auto &table_entry : tables) {
+			auto &table = table_entry.get().Cast<TableCatalogEntry>();
+			if (!table.IsDuckTable()) {
+				continue;
+			}
+			auto &duck_table = table.Cast<DuckTableEntry>();
+			duck_table.ScanTriggersNonTransactional([&](CatalogEntry &entry) {
+				if (!entry.internal) {
+					entries.push_back(entry);
+				}
+			});
+		}
+
 		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
@@ -132,6 +195,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	if (storage_manager.InMemory()) {
 		return;
 	}
+	if (ValidChecker::IsInvalidated(db.GetDatabase())) {
+		// don't checkpoint invalidated databases
+		return;
+	}
 	// assert that the checkpoint manager hasn't been used before
 	D_ASSERT(!metadata_writer);
 
@@ -155,123 +222,138 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
 	// to replay any concurrent commits that have succeeded and ensure these are not lost
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-	ActiveCheckpointWrapper active_checkpoint(transaction_manager);
-	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
 
-	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
-	if (checkpoint_sleep_ms > 0) {
-		ThreadUtil::SleepMs(checkpoint_sleep_ms);
-	}
-
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
-	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+	// If there is a context (non shutdown path): this will create a new connection for the checkpoint, then in
+	// WALStartCheckpoint we will create a transaction for the checkpoint.
+	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
-	D_ASSERT(catalog.IsDuckCatalog());
-
-	auto &dependency_manager = *catalog.GetDependencyManager();
-	catalog_entries = GetCatalogEntries(schemas);
-	dependency_manager.ReorderEntries(catalog_entries);
-
-	// write the actual data into the database
-
-	// Create a serializer to write the checkpoint data
-	// The serialized format is roughly:
-	/*
-	    {
-	        schemas: [
-	            {
-	                schema: <schema_info>,
-	                custom_types: [ { type: <type_info> }, ... ],
-	                sequences: [ { sequence: <sequence_info> }, ... ],
-	                tables: [ { table: <table_info> }, ... ],
-	                views: [ { view: <view_info> }, ... ],
-	                macros: [ { macro: <macro_info> }, ... ],
-	                table_macros: [ { table_macro: <table_macro_info> }, ... ],
-	                indexes: [ { index: <index_info>, root_offset <block_ptr> }, ... ]
-	            }
-	        ]
-	    }
-	 */
-	BinarySerializer serializer(*metadata_writer, SerializationOptions(db));
-	serializer.Begin();
-	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = catalog_entries[i];
-		list.WriteObject([&](Serializer &obj) { WriteEntry(entry.get(), obj); });
-	});
-	serializer.End();
-
-	metadata_writer->Flush();
-	table_metadata_writer->Flush();
-
-	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
-	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
-		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
-	}
-
-	// finally write the updated header
-	DatabaseHeader header;
-	header.meta_block = meta_block.block_pointer;
-	header.block_alloc_size = block_manager.GetBlockAllocSize();
-	header.vector_size = STANDARD_VECTOR_SIZE;
-	block_manager.WriteHeader(context, header);
-
-	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(db.GetDatabase());
-	if (debug_verify_blocks) {
-		// extend verify_block_usage_count
-		auto metadata_info = storage_manager.GetMetadataInfo();
-		for (auto &info : metadata_info) {
-			verify_block_usage_count[info.block_id]++;
+	try {
+		auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
+		if (checkpoint_sleep_ms > 0) {
+			ThreadUtil::SleepMs(checkpoint_sleep_ms);
 		}
-		for (auto &entry_ref : catalog_entries) {
-			auto &entry = entry_ref.get();
-			if (entry.type != CatalogType::TABLE_ENTRY) {
-				continue;
+
+		vector<reference<SchemaCatalogEntry>> schemas;
+		// we scan the set of committed schemas
+		auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+		catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+		D_ASSERT(catalog.IsDuckCatalog());
+
+		auto &dependency_manager = *catalog.GetDependencyManager();
+		catalog_entries = GetCatalogEntries(schemas);
+		dependency_manager.ReorderEntries(catalog_entries);
+
+		// write the actual data into the database
+
+		// Create a serializer to write the checkpoint data
+		// The serialized format is roughly:
+		/*
+		    {
+		        schemas: [
+		            {
+		                schema: <schema_info>,
+		                custom_types: [ { type: <type_info> }, ... ],
+		                sequences: [ { sequence: <sequence_info> }, ... ],
+		                tables: [ { table: <table_info> }, ... ],
+		                views: [ { view: <view_info> }, ... ],
+		                macros: [ { macro: <macro_info> }, ... ],
+		                table_macros: [ { table_macro: <table_macro_info> }, ... ],
+		                indexes: [ { index: <index_info>, root_offset <block_ptr> }, ... ]
+		            }
+		        ]
+		    }
+		 */
+		BinarySerializer serializer(*metadata_writer, SerializationOptions(db));
+		serializer.Begin();
+		serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
+			auto &entry = catalog_entries[i];
+			list.WriteObject([&](Serializer &obj) { WriteEntry(entry.get(), obj); });
+		});
+		serializer.End();
+
+		metadata_writer->Flush();
+		table_metadata_writer->Flush();
+
+		auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
+		if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
+			throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
+		}
+
+		// finally write the updated header
+		DatabaseHeader header;
+		header.meta_block = meta_block.block_pointer;
+		header.block_alloc_size = block_manager.GetBlockAllocSize();
+		header.vector_size = STANDARD_VECTOR_SIZE;
+		block_manager.WriteHeader(context, header);
+
+		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(db.GetDatabase());
+		if (debug_verify_blocks) {
+			// extend verify_block_usage_count
+			auto metadata_info = storage_manager.GetMetadataInfo();
+			for (auto &info : metadata_info) {
+				verify_block_usage_count[info.block_id]++;
 			}
-			auto &table = entry.Cast<DuckTableEntry>();
-			auto &storage = table.GetStorage();
-			auto segment_info = storage.GetColumnSegmentInfo(context);
-			for (auto &segment : segment_info) {
-				verify_block_usage_count[segment.block_id]++;
-				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
-					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
-					auto splits = StringUtil::Split(overflow_blocks, ", ");
-					for (auto &split : splits) {
-						auto overflow_block_id = std::stoll(split);
-						verify_block_usage_count[overflow_block_id]++;
+			for (auto &entry_ref : catalog_entries) {
+				auto &entry = entry_ref.get();
+				if (entry.type != CatalogType::TABLE_ENTRY) {
+					continue;
+				}
+				auto &table = entry.Cast<DuckTableEntry>();
+				auto &storage = table.GetStorage();
+				auto segment_info = storage.GetColumnSegmentInfo(context);
+				for (auto &segment : segment_info) {
+					verify_block_usage_count[segment.block_id]++;
+					if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
+						auto overflow_blocks =
+						    StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+						auto splits = StringUtil::Split(overflow_blocks, ", ");
+						for (auto &split : splits) {
+							auto overflow_block_id = std::stoll(split);
+							verify_block_usage_count[overflow_block_id]++;
+						}
 					}
 				}
 			}
+			block_manager.VerifyBlocks(verify_block_usage_count);
 		}
-		block_manager.VerifyBlocks(verify_block_usage_count);
+
+		if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
+			throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+		}
+
+		// truncate the file
+		block_manager.Truncate();
+
+		if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FINISH) {
+			throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+		}
+
+		// truncate the WAL
+		if (has_wal) {
+			unique_ptr<lock_guard<mutex>> owned_wal_lock;
+			optional_ptr<lock_guard<mutex>> wal_lock;
+			if (!options.wal_lock) {
+				// not holding the WAL lock yet - grab it
+				owned_wal_lock = storage_manager.GetWALLock();
+				wal_lock = *owned_wal_lock;
+			} else {
+				// we already have the WAL lock - just refer to it
+				wal_lock = options.wal_lock;
+			}
+			storage_manager.WALFinishCheckpoint(*wal_lock);
+		}
+	} catch (std::exception &ex) {
+		// any exceptions thrown here are fatal
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::FATAL) {
+			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
+			throw;
+		}
+		throw FatalException("Failed to create checkpoint: %s", error.Message());
 	}
-
-	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
-		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
-	}
-
-	// truncate the file
-	block_manager.Truncate();
-
-	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FINISH) {
-		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
-	}
-
-	// truncate the WAL
-	unique_ptr<lock_guard<mutex>> wal_lock;
-	if (has_wal) {
-		wal_lock = storage_manager.GetWALLock();
-		storage_manager.WALFinishCheckpoint(*wal_lock);
-	}
-
-	// FIXME: hold the WAL lock while we are merging checkpoint deltas
-	// this prevents any commits from happening while this is going on
-	// this is currently required because of the way that "deletes + inserts" of the same row are processed
-	// currently we FIRST append the new (duplicate) insert, THEN delete the old value
-	// if we append the duplicate value, then call MergeCheckpointDeltas, that will fail with a duplicate entry error
-	// we can fix this and stop holding the WAL lock once we fix / remove that order of operations in the commit
 
 	// for any indexes that were appended to while checkpointing, merge the delta back into the main index
 	// FIXME: we only clean up appends made to tables that are part of this checkpoint
@@ -289,8 +371,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &storage = table.GetStorage();
 		auto &table_info = storage.GetDataTableInfo();
 		auto &index_list = table_info->GetIndexes();
-		index_list.MergeCheckpointDeltas(storage, options.transaction_id);
+		index_list.MergeCheckpointDeltas(options.transaction_id);
 	}
+	active_checkpoint.Commit();
 }
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {
@@ -373,6 +456,11 @@ void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
 		WriteIndex(index, serializer);
 		break;
 	}
+	case CatalogType::TRIGGER_ENTRY: {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		WriteTrigger(trigger, serializer);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
@@ -422,6 +510,10 @@ void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &d
 		ReadIndex(transaction, deserializer);
 		break;
 	}
+	case CatalogType::TRIGGER_ENTRY: {
+		ReadTrigger(transaction, deserializer);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
@@ -448,6 +540,26 @@ void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &de
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "view");
 	auto &view_info = info->Cast<CreateViewInfo>();
 	catalog.CreateView(transaction, view_info);
+}
+
+//===--------------------------------------------------------------------===//
+// Triggers
+//===--------------------------------------------------------------------===//
+void CheckpointWriter::WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer) {
+	serializer.WriteProperty(100, "trigger", &trigger);
+}
+
+void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "trigger");
+	auto &trigger_info = info->Cast<CreateTriggerInfo>();
+	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	auto &schema = catalog.GetSchema(transaction, trigger_info.schema);
+	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name);
+	if (!table_entry) {
+		throw IOException("corrupt database file - trigger entry without table entry");
+	}
+	auto &duck_table = table_entry->Cast<DuckTableEntry>();
+	duck_table.CreateTrigger(transaction, trigger_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -512,22 +624,16 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 		// Read older duckdb files.
 		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
-
 	} else {
-		// Read the matching index storage info.
-		for (auto const &elem : table_info->GetIndexStorageInfo()) {
-			if (elem.name == index.name) {
-				index_storage_info = elem;
-				break;
-			}
-		}
+		// Extract the matching index storage info (moves it out of the stored collection).
+		index_storage_info = table_info->ExtractIndexStorageInfo(index.name);
 	}
 
 	D_ASSERT(index_storage_info.IsValid());
 	D_ASSERT(!index_storage_info.name.empty());
 
 	// Create an unbound index and add it to the table.
-	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
+	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_storage_info),
 	                                             TableIOManager::Get(data_table), data_table.db);
 	table_info->GetIndexes().AddIndex(std::move(unbound_index));
 }
@@ -622,7 +728,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
 	if (!index_storage_infos.empty()) {
-		bound_info.indexes = index_storage_infos;
+		bound_info.indexes = std::move(index_storage_infos);
 
 	} else {
 		// This is an old duckdb file containing index pointers and deprecated storage.
@@ -630,7 +736,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 			// Deprecated storage is always true for old duckdb files.
 			IndexStorageInfo index_storage_info;
 			index_storage_info.root_block_ptr = index_pointers[i];
-			bound_info.indexes.push_back(index_storage_info);
+			bound_info.indexes.push_back(std::move(index_storage_info));
 		}
 	}
 

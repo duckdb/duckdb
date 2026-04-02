@@ -1,3 +1,11 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/fsst_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -43,8 +51,7 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
     : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
-		auto vector = make_uniq<Vector>(child_type.second, capacity);
-		children.push_back(std::move(vector));
+		children.emplace_back(child_type.second, capacity);
 	}
 }
 
@@ -52,8 +59,7 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
     : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 	auto &other_vector = StructVector::GetEntries(other);
 	for (auto &child_vector : other_vector) {
-		auto vector = make_uniq<Vector>(*child_vector, sel, count);
-		children.push_back(std::move(vector));
+		children.emplace_back(child_vector, sel, count);
 	}
 }
 
@@ -149,6 +155,13 @@ ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
 }
 
 ManagedVectorBuffer::~ManagedVectorBuffer() {
+}
+
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
+    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
+}
+
+ShreddedVectorBuffer::~ShreddedVectorBuffer() {
 }
 
 } // namespace duckdb

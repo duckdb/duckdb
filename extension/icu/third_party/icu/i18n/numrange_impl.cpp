@@ -7,13 +7,12 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
-#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
-#endif
 
 #include "unicode/numberrangeformatter.h"
 #include "numrange_impl.h"
 #include "patternprops.h"
+#include "pluralranges.h"
 #include "uresimp.h"
 #include "util.h"
 
@@ -31,14 +30,15 @@ constexpr int8_t identity2d(UNumberRangeIdentityFallback a, UNumberRangeIdentity
 
 struct NumberRangeData {
     SimpleFormatter rangePattern;
-    SimpleFormatter approximatelyPattern;
+    // Note: approximatelyPattern is unused since ICU 69.
+    // SimpleFormatter approximatelyPattern;
 };
 
 class NumberRangeDataSink : public ResourceSink {
   public:
     NumberRangeDataSink(NumberRangeData& data) : fData(data) {}
 
-    void put(const char* key, ResourceValue& value, UBool /*noFallback*/, UErrorCode& status) U_OVERRIDE {
+    void put(const char* key, ResourceValue& value, UBool /*noFallback*/, UErrorCode& status) override {
         ResourceTable miscTable = value.getTable(status);
         if (U_FAILURE(status)) { return; }
         for (int i = 0; miscTable.getKeyAndValue(i, key, value); i++) {
@@ -47,12 +47,16 @@ class NumberRangeDataSink : public ResourceSink {
                     continue; // have already seen this pattern
                 }
                 fData.rangePattern = {value.getUnicodeString(status), status};
-            } else if (uprv_strcmp(key, "approximately") == 0) {
+            }
+            /*
+            // Note: approximatelyPattern is unused since ICU 69.
+            else if (uprv_strcmp(key, "approximately") == 0) {
                 if (hasApproxData()) {
                     continue; // have already seen this pattern
                 }
                 fData.approximatelyPattern = {value.getUnicodeString(status), status};
             }
+            */
         }
     }
 
@@ -60,21 +64,26 @@ class NumberRangeDataSink : public ResourceSink {
         return fData.rangePattern.getArgumentLimit() != 0;
     }
 
+    /*
+    // Note: approximatelyPattern is unused since ICU 69.
     bool hasApproxData() {
         return fData.approximatelyPattern.getArgumentLimit() != 0;
     }
+    */
 
     bool isComplete() {
-        return hasRangeData() && hasApproxData();
+        return hasRangeData() /* && hasApproxData() */;
     }
 
     void fillInDefaults(UErrorCode& status) {
         if (!hasRangeData()) {
             fData.rangePattern = {u"{0}–{1}", status};
         }
+        /*
         if (!hasApproxData()) {
             fData.approximatelyPattern = {u"~{0}", status};
         }
+        */
     }
 
   private:
@@ -83,7 +92,7 @@ class NumberRangeDataSink : public ResourceSink {
 
 void getNumberRangeData(const char* localeName, const char* nsName, NumberRangeData& data, UErrorCode& status) {
     if (U_FAILURE(status)) { return; }
-    LocalUResourceBundlePointer rb(ures_open(NULL, localeName, &status));
+    LocalUResourceBundlePointer rb(ures_open(nullptr, localeName, &status));
     if (U_FAILURE(status)) { return; }
     NumberRangeDataSink sink(data);
 
@@ -108,91 +117,8 @@ void getNumberRangeData(const char* localeName, const char* nsName, NumberRangeD
     sink.fillInDefaults(status);
 }
 
-class PluralRangesDataSink : public ResourceSink {
-  public:
-    PluralRangesDataSink(StandardPluralRanges& output) : fOutput(output) {}
-
-    void put(const char* /*key*/, ResourceValue& value, UBool /*noFallback*/, UErrorCode& status) U_OVERRIDE {
-        ResourceArray entriesArray = value.getArray(status);
-        if (U_FAILURE(status)) { return; }
-        fOutput.setCapacity(entriesArray.getSize());
-        for (int i = 0; entriesArray.getValue(i, value); i++) {
-            ResourceArray pluralFormsArray = value.getArray(status);
-            if (U_FAILURE(status)) { return; }
-            pluralFormsArray.getValue(0, value);
-            StandardPlural::Form first = StandardPlural::fromString(value.getUnicodeString(status), status);
-            if (U_FAILURE(status)) { return; }
-            pluralFormsArray.getValue(1, value);
-            StandardPlural::Form second = StandardPlural::fromString(value.getUnicodeString(status), status);
-            if (U_FAILURE(status)) { return; }
-            pluralFormsArray.getValue(2, value);
-            StandardPlural::Form result = StandardPlural::fromString(value.getUnicodeString(status), status);
-            if (U_FAILURE(status)) { return; }
-            fOutput.addPluralRange(first, second, result);
-        }
-    }
-
-  private:
-    StandardPluralRanges& fOutput;
-};
-
-void getPluralRangesData(const Locale& locale, StandardPluralRanges& output, UErrorCode& status) {
-    if (U_FAILURE(status)) { return; }
-    LocalUResourceBundlePointer rb(ures_openDirect(nullptr, "pluralRanges", &status));
-    if (U_FAILURE(status)) { return; }
-
-    CharString dataPath;
-    dataPath.append("locales/", -1, status);
-    dataPath.append(locale.getLanguage(), -1, status);
-    if (U_FAILURE(status)) { return; }
-    int32_t setLen;
-    // Not all languages are covered: fail gracefully
-    UErrorCode internalStatus = U_ZERO_ERROR;
-    const UChar* set = ures_getStringByKeyWithFallback(rb.getAlias(), dataPath.data(), &setLen, &internalStatus);
-    if (U_FAILURE(internalStatus)) { return; }
-
-    dataPath.clear();
-    dataPath.append("rules/", -1, status);
-    dataPath.appendInvariantChars(set, setLen, status);
-    if (U_FAILURE(status)) { return; }
-    PluralRangesDataSink sink(output);
-    ures_getAllItemsWithFallback(rb.getAlias(), dataPath.data(), sink, status);
-    if (U_FAILURE(status)) { return; }
-}
-
 } // namespace
 
-
-void StandardPluralRanges::initialize(const Locale& locale, UErrorCode& status) {
-    getPluralRangesData(locale, *this, status);
-}
-
-void StandardPluralRanges::addPluralRange(
-        StandardPlural::Form first,
-        StandardPlural::Form second,
-        StandardPlural::Form result) {
-    U_ASSERT(fTriplesLen < fTriples.getCapacity());
-    fTriples[fTriplesLen] = {first, second, result};
-    fTriplesLen++;
-}
-
-void StandardPluralRanges::setCapacity(int32_t length) {
-    if (length > fTriples.getCapacity()) {
-        fTriples.resize(length, 0);
-    }
-}
-
-StandardPlural::Form
-StandardPluralRanges::resolve(StandardPlural::Form first, StandardPlural::Form second) const {
-    for (int32_t i=0; i<fTriplesLen; i++) {
-        const auto& triple = fTriples[i];
-        if (triple.first == first && triple.second == second) {
-            return triple.result;
-        }
-    }
-    // Default fallback
-    return StandardPlural::OTHER;
-}
 
 
 NumberRangeFormatterImpl::NumberRangeFormatterImpl(const RangeMacroProps& macros, UErrorCode& status)
@@ -200,10 +126,11 @@ NumberRangeFormatterImpl::NumberRangeFormatterImpl(const RangeMacroProps& macros
       formatterImpl2(macros.formatter2.fMacros, status),
       fSameFormatters(macros.singleFormatter),
       fCollapse(macros.collapse),
-      fIdentityFallback(macros.identityFallback) {
+      fIdentityFallback(macros.identityFallback),
+      fApproximatelyFormatter(status) {
 
     const char* nsName = formatterImpl1.getRawMicroProps().nsName;
-    if (uprv_strcmp(nsName, formatterImpl2.getRawMicroProps().nsName) != 0) {
+    if (!fSameFormatters && uprv_strcmp(nsName, formatterImpl2.getRawMicroProps().nsName) != 0) {
         status = U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }
@@ -212,10 +139,19 @@ NumberRangeFormatterImpl::NumberRangeFormatterImpl(const RangeMacroProps& macros
     getNumberRangeData(macros.locale.getName(), nsName, data, status);
     if (U_FAILURE(status)) { return; }
     fRangeFormatter = data.rangePattern;
-    fApproximatelyModifier = {data.approximatelyPattern, UNUM_FIELD_COUNT, false};
+
+    if (fSameFormatters && (
+            fIdentityFallback == UNUM_IDENTITY_FALLBACK_APPROXIMATELY ||
+            fIdentityFallback == UNUM_IDENTITY_FALLBACK_APPROXIMATELY_OR_SINGLE_VALUE)) {
+        MacroProps approximatelyMacros(macros.formatter1.fMacros);
+        approximatelyMacros.approximately = true;
+        // Use in-place construction because NumberFormatterImpl has internal self-pointers
+        fApproximatelyFormatter.~NumberFormatterImpl();
+        new (&fApproximatelyFormatter) NumberFormatterImpl(approximatelyMacros, status);
+    }
 
     // TODO: Get locale from PluralRules instead?
-    fPluralRanges.initialize(macros.locale, status);
+    fPluralRanges = StandardPluralRanges::forLocale(macros.locale, status);
     if (U_FAILURE(status)) { return; }
 }
 
@@ -293,7 +229,7 @@ void NumberRangeFormatterImpl::format(UFormattedNumberRangeData& data, bool equa
             break;
 
         default:
-            UPRV_UNREACHABLE;
+            UPRV_UNREACHABLE_EXIT;
     }
 }
 
@@ -303,7 +239,7 @@ void NumberRangeFormatterImpl::formatSingleValue(UFormattedNumberRangeData& data
                                                  UErrorCode& status) const {
     if (U_FAILURE(status)) { return; }
     if (fSameFormatters) {
-        int32_t length = NumberFormatterImpl::writeNumber(micros1, data.quantity1, data.getStringRef(), 0, status);
+        int32_t length = NumberFormatterImpl::writeNumber(micros1.simple, data.quantity1, data.getStringRef(), 0, status);
         NumberFormatterImpl::writeAffixes(micros1, data.getStringRef(), 0, length, status);
     } else {
         formatRange(data, micros1, micros2, status);
@@ -316,12 +252,14 @@ void NumberRangeFormatterImpl::formatApproximately (UFormattedNumberRangeData& d
                                                     UErrorCode& status) const {
     if (U_FAILURE(status)) { return; }
     if (fSameFormatters) {
-        int32_t length = NumberFormatterImpl::writeNumber(micros1, data.quantity1, data.getStringRef(), 0, status);
-        // HEURISTIC: Desired modifier order: inner, middle, approximately, outer.
-        length += micros1.modInner->apply(data.getStringRef(), 0, length, status);
-        length += micros1.modMiddle->apply(data.getStringRef(), 0, length, status);
-        length += fApproximatelyModifier.apply(data.getStringRef(), 0, length, status);
-        micros1.modOuter->apply(data.getStringRef(), 0, length, status);
+        // Re-format using the approximately formatter:
+        MicroProps microsAppx;
+        data.quantity1.resetExponent();
+        fApproximatelyFormatter.preProcess(data.quantity1, microsAppx, status);
+        int32_t length = NumberFormatterImpl::writeNumber(microsAppx.simple, data.quantity1, data.getStringRef(), 0, status);
+        length += microsAppx.modInner->apply(data.getStringRef(), 0, length, status);
+        length += microsAppx.modMiddle->apply(data.getStringRef(), 0, length, status);
+        microsAppx.modOuter->apply(data.getStringRef(), 0, length, status);
     } else {
         formatRange(data, micros1, micros2, status);
     }
@@ -370,7 +308,8 @@ void NumberRangeFormatterImpl::formatRange(UFormattedNumberRangeData& data,
                 // Only collapse if the modifier is a unit.
                 // TODO: Make a better way to check for a unit?
                 // TODO: Handle case where the modifier has both notation and unit (compact currency)?
-                if (!mm->containsField(UNUM_CURRENCY_FIELD) && !mm->containsField(UNUM_PERCENT_FIELD)) {
+                if (!mm->containsField({UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD})
+                        && !mm->containsField({UFIELD_CATEGORY_NUMBER, UNUM_PERCENT_FIELD})) {
                     collapseMiddle = false;
                 }
             } else if (fCollapse == UNUM_RANGE_COLLAPSE_AUTO) {
@@ -388,7 +327,7 @@ void NumberRangeFormatterImpl::formatRange(UFormattedNumberRangeData& data,
             // INNER MODIFIER
             collapseInner = micros1.modInner->semanticallyEquivalent(*micros2.modInner);
 
-            // All done checking for collapsability.
+            // All done checking for collapsibility.
             break;
         }
 
@@ -411,6 +350,7 @@ void NumberRangeFormatterImpl::formatRange(UFormattedNumberRangeData& data,
     #define UPRV_INDEX_1 (lengthPrefix + length1)
     #define UPRV_INDEX_2 (lengthPrefix + length1 + lengthInfix)
     #define UPRV_INDEX_3 (lengthPrefix + length1 + lengthInfix + length2)
+    #define UPRV_INDEX_4 (lengthPrefix + length1 + lengthInfix + length2 + lengthSuffix)
 
     int32_t lengthRange = SimpleModifier::formatTwoArgPattern(
         fRangeFormatter,
@@ -418,7 +358,7 @@ void NumberRangeFormatterImpl::formatRange(UFormattedNumberRangeData& data,
         0,
         &lengthPrefix,
         &lengthSuffix,
-        UNUM_FIELD_COUNT,
+        kUndefinedField,
         status);
     if (U_FAILURE(status)) { return; }
     lengthInfix = lengthRange - lengthPrefix - lengthSuffix;
@@ -436,45 +376,55 @@ void NumberRangeFormatterImpl::formatRange(UFormattedNumberRangeData& data,
         if (repeatInner || repeatMiddle || repeatOuter) {
             // Add spacing if there is not already spacing
             if (!PatternProps::isWhiteSpace(string.charAt(UPRV_INDEX_1))) {
-                lengthInfix += string.insertCodePoint(UPRV_INDEX_1, u'\u0020', UNUM_FIELD_COUNT, status);
+                lengthInfix += string.insertCodePoint(UPRV_INDEX_1, u'\u0020', kUndefinedField, status);
             }
             if (!PatternProps::isWhiteSpace(string.charAt(UPRV_INDEX_2 - 1))) {
-                lengthInfix += string.insertCodePoint(UPRV_INDEX_2, u'\u0020', UNUM_FIELD_COUNT, status);
+                lengthInfix += string.insertCodePoint(UPRV_INDEX_2, u'\u0020', kUndefinedField, status);
             }
         }
     }
 
-    length1 += NumberFormatterImpl::writeNumber(micros1, data.quantity1, string, UPRV_INDEX_0, status);
-    length2 += NumberFormatterImpl::writeNumber(micros2, data.quantity2, string, UPRV_INDEX_2, status);
+    length1 += NumberFormatterImpl::writeNumber(micros1.simple, data.quantity1, string, UPRV_INDEX_0, status);
+    // ICU-21684: Write the second number to a temp string to avoid repeated insert operations
+    FormattedStringBuilder tempString;
+    NumberFormatterImpl::writeNumber(micros2.simple, data.quantity2, tempString, 0, status);
+    length2 += string.insert(UPRV_INDEX_2, tempString, status);
 
     // TODO: Support padding?
 
     if (collapseInner) {
-        // Note: this is actually a mix of prefix and suffix, but adding to infix length works
         const Modifier& mod = resolveModifierPlurals(*micros1.modInner, *micros2.modInner);
-        lengthInfix += mod.apply(string, UPRV_INDEX_0, UPRV_INDEX_3, status);
+        lengthSuffix += mod.apply(string, UPRV_INDEX_0, UPRV_INDEX_4, status);
+        lengthPrefix += mod.getPrefixLength();
+        lengthSuffix -= mod.getPrefixLength();
     } else {
         length1 += micros1.modInner->apply(string, UPRV_INDEX_0, UPRV_INDEX_1, status);
-        length2 += micros2.modInner->apply(string, UPRV_INDEX_2, UPRV_INDEX_3, status);
+        length2 += micros2.modInner->apply(string, UPRV_INDEX_2, UPRV_INDEX_4, status);
     }
 
     if (collapseMiddle) {
-        // Note: this is actually a mix of prefix and suffix, but adding to infix length works
         const Modifier& mod = resolveModifierPlurals(*micros1.modMiddle, *micros2.modMiddle);
-        lengthInfix += mod.apply(string, UPRV_INDEX_0, UPRV_INDEX_3, status);
+        lengthSuffix += mod.apply(string, UPRV_INDEX_0, UPRV_INDEX_4, status);
+        lengthPrefix += mod.getPrefixLength();
+        lengthSuffix -= mod.getPrefixLength();
     } else {
         length1 += micros1.modMiddle->apply(string, UPRV_INDEX_0, UPRV_INDEX_1, status);
-        length2 += micros2.modMiddle->apply(string, UPRV_INDEX_2, UPRV_INDEX_3, status);
+        length2 += micros2.modMiddle->apply(string, UPRV_INDEX_2, UPRV_INDEX_4, status);
     }
 
     if (collapseOuter) {
-        // Note: this is actually a mix of prefix and suffix, but adding to infix length works
         const Modifier& mod = resolveModifierPlurals(*micros1.modOuter, *micros2.modOuter);
-        lengthInfix += mod.apply(string, UPRV_INDEX_0, UPRV_INDEX_3, status);
+        lengthSuffix += mod.apply(string, UPRV_INDEX_0, UPRV_INDEX_4, status);
+        lengthPrefix += mod.getPrefixLength();
+        lengthSuffix -= mod.getPrefixLength();
     } else {
         length1 += micros1.modOuter->apply(string, UPRV_INDEX_0, UPRV_INDEX_1, status);
-        length2 += micros2.modOuter->apply(string, UPRV_INDEX_2, UPRV_INDEX_3, status);
+        length2 += micros2.modOuter->apply(string, UPRV_INDEX_2, UPRV_INDEX_4, status);
     }
+
+    // Now that all pieces are added, save the span info.
+    data.appendSpanInfo(UFIELD_CATEGORY_NUMBER_RANGE_SPAN, 0, UPRV_INDEX_0, length1, status);
+    data.appendSpanInfo(UFIELD_CATEGORY_NUMBER_RANGE_SPAN, 1, UPRV_INDEX_2, length2, status);
 }
 
 

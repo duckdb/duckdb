@@ -36,9 +36,9 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
-enum class OrderByColumnType;
-enum class RowGroupOrderType;
-enum class OrderByStatistics;
+enum class OrderByColumnType : uint8_t;
+enum class OrderType : uint8_t;
+enum class OrderByStatistics : uint8_t;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -98,9 +98,11 @@ struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
-	                       TableFunction &table_function, const TableFunctionRef &ref)
+	                       TableFunction &table_function, const TableFunctionRef &ref,
+	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
+	      input_plan(input_plan) {
 	}
 
 	vector<Value> &inputs;
@@ -111,6 +113,7 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
+	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
 };
 
 struct TableFunctionInitInput {
@@ -288,7 +291,8 @@ typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
-                                                                      TableFunctionBindInput &input, idx_t bind_index,
+                                                                      TableFunctionBindInput &input,
+                                                                      TableIndex bind_index,
                                                                       vector<string> &return_names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);

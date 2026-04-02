@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "core_functions/array_kernels.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -60,10 +61,6 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 
 		    return OP::Operation(lhs_data + left.offset, rhs_data + right.offset, left.length);
 	    });
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 //-------------------------------------------------------------------------

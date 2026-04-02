@@ -20,6 +20,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -63,6 +64,8 @@ struct FileMetadata {
 	int64_t file_size = -1;
 	timestamp_t last_modification_time = timestamp_t::ninfinity();
 	FileType file_type = FileType::FILE_TYPE_INVALID;
+	optional_idx device_id;
+	optional_idx file_id;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;
@@ -229,13 +232,15 @@ public:
 	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
-	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
-	DUCKDB_API bool IsPathAbsolute(const string &path);
-	//! Normalize an absolute path - the goal of normalizing is converting "\test.db" and "C:/test.db" into "C:\test.db"
-	//! so that the database system cache can correctly
-	DUCKDB_API string NormalizeAbsolutePath(const string &path);
+	//! Checks if path is is an absolute path
+	DUCKDB_API virtual bool IsPathAbsolute(const string &path);
 	//! Join two paths together
 	DUCKDB_API string JoinPath(const string &a, const string &path);
+	// Join N paths together
+	template <typename... ARGS>
+	string JoinPath(const string &a, const string &b, ARGS... args) {
+		return JoinPath(JoinPath(a, b), args...);
+	}
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
 	DUCKDB_API string ConvertSeparators(const string &path);
 	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is 'example')
@@ -309,6 +314,9 @@ public:
 	DUCKDB_API virtual bool IsDisabledForPath(const string &path);
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
+
+	//! Canonicalize a path
+	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener = nullptr);
 
 protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,

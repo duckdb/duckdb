@@ -383,6 +383,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
             parameter_types,
             return_type
         from duckdb_functions()
+        where function_type <> 'window'
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
@@ -802,7 +803,6 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
 static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
-    {"geometry", "spatial"}
 }; // END_OF_EXTENSION_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

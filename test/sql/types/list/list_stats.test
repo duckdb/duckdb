@@ -2,21 +2,21 @@
 # description: Test stats propagation for lists
 # group: [list]
 
-# struct stats
-query I
-SELECT STATS([3, 4])
+# list stats
+query II
+SELECT s.child_stats.min, s.child_stats.max FROM (SELECT STATS([3, 4]) s)
 ----
-<REGEX>:.*3.*4.*
+3	4
 
 query I
 SELECT [3, 4]
 ----
 [3, 4]
 
-query I
-SELECT STATS(NULL::INT[])
+query II
+SELECT s.has_null, s.has_no_null FROM (SELECT STATS(NULL::INT[]) s)
 ----
-<REGEX>:.*Has Null: true.*
+true	false
 
 query I
 SELECT NULL::INT[]
@@ -45,10 +45,10 @@ CREATE TABLE integers(i integer)
 statement ok
 insert into integers values (3), (4);
 
-query I
-SELECT STATS([i]) FROM integers LIMIT 1
+query IIII
+SELECT s.child_stats.min, s.child_stats.max, s.child_stats.has_null, s.has_null FROM (SELECT STATS([i]) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*3.*4.*Has Null: false.*
+3	4	false	false
 
 query I
 SELECT [i] FROM integers
@@ -59,10 +59,10 @@ SELECT [i] FROM integers
 statement ok
 insert into integers values (NULL);
 
-query I
-SELECT STATS([i]) FROM integers LIMIT 1
+query IIII
+SELECT s.child_stats.min, s.child_stats.max, s.child_stats.has_null, s.has_null FROM (SELECT STATS([i]) s FROM integers LIMIT 1)
 ----
-<REGEX>:.*3.*4.*Has Null: true.*
+3	4	true	false
 
 query I
 SELECT [i] FROM integers
@@ -75,10 +75,10 @@ statement ok
 CREATE TABLE lists AS SELECT [3, 4] l
 
 # list_extract always propagates a null
-query I
-SELECT STATS(l[1]) FROM lists LIMIT 1
+query III
+SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
 ----
-<REGEX>:.*3.*4.*Has Null: true.*
+3	4	true
 
 query I
 SELECT l[1] FROM lists
@@ -89,10 +89,10 @@ SELECT l[1] FROM lists
 statement ok
 INSERT INTO lists VALUES ([])
 
-query I
-SELECT STATS(l[1]) FROM lists LIMIT 1
+query III
+SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
 ----
-<REGEX>:.*3.*4.*Has Null: true.*
+3	4	true
 
 query I
 SELECT l[1] FROM lists
@@ -104,10 +104,10 @@ NULL
 statement ok
 INSERT INTO lists VALUES (NULL)
 
-query I
-SELECT STATS(l[1]) FROM lists LIMIT 1
+query III
+SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
 ----
-<REGEX>:.*3.*4.*Has Null: true.*
+3	4	true
 
 query I
 SELECT l[1] FROM lists
@@ -121,10 +121,10 @@ NULL
 statement ok
 INSERT INTO lists VALUES ([NULL])
 
-query I
-SELECT STATS(l[1]) FROM lists LIMIT 1
+query III
+SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
 ----
-<REGEX>:.*3.*4.*Has Null: true.*
+3	4	true
 
 query I
 SELECT l[1] FROM lists

@@ -65,7 +65,7 @@ Cannot perform list_reduce on an empty input list
 statement error
 SELECT list_reduce([1, 2, 3], lambda x, y: (x * y)::VARCHAR || 'please work');
 ----
-Could not convert
+Binder Error
 
 statement error
 SELECT list_reduce([1, 2], lambda x: x);

@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
+class AttachedDatabase;
 class DatabaseInstance;
 class TableIOManager;
+class RowGroupCollection;
 
 struct DataTableInfo {
 	friend class DataTable;
@@ -39,13 +41,13 @@ public:
 	TableIndexList &GetIndexes() {
 		return indexes;
 	}
-	const vector<IndexStorageInfo> &GetIndexStorageInfo() const {
-		return index_storage_infos;
-	}
+	//! Find and move out an IndexStorageInfo by name from the stored collection.
+	IndexStorageInfo ExtractIndexStorageInfo(const string &name);
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}
 	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
+	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
 	void VerifyIndexBuffers();
 
 	string GetSchemaName();

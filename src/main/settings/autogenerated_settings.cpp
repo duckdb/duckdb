@@ -49,6 +49,13 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
+// Checkpoint On Detach
+//===----------------------------------------------------------------------===//
+void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CheckpointOnDetach>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -106,6 +113,13 @@ void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Deprecated Using Key Syntax
+//===----------------------------------------------------------------------===//
+void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

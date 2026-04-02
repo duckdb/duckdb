@@ -7,7 +7,7 @@ require icu
 foreach timezone UTC ECT
 
 statement ok
-set TimeZone='${timezone}';
+set TimeZone='{timezone}';
 
 statement ok
 create or replace table t1 (ts timestamp, i int);

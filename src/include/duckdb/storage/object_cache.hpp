@@ -19,6 +19,18 @@
 
 namespace duckdb {
 
+struct BufferPoolPayload {
+	explicit BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {
+	}
+	~BufferPoolPayload() {
+		reservation->Resize(0);
+	}
+	idx_t GetWeight() const {
+		return reservation->size;
+	}
+	unique_ptr<BufferPoolReservation> reservation;
+};
+
 // Forward declaration.
 class BufferPool;
 
@@ -33,6 +45,13 @@ public:
 	//! Get the rough cache memory usage in bytes for this entry.
 	//! Used for eviction decisions. Return invalid index to prevent eviction.
 	virtual optional_idx GetEstimatedCacheMemory() const = 0;
+};
+
+struct CleanupBufferPool {
+	void operator()(unique_ptr<BufferPoolReservation> &buffer) {
+		D_ASSERT(buffer);
+		buffer->Resize(0);
+	}
 };
 
 class ObjectCache {
@@ -134,11 +153,11 @@ public:
 
 	idx_t GetMaxMemory() const {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.MaxMemory();
+		return lru_cache.Capacity();
 	}
 	idx_t GetCurrentMemory() const {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.CurrentMemory();
+		return lru_cache.CurrentTotalWeight();
 	}
 	size_t GetEntryCount() const {
 		const lock_guard<mutex> lock(lock_mutex);
@@ -151,13 +170,14 @@ public:
 
 	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.EvictToReduceMemory(target_bytes);
+		return lru_cache.EvictToReduceAtLeast(target_bytes);
 	}
 
 private:
 	mutable mutex lock_mutex;
 	//! LRU cache for evictable entries
-	SharedLruCache<string, ObjectCacheEntry> lru_cache;
+
+	SharedLruCache<string, ObjectCacheEntry, duckdb::BufferPoolPayload> lru_cache;
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
 	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.

@@ -87,6 +87,8 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 				last_child_ptr = meta_pipeline.GetLastChild();
 			}
 		}
+		// Assign proper batch index to the union pipeline
+		meta_pipeline.AssignNextBatchIndex(union_pipeline);
 		// build the union pipeline
 		children[i].get().BuildPipelines(union_pipeline, meta_pipeline);
 
@@ -94,9 +96,6 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 			// the pointer was set, set up the dependencies
 			meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
 		}
-		// Assign proper batch index to the union pipeline
-		// This needs to happen after the pipelines have been built because unions can be nested
-		meta_pipeline.AssignNextBatchIndex(union_pipeline);
 	}
 }
 

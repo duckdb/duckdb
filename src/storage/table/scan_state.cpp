@@ -68,23 +68,24 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
-ScanFilter::ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+                       TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
 
 void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
                                 const vector<StorageIndex> &column_ids) {
-	D_ASSERT(!filters.filters.empty());
+	D_ASSERT(filters.HasFilters());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
-	filter_list.reserve(filters.filters.size());
-	for (auto &entry : filters.filters) {
-		filter_list.emplace_back(context, entry.first, column_ids, *entry.second);
+	filter_list.reserve(filters.FilterCount());
+	for (auto &entry : filters) {
+		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());
 	}
 	column_has_filter.reserve(column_ids.size());
-	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
+	for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+		bool has_filter = table_filters->HasFilter(col_idx);
 		column_has_filter.push_back(has_filter);
 	}
 	base_column_has_filter = column_has_filter;

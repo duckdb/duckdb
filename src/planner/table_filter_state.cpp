@@ -4,6 +4,7 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -50,6 +51,8 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER:
 		// root nodes - create an empty filter state
 		return make_uniq<TableFilterState>();
 	default:

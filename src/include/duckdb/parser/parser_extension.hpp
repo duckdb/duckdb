@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -20,6 +21,23 @@ struct DBConfig;
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
 struct ParserExtensionInfo {
 	virtual ~ParserExtensionInfo() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		auto result = dynamic_cast<TARGET *>(this);
+		if (!result) {
+			throw InternalException("Failed to cast ParserExtensionInfo to type");
+		}
+		return *result;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		auto result = dynamic_cast<const TARGET *>(this);
+		if (!result) {
+			throw InternalException("Failed to cast ParserExtensionInfo to type");
+		}
+		return *result;
 	}
 };
 
@@ -95,7 +113,8 @@ struct ParserOverrideResult {
 	ErrorData error;
 };
 
-typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query);
+typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query,
+                                                           ParserOptions &options);
 
 //===--------------------------------------------------------------------===//
 // ParserExtension

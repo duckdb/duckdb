@@ -188,7 +188,11 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
-		string parameters = format.substr(format.find(':') + 1);
+		// Arrow C Data Interface spec: fixed-size binary is "w:NN", colon always at position 1
+		if (format.size() <= 2 || format[1] != ':') {
+			throw InvalidInputException("Invalid Arrow fixed-size binary format string: \"%s\"", format);
+		}
+		string parameters = format.substr(2);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
@@ -212,23 +216,28 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 	return nullptr;
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, ArrowSchema &schema, string &format) {
 	auto type = GetTypeFromFormat(format);
+
 	if (type) {
 		return type;
 	}
 	if (format == "+l") {
-		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
+		return CreateListType(context, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
 	} else if (format == "+L") {
-		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
+		return CreateListType(context, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
 	} else if (format == "+vl") {
-		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, true);
+		return CreateListType(context, *schema.children[0], ArrowVariableSizeType::NORMAL, true);
 	} else if (format == "+vL") {
-		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
+		return CreateListType(context, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
 	} else if (format[0] == '+' && format[1] == 'w') {
-		std::string parameters = format.substr(format.find(':') + 1);
+		// Arrow C Data Interface spec: fixed-size list is "+w:NN", colon always at position 2
+		if (format.size() <= 3 || format[2] != ':') {
+			throw InvalidInputException("Invalid Arrow fixed-size list format string: \"%s\"", format);
+		}
+		std::string parameters = format.substr(3);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
-		auto child_type = GetArrowLogicalType(config, *schema.children[0]);
+		auto child_type = GetArrowLogicalType(context, *schema.children[0]);
 
 		auto array_type = LogicalType::ARRAY(child_type->GetDuckType(), fixed_size);
 		auto type_info = make_uniq<ArrowArrayInfo>(std::move(child_type), fixed_size);
@@ -241,7 +250,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
 		}
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
-			children.emplace_back(GetArrowLogicalType(config, *schema.children[type_idx]));
+			children.emplace_back(GetArrowLogicalType(context, *schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
 		}
 		auto type_info = make_uniq<ArrowStructInfo>(std::move(children));
@@ -265,7 +274,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			auto type = schema.children[type_idx];
 
-			children.emplace_back(GetArrowLogicalType(config, *type));
+			children.emplace_back(GetArrowLogicalType(context, *type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
@@ -281,7 +290,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 		D_ASSERT(string(schema.children[1]->name) == "values");
 		for (idx_t i = 0; i < n_children; i++) {
 			auto type = schema.children[i];
-			children.emplace_back(GetArrowLogicalType(config, *type));
+			children.emplace_back(GetArrowLogicalType(context, *type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
@@ -292,8 +301,8 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
-		auto key_type = GetArrowLogicalType(config, *arrow_struct_type.children[0]);
-		auto value_type = GetArrowLogicalType(config, *arrow_struct_type.children[1]);
+		auto key_type = GetArrowLogicalType(context, *arrow_struct_type.children[0]);
+		auto value_type = GetArrowLogicalType(context, *arrow_struct_type.children[1]);
 		child_list_t<LogicalType> key_value;
 		key_value.emplace_back(std::make_pair("key", key_type->GetDuckType()));
 		key_value.emplace_back(std::make_pair("value", value_type->GetDuckType()));
@@ -311,9 +320,9 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 	throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 }
 
-unique_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
-                                                bool view) {
-	auto child_type = GetArrowLogicalType(config, child);
+unique_ptr<ArrowType> ArrowType::CreateListType(ClientContext &context, ArrowSchema &child,
+                                                ArrowVariableSizeType size_type, bool view) {
+	auto child_type = GetArrowLogicalType(context, child);
 
 	unique_ptr<ArrowTypeInfo> type_info;
 	auto type = LogicalType::LIST(child_type->GetDuckType());
@@ -330,9 +339,6 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return dictionary_type->GetDuckType();
 	}
 	if (!use_dictionary) {
-		if (extension_data) {
-			return extension_data->GetDuckDBType();
-		}
 		return type;
 	}
 	// Dictionaries can exist in arbitrarily nested schemas
@@ -371,18 +377,15 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return LogicalType::UNION(std::move(new_children));
 	}
 	default: {
-		if (extension_data) {
-			return extension_data->GetDuckDBType();
-		}
 		return type;
 	}
 	}
 }
 
-unique_ptr<ArrowType> ArrowType::GetArrowLogicalType(DBConfig &config, ArrowSchema &schema) {
-	auto arrow_type = ArrowType::GetTypeFromSchema(config, schema);
+unique_ptr<ArrowType> ArrowType::GetArrowLogicalType(ClientContext &context, ArrowSchema &schema) {
+	auto arrow_type = ArrowType::GetTypeFromSchema(context, schema);
 	if (schema.dictionary) {
-		auto dictionary = GetArrowLogicalType(config, *schema.dictionary);
+		auto dictionary = GetArrowLogicalType(context, *schema.dictionary);
 		arrow_type->SetDictionary(std::move(dictionary));
 	}
 	return arrow_type;
@@ -402,16 +405,17 @@ ArrowArrayPhysicalType ArrowType::GetPhysicalType() const {
 	return ArrowArrayPhysicalType::DEFAULT;
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(ClientContext &context, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
-	auto arrow_type = GetTypeFromFormat(config, schema, format);
+	auto &config = DBConfig::GetConfig(context);
+	auto arrow_type = GetTypeFromFormat(context, schema, format);
 	if (schema_metadata.HasExtension()) {
 		auto extension_info = schema_metadata.GetExtensionInfo(string(format));
 		if (config.HasArrowExtension(extension_info)) {
 			auto extension = config.GetArrowExtension(extension_info);
-			arrow_type = extension.GetType(schema, schema_metadata);
+			arrow_type = extension.GetType(context, schema, schema_metadata);
 			arrow_type->extension_data = extension.GetTypeExtension();
 		}
 	}

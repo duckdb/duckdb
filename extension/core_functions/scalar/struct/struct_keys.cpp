@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
@@ -61,12 +62,9 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	// Non-constant input: return a DICTIONARY_VECTOR over two entries (keys list and NULL) to preserve per-row NULLs
 	// Build the dictionary selection: 0 for non-null input, 1 for null input
 	SelectionVector sel(count);
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	auto validity_entries = input.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		const bool is_valid = input_data.validity.RowIsValid(idx);
-		sel.set_index(i, !is_valid);
+		sel.set_index(i, !validity_entries.IsValid(i));
 	}
 
 	result.Slice(keys_vector, sel, count);
@@ -74,7 +72,8 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT) {
+	auto return_type = arguments[0]->return_type;
+	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
 	}
 
@@ -86,7 +85,7 @@ static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction StructKeysFun::GetFunction() {
-	ScalarFunction func({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR), StructKeysFunction,
+	ScalarFunction func({LogicalTypeId::ANY}, LogicalType::LIST(LogicalType::VARCHAR), StructKeysFunction,
 	                    StructKeysBind);
 	return func;
 }

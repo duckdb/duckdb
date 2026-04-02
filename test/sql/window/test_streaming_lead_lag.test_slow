@@ -58,7 +58,7 @@ query TT
 EXPLAIN
 SELECT lead(lag, -1) over () IS NOT DISTINCT FROM lag(lead, 1) over ()
 FROM (
-	SELECT lag("${col}", 1) OVER () AS lag, lead("${col}", -1) OVER () AS lead 
+	SELECT lag("{col}", 1) OVER () AS lag, lead("{col}", -1) OVER () AS lead 
 	FROM test_all_types()
 )
 QUALIFY row_number() over ()==2;
@@ -68,7 +68,7 @@ physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 query I
 SELECT lead(lag, -1) over () IS NOT DISTINCT FROM lag(lead, 1) over ()
 FROM (
-	SELECT lag("${col}", 1) OVER () AS lag, lead("${col}", -1) OVER () AS lead 
+	SELECT lag("{col}", 1) OVER () AS lag, lead("{col}", -1) OVER () AS lead 
 	FROM test_all_types()
 )
 QUALIFY row_number() over ()==2;
@@ -79,7 +79,7 @@ query TT
 EXPLAIN
 SELECT lead(lag, 1) over () IS NOT DISTINCT FROM lag(lead, -1) over ()
 FROM (
-	SELECT lag("${col}", -1) OVER () AS lag, lead("${col}", 1) OVER () AS lead 
+	SELECT lag("{col}", -1) OVER () AS lag, lead("{col}", 1) OVER () AS lead 
 	FROM test_all_types()
 )
 QUALIFY row_number() over ()==2;
@@ -89,7 +89,7 @@ physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 query I
 SELECT lead(lag, 1) over () IS NOT DISTINCT FROM lag(lead, -1) over ()
 FROM (
-	SELECT lag("${col}", -1) OVER () AS lag, lead("${col}", 1) OVER () AS lead 
+	SELECT lag("{col}", -1) OVER () AS lag, lead("{col}", 1) OVER () AS lead 
 	FROM test_all_types()
 )
 QUALIFY row_number() over ()==2;

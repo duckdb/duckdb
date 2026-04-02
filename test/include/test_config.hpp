@@ -56,6 +56,7 @@ public:
 	string GetInitialDBPath();
 	optional_idx GetMaxThreads();
 	optional_idx GetBlockAllocSize();
+	optional_idx GetMaxTestThreads();
 	idx_t GetCheckpointWALSize();
 	bool GetForceRestart();
 	bool GetCheckpointOnShutdown();
