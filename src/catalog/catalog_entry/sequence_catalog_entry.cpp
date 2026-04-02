@@ -86,7 +86,7 @@ void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter
 		data.usage_count = v_usage_count;
 		data.counter = v_counter;
 	}
-	// reset after replay, as usage_count is a session-level flag for currval, not a value that should survive restart
+	// reset after replay, as usage_count should be fresh for every session
 	data.usage_count = 0;
 }
 

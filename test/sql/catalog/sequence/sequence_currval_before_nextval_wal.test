@@ -1,7 +1,13 @@
-# name: test/sql/catalog/sequence/sequence_currval_before_nextval.test
+# name: test/sql/catalog/sequence/sequence_currval_before_nextval_wal.test
 # group: [sequence]
 
-load {TEST_DIR}/mydb.db
+load {TEST_DIR}/wal_replay.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
 CREATE SEQUENCE IF NOT EXISTS scenario_id START 1 INCREMENT BY 1;
@@ -16,16 +22,15 @@ SELECT nextval('scenario_id');
 ----
 1
 
-statement ok
-checkpoint;
-
 restart
 
+# after WAL replay currval should fail
 statement error
 SELECT currval('scenario_id');
 ----
 Sequence Error: currval: sequence is not yet defined in this session
 
+# but the sequence counter should have been restored
 query I
 SELECT nextval('scenario_id');
 ----
