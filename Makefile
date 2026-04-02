@@ -35,7 +35,7 @@ UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
 
-CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || printf '%s\n' "$${NUMBER_OF_PROCESSORS:-1}")
 CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
 ifneq ($(filter 1 true TRUE,$(CI)),)
 ifndef CMAKE_BUILD_PARALLEL_LEVEL
@@ -379,11 +379,11 @@ release: ${EXTENSION_CONFIG_STEP}
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM) -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" -DDISABLE_UNITY=1 . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" -DDISABLE_UNITY=1 . && \
 	cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	cmake --build . --config Release
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
@@ -459,8 +459,12 @@ endif
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
 	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/$(UNITTEST_BINARY) "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+
+.PHONY: unittest_threadsan_extra
+unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
+unittest_threadsan_extra: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -491,6 +495,16 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
+.PHONY: symbol-checks symbol-leakage-check banned-symbol-check
+
+symbol-checks: symbol-leakage-check banned-symbol-check
+
+symbol-leakage-check:
+	$(PYTHON) scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+banned-symbol-check:
+	$(PYTHON) scripts/banned_symbols_check.py --directory build/release/src
+
 define ensure_apt_commands
 	missing=0; \
 	for cmd in $(1); do \
@@ -519,7 +533,15 @@ test_ci:
 
 format_tools:
 	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
-	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+	sudo pip3 install --break-system-packages cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+	@echo "::group::Installed Python packages"
+	pip3 freeze
+	@echo "::endgroup::"
+	@echo "::group::Formatter versions and config"
+	clang-format --version
+	clang-format --dump-config
+	black --version
+	@echo "::endgroup::"
 
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
