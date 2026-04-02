@@ -203,8 +203,6 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 					break;
 				}
 			}
-			// Position is already correct, no change needed.
-			(void)found;
 		}
 	}
 	get.SetColumnIds(std::move(col_ids));
