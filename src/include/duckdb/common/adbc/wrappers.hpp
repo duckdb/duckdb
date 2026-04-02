@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.h"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
@@ -22,6 +23,7 @@ namespace duckdb {
 struct DuckDBAdbcConnectionWrapper {
 	duckdb_connection connection;
 	unordered_map<string, string> options;
+	mutex stream_mutex;
 	//! Active stream wrappers on this connection (for materialization on concurrent execute)
 	vector<duckdb_adbc::DuckDBAdbcStreamWrapper *> active_streams;
 };
