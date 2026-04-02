@@ -1,0 +1,189 @@
+# name: test/sql/storage/vacuum/vacuum_rebuild_indexes_threshold.test_slow
+# description: Test vacuum_rebuild_indexes threshold with various scenarios
+# group: [vacuum]
+
+require vacuum_rebuild_indexes
+
+# --- Scenario 1: Partial deletes with merge + empty row group drops ---
+# Tests that vacuum correctly drops an empty row group and compacts
+# a partially-deleted row group, then rebuilds the index.
+
+load {TEST_DIR}/vacuum_rebuild_indexes_threshold_1.db
+
+statement ok
+SET wal_autocheckpoint='100GB'
+
+statement ok
+SET max_vacuum_tasks=99
+
+statement ok
+CREATE TABLE t1(i INTEGER);
+
+statement ok
+CREATE INDEX idx1 ON t1(i);
+
+# insert enough rows for 4 row groups (122880 rows each = 491520 total)
+statement ok
+INSERT INTO t1 SELECT i FROM range(491520) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t1')
+----
+4
+
+# delete all rows in the first row group (empty group drop)
+# and half the rows in the second row group (partial delete)
+statement ok
+DELETE FROM t1 WHERE i < 184320
+
+statement ok
+CHECKPOINT
+
+# RG0 (all deleted) is dropped. RG1 has 61440 live rows (half), RG2 and RG3 are full.
+# The empty RG0 is dropped, leaving 3 row groups.
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t1')
+----
+3
+
+# verify index lookups still work across the compacted range
+query I
+SELECT COUNT(*) FROM t1 WHERE i = 184320
+----
+1
+
+query I
+SELECT COUNT(*) FROM t1 WHERE i = 245760
+----
+1
+
+query I
+SELECT COUNT(*) FROM t1 WHERE i = 491519
+----
+1
+
+query I
+SELECT COUNT(*) FROM t1 WHERE i = 0
+----
+0
+
+query I
+SELECT COUNT(*) FROM t1 WHERE i = 122879
+----
+0
+
+query I
+SELECT COUNT(*) FROM t1
+----
+307200
+
+# Threshold exceeded: vacuum should NOT rebuild indexes.
+# When a table exceeds the threshold, row id changing vacuum operations
+# should be skipped to avoid index rebuilds.
+
+load {TEST_DIR}/vacuum_rebuild_indexes_threshold_2.db
+
+statement ok
+SET wal_autocheckpoint='100GB'
+
+statement ok
+CREATE TABLE t2(i INTEGER);
+
+statement ok
+CREATE INDEX idx2 ON t2(i);
+
+# insert 1M rows (~9 row groups) - well above the test config threshold (500000)
+statement ok
+INSERT INTO t2 SELECT i FROM range(1000000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t2')
+----
+9
+
+# delete all rows in the first row group
+statement ok
+DELETE FROM t2 WHERE i < 122880
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t2')
+----
+9
+
+query I
+SELECT COUNT(*) FROM t2
+----
+877120
+
+query I
+SELECT COUNT(*) FROM t2 WHERE i = 122880
+----
+1
+
+query I
+SELECT COUNT(*) FROM t2 WHERE i = 999999
+----
+1
+
+# --- Scenario 3: Multiple indexes ---
+# Verify rebuild works when a table has multiple ART indexes.
+
+load {TEST_DIR}/vacuum_rebuild_indexes_threshold_3.db
+
+statement ok
+SET wal_autocheckpoint='100GB'
+
+statement ok
+CREATE TABLE t3(i INTEGER, j INTEGER);
+
+statement ok
+CREATE INDEX idx3a ON t3(i);
+
+statement ok
+CREATE INDEX idx3b ON t3(j);
+
+statement ok
+INSERT INTO t3 SELECT i, i * 10 FROM range(245760) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t3')
+----
+2
+
+statement ok
+DELETE FROM t3 WHERE i < 122880
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t3')
+----
+1
+
+query I
+SELECT COUNT(*) FROM t3 WHERE i = 200000
+----
+1
+
+query I
+SELECT COUNT(*) FROM t3 WHERE j = 2000000
+----
+1
+
+query I
+SELECT COUNT(*) FROM t3
+----
+122880
