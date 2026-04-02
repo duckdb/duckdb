@@ -1691,38 +1691,22 @@ opt_Typename:
 			Typename						{ $$ = $1; }
 			| /*EMPTY*/						{ $$ = NULL; }
 
-Typename:	SimpleTypename opt_array_bounds
+Typename:	qualified_typename opt_array_bounds
 				{
 					$$ = $1;
 					$$->arrayBounds = $2;
 				}
-			| qualified_typename opt_array_bounds
-				{
-					$$ = $1;
-					$$->arrayBounds = $2;
-				}
-			| SETOF SimpleTypename opt_array_bounds
+			| SETOF qualified_typename opt_array_bounds
 				{
 					$$ = $2;
 					$$->arrayBounds = $3;
 					$$->setof = true;
 				}
 			/* SQL standard syntax, currently only one-dimensional */
-			| SimpleTypename ARRAY '[' Iconst ']'
-				{
-					$$ = $1;
-					$$->arrayBounds = list_make1(makeInteger($4));
-				}
 			| qualified_typename ARRAY '[' Iconst ']'
 				{
 					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger($4));
-				}
-			| SETOF SimpleTypename ARRAY '[' Iconst ']'
-				{
-					$$ = $2;
-					$$->arrayBounds = list_make1(makeInteger($5));
-					$$->setof = true;
 				}
 			| SETOF qualified_typename ARRAY '[' Iconst ']'
 				{
@@ -1730,21 +1714,10 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger($5));
 					$$->setof = true;
 				}
-			| SimpleTypename ARRAY
-				{
-					$$ = $1;
-					$$->arrayBounds = list_make1(makeInteger(-1));
-				}
 			| qualified_typename ARRAY
 				{
 					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger(-1));
-				}
-			| SETOF SimpleTypename ARRAY
-				{
-					$$ = $2;
-					$$->arrayBounds = list_make1(makeInteger(-1));
-					$$->setof = true;
 				}
 			| SETOF qualified_typename ARRAY
 				{
@@ -1775,18 +1748,23 @@ Typename:	SimpleTypename opt_array_bounds
 				}
 		;
 
+type_prefix:
+      IDENT '.' {
+          $$ = list_make1(makeString($1));
+      }
+    | type_prefix IDENT '.' {
+          $$ = lappend($1, makeString($2));
+      }
+;
+
 qualified_typename:
-			IDENT '.' SimpleTypename {
-				$3->names = lcons(makeString($1), $3->names);
-				$$ = $3;
-			}
-			| qualified_typename '.' SimpleTypename {
-				$1->names = list_concat($1->names, $3->names);
-				$1->typmods = $3->typmods;
-				$1->typemod = $3->typemod;
-				$$ = $1;
-			}
-	;
+    SimpleTypename {
+        $$ = $1;
+    }
+    | type_prefix SimpleTypename {
+        $2->names = list_concat($1, $2->names);
+        $$ = $2;
+    };
 
 opt_array_bounds:
 			opt_array_bounds '[' ']'
