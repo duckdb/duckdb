@@ -223,8 +223,7 @@ public:
 				if (has_agg) {
 					// Fetch into temp chunk with original column types, then accumulate.
 					l_state.fetch_chunk.Reset();
-					storage.Fetch(tx, l_state.fetch_chunk, column_ids, local_vector, scan_count,
-					              l_state.fetch_state);
+					storage.Fetch(tx, l_state.fetch_chunk, column_ids, local_vector, scan_count, l_state.fetch_state);
 					l_state.aggregate_state.AccumulateChunk(l_state.fetch_chunk);
 					l_state.rows_scanned += scan_count;
 					// Don't output yet — loop to pick up more batches.

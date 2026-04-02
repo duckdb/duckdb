@@ -125,8 +125,8 @@ bool ScanAggregateInfo::AccumulateRowGroupStats(RowGroup &rg) {
 		switch (aggr.type) {
 		case PushedAggregateType::COUNT_STAR: {
 			AggregateInputData aggr_input_data(aggr.bind_data.get(), *arena);
-			aggr.aggregate_function->simple_update(nullptr, aggr_input_data, 0,
-			                                 aggregate_states[aggr.output_idx].get(), rg.count.load());
+			aggr.aggregate_function->simple_update(nullptr, aggr_input_data, 0, aggregate_states[aggr.output_idx].get(),
+			                                       rg.count.load());
 			break;
 		}
 		case PushedAggregateType::COUNT_COL:
@@ -145,8 +145,7 @@ bool ScanAggregateInfo::AccumulateRowGroupStats(RowGroup &rg) {
 	return true;
 }
 
-bool ScanAggregateInfo::AccumulateSegmentStats(idx_t count,
-                                                   const unsafe_vector<ColumnScanState> &col_scans) {
+bool ScanAggregateInfo::AccumulateSegmentStats(idx_t count, const unsafe_vector<ColumnScanState> &col_scans) {
 	D_ASSERT(aggregate_info);
 	// First, check if ALL aggregates can be resolved from segment stats.
 	for (auto &aggregate : aggregate_info->aggregates) {
@@ -189,7 +188,7 @@ bool ScanAggregateInfo::AccumulateSegmentStats(idx_t count,
 		case PushedAggregateType::COUNT_STAR: {
 			AggregateInputData aggr_input_data(aggregate.bind_data.get(), *arena);
 			aggregate.aggregate_function->simple_update(nullptr, aggr_input_data, 0,
-			                                aggregate_states[aggregate.output_idx].get(), count);
+			                                            aggregate_states[aggregate.output_idx].get(), count);
 			break;
 		}
 		case PushedAggregateType::COUNT_COL:
@@ -218,8 +217,8 @@ void ScanAggregateInfo::AccumulateChunk(DataChunk &chunk) {
 		switch (agg.type) {
 		case PushedAggregateType::COUNT_STAR: {
 			AggregateInputData aggr_input_data(agg.bind_data.get(), *arena);
-			agg.aggregate_function->simple_update(nullptr, aggr_input_data, 0,
-			                                aggregate_states[agg.output_idx].get(), chunk.size());
+			agg.aggregate_function->simple_update(nullptr, aggr_input_data, 0, aggregate_states[agg.output_idx].get(),
+			                                      chunk.size());
 			break;
 		}
 		case PushedAggregateType::COUNT_COL:
@@ -227,7 +226,7 @@ void ScanAggregateInfo::AccumulateChunk(DataChunk &chunk) {
 		case PushedAggregateType::MAX: {
 			AggregateInputData aggr_input_data(agg.bind_data.get(), *arena);
 			agg.aggregate_function->simple_update(&chunk.data[agg.scan_col_position], aggr_input_data, 1,
-			                                aggregate_states[agg.output_idx].get(), chunk.size());
+			                                      aggregate_states[agg.output_idx].get(), chunk.size());
 			break;
 		}
 		}
@@ -245,13 +244,15 @@ void ScanAggregateInfo::Finalize(DataChunk &output) const {
 		case PushedAggregateType::MAX: {
 			Vector state_vector(Value::POINTER(CastPointerToValue(aggregate_states[agg.output_idx].get())));
 			AggregateInputData aggr_input_data(agg.bind_data.get(), *arena);
-			agg.aggregate_function->GetStateFinalizeCallback()(state_vector, aggr_input_data, output.data[agg.output_idx], 1, 0);
+			agg.aggregate_function->GetStateFinalizeCallback()(state_vector, aggr_input_data,
+			                                                   output.data[agg.output_idx], 1, 0);
 			break;
 		}
 		case PushedAggregateType::COUNT_COL: {
 			Vector state_vector(Value::POINTER(CastPointerToValue(aggregate_states[agg.output_idx].get())));
 			AggregateInputData aggr_input_data(agg.bind_data.get(), *arena);
-			agg.aggregate_function->GetStateFinalizeCallback()(state_vector, aggr_input_data, output.data[agg.output_idx], 1, 0);
+			agg.aggregate_function->GetStateFinalizeCallback()(state_vector, aggr_input_data,
+			                                                   output.data[agg.output_idx], 1, 0);
 			int64_t chunk_count = output.data[agg.output_idx].GetValue(0).GetValue<int64_t>();
 			output.data[agg.output_idx].SetValue(0, Value::BIGINT(counts[agg.output_idx] + chunk_count));
 			break;
@@ -267,8 +268,7 @@ TableScanState::~TableScanState() {
 }
 
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
-                                optional_ptr<TableFilterSet> table_filters,
-                                optional_ptr<SampleOptions> table_sampling,
+                                optional_ptr<TableFilterSet> table_filters, optional_ptr<SampleOptions> table_sampling,
                                 optional_ptr<AggregatePushdownInfo> table_aggregates) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {

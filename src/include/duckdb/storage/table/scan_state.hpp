@@ -247,8 +247,7 @@ public:
 
 	//! Accumulate from a single column segment that is ALWAYS_TRUE for the current filter.
 	//! Returns false if any aggregate cannot be resolved from segment stats alone.
-	bool AccumulateSegmentStats(idx_t segment_count,
-	                                const unsafe_vector<ColumnScanState> &col_scans);
+	bool AccumulateSegmentStats(idx_t segment_count, const unsafe_vector<ColumnScanState> &col_scans);
 	//! Accumulate from a chunk.
 	void AccumulateChunk(DataChunk &chunk);
 
@@ -354,7 +353,7 @@ public:
 	ScanFilterInfo filters;
 	//! Sampling info
 	ScanSamplingInfo sampling_info;
-	//! Aggregate pushdown info 
+	//! Aggregate pushdown info
 	ScanAggregateInfo aggregates;
 
 public:

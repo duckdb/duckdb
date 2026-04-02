@@ -18,12 +18,7 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
-enum class PushedAggregateType : uint8_t {
-	COUNT_STAR = 0,
-	COUNT_COL = 1,
-	MIN = 2,
-	MAX = 3
-};
+enum class PushedAggregateType : uint8_t { COUNT_STAR = 0, COUNT_COL = 1, MIN = 2, MAX = 3 };
 
 struct PushedAggregateInfo {
 	//! The type of aggregate

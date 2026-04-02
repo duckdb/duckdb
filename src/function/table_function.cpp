@@ -75,8 +75,7 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       verify_serialization == rhs.verify_serialization && projection_pushdown == rhs.projection_pushdown &&
 	       filter_pushdown == rhs.filter_pushdown && filter_prune == rhs.filter_prune &&
 	       sampling_pushdown == rhs.sampling_pushdown && aggregate_pushdown == rhs.aggregate_pushdown &&
-	       late_materialization == rhs.late_materialization &&
-	       global_initialization == rhs.global_initialization;
+	       late_materialization == rhs.late_materialization && global_initialization == rhs.global_initialization;
 }
 
 bool TableFunction::operator!=(const TableFunction &rhs) const {

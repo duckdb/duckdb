@@ -40,7 +40,7 @@ public:
 		if (op.function.init_global) {
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
-			                             op.extra_info.sample_options, op.extra_info.aggregate_pushdown_info,&op);
+			                             op.extra_info.sample_options, op.extra_info.aggregate_pushdown_info, &op);
 
 			global_state = op.function.init_global(context, input);
 			if (global_state) {

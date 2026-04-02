@@ -98,7 +98,7 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 
 		PushedAggregateInfo info;
 		info.output_idx = idx;
-		
+
 		const auto &func_name = aggr_expr.function.name;
 		if (func_name != "count_star" && func_name != "count" && func_name != "min" && func_name != "max") {
 			return false;
@@ -121,8 +121,7 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 
 			if (func_name == "min" || func_name == "max") {
 				auto &return_type = aggr_expr.children[0]->return_type;
-				if (return_type != LogicalType::VARCHAR && !return_type.IsNumeric() &&
-				    !return_type.IsTemporal()) {
+				if (return_type != LogicalType::VARCHAR && !return_type.IsNumeric() && !return_type.IsTemporal()) {
 					// Aligned with StatisticsPropagator::GetComparator —
 					// only VARCHAR (exact match), numeric, and temporal types have usable min/max stats.
 					return false;
@@ -234,8 +233,7 @@ bool AggregatePushdown::TryPushdown(unique_ptr<LogicalOperator> &op) {
 		const auto &partial_type = pushed_agg.return_type;
 
 		if (func_name == "count_star" || func_name == "count") {
-			auto &sum_entry =
-			    catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
+			auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
 			auto sum_fun = sum_entry.functions.GetFunctionByArguments(optimizer.context, {partial_type});
 			vector<unique_ptr<Expression>> args;
 			args.push_back(make_uniq<BoundColumnRefExpression>(partial_type, partial_ref));
