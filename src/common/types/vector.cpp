@@ -671,7 +671,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 	}
 	auto &vector = current_vector_ref.get();
-	auto &validity = vector.validity;
+	auto &validity = vector.buffer->GetValidityMask();
 	auto &type = vector.GetType();
 	if (!validity.RowIsValid(index)) {
 		return Value(vector.GetType());

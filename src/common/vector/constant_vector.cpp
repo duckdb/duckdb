@@ -15,7 +15,8 @@ void ConstantVector::SetNull(Vector &vector) {
 
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	vector.validity.Set(0, !is_null);
+	auto &validity = vector.buffer->GetValidityMask();
+	validity.Set(0, !is_null);
 	if (is_null) {
 		auto &type = vector.GetType();
 		auto internal_type = type.InternalType();
@@ -110,7 +111,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
 
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		vector.validity.Set(0, true);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Set(0, true);
 		break;
 	}
 	case PhysicalType::STRUCT: {
@@ -132,7 +134,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 			ConstantVector::Reference(target_entries[i], source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		vector.validity.Set(0, true);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Set(0, true);
 		break;
 	}
 	default:

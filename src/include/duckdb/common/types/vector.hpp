@@ -220,8 +220,6 @@ protected:
 	mutable VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	LogicalType type;
-	//! The validity mask of the vector
-	mutable ValidityMask validity;
 	//! The main buffer holding the data of the vector
 	mutable buffer_ptr<VectorBuffer> buffer;
 };

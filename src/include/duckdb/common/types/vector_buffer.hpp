@@ -70,6 +70,9 @@ public:
 	virtual data_ptr_t GetData() {
 		return nullptr;
 	}
+	virtual ValidityMask &GetValidityMask() {
+		throw InternalException("VectorBuffer does not have a ValidityMask");
+	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {
