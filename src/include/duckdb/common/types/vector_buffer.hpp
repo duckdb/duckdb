@@ -21,21 +21,23 @@ class VectorBuffer;
 class Vector;
 
 enum class VectorBufferType : uint8_t {
-	STANDARD_BUFFER,   // standard buffer, holds a single array of data
-	DICTIONARY_BUFFER, // dictionary buffer, holds a selection vector and child vector
-	STRING_BUFFER,     // string buffer, holds a string heap
-	FSST_BUFFER,       // fsst compressed string buffer, holds a string heap, fsst symbol table and a string count
-	STRUCT_BUFFER,     // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER,       // list buffer, holds a single flatvector child
-	MANAGED_BUFFER,    // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER,     // opaque buffer, can be created for example by the parquet reader
-	ARRAY_BUFFER,      // array buffer, holds a single flatvector child
-	SHREDDED_BUFFER,   // holds data for a shredded variant vector
-	SEQUENCE_BUFFER    // holds a linear numeric sequence (start, increment)
+	STANDARD_BUFFER,   // VectorType::FLAT/CONSTANT - Fixed-Size Type - Holds a single array of data
+	STRING_BUFFER,     // VectorType::FLAT/CONSTANT - String          - Holds string_t array and StringHeap
+	STRUCT_BUFFER,     // VectorType::FLAT/CONSTANT - Struct          - Holds struct child vectors
+	LIST_BUFFER,       // VectorType::FLAT/CONSTANT - List            - Holds list_entry_t array and list child vector
+	ARRAY_BUFFER,      // VectorType::FLAT/CONSTANT - Array           - Holds array child vector
+	DICTIONARY_BUFFER, // VectorType::DICTIONARY    - Any             - Holds SelectionVector and dict child vector
+	FSST_BUFFER,       // VectorType::FSST          - String          - Holds string_t array, StringHeap and FSST table
+	SHREDDED_BUFFER,   // VectorType::SHREDDED      - Variant         - Holds shredded variant
+	SEQUENCE_BUFFER    // VectorType::SEQUENCE      - Any             - Holds linear numeric sequence (start, increment)
 };
 
 struct AuxiliaryDataHolder {
 	virtual ~AuxiliaryDataHolder() = default;
+};
+
+struct AuxiliaryDataSet {
+	vector<unique_ptr<AuxiliaryDataHolder>> data;
 };
 
 class PinnedBufferHolder : public AuxiliaryDataHolder {
@@ -47,13 +49,13 @@ private:
 	BufferHandle handle;
 };
 
-class VectorBufferHolder : public AuxiliaryDataHolder {
+class AuxiliaryDataSetHolder : public AuxiliaryDataHolder {
 public:
-	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer) : vector_buffer(std::move(buffer)) {
+	explicit AuxiliaryDataSetHolder(buffer_ptr<AuxiliaryDataSet> buffer) : auxiliary_data(std::move(buffer)) {
 	}
 
 private:
-	buffer_ptr<VectorBuffer> vector_buffer;
+	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -70,10 +72,16 @@ public:
 	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
-		auxiliary_data.push_back(std::move(aux_data_p));
+		if (!auxiliary_data) {
+			auxiliary_data = make_buffer<AuxiliaryDataSet>();
+		}
+		auxiliary_data->data.push_back(std::move(aux_data_p));
 	}
-	vector<unique_ptr<AuxiliaryDataHolder>> &GetAuxiliaryDataMutable() {
+	buffer_ptr<AuxiliaryDataSet> &GetAuxiliaryData() {
 		return auxiliary_data;
+	}
+	virtual void ClearAuxiliaryData() {
+		auxiliary_data.reset();
 	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
@@ -92,7 +100,7 @@ public:
 
 protected:
 	VectorBufferType buffer_type;
-	vector<unique_ptr<AuxiliaryDataHolder>> auxiliary_data;
+	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 
 public:
 	template <class TARGET>

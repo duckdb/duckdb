@@ -28,13 +28,9 @@ VectorListBuffer::VectorListBuffer(data_ptr_t data, const Vector &vector, idx_t 
 	child = make_uniq<Vector>(Vector::Ref(vector));
 }
 
-VectorListBuffer::VectorListBuffer(data_ptr_t data, buffer_ptr<VectorBuffer> parent_buffer)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data) {
-	auto &parent = parent_buffer->Cast<VectorListBuffer>();
-	capacity = parent.capacity;
-	size = parent.size;
+VectorListBuffer::VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), data_ptr(data), capacity(parent.capacity), size(parent.size) {
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
-	AddAuxiliaryData(make_uniq<VectorBufferHolder>(std::move(parent_buffer)));
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, const VectorListBuffer &parent)
