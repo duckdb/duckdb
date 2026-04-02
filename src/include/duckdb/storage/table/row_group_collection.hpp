@@ -114,7 +114,7 @@ public:
 	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
-	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats, bool &needs_index_rebuild);
+	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);

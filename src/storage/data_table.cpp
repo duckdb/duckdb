@@ -363,7 +363,7 @@ void DataTable::RebuildIndexes() {
 
 	for (auto &index : indexes.Indexes()) {
 		if (!index.IsBound()) {
-			continue;
+			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
 		auto &bound_index = index.Cast<BoundIndex>();
 		bound_index.CommitDrop();
@@ -1746,10 +1746,9 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	bool need_index_rebuild = false;
-	row_groups->Checkpoint(writer, global_stats, need_index_rebuild);
+	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetAppendRequiresNewRowGroup();
-	if (need_index_rebuild) {
+	if (writer.NeedsIndexRebuild()) {
 		RebuildIndexes();
 	}
 	// The row group payload data has been written. Now write:

@@ -1481,7 +1481,7 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats, bool &needs_index_rebuild) {
+void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto row_groups = GetRowGroups();
 
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
@@ -1769,7 +1769,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// setting is enabled and all the indexes are bound ART's),
 	// and
 	// 2) we have changed rowids.
-	needs_index_rebuild = vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed;
+	writer.SetNeedsIndexRebuild(vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed);
 }
 
 //===--------------------------------------------------------------------===//
