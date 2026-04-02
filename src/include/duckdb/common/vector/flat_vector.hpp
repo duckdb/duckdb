@@ -115,10 +115,65 @@ private:
 		idx_t count;
 	};
 
+	struct StringElement {
+		StringElement(Vector &vector, string_t *data, idx_t idx) : vector(vector), data(data), idx(idx) {
+		}
+
+		//! Constructs an empty string of a given length and returns it
+		//! Note: the empty string must be filled and .Finalize() must be called on it
+		DUCKDB_API string_t &EmptyString(idx_t length);
+		DUCKDB_API string_t &operator=(string_t val);
+		inline char *GetDataWriteable() {
+			return data[idx].GetDataWriteable();
+		}
+		inline void Finalize() {
+			data[idx].Finalize();
+		}
+		inline string GetString() {
+			return data[idx].GetString();
+		}
+
+		operator string_t() const { // NOLINT: allow implicit conversion
+			return data[idx];
+		}
+
+	private:
+		Vector &vector;
+		string_t *data;
+		idx_t idx;
+	};
+
 public:
+	struct FlatStringWriter {
+		FlatStringWriter(Vector &vector, idx_t count)
+		    : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)),
+		      count(count) {
+		}
+
+		void SetInvalid(idx_t idx) {
+			D_ASSERT(idx < count);
+			validity.SetInvalid(idx);
+		}
+
+		StringElement operator[](idx_t idx) {
+			D_ASSERT(idx < count);
+			return StringElement(vector, data, idx);
+		}
+
+	private:
+		Vector &vector;
+		string_t *data;
+		ValidityMask &validity;
+		idx_t count;
+	};
+
 	template <class T>
-	static FlatVectorWriter<T> Writer(Vector &vector, idx_t count) {
-		return FlatVectorWriter<T>(vector, count);
+	static auto Writer(Vector &vector, idx_t count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			return FlatStringWriter(vector, count);
+		} else {
+			return FlatVectorWriter<T>(vector, count);
+		}
 	}
 };
 

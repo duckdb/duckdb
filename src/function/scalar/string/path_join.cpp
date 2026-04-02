@@ -77,7 +77,7 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 			result_data.SetInvalid(row_idx);
 			continue;
 		}
-		result_data[row_idx] = StringVector::AddString(result, joined);
+		result_data[row_idx] = joined;
 	}
 }
 

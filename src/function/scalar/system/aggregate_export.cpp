@@ -179,13 +179,13 @@ template <>
 void StoreFieldOp::Operation<string_t>(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources,
                                        idx_t field_offset) {
 	auto &child = StructVector::GetEntries(struct_vec)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
+	auto child_data = FlatVector::Writer<string_t>(child, count);
 
 	for (idx_t row = 0; row < count; row++) {
 		auto src = sources[row] + field_offset;
 		string_t source_str = *reinterpret_cast<string_t *>(src);
 		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
+		child_data[row] = source_str;
 	}
 }
 
@@ -246,14 +246,14 @@ void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout
                                                       idx_t field_idx, const SelectionVector &sel, idx_t count,
                                                       data_ptr_t base_ptr, idx_t field_offset) {
 	auto &child = StructVector::GetEntries(result)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
+	auto child_data = FlatVector::Writer<string_t>(child, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		idx_t row = sel.get_index(i);
 		auto src = base_ptr + i * layout.aligned_state_size + field_offset;
 		string_t source_str = *reinterpret_cast<string_t *>(src);
 		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
+		child_data[row] = source_str;
 	}
 }
 
@@ -765,10 +765,10 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		return;
 	}
 
-	auto blob_ptr = FlatVector::GetData<string_t>(result);
+	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
+		blob_ptr[row_idx] = string_t(const_char_ptr_cast(data_ptr), state_size);
 	}
 }
 

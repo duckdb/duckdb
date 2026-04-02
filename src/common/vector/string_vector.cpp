@@ -3,6 +3,16 @@
 
 namespace duckdb {
 
+string_t &FlatVector::StringElement::EmptyString(idx_t length) {
+	data[idx] = StringVector::EmptyString(vector, length);
+	return data[idx];
+}
+
+string_t &FlatVector::StringElement::operator=(string_t val) {
+	data[idx] = StringVector::AddStringOrBlob(vector, val);
+	return data[idx];
+}
+
 VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
