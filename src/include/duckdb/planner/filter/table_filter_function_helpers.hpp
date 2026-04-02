@@ -41,8 +41,22 @@ inline unique_ptr<FunctionLocalState> InitSelectivityTrackingLocalState(idx_t n_
 	return make_uniq<SelectivityTrackingLocalState>(n_vectors_to_check, selectivity_threshold);
 }
 
+inline void SetConstantBooleanResult(Vector &result, bool value) {
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<bool>(result)[0] = value;
+}
+
 inline void SelectionToBooleanResult(idx_t count, const SelectionVector &sel, idx_t sel_count, Vector &result) {
+	if (count == 0 || sel_count == 0) {
+		SetConstantBooleanResult(result, false);
+		return;
+	}
+	if (sel_count == count) {
+		SetConstantBooleanResult(result, true);
+		return;
+	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::Validity(result).SetAllValid(count);
 	auto result_data = FlatVector::GetData<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = false;
@@ -53,8 +67,7 @@ inline void SelectionToBooleanResult(idx_t count, const SelectionVector &sel, id
 }
 
 inline void SetAllTrue(DataChunk &args, Vector &result) {
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::GetData<bool>(result)[0] = true;
+	SetConstantBooleanResult(result, true);
 }
 
 template <class TRACKING_STATE, class EXECUTOR>
