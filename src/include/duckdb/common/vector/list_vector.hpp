@@ -23,7 +23,7 @@ public:
 	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
 	explicit VectorListBuffer(data_ptr_t data, const Vector &vector, idx_t child_capacity, idx_t child_size);
-	explicit VectorListBuffer(data_ptr_t data, buffer_ptr<VectorBuffer> parent_buffer);
+	explicit VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, const VectorListBuffer &parent);
 	~VectorListBuffer() override;
 

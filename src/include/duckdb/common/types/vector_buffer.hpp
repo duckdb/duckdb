@@ -38,6 +38,10 @@ struct AuxiliaryDataHolder {
 	virtual ~AuxiliaryDataHolder() = default;
 };
 
+struct AuxiliaryDataSet {
+	vector<unique_ptr<AuxiliaryDataHolder>> data;
+};
+
 class PinnedBufferHolder : public AuxiliaryDataHolder {
 public:
 	explicit PinnedBufferHolder(BufferHandle handle);
@@ -47,13 +51,13 @@ private:
 	BufferHandle handle;
 };
 
-class VectorBufferHolder : public AuxiliaryDataHolder {
+class AuxiliaryDataSetHolder : public AuxiliaryDataHolder {
 public:
-	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer) : vector_buffer(std::move(buffer)) {
+	explicit AuxiliaryDataSetHolder(buffer_ptr<AuxiliaryDataSet> buffer) : auxiliary_data(std::move(buffer)) {
 	}
 
 private:
-	buffer_ptr<VectorBuffer> vector_buffer;
+	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -70,13 +74,16 @@ public:
 	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
-		auxiliary_data.push_back(std::move(aux_data_p));
+		if (!auxiliary_data) {
+			auxiliary_data = make_buffer<AuxiliaryDataSet>();
+		}
+		auxiliary_data->data.push_back(std::move(aux_data_p));
 	}
-	vector<unique_ptr<AuxiliaryDataHolder>> &GetAuxiliaryDataMutable() {
+	buffer_ptr<AuxiliaryDataSet> &GetAuxiliaryData() {
 		return auxiliary_data;
 	}
 	virtual void ClearAuxiliaryData() {
-		auxiliary_data.clear();
+		auxiliary_data.reset();
 	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
@@ -95,7 +102,7 @@ public:
 
 protected:
 	VectorBufferType buffer_type;
-	vector<unique_ptr<AuxiliaryDataHolder>> auxiliary_data;
+	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 
 public:
 	template <class TARGET>
