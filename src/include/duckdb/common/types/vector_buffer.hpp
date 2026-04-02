@@ -75,6 +75,9 @@ public:
 	vector<unique_ptr<AuxiliaryDataHolder>> &GetAuxiliaryDataMutable() {
 		return auxiliary_data;
 	}
+	virtual void ClearAuxiliaryData() {
+		auxiliary_data.clear();
+	}
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
 		return nullptr;
