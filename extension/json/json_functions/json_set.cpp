@@ -91,55 +91,30 @@ static void JsonSetFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
-	const auto count = args.size();
+	TernaryExecutor::ExecuteWithNulls<string_t, string_t, string_t, string_t>(
+	    args.data[0], args.data[1], args.data[2], result, args.size(),
+	    [&](string_t doc_str, string_t path_str, string_t val_str, ValidityMask &mask, idx_t idx) {
+		    auto doc = JSONCommon::ReadDocument(doc_str, JSONCommon::READ_FLAG, alc);
+		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
-	UnifiedVectorFormat doc_data, path_data, val_data;
-	args.data[0].ToUnifiedFormat(count, doc_data);
-	args.data[1].ToUnifiedFormat(count, path_data);
-	args.data[2].ToUnifiedFormat(count, val_data);
-	auto doc_inputs = UnifiedVectorFormat::GetData<string_t>(doc_data);
-	auto path_inputs = UnifiedVectorFormat::GetData<string_t>(path_data);
-	auto val_inputs = UnifiedVectorFormat::GetData<string_t>(val_data);
+		    auto val_doc = JSONCommon::ReadDocument(val_str, JSONCommon::READ_FLAG, alc);
+		    auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+		    auto pointer = ConvertToJsonPointer(path_str);
 
-	for (idx_t i = 0; i < count; i++) {
-		auto doc_idx = doc_data.sel->get_index(i);
-		auto path_idx = path_data.sel->get_index(i);
-		auto val_idx = val_data.sel->get_index(i);
+		    // Try set first (overwrites existing, creates missing).
+		    // Fall back to add for cases set cannot handle (e.g. appending with /-).
+		    if (!yyjson_mut_doc_ptr_setx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr)) {
+			    yyjson_mut_doc_ptr_addx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr);
+		    }
 
-		if (!doc_data.validity.RowIsValid(doc_idx) || !path_data.validity.RowIsValid(path_idx) ||
-		    !val_data.validity.RowIsValid(val_idx)) {
-			result_validity.SetInvalid(i);
-			continue;
-		}
-
-		auto doc = JSONCommon::ReadDocument(doc_inputs[doc_idx], JSONCommon::READ_FLAG, alc);
-		auto mut_doc = yyjson_doc_mut_copy(doc, alc);
-
-		auto val_doc = JSONCommon::ReadDocument(val_inputs[val_idx], JSONCommon::READ_FLAG, alc);
-		auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
-
-		auto pointer = ConvertToJsonPointer(path_inputs[path_idx]);
-
-		// Try set first (overwrites existing, creates missing).
-		// Fall back to add for cases set cannot handle (e.g. appending with /-).
-		if (!yyjson_mut_doc_ptr_setx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr)) {
-			yyjson_mut_doc_ptr_addx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr);
-		}
-
-		auto root = yyjson_mut_doc_get_root(mut_doc);
-		if (root) {
-			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
-		} else {
-			result_validity.SetInvalid(i);
-		}
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+		    auto root = yyjson_mut_doc_get_root(mut_doc);
+		    if (!root) {
+			    mask.SetInvalid(idx);
+			    return string_t {};
+		    }
+		    return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
+	    });
 
 	JSONAllocator::AddBuffer(result, alc);
 }
