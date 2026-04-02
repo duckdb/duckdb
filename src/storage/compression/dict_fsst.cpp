@@ -191,11 +191,9 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 			// apply the filter
 			auto &dict_data = scan_state.dictionary->data;
-			UnifiedVectorFormat vdata;
-			dict_data.ToUnifiedFormat(scan_state.dict_count, vdata);
 			SelectionVector dict_sel;
 			idx_t filter_count = scan_state.dict_count;
-			ColumnSegment::FilterSelection(dict_sel, dict_data, vdata, filter, filter_state, scan_state.dict_count,
+			ColumnSegment::FilterSelection(dict_sel, dict_data, filter, filter_state, scan_state.dict_count,
 			                               filter_count);
 
 			// now set all matching tuples to true
@@ -227,9 +225,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 	// fallback: scan + filter
 	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
 
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(vector_count, vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, vector_count, sel_count);
+	ColumnSegment::FilterSelection(sel, result, filter, filter_state, vector_count, sel_count);
 }
 
 } // namespace dict_fsst

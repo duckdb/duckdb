@@ -350,9 +350,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 	return approved_tuple_count;
 }
 
-idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-                                     const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
-                                     idx_t &approved_tuple_count) {
+idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, const TableFilter &filter,
+                                     TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
 	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
 }

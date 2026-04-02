@@ -461,12 +461,9 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		// execute the filter over all runs at once
 		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer));
 
-		UnifiedVectorFormat run_format;
-		run_vector.ToUnifiedFormat(total_run_count, run_format);
-
 		SelectionVector run_matches;
 		scan_state.matching_run_count = total_run_count;
-		ColumnSegment::FilterSelection(run_matches, run_vector, run_format, filter, filter_state, total_run_count,
+		ColumnSegment::FilterSelection(run_matches, run_vector, filter, filter_state, total_run_count,
 		                               scan_state.matching_run_count);
 
 		// for any runs that pass the filter - set the matches to true
