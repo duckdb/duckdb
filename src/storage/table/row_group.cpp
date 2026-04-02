@@ -1113,7 +1113,10 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	return count - vinfo->GetCommittedDeletedCount(count);
+	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
+	options.insert_type = InsertedScanType::ALL_ROWS;
+	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+	return vinfo->GetRowCount(options, count);
 }
 
 idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
@@ -1121,7 +1124,7 @@ idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
 	if (!vinfo) {
 		return count;
 	}
-	return count - vinfo->GetDeletedCount(transaction, count);
+	return vinfo->GetRowCount(transaction, count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
