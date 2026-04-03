@@ -13,6 +13,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 
@@ -51,8 +52,8 @@ struct UnaryLambdaWrapperWithNulls {
 template <class OP>
 struct UnaryStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, Vector &data) {
-		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, data);
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, StringHeap &heap) {
+		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, heap);
 	}
 };
 
@@ -237,7 +238,8 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void ExecuteString(Vector &input, Vector &result, idx_t count) {
-		UnaryExecutor::GenericExecute<INPUT_TYPE, RESULT_TYPE, UnaryStringOperator<OP>>(input, result, count, result);
+		auto &heap = StringVector::GetStringHeap(result);
+		UnaryExecutor::GenericExecute<INPUT_TYPE, RESULT_TYPE, UnaryStringOperator<OP>>(input, result, count, heap);
 	}
 
 private:

@@ -50,7 +50,9 @@ string_t StringHeap::AddBlob(const string_t &data) {
 }
 
 string_t StringHeap::EmptyString(idx_t len) {
-	D_ASSERT(len > string_t::INLINE_LENGTH);
+	if (len <= string_t::INLINE_LENGTH) {
+		return string_t(UnsafeNumericCast<uint32_t>(len));
+	}
 	if (len > string_t::MAX_STRING_SIZE) {
 		throw OutOfRangeException("Cannot create a string of size: '%d', the maximum supported string size is: '%d'",
 		                          len, string_t::MAX_STRING_SIZE);
