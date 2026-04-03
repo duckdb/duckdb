@@ -706,8 +706,9 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 	idx_t current_column_idx = 0;
 	for (auto group_idx : group_idxs) {
 		const auto group_referencing_idx = group_idx.first;
-		const auto column_idx =
-		    compact_group_columns ? compact_group_projection_idxs[group_idx.second] : group_idx.second;
+		const auto column_idx = (compact_group_columns && op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN)
+		                            ? compact_group_projection_idxs[group_idx.second]
+		                            : group_idx.second;
 		new_bindings[group_referencing_idx].table_index = group_table_idx;
 		new_bindings[group_referencing_idx].column_index = column_idx;
 
