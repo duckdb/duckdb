@@ -123,7 +123,7 @@ duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t mem
 		return nullptr;
 	}
 	duckdb::Vector enum_vector(duckdb::LogicalType::VARCHAR, member_count);
-	auto enum_vector_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(enum_vector);
+	auto enum_vector_ptr = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(enum_vector);
 
 	for (idx_t i = 0; i < member_count; i++) {
 		if (!member_names[i]) {

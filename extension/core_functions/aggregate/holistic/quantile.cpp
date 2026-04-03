@@ -186,7 +186,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
 		if (!n) {
@@ -253,7 +253,7 @@ struct QuantileListOperation : QuantileOperation {
 		auto &result = ListVector::GetEntry(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		auto v_t = state.v.data();
 		D_ASSERT(v_t);

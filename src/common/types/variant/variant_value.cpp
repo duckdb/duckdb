@@ -619,7 +619,7 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 		values_offset += values_entry.length;
 
 		//! value
-		blob_data[i].EmptyString(blob, blob_sizes[i]);
+		blob_data[i].EmptyString(blob_sizes[i]);
 	}
 
 	//! Reserve for the children of the lists

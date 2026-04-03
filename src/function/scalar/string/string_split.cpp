@@ -29,7 +29,7 @@ struct StringSplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] =
+		FlatVector::GetDataMutable<string_t>(result_child)[list_entry] =
 		    string_t(split_data, UnsafeNumericCast<uint32_t>(split_size));
 	}
 };
@@ -119,7 +119,7 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	ListVector::SetListSize(result, 0);
 
-	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_struct_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	// count all the splits and set up the list entries
 	auto &child_entry = ListVector::GetEntry(result);

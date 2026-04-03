@@ -372,7 +372,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		state.InitializePage(partition);
 		const auto &fmask = partition.filter_mask;
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;
 		if (prevs.empty()) {

@@ -2063,10 +2063,10 @@ struct StructDatePart {
 				if (owners[part_index] == col) {
 					if (IsBigintDatepart(info.part_codes[col])) {
 						bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-						    FlatVector::GetData<int64_t>(child_entry);
+						    FlatVector::GetDataMutable<int64_t>(child_entry);
 					} else {
 						double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-						    FlatVector::GetData<double>(child_entry);
+						    FlatVector::GetDataMutable<double>(child_entry);
 					}
 				}
 			}

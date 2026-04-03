@@ -259,7 +259,7 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	const auto count = sink_chunk.size();
 	sort_chunk.Reset();
 	auto &sorted_vec = sort_chunk.data.back();
-	auto sorted = FlatVector::GetData<idx_t>(sorted_vec);
+	auto sorted = FlatVector::GetDataMutable<idx_t>(sorted_vec);
 	std::iota(sorted, sorted + count, input_idx);
 
 	// Our arguments are being fully materialised,
@@ -646,8 +646,8 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 void WindowDistinctAggregatorLocalState::Evaluate(ExecutionContext &context,
                                                   const WindowDistinctAggregatorGlobalState &gdstate,
                                                   const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
-	auto ldata = FlatVector::GetData<const_data_ptr_t>(statel);
-	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
+	auto ldata = FlatVector::GetDataMutable<const_data_ptr_t>(statel);
+	auto pdata = FlatVector::GetDataMutable<data_ptr_t>(statep);
 
 	const auto &merge_sort_tree = gdstate.merge_sort_tree;
 	const auto &levels_flat_native = gdstate.levels_flat_native;

@@ -16,7 +16,7 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ListVector::SetListSize(result, 0);
 
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	result_data[0] = list_entry_t();
 	result.Verify(row_count);
 }
@@ -83,7 +83,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	values_child_vector.ToUnifiedFormat(ListVector::GetListSize(values), values_child_data);
 
 	// a LIST vector, where each row contains a MAP (LIST of STRUCTs)
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	auto &result_validity = FlatVector::Validity(result);
 

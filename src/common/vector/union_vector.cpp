@@ -68,7 +68,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 				FlatVector::Validity(tag_vector) = FlatVector::Validity(member_vector);
 			}
 
-			auto tag_data = FlatVector::GetData<union_tag_t>(tag_vector);
+			auto tag_data = FlatVector::GetDataMutable<union_tag_t>(tag_vector);
 			memset(tag_data, tag, count);
 		}
 	}

@@ -65,7 +65,7 @@ static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastPara
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		auto source_sel = vdata.sel;
 		auto source_mask = vdata.validity;
-		auto result_data = FlatVector::GetData<T>(result);
+		auto result_data = FlatVector::GetDataMutable<T>(result);
 		auto &result_mask = FlatVector::Validity(result);
 
 		VectorTryCastData vector_cast_data(result, parameters);
@@ -149,8 +149,8 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	ListVector::Reserve(result, total_list_size);
 	ListVector::SetListSize(result, total_list_size);
 
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
-	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto child_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
@@ -298,12 +298,12 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 
 	Vector varchar_key_vector(LogicalType::VARCHAR, total_elements);
 	Vector varchar_val_vector(LogicalType::VARCHAR, total_elements);
-	auto child_key_data = FlatVector::GetData<string_t>(varchar_key_vector);
-	auto child_val_data = FlatVector::GetData<string_t>(varchar_val_vector);
+	auto child_key_data = FlatVector::GetDataMutable<string_t>(varchar_key_vector);
+	auto child_val_data = FlatVector::GetDataMutable<string_t>(varchar_val_vector);
 
 	ListVector::Reserve(result, total_elements);
 	ListVector::SetListSize(result, total_elements);
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
@@ -397,7 +397,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 
 	auto child_count = array_size * count;
 	Vector varchar_vector(LogicalType::VARCHAR, child_count);
-	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+	auto child_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;

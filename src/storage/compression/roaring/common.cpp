@@ -220,7 +220,7 @@ void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t sca
 	// Get src's validity mask
 	auto &validity = FlatVector::Validity(src);
 
-	auto write_ptr = FlatVector::GetData<uint8_t>(dst) + offset;
+	auto write_ptr = FlatVector::GetDataMutable<uint8_t>(dst) + offset;
 	if (validity.CannotHaveNull()) {
 		memset(write_ptr, 1, scan_count); // 1 is for valid
 	} else if (scan_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0) {

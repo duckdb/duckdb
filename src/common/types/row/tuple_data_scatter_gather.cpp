@@ -110,7 +110,7 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
                                            const SelectionVector &append_sel, const idx_t append_count) {
 	ResetCombinedListData(chunk_state.vector_data);
 
-	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
 	std::fill_n(heap_sizes, append_count, 0);
 
 	for (idx_t col_idx = 0; col_idx < new_chunk.ColumnCount(); col_idx++) {
@@ -158,7 +158,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		return;
 	}
 
-	const auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(heap_sizes_v);
 
 	// Source
 	const auto &source_vector_data = source_format.unified;
@@ -270,7 +270,7 @@ void TupleDataCollection::SortKeyComputeHeapSizes(TupleDataChunkState &chunk_sta
 		return;
 	}
 
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
 
 	const auto &source_vector_data = chunk_state.vector_data[0].unified;
 	const auto &source_sel = *source_vector_data.sel;
@@ -329,7 +329,7 @@ void TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(Vector &heap_siz
 	const auto &list_validity = list_data.validity;
 
 	// Target
-	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	auto heap_sizes = FlatVector::GetDataMutable<idx_t>(heap_sizes_v);
 
 	D_ASSERT(TypeIsConstantSize(source_v.GetType().InternalType()));
 	const auto type_size = GetTypeIdSize(source_v.GetType().InternalType());
@@ -369,7 +369,7 @@ void TupleDataCollection::StringWithinCollectionComputeHeapSizes(Vector &heap_si
 	const auto &source_validity = source_data.validity;
 
 	// Target
-	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	auto heap_sizes = FlatVector::GetDataMutable<idx_t>(heap_sizes_v);
 
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
@@ -411,7 +411,7 @@ void TupleDataCollection::StructWithinCollectionComputeHeapSizes(Vector &heap_si
 	const auto &list_validity = list_data.validity;
 
 	// Target
-	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	auto heap_sizes = FlatVector::GetDataMutable<idx_t>(heap_sizes_v);
 
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
@@ -483,7 +483,7 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 	const auto &child_list_validity = child_list_data.validity;
 
 	// Target
-	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	auto heap_sizes = FlatVector::GetDataMutable<idx_t>(heap_sizes_v);
 
 	// Figure out actual child list size (can differ from ListVector::GetListSize if dict/const vector),
 	// and we cannot use ConstantVector::ZeroSelectionVector because it may need to be longer than STANDARD_VECTOR_SIZE
@@ -657,7 +657,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 	Vector heap_locations_copy(LogicalType::POINTER);
 	if (!layout.AllConstant()) {
 		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-		const auto copied_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
+		const auto copied_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations_copy);
 		for (idx_t i = 0; i < append_count; i++) {
 			copied_heap_locations[i] = heap_locations[i];
 		}
@@ -739,7 +739,7 @@ static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVec
 
 	// Target
 	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -838,8 +838,8 @@ void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source
 	const auto &validity = source_data.validity;
 
 	// Target
-	const auto target_locations = FlatVector::GetData<SORT_KEY *>(row_locations);
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_locations = FlatVector::GetDataMutable<SORT_KEY *>(const_cast<Vector &>(row_locations));
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	if (validity.CannotHaveNull()) {
 		// Fast path
@@ -895,7 +895,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 
 	// Create a Vector of pointers to the TupleDataLayout of the STRUCT
 	Vector struct_row_locations(LogicalType::POINTER, append_count);
-	auto struct_target_locations = FlatVector::GetData<data_ptr_t>(struct_row_locations);
+	auto struct_target_locations = FlatVector::GetDataMutable<data_ptr_t>(struct_row_locations);
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	for (idx_t i = 0; i < append_count; i++) {
 		struct_target_locations[i] = target_locations[i] + offset_in_row;
@@ -936,7 +936,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 
 	// Target
 	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -986,7 +986,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 
 	// Target
 	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1040,7 +1040,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const Tupl
 	const auto &source_validity = source_data.validity;
 
 	// Target
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
@@ -1097,7 +1097,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 	const auto &source_validity = source_data.validity;
 
 	// Target
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Initialize the validity of the STRUCTs
 	for (idx_t i = 0; i < append_count; i++) {
@@ -1161,7 +1161,7 @@ static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
 	const auto &child_list_validity = child_list_data.validity;
 
 	// Target
-	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
@@ -1390,7 +1390,7 @@ static void TupleDataTemplatedGatherInternal(const TupleDataLayout &layout, Vect
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
-	auto target_data = FlatVector::GetData<T>(target);
+	auto target_data = FlatVector::GetDataMutable<T>(target);
 	auto &target_validity = FlatVector::Validity(target);
 
 	// Precompute mask indexes
@@ -1497,7 +1497,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 
 	// Get validity of the struct and create a Vector of pointers to the start of the TupleDataLayout of the STRUCT
 	Vector struct_row_locations(LogicalType::POINTER);
-	auto struct_source_locations = FlatVector::GetData<data_ptr_t>(struct_row_locations);
+	auto struct_source_locations = FlatVector::GetDataMutable<data_ptr_t>(struct_row_locations);
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	for (idx_t i = 0; i < scan_count; i++) {
 		const auto source_idx = scan_sel.get_index(i);
@@ -1551,7 +1551,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 
 	// Load pointers to the data from the row
 	Vector heap_locations(LogicalType::POINTER);
-	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	auto list_size_before = ListVector::GetListSize(target);
@@ -1603,10 +1603,10 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
-	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Target
-	const auto target_data = FlatVector::GetData<T>(target);
+	const auto target_data = FlatVector::GetDataMutable<T>(target);
 	auto &target_validity = FlatVector::Validity(target);
 
 	uint64_t target_offset = list_size_before;
@@ -1655,7 +1655,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
-	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Target
 	auto &target_validity = FlatVector::Validity(target);
@@ -1707,7 +1707,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
-	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Target
 	const auto target_list_entries = FlatVector::GetDataUnsafe<list_entry_t>(target);

@@ -640,7 +640,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
                                           const idx_t base_col_offset) {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+	const auto heap_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.heap_locations);
 
 	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();

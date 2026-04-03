@@ -52,7 +52,7 @@ void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t c
 		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
 		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result));
@@ -174,9 +174,9 @@ idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionVector *
 #ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, const SelectionVector *sel,
-                             idx_t count, ValidityMask &lmask, ValidityMask &rmask, SelectionVector *true_sel,
-                             SelectionVector *false_sel) {
+idx_t DistinctSelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+                             const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
+                             SelectionVector *true_sel, SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t result_idx = sel->get_index(i);
@@ -202,7 +202,7 @@ idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL>
-idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+idx_t DistinctSelectFlatLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                       const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
                                       SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
@@ -219,7 +219,7 @@ idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *_
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+idx_t DistinctSelectFlatLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                    const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
 	return DistinctSelectFlatLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, true>(
@@ -229,8 +229,8 @@ idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__re
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                          SelectionVector *true_sel, SelectionVector *false_sel) {
-	auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
-	auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
+	const auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
+	const auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
 	if (LEFT_CONSTANT) {
 		ValidityMask validity;
 		if (ConstantVector::IsNull(left)) {

@@ -328,7 +328,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	}
 
 	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	const auto partition_indices = FlatVector::GetDataMutable<idx_t>(state.partition_indices);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		key.hash = hashes[i];

@@ -291,8 +291,8 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	ListVector::Reserve(result, old_len + new_entries);
 	auto &keys = MapVector::GetKeys(result);
 	auto &values = MapVector::GetValues(result);
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto count_entries = FlatVector::GetData<uint64_t>(values);
+	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto count_entries = FlatVector::GetDataMutable<uint64_t>(values);
 
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {

@@ -675,7 +675,7 @@ void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info
 void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetData<string_t>(result);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		for (idx_t r = 0; r < size; r++) {
 			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
 			result_data[r] = StringVector::EmptyString(result, blob_size);
@@ -687,7 +687,7 @@ void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths,
 		break;
 	}
 	case LogicalTypeId::BIGINT: {
-		auto result_data = FlatVector::GetData<int64_t>(result);
+		auto result_data = FlatVector::GetDataMutable<int64_t>(result);
 		for (idx_t r = 0; r < size; r++) {
 			result_data[r] = 0;
 			data_pointers[r] = data_ptr_cast(&result_data[r]);
@@ -703,7 +703,7 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
                       const unsafe_vector<idx_t> &offsets) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetData<string_t>(result);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		// call Finalize on the result
 		for (idx_t r = 0; r < size; r++) {
 			result_data[r].SetSizeAndFinalize(NumericCast<uint32_t>(offsets[r]),
@@ -712,7 +712,7 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 		break;
 	}
 	case LogicalTypeId::BIGINT: {
-		auto result_data = FlatVector::GetData<int64_t>(result);
+		auto result_data = FlatVector::GetDataMutable<int64_t>(result);
 		for (idx_t r = 0; r < size; r++) {
 			result_data[r] = BSwapIfLE(result_data[r]);
 		}
@@ -942,7 +942,7 @@ void TemplatedDecodeSortKey(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVe
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
 	const auto result_data =
-	    is_const ? ConstantVector::GetData<typename OP::TYPE>(result) : FlatVector::GetData<typename OP::TYPE>(result);
+	    is_const ? ConstantVector::GetData<typename OP::TYPE>(result) : FlatVector::GetDataMutable<typename OP::TYPE>(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
@@ -988,7 +988,7 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
 	const auto list_data =
-	    is_const ? ConstantVector::GetData<list_entry_t>(result) : FlatVector::GetData<list_entry_t>(result);
+	    is_const ? ConstantVector::GetData<list_entry_t>(result) : FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &child_vector = ListVector::GetEntry(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;

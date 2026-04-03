@@ -199,7 +199,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
 		const auto n = FrameSize(included, frames);

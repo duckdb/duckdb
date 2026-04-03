@@ -386,7 +386,7 @@ struct MinMaxFixedValueOrNull {
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
 		FlatVector::Validity(vector).Set(idx, value.is_valid);
-		FlatVector::GetData<T>(vector)[idx] = value.value;
+		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
 	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
