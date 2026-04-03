@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -76,6 +77,26 @@ void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
 }
 
 void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
+	D_ASSERT(!function.functions.name.empty());
+	function.extension_name = extension_name;
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateFunction(data, function);
+}
+
+void ExtensionLoader::RegisterFunction(WindowFunction function) {
+	WindowFunctionSet set(function.name);
+	set.AddFunction(std::move(function));
+	RegisterFunction(std::move(set));
+}
+
+void ExtensionLoader::RegisterFunction(WindowFunctionSet function) {
+	CreateWindowFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	RegisterFunction(std::move(info));
+}
+
+void ExtensionLoader::RegisterFunction(CreateWindowFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.extension_name = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);

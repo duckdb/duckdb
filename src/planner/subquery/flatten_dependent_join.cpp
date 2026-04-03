@@ -4,7 +4,7 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
-#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -100,7 +100,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 			// and perform all duplicate elimination on that row number instead
 			const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
 			auto window = make_uniq<LogicalWindow>(op_col.binding.table_index);
-			auto row_number_func = make_uniq<WindowFunction>(RowNumberFunc::GetFunction());
+			auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 			auto row_number =
 			    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
 			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
@@ -858,7 +858,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we push a row_number() OVER (PARTITION BY [correlated columns])
 		auto window_index = binder.GenerateTableIndex();
 		auto window = make_uniq<LogicalWindow>(window_index);
-		auto rn = make_uniq<WindowFunction>(RowNumberFunc::GetFunction());
+		auto rn = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 		auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn), nullptr);
 		auto partition_count = perform_delim ? correlated_columns.size() : 1;
 		for (idx_t i = 0; i < partition_count; i++) {
