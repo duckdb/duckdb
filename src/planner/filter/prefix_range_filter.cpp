@@ -12,6 +12,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -73,7 +74,7 @@ public:
 	}
 
 	void Insert(U key, PrefixRangeFilter::BuildState &state_p) const {
-		auto &state = static_cast<PrefixRangeBuildState &>(state_p);
+		auto &state = state_p.Cast<PrefixRangeBuildState>();
 		const U y = key - min;
 		// All keys are in-range by construction, so the range check can be omitted here.
 		const U idx = y >> shift;
@@ -81,18 +82,18 @@ public:
 	}
 
 	void MergeBuildState(PrefixRangeFilter::BuildState &state_p) {
-		auto &state = static_cast<PrefixRangeBuildState &>(state_p);
+		auto &state = state_p.Cast<PrefixRangeBuildState>();
 		for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
 			bitmap[word_idx] |= state.bitmap[word_idx];
 		}
 		initialized = true;
 	}
 
-	idx_t Lookup(U key) const {
+	inline idx_t Lookup(U key) const {
 		const U y = key - min;
 		const U bit_idx = y >> shift;
 		const uint8_t in_range = y <= span;
-		const uint32_t word_idx = static_cast<uint32_t>(bit_idx >> WORD_SHIFT) & (0U - in_range);
+		const uint32_t word_idx = UnsafeNumericCast<uint32_t>(bit_idx >> WORD_SHIFT) & (0U - in_range);
 		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 		return bit & in_range;
 	}
@@ -114,8 +115,8 @@ public:
 		const U ub_bit_idx = ub_y >> shift;
 		const auto ub_word_idx = ub_bit_idx >> WORD_SHIFT;
 
-		const idx_t lb_bit_off = static_cast<idx_t>(lb_bit_idx & static_cast<U>(WORD_MASK));
-		const idx_t ub_bit_off = static_cast<idx_t>(ub_bit_idx & static_cast<U>(WORD_MASK));
+		const idx_t lb_bit_off = UnsafeNumericCast<idx_t>(lb_bit_idx & UnsafeNumericCast<U>(WORD_MASK));
+		const idx_t ub_bit_off = UnsafeNumericCast<idx_t>(ub_bit_idx & UnsafeNumericCast<U>(WORD_MASK));
 
 		// TODO: Count the amount of 1's in the range, compare to a threshold, and make a decision if we want to use the
 		// per-row filter for this row group.
@@ -132,7 +133,7 @@ public:
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 
-		for (idx_t i = NumericCast<idx_t>(lb_word_idx) + 1; i < NumericCast<idx_t>(ub_word_idx); i++) {
+		for (idx_t i = UnsafeNumericCast<idx_t>(lb_word_idx) + 1; i < UnsafeNumericCast<idx_t>(ub_word_idx); i++) {
 			if (bitmap[i]) {
 				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			}
@@ -179,6 +180,7 @@ struct NumericPrefixPolicy {
 	using comparable_type = typename MakeUnsigned<T>::type;
 
 	static comparable_type ToComparable(input_type value) {
+		// Overflow is explicitly allowed for unsigned to signed cast
 		return static_cast<comparable_type>(value);
 	}
 
@@ -198,14 +200,15 @@ struct NumericPrefixPolicy {
 		const auto lb = lower_bound.GetValueUnsafe<input_type>();
 		const auto ub = upper_bound.GetValueUnsafe<input_type>();
 
+		// static_cast is needed here as we need to allow overflow to cast from comparable_type
 		const auto min_t = static_cast<input_type>(bitmap.Min());
 		const auto max_t = static_cast<input_type>(bitmap.Min() + bitmap.Span());
 		if (ub < min_t || lb > max_t) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
-		const auto adjusted_lb = static_cast<comparable_type>(MaxValue<input_type>(lb, min_t));
-		const auto adjusted_ub = static_cast<comparable_type>(MinValue<input_type>(ub, max_t));
+		const auto adjusted_lb = ToComparable(MaxValue<input_type>(lb, min_t));
+		const auto adjusted_ub = ToComparable(MinValue<input_type>(ub, max_t));
 		return bitmap.LookupClampedRange(adjusted_lb, adjusted_ub);
 	}
 };
@@ -336,8 +339,13 @@ bool ComputeStringPrefixSpan(const Value &lower_bound, const Value &upper_bound,
 #else
 	auto lb_value = lower_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
 	auto ub_value = upper_bound.GetValueUnsafe<string_t>().GetPrefixIntegerComparable();
-	result = Uhugeint::Convert(static_cast<uint64_t>(ub_value - lb_value));
-	return true;
+	uint32_t res;
+	if (TrySubtractOperator::Operation(ub_value, lb_value, res)) {
+		result = Uhugeint::Convert(res);
+		return true;
+	} else {
+		return false;
+	}
 #endif
 }
 
