@@ -215,7 +215,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 			break;
 		}
 
-		auto result_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_data = FlatVector::Writer<list_entry_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = sel.get_index(i);
 			result_data[result_idx].offset += offset;

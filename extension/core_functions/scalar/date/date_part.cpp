@@ -2015,12 +2015,10 @@ struct StructDatePart {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
-				ConstantVector::SetNull(result, false);
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
-					ConstantVector::SetNull(child_entry, false);
 					const auto part_index = size_t(info.part_codes[col]);
 					if (owners[part_index] == col) {
 						if (IsBigintDatepart(info.part_codes[col])) {
@@ -2037,7 +2035,7 @@ struct StructDatePart {
 					DatePart::StructOperator::Operation(bigint_values, double_values, tdata[0], 0, part_mask);
 				} else {
 					for (auto &child_entry : child_entries) {
-						ConstantVector::SetNull(child_entry, true);
+						ConstantVector::SetNull(child_entry);
 					}
 				}
 			}

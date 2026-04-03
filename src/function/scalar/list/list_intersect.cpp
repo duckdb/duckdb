@@ -30,8 +30,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// Handle NULL return type case
 	if (result.GetType() == LogicalType::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 

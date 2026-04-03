@@ -102,8 +102,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(part_arg)) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				auto part_func = SubtractFactory(GetDatePartSpecifier(specifier));
@@ -233,8 +232,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(part_arg)) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				const auto part = GetDatePartSpecifier(specifier);
