@@ -387,9 +387,8 @@ struct ICUDatePart : public ICUDateFunc {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
-				ConstantVector::SetNull(result, false);
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
 				auto micros = SetTime(calendar, tdata[0]);
 				const auto is_finite = Timestamp::IsFinite(*tdata);
@@ -397,7 +396,6 @@ struct ICUDatePart : public ICUDateFunc {
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
-						ConstantVector::SetNull(child_entry, false);
 						if (IsBigintDatepart(info.part_codes[col])) {
 							auto pdata = ConstantVector::GetData<int64_t>(child_entry);
 							auto adapter = info.bigints[col];
@@ -408,7 +406,7 @@ struct ICUDatePart : public ICUDateFunc {
 							pdata[0] = adapter(calendar, micros);
 						}
 					} else {
-						ConstantVector::SetNull(child_entry, true);
+						ConstantVector::SetNull(child_entry);
 					}
 				}
 			}

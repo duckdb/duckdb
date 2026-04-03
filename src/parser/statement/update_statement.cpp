@@ -59,6 +59,9 @@ bool UpdateSetInfo::Equals(const unique_ptr<UpdateSetInfo> &left, const unique_p
 UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT), node(make_uniq<UpdateQueryNode>()) {
 }
 
+UpdateStatement::~UpdateStatement() {
+}
+
 UpdateStatement::UpdateStatement(const UpdateStatement &other)
     : SQLStatement(other), node(unique_ptr_cast<QueryNode, UpdateQueryNode>(other.node->Copy())) {
 }

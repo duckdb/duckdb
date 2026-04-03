@@ -67,13 +67,11 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	args.data[0].ToUnifiedFormat(count, input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
-			result_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 			continue;
 		}
 

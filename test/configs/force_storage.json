@@ -56,6 +56,14 @@
         "test/sql/types/geo/geometry_crs.test",
         "test/sql/types/geo/geometry_stats.test"
       ]
+    },
+    {
+      "reason": "Trigger tests require v2.0.0 storage; force_storage uses default serialization version 1.",
+      "paths": [
+        "test/sql/trigger/create_trigger_catalog.test",
+        "test/sql/trigger/create_trigger_parse.test",
+        "test/sql/trigger/create_trigger_wal.test"
+      ]
     }
 
   ]

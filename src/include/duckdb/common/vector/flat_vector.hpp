@@ -13,6 +13,27 @@
 
 namespace duckdb {
 
+class StandardVectorBuffer : public VectorBuffer {
+public:
+	StandardVectorBuffer(Allocator &allocator, idx_t data_size);
+	explicit StandardVectorBuffer(idx_t data_size);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p);
+	explicit StandardVectorBuffer(AllocatedData &&data_p);
+
+public:
+	data_ptr_t GetData() override {
+		return data_ptr;
+	}
+
+	optional_ptr<Allocator> GetAllocator() const override {
+		return allocated_data.GetAllocator();
+	}
+
+protected:
+	data_ptr_t data_ptr;
+	AllocatedData allocated_data;
+};
+
 struct FlatVector {
 	static void VerifyFlatVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY
@@ -46,10 +67,7 @@ struct FlatVector {
 	static inline T *GetDataUnsafe(Vector &vector) {
 		return ConstantVector::GetDataUnsafe<T>(vector);
 	}
-	static inline void SetData(Vector &vector, data_ptr_t data) {
-		VerifyFlatVector(vector);
-		vector.buffer->SetData(data);
-	}
+	static void SetData(Vector &vector, data_ptr_t data);
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
 		VerifyFlatVector(vector);
@@ -73,6 +91,39 @@ struct FlatVector {
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
+
+private:
+	template <class T>
+	struct FlatVectorWriter {
+		FlatVectorWriter(Vector &vector, idx_t count)
+		    : data(FlatVector::GetData<T>(vector)), validity(FlatVector::Validity(vector)), count(count) {
+		}
+
+		void SetInvalid(idx_t idx) {
+			D_ASSERT(idx < count);
+			validity.SetInvalid(idx);
+		}
+
+		T &operator[](idx_t idx) {
+			D_ASSERT(idx < count);
+			return data[idx];
+		}
+
+	private:
+		T *data;
+		ValidityMask &validity;
+		idx_t count;
+	};
+
+public:
+	template <class T>
+	static FlatVectorWriter<T> Writer(Vector &vector, idx_t count) {
+		return FlatVectorWriter<T>(vector, count);
+	}
+	template <class T>
+	static FlatVectorWriter<T> Writer(Vector &vector) {
+		return Writer<T>(vector, NumericLimits<idx_t>::Maximum());
+	}
 };
 
 } // namespace duckdb

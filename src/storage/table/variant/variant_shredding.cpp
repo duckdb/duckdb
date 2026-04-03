@@ -397,21 +397,27 @@ static LogicalType SetShreddedType(const LogicalType &typed_value, bool fully_co
 
 bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
                                                     optional_idx parent_count) const {
-	idx_t max_count = 0;
-	uint8_t type_index = 0;
-	if (column.type_counts[0] == column.total_count) {
+	if (parent_count.IsValid() && column.total_count > parent_count.GetIndex()) {
+		throw InternalException("Column count is larger than parent count - this should not be possible");
+	}
+	auto total_value_count = parent_count.IsValid() ? parent_count.GetIndex() : column.total_count;
+	const auto null_count = column.type_counts[0];
+	if (null_count == column.total_count) {
 		//! All NULL, emit INT32
-		out_type = SetShreddedType(LogicalTypeId::INTEGER, true);
+		auto fully_consistent = null_count == total_value_count;
+		out_type = SetShreddedType(LogicalTypeId::INTEGER, fully_consistent);
 		return true;
 	}
 
+	idx_t max_count = 0;
+	uint8_t type_index = 0;
 	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
 	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
 		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL) && !column.decimal_consistent) {
 			//! Can't shred on DECIMAL, not consistent
 			continue;
 		}
-		idx_t count = column.type_counts[i] + column.type_counts[0];
+		idx_t count = column.type_counts[i] + null_count;
 		if (!max_count || count > max_count) {
 			max_count = count;
 			type_index = i;
@@ -421,11 +427,7 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 	if (!max_count) {
 		return false;
 	}
-	if (parent_count.IsValid() && column.total_count > parent_count.GetIndex()) {
-		throw InternalException("Column count is larger than parent count - this should not be possible");
-	}
 
-	auto total_value_count = parent_count.IsValid() ? parent_count.GetIndex() : column.total_count;
 	bool fully_consistent = max_count == total_value_count;
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
 		child_list_t<LogicalType> child_types;
@@ -704,7 +706,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 	ListVector::SetListSize(values, 0);
 
 	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);
 

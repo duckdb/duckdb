@@ -23,7 +23,7 @@ void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
 template <class T>
 void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::Writer<T>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = ldata[i];
 	}

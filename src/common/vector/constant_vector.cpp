@@ -8,6 +8,11 @@
 
 namespace duckdb {
 
+void ConstantVector::SetNull(Vector &vector) {
+	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	SetNull(vector, true);
+}
+
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	vector.validity.Set(0, !is_null);
