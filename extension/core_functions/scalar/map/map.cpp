@@ -16,7 +16,7 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ListVector::SetListSize(result, 0);
 
-	auto result_data = ListVector::GetData(result);
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	result_data[0] = list_entry_t();
 	result.Verify(row_count);
 }

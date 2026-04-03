@@ -149,7 +149,7 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	ListVector::Reserve(result, total_list_size);
 	ListVector::SetListSize(result, total_list_size);
 
-	auto list_data = ListVector::GetData(result);
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
 	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
@@ -303,7 +303,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 
 	ListVector::Reserve(result, total_elements);
 	ListVector::SetListSize(result, total_elements);
-	auto list_data = ListVector::GetData(result);
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;

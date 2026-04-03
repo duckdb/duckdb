@@ -77,8 +77,8 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	map_vec.ToUnifiedFormat(count, lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
-	const auto inc_list_data = ListVector::GetData(map_vec);
-	const auto out_list_data = ListVector::GetData(result);
+	const auto inc_list_data = FlatVector::GetData<list_entry_t>(map_vec);
+	const auto out_list_data = FlatVector::GetData<list_entry_t>(result);
 
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {

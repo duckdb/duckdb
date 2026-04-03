@@ -1322,7 +1322,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 	ListVector::Reserve(target_vec, vert_total);
 	ListVector::SetListSize(target_vec, vert_total);
 
-	auto list_data = ListVector::GetData(target_vec);
+	auto list_data = FlatVector::GetData<list_entry_t>(target_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
@@ -1368,7 +1368,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	const auto line_data = ListVector::GetData(source_vec);
+	const auto line_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
 
 	double *vert_data[V::WIDTH];
@@ -1457,8 +1457,8 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 	ListVector::Reserve(ring_vec, vert_total);
 	ListVector::SetListSize(ring_vec, vert_total);
 
-	const auto poly_data = ListVector::GetData(target_vec);
-	const auto ring_data = ListVector::GetData(ring_vec);
+	const auto poly_data = FlatVector::GetData<list_entry_t>(target_vec);
+	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 	double *vert_data[V::WIDTH];
 
@@ -1515,9 +1515,9 @@ template <class V = VertexXY>
 static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	source_vec.Flatten(row_count);
 
-	const auto poly_data = ListVector::GetData(source_vec);
+	const auto poly_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &ring_vec = ListVector::GetEntry(source_vec);
-	const auto ring_data = ListVector::GetData(ring_vec);
+	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 
 	double *vert_data[V::WIDTH];
@@ -1609,7 +1609,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 	ListVector::Reserve(target_vec, vert_total);
 	ListVector::SetListSize(target_vec, vert_total);
 
-	auto mult_data = ListVector::GetData(target_vec);
+	auto mult_data = FlatVector::GetData<list_entry_t>(target_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
@@ -1657,7 +1657,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	const auto mult_data = ListVector::GetData(source_vec);
+	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
 
 	double *vert_data[V::WIDTH];
@@ -1766,8 +1766,8 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 	ListVector::Reserve(line_vec, vert_total);
 	ListVector::SetListSize(line_vec, vert_total);
 
-	const auto mult_data = ListVector::GetData(target_vec);
-	const auto line_data = ListVector::GetData(line_vec);
+	const auto mult_data = FlatVector::GetData<list_entry_t>(target_vec);
+	const auto line_data = FlatVector::GetData<list_entry_t>(line_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
@@ -1827,9 +1827,9 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 
 	source_vec.Flatten(row_count);
 
-	const auto mult_data = ListVector::GetData(source_vec);
+	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &line_vec = ListVector::GetEntry(source_vec);
-	const auto line_data = ListVector::GetData(line_vec);
+	const auto line_data = FlatVector::GetData<list_entry_t>(line_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
@@ -1951,9 +1951,9 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 	ListVector::Reserve(ring_vec, vert_total);
 	ListVector::SetListSize(ring_vec, vert_total);
 
-	const auto mult_data = ListVector::GetData(target_vec);
-	const auto poly_data = ListVector::GetData(poly_vec);
-	const auto ring_data = ListVector::GetData(ring_vec);
+	const auto mult_data = FlatVector::GetData<list_entry_t>(target_vec);
+	const auto poly_data = FlatVector::GetData<list_entry_t>(poly_vec);
+	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {
@@ -2021,11 +2021,11 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	const auto mult_data = ListVector::GetData(source_vec);
+	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &poly_vec = ListVector::GetEntry(source_vec);
-	const auto poly_data = ListVector::GetData(poly_vec);
+	const auto poly_data = FlatVector::GetData<list_entry_t>(poly_vec);
 	auto &ring_vec = ListVector::GetEntry(poly_vec);
-	const auto ring_data = ListVector::GetData(ring_vec);
+	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
 	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
 	double *vert_data[V::WIDTH];
 	for (idx_t i = 0; i < V::WIDTH; i++) {

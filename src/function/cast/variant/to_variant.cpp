@@ -34,13 +34,13 @@ void InitializeOffsets(DataChunk &offsets, idx_t count) {
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size,
                                OrderedOwningStringMap<uint32_t> &dictionary) {
 	auto &keys = VariantVector::GetKeys(result);
-	auto keys_data = ListVector::GetData(keys);
+	auto keys_data = FlatVector::GetData<list_entry_t>(keys);
 
 	auto &children = VariantVector::GetChildren(result);
-	auto children_data = ListVector::GetData(children);
+	auto children_data = FlatVector::GetData<list_entry_t>(children);
 
 	auto &values = VariantVector::GetValues(result);
-	auto values_data = ListVector::GetData(values);
+	auto values_data = FlatVector::GetData<list_entry_t>(values);
 
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);

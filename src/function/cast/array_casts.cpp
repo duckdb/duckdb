@@ -185,7 +185,7 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.function(source_child, result_child, child_count, child_parameters);
 
-	auto list_data = ListVector::GetData(result);
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (FlatVector::IsNull(source, i)) {
 			FlatVector::SetNull(result, i, true);

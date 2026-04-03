@@ -577,13 +577,13 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 //! Copied and modified from 'to_variant.cpp'
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size) {
 	auto &keys = VariantVector::GetKeys(result);
-	auto keys_data = ListVector::GetData(keys);
+	auto keys_data = FlatVector::GetData<list_entry_t>(keys);
 
 	auto &children = VariantVector::GetChildren(result);
-	auto children_data = ListVector::GetData(children);
+	auto children_data = FlatVector::GetData<list_entry_t>(children);
 
 	auto &values = VariantVector::GetValues(result);
-	auto values_data = ListVector::GetData(values);
+	auto values_data = FlatVector::GetData<list_entry_t>(values);
 
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);

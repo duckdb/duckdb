@@ -186,7 +186,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	if (info.is_grade_up) {
 		ListVector::Reserve(result, lists_size);
 		ListVector::SetListSize(result, lists_size);
-		auto result_data = ListVector::GetData(result);
+		auto result_data = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			result_data[i] = list_entries.GetValueUnsafe(i);
 		}
@@ -232,7 +232,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		if (info.is_grade_up) {
 			auto &result_entry = ListVector::GetEntry(result);
-			auto result_data = ListVector::GetData(result);
+			auto result_data = FlatVector::GetData<list_entry_t>(result);
 			for (idx_t i = 0; i < count; i++) {
 				if (!result_validity.RowIsValid(i)) {
 					continue;
