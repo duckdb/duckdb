@@ -100,12 +100,16 @@ private:
 		}
 
 		void SetInvalid(idx_t idx) {
-			D_ASSERT(idx < count);
+			if (idx >= count) {
+				throw InternalException("eek");
+			}
 			validity.SetInvalid(idx);
 		}
 
 		T &operator[](idx_t idx) {
-			D_ASSERT(idx < count);
+			if (idx >= count) {
+				throw InternalException("eek");
+			}
 			return data[idx];
 		}
 
@@ -119,6 +123,10 @@ public:
 	template <class T>
 	static FlatVectorWriter<T> Writer(Vector &vector, idx_t count) {
 		return FlatVectorWriter<T>(vector, count);
+	}
+	template <class T>
+	static FlatVectorWriter<T> Writer(Vector &vector) {
+		return Writer<T>(vector, NumericLimits<idx_t>::Maximum());
 	}
 };
 
