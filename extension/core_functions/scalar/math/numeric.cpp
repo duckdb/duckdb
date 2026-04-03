@@ -8,12 +8,35 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cmath>
 #include <cstdint>
 
 namespace duckdb {
+
+template <class ERROR_OP, class IEEE_OP>
+static unique_ptr<FunctionData> BindIEEEFloatingUnary(ClientContext &context, ScalarFunction &bound_function,
+                                                      vector<unique_ptr<Expression>> &) {
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+		bound_function.SetFunctionCallback(ScalarFunction::UnaryFunction<double, double, IEEE_OP>);
+	} else {
+		bound_function.SetFunctionCallback(ScalarFunction::UnaryFunction<double, double, ERROR_OP>);
+	}
+	return nullptr;
+}
+
+template <class ERROR_OP, class IEEE_OP>
+static unique_ptr<FunctionData> BindIEEEFloatingBinary(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &) {
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+		bound_function.SetFunctionCallback(ScalarFunction::BinaryFunction<double, double, double, IEEE_OP>);
+	} else {
+		bound_function.SetFunctionCallback(ScalarFunction::BinaryFunction<double, double, double, ERROR_OP>);
+	}
+	return nullptr;
+}
 
 template <class TR, class OP>
 static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalType &type) {
@@ -971,11 +994,18 @@ struct SqrtOperator {
 		return std::sqrt(input);
 	}
 };
+
+struct IEEESqrtOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::sqrt(input);
+	}
+};
 } // namespace
 
 ScalarFunction SqrtFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<SqrtOperator, IEEESqrtOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1017,10 +1047,17 @@ struct LnOperator {
 	}
 };
 
+struct IEEELnOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::log(input);
+	}
+};
+
 } // namespace
 ScalarFunction LnFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, LnOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<LnOperator, IEEELnOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1043,11 +1080,18 @@ struct Log10Operator {
 	}
 };
 
+struct IEEELog10Operator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::log10(input);
+	}
+};
+
 } // namespace
 
 ScalarFunction Log10Fun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, Log10Operator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
 	function.SetFallible();
 	return function;
 }
@@ -1068,14 +1112,21 @@ struct LogBaseOperator {
 	}
 };
 
+struct IEEELogBaseOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA b, TB x) {
+		return IEEELog10Operator::Operation<TB, TR>(x) / IEEELog10Operator::Operation<TA, TR>(b);
+	}
+};
+
 } // namespace
 
 ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                 ScalarFunction::BinaryFunction<double, double, double, LogBaseOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                                 BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
 	for (auto &function : funcs.functions) {
 		function.SetFallible();
 	}
@@ -1098,11 +1149,18 @@ struct Log2Operator {
 		return std::log2(input);
 	}
 };
+
+struct IEEELog2Operator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::log2(input);
+	}
+};
 } // namespace
 
 ScalarFunction Log2Fun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, Log2Operator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<Log2Operator, IEEELog2Operator>);
 	function.SetFallible();
 	return function;
 }

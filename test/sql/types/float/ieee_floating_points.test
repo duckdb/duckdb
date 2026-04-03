@@ -56,7 +56,7 @@ SELECT val, val % 0::{type} FROM tbl
 nan	NULL
 inf	NULL
 
-# math domain errors are unaffected by the setting
+# math domain cases still error when IEEE behavior is disabled
 statement ok
 SET ieee_floating_point_ops = false;
 
@@ -71,12 +71,14 @@ SELECT ln(-1::{type});
 statement ok
 SET ieee_floating_point_ops = true;
 
-statement error
-SELECT sqrt(-1::{type});
+query IIII
+SELECT sqrt(-1::{type}), ln(-1::{type}), log10(-1::{type}), log2(-1::{type});
 ----
+nan	nan	nan	nan
 
-statement error
-SELECT ln(-1::{type});
+query IIII
+SELECT ln(0::{type}), log10(0::{type}), log2(0::{type}), log(1::{type}, 64::{type});
 ----
+-inf	-inf	-inf	inf
 
 endloop
