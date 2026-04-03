@@ -18,12 +18,12 @@ statement ok
 BEGIN;
 
 statement maybe
-DELETE FROM tbl WHERE i = ${i} + ${threadid} * 10;
+DELETE FROM tbl WHERE i = {i} + {threadid} * 10;
 ----
 TransactionContext Error
 
 statement maybe
-INSERT INTO tbl VALUES (${i} + ${threadid} * 10);
+INSERT INTO tbl VALUES ({i} + {threadid} * 10);
 ----
 TransactionContext Error
 
@@ -44,7 +44,7 @@ SELECT COUNT(*), SUM(i) FROM tbl;
 loop i 0 10000
 
 query I
-SELECT i = ${i} FROM tbl WHERE i = ${i};
+SELECT i = {i} FROM tbl WHERE i = {i};
 ----
 true
 

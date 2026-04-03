@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
@@ -17,10 +18,7 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
-	result->sql_body_text = sql_body_text;
-	if (sql_body) {
-		result->sql_body = sql_body->Copy();
-	}
+	result->trigger_action = trigger_action->Copy();
 	return std::move(result);
 }
 
@@ -34,53 +32,27 @@ string CreateTriggerInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << "IF NOT EXISTS ";
 	}
+	if (!IsInvalidSchema(schema)) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+	}
 	ss << KeywordHelper::WriteOptionallyQuoted(trigger_name);
 	ss << " ";
-	switch (timing) {
-	case TriggerTiming::BEFORE:
-		ss << "BEFORE";
-		break;
-	case TriggerTiming::AFTER:
-		ss << "AFTER";
-		break;
-	case TriggerTiming::INSTEAD_OF:
-		ss << "INSTEAD OF";
-		break;
-	}
+	ss << EnumUtil::ToString(timing);
 	ss << " ";
-	switch (event_type) {
-	case TriggerEventType::INSERT_EVENT:
-		ss << "INSERT";
-		break;
-	case TriggerEventType::DELETE_EVENT:
-		ss << "DELETE";
-		break;
-	case TriggerEventType::UPDATE_EVENT:
-		ss << "UPDATE";
-		if (!columns.empty()) {
-			ss << " OF ";
-			for (idx_t i = 0; i < columns.size(); i++) {
-				if (i > 0) {
-					ss << ", ";
-				}
-				ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
+	ss << EnumUtil::ToString(event_type);
+	if (event_type == TriggerEventType::UPDATE_EVENT && !columns.empty()) {
+		ss << " OF ";
+		for (idx_t i = 0; i < columns.size(); i++) {
+			if (i > 0) {
+				ss << ", ";
 			}
+			ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
 		}
-		break;
 	}
 	ss << " ON ";
 	ss << base_table->ToString();
-	switch (for_each) {
-	case TriggerForEach::ROW:
-		ss << " FOR EACH ROW";
-		break;
-	case TriggerForEach::STATEMENT:
-		ss << " FOR EACH STATEMENT";
-		break;
-	}
-	if (sql_body) {
-		ss << " " << sql_body->ToString();
-	}
+	ss << " FOR EACH " << EnumUtil::ToString(for_each);
+	ss << " " << trigger_action->ToString();
 	ss << ";";
 	return ss.str();
 }

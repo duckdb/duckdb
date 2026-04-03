@@ -50,9 +50,6 @@ public:
 
 	unique_ptr<Expression> start_expr;
 	unique_ptr<Expression> end_expr;
-	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<Expression> offset_expr;
-	unique_ptr<Expression> default_expr;
 
 	//! The set of argument ordering clauses
 	//! These are distinct from the frame ordering clauses e.g., the "x" in

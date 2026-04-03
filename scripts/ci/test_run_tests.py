@@ -1,42 +1,57 @@
 #!/usr/bin/env python3
 import os
-import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN_TESTS = REPO_ROOT / "scripts" / "ci" / "run_tests.py"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.ci import run_tests
+
+
+def create_temp_file(content: str, **format_vars: object) -> Path:
+    rendered_content = textwrap.dedent(content).lstrip().format(**format_vars)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as tmp_file:
+        tmp_file.write(rendered_content)
+        tmp_file.flush()
+        return Path(tmp_file.name)
+
+
+def start_runner(cli_args: list[str]):
+    return run_tests.invoke(cli_args, cwd=REPO_ROOT)
 
 
 class RunTestsScriptTest(unittest.TestCase):
     def test_generate_list(self):
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as listed_tests:
-            listed_tests.write("name\tgroup\n")
-            listed_tests.write("test/sql/slow.test\t[.][slow]\n")
-            listed_tests.write("test/sql/fast.test\t[fast]\n")
-            listed_tests.flush()
-            listed_tests_path = Path(listed_tests.name)
+        listed_tests_path = create_temp_file(
+            """
+            name\tgroup
+            test/sql/slow.test\t[.][slow]
+            test/sql/fast.test\t[fast]
+            """
+        )
 
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as list_helper:
-            list_helper.write("#!/bin/sh\n")
+        list_helper_path = create_temp_file(
+            """
+            #!/bin/sh
             # run_tests.py calls: <helper> --list-tests <pattern>
-            list_helper.write('if [ "$1" != "--list-tests" ]; then\n')
-            list_helper.write("  exit 2\n")
-            list_helper.write("fi\n")
-            list_helper.write('cat "$2"\n')
-            list_helper.write("exit 2\n")
-            list_helper.flush()
-            list_helper_path = Path(list_helper.name)
+            if [ "$1" != "--list-tests" ]; then
+              exit 2
+            fi
+            cat "$2"
+            exit 2
+            """
+        )
 
         os.chmod(list_helper_path, 0o755)
 
         try:
-            proc = subprocess.run(
+            proc = start_runner(
                 [
-                    sys.executable,
-                    str(RUN_TESTS),
                     "--workers",
                     "1",
                     "--batch-size",
@@ -47,11 +62,7 @@ class RunTestsScriptTest(unittest.TestCase):
                     "echo fake-run {test_list}",
                     str(list_helper_path),
                     str(listed_tests_path),
-                ],
-                cwd=REPO_ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                ]
             )
         finally:
             listed_tests_path.unlink(missing_ok=True)
@@ -65,17 +76,11 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertIn("all tests passed in ", proc.stdout)
 
     def test_runs_with_echo_test_command(self):
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
-            test_list.write("test/sql/a.test\n")
-            test_list.write("test/sql/b.test\n")
-            test_list.flush()
-            test_list_path = Path(test_list.name)
+        test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
 
         try:
-            proc = subprocess.run(
+            proc = start_runner(
                 [
-                    sys.executable,
-                    str(RUN_TESTS),
                     "--workers",
                     "1",
                     "--batch-size",
@@ -85,11 +90,7 @@ class RunTestsScriptTest(unittest.TestCase):
                     "--test-command",
                     "echo fake-run {test_list}",
                     "unused-binary",
-                ],
-                cwd=REPO_ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                ]
             )
         finally:
             test_list_path.unlink(missing_ok=True)
@@ -98,35 +99,90 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertIn("found 2 tests", proc.stdout)
         self.assertIn("all tests passed in ", proc.stdout)
 
+    def test_changed_tests_flag_uses_second_list_file(self):
+        base_test_list_path = create_temp_file(
+            """
+            test/sql/a.test
+            test/sql/b.test
+            """
+        )
+        changed_test_list_path = create_temp_file(
+            """
+            test/sql/b.test
+            test/sql/c.test
+            """
+        )
+
+        list_helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            if [ "$1" != "--list-tests" ]; then
+              exit 2
+            fi
+            shift
+            while [ "$#" -gt 0 ]; do
+              if [ "$1" = "-f" ]; then
+                shift
+                cat "$1"
+              fi
+              shift
+            done
+            exit 0
+            """
+        )
+
+        os.chmod(list_helper_path, 0o755)
+
+        try:
+            proc = start_runner(
+                [
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    "2",
+                    "--test-list",
+                    str(base_test_list_path),
+                    "--changed-tests",
+                    str(changed_test_list_path),
+                    "--test-command",
+                    "echo fake-run {test_list}",
+                    str(list_helper_path),
+                ]
+            )
+        finally:
+            base_test_list_path.unlink(missing_ok=True)
+            changed_test_list_path.unlink(missing_ok=True)
+            list_helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn(f"-f {base_test_list_path}", proc.stdout)
+        self.assertIn(f"-f {changed_test_list_path}", proc.stdout)
+        self.assertIn("added 1 tests from --changed-tests file to the smoke test run", proc.stdout)
+        self.assertIn("all tests passed in ", proc.stdout)
+
     def test_retries_failed_fake_job(self):
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
-            test_list.write("test/sql/a.test\n")
-            test_list.flush()
-            test_list_path = Path(test_list.name)
-
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as state_file:
-            state_file_path = Path(state_file.name)
-
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as helper:
-            helper.write("#!/bin/sh\n")
-            helper.write(f"if [ ! -f {state_file_path} ]; then\n")
-            helper.write(f"  touch {state_file_path}\n")
-            helper.write("  echo fake failure\n")
-            helper.write("  exit 1\n")
-            helper.write("fi\n")
-            helper.write("echo fake success\n")
-            helper.write("exit 0\n")
-            helper.flush()
-            helper_path = Path(helper.name)
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        state_file_path = create_temp_file("")
+        helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            if [ ! -f {state_file_path} ]; then
+              touch {state_file_path}
+              echo fake failure
+              exit 1
+            fi
+            echo fake success
+            exit 0
+            """,
+            state_file_path=state_file_path,
+        )
 
         os.chmod(helper_path, 0o755)
         state_file_path.unlink(missing_ok=True)
 
         try:
-            proc = subprocess.run(
+            proc = start_runner(
                 [
-                    sys.executable,
-                    str(RUN_TESTS),
                     "--workers",
                     "1",
                     "--batch-size",
@@ -140,11 +196,7 @@ class RunTestsScriptTest(unittest.TestCase):
                     "--test-command",
                     f"{helper_path} {{test_list}}",
                     "unused-binary",
-                ],
-                cwd=REPO_ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                ]
             )
         finally:
             test_list_path.unlink(missing_ok=True)
@@ -157,35 +209,31 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertIn("all tests passed in ", proc.stdout)
 
     def test_retries_timed_out_sleep_job(self):
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
-            test_list.write("test/sql/a.test\n")
-            test_list.flush()
-            test_list_path = Path(test_list.name)
-
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as state_file:
-            state_file_path = Path(state_file.name)
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        state_file_path = create_temp_file("")
 
         batch_timeout = 0.3
 
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as helper:
-            helper.write("#!/bin/sh\n")
-            helper.write(f"if [ ! -f {state_file_path} ]; then\n")
-            helper.write(f"  touch {state_file_path}\n")
-            helper.write(f"  sleep {batch_timeout + 0.1}\n")
-            helper.write("fi\n")
-            helper.write("echo fake success\n")
-            helper.write("exit 0\n")
-            helper.flush()
-            helper_path = Path(helper.name)
+        helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            if [ ! -f {state_file_path} ]; then
+              touch {state_file_path}
+              sleep {sleep_seconds}
+            fi
+            echo fake success
+            exit 0
+            """,
+            state_file_path=state_file_path,
+            sleep_seconds=batch_timeout + 0.1,
+        )
 
         os.chmod(helper_path, 0o755)
         state_file_path.unlink(missing_ok=True)
 
         try:
-            proc = subprocess.run(
+            proc = start_runner(
                 [
-                    sys.executable,
-                    str(RUN_TESTS),
                     "--retry",
                     "1",
                     "--batch-timeout",
@@ -195,11 +243,7 @@ class RunTestsScriptTest(unittest.TestCase):
                     "--test-command",
                     f"{helper_path} {{test_list}}",
                     "unused-binary",
-                ],
-                cwd=REPO_ROOT,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                ]
             )
         finally:
             test_list_path.unlink(missing_ok=True)

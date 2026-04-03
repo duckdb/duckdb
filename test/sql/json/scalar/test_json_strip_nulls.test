@@ -1,0 +1,156 @@
+# name: test/sql/json/scalar/test_json_strip_nulls.test
+# description: Test JSON strip nulls (recursively remove null-valued keys)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Basic: remove null-valued key
+query T
+SELECT json_strip_nulls('{"a":1,"b":null}')
+----
+{"a":1}
+
+# Multiple nulls
+query T
+SELECT json_strip_nulls('{"a":1,"b":null,"c":null,"d":2}')
+----
+{"a":1,"d":2}
+
+# No nulls (passthrough)
+query T
+SELECT json_strip_nulls('{"a":1,"b":2}')
+----
+{"a":1,"b":2}
+
+# All nulls
+query T
+SELECT json_strip_nulls('{"a":null,"b":null}')
+----
+{}
+
+# Nested: null inside nested object
+query T
+SELECT json_strip_nulls('{"a":{"x":1,"y":null},"b":2}')
+----
+{"a":{"x":1},"b":2}
+
+# Deeply nested (3 levels)
+query T
+SELECT json_strip_nulls('{"a":{"b":{"c":null,"d":1}}}')
+----
+{"a":{"b":{"d":1}}}
+
+# Nested object becomes empty after stripping
+query T
+SELECT json_strip_nulls('{"a":{"x":null},"b":2}')
+----
+{"a":{},"b":2}
+
+# Null values inside arrays are NOT stripped (arrays are not objects)
+query T
+SELECT json_strip_nulls('{"a":[1,null,3]}')
+----
+{"a":[1,null,3]}
+
+# Objects inside arrays ARE stripped
+query T
+SELECT json_strip_nulls('{"a":[{"x":1,"y":null},{"z":null}]}')
+----
+{"a":[{"x":1},{}]}
+
+# Top-level array with objects
+query T
+SELECT json_strip_nulls('[{"a":null,"b":1},{"c":null}]')
+----
+[{"b":1},{}]
+
+# Scalar inputs pass through unchanged
+query T
+SELECT json_strip_nulls('"hello"')
+----
+"hello"
+
+query T
+SELECT json_strip_nulls('42')
+----
+42
+
+query T
+SELECT json_strip_nulls('true')
+----
+true
+
+query T
+SELECT json_strip_nulls('null')
+----
+null
+
+# SQL NULL input
+query T
+SELECT json_strip_nulls(NULL)
+----
+NULL
+
+# Empty object
+query T
+SELECT json_strip_nulls('{}')
+----
+{}
+
+# Empty array
+query T
+SELECT json_strip_nulls('[]')
+----
+[]
+
+# Mixed nesting: objects in arrays in objects
+query T
+SELECT json_strip_nulls('{"a":[{"b":null,"c":1}],"d":null}')
+----
+{"a":[{"c":1}]}
+
+# Deeply nested all-null chain
+query T
+SELECT json_strip_nulls('{"a":{"b":{"c":null}}}')
+----
+{"a":{"b":{}}}
+
+# Real-world: entity with null attributes
+query T
+SELECT json_strip_nulls('{"typeName":"Column","attributes":{"name":"col1","description":null,"parentColumn":null,"dataType":"VARCHAR"}}')
+----
+{"typeName":"Column","attributes":{"name":"col1","dataType":"VARCHAR"}}
+
+# Constant vector test
+query T
+SELECT json_strip_nulls('{"a":null,"b":1}') FROM range(3)
+----
+{"b":1}
+{"b":1}
+{"b":1}
+
+# Table-based test
+statement ok
+CREATE TABLE json_data (id INTEGER, data JSON);
+
+statement ok
+INSERT INTO json_data VALUES
+    (1, '{"a":1,"b":null}'),
+    (2, '{"x":null,"y":null}'),
+    (3, NULL);
+
+query IT
+SELECT id, json_strip_nulls(data) FROM json_data ORDER BY id
+----
+1	{"a":1}
+2	{}
+3	NULL
+
+# Composability: strip nulls then normalize
+query T
+SELECT json_normalize(json_strip_nulls('{"z":1,"a":null,"m":2}'))
+----
+{"m":2,"z":1}

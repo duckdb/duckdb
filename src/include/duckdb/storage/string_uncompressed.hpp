@@ -209,9 +209,9 @@ public:
 			auto entry_offset = result_data[new_count - 1];
 			if (entry_offset < 0) {
 				// overflow strings store the dict offset negatively - invert size
-				new_dictionary_size = -entry_offset;
+				new_dictionary_size = NumericCast<uint32_t>(-entry_offset);
 			} else {
-				new_dictionary_size = entry_offset;
+				new_dictionary_size = NumericCast<uint32_t>(entry_offset);
 			}
 		}
 		*dictionary_size = new_dictionary_size;

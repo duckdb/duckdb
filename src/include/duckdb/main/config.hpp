@@ -127,6 +127,8 @@ struct DBConfigOptions {
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
 	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
+	//! Delta Only! - Fall back to recognizing Variant columns structurally
+	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
 	//! The default block header size for new duckdb database files.

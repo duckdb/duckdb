@@ -102,7 +102,9 @@ jobs:
     - uses: ./.github/actions/swap_space
 
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -139,7 +141,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install Ninja
-      run: brew install ninja
+      run: python3 scripts/ci/retry.py -- brew install ninja
 
     - uses: ./.github/actions/ccache-action
 
@@ -228,7 +230,9 @@ jobs:
     - uses: ./.github/actions/swap_space
 
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -338,7 +342,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install awscli
+        run: python3 scripts/ci/retry.py -- pip install awscli
 
       - uses: ./.github/actions/ccache-action
 
@@ -747,7 +751,7 @@ jobs:
         run: chmod +x build/release/duckdb
 
       - name: Install Python dependencies
-        run: pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
+        run: python3 scripts/ci/retry.py -- pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
 
       - name: Download BWC cache
         if: ${{ vars.ENABLE_BWC_CACHE_DOWNLOAD == 'true' }}

@@ -12,7 +12,7 @@ CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);
 loop i 0 29
 
 statement ok
-INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, ${i});
+INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, {i});
 
 endloop
 
@@ -20,7 +20,7 @@ endloop
 loop i 0 29
 
 query II
-SELECT id_int, id_point = ${i} FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+SELECT id_int, id_point = {i} FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
 ----
 2	true
 

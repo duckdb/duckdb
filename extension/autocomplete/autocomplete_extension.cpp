@@ -1,4 +1,5 @@
 #include "autocomplete_extension.hpp"
+#include "sql_formatter.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -23,6 +24,10 @@
 #include "parser/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -648,6 +653,78 @@ static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &conte
 	return nullptr;
 }
 
+struct FormatSQLBindData : public FunctionData {
+	FormatterConfig config;
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto result = make_uniq<FormatSQLBindData>();
+		result->config = config;
+		return std::move(result);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<FormatSQLBindData>();
+		return config.indent_size == other.config.indent_size &&
+		       config.inline_threshold == other.config.inline_threshold &&
+		       config.keyword_case == other.config.keyword_case;
+	}
+};
+
+//! Parse the MAP(VARCHAR, VARCHAR) config argument and populate FormatterConfig.
+//! Recognised keys: "indent_size", "inline_threshold", "keyword_case".
+static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+	FormatterConfig config;
+	if (arguments.size() < 2) {
+		return config;
+	}
+	auto &map_expr = *arguments[1];
+	if (!map_expr.IsFoldable()) {
+		throw InvalidInputException("duckdb_format_sql: config map must be a constant expression");
+	}
+	Value map_val = ExpressionExecutor::EvaluateScalar(context, map_expr);
+	if (map_val.IsNull()) {
+		return config;
+	}
+	for (const auto &pair : MapValue::GetChildren(map_val)) {
+		const auto &kv = StructValue::GetChildren(pair);
+		const auto key = StringUtil::Lower(kv[0].ToString());
+		const auto val_str = kv[1].ToString();
+		if (key == "indent_size") {
+			config.indent_size = std::stoull(val_str);
+		} else if (key == "inline_threshold") {
+			config.inline_threshold = std::stoull(val_str);
+		} else if (key == "keyword_case") {
+			const string kc = StringUtil::Lower(val_str);
+			if (kc == "upper") {
+				config.keyword_case = KeywordCase::UPPER;
+			} else if (kc == "lower") {
+				config.keyword_case = KeywordCase::LOWER;
+			} else if (kc == "preserve") {
+				config.keyword_case = KeywordCase::PRESERVE;
+			} else {
+				throw InvalidInputException(
+				    "duckdb_format_sql: keyword_case must be 'upper', 'lower', or 'preserve'; got '%s'", val_str);
+			}
+		} else {
+			throw InvalidInputException("duckdb_format_sql: unknown config key '%s'", key);
+		}
+	}
+	return config;
+}
+
+static unique_ptr<FunctionData> FormatSQLBind(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = make_uniq<FormatSQLBindData>();
+	bind_data->config = ParseFormatterConfig(context, arguments);
+	return std::move(bind_data);
+}
+
+static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &info = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<FormatSQLBindData>();
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+		return StringVector::AddString(result, FormatSQL(input.GetString(), info.config));
+	});
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
@@ -670,6 +747,16 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                           SQLTokenizeInit);
 
 	loader.RegisterFunction(tokenize_fun);
+
+	const auto map_config_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	ScalarFunctionSet format_sql_set("duckdb_format_sql");
+	// duckdb_format_sql(sql)
+	format_sql_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	// duckdb_format_sql(sql, config => MAP {'indent_size':'4', 'inline_threshold':'60'})
+	format_sql_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, map_config_type}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	loader.RegisterFunction(format_sql_set);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	ParserExtension::Register(config, PEGParserExtension());
 }

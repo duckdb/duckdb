@@ -67,7 +67,7 @@ CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/rea
 foreach lineitem lineitem_csv lineitem_csv_auto
 
 query I
-SELECT l_orderkey FROM ${lineitem}
+SELECT l_orderkey FROM {lineitem}
 ----
 1
 1
@@ -81,7 +81,7 @@ SELECT l_orderkey FROM ${lineitem}
 3
 
 query I
-SELECT l_partkey FROM ${lineitem}
+SELECT l_partkey FROM {lineitem}
 ----
 15519
 6731
@@ -95,7 +95,7 @@ SELECT l_partkey FROM ${lineitem}
 12845
 
 query I
-SELECT l_shipdate FROM ${lineitem}
+SELECT l_shipdate FROM {lineitem}
 ----
 1996-03-13
 1996-04-12
@@ -109,7 +109,7 @@ SELECT l_shipdate FROM ${lineitem}
 1994-01-16
 
 query I
-SELECT COUNT(*) FROM ${lineitem}
+SELECT COUNT(*) FROM {lineitem}
 ----
 10
 

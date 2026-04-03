@@ -403,24 +403,7 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 	validity->Append(stats, state.child_appends[0], vector, count);
 
 	if (IsShredded()) {
-		auto &unshredded_type = sub_columns[0]->type;
-		auto &shredded_type = sub_columns[1]->type;
-
-		auto variant_shredded_type = LogicalType::STRUCT({
-		    {"unshredded", unshredded_type},
-		    {"shredded", shredded_type},
-		});
-		Vector append_vector(variant_shredded_type, count);
-
-		VariantShreddedAppendInput append_data {
-		    *sub_columns[0],
-		    *sub_columns[1],
-		    state.child_appends[1],
-		    state.child_appends[2],
-		    VariantStats::GetUnshreddedStats(stats),
-		    VariantStats::GetShreddedStats(stats),
-		};
-		AppendShredded(vector, append_vector, count, append_data);
+		throw InternalException("Can't append to a shredded VariantColumnData");
 	} else {
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);

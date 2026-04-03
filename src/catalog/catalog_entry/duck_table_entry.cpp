@@ -22,6 +22,7 @@
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -66,10 +67,13 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto required = GetStorageVersionName(Geometry::VERSION_ADDED, false);
 				auto current = GetStorageVersionName(storage_version, false);
 
-				throw InvalidInputException(
-				    "GEOMETRY columns with coordinate reference system identifiers are not supported in storage "
-				    "versions prior %s (database \"%s\" is using storage version %s)",
-				    required, db.GetName(), current);
+				// TODO: Turn this into a hard error
+				auto &logger = Logger::Get(db.GetDatabase());
+				logger.WriteLog(DefaultLogType::NAME, LogLevel::LOG_WARNING,
+				                "GEOMETRY columns with coordinate reference system identifiers are not supported in "
+				                "storage versions prior "
+				                "to %s (database \"%s\" is using storage version %s). CRS will not be persisted.",
+				                required, db.GetName(), current);
 			}
 		} break;
 		default:
@@ -80,9 +84,12 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-                               shared_ptr<DataTable> inherited_storage)
+                               shared_ptr<DataTable> inherited_storage, shared_ptr<CatalogSet> inherited_triggers)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
-      column_dependency_manager(std::move(info.column_dependency_manager)) {
+      triggers(std::move(inherited_triggers)), column_dependency_manager(std::move(info.column_dependency_manager)) {
+	if (!triggers) {
+		triggers = make_shared_ptr<CatalogSet>(catalog);
+	}
 	if (storage) {
 		if (!info.indexes.empty()) {
 			storage->SetIndexStorageInfo(std::move(info.indexes));
@@ -390,7 +397,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
@@ -752,7 +759,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
-		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 	}
 	auto new_storage =
 	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
@@ -974,7 +981,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
@@ -1005,7 +1012,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 	// Early return
 	if (has_not_null) {
-		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 	}
 
 	// Return with new storage info. Note that we need the bound column index here.
@@ -1035,7 +1042,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
@@ -1157,7 +1164,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKeyInfo &info) {
@@ -1182,7 +1189,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKey
 
 	unique_ptr<BoundCreateTableInfo> bound_create_info;
 	bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
@@ -1206,7 +1213,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
@@ -1291,7 +1298,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableCheckpoint(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
 void DuckTableEntry::SetAsRoot() {
@@ -1337,6 +1344,34 @@ vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContex
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	return storage->GetStorageInfo();
+}
+
+optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+	auto trigger = make_uniq<TriggerCatalogEntry>(catalog, schema, info);
+	auto entry_name = trigger->name;
+	LogicalDependencyList dependencies = trigger->dependencies;
+	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
+		if (old_entry) {
+			return nullptr;
+		}
+	}
+	if (!triggers->CreateEntry(transaction, entry_name, std::move(trigger), dependencies)) {
+		throw CatalogException::EntryAlreadyExists(CatalogType::TRIGGER_ENTRY, entry_name);
+	}
+	return triggers->GetEntry(transaction, entry_name);
+}
+
+void DuckTableEntry::ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
+	triggers->Scan(transaction, callback);
+}
+
+void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback) {
+	triggers->Scan(callback);
+}
+
+bool DuckTableEntry::DropTrigger(CatalogTransaction transaction, const string &name, bool cascade) {
+	return triggers->DropEntry(transaction, name, cascade);
 }
 
 } // namespace duckdb

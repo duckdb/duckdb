@@ -35,9 +35,6 @@ struct RegrBaseOperation {
 			return;
 		}
 		auto var_pop = state.var_pop.count > 1 ? (state.var_pop.dsquared / state.var_pop.count) : 0;
-		if (!Value::DoubleIsFinite(var_pop)) {
-			throw OutOfRangeException("VARPOP is out of range!");
-		}
 		RegrCountFunction::Finalize<T, uint64_t>(state.count, target, finalize_data);
 		target *= var_pop;
 	}

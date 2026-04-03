@@ -24,7 +24,7 @@ foreach val_col bool int bigint hugeint date time timestamp float double dec_4_1
 # Create a cross product of the 3 selected types
 statement ok
 CREATE OR REPLACE TABLE tbl AS SELECT * FROM
-		(SELECT ${val_col} as val_col FROM all_types)
+		(SELECT {val_col} as val_col FROM all_types)
 	CROSS JOIN (SELECT i % 2 as grp_col FROM range(5) as r(i));
 
 # Disable top_n_window_elimination to prevent comparing max and max_by
