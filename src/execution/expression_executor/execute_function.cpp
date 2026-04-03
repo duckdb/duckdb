@@ -217,4 +217,49 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	D_ASSERT(result.GetType() == expr.return_type);
 }
 
+static void ScatterSelectionResult(const SelectionVector &source, idx_t source_count, const SelectionVector *sel,
+                                   SelectionVector *target) {
+	if (!target) {
+		return;
+	}
+	for (idx_t i = 0; i < source_count; i++) {
+		auto idx = source.get_index(i);
+		target->set_index(i, sel ? sel->get_index(idx) : idx);
+	}
+}
+
+idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
+	if (!expr.function.HasSelectCallback()) {
+		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
+	}
+
+	state->intermediate_chunk.Reset();
+	auto &arguments = state->intermediate_chunk;
+	for (idx_t i = 0; i < expr.children.size(); i++) {
+		D_ASSERT(state->types[i] == expr.children[i]->return_type);
+		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+	}
+	arguments.SetCardinality(count);
+	arguments.Verify(context ? context->db : nullptr);
+
+	const bool has_sel = sel && sel != FlatVector::IncrementalSelectionVector();
+	if (!has_sel) {
+		return expr.function.GetSelectCallback()(arguments, *state, true_sel, false_sel);
+	}
+
+	SelectionVector temp_true(count);
+	SelectionVector temp_false(count);
+	auto dense_true_sel = true_sel ? &temp_true : nullptr;
+	auto dense_false_sel = false_sel ? &temp_false : nullptr;
+	auto true_count = expr.function.GetSelectCallback()(arguments, *state, dense_true_sel, dense_false_sel);
+	ScatterSelectionResult(temp_true, true_count, sel, true_sel);
+	if (false_sel) {
+		auto false_count = count - true_count;
+		ScatterSelectionResult(temp_false, false_count, sel, false_sel);
+	}
+	return true_count;
+}
+
 } // namespace duckdb

@@ -301,6 +301,8 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+	case ExpressionClass::BOUND_FUNCTION:
+		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel, false_sel);
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
