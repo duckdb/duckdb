@@ -34,12 +34,10 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	for (auto &cte : node.cte_map.map) {
 		if (IsDMLQueryNode(*cte.second)) {
 			if (parent) {
-				throw BinderException(
-				    "WITH clause containing a data-modifying statement must be at the top level");
+				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
 			if (++dml_cte_count > 1) {
-				throw BinderException(
-				    "Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
+				throw BinderException("Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
 			}
 		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
