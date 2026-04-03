@@ -86,8 +86,7 @@ jobs:
       shell: bash
       if: ${{ !inputs.skip_tests }}
       run: |
-        python scripts/ci/retry.py -- choco install wget -y --no-progress
-        python scripts/ci/retry.py -- wget -P ./test https://blobs.duckdb.org/ci/msvcp140.dll
+        python scripts/ci/retry.py -- curl -L --output ./test/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test
         python scripts/ci/run_tests.py test/unittest.exe
         rm ./test/msvcp140.dll
