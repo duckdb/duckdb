@@ -701,7 +701,7 @@
     },
     {
         "name": "ieee_floating_point_ops",
-        "description": "Use IEEE 754 behavior for supported floating point arithmetic operations, returning NAN/INF instead of errors/NULL.",
+        "description": "Use IEEE 754 behavior for supported floating point arithmetic operations, returning NAN/INF instead of NULL.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
