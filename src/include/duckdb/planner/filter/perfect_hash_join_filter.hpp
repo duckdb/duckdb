@@ -23,13 +23,18 @@ public:
 
 public:
 	PerfectHashJoinFilter(optional_ptr<const PerfectHashJoinExecutor> perfect_join_executor,
-	                      const string &key_column_name);
+	                      const string &key_column_name, const LogicalType &key_type_p);
 
 public:
+	const LogicalType &GetKeyType() const {
+		return key_type;
+	}
+
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 	string ToString(const string &column_name) const override;
 
-	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const;
+	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
+	             JoinFilterTableFilterState &state) const;
 	bool FilterValue(const Value &value) const;
 
 private:
@@ -43,6 +48,7 @@ private:
 private:
 	optional_ptr<const PerfectHashJoinExecutor> perfect_join_executor;
 	const string key_column_name;
+	const LogicalType key_type;
 };
 
 } // namespace duckdb

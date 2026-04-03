@@ -28,7 +28,9 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 
 		bool is_null = OP::Operation(*ldata > 0, *rdata > 0, ConstantVector::IsNull(left),
 		                             ConstantVector::IsNull(right), *result_data);
-		ConstantVector::SetNull(result, is_null);
+		if (is_null) {
+			ConstantVector::SetNull(result);
+		}
 		return;
 	}
 	// perform generic loop

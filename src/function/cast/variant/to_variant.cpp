@@ -127,11 +127,9 @@ struct VariantLocalData : FunctionLocalState {
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(unshredded_entry, true);
+			ConstantVector::SetNull(unshredded_entry);
 		}
-		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(unshredded_child, true);
+		ConstantVector::SetNull(unshredded_child);
 	}
 
 	Vector &GetShreddedVector(idx_t req_capacity) {
@@ -239,7 +237,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	auto &keys_entry = ListVector::GetEntry(keys);
 
 	//! Initialize the dictionary
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	ToVariantSourceData source_data(source, count);
 

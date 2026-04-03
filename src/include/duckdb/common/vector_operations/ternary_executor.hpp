@@ -78,7 +78,7 @@ public:
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				auto adata = ConstantVector::GetData<A_TYPE>(a);
 				auto bdata = ConstantVector::GetData<B_TYPE>(b);

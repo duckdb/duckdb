@@ -61,9 +61,13 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			auto &child = DictionaryVector::Child(*source);
 			auto &dict_sel = DictionaryVector::SelVector(*source);
 			// merge the selection vectors and verify the child
-			auto new_buffer = dict_sel.Slice(*sel, source_count);
-			owned_sel.Initialize(new_buffer);
-			sel = &owned_sel;
+			if (sel->IsSet()) {
+				auto new_buffer = dict_sel.Slice(*sel, source_count);
+				owned_sel.Initialize(new_buffer);
+				sel = &owned_sel;
+			} else {
+				sel = &dict_sel;
+			}
 			source = &child;
 			break;
 		}
@@ -172,11 +176,16 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(*source);
 		auto tdata = FlatVector::GetData<string_t>(target);
+		auto &buffer = StringVector::GetStringBuffer(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (tmask.RowIsValid(target_idx)) {
-				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
+				if (ldata[source_idx].IsInlined()) {
+					tdata[target_idx] = ldata[source_idx];
+				} else {
+					tdata[target_idx] = buffer.AddBlob(ldata[source_idx]);
+				}
 			}
 		}
 		break;

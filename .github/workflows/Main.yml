@@ -49,7 +49,7 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
@@ -62,10 +62,9 @@ jobs:
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       # Avoid downloading blobs >50 KB until they are actually needed by git.
       GIT_FETCH_FILTER: blob:limit=50k
@@ -99,6 +98,8 @@ jobs:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+            tests:
+              - test/**/*.test
 
       - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -196,20 +197,11 @@ jobs:
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
           echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
-      - name: Install tools
-        run: |
-          make format_tools
-          echo "::group::Installed Python packages"
-          pip3 freeze
-          echo "::endgroup::"
+      - name: Install format tools
+        run: python3 scripts/ci/retry.py -- make format_tools
 
       - name: Check format
         run: |
-          echo "::group::Formatter versions and config"
-          clang-format --version
-          clang-format --dump-config
-          black --version
-          echo "::endgroup::"
           make format-check-silent enum-integrity-check
           echo "::group::Check generated files"
           make generate-files
@@ -246,8 +238,12 @@ jobs:
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - name: Smoke tests
-      run: make smoke
+      run: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
@@ -375,6 +371,8 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - uses: ./.github/actions/ccache-action
+
     - name: Build
       run: make wasm_ci
 
@@ -393,24 +391,20 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build
+        changed_tests_file: ${{ runner.temp }}/changed_tests.txt
 
     - name: Build linux default release
       run: make clean release
 
-    - name: Prepare linux default release artifact
-      run: |
-        make release-artifact
-        mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
-
-    - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-default-release-build
-        path: build/linux-default-release.tar.gz
-        if-no-files-found: error
+    - name: Symbol Checks
+      run: make -j4 --output-sync=target symbol-checks
 
  linux-release-tests:
     name: Linux Release Tests
@@ -438,37 +432,6 @@ jobs:
 
     - name: Test
       run: make allunit
-
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-24.04
-    needs:
-      - prepare
-      - linux-release
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Download linux default release artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-default-release-build
-        path: build
-
-    - name: Extract linux default release artifact
-      run: |
-        rm -rf build/release
-        tar -xzf build/linux-default-release.tar.gz -C build
-
-    - name: Symbol Leakage Test
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Banned Symbol Check
-      run: python3 scripts/banned_symbols_check.py --directory build/release/src
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
@@ -788,13 +751,13 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
       - linux-debug
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
@@ -814,7 +777,7 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.ref_name == 'main'
     runs-on: ubuntu-24.04
     needs: linux-debug
     env:
@@ -876,6 +839,10 @@ jobs:
 
     - name: Test
       run: make unittest_threadsan
+
+    - name: Test Extra
+      if: github.ref_name == 'main'
+      run: make unittest_threadsan_extra
 
  amalgamation-tests:
     name: Amalgamation Tests

@@ -8,6 +8,9 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	auto result = make_uniq<AttachInfo>();
 	result->name = name;
 	result->path = path;
+	if (parsed_path) {
+		result->parsed_path = parsed_path->Copy();
+	}
 	result->options = options;
 	for (auto &entry : parsed_options) {
 		result->parsed_options[entry.first] = entry.second->Copy();
@@ -25,7 +28,11 @@ string AttachInfo::ToString() const {
 		result += " OR REPLACE";
 	}
 	result += " DATABASE ";
-	result += KeywordHelper::WriteQuoted(path, '\'');
+	if (parsed_path) {
+		result += parsed_path->ToString();
+	} else {
+		result += KeywordHelper::WriteQuoted(path, '\'');
+	}
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}

@@ -51,6 +51,7 @@ ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
+TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 SecretName <- ColId

@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+struct JoinFilterTableFilterState;
+
 class PrefixRangeFilter {
 public:
 	struct BuildState {
@@ -54,13 +56,14 @@ public:
 	explicit PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
 	                                const LogicalType &key_type_p);
 
-	LogicalType GetKeyType() const {
+	const LogicalType &GetKeyType() const {
 		return key_type;
 	}
 
 	string ToString(const string &column_name) const override;
 
-	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const;
+	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
+	             JoinFilterTableFilterState &state) const;
 	bool FilterValue(const Value &value) const;
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
