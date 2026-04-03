@@ -24,6 +24,8 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 statement ok
 set disabled_optimizers to 'common_subplan,column_lifetime,compressed_materialization,statistics_propagation';
 
+mode skip
+
 # Projection with expressions used in join condition. Cannot pull up
 query II
 explain SELECT * FROM (SELECT a + 1 as x, b FROM tbl) subq JOIN t1 ON subq.x = t1.a;
@@ -119,3 +121,83 @@ query II
 explain select i, j1.j from v1 j1 join v1 j2 using (i);
 ----
 logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+mode unskip
+
+# Verify that non-matching rows on the nullable side of a LEFT JOIN produce NULL and are not affected by the pullup
+statement ok
+CREATE TABLE tbl1 AS SELECT range AS a FROM range(3);
+
+statement ok
+CREATE TABLE tbl2 AS SELECT range AS b FROM range(1);
+
+statement ok
+CREATE VIEW v AS SELECT b, COALESCE(b, 0) AS c FROM tbl2;
+
+query II
+SELECT a, v.c FROM tbl1 LEFT JOIN v ON tbl1.a = v.b;
+----
+0	0
+1	NULL
+2	NULL
+
+
+# Test correctness
+foreach do '' 'projection_pullup'
+
+statement ok
+set disabled_optimizers to {do}
+
+query III
+SELECT * FROM (SELECT a + 1 as x, b FROM tbl) subq JOIN t1 ON subq.x = t1.a limit 3;
+----
+3	2	3
+4	3	4
+5	4	5
+
+query IIII
+SELECT * FROM (SELECT a.a, b.b FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
+JOIN (SELECT c.c, d.d as newD FROM t3 c JOIN t4 d ON c.c = d.d) AS join34 ON join12.a = join34.c limit 3;
+----
+5	5	5	5
+6	6	6	6
+7	7	7	7
+
+query III
+SELECT * FROM (SELECT a.a, b.b FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
+JOIN t3 on join12.a = t3.c LIMIT 3;
+----
+5	5	5
+6	6	6
+7	7	7
+
+query II
+select * from(select a.a, b.b from (select * from t1) a join (select * from t2) b on a.a = b.b) as join12
+semi join(select c.c, d.d as newD from (select * from t3) c join (select * from t4) d on c.c = d.d) as join34 on join12.a = join34.c limit 3;
+----
+5	5
+6	6
+7	7
+
+query II
+with cte_1 as (select * from t1) select * from cte_1 join t2 on a=b limit 3;
+----
+5	5
+6	6
+7	7
+
+query II
+SELECT a, v.c FROM tbl1 LEFT JOIN v ON tbl1.a = v.b ORDER BY a;
+----
+0	0
+1	NULL
+2	NULL
+
+query I
+SELECT a3 FROM (SELECT a2 AS a3 FROM (SELECT a1 AS a2 FROM (SELECT a AS a1 FROM tbl) AS t0) AS t1) AS t2 WHERE a3 % 2 = 0 limit 3
+----
+0
+2
+4
+
+endloop

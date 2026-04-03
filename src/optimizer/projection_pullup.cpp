@@ -193,6 +193,9 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 			}
 		}
 
+		// Partial pullup is intentionally not implemented.
+		// Pulling a projection only partially up could leave it in an intermediate state between operators. This would
+		// reduce the opportunities for join reordering without providing any benefit.
 		if (!can_pull_through) {
 			// Recurse into child;
 			ProjectionPullup next(optimizer, root);
@@ -234,10 +237,22 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 
 			// Not all expressions are colrefs. We can pull up instead of removing
 			for (idx_t i = 0; i < proj.expressions.size(); i++) {
-				// FIXME: Constants should be safe to pass through if they are in projections on the non-nullable side
-				// of a join. Skip for now
-				if (proj.expressions[i]->type == ExpressionType::VALUE_CONSTANT) {
-					return;
+				LogicalOperator &parent_op = parents[i].get();
+
+				// Do not pull non-colref expressions through outer joins.
+				// non-colref expressions on the nullable side of a LEFT/RIGHT/OUTER JOIN must not be pulled above the
+				// join. If pulled up, expressions (e.g COALESCE) evaluate after the join and return non-null for
+				// unmatched rows instead of null.
+				if (parent_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+				    parent_op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+					auto &join = parent_op.Cast<LogicalComparisonJoin>();
+					if (join.join_type == JoinType::LEFT || join.join_type == JoinType::RIGHT ||
+					    join.join_type == JoinType::OUTER) {
+						// Recurse into child without pulling up
+						ProjectionPullup next(optimizer, root);
+						next.Optimize(proj.children[0]);
+						return;
+					}
 				}
 			}
 
