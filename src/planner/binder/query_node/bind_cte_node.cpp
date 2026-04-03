@@ -18,19 +18,28 @@ struct BoundCTEData {
 	shared_ptr<CTEBindState> cte_bind_state;
 };
 
+static bool IsDMLQueryNode(const CommonTableExpressionInfo &cte) {
+	if (!cte.query_node) {
+		return false;
+	}
+	auto t = cte.query_node->type;
+	return t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+	       t == QueryNodeType::DELETE_QUERY_NODE;
+}
+
 BoundStatement Binder::BindNode(QueryNode &node) {
 	reference<Binder> current_binder(*this);
 	vector<BoundCTEData> bound_ctes;
 	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
-		if (cte.second->query_node) {
-			auto t = cte.second->query_node->type;
-			if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
-			    t == QueryNodeType::DELETE_QUERY_NODE) {
-				if (++dml_cte_count > 1) {
-					throw BinderException(
-					    "Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
-				}
+		if (IsDMLQueryNode(*cte.second)) {
+			if (parent) {
+				throw BinderException(
+				    "WITH clause containing a data-modifying statement must be at the top level");
+			}
+			if (++dml_cte_count > 1) {
+				throw BinderException(
+				    "Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
 			}
 		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));

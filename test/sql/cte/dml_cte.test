@@ -298,6 +298,23 @@ WITH upd AS (UPDATE t SET j = 0 RETURNING i), del AS (DELETE FROM t WHERE i = 1 
 ----
 <REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
 
+# DML CTEs must be at the top level (not inside subqueries)
+
+statement error
+SELECT (WITH ins AS (INSERT INTO t VALUES (1, 2) RETURNING i) SELECT * FROM ins) AS x;
+----
+<REGEX>:.*data-modifying statement must be at the top level.*
+
+statement error
+SELECT * FROM (WITH ins AS (INSERT INTO t VALUES (1, 2) RETURNING i) SELECT * FROM ins) AS sub;
+----
+<REGEX>:.*data-modifying statement must be at the top level.*
+
+statement error
+SELECT * FROM t WHERE i IN (WITH del AS (DELETE FROM t WHERE i = 1 RETURNING i) SELECT i FROM del);
+----
+<REGEX>:.*data-modifying statement must be at the top level.*
+
 # Self-referential INSERT + SELECT from the same table.
 # The INSERT CTE always executes (side effect), so after the query t2 has rows.
 # Whether sel sees the inserted rows depends on execution order, which is not
@@ -385,16 +402,15 @@ SELECT * FROM base;
 4
 5
 
-# Nested WITH clauses: a DML CTE inside a subquery's WITH is a separate clause,
-# so it does not count against the outer WITH clause's single-DML limit.
-# Both the outer DML CTE and the nested one execute.
+# Nested DML CTEs inside subqueries are rejected (Postgres-compatible behavior):
+# WITH clause containing a data-modifying statement must be at the top level.
 statement ok
 TRUNCATE t;
 
 statement ok
 INSERT INTO t VALUES (1, 1), (2, 2), (3, 3);
 
-query I rowsort
+statement error
 WITH outer_del AS (
     DELETE FROM t WHERE i = 1 RETURNING i
 )
@@ -403,14 +419,7 @@ SELECT * FROM (
     SELECT * FROM inner_ins
 ) sub;
 ----
-99
-
-query II rowsort
-SELECT * FROM t;
-----
-2	2
-3	3
-99	99
+<REGEX>:.*data-modifying statement must be at the top level.*
 
 # Transaction rollback: DML CTE side effects roll back with the transaction
 statement ok

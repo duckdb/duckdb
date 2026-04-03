@@ -11,9 +11,16 @@ CREATE TABLE table1 (id INTEGER, a INTEGER);
 statement ok
 CREATE TABLE table2 (table1_id INTEGER);
 
-# DML CTEs in INSERT statements are now supported
-statement ok
+# DML CTEs must use the WITH ... INSERT INTO syntax (WITH before the INSERT keyword).
+# The INSERT INTO t WITH ... SELECT form is not supported (matches Postgres).
+statement error
 INSERT INTO table2 WITH cte AS (INSERT INTO table1 SELECT 1, 2 RETURNING id) SELECT id FROM cte;
+----
+<REGEX>:.*data-modifying statement must be at the top level.*
+
+# Correct syntax: WITH before INSERT
+statement ok
+WITH cte AS (INSERT INTO table1 SELECT 1, 2 RETURNING id) INSERT INTO table2 SELECT id FROM cte;
 
 query II
 SELECT * FROM table1;
