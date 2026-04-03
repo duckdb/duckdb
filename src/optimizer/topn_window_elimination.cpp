@@ -5,11 +5,14 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -78,6 +81,36 @@ vector<LogicalType> ExtractReturnTypes(const vector<unique_ptr<Expression>> &exp
 bool BindingsReferenceRowNumber(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
 	for (const auto &binding : bindings) {
 		if (binding.table_index == window.window_index) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void GatherLocalCTEInfo(const LogicalOperator &op, unordered_set<idx_t> &definitions,
+                        unordered_set<idx_t> &references) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		definitions.insert(op.Cast<LogicalCTE>().table_index);
+		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		references.insert(op.Cast<LogicalCTERef>().cte_index);
+		break;
+	default:
+		break;
+	}
+	for (const auto &child : op.children) {
+		GatherLocalCTEInfo(*child, definitions, references);
+	}
+}
+
+bool HasExternalCTEReferences(const LogicalOperator &op) {
+	unordered_set<idx_t> definitions;
+	unordered_set<idx_t> references;
+	GatherLocalCTEInfo(op, definitions, references);
+	for (const auto &cte_index : references) {
+		if (!definitions.count(cte_index)) {
 			return true;
 		}
 	}
@@ -227,8 +260,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	UpdateTopmostBindings(window_idx, op, group_projection_idxs, topmost_bindings, new_bindings, replacer);
 	replacer.stop_operator = op.get();
 
-	RemoveUnusedColumns unused_optimizer(optimizer);
-	unused_optimizer.VisitOperator(*op);
+	if (!HasExternalCTEReferences(*op)) {
+		RemoveUnusedColumns unused_optimizer(optimizer);
+		unused_optimizer.VisitOperator(*op);
+	}
 
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
