@@ -1305,8 +1305,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// this limits what kind of vacuuming we can do
 	bool has_indexes = !info->GetIndexes().Empty();
 
-	// *unless* vacuum_rebuild_indexes threshold is set and the table's row count
-	// is within the threshold, and all indexes are ART indexes,
+	// *unless* vacuum_rebuild_indexes threshold is set, the table's row count
+	// is within the threshold, and all indexes are bound ART indexes,
 	// in which case we allow vacuuming and rebuild the indexes afterward.
 	auto vacuum_rebuild_threshold = Settings::Get<VacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
 	auto index_types = info->GetIndexes().DistinctIndexTypes();
