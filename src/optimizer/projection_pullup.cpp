@@ -236,7 +236,7 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 			}
 
 			// Not all expressions are colrefs. We can pull up instead of removing
-			for (idx_t i = 0; i < proj.expressions.size(); i++) {
+			for (idx_t i = 0; i < parents.size(); i++) {
 				LogicalOperator &parent_op = parents[i].get();
 
 				// Do not pull non-colref expressions through outer joins.
