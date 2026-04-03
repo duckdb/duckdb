@@ -813,7 +813,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		auto tagged_table_info = make_uniq<CreateTableInfo>();
 		tagged_table_info->schema = DEFAULT_SCHEMA;
 		tagged_table_info->table = "tagged_table";
-		tagged_table_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		tagged_table_info->temporary = false;
 		tagged_table_info->internal = true;
 
