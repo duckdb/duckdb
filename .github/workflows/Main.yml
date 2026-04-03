@@ -66,26 +66,15 @@ jobs:
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
       save_cache: ${{ steps.config.outputs.save_cache }}
+      runner_provider: ${{ steps.config.outputs.runner_provider }}
     env:
       GEN: ninja
-      # Avoid downloading blobs >50 KB until they are actually needed by git.
-      GIT_FETCH_FILTER: blob:limit=50k
-      GIT_CONFIG_COUNT: 1
-      GIT_CONFIG_KEY_0: checkout.workers
-      GIT_CONFIG_VALUE_0: 4
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          filter: ${{ env.GIT_FETCH_FILTER }}
-
-      - name: Fetch PR base branch history
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # changed-files needs base branch history for merge-base lookup
-          # and the exact base SHA for comparison.
-          git fetch --no-tags --depth=100 --filter="${GIT_FETCH_FILTER}" origin \
-            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} \
-            ${{ github.event.pull_request.base.sha }}
+          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          fetch_depth: 0
 
       - name: Detect changes
         id: changed
@@ -130,6 +119,7 @@ jobs:
 
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
+            runner_provider=namespace
             runner_linux_small=namespace-profile-linux-small
             runner_linux_x64=namespace-profile-linux-x64
             runner_linux_22_x64=namespace-profile-linux-22-x64
@@ -138,6 +128,7 @@ jobs:
             runner_macos_arm64=namespace-profile-macos-arm64
             runner_macos_14_arm64=namespace-profile-macos-14-arm64
           else
+            runner_provider=github
             runner_linux_small=ubuntu-latest
             runner_linux_x64=ubuntu-latest
             runner_linux_22_x64=ubuntu-22.04
@@ -148,6 +139,7 @@ jobs:
           fi
 
           {
+            echo "runner_provider=$runner_provider"
             echo "runner_linux_small=$runner_linux_small"
             echo "runner_linux_x64=$runner_linux_x64"
             echo "runner_linux_22_x64=$runner_linux_22_x64"
@@ -237,7 +229,10 @@ jobs:
       EXTENSIONS_STATIC_BUILD: 0
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -411,7 +406,10 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
