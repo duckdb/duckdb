@@ -25,6 +25,13 @@
 
 namespace duckdb {
 
+//! Controls how a table function manages parallelism.
+enum class TableFunctionParallelism : uint8_t {
+	SELF_MANAGED_PARALLELISM = 0,         //! Source handles its own parallelism (default)
+	SEQUENTIAL = 1,                       //! Sequential source, benefits from external parallelization
+	SEQUENTIAL_PREFER_SINGLE_THREADED = 2 //! Sequential source, prefers single-threaded execution
+};
+
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;
@@ -503,6 +510,9 @@ public:
 	//! By default init_global is called when the pipeline is ready for execution
 	//! If this is set to `INITIALIZE_ON_SCHEDULE` the table function is initialized when the query is scheduled
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
+
+	//! How this table function manages parallelism
+	TableFunctionParallelism parallelism = TableFunctionParallelism::SELF_MANAGED_PARALLELISM;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;

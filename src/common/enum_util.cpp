@@ -5253,6 +5253,25 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 13, "TableFilterType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTableFunctionParallelismValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TableFunctionParallelism::SELF_MANAGED_PARALLELISM), "SELF_MANAGED_PARALLELISM" },
+		{ static_cast<uint32_t>(TableFunctionParallelism::SEQUENTIAL), "SEQUENTIAL" },
+		{ static_cast<uint32_t>(TableFunctionParallelism::SEQUENTIAL_PREFER_SINGLE_THREADED), "SEQUENTIAL_PREFER_SINGLE_THREADED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value) {
+	return StringUtil::EnumToString(GetTableFunctionParallelismValues(), 3, "TableFunctionParallelism", static_cast<uint32_t>(value));
+}
+
+template<>
+TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value) {
+	return static_cast<TableFunctionParallelism>(StringUtil::StringToEnum(GetTableFunctionParallelismValues(), 3, "TableFunctionParallelism", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TablePartitionInfo::NOT_PARTITIONED), "NOT_PARTITIONED" },
