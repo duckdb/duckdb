@@ -940,13 +940,15 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	auto name = deserializer.ReadProperty<string>(102, "name");
 	auto usage_count = deserializer.ReadProperty<uint64_t>(103, "usage_count");
 	auto counter = deserializer.ReadProperty<int64_t>(104, "counter");
+	auto last_value = deserializer.ReadPropertyWithDefault<std::optional<int64_t>>(105, "last_value");
+
 	if (DeserializeOnly()) {
 		return;
 	}
 
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
-	seq.ReplayValue(usage_count, counter);
+	seq.ReplayValue(usage_count, counter, last_value);
 }
 
 //===--------------------------------------------------------------------===//

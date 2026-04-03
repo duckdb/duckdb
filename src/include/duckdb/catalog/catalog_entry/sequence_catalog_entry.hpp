@@ -31,10 +31,10 @@ struct SequenceData {
 	//! The sequence counter
 	int64_t counter;
 	//! The most recently returned value
-	int64_t last_value;
+	std::optional<int64_t> last_value;
 	//! The increment value
 	int64_t increment;
-	//! The minimum value of the sequence
+	//! The start_value of the sequence
 	int64_t start_value;
 	//! The minimum value of the sequence
 	int64_t min_value;
@@ -61,7 +61,7 @@ public:
 	SequenceData GetData() const;
 	int64_t CurrentValue();
 	int64_t NextValue(DuckTransaction &transaction);
-	void ReplayValue(uint64_t usage_count, int64_t counter);
+	void ReplayValue(uint64_t usage_count, int64_t counter, std::optional<int64_t> last_value);
 
 	string ToSQL() const override;
 

@@ -1,5 +1,8 @@
-# name: test/sql/catalog/sequence/sequence_currval_before_nextval.test
+# name: test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test
 # group: [sequence]
+
+statement ok
+SET storage_compatibility_version = 'v1.4.4';
 
 load {TEST_DIR}/mydb.db
 
@@ -16,6 +19,11 @@ SELECT nextval('scenario_id');
 ----
 1
 
+query I
+SELECT nextval('scenario_id');
+----
+2
+
 statement ok
 checkpoint;
 
@@ -29,9 +37,9 @@ Sequence Error: currval: sequence is not yet defined in this session
 query I
 SELECT nextval('scenario_id');
 ----
-2
+3
 
 query I
 SELECT currval('scenario_id');
 ----
-2
+3

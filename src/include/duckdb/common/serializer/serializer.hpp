@@ -205,6 +205,19 @@ protected:
 		}
 	}
 
+	// Optional
+	template <typename T>
+	void WriteValue(const std::optional<T> &opt) {
+		if (!opt.has_value()) {
+			OnNullableBegin(false);
+			OnNullableEnd();
+		} else {
+			OnNullableBegin(true);
+			WriteValue(opt.value());
+			OnNullableEnd();
+		}
+	}
+
 	// Pair
 	template <class K, class V>
 	void WriteValue(const std::pair<K, V> &pair) {

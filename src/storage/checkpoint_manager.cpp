@@ -521,14 +521,23 @@ void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &de
 // Sequences
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
-	serializer.WriteProperty(100, "sequence", &seq);
+	auto info = seq.GetInfo();
+	auto &seq_info = info->Cast<CreateSequenceInfo>();
+	// we only support writing last value from version 7 onwards
+	if (db.GetStorageManager().GetStorageVersion() < 7) {
+		seq_info.last_value = std::nullopt;
+	}
+	serializer.WriteProperty(100, "sequence", info.get());
 }
 
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
-	// reset with checkpoint read, as usage_count should be fresh for every session
-	sequence_info.usage_count = 0;
+	if (!sequence_info.last_value.has_value()) {
+		// reset with checkpoint read, as usage_count should be fresh for every session
+		sequence_info.usage_count = 0;
+	}
+
 	catalog.CreateSequence(transaction, sequence_info);
 }
 
