@@ -1,0 +1,56 @@
+[
+    {
+        "name": "first_value",
+        "parameters": "expr",
+        "description": "The first value of expr in the frame. Can IGNORE or RESPECT NULLS.",
+        "example": "FIRST_VALUE(athlete) OVER (PARTITION BY event ORDER BY points) AS gold",
+        "categories": "",
+
+        "type": "window_function"
+    },
+    {
+    "name": "last_value",
+        "parameters": "expr",
+        "description": "The last value of expr in the frame. Can IGNORE or RESPECT NULLS.",
+        "example": "LAST_VALUE(athlete) OVER (PARTITION BY event ORDER BY points) AS bottom",
+        "categories": "",
+
+        "type": "window_function"
+    },
+    {
+        "name": "nth_value",
+        "parameters": "expr, n",
+        "description": "The nth value of expr in the frame. Can IGNORE or RESPECT NULLS.",
+        "example": "NTH_VALUE(athlete, 2) OVER (PARTITION BY event ORDER BY points) AS silver",
+        "categories": "",
+
+        "type": "window_function"
+    },
+    {
+        "name": "lead",
+        "parameters": "expr[, n[, default]]",
+        "description": "The value of expr n rows after the current row, or the default. Can IGNORE or RESPECT NULLS.",
+        "example": "LEAD(athlete, 1, NULL) OVER (PARTITION BY event ORDER BY points) AS victorious_over",
+        "categories": "",
+
+        "type": "window_function_set"
+    },
+    {
+        "name": "lag",
+        "parameters": "expr[, n[, default]]",
+        "description": "The value of expr n rows after the current row, or the default. Can IGNORE or RESPECT NULLS.",
+        "example": "LAG(athlete, 1, NULL) OVER (PARTITION BY event ORDER BY points) AS defeated_by",
+        "categories": "",
+
+        "type": "window_function_set"
+    },
+    {
+        "name": "fill",
+        "parameters": "expr",
+        "description": "Fill in missing values using linear interpolation with ORDER BY as the X-axis.",
+        "example": "FILL(usage) OVER (PARTITION BY customer ORDER BY date)",
+        "categories": "",
+
+        "type": "window_function"
+    }
+]

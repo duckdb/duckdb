@@ -3,7 +3,7 @@
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window/ranking_functions.hpp"
 #include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
@@ -144,8 +144,8 @@ public:
 	}
 };
 
-WindowFunction RankFunc::GetFunction() {
-	WindowFunction fun("rank", {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK);
+WindowFunction RankFun::GetFunction() {
+	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK);
 	return fun;
 }
 
@@ -198,14 +198,8 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 // WindowDenseRankExecutor
 //===--------------------------------------------------------------------===//
 WindowFunction DenseRankFun::GetFunction() {
-	WindowFunction fun("dense_rank", {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE);
+	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE);
 	fun.can_order_by = false;
-	return fun;
-}
-
-WindowFunction RankDenseFun::GetFunction() {
-	auto fun = DenseRankFun::GetFunction();
-	fun.name = "rank_dense";
 	return fun;
 }
 
@@ -301,7 +295,7 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 // WindowPercentRankExecutor
 //===--------------------------------------------------------------------===//
 WindowFunction PercentRankFun::GetFunction() {
-	WindowFunction fun("percent_rank", {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK);
+	WindowFunction fun({}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK);
 	return fun;
 }
 
@@ -386,7 +380,7 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 // WindowCumeDistExecutor
 //===--------------------------------------------------------------------===//
 WindowFunction CumeDistFun::GetFunction() {
-	WindowFunction fun("cume_dist", {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST);
+	WindowFunction fun({}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST);
 	return fun;
 }
 
