@@ -94,7 +94,7 @@ index 4602928..3e56aca 100644
  	for (auto &cte_child : cte.map) {
  		// simplify individual ctes
 -		Simplify(cte_child.second->query->node);
-+		Simplify(*cte_child.second->query_node);
++		Simplify(cte_child.second->query_node);
  	}
  }
 
