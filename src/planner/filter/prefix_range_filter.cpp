@@ -6,6 +6,7 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -99,14 +100,6 @@ public:
 	}
 
 	FilterPropagateResult LookupRange(U lower_bound, U upper_bound) const {
-		const U max = min + span;
-		if (upper_bound < min || lower_bound > max) {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		}
-		return LookupClampedRange(MaxValue<U>(lower_bound, min), MinValue<U>(upper_bound, max));
-	}
-
-	FilterPropagateResult LookupClampedRange(U lower_bound, U upper_bound) const {
 		const U lb_y = lower_bound - min;
 		const U lb_bit_idx = lb_y >> shift;
 		const auto lb_word_idx = lb_bit_idx >> WORD_SHIFT;
@@ -179,7 +172,11 @@ struct NumericPrefixPolicy {
 	using input_type = T;
 	using comparable_type = typename MakeUnsigned<T>::type;
 
-	static comparable_type ToComparable(input_type value) {
+	static bool SupportsStats(const BaseStatistics &stats) {
+		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
+	}
+
+	static inline comparable_type ToComparable(input_type value) {
 		// Overflow is explicitly allowed for unsigned to signed cast
 		return static_cast<comparable_type>(value);
 	}
@@ -195,29 +192,59 @@ struct NumericPrefixPolicy {
 		bitmap.Initialize(context, min, max - min);
 	}
 
-	static FilterPropagateResult LookupRange(const PrefixRangeBitmap<comparable_type> &bitmap, const Value &lower_bound,
-	                                         const Value &upper_bound) {
-		const auto lb = lower_bound.GetValueUnsafe<input_type>();
-		const auto ub = upper_bound.GetValueUnsafe<input_type>();
+	static bool ExtractClampedStatsRange(const PrefixRangeBitmap<comparable_type> &bitmap, BaseStatistics &stats,
+	                                     comparable_type &lower_bound, comparable_type &upper_bound) {
+		if (!NumericStats::HasMinMax(stats)) {
+			return false;
+		}
+
+		const auto min = NumericStats::Min(stats).GetValueUnsafe<input_type>();
+		const auto max = NumericStats::Max(stats).GetValueUnsafe<input_type>();
+		if (min > max) {
+			return false;
+		}
 
 		// static_cast is needed here as we need to allow overflow to cast from comparable_type
 		const auto min_t = static_cast<input_type>(bitmap.Min());
 		const auto max_t = static_cast<input_type>(bitmap.Min() + bitmap.Span());
-		if (ub < min_t || lb > max_t) {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		if (max < min_t || min > max_t) {
+			return false;
 		}
 
-		const auto adjusted_lb = ToComparable(MaxValue<input_type>(lb, min_t));
-		const auto adjusted_ub = ToComparable(MinValue<input_type>(ub, max_t));
-		return bitmap.LookupClampedRange(adjusted_lb, adjusted_ub);
+		lower_bound = ToComparable(MaxValue<input_type>(min, min_t));
+		upper_bound = ToComparable(MinValue<input_type>(max, max_t));
+		return true;
 	}
 };
+
+uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
+	return string_t(StringStats::Min(stats)).GetPrefixIntegerComparable();
+}
+
+uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
+	const auto max_string = StringStats::Max(stats);
+	if (max_string.size() >= string_t::PREFIX_BYTES) {
+		return string_t(max_string).GetPrefixIntegerComparable();
+	}
+
+	// Pad string prefix with 0xFF to keep correctness if max is truncated at \0 char, e.g., ab\0c -> ab
+	array<char, string_t::PREFIX_BYTES> padded_prefix;
+	padded_prefix.fill(char(0xFF));
+	for (idx_t i = 0; i < max_string.size(); i++) {
+		padded_prefix[i] = max_string[i];
+	}
+	return string_t(padded_prefix.data(), string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
+}
 
 struct StringPrefixPolicy {
 	using input_type = string_t;
 	using comparable_type = uint32_t;
 
-	static comparable_type ToComparable(const input_type &value) {
+	static bool SupportsStats(const BaseStatistics &stats) {
+		return stats.GetStatsType() == StatisticsType::STRING_STATS;
+	}
+
+	static inline comparable_type ToComparable(const input_type &value) {
 		return value.GetPrefixIntegerComparable();
 	}
 
@@ -233,29 +260,29 @@ struct StringPrefixPolicy {
 		bitmap.Initialize(context, min, max - min);
 	}
 
-	static FilterPropagateResult LookupRange(const PrefixRangeBitmap<comparable_type> &bitmap, const Value &lower_bound,
-	                                         const Value &upper_bound) {
-		return bitmap.LookupRange(ToComparable(lower_bound), ToComparable(upper_bound));
+	static bool ExtractClampedStatsRange(const PrefixRangeBitmap<comparable_type> &bitmap, BaseStatistics &stats,
+	                                     comparable_type &lower_bound, comparable_type &upper_bound) {
+		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
+			return false;
+		}
+
+		lower_bound = StringStatsMinComparable(stats);
+		upper_bound = StringStatsMaxComparable(stats);
+		if (lower_bound > upper_bound) {
+			return false;
+		}
+
+		const auto bitmap_min = bitmap.Min();
+		const auto bitmap_max = bitmap.Min() + bitmap.Span();
+		if (upper_bound < bitmap_min || lower_bound > bitmap_max) {
+			return false;
+		}
+
+		lower_bound = MaxValue<comparable_type>(lower_bound, bitmap_min);
+		upper_bound = MinValue<comparable_type>(upper_bound, bitmap_max);
+		return true;
 	}
 };
-
-uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
-	return string_t(StringStats::Min(stats)).GetPrefixIntegerComparable();
-}
-
-uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
-	const auto max_string = StringStats::Max(stats);
-	if (max_string.size() >= string_t::PREFIX_BYTES) {
-		return string_t(max_string).GetPrefixIntegerComparable();
-	}
-
-	array<char, string_t::PREFIX_BYTES> padded_prefix;
-	padded_prefix.fill(char(0xFF));
-	for (idx_t i = 0; i < max_string.size(); i++) {
-		padded_prefix[i] = max_string[i];
-	}
-	return string_t(padded_prefix.data(), string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
-}
 
 template <typename Policy>
 class TemplatedPrefixRangeFilter : public PrefixRangeFilter {
@@ -304,11 +331,13 @@ public:
 		return bitmap.Lookup(Policy::ToComparable(key));
 	}
 
-	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
-		return Policy::LookupRange(bitmap, lower_bound, upper_bound);
-	}
-
-	FilterPropagateResult LookupComparableRange(Comparable lower_bound, Comparable upper_bound) const {
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
+		Comparable lower_bound;
+		Comparable upper_bound;
+		if (!Policy::SupportsStats(stats) ||
+		    !Policy::ExtractClampedStatsRange(bitmap, stats, lower_bound, upper_bound)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		return bitmap.LookupRange(lower_bound, upper_bound);
 	}
 
@@ -495,47 +524,7 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 	if (!filter || !filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-
-	switch (stats.GetStatsType()) {
-	case StatisticsType::NUMERIC_STATS:
-		if (!NumericStats::HasMinMax(stats)) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		break;
-	case StatisticsType::STRING_STATS:
-		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		break;
-	default:
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	Value min;
-	Value max;
-	if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-		const auto min_comparable = StringStatsMinComparable(stats);
-		const auto max_comparable = StringStatsMaxComparable(stats);
-		auto *string_filter = dynamic_cast<const TemplatedPrefixRangeFilter<StringPrefixPolicy> *>(filter.get());
-		D_ASSERT(string_filter);
-		if (min_comparable > max_comparable) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		return string_filter->LookupComparableRange(min_comparable, max_comparable);
-	}
-
-	min = NumericStats::Min(stats);
-	max = NumericStats::Max(stats);
-	if (min > max) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	// The filter was built with key_type (condition_type), but stats are in storage_type
-	if (stats.GetType() != key_type && (!min.DefaultTryCastAs(key_type) || !max.DefaultTryCastAs(key_type))) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	return filter->LookupRange(min, max);
+	return filter->CheckStatistics(stats);
 }
 
 bool PrefixRangeTableFilter::Equals(const TableFilter &other_p) const {
