@@ -33,14 +33,13 @@ enum class WindowExcludeMode : uint8_t { NO_OTHER = 0, CURRENT_ROW = 1, GROUP = 
 
 const char *ToString(WindowBoundary value);
 
-//! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
-//! they inherit from them.
+//! The WindowExpression represents a window function in the query.
 class WindowExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
 
 public:
-	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
+	WindowExpression(const string &catalog_name, const string &schema, const string &function_name);
 
 	//! Catalog of the aggregate function
 	string catalog;
@@ -56,6 +55,8 @@ public:
 	vector<OrderByNode> orders;
 	//! Expression representing a filter, only used for aggregates
 	unique_ptr<ParsedExpression> filter_expr;
+	//! True if we parsed IGNORE/RESPECT NULLS
+	bool has_ignore_nulls = false;
 	//! True to ignore NULL values
 	bool ignore_nulls = false;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
@@ -68,9 +69,6 @@ public:
 
 	unique_ptr<ParsedExpression> start_expr;
 	unique_ptr<ParsedExpression> end_expr;
-	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<ParsedExpression> offset_expr;
-	unique_ptr<ParsedExpression> default_expr;
 
 	//! The set of argument ordering clauses
 	//! These are distinct from the frame ordering clauses e.g., the "x" in
@@ -94,7 +92,9 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
-	static ExpressionType WindowToExpressionType(string &fun_name);
+	void SetFunctionName(const string &function_name);
+
+	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
@@ -119,15 +119,6 @@ public:
 			result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
 				return (distincts++ ? "" : "DISTINCT ") + child->ToString();
 			});
-		}
-		// Lead/Lag extra arguments
-		if (entry.offset_expr.get()) {
-			result += ", ";
-			result += entry.offset_expr->ToString();
-		}
-		if (entry.default_expr.get()) {
-			result += ", ";
-			result += entry.default_expr->ToString();
 		}
 		// ORDER BY arguments
 		if (!entry.arg_orders.empty()) {
@@ -288,7 +279,14 @@ public:
 	}
 
 private:
-	explicit WindowExpression(ExpressionType type);
+	//	Backwards-compatible serialization interface
+	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
+	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);
+
+	//	Remove LEAD/LAG offset/default
+	vector<unique_ptr<ParsedExpression>> SerializedChildren(Serializer &serializer) const;
+	unique_ptr<ParsedExpression> SerializedOffset(Serializer &serializer) const;
+	unique_ptr<ParsedExpression> SerializedDefault(Serializer &serializer) const;
 };
 
 } // namespace duckdb
