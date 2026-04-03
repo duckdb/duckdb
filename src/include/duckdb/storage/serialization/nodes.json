@@ -4,7 +4,6 @@
     "includes": [
       "duckdb/parser/common_table_expression_info.hpp"
     ],
-    "custom_implementation": true,
     "members": [
       {
         "id": 100,
@@ -16,7 +15,8 @@
         "name": "query",
         "type": "SelectStatement*",
         "version": "v2.0.0",
-        "status": "deleted"
+        "status": "read_only",
+        "serialize_property": "GetQueryForSerialization(serializer)"
       },
       {
         "id": 102,
@@ -37,10 +37,10 @@
       {
         "id": 106,
         "name": "query_node",
-        "type": "QueryNode*",
-        "version": "v2.0.0"
+        "type": "QueryNode*"
       }
-    ]
+    ],
+    "constructor": ["query", "query_node"]
   },
   {
     "class": "CommonTableExpressionMap",

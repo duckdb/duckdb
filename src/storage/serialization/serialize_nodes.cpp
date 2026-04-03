@@ -257,6 +257,32 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
+	if (!serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", GetQueryForSerialization(serializer));
+	}
+	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates", payload_aggregates);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node", query_node);
+}
+
+unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
+	auto aliases = deserializer.ReadPropertyWithDefault<vector<string>>(100, "aliases");
+	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query");
+	auto materialized = deserializer.ReadProperty<CTEMaterialize>(102, "materialized");
+	auto key_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets");
+	auto payload_aggregates = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates");
+	auto query_node = deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node");
+	auto result = duckdb::unique_ptr<CommonTableExpressionInfo>(new CommonTableExpressionInfo(std::move(query), std::move(query_node)));
+	result->aliases = std::move(aliases);
+	result->materialized = materialized;
+	result->key_targets = std::move(key_targets);
+	result->payload_aggregates = std::move(payload_aggregates);
+	return result;
+}
+
 void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", map);
 }

@@ -56,49 +56,12 @@ unique_ptr<SelectStatement> CommonTableExpressionInfo::GetQueryForSerialization(
 	return select;
 }
 
-// Serialization field layout for CommonTableExpressionInfo:
-//   100  aliases            vector<string>        (all versions)
-//   101  query              SelectStatement*      (v7 and older; written via GetQueryForSerialization)
-//   102  materialized       CTEMaterialize        (all versions)
-//   103  key_targets        vector<ParsedExpr*>   (all versions)
-//   104  payload_aggregates vector<ParsedExpr*>   (all versions)
-//   106  query_node         QueryNode*            (v8+; unified field for SELECT and DML CTEs)
-void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
-	if (!serializer.ShouldSerialize(8)) {
-		// Old format (v7 and earlier): wrap the QueryNode back in a SelectStatement.
-		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query",
-		                                                                 GetQueryForSerialization(serializer));
-	}
-	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates",
-	                                                                          payload_aggregates);
-	if (serializer.ShouldSerialize(8)) {
-		// New format (v8+): write the QueryNode directly.
-		D_ASSERT(query_node);
-		serializer.WriteProperty<unique_ptr<QueryNode>>(106, "query_node", query_node->Copy());
-	}
-}
-
-unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CommonTableExpressionInfo>();
-	deserializer.ReadPropertyWithDefault<vector<string>>(100, "aliases", result->aliases);
-	// Field 101 (SelectStatement) is only written in old format (v7 and earlier).
-	auto select = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query");
-	if (select) {
-		result->query_node = std::move(select->node);
-	}
-	deserializer.ReadProperty<CTEMaterialize>(102, "materialized", result->materialized);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", result->key_targets);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates",
-	                                                                           result->payload_aggregates);
-	// Field 106 (QueryNode) is only present in new format (v8+); overrides field 101 if present.
-	auto query_node = deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node");
+CommonTableExpressionInfo::CommonTableExpressionInfo(unique_ptr<SelectStatement> query, unique_ptr<QueryNode> query_node) {
 	if (query_node) {
-		result->query_node = std::move(query_node);
+		this->query_node = std::move(query_node);
+	} else if (query) {
+		this->query_node = std::move(query->node);
 	}
-	return result;
 }
 
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
