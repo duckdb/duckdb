@@ -15,9 +15,9 @@ unzip <path/to/filename.db.gz> <extraction/path/to/filename.db>
 load <extraction/path/to/filename.db> readonly
 ```
 
-or by using the default extraction path `__TEST_DIR__/` (temporary space)
+or by using the default extraction path `{TEST_DIR}/` (temporary space)
 ```
 unzip <path/to/filename.db.gz>
 
-load __TEST_DIR__/<filename.db> readonly
+load {TEST_DIR}/<filename.db> readonly
 ```

@@ -21,11 +21,11 @@ DROP TRIGGER IF EXISTS my_trigger ON my_table;
 ----
 DROP TRIGGER is not yet supported
 
-# Schema-qualified trigger name
+# Schema-qualified trigger name is not allowed (triggers inherit schema from the table)
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
 # Schema-qualified table name
 statement error
@@ -33,17 +33,17 @@ DROP TRIGGER my_trigger ON my_schema.my_table;
 ----
 DROP TRIGGER is not yet supported
 
-# Both schema-qualified
+# Schema-qualified trigger name with schema-qualified table
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
-# DROP TRIGGER IF EXISTS with schema-qualified names
+# DROP TRIGGER IF EXISTS with schema-qualified trigger name
 statement error
 DROP TRIGGER IF EXISTS my_schema.my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
 # CASCADE
 statement error
@@ -73,16 +73,16 @@ DROP TRIGGER is not yet supported
 statement error
 DROP TRIGGER my_trigger my_table;
 ----
-Parser Error: Syntax error at or near "my_table"
+yntax error
 
 # Syntax errors - missing table name
 statement error
 DROP TRIGGER my_trigger ON;
 ----
-Parser Error: Syntax error at or near "ON"
+yntax error
 
 # Syntax errors - missing trigger name
 statement error
 DROP TRIGGER ON my_table;
 ----
-Parser Error: Syntax error at or near "ON"
+yntax error

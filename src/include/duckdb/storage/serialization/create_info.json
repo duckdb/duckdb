@@ -62,7 +62,12 @@
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
         "version": "v0.10.3"
-	  }
+	  },
+      {
+        "id": 110,
+        "name": "extension_name",
+        "type": "string"
+      }
     ]
   },
   {
@@ -369,8 +374,8 @@
       },
       {
         "id": 208,
-        "name": "sql_body_text",
-        "type": "string"
+        "name": "trigger_action",
+        "type": "QueryNode*"
       }
     ]
   }

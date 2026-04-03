@@ -7,7 +7,7 @@ concurrentloop threadid 0 10
 foreach system_table pragma_database_list sqlite_master sqlite_schema sqlite_temp_master sqlite_temp_schema duckdb_constraints duckdb_columns duckdb_indexes duckdb_schemas duckdb_tables duckdb_types duckdb_views
 
 statement ok
-SELECT * FROM ${system_table}
+SELECT * FROM {system_table}
 
 endloop
 

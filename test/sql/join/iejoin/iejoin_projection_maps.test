@@ -33,7 +33,7 @@ PRAGMA enable_verification
 foreach prefer False True
 
 statement ok
-PRAGMA prefer_range_joins=${prefer};
+PRAGMA prefer_range_joins={prefer};
 
 # mode output_hash
 

@@ -4,7 +4,7 @@
 
 require tpch
 
-load __TEST_DIR__/out_of_core_aggregation.db
+load {TEST_DIR}/out_of_core_aggregation.db
 
 statement ok
 CALL dbgen(sf=1);
@@ -20,10 +20,10 @@ foreach mem 300MiB 600MiB
 foreach threads 1 2 8
 
 statement ok
-SET memory_limit='${mem}';
+SET memory_limit='{mem}';
 
 statement ok
-SET threads=${threads};
+SET threads={threads};
 
 query I
 WITH cte AS (

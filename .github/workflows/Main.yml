@@ -49,23 +49,22 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
-      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.select_runner.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.build_runners.outputs.runners }}
-      linux_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_cli_matrix }}
-      linux_musl_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_musl_cli_matrix }}
+      runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
+      runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.config.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.config.outputs.runner_windows_2022_x64 }}
+      runner_macos_arm64: ${{ steps.config.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.config.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.config.outputs.runners }}
+      linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
+      linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
-      extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
+      changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
+      extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       # Avoid downloading blobs >50 KB until they are actually needed by git.
       GIT_FETCH_FILTER: blob:limit=50k
@@ -99,120 +98,115 @@ jobs:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+            tests:
+              - test/**/*.test
 
-      - name: Check workflow files
+      - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
         run: |
           echo "::add-matcher::.github/actionlint-matcher.json"
+          echo "::group::ShellCheck version"
           shellcheck --version
+          echo "::endgroup::"
+          echo "::group::Install actionlint"
           bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "::endgroup::"
           ./actionlint -color
+          make test_ci
         shell: bash
 
-      - name: Configure extensions
-        id: extensions
+      - name: Configure CI
+        id: config
         run: |
           if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
+            extra_exclude_archs=
           else
-            echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+            extra_exclude_archs=windows_amd64\;wasm_eh
           fi
 
-      - name: Select CI runner
-        id: select_runner
-        run: |
+          echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
+
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
-            {
-              echo "runner_linux_small=namespace-profile-linux-small"
-              echo "runner_linux_x64=namespace-profile-linux-x64"
-              echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
-              echo "runner_linux_arm64=namespace-profile-linux-arm64"
-              echo "runner_windows_2022_x64=namespace-profile-windows-x64"
-              echo "runner_macos_arm64=namespace-profile-macos-arm64"
-              echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
-            } >> "$GITHUB_OUTPUT"
+            runner_linux_small=namespace-profile-linux-small
+            runner_linux_x64=namespace-profile-linux-x64
+            runner_linux_22_x64=namespace-profile-linux-22-x64
+            runner_linux_arm64=namespace-profile-linux-arm64
+            runner_windows_2022_x64=namespace-profile-windows-x64
+            runner_macos_arm64=namespace-profile-macos-arm64
+            runner_macos_14_arm64=namespace-profile-macos-14-arm64
           else
-            {
-              echo "runner_linux_small=ubuntu-latest"
-              echo "runner_linux_x64=ubuntu-latest"
-              echo "runner_linux_22_x64=ubuntu-22.04"
-              echo "runner_linux_arm64=ubuntu-24.04-arm"
-              echo "runner_windows_2022_x64=windows-2022"
-              echo "runner_macos_arm64=macos-14"
-              echo "runner_macos_14_arm64=macos-14"
-            } >> "$GITHUB_OUTPUT"
+            runner_linux_small=ubuntu-latest
+            runner_linux_x64=ubuntu-latest
+            runner_linux_22_x64=ubuntu-22.04
+            runner_linux_arm64=ubuntu-24.04-arm
+            runner_windows_2022_x64=windows-2022
+            runner_macos_arm64=macos-14
+            runner_macos_14_arm64=macos-14
           fi
 
-          grep runner_ "$GITHUB_OUTPUT"
+          {
+            echo "runner_linux_small=$runner_linux_small"
+            echo "runner_linux_x64=$runner_linux_x64"
+            echo "runner_linux_22_x64=$runner_linux_22_x64"
+            echo "runner_linux_arm64=$runner_linux_arm64"
+            echo "runner_windows_2022_x64=$runner_windows_2022_x64"
+            echo "runner_macos_arm64=$runner_macos_arm64"
+            echo "runner_macos_14_arm64=$runner_macos_14_arm64"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Build runners JSON
-        id: build_runners
-        run: |
           {
             echo "runners<<EOF"
             cat <<EOF
           {
-            "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
-            "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
-            "linux_arm64": "${{ steps.select_runner.outputs.runner_linux_arm64 }}",
-            "windows_2022_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
-            "windows_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
-            "macos_arm64": "${{ steps.select_runner.outputs.runner_macos_arm64 }}",
-            "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
+            "linux_x64": "$runner_linux_x64",
+            "linux_22_x64": "$runner_linux_22_x64",
+            "linux_arm64": "$runner_linux_arm64",
+            "windows_2022_x64": "$runner_windows_2022_x64",
+            "windows_x64": "$runner_windows_2022_x64",
+            "macos_arm64": "$runner_macos_arm64",
+            "macos_14_arm64": "$runner_macos_14_arm64"
           }
           EOF
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build Linux CLI matrices
-        id: build_linux_cli_matrices
-        run: |
           linux_cli_matrix=$(
-            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+            jq -nc --arg runner "$runner_linux_x64" \
               '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
           )
 
           linux_musl_cli_matrix=$(
-            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+            jq -nc --arg runner "$runner_linux_arm64" \
               '[{runner: $runner, arch: "arm64"}]'
           )
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
-              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+              jq -c --arg runner "$runner_linux_arm64" \
                 '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
             )
 
             linux_musl_cli_matrix=$(
-              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+              jq -c --arg runner "$runner_linux_x64" \
                 '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
             )
           fi
 
+          grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
           echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
-      - name: Install tools
-        run: make format_tools
-
-      - name: List Installed Packages
-        run: pip3 freeze
+      - name: Install format tools
+        run: python3 scripts/ci/retry.py -- make format_tools
 
       - name: Check format
         run: |
-          clang-format --version
-          clang-format --dump-config
-          black --version
-          make format-check-silent
-
-      - name: Check generated files
-        run: |
+          make format-check-silent enum-integrity-check
+          echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
-
-      - name: Test CI scripts
-        run: make test_ci
+          echo "::endgroup::"
 
  linux-debug:
     name: Linux Debug
@@ -244,8 +238,12 @@ jobs:
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - name: Smoke tests
-      run: make smoke
+      run: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
@@ -305,10 +303,43 @@ jobs:
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
- code-quality:
-    uses: ./.github/workflows/CodeQuality.yml
-    secrets: inherit
+ tidy-check:
+    name: Tidy Check
     needs: prepare
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc
+      CXX: g++
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
+        python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Download clang-tidy-cache
+      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
+      run: |
+        set -e
+        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
+        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
+        chmod +x /tmp/clang-tidy-cache
+
+    - name: Tidy Check
+      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
+      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+
+    - name: Tidy Check Diff
+      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
  extensions:
     uses: ./.github/workflows/Extensions.yml
@@ -340,6 +371,8 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - uses: ./.github/actions/ccache-action
+
     - name: Build
       run: make wasm_ci
 
@@ -358,24 +391,20 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build
+        changed_tests_file: ${{ runner.temp }}/changed_tests.txt
 
     - name: Build linux default release
       run: make clean release
 
-    - name: Prepare linux default release artifact
-      run: |
-        make release-artifact
-        mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
-
-    - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-default-release-build
-        path: build/linux-default-release.tar.gz
-        if-no-files-found: error
+    - name: Symbol Checks
+      run: make -j4 --output-sync=target symbol-checks
 
  linux-release-tests:
     name: Linux Release Tests
@@ -404,37 +433,6 @@ jobs:
     - name: Test
       run: make allunit
 
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-24.04
-    needs:
-      - prepare
-      - linux-release
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Download linux default release artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-default-release-build
-        path: build
-
-    - name: Extract linux default release artifact
-      run: |
-        rm -rf build/release
-        tar -xzf build/linux-default-release.tar.gz -C build
-
-    - name: Symbol Leakage Test
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Banned Symbol Check
-      run: python3 scripts/banned_symbols_check.py --directory build/release/src
-
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
     needs:
@@ -459,6 +457,8 @@ jobs:
         python3 -m pip install --break-system-packages pytest
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
       run: |
@@ -508,11 +508,8 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
-    - name: Test
-      run: make allunit
-
-    - name: Release specific tests
-      run: make unittest_release_tag
+    - name: Release tests
+      run: make alltest_release_tag
 
     - name: Tools Tests
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
@@ -542,6 +539,8 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
+      with:
+        key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
       shell: bash
@@ -608,10 +607,8 @@ jobs:
             python3    \
             py3-pytest
           cd \"$PWD\"
-          echo Tests
-          make allunit
-          echo Release specific tests
-          make unittest_release_tag
+          echo Release tests
+          make alltest_release_tag
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
@@ -754,13 +751,13 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
       - linux-debug
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
@@ -780,7 +777,7 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.ref_name == 'main'
     runs-on: ubuntu-24.04
     needs: linux-debug
     env:
@@ -842,6 +839,10 @@ jobs:
 
     - name: Test
       run: make unittest_threadsan
+
+    - name: Test Extra
+      if: github.ref_name == 'main'
+      run: make unittest_threadsan_extra
 
  amalgamation-tests:
     name: Amalgamation Tests

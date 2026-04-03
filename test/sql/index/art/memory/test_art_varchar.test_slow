@@ -2,17 +2,11 @@
 # description: Test the memory usage of the ART for a big table with a VARCHAR column
 # group: [memory]
 
-mode skip
-
 require 64bit
 
 require vector_size 2048
 
 require ram 16gb
-
-# This test results in a timeout after 600s on Linux CLI musl in CI.
-
-require notmusl
 
 statement ok
 set temp_directory=null;

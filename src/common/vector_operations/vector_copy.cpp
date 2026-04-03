@@ -61,9 +61,13 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			auto &child = DictionaryVector::Child(*source);
 			auto &dict_sel = DictionaryVector::SelVector(*source);
 			// merge the selection vectors and verify the child
-			auto new_buffer = dict_sel.Slice(*sel, source_count);
-			owned_sel.Initialize(new_buffer);
-			sel = &owned_sel;
+			if (sel->IsSet()) {
+				auto new_buffer = dict_sel.Slice(*sel, source_count);
+				owned_sel.Initialize(new_buffer);
+				sel = &owned_sel;
+			} else {
+				sel = &dict_sel;
+			}
 			source = &child;
 			break;
 		}

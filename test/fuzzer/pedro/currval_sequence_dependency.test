@@ -14,7 +14,7 @@ statement ok
 CREATE SEQUENCE seq;
 
 statement ok
-CREATE TABLE t1(c1 INT, CHECK(${fun}('seq')));
+CREATE TABLE t1(c1 INT, CHECK({fun}('seq')));
 
 statement error
 DROP SEQUENCE seq;

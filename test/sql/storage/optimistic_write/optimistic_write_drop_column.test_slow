@@ -2,7 +2,7 @@
 # description: Test optimistic write with drop column in transaction-local storage
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_drop.db
+load {TEST_DIR}/optimistic_write_drop.db
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER);
@@ -92,7 +92,7 @@ CHECKPOINT
 # by more than 1.5.
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN NULL
+SELECT CASE WHEN {i} = 0 THEN NULL
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.5 THEN NULL
 	ELSE {'current': current.total_blocks, 'total': total_blocks_tbl.total_blocks} END
 FROM pragma_database_size() AS current, total_blocks_tbl;
@@ -103,7 +103,7 @@ NULL
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+	SELECT CASE WHEN {i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
 
 statement ok

@@ -13,7 +13,7 @@ PRAGMA verify_external
 foreach type tinyint smallint integer bigint utinyint usmallint uinteger ubigint
 
 statement ok
-CREATE TABLE test (g INTEGER, i ${type})
+CREATE TABLE test (g INTEGER, i {type})
 
 query I
 SELECT LIST(i) FROM test GROUP BY g ORDER BY g
@@ -38,7 +38,7 @@ endloop
 foreach type float double
 
 statement ok
-CREATE TABLE test (g INTEGER, i ${type})
+CREATE TABLE test (g INTEGER, i {type})
 
 statement ok
 INSERT INTO test VALUES (1, 2), (1, 3), (2, 4)
@@ -168,10 +168,10 @@ SELECT tconst, list(principals) as principals FROM parquet_scan('{DATA_DIR}/parq
 foreach type bool tinyint smallint int bigint hugeint uhugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
 
 statement ok
-CREATE TABLE t1 AS SELECT ${type} AS c1 FROM test_all_types();
+CREATE TABLE t1 AS SELECT {type} AS c1 FROM test_all_types();
 
 statement ok
-CREATE TABLE t2 AS SELECT UNNEST(LIST(${type})) AS c2 FROM test_all_types();
+CREATE TABLE t2 AS SELECT UNNEST(LIST({type})) AS c2 FROM test_all_types();
 
 query I
 SELECT * FROM t1 EXCEPT SELECT * FROM t2;

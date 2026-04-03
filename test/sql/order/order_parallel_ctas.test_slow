@@ -2,7 +2,7 @@
 # description: Test parallel CREATE TABLE AS with ORDER BY
 # group: [order]
 
-load __TEST_DIR__/order_parallel_ctas.db
+load {TEST_DIR}/order_parallel_ctas.db
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
