@@ -62,7 +62,6 @@ unique_ptr<SelectStatement> CommonTableExpressionInfo::GetQueryForSerialization(
 //   102  materialized       CTEMaterialize        (all versions)
 //   103  key_targets        vector<ParsedExpr*>   (all versions)
 //   104  payload_aggregates vector<ParsedExpr*>   (all versions)
-//   105  dml_query          QueryNode*            (deleted; tombstoned, never shipped)
 //   106  query_node         QueryNode*            (v8+; unified field for SELECT and DML CTEs)
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);

@@ -35,13 +35,6 @@
         "type": "vector<ParsedExpression*>"
       },
       {
-        "id": 105,
-        "name": "dml_query",
-        "type": "QueryNode*",
-        "version": "v2.0.0",
-        "status": "deleted"
-      },
-      {
         "id": 106,
         "name": "query_node",
         "type": "QueryNode*",
