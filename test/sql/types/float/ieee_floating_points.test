@@ -59,4 +59,13 @@ inf	NULL
 statement ok
 SET ieee_floating_point_ops = true;
 
+# math domain errors are unaffected by the setting
+statement error
+SELECT sqrt(-1::{type});
+----
+
+statement error
+SELECT ln(-1::{type});
+----
+
 endloop

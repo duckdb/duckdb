@@ -1035,7 +1035,8 @@ struct IeeeFloatingPointOpsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "ieee_floating_point_ops";
 	static constexpr const char *Description =
-	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
+	    "Use IEEE 754 behavior for supported floating point arithmetic operations, returning NAN/INF instead of "
+	    "errors/NULL.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
