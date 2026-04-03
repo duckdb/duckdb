@@ -11,13 +11,11 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
@@ -571,7 +569,7 @@ struct PragmaFunctionExtractor {
 static vector<Value> ToValueVector(vector<string> &string_vector) {
 	vector<Value> result;
 	for (string &str : string_vector) {
-		result.emplace_back(Value(str));
+		result.emplace_back(str);
 	}
 	return result;
 }

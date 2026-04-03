@@ -77,6 +77,14 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 			default_table = QualifiedName::Parse(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
 			continue;
 		}
+
+		if (entry.first == "hidden") {
+			auto is_hidden = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			if (is_hidden) {
+				visibility = AttachVisibility::HIDDEN;
+			}
+			continue;
+		}
 		options.emplace(entry.first, entry.second);
 	}
 }
