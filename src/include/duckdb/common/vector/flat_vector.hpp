@@ -102,23 +102,25 @@ private:
 	template <class T>
 	struct FlatVectorWriter {
 		FlatVectorWriter(Vector &vector, idx_t count)
-		    : data(FlatVector::GetData<T>(vector)), validity(FlatVector::Validity(vector)), count(count) {
+		    : data(FlatVector::GetData<T>(vector)), validity(FlatVector::Validity(vector)),
+		      capacity(validity.Capacity()) {
+			(void)count;
 		}
 
 		void SetInvalid(idx_t idx) {
-			D_ASSERT(idx < count);
+			D_ASSERT(idx < capacity);
 			validity.SetInvalid(idx);
 		}
 
 		T &operator[](idx_t idx) {
-			D_ASSERT(idx < count);
+			D_ASSERT(idx < capacity);
 			return data[idx];
 		}
 
 	private:
 		T *data;
 		ValidityMask &validity;
-		idx_t count;
+		idx_t capacity;
 	};
 
 public:

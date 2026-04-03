@@ -42,6 +42,9 @@ Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, id
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
 	if (create_data) {
 		Initialize(initialize_to_zero, capacity);
+	} else {
+		// Even without data, we need a buffer for the validity mask
+		Initialize(false, capacity);
 	}
 }
 
@@ -258,6 +261,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 			auto &child_vector = entry->data;
 			Vector new_child(Vector::Ref(child_vector));
 			new_child.buffer = make_buffer<VectorStructBuffer>(new_child, sel, count);
+			new_child.buffer->GetValidityMask() = child_vector.buffer->GetValidityMask();
 			entry = make_shared_ptr<DictionaryEntry>(std::move(new_child));
 		}
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
@@ -278,6 +282,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
 		child_vector.buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
+		child_vector.buffer->GetValidityMask() = buffer->GetValidityMask();
 	}
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
@@ -358,6 +363,7 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 			memset(data, 0, capacity * type_size);
 		}
 	}
+	buffer->GetValidityMask().Resize(capacity);
 }
 
 void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
@@ -451,6 +457,8 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 		auto new_data = allocator.Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
+		// Save the resized validity mask before replacing the buffer.
+		auto resized_validity = std::move(resize_info_entry.vec.buffer->GetValidityMask());
 		buffer_ptr<VectorBuffer> new_buffer;
 		if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::LIST) {
 			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorListBuffer>();
@@ -461,6 +469,8 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		} else {
 			new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
 		}
+		// Restore the resized validity mask into the new buffer.
+		new_buffer->GetValidityMask() = std::move(resized_validity);
 		resize_info_entry.buffer = new_buffer.get();
 		resize_info_entry.vec.buffer = std::move(new_buffer);
 	}
@@ -1632,9 +1642,10 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 		}
 		case VectorType::FLAT_VECTOR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
+			auto &flat_validity = FlatVector::Validity(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
-				if (validity.RowIsValid(oidx)) {
+				if (flat_validity.RowIsValid(oidx)) {
 					strings[oidx].Verify();
 				}
 			}

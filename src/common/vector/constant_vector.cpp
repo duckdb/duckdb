@@ -10,6 +10,30 @@ namespace duckdb {
 
 void ConstantVector::SetNull(Vector &vector) {
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto &type = vector.GetType();
+	auto internal_type = type.InternalType();
+	// ensure the buffer supports validity masks
+	// buffers like SequenceBuffer/DictionaryBuffer do not have validity masks
+	bool needs_new_buffer = !vector.buffer;
+	if (!needs_new_buffer) {
+		auto buffer_type = vector.buffer->GetBufferType();
+		needs_new_buffer = (buffer_type != VectorBufferType::STANDARD_BUFFER &&
+		                    buffer_type != VectorBufferType::STRUCT_BUFFER &&
+		                    buffer_type != VectorBufferType::ARRAY_BUFFER &&
+		                    buffer_type != VectorBufferType::LIST_BUFFER &&
+		                    buffer_type != VectorBufferType::STRING_BUFFER);
+	}
+	if (needs_new_buffer) {
+		if (internal_type == PhysicalType::STRUCT) {
+			vector.buffer = make_buffer<VectorStructBuffer>(type, 1);
+		} else if (internal_type == PhysicalType::ARRAY) {
+			vector.buffer = make_buffer<VectorArrayBuffer>(type, 1);
+		} else if (internal_type == PhysicalType::LIST) {
+			vector.buffer = VectorBuffer::CreateConstantVector(type);
+		} else {
+			vector.buffer = VectorBuffer::CreateConstantVector(internal_type);
+		}
+	}
 	SetNull(vector, true);
 }
 

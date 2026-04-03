@@ -1229,6 +1229,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &child_vectors = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
 		auto &child_vector = child_vectors[c];
+		FlatVector::Validity(child_vector).Reset();
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
 		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
 	}

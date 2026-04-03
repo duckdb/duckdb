@@ -44,7 +44,10 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	executor.Execute(input, keys);
 
 	// Do not operate on primary key directly to avoid modifying the input chunk
-	auto primary = Vector::Ref(keys.data[0]);
+	// Copy the primary key so MergeNulls can modify its validity without
+	// affecting the input chunk (buffers are shared via Reference)
+	Vector primary(keys.data[0].GetType());
+	VectorOperations::Copy(keys.data[0], primary, keys.size(), 0, 0);
 	// Count the NULLs so we can exclude them later
 	has_null += MergeNulls(primary, global_table.op.conditions);
 	count += keys.size();

@@ -31,17 +31,18 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("SetData not supported for struct");
 	}
+	// Preserve the validity mask from the old buffer before replacing it.
+	auto old_validity = std::move(vector.buffer->GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
 		vector.buffer = make_buffer<VectorListBuffer>(data, current_buffer.GetChild(), current_buffer.GetCapacity(),
 		                                              current_buffer.GetSize());
-		return;
-	}
-	if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
 		vector.buffer = make_buffer<VectorStringBuffer>(data);
-		return;
+	} else {
+		vector.buffer = make_buffer<StandardVectorBuffer>(data);
 	}
-	vector.buffer = make_buffer<StandardVectorBuffer>(data);
+	vector.buffer->GetValidityMask() = std::move(old_validity);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {

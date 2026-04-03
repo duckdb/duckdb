@@ -94,6 +94,9 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
+			// Reset validity since the buffer is shared with intermediate -
+			// previous iterations may have written validity data into it
+			FlatVector::Validity(scan_vector).Reset();
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
