@@ -122,7 +122,6 @@ jobs:
           python scripts/ci/retry.py -- choco install \
             ccache \
             make \
-            ninja \
             zip \
             --no-progress
           python scripts/ci/retry.py -- choco install \

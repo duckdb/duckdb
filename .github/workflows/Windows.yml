@@ -55,10 +55,6 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Dependencies
-      shell: bash
-      run: python scripts/ci/retry.py -- choco install ninja --no-progress
-
     - uses: ./.github/actions/ccache-action
     - uses: ilammy/msvc-dev-cmd@v1
 
@@ -159,10 +155,6 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Dependencies
-      shell: bash
-      run: python scripts/ci/retry.py -- choco install ninja --no-progress
-
     - uses: ./.github/actions/ccache-action
     - uses: ilammy/msvc-dev-cmd@v1
       with:
@@ -201,10 +193,6 @@ jobs:
      - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
-
-     - name: Dependencies
-       shell: bash
-       run: python scripts/ci/retry.py -- choco install ninja --no-progress
 
      - uses: ./.github/actions/ccache-action
      - uses: ilammy/msvc-dev-cmd@v1
@@ -278,7 +266,6 @@ jobs:
            python scripts/ci/retry.py -- choco install \
              ccache \
              make \
-             ninja \
              --no-progress
            python scripts/ci/retry.py -- choco install \
              mingw --version 14.2.0 \
