@@ -123,6 +123,9 @@ private:
 		//! Note: the empty string must be filled and .Finalize() must be called on it
 		DUCKDB_API string_t &EmptyString(idx_t length);
 		DUCKDB_API string_t &operator=(string_t val);
+		void AssignWithoutCopying(string_t val) {
+			data[idx] = val;
+		}
 		inline char *GetDataWriteable() {
 			return data[idx].GetDataWriteable();
 		}
@@ -176,7 +179,7 @@ public:
 		}
 	}
 	template <class T>
-	static FlatVectorWriter<T> Writer(Vector &vector) {
+	static auto Writer(Vector &vector) {
 		return Writer<T>(vector, NumericLimits<idx_t>::Maximum());
 	}
 };

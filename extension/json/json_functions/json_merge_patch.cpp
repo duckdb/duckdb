@@ -65,7 +65,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 		if (origs[i] == nullptr) {
 			result_data.SetInvalid(i);
 		} else {
-			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
+			result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
 	JSONAllocator::AddBuffer(result, alc);
