@@ -563,7 +563,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 
 	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
 	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
-	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
+	auto result_data = FlatVector::Writer<VALUE_TYPE>(result, count);
 	auto &validity = FlatVector::Validity(result);
 
 	// According to the arrow spec, the 'run_ends' array is always valid
@@ -681,7 +681,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 		break;
 	case PhysicalType::VARCHAR: {
 		// Share the string heap, we don't need to allocate new strings, we just reference the existing ones
-		result.SetAuxiliary(values.GetAuxiliary());
+		StringVector::AddHeapReference(result, values);
 		FlattenRunEnds<RUN_END_TYPE, string_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	}
@@ -706,7 +706,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
@@ -839,7 +839,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	}
 
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
@@ -1392,7 +1392,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
                                                             const ArrowType &arrow_type, int64_t nested_offset,
                                                             const ValidityMask *parent_mask, uint64_t parent_offset) {
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	D_ASSERT(arrow_type.HasDictionary());
 	const bool has_nulls = CanContainNull(array, parent_mask);

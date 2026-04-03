@@ -1,9 +1,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
-#include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/common/enum_util.hpp"
 
@@ -110,12 +107,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		if (window_expr.end_expr) {
 			callback(window_expr.end_expr);
-		}
-		if (window_expr.offset_expr) {
-			callback(window_expr.offset_expr);
-		}
-		if (window_expr.default_expr) {
-			callback(window_expr.default_expr);
 		}
 		for (auto &order : window_expr.arg_orders) {
 			callback(order.expression);

@@ -265,7 +265,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 	// Reference the 'input' StringBuffer, because we won't need to allocate new data
 	// for the result, all returned strings are substrings of the originals
 	for (auto &child_entry : child_entries) {
-		child_entry.SetAuxiliary(input.GetAuxiliary());
+		StringVector::AddHeapReference(child_entry, input);
 	}
 
 	vector<RE2::Arg> argv(groupSize);
@@ -280,7 +280,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			ConstantVector::SetNull(result, false);
 			auto idata = ConstantVector::GetData<string_t>(input);

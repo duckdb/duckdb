@@ -79,8 +79,7 @@ idx_t PositionalJoinGlobalState::Refill() {
 			source.Reset();
 			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
 				auto &vec = source.data[i];
-				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(vec, true);
+				ConstantVector::SetNull(vec);
 			}
 			exhausted = true;
 		}
@@ -161,8 +160,7 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 	const auto col_offset = output.ColumnCount() - source.ColumnCount();
 	for (idx_t i = 0; i < col_offset; ++i) {
 		auto &vec = output.data[i];
-		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(vec, true);
+		ConstantVector::SetNull(vec);
 	}
 
 	//	RHS still has data, so copy it

@@ -1,33 +1,53 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::WINDOW) {
+WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children_p,
+                                   unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
+    : ParsedExpression(type, ExpressionClass::WINDOW), children(std::move(children_p)) {
+	if (offset_expr) {
+		children.emplace_back(std::move(offset_expr));
+	}
+	if (default_expr) {
+		children.emplace_back(std::move(default_expr));
+	}
 }
 
-WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
-    : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
-	switch (type) {
-	case ExpressionType::WINDOW_AGGREGATE:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_NTILE:
-	case ExpressionType::WINDOW_FILL:
-		break;
-	default:
-		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
+vector<unique_ptr<ParsedExpression>> WindowExpression::SerializedChildren(Serializer &serializer) const {
+	vector<unique_ptr<ParsedExpression>> result;
+	idx_t nargs = children.size();
+	if (!serializer.ShouldSerialize(8) && (function_name == "lead" || function_name == "lag")) {
+		nargs = 1;
 	}
+
+	for (idx_t i = 0; i < nargs; ++i) {
+		result.emplace_back(children[i]->Copy());
+	}
+
+	return result;
+}
+
+unique_ptr<ParsedExpression> WindowExpression::SerializedOffset(Serializer &serializer) const {
+	if (!serializer.ShouldSerialize(8) && children.size() > 1 && (function_name == "lead" || function_name == "lag")) {
+		return children[1]->Copy();
+	}
+
+	return nullptr;
+}
+
+unique_ptr<ParsedExpression> WindowExpression::SerializedDefault(Serializer &serializer) const {
+	if (!serializer.ShouldSerialize(8) && children.size() > 2 && (function_name == "lead" || function_name == "lag")) {
+		return children[2]->Copy();
+	}
+
+	return nullptr;
+}
+
+WindowExpression::WindowExpression(const string &catalog_name, const string &schema, const string &function_name)
+    : ParsedExpression(WindowToExpressionType(function_name), ExpressionClass::WINDOW), catalog(catalog_name),
+      schema(schema), function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
 }
 
 struct WindowFunctionDefinition {
@@ -51,7 +71,7 @@ static const WindowFunctionDefinition internal_window_functions[] = {
     {"fill", ExpressionType::WINDOW_FILL},
     {nullptr, ExpressionType::INVALID}};
 
-ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
+ExpressionType WindowExpression::WindowToExpressionType(const string &fun_name) {
 	D_ASSERT(StringUtil::IsLower(fun_name));
 	auto functions = internal_window_functions;
 	for (idx_t i = 0; functions[i].name != nullptr; i++) {
@@ -62,13 +82,21 @@ ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
+void WindowExpression::SetFunctionName(const string &function_name_p) {
+	function_name = function_name_p;
+	type = WindowToExpressionType(function_name);
+}
+
 string WindowExpression::ToString() const {
 	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
 bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &b) {
 	// check if the child expressions are equivalent
-	if (a.ignore_nulls != b.ignore_nulls) {
+	if (a.has_ignore_nulls != b.has_ignore_nulls) {
+		return false;
+	}
+	if (a.has_ignore_nulls && a.ignore_nulls != b.ignore_nulls) {
 		return false;
 	}
 	if (a.distinct != b.distinct) {
@@ -84,9 +112,7 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 		return false;
 	}
 	// check if the framing expressions are equivalent
-	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
-	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
-	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
+	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr)) {
 		return false;
 	}
 
@@ -160,7 +186,7 @@ bool WindowExpression::HasBoundedParts() {
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_uniq<WindowExpression>(type, catalog, schema, function_name);
+	auto new_window = make_uniq<WindowExpression>(catalog, schema, function_name);
 	new_window->CopyProperties(*this);
 
 	for (auto &child : children) {
@@ -186,8 +212,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
-	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
-	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
+	new_window->has_ignore_nulls = has_ignore_nulls;
 	new_window->ignore_nulls = ignore_nulls;
 	new_window->distinct = distinct;
 

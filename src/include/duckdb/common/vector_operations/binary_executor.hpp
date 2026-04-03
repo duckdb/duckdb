@@ -135,7 +135,7 @@ struct BinaryExecutor {
 		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 
 		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		*result_data = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
@@ -151,8 +151,7 @@ struct BinaryExecutor {
 
 		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
 			// either left or right is constant NULL: result is constant NULL
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 

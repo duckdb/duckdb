@@ -12,7 +12,7 @@ constexpr uint64_t MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 68;
+const uint64_t VERSION_NUMBER_UPPER = 69;
 
 static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
 static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
@@ -95,7 +95,7 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.5.0", 68},
 	{"v1.5.1", 68},
 	{"v1.5.2", 68},
-	{"v2.0.0", 68},
+	{"v2.0.0", 69},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
