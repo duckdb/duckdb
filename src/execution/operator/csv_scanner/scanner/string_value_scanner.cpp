@@ -846,7 +846,7 @@ bool StringValueResult::AddRowInternal() {
 		// - store rejects = true, with last row index being added to borked rows
 		// Invalid all columns that are not populated for this row, when the row still exists.
 		if (borked_rows.find(static_cast<idx_t>(number_of_rows)) != borked_rows.end()) {
-			for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < chunk_col_id; ++cur_col_idx) {
+			for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < validity_mask.size(); ++cur_col_idx) {
 				validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
 			}
 		}
