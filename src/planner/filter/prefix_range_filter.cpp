@@ -35,14 +35,13 @@ AllocatedData AllocateBitmap(ClientContext &context, const idx_t word_count, uin
 	return buffer;
 }
 
-struct PrefixRangeBuildState : public PrefixRangeFilter::BuildState {
-	explicit PrefixRangeBuildState(AllocatedData data_p, uint64_t *bitmap_p, idx_t word_count_p)
-	    : data(std::move(data_p)), bitmap(bitmap_p), word_count(word_count_p) {
+struct PrefixRangeBitmapBuildState : public PrefixRangeFilter::BuildState {
+	explicit PrefixRangeBitmapBuildState(AllocatedData data_p, uint64_t *bitmap_p)
+	    : data(std::move(data_p)), bitmap(bitmap_p) {
 	}
 
 	AllocatedData data;
 	uint64_t *bitmap;
-	idx_t word_count;
 };
 
 template <typename U>
@@ -67,22 +66,21 @@ public:
 		initialized = false;
 	}
 
-	unique_ptr<PrefixRangeFilter::BuildState> InitializeBuildState(ClientContext &context) const {
+	unique_ptr<PrefixRangeBitmapBuildState> InitializeBuildState(ClientContext &context) const {
 		D_ASSERT(bitmap);
 		uint64_t *state_bitmap;
 		auto state_data = AllocateBitmap(context, word_count, state_bitmap);
-		return make_uniq<PrefixRangeBuildState>(std::move(state_data), state_bitmap, word_count);
+		return make_uniq<PrefixRangeBitmapBuildState>(std::move(state_data), state_bitmap);
 	}
 
-	inline void Insert(U key, PrefixRangeBuildState &state) const {
+	inline void Insert(U key, uint64_t *state_bitmap) const {
 		const U y = key - min;
 		// All keys are in-range by construction, so the range check can be omitted here.
 		const U idx = y >> shift;
-		state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
+		state_bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
 	}
 
-	void MergeBuildState(PrefixRangeFilter::BuildState &state_p) {
-		auto &state = state_p.Cast<PrefixRangeBuildState>();
+	void MergeBuildState(PrefixRangeBitmapBuildState &state) {
 		for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
 			bitmap[word_idx] |= state.bitmap[word_idx];
 		}
@@ -166,56 +164,6 @@ private:
 	uint64_t *bitmap;
 };
 
-template <typename T>
-struct NumericPrefixPolicy {
-	using input_type = T;
-	using comparable_type = typename MakeUnsigned<T>::type;
-
-	static bool SupportsStats(const BaseStatistics &stats) {
-		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
-	}
-
-	static inline comparable_type ToComparable(input_type value) {
-		// Overflow is explicitly allowed for unsigned to signed cast
-		return static_cast<comparable_type>(value);
-	}
-
-	static comparable_type ToComparable(const Value &value) {
-		return ToComparable(value.GetValueUnsafe<input_type>());
-	}
-
-	static void InitializeBitmap(PrefixRangeBitmap<comparable_type> &bitmap, ClientContext &context,
-	                             const Value &min_val, const Value &max_val) {
-		const auto min = ToComparable(min_val);
-		const auto max = ToComparable(max_val);
-		bitmap.Initialize(context, min, max - min);
-	}
-
-	static bool ExtractClampedStatsRange(const PrefixRangeBitmap<comparable_type> &bitmap, BaseStatistics &stats,
-	                                     comparable_type &lower_bound, comparable_type &upper_bound) {
-		if (!NumericStats::HasMinMax(stats)) {
-			return false;
-		}
-
-		const auto min = NumericStats::Min(stats).GetValueUnsafe<input_type>();
-		const auto max = NumericStats::Max(stats).GetValueUnsafe<input_type>();
-		if (min > max) {
-			return false;
-		}
-
-		// static_cast is needed here as we need to allow overflow to cast from comparable_type
-		const auto min_t = static_cast<input_type>(bitmap.Min());
-		const auto max_t = static_cast<input_type>(bitmap.Min() + bitmap.Span());
-		if (max < min_t || min > max_t) {
-			return false;
-		}
-
-		lower_bound = ToComparable(MaxValue<input_type>(min, min_t));
-		upper_bound = ToComparable(MinValue<input_type>(max, max_t));
-		return true;
-	}
-};
-
 uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
 	return string_t(StringStats::Min(stats)).GetPrefixIntegerComparable();
 }
@@ -235,65 +183,18 @@ uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
 	return string_t(padded_prefix.data(), string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
 }
 
-struct StringPrefixPolicy {
-	using input_type = string_t;
-	using comparable_type = uint32_t;
-
-	static bool SupportsStats(const BaseStatistics &stats) {
-		return stats.GetStatsType() == StatisticsType::STRING_STATS;
-	}
-
-	static inline comparable_type ToComparable(const input_type &value) {
-		return value.GetPrefixIntegerComparable();
-	}
-
-	static comparable_type ToComparable(const Value &value) {
-		return ToComparable(value.GetValueUnsafe<input_type>());
-	}
-
-	static void InitializeBitmap(PrefixRangeBitmap<comparable_type> &bitmap, ClientContext &context,
-	                             const Value &min_val, const Value &max_val) {
-		const auto min = ToComparable(min_val);
-		const auto max = ToComparable(max_val);
-		D_ASSERT(min <= max);
-		bitmap.Initialize(context, min, max - min);
-	}
-
-	static bool ExtractClampedStatsRange(const PrefixRangeBitmap<comparable_type> &bitmap, BaseStatistics &stats,
-	                                     comparable_type &lower_bound, comparable_type &upper_bound) {
-		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
-			return false;
-		}
-
-		lower_bound = StringStatsMinComparable(stats);
-		upper_bound = StringStatsMaxComparable(stats);
-		if (lower_bound > upper_bound) {
-			return false;
-		}
-
-		const auto bitmap_min = bitmap.Min();
-		const auto bitmap_max = bitmap.Min() + bitmap.Span();
-		if (upper_bound < bitmap_min || lower_bound > bitmap_max) {
-			return false;
-		}
-
-		lower_bound = MaxValue<comparable_type>(lower_bound, bitmap_min);
-		upper_bound = MinValue<comparable_type>(upper_bound, bitmap_max);
-		return true;
-	}
-};
-
-template <typename Policy>
-class TemplatedPrefixRangeFilter : public PrefixRangeFilter {
+template <typename T>
+class NumericPrefixRangeFilter : public PrefixRangeFilter {
 private:
-	using Input = typename Policy::input_type;
-	using Comparable = typename Policy::comparable_type;
+	using Comparable = typename MakeUnsigned<T>::type;
 
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
-		Policy::InitializeBitmap(bitmap, context, min_val, max_val);
+		const auto min = ToComparable(min_val.GetValueUnsafe<T>());
+		const auto max = ToComparable(max_val.GetValueUnsafe<T>());
+		bitmap.Initialize(context, min, max - min);
 	}
 
 	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
@@ -301,14 +202,15 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
-		auto &bitmap_state = state.Cast<PrefixRangeBuildState>();
-		for (const auto &entry : keys.template ValidValues<Input>(count)) {
-			bitmap.Insert(Policy::ToComparable(entry.value), bitmap_state);
+		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
+		auto *state_bitmap = bitmap_state.bitmap;
+		for (const auto &entry : keys.template ValidValues<T>(count)) {
+			bitmap.Insert(ToComparable(entry.value), state_bitmap);
 		}
 	}
 
 	void MergeBuildState(BuildState &state) override {
-		bitmap.MergeBuildState(state);
+		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
 	}
 
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
@@ -317,9 +219,9 @@ public:
 		}
 
 		idx_t found_count = 0;
-		for (const auto &entry : keys.template ValidValues<Input>(count)) {
+		for (const auto &entry : keys.template ValidValues<T>(count)) {
 			result_sel.set_index(found_count, entry.index);
-			found_count += bitmap.Lookup(Policy::ToComparable(entry.value));
+			found_count += bitmap.Lookup(ToComparable(entry.value));
 		}
 		return found_count;
 	}
@@ -328,16 +230,27 @@ public:
 		if (key.IsNull()) {
 			return false;
 		}
-		return bitmap.Lookup(Policy::ToComparable(key));
+		return bitmap.Lookup(ToComparable(key.GetValueUnsafe<T>()));
 	}
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
-		Comparable lower_bound;
-		Comparable upper_bound;
-		if (!Policy::SupportsStats(stats) ||
-		    !Policy::ExtractClampedStatsRange(bitmap, stats, lower_bound, upper_bound)) {
+		if (stats.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
+		const auto min = NumericStats::Min(stats).GetValueUnsafe<T>();
+		const auto max = NumericStats::Max(stats).GetValueUnsafe<T>();
+		if (min > max) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+
+		const auto bitmap_min = static_cast<T>(bitmap.Min());
+		const auto bitmap_max = static_cast<T>(bitmap.Min() + bitmap.Span());
+		if (max < bitmap_min || min > bitmap_max) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+
+		const auto lower_bound = ToComparable(MaxValue<T>(min, bitmap_min));
+		const auto upper_bound = ToComparable(MinValue<T>(max, bitmap_max));
 		return bitmap.LookupRange(lower_bound, upper_bound);
 	}
 
@@ -347,6 +260,93 @@ public:
 
 private:
 	PrefixRangeBitmap<Comparable> bitmap;
+
+	static inline Comparable ToComparable(T value) {
+		// Overflow is explicitly allowed for unsigned to signed cast
+		return static_cast<Comparable>(value);
+	}
+};
+
+class StringPrefixRangeFilter : public PrefixRangeFilter {
+public:
+	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
+		D_ASSERT(min_val <= max_val);
+		D_ASSERT(number_of_rows > 0);
+		const auto min = ToComparable(min_val.GetValueUnsafe<string_t>());
+		const auto max = ToComparable(max_val.GetValueUnsafe<string_t>());
+		D_ASSERT(min <= max);
+		bitmap.Initialize(context, min, max - min);
+	}
+
+	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
+		return bitmap.InitializeBuildState(context);
+	}
+
+	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
+		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
+		auto *state_bitmap = bitmap_state.bitmap;
+		for (const auto &entry : keys.template ValidValues<string_t>(count)) {
+			bitmap.Insert(ToComparable(entry.value), state_bitmap);
+		}
+	}
+
+	void MergeBuildState(BuildState &state) override {
+		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	}
+
+	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
+		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return LookupOneValue(keys.GetValue(0)) ? count : 0;
+		}
+
+		idx_t found_count = 0;
+		for (const auto &entry : keys.template ValidValues<string_t>(count)) {
+			result_sel.set_index(found_count, entry.index);
+			found_count += bitmap.Lookup(ToComparable(entry.value));
+		}
+		return found_count;
+	}
+
+	bool LookupOneValue(const Value &key) const override {
+		if (key.IsNull()) {
+			return false;
+		}
+		return bitmap.Lookup(ToComparable(key.GetValueUnsafe<string_t>()));
+	}
+
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
+		if (stats.GetStatsType() != StatisticsType::STRING_STATS || !stats.CanHaveNoNull() ||
+		    !StringStats::HasMaxStringLength(stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+
+		auto lower_bound = StringStatsMinComparable(stats);
+		auto upper_bound = StringStatsMaxComparable(stats);
+		if (lower_bound > upper_bound) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+
+		const auto bitmap_min = bitmap.Min();
+		const auto bitmap_max = bitmap.Min() + bitmap.Span();
+		if (upper_bound < bitmap_min || lower_bound > bitmap_max) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+
+		lower_bound = MaxValue<uint32_t>(lower_bound, bitmap_min);
+		upper_bound = MinValue<uint32_t>(upper_bound, bitmap_max);
+		return bitmap.LookupRange(lower_bound, upper_bound);
+	}
+
+	bool IsInitialized() const override {
+		return bitmap.IsInitialized();
+	}
+
+private:
+	static inline uint32_t ToComparable(const string_t &value) {
+		return value.GetPrefixIntegerComparable();
+	}
+
+	PrefixRangeBitmap<uint32_t> bitmap;
 };
 
 template <typename T>
@@ -383,26 +383,26 @@ bool ComputeStringPrefixSpan(const Value &lower_bound, const Value &upper_bound,
 unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const LogicalType &key_type) {
 	switch (key_type.InternalType()) {
 	case PhysicalType::UINT8:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<uint8_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<uint8_t>>();
 	case PhysicalType::UINT16:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<uint16_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<uint16_t>>();
 	case PhysicalType::UINT32:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<uint32_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<uint32_t>>();
 	case PhysicalType::UINT64:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<uint64_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<uint64_t>>();
 	case PhysicalType::INT8:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<int8_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<int8_t>>();
 	case PhysicalType::INT16:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<int16_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<int16_t>>();
 	case PhysicalType::INT32:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<int32_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<int32_t>>();
 	case PhysicalType::INT64:
-		return make_uniq<TemplatedPrefixRangeFilter<NumericPrefixPolicy<int64_t>>>();
+		return make_uniq<NumericPrefixRangeFilter<int64_t>>();
 	case PhysicalType::VARCHAR:
 #ifdef DUCKDB_DEBUG_NO_INLINE
 		throw NotImplementedException("Prefix range filter is not implemented for type %s", key_type.ToString());
 #else
-		return make_uniq<TemplatedPrefixRangeFilter<StringPrefixPolicy>>();
+		return make_uniq<StringPrefixRangeFilter>();
 #endif
 	case PhysicalType::INT128:
 	case PhysicalType::UINT128:
