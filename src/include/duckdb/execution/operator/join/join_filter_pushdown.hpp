@@ -24,6 +24,8 @@ struct LocalUngroupedAggregateState;
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
 	ColumnBinding probe_column_index;
+	//! The type of the value in storage (LogicalGet)
+	LogicalType storage_type;
 };
 
 struct JoinFilterGlobalState {

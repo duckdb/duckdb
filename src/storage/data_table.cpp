@@ -29,6 +29,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -422,7 +423,76 @@ TableStorageInfo DataTable::GetStorageInfo() {
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
                       const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+	D_ASSERT(row_identifiers.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+
+	// Quick scan to check for transaction-local row IDs (>= MAX_ROW_ID).
+	bool has_local = false;
+	for (idx_t i = 0; i < fetch_count; i++) {
+		if (row_ids[i] >= MAX_ROW_ID) {
+			has_local = true;
+			break;
+		}
+	}
+
+	if (!has_local) {
+		// All committed rows — fast path (common case).
+		row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
+		return;
+	}
+
+	// There are local rows. Classify all row IDs to determine the split.
+	auto &local_storage = transaction.GetLocalStorage();
+	SelectionVector committed_sel(fetch_count);
+	SelectionVector local_sel(fetch_count);
+	idx_t committed_count = 0;
+	idx_t local_count = 0;
+	for (idx_t i = 0; i < fetch_count; i++) {
+		if (row_ids[i] >= MAX_ROW_ID) {
+			local_sel.set_index(local_count++, i);
+		} else {
+			committed_sel.set_index(committed_count++, i);
+		}
+	}
+
+	if (committed_count == 0) {
+		// All local rows.
+		local_storage.FetchChunk(*this, row_identifiers, fetch_count, column_ids, result, state);
+		return;
+	}
+
+	// Mixed: some rows are committed, some are local.
+	// row_groups->Fetch silently skips local row IDs, packing committed rows at 0..committed_count-1.
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
+	D_ASSERT(result.size() == committed_count);
+
+	// Fetch local rows into a separate chunk.
+	auto &allocator = Allocator::Get(local_storage.GetClientContext());
+	DataChunk local_chunk;
+	local_chunk.Initialize(allocator, result.GetTypes());
+	Vector local_row_ids(row_identifiers, local_sel, local_count);
+	local_row_ids.Flatten(local_count);
+	ColumnFetchState local_fetch_state;
+	local_storage.FetchChunk(*this, local_row_ids, local_count, column_ids, local_chunk, local_fetch_state);
+
+	// Append local rows after committed rows in the result.
+	for (idx_t col = 0; col < result.ColumnCount(); col++) {
+		VectorOperations::Copy(local_chunk.data[col], result.data[col], local_count, 0, committed_count);
+	}
+	result.SetCardinality(committed_count + local_count);
+
+	// Build inverse permutation to restore original row order.
+	// Current layout: [committed rows in relative order | local rows in relative order].
+	SelectionVector inv_perm(fetch_count);
+	for (idx_t i = 0; i < committed_count; i++) {
+		inv_perm.set_index(committed_sel.get_index(i), i);
+	}
+	for (idx_t j = 0; j < local_count; j++) {
+		inv_perm.set_index(local_sel.get_index(j), committed_count + j);
+	}
+	for (idx_t col = 0; col < result.ColumnCount(); col++) {
+		result.data[col].Slice(inv_perm, fetch_count);
+	}
 }
 
 void DataTable::FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,

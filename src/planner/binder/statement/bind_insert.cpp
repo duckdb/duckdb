@@ -521,11 +521,13 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		auto merge_into = GenerateMergeInto(stmt, table);
 		return Bind(*merge_into);
 	}
-	if (!table.temporary) {
+	if (table.temporary) {
+		// Temporary inserts still need a catalog dependency so prepared statements are rebound if the table is dropped.
+		GetStatementProperties().RegisterDBRead(table.catalog, context);
+	} else {
 		// inserting into a non-temporary table: alters underlying database
-		auto &properties = GetStatementProperties();
 		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
-		properties.RegisterDBModify(table.catalog, context, modification_type);
+		GetStatementProperties().RegisterDBModify(table.catalog, context, modification_type);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
