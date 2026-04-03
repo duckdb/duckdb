@@ -74,8 +74,7 @@ public:
 		return make_uniq<PrefixRangeBuildState>(std::move(state_data), state_bitmap, word_count);
 	}
 
-	void Insert(U key, PrefixRangeFilter::BuildState &state_p) const {
-		auto &state = state_p.Cast<PrefixRangeBuildState>();
+	inline void Insert(U key, PrefixRangeBuildState &state) const {
 		const U y = key - min;
 		// All keys are in-range by construction, so the range check can be omitted here.
 		const U idx = y >> shift;
@@ -302,8 +301,9 @@ public:
 	}
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
+		auto &bitmap_state = state.Cast<PrefixRangeBuildState>();
 		for (const auto &entry : keys.template ValidValues<Input>(count)) {
-			bitmap.Insert(Policy::ToComparable(entry.value), state);
+			bitmap.Insert(Policy::ToComparable(entry.value), bitmap_state);
 		}
 	}
 
