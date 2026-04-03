@@ -112,9 +112,6 @@ unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, Scalar
 
 void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const ScalarFunction &) {
 	auto &next_val_bind_data = bind_data->Cast<NextvalBindData>();
-	if (serializer.GetOptions().serialization_compatibility.serialization_version < 7) {
-		next_val_bind_data.sequence.GetData().last_value = std::optional<int64_t>();
-	}
 	serializer.WritePropertyWithDefault(100, "sequence_create_info", next_val_bind_data.create_info);
 }
 
