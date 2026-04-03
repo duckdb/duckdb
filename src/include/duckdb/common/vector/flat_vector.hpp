@@ -92,7 +92,7 @@ struct FlatVector {
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 
-private:
+public:
 	template <class T>
 	struct FlatVectorWriter {
 		FlatVectorWriter(Vector &vector, idx_t count)
@@ -115,8 +115,9 @@ private:
 		idx_t count;
 	};
 
+	struct FlatStringWriter;
 	struct StringElement {
-		StringElement(Vector &vector, string_t *data, idx_t idx) : vector(vector), data(data), idx(idx) {
+		StringElement(FlatStringWriter &writer, string_t *data, idx_t idx) : writer(writer), data(data), idx(idx) {
 		}
 
 		//! Constructs an empty string of a given length and returns it
@@ -138,7 +139,7 @@ private:
 		}
 
 	private:
-		Vector &vector;
+		FlatStringWriter &writer;
 		string_t *data;
 		idx_t idx;
 	};
@@ -157,13 +158,16 @@ public:
 
 		StringElement operator[](idx_t idx) {
 			D_ASSERT(idx < count);
-			return StringElement(vector, data, idx);
+			return StringElement(*this, data, idx);
 		}
+
+		StringHeap &GetHeap();
 
 	private:
 		Vector &vector;
 		string_t *data;
 		ValidityMask &validity;
+		optional_ptr<StringHeap> heap;
 		idx_t count;
 	};
 
