@@ -35,6 +35,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Set vcpkg binary cache path
+      shell: bash
+      run: echo "VCPKG_DEFAULT_BINARY_CACHE=${GITHUB_WORKSPACE}/vcpkg-cache" >> "$GITHUB_ENV"
+
+    - name: Cache vcpkg binaries
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg-cache
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('build/extension_configuration/vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-
+
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11.5
       env:
