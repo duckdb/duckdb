@@ -42,9 +42,6 @@ Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, id
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
 	if (create_data) {
 		Initialize(initialize_to_zero, capacity);
-	} else {
-		// Even without data, we need a buffer for the validity mask
-		Initialize(false, capacity);
 	}
 }
 
