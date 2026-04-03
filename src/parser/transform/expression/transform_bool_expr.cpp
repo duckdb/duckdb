@@ -42,6 +42,14 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 				// NOT(x IS DISTINCT FROM y) is equivalent to x IS NOT DISTINCT FROM y
 				next->SetExpressionTypeUnsafe(NegateComparisonExpression(next->GetExpressionType()));
 				result = std::move(next);
+			} else if (next->GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
+				// NOT(IS NULL) → IS NOT NULL
+				next->SetExpressionTypeUnsafe(ExpressionType::OPERATOR_IS_NOT_NULL);
+				result = std::move(next);
+			} else if (next->GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+				// NOT(IS NOT NULL) → IS NULL
+				next->SetExpressionTypeUnsafe(ExpressionType::OPERATOR_IS_NULL);
+				result = std::move(next);
 			} else {
 				result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(next));
 			}
