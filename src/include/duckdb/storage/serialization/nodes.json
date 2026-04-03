@@ -37,7 +37,8 @@
       {
         "id": 106,
         "name": "query_node",
-        "type": "QueryNode*"
+        "type": "QueryNode*",
+        "version": "v2.0.0"
       }
     ],
     "constructor": ["query", "query_node"]

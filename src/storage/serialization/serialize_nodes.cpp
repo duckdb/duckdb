@@ -265,7 +265,9 @@ void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates", payload_aggregates);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node", query_node);
+	if (serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node", query_node);
+	}
 }
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
