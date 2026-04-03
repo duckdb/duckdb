@@ -886,7 +886,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					break;
 				}
 
-				if (ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
+				auto condition_type = op.conditions[join_condition[filter_idx]].left->return_type;
+				bool has_cast = condition_type != pushdown_column.storage_type;
+				if (!has_cast && ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
 					PushBloomFilter(info, *ht, op, filter_col_idx);
 				}
 			}
