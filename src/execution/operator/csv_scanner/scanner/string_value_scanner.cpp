@@ -841,9 +841,14 @@ bool StringValueResult::AddRowInternal() {
 	// Keep the current parse progress, `HandleErrors` reset states.
 	const auto chunk_col_id_before = chunk_col_id;
 	if (current_errors.HandleErrors(*this)) {
-		// Invalid all columns that are not populated for this row.
-		for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < validity_mask.size(); ++cur_col_idx) {
-			validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
+		// There're two cases here:
+		// - ignore errors = true, with last row being removed
+		// - store rejects = true, with last row index being added to borked rows
+		// Invalid all columns that are not populated for this row, when the row still exists.
+		if (borked_rows.find(static_cast<idx_t>(number_of_rows)) != borked_rows.end()) {
+			for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < chunk_col_id; ++cur_col_idx) {
+				validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
+			}
 		}
 
 		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
