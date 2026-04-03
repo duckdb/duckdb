@@ -523,7 +523,7 @@ void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &de
 void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
 	auto info = seq.GetInfo();
 	auto &seq_info = info->Cast<CreateSequenceInfo>();
-	// we only support writing last value from version 7 onwards
+	// we only support writing last_value from version 7 onwards
 	if (db.GetStorageManager().GetStorageVersion() < 7) {
 		seq_info.last_value = std::nullopt;
 	}
