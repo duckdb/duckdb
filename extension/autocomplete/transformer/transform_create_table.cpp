@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -295,7 +296,25 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				fk_constraint->fk_columns.push_back(qualified_name.name);
 				column_constraint.constraints.push_back(std::move(fk_constraint));
 			} else if (constraint->name == "ColumnCollation") {
-				type = transformer.Transform<LogicalType>(constraint);
+				if (type.id() == LogicalTypeId::ANY) {
+					throw ParserException("Specify the VARCHAR type for column \"%s\" with collation.",
+					                      qualified_name.ToString());
+				} else if (type.IsUnbound()) {
+					auto &expr = UnboundType::GetTypeExpression(type);
+					if (expr->GetExpressionClass() != ExpressionClass::TYPE) {
+						throw InternalException("Expected a type expression");
+					}
+					auto &type_expr = expr->Cast<TypeExpression>();
+					if (!StringUtil::CIEquals(type_expr.GetTypeName(), "VARCHAR")) {
+						throw ParserException("Only VARCHAR columns can have collations!");
+					}
+				} else {
+					throw InternalException("Expected only unbound types here");
+				}
+				auto collation = transformer.Transform<unique_ptr<ParsedExpression>>(constraint);
+				vector<unique_ptr<ParsedExpression>> type_children;
+				type_children.push_back(std::move(collation));
+				type = LogicalType::UNBOUND(make_uniq<TypeExpression>("VARCHAR", std::move(type_children)));
 			} else {
 				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
 			}
@@ -532,12 +551,14 @@ pair<bool, ConstraintType> PEGTransformerFactory::TransformNotNullConstraint(PEG
 	return make_pair(false, ConstraintType::INVALID);
 }
 
-LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
-                                                            optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	string collation = StringUtil::Join(dotted_identifier, ".");
-	return LogicalType::VARCHAR_COLLATION(collation);
+	auto expr = make_uniq<ConstantExpression>(Value(collation));
+	expr->alias = "collation";
+	return std::move(expr);
 }
 
 bool PEGTransformerFactory::TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
