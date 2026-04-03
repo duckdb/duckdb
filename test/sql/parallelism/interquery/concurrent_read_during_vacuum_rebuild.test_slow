@@ -48,16 +48,35 @@ endloop
 
 endloop
 
-# verify index is correct after everything completes
+# verify index scan is used after rebuild
 query II
-SELECT i, j FROM t WHERE i = 0
+EXPLAIN ANALYZE SELECT i, j FROM t WHERE i = 0
 ----
-0	0
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
-query II
-SELECT i, j FROM t WHERE i = 499999
+# verify index is correct after everything completes, including row IDs
+# RG1 (122880-245759) was dropped, so RG2+ shift back by 122880
+query III
+SELECT i, j, rowid FROM t WHERE i = 0
 ----
-499999	499999
+0	0	0
+
+query III
+SELECT i, j, rowid FROM t WHERE i = 122879
+----
+122879	122879	122879
+
+# i=245760 was in RG2 (originally rowid 245760), now shifted to rowid 122880
+query III
+SELECT i, j, rowid FROM t WHERE i = 245760
+----
+245760	245760	122880
+
+# i=499999 was in RG4 (originally rowid 499999), now shifted to rowid 377119
+query III
+SELECT i, j, rowid FROM t WHERE i = 499999
+----
+499999	499999	377119
 
 query I
 SELECT COUNT(*) FROM t
