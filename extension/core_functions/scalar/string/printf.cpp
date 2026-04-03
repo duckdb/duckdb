@@ -73,9 +73,8 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 
 template <class FORMAT_FUN, class CTX>
 static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &format_string = args.data[0];
+	auto &format_string_vec = args.data[0];
 	auto &result_validity = FlatVector::Validity(result);
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	result_validity.Initialize(args.size());
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		switch (args.data[i].GetVectorType()) {
@@ -89,15 +88,14 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		default:
 			// FLAT VECTOR, we can directly OR the nullmask
 			args.data[i].Flatten(args.size());
-			result.SetVectorType(VectorType::FLAT_VECTOR);
 			result_validity.Combine(FlatVector::Validity(args.data[i]), args.size());
 			break;
 		}
 	}
-	idx_t count = result.GetVectorType() == VectorType::CONSTANT_VECTOR ? 1 : args.size();
+	idx_t count = args.size();
 
-	auto format_data = FlatVector::GetData<string_t>(format_string);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto format_data = FlatVector::GetData<string_t>(format_string_vec);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t idx = 0; idx < count; idx++) {
 		if (result.GetVectorType() == VectorType::FLAT_VECTOR && FlatVector::IsNull(result, idx)) {
 			// this entry is NULL: skip it
@@ -105,7 +103,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 
 		// first fetch the format string
-		auto fmt_idx = format_string.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto fmt_idx = format_string_vec.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
 		auto format_string = format_data[fmt_idx].GetString();
 
 		// now gather all the format arguments

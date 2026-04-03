@@ -37,7 +37,7 @@ static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const S
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rsel.get_index(i);
 		// allocate an empty string of the required size

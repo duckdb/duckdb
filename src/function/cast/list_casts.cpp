@@ -77,7 +77,6 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 }
 
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
@@ -99,15 +98,15 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
 	unsafe_unique_array<bool> needs_quotes;
 	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
 
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, i, true);
+			result_data.SetInvalid(i);
 			continue;
 		}
 		auto list = list_data[i];
@@ -148,10 +147,6 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		dataptr[offset] = ']';
 		result_data[i].Finalize();
-	}
-
-	if (constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	return true;
 }
