@@ -501,8 +501,11 @@ end
 
 function get_conversion_loop_function(logical_type::LogicalType)::Function
     type = get_type_id(logical_type)
-    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT || type == DUCKDB_TYPE_GEOMETRY
-        return convert_vector_string
+    if type == DUCKDB_TYPE_VARCHAR ||
+    	type == DUCKDB_TYPE_BLOB ||
+    	type == DUCKDB_TYPE_BIT ||
+    	type == DUCKDB_TYPE_GEOMETRY
+    	return convert_vector_string
     elseif type == DUCKDB_TYPE_LIST
         return convert_vector_list
     elseif type == DUCKDB_TYPE_STRUCT
