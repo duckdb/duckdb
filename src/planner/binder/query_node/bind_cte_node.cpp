@@ -21,7 +21,18 @@ struct BoundCTEData {
 BoundStatement Binder::BindNode(QueryNode &node) {
 	reference<Binder> current_binder(*this);
 	vector<BoundCTEData> bound_ctes;
+	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
+		if (cte.second->query_node) {
+			auto t = cte.second->query_node->type;
+			if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+			    t == QueryNodeType::DELETE_QUERY_NODE) {
+				if (++dml_cte_count > 1) {
+					throw BinderException(
+					    "Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
+				}
+			}
+		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
 	}

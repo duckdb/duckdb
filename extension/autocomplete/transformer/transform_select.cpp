@@ -1597,22 +1597,10 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	CommonTableExpressionMap result;
-	idx_t dml_cte_count = 0;
 
 	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
 		auto with_entry =
 		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
-
-		if (with_entry.second->query_node) {
-			auto t = with_entry.second->query_node->type;
-			if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
-			    t == QueryNodeType::DELETE_QUERY_NODE) {
-				if (++dml_cte_count > 1) {
-					throw ParserException(
-					    "Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
-				}
-			}
-		}
 
 		if (is_recursive) {
 			auto &query_node = with_entry.second->query_node;

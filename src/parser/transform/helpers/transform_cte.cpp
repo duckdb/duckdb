@@ -123,7 +123,6 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause.ctes);
-	idx_t dml_cte_count = 0;
 	for (auto cte_ele = de_with_clause.ctes->head; cte_ele != nullptr; cte_ele = cte_ele->next) {
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
@@ -176,9 +175,6 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			// DML body (INSERT / UPDATE / DELETE)
 			if (is_recursive) {
 				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
-			if (++dml_cte_count > 1) {
-				throw ParserException("Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
 			}
 			Transformer cte_transformer(*this);
 			if (cte.ctequery->type == duckdb_libpgquery::T_PGInsertStmt) {
