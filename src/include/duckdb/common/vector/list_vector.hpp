@@ -83,7 +83,7 @@ struct ListVector {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
-		return FlatVector::GetData<list_entry_t>(v);
+		return FlatVector::GetDataMutable<list_entry_t>(v);
 	}
 	//! Gets a reference to the underlying child-vector of a list
 	DUCKDB_API static const Vector &GetEntry(const Vector &vector);

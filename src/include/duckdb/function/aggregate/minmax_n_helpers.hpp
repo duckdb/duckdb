@@ -288,7 +288,7 @@ struct MinMaxFixedValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<T>(vector)[idx] = value;
+		FlatVector::GetDataMutable<T>(vector)[idx] = value;
 	}
 
 	// Nothing to do here
@@ -311,7 +311,7 @@ struct MinMaxStringValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
+		FlatVector::GetDataMutable<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
 	// Nothing to do here
@@ -436,7 +436,6 @@ struct MinMaxNOperation {
 		state_vector.ToUnifiedFormat(count, state_format);
 
 		const auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
-		auto &mask = FlatVector::Validity(result);
 
 		const auto old_len = ListVector::GetListSize(result);
 
@@ -451,7 +450,7 @@ struct MinMaxNOperation {
 		// Resize the list vector to fit the new entries
 		ListVector::Reserve(result, old_len + new_entries);
 
-		const auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
 		auto &child_data = ListVector::GetEntry(result);
 
 		idx_t current_offset = old_len;
@@ -461,12 +460,12 @@ struct MinMaxNOperation {
 			auto &state = *states[state_idx];
 
 			if (!state.is_initialized || state.heap.IsEmpty()) {
-				mask.SetInvalid(rid);
+				result_data.SetInvalid(rid);
 				continue;
 			}
 
 			// Add the entries to the list vector
-			auto &list_entry = list_entries[rid];
+			auto &list_entry = result_data[rid];
 			list_entry.offset = current_offset;
 			list_entry.length = state.heap.Size();
 

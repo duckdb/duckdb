@@ -163,7 +163,7 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
 			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::Validity(input),
@@ -184,7 +184,7 @@ private:
 					auto &dictionary_values = DictionaryVector::Child(input);
 					if (dictionary_values.GetVectorType() == VectorType::FLAT_VECTOR) {
 						// execute the function over the dictionary
-						auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+						auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 						auto ldata = FlatVector::GetData<INPUT_TYPE>(dictionary_values);
 						ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
 						    ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
@@ -204,7 +204,7 @@ private:
 			input.ToUnifiedFormat(count, vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,

@@ -16,7 +16,7 @@ namespace duckdb {
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	idx_t count = args.size();
 	idx_t args_size = args.ColumnCount();
-	auto *result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	auto &result_struct = ListVector::GetEntry(result);
 	auto &struct_entries = StructVector::GetEntries(result_struct);
 	bool truncate_flags_set = false;

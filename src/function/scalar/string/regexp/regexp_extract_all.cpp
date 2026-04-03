@@ -59,13 +59,13 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	auto input = CreateStringPiece(string);
 
 	auto &child_vector = ListVector::GetEntry(result);
-	auto list_content = FlatVector::GetData<string_t>(child_vector);
+	auto list_content = FlatVector::GetDataMutable<string_t>(child_vector);
 	auto &child_validity = FlatVector::Validity(child_vector);
 
 	auto current_list_size = ListVector::GetListSize(result);
 	auto current_list_capacity = ListVector::GetListCapacity(result);
 
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &list_entry = result_data[row];
 	list_entry.offset = current_list_size;
 
@@ -88,7 +88,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		if (current_list_size + 1 >= current_list_capacity) {
 			ListVector::Reserve(result, current_list_capacity * 2);
 			current_list_capacity = ListVector::GetListCapacity(result);
-			list_content = FlatVector::GetData<string_t>(child_vector);
+			list_content = FlatVector::GetDataMutable<string_t>(child_vector);
 		}
 
 		// Write the captured groups into the list-child vector
@@ -211,7 +211,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		if (!pattern_valid || !string_entry.IsValid() || !GetGroupIndex(args, row, group_index)) {
 			// If something is NULL, the result is NULL
 			// FIXME: do we even need 'SPECIAL_HANDLING'?
-			auto result_data = FlatVector::GetData<list_entry_t>(result);
+			auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
 			auto &result_validity = FlatVector::Validity(result);
 			result_data[row].length = 0;
 			result_data[row].offset = ListVector::GetListSize(result);
@@ -244,7 +244,7 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
                                         vector<duckdb_re2::StringPiece> &group_spans, vector<Vector> &child_entries,
                                         Vector &result, idx_t row) {
 	const idx_t group_count = child_entries.size();
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result);
 	idx_t current_list_size = ListVector::GetListSize(result);
 	list_entries[row].offset = current_list_size;
 
@@ -259,7 +259,7 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 		for (idx_t g = 0; g < group_count; g++) {
 			auto &child_vec = child_entries[g];
 			child_vec.SetVectorType(VectorType::FLAT_VECTOR);
-			auto cdata = FlatVector::GetData<string_t>(child_vec);
+			auto cdata = FlatVector::GetDataMutable<string_t>(child_vec);
 			auto &span = group_spans[g + 1];
 			if (span.empty()) {
 				if (span.begin() == nullptr) {
@@ -310,8 +310,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
-	auto &list_validity = FlatVector::Validity(result);
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result, args.size());
 
 	vector<duckdb_re2::StringPiece> group_spans(group_count + 1);
 
@@ -320,7 +319,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		if (!string_entry.IsValid()) {
 			list_entries[row].offset = ListVector::GetListSize(result);
 			list_entries[row].length = 0;
-			list_validity.SetInvalid(row);
+			list_entries.SetInvalid(row);
 			continue;
 		}
 		auto &string_val = string_entry.value;

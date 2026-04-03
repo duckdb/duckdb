@@ -20,16 +20,16 @@ void InitializeOffsets(DataChunk &offsets, idx_t count);
 struct OffsetData {
 public:
 	static uint32_t *GetKeys(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[0]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[0]);
 	}
 	static uint32_t *GetChildren(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[1]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[1]);
 	}
 	static uint32_t *GetValues(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[2]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[2]);
 	}
 	static uint32_t *GetBlob(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[3]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[3]);
 	}
 };
 

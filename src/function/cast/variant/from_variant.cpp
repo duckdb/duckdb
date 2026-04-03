@@ -259,17 +259,17 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 	ListVector::Reserve(result, total_offset + total_children);
 	auto &child = ListVector::GetEntry(result);
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
 
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, offset + i, true);
+			result_data.SetInvalid(offset + i);
 			continue;
 		}
 
-		auto &entry = list_data[i + offset];
+		auto &entry = result_data[i + offset];
 		entry.offset = total_offset;
 		entry.length = child_data_entry.child_count;
 		total_offset += entry.length;
