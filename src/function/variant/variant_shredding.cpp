@@ -59,7 +59,7 @@ static bool IsVariantStringType(VariantLogicalType type_id) {
 static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                 const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                 idx_t count) {
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::Writer<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -74,7 +74,7 @@ static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &resul
 static void WriteShreddedBoolean(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                  const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                  idx_t count) {
-	auto result_data = FlatVector::Writer<bool>(result, count);
+	auto result_data = FlatVector::Writer<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];

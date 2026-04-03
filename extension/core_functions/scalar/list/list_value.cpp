@@ -38,7 +38,7 @@ void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	const auto row_count = args.size();
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<T>(result, row_count);
+	auto result_data = FlatVector::Writer<T>(result, row_count * column_count);
 	auto unified_format = args.ToUnifiedFormat();
 	for (idx_t row = 0; row < row_count; row++) {
 		for (idx_t col = 0; col < column_count; col++) {
@@ -166,7 +166,7 @@ void ListFunction(DataChunk &args, Vector &result) {
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size() * column_count);
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);
