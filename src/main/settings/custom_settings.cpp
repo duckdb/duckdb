@@ -778,12 +778,6 @@ void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Va
 		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
 		                            bytes);
 	}
-	if (info.db) {
-		const auto old_bs = Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(*info.db);
-		if (old_bs != bytes) {
-			ExternalFileCache::Get(*info.db).ReindexCachedFiles(/*is_remote=*/false, old_bs, bytes);
-		}
-	}
 }
 
 void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -794,12 +788,6 @@ void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, V
 	if (!IsPowerOfTwo(bytes)) {
 		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
 		                            bytes);
-	}
-	if (info.db) {
-		const auto old_bs = Settings::Get<ExternalFileCacheRemoteBlockSizeSetting>(*info.db);
-		if (old_bs != bytes) {
-			ExternalFileCache::Get(*info.db).ReindexCachedFiles(/*is_remote=*/true, old_bs, bytes);
-		}
 	}
 }
 

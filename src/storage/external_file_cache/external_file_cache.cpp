@@ -20,17 +20,10 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
-void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_block_size, idx_t new_block_size) {
-	idx_t file_size = 0;
-	{
-		annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		file_size = cached_file.file_size;
-	}
-	if (file_size == 0) {
-		return;
-	}
-
-	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size,
+                                              idx_t new_block_size) {
+	D_ASSERT(old_block_size > 0);
+	D_ASSERT(new_block_size > 0);
 
 	// Phase 1: Pin all LOADED old blocks, sorted by block index.
 	map<idx_t, pair<BufferHandle, idx_t>> pinned;
@@ -119,19 +112,39 @@ void ExternalFileCache::ReindexCachedFile(CachedFile &cached_file, idx_t old_blo
 	cached_file.blocks = std::move(new_blocks);
 }
 
-void ExternalFileCache::ReindexCachedFiles(bool is_remote, idx_t old_block_size, idx_t new_block_size) {
-	D_ASSERT(old_block_size > 0);
-	D_ASSERT(new_block_size > 0);
-	if (old_block_size == new_block_size) {
-		return;
+void ExternalFileCache::MaybeReindexCachedFile(CachedFile &cached_file, idx_t current_block_size) {
+	D_ASSERT(current_block_size > 0);
+
+	// Quick check under map_lock.
+	{
+		annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+		if (!cached_file.cached_block_size.IsValid() ||
+		    cached_file.cached_block_size.GetIndex() == current_block_size) {
+			cached_file.cached_block_size = current_block_size;
+			return;
+		}
 	}
 
-	lock_guard<mutex> guard(lock);
-	for (auto &entry : cached_files) {
-		if (FileSystem::IsRemoteFile(entry.first) != is_remote) {
-			continue;
+	// Block size changed — need to reindex. Respect lock order: meta_lock before map_lock.
+	idx_t file_size;
+	{
+		annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
+		file_size = cached_file.file_size;
+	}
+
+	{
+		annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+		// Double-check: another thread may have already reindexed while we released map_lock.
+		if (!cached_file.cached_block_size.IsValid() ||
+		    cached_file.cached_block_size.GetIndex() == current_block_size) {
+			cached_file.cached_block_size = current_block_size;
+			return;
 		}
-		ReindexCachedFile(*entry.second, old_block_size, new_block_size);
+		const idx_t old_block_size = cached_file.cached_block_size.GetIndex();
+		if (file_size > 0) {
+			ReindexCachedFileCore(cached_file, file_size, old_block_size, current_block_size);
+		}
+		cached_file.cached_block_size = current_block_size;
 	}
 }
 
@@ -195,8 +208,9 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	unique_lock<mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		const idx_t block_size = GetCacheBlockSize(file.first);
 		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
+		const idx_t block_size = file.second->cached_block_size.IsValid() ? file.second->cached_block_size.GetIndex()
+		                                                                  : GetCacheBlockSize(file.first);
 		for (const auto &block_entry : file.second->blocks) {
 			const idx_t block_idx = block_entry.first;
 			const auto &block = *block_entry.second;

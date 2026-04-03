@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/thread_annotation.hpp"
@@ -34,10 +35,6 @@ public:
 	//! Get the cache block size for a given file path.
 	DUCKDB_API idx_t GetCacheBlockSize(const string &path) const;
 
-	//! Re-index cached blocks from old_block_size to new_block_size, preserving data where possible.
-	//! Only affects files matching the is_remote predicate (local or remote).
-	void ReindexCachedFiles(bool is_remote, idx_t old_block_size, idx_t new_block_size);
-
 	//! Cached files
 	struct CachedFile {
 	public:
@@ -50,7 +47,9 @@ public:
 		const string path;
 
 		mutable annotated_mutex map_lock;
-		// Maps from block index to cached block.
+		//! The block size used to index the current block map. Invalid if no blocks have been cached yet.
+		optional_idx cached_block_size DUCKDB_GUARDED_BY(map_lock);
+		//! Maps from block index to cached block.
 		unordered_map<idx_t, shared_ptr<CacheBlock>> blocks DUCKDB_GUARDED_BY(map_lock);
 
 		mutable annotated_mutex meta_lock;
@@ -72,6 +71,9 @@ public:
 	void SetEnabled(bool enable);
 	vector<CachedFileInformation> GetCachedFileInformation() const;
 
+	//! Lazily re-index a single cached file if the block size has changed since it was last accessed.
+	void MaybeReindexCachedFile(CachedFile &cached_file, idx_t current_block_size);
+
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
@@ -80,8 +82,8 @@ public:
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
-	//! Re-index blocks of a single cached file from old_block_size to new_block_size.
-	void ReindexCachedFile(CachedFile &cached_file, idx_t old_block_size, idx_t new_block_size);
+	//! Re-index blocks of a single cached file. Assumes map_lock is held by the caller.
+	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;

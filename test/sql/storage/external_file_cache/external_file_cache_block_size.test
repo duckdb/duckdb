@@ -1,5 +1,5 @@
 # name: test/sql/storage/external_file_cache/external_file_cache_block_size.test
-# description: Test that changing cache block size re-indexes blocks instead of clearing
+# description: Test that changing cache block size lazily re-indexes blocks on next read
 # group: [external_file_cache]
 
 require parquet
@@ -12,11 +12,11 @@ set prefetch_all_parquet_files=true;
 
 # Create a test parquet file
 statement ok
-copy (select range i, range % 100 j from range(10000)) to '__TEST_DIR__/test_block_size.parquet';
+copy (select range i, range % 100 j from range(10000)) to '${TEST_DIR}/test_block_size.parquet';
 
 # Read the file to populate cache at default 16KiB block size
 statement ok
-select * from '__TEST_DIR__/test_block_size.parquet';
+select * from '${TEST_DIR}/test_block_size.parquet';
 
 # Verify cache is populated
 query I
@@ -32,21 +32,21 @@ create temp table cached_bytes_before as select sum(nr_bytes) as total from duck
 statement ok
 set external_file_cache_local_block_size=4096;
 
-# Cache should still have data (re-indexed, not cleared)
+# Cache should still have data (lazy reindex has not happened yet)
 query I
 select count(*) > 0 from duckdb_external_file_cache();
 ----
 true
 
-# Total cached bytes should be preserved after re-indexing
+# Total cached bytes should be preserved (reindex is deferred to next read)
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
 ----
 true
 
-# Verify reads still return correct data after re-indexing
+# Reading triggers lazy re-index and returns correct data
 query II
-select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
@@ -61,7 +61,7 @@ create temp table cached_bytes_before as select sum(nr_bytes) as total from duck
 statement ok
 set external_file_cache_local_block_size=16384;
 
-# Total cached bytes should be preserved after merge
+# Total cached bytes should be preserved (reindex deferred to next read)
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
 ----
@@ -69,7 +69,7 @@ true
 
 # Verify reads are still correct
 query II
-select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
@@ -105,11 +105,11 @@ true
 
 # Verify reads are still correct after reset
 query II
-select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
-# Change to a different size, then reset — should re-index back to default
+# Change to a different size, then reset — lazy re-index back to default on next read
 statement ok
 drop table cached_bytes_before;
 
@@ -139,7 +139,7 @@ select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total 
 true
 
 query II
-select count(*), sum(i) from '__TEST_DIR__/test_block_size.parquet';
+select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 

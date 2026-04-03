@@ -9,113 +9,115 @@ namespace duckdb {
 using EFCTestFileGuard = CachingTestFileGuard;
 using EFCTrackingFileSystem = SimpleTrackingFileSystem;
 
+static OpenFileInfo MakeTestOpenFileInfo(const string &path) {
+	OpenFileInfo info(path);
+	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+	return info;
+}
+
+static string MakeTestContent(idx_t size) {
+	string content(size, '\0');
+	for (idx_t i = 0; i < size; i++) {
+		content[i] = static_cast<char>('A' + (i % 26));
+	}
+	return content;
+}
+
+static string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
+	auto group = handle.Read(size, offset);
+	string result(size, '\0');
+	group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), size);
+	return result;
+}
+
+static idx_t CountCachedBlocks(ExternalFileCache &cache) {
+	return cache.GetCachedFileInformation().size();
+}
+
+static idx_t TotalCachedBytes(ExternalFileCache &cache) {
+	idx_t total = 0;
+	for (auto &info : cache.GetCachedFileInformation()) {
+		total += info.nr_bytes;
+	}
+	return total;
+}
+
 //===----------------------------------------------------------------------===//
-// ReindexCachedFiles Tests
+// Lazy Reindex Tests
 //===----------------------------------------------------------------------===//
 
-TEST_CASE("ReindexCachedFiles split large blocks into smaller blocks", "[external_file_cache]") {
+TEST_CASE("Lazy reindex splits large blocks on next read", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
-	const idx_t OLD_BLOCK_SIZE = 16384; // 16 KiB
-	const idx_t NEW_BLOCK_SIZE = 4096;  // 4 KiB
+	const idx_t OLD_BLOCK_SIZE = 16384;
+	const idx_t NEW_BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = OLD_BLOCK_SIZE * 3 + 100;
 
-	string content(FILE_SIZE, '\0');
-	for (idx_t i = 0; i < FILE_SIZE; i++) {
-		content[i] = static_cast<char>('A' + (i % 26));
-	}
+	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_reindex_split.bin", content);
 
 	CachingFileSystem cfs(*tracking_fs, db_instance);
-	OpenFileInfo file_info(test_file.GetPath());
-	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
-
-	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	auto &cache = db_instance.GetExternalFileCache();
 
-	// Read full file to populate cache at OLD_BLOCK_SIZE.
-	{
-		auto group = handle->Read(FILE_SIZE, 0);
-		string result(FILE_SIZE, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
-		REQUIRE(result == content);
-	}
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(CountCachedBlocks(cache) == 4);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 
-	auto cached_before = cache.GetCachedFileInformation();
-	idx_t total_bytes_before = 0;
-	for (auto &info : cached_before) {
-		total_bytes_before += info.nr_bytes;
-	}
-	REQUIRE(cached_before.size() == 4); // 3 full blocks + 1 partial
-	REQUIRE(total_bytes_before == FILE_SIZE);
+	// Change block size — no eager reindex.
+	Connection con(db);
+	con.Query("SET external_file_cache_local_block_size=" + to_string(NEW_BLOCK_SIZE));
 
-	// Re-index: split 16KiB blocks into 4KiB blocks.
-	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
+	// Cache still has 4 old blocks (not yet reindexed).
+	REQUIRE(CountCachedBlocks(cache) == 4);
 
-	auto cached_after = cache.GetCachedFileInformation();
-	idx_t total_bytes_after = 0;
-	for (auto &info : cached_after) {
-		total_bytes_after += info.nr_bytes;
-	}
+	// Next read triggers lazy reindex: 16KiB → 4KiB.
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+
 	// 3 * (16384/4096) + 1 = 13 blocks
-	REQUIRE(cached_after.size() == 13);
-	REQUIRE(total_bytes_after == FILE_SIZE);
+	REQUIRE(CountCachedBlocks(cache) == 13);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 }
 
-TEST_CASE("ReindexCachedFiles merge small blocks into larger blocks", "[external_file_cache]") {
+TEST_CASE("Lazy reindex merges small blocks on next read", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
-	const idx_t OLD_BLOCK_SIZE = 4096;  // 4 KiB
-	const idx_t NEW_BLOCK_SIZE = 16384; // 16 KiB
+	const idx_t OLD_BLOCK_SIZE = 4096;
+	const idx_t NEW_BLOCK_SIZE = 16384;
 	const idx_t FILE_SIZE = OLD_BLOCK_SIZE * 8;
 
-	// Set the block size to 4KiB before populating the cache.
 	Connection con(db);
 	con.Query("SET external_file_cache_local_block_size=" + to_string(OLD_BLOCK_SIZE));
 
-	string content(FILE_SIZE, '\0');
-	for (idx_t i = 0; i < FILE_SIZE; i++) {
-		content[i] = static_cast<char>('A' + (i % 26));
-	}
+	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_reindex_merge.bin", content);
 
 	CachingFileSystem cfs(*tracking_fs, db_instance);
-	OpenFileInfo file_info(test_file.GetPath());
-	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
-
-	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	auto &cache = db_instance.GetExternalFileCache();
 
-	// Read full file to populate cache at OLD_BLOCK_SIZE.
-	{
-		auto group = handle->Read(FILE_SIZE, 0);
-		string result(FILE_SIZE, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
-		REQUIRE(result == content);
-	}
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(CountCachedBlocks(cache) == 8);
 
-	REQUIRE(cache.GetCachedFileInformation().size() == 8); // 8 x 4KiB blocks
+	// Change block size.
+	con.Query("SET external_file_cache_local_block_size=" + to_string(NEW_BLOCK_SIZE));
 
-	// Re-index: merge 4KiB blocks into 16KiB blocks.
-	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
+	// Still 8 old blocks.
+	REQUIRE(CountCachedBlocks(cache) == 8);
 
-	auto cached_after = cache.GetCachedFileInformation();
-	idx_t total_bytes_after = 0;
-	for (auto &info : cached_after) {
-		total_bytes_after += info.nr_bytes;
-	}
-	// 8 * 4KiB = 32KiB = 2 x 16KiB blocks
-	REQUIRE(cached_after.size() == 2);
-	REQUIRE(total_bytes_after == FILE_SIZE);
+	// Next read triggers lazy reindex: 4KiB → 16KiB.
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+
+	REQUIRE(CountCachedBlocks(cache) == 2);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 }
 
-TEST_CASE("ReindexCachedFiles same block size is a no-op", "[external_file_cache]") {
+TEST_CASE("Lazy reindex is a no-op for same block size", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
@@ -123,94 +125,143 @@ TEST_CASE("ReindexCachedFiles same block size is a no-op", "[external_file_cache
 	const idx_t BLOCK_SIZE = 16384;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 2;
 
-	string content(FILE_SIZE, '\0');
-	for (idx_t i = 0; i < FILE_SIZE; i++) {
-		content[i] = static_cast<char>('A' + (i % 26));
-	}
+	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_reindex_noop.bin", content);
 
 	CachingFileSystem cfs(*tracking_fs, db_instance);
-	OpenFileInfo file_info(test_file.GetPath());
-	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
-
-	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	auto &cache = db_instance.GetExternalFileCache();
 
-	{
-		auto group = handle->Read(FILE_SIZE, 0);
-		string result(FILE_SIZE, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
-		REQUIRE(result == content);
-	}
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(CountCachedBlocks(cache) == 2);
 
-	auto cached_before = cache.GetCachedFileInformation();
-	REQUIRE(cached_before.size() == 2);
+	// SET same block size — no-op.
+	Connection con(db);
+	con.Query("SET external_file_cache_local_block_size=" + to_string(BLOCK_SIZE));
 
-	// Same block size: should be a no-op.
-	cache.ReindexCachedFiles(/*is_remote=*/false, BLOCK_SIZE, BLOCK_SIZE);
-
-	auto cached_after = cache.GetCachedFileInformation();
-	REQUIRE(cached_after.size() == 2);
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(CountCachedBlocks(cache) == 2);
 }
 
-TEST_CASE("ReindexCachedFiles with holes in cached content", "[external_file_cache]") {
+TEST_CASE("Lazy reindex with holes in cached content", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t OLD_BLOCK_SIZE = 4096;
 	const idx_t NEW_BLOCK_SIZE = 16384;
-	const idx_t FILE_SIZE = OLD_BLOCK_SIZE * 8; // 32KiB = 8 old blocks
+	const idx_t FILE_SIZE = OLD_BLOCK_SIZE * 8;
 
 	Connection con(db);
 	con.Query("SET external_file_cache_local_block_size=" + to_string(OLD_BLOCK_SIZE));
 
-	string content(FILE_SIZE, '\0');
-	for (idx_t i = 0; i < FILE_SIZE; i++) {
-		content[i] = static_cast<char>('A' + (i % 26));
-	}
+	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_reindex_holes.bin", content);
 
 	CachingFileSystem cfs(*tracking_fs, db_instance);
-	OpenFileInfo file_info(test_file.GetPath());
-	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
-
-	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	auto &cache = db_instance.GetExternalFileCache();
 
 	// Only read blocks 0-1 and 4-7, skipping blocks 2-3 to create a hole.
-	// Blocks 0-1: [0, 8192)
-	{
-		auto group = handle->Read(OLD_BLOCK_SIZE * 2, 0);
-		string result(OLD_BLOCK_SIZE * 2, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), OLD_BLOCK_SIZE * 2);
-		REQUIRE(result == content.substr(0, OLD_BLOCK_SIZE * 2));
-	}
-	// Blocks 4-7: [16384, 32768)
-	{
-		auto group = handle->Read(OLD_BLOCK_SIZE * 4, OLD_BLOCK_SIZE * 4);
-		string result(OLD_BLOCK_SIZE * 4, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), OLD_BLOCK_SIZE * 4);
-		REQUIRE(result == content.substr(OLD_BLOCK_SIZE * 4, OLD_BLOCK_SIZE * 4));
-	}
+	REQUIRE(ReadFull(*handle, OLD_BLOCK_SIZE * 2, 0) == content.substr(0, OLD_BLOCK_SIZE * 2));
+	REQUIRE(ReadFull(*handle, OLD_BLOCK_SIZE * 4, OLD_BLOCK_SIZE * 4) ==
+	        content.substr(OLD_BLOCK_SIZE * 4, OLD_BLOCK_SIZE * 4));
+	REQUIRE(CountCachedBlocks(cache) == 6);
 
-	// 6 cached blocks: 0,1 and 4,5,6,7 (blocks 2,3 are the hole)
-	REQUIRE(cache.GetCachedFileInformation().size() == 6);
+	// Change block size.
+	con.Query("SET external_file_cache_local_block_size=" + to_string(NEW_BLOCK_SIZE));
 
-	// Merge 4KiB -> 16KiB. Two new blocks possible:
-	// New block 0 [0, 16384): needs old blocks 0,1,2,3 — blocks 2,3 missing → skipped
-	// New block 1 [16384, 32768): needs old blocks 4,5,6,7 — all present → created
-	cache.ReindexCachedFiles(/*is_remote=*/false, OLD_BLOCK_SIZE, NEW_BLOCK_SIZE);
+	// Still 6 old blocks.
+	REQUIRE(CountCachedBlocks(cache) == 6);
 
-	auto cached_after = cache.GetCachedFileInformation();
-	idx_t total_bytes_after = 0;
-	for (auto &info : cached_after) {
-		total_bytes_after += info.nr_bytes;
+	// Read the second half — triggers lazy reindex of all blocks in this file.
+	// Reindex: blocks 4-7 merge into 1 new 16KiB block. Blocks 0-1 can't form a
+	// complete 16KiB block (blocks 2-3 missing) so they are dropped.
+	REQUIRE(ReadFull(*handle, NEW_BLOCK_SIZE, NEW_BLOCK_SIZE) == content.substr(NEW_BLOCK_SIZE, NEW_BLOCK_SIZE));
+
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(TotalCachedBytes(cache) == NEW_BLOCK_SIZE);
+}
+
+TEST_CASE("Lazy reindex: SET does not trigger reindex", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t FILE_SIZE = 16384 * 2;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_lazy_no_eager.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(CountCachedBlocks(cache) == 2);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+
+	// Change block size multiple times — cache should remain untouched.
+	Connection con(db);
+	con.Query("SET external_file_cache_local_block_size=4096");
+	REQUIRE(CountCachedBlocks(cache) == 2);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+
+	con.Query("SET external_file_cache_local_block_size=8192");
+	REQUIRE(CountCachedBlocks(cache) == 2);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+
+	// Only on the next read does the reindex happen (to 8192).
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(CountCachedBlocks(cache) == 4);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+}
+
+TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t OLD_BLOCK_SIZE = 4096;
+	const idx_t NEW_BLOCK_SIZE = 16384;
+	const idx_t FILE_SIZE = OLD_BLOCK_SIZE * 8;
+
+	Connection con(db);
+	con.Query("SET external_file_cache_local_block_size=" + to_string(OLD_BLOCK_SIZE));
+
+	auto content_a = MakeTestContent(FILE_SIZE);
+	auto content_b = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard file_a("test_lazy_multi_a.bin", content_a);
+	EFCTestFileGuard file_b("test_lazy_multi_b.bin", content_b);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto handle_a = cfs.OpenFile(MakeTestOpenFileInfo(file_a.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle_b = cfs.OpenFile(MakeTestOpenFileInfo(file_b.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	// Populate both files at 4KiB.
+	REQUIRE(ReadFull(*handle_a, FILE_SIZE) == content_a);
+	REQUIRE(ReadFull(*handle_b, FILE_SIZE) == content_b);
+	REQUIRE(CountCachedBlocks(cache) == 16); // 8 blocks per file
+
+	// Change block size.
+	con.Query("SET external_file_cache_local_block_size=" + to_string(NEW_BLOCK_SIZE));
+	REQUIRE(CountCachedBlocks(cache) == 16);
+
+	// Read only file A — triggers lazy reindex of A only.
+	REQUIRE(ReadFull(*handle_a, FILE_SIZE) == content_a);
+
+	// Count blocks per file.
+	auto infos = cache.GetCachedFileInformation();
+	idx_t blocks_a = 0, blocks_b = 0;
+	for (auto &info : infos) {
+		if (info.path == file_a.GetPath()) {
+			blocks_a++;
+		} else {
+			blocks_b++;
+		}
 	}
-	REQUIRE(cached_after.size() == 1);
-	REQUIRE(total_bytes_after == NEW_BLOCK_SIZE); // only the second 16KiB block
+	REQUIRE(blocks_a == 2); // reindexed: 8 x 4KiB → 2 x 16KiB
+	REQUIRE(blocks_b == 8); // untouched: still 8 x 4KiB
 }
 
 } // namespace duckdb

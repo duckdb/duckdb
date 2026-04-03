@@ -185,6 +185,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 			                                last_modified)) {
 				annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 				cached_file.blocks.clear();
+				cached_file.cached_block_size.SetInvalid();
 			}
 			cached_file.file_size = file_handle->GetFileSize();
 			cached_file.last_modified = last_modified;
@@ -210,6 +211,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	const idx_t block_size = external_file_cache.GetCacheBlockSize(cached_file.path);
+	external_file_cache.MaybeReindexCachedFile(cached_file, block_size);
+
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;
