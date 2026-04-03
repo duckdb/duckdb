@@ -223,7 +223,7 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 		break;
 	}
 	case VariantValueType::MISSING:
-		throw InternalException("Unexpected MISSING value in Variant AnalyzeValue");
+		break;
 	default:
 		throw InternalException("VariantValueType not handled");
 	}
@@ -648,7 +648,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		if (value.IsNull()) {
+		if (value.IsNull() || value.IsMissing()) {
 			continue;
 		}
 		AnalyzeValue(value, i, analyze_offsets);
@@ -672,7 +672,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		if (value.IsNull()) {
+		if (value.IsNull() || value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}

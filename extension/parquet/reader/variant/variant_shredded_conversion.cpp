@@ -57,6 +57,11 @@ template <>
 VariantValue ConvertShreddedValue<double>::Convert(double val) {
 	return VariantValue(Value::DOUBLE(val));
 }
+//! NOTE: decimal2 - not in the spec, but some writers create this regardless
+template <>
+VariantValue ConvertShreddedValue<int16_t>::ConvertDecimal(int16_t val, uint8_t width, uint8_t scale) {
+	return VariantValue(Value::DECIMAL(val, width, scale));
+}
 //! decimal4/decimal8/decimal16
 template <>
 VariantValue ConvertShreddedValue<int32_t>::ConvertDecimal(int32_t val, uint8_t width, uint8_t scale) {
@@ -234,6 +239,11 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 	case LogicalTypeId::DECIMAL: {
 		auto physical_type = type.InternalType();
 		switch (physical_type) {
+		case PhysicalType::INT16: {
+			//! NOTE: This is not spec compliant, but some writers shred DECIMAL2
+			return ConvertTypedValues<int16_t, ConvertShreddedValue<int16_t>, LogicalTypeId::DECIMAL>(
+			    typed_value, metadata, value, offset, length, total_size, is_field);
+		}
 		case PhysicalType::INT32: {
 			return ConvertTypedValues<int32_t, ConvertShreddedValue<int32_t>, LogicalTypeId::DECIMAL>(
 			    typed_value, metadata, value, offset, length, total_size, is_field);
@@ -447,7 +457,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 			if (typed_validity.RowIsValid(typed_index)) {
 				ret[i] = ConvertPartiallyShreddedObject(shredded_fields, metadata_format, value_format, i, offset);
 			} else {
-				if (is_field && !validity.RowIsValid(value_index)) {
+				if (!validity.RowIsValid(value_index)) {
 					//! This object is a field in the parent object, the value is missing, skip it
 					continue;
 				}
