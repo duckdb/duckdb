@@ -56,7 +56,8 @@ unique_ptr<SelectStatement> CommonTableExpressionInfo::GetQueryForSerialization(
 	return select;
 }
 
-CommonTableExpressionInfo::CommonTableExpressionInfo(unique_ptr<SelectStatement> query, unique_ptr<QueryNode> query_node) {
+CommonTableExpressionInfo::CommonTableExpressionInfo(unique_ptr<SelectStatement> query,
+                                                     unique_ptr<QueryNode> query_node) {
 	if (query_node) {
 		this->query_node = std::move(query_node);
 	} else if (query) {
