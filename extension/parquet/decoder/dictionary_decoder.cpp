@@ -23,14 +23,15 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	const auto duckdb_dictionary_size = dictionary_size + can_have_nulls;
 	dictionary = DictionaryVector::CreateReusableDictionary(reader.Type(), duckdb_dictionary_size);
-	auto &dict_validity = FlatVector::Validity(dictionary->data);
+	auto &dictionary_data = dictionary->data;
+	auto &dict_validity = FlatVector::Validity(dictionary_data);
 	dict_validity.Reset(duckdb_dictionary_size);
 	if (can_have_nulls) {
 		dict_validity.SetInvalid(dictionary_size);
 	}
 
 	// now read the non-NULL values from Parquet
-	reader.Plain(reader.block, nullptr, dictionary_size, 0, dictionary->data);
+	reader.Plain(reader.block, nullptr, dictionary_size, 0, dictionary_data);
 
 	// immediately filter the dictionary, if applicable
 	if (filter && CanFilter(*filter, *filter_state)) {
@@ -40,11 +41,11 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 
 		// apply the filter
 		UnifiedVectorFormat vdata;
-		dictionary->data.ToUnifiedFormat(duckdb_dictionary_size, vdata);
+		dictionary_data.ToUnifiedFormat(duckdb_dictionary_size, vdata);
 		SelectionVector dict_sel;
 		filter_count = duckdb_dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, dictionary->data, vdata, *filter, *filter_state,
-		                               duckdb_dictionary_size, filter_count);
+		ColumnSegment::FilterSelection(dict_sel, dictionary_data, vdata, *filter, *filter_state, duckdb_dictionary_size,
+		                               filter_count);
 
 		// now set all matching tuples to true
 		for (idx_t i = 0; i < filter_count; i++) {

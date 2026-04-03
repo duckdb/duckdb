@@ -29,9 +29,9 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		const bool is_null = ConstantVector::IsNull(input);
-		ConstantVector::SetNull(result, is_null);
+		if (ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result);
+		}
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 

@@ -121,8 +121,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 			auto target_idx = cast_data.target_null_indexes[i];
 			auto &target_vector = target_children[target_idx];
 
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 		}
 	}
 
@@ -281,7 +280,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 		count = 1;
 		if (ConstantVector::IsNull(source)) {
 			// If there's only a null in there we don't need to cast anything
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return true;
 		}
 	}

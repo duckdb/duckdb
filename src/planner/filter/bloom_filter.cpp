@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 
@@ -84,25 +85,10 @@ string BFTableFilter::ToString(const string &column_name) const {
 	return column_name + " IN BF(" + key_column_name + ")";
 }
 
-void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-                                 BFTableFilterState &state) {
-	if (sel.IsSet()) {
-		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
-		VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
-	} else {
-		VectorOperations::Hash(keys_v, state.hashes_v, approved_count);
-	}
-}
-
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
-                            BFTableFilterState &state) const {
-	if (state.current_capacity < approved_tuple_count) {
-		state.hashes_v.Initialize(false, approved_tuple_count);
-		state.bf_sel.Initialize(approved_tuple_count);
-		state.current_capacity = approved_tuple_count;
-	}
-
-	HashInternal(keys_v, sel, approved_tuple_count, state);
+                            JoinFilterTableFilterState &state) const {
+	state.PrepareSlicedKeys(keys_v, sel, approved_tuple_count);
+	VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_tuple_count);
 
 	idx_t found_count;
 	if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -111,7 +97,7 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 		found_count = found ? approved_tuple_count : 0;
 	} else {
 		state.hashes_v.Flatten(approved_tuple_count);
-		found_count = this->filter.LookupHashes(state.hashes_v, state.bf_sel, approved_tuple_count);
+		found_count = this->filter.LookupHashes(state.hashes_v, state.probe_sel, approved_tuple_count);
 	}
 
 	// all the elements have been found, we don't need to translate anything
@@ -121,12 +107,12 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 
 	if (sel.IsSet()) {
 		for (idx_t idx = 0; idx < found_count; idx++) {
-			const idx_t flat_sel_idx = state.bf_sel.get_index(idx);
+			const idx_t flat_sel_idx = state.probe_sel.get_index(idx);
 			const idx_t original_sel_idx = sel.get_index(flat_sel_idx);
 			sel.set_index(idx, original_sel_idx);
 		}
 	} else {
-		sel.Initialize(state.bf_sel);
+		sel.Initialize(state.probe_sel);
 	}
 
 	approved_tuple_count = found_count;
@@ -139,13 +125,7 @@ bool BFTableFilter::FilterValue(const Value &value) const {
 }
 
 template <class T>
-static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, const BaseStatistics &stats) {
-	if (!NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	const auto min = NumericStats::GetMin<T>(stats);
-	const auto max = NumericStats::GetMax<T>(stats);
+static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, T min, T max) {
 	if (min > max) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
 	}
@@ -173,27 +153,49 @@ static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, con
 }
 
 FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
-	switch (stats.GetType().InternalType()) {
+	if (!TypeIsInteger(key_type.InternalType()) || !NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	auto min_val = NumericStats::Min(stats);
+	auto max_val = NumericStats::Max(stats);
+
+	// The filter was built with key_type (condition_type), but stats are in storage_type
+	if (stats.GetType() != key_type && (!min_val.DefaultTryCastAs(key_type) || !max_val.DefaultTryCastAs(key_type))) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	switch (key_type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedCheckStatistics<uint8_t>(filter, stats);
+		return TemplatedCheckStatistics<uint8_t>(filter, min_val.GetValueUnsafe<uint8_t>(),
+		                                         max_val.GetValueUnsafe<uint8_t>());
 	case PhysicalType::UINT16:
-		return TemplatedCheckStatistics<uint16_t>(filter, stats);
+		return TemplatedCheckStatistics<uint16_t>(filter, min_val.GetValueUnsafe<uint16_t>(),
+		                                          max_val.GetValueUnsafe<uint16_t>());
 	case PhysicalType::UINT32:
-		return TemplatedCheckStatistics<uint32_t>(filter, stats);
+		return TemplatedCheckStatistics<uint32_t>(filter, min_val.GetValueUnsafe<uint32_t>(),
+		                                          max_val.GetValueUnsafe<uint32_t>());
 	case PhysicalType::UINT64:
-		return TemplatedCheckStatistics<uint64_t>(filter, stats);
+		return TemplatedCheckStatistics<uint64_t>(filter, min_val.GetValueUnsafe<uint64_t>(),
+		                                          max_val.GetValueUnsafe<uint64_t>());
 	case PhysicalType::UINT128:
-		return TemplatedCheckStatistics<uhugeint_t>(filter, stats);
+		return TemplatedCheckStatistics<uhugeint_t>(filter, min_val.GetValueUnsafe<uhugeint_t>(),
+		                                            max_val.GetValueUnsafe<uhugeint_t>());
 	case PhysicalType::INT8:
-		return TemplatedCheckStatistics<int8_t>(filter, stats);
+		return TemplatedCheckStatistics<int8_t>(filter, min_val.GetValueUnsafe<int8_t>(),
+		                                        max_val.GetValueUnsafe<int8_t>());
 	case PhysicalType::INT16:
-		return TemplatedCheckStatistics<int16_t>(filter, stats);
+		return TemplatedCheckStatistics<int16_t>(filter, min_val.GetValueUnsafe<int16_t>(),
+		                                         max_val.GetValueUnsafe<int16_t>());
 	case PhysicalType::INT32:
-		return TemplatedCheckStatistics<int32_t>(filter, stats);
+		return TemplatedCheckStatistics<int32_t>(filter, min_val.GetValueUnsafe<int32_t>(),
+		                                         max_val.GetValueUnsafe<int32_t>());
 	case PhysicalType::INT64:
-		return TemplatedCheckStatistics<int64_t>(filter, stats);
+		return TemplatedCheckStatistics<int64_t>(filter, min_val.GetValueUnsafe<int64_t>(),
+		                                         max_val.GetValueUnsafe<int64_t>());
 	case PhysicalType::INT128:
-		return TemplatedCheckStatistics<hugeint_t>(filter, stats);
+		return TemplatedCheckStatistics<hugeint_t>(filter, min_val.GetValueUnsafe<hugeint_t>(),
+		                                           max_val.GetValueUnsafe<hugeint_t>());
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

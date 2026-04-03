@@ -52,17 +52,18 @@ public:
 	ExpressionExecutor executor;
 };
 
-struct BFTableFilterState final : public TableFilterState {
+struct JoinFilterTableFilterState final : public TableFilterState {
+public:
+	explicit JoinFilterTableFilterState(const LogicalType &key_logical_type);
+
+public:
+	void PrepareSlicedKeys(Vector &keys_v, SelectionVector &sel, idx_t approved_tuple_count);
+
+public:
 	idx_t current_capacity;
 	Vector hashes_v;
-	Vector found_v;
 	Vector keys_sliced_v;
-	SelectionVector bf_sel;
-
-	explicit BFTableFilterState(const LogicalType &key_logical_type)
-	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), found_v(LogicalType::UBIGINT),
-	      keys_sliced_v(key_logical_type), bf_sel(STANDARD_VECTOR_SIZE) {
-	}
+	SelectionVector probe_sel;
 };
 
 } // namespace duckdb

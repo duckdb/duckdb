@@ -42,8 +42,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 
 	if (total_matches == 0 && return_pos) {
 		// if there are no members that match the target type, we cannot return a position
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -179,8 +178,7 @@ static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
