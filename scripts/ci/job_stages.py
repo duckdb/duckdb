@@ -63,12 +63,12 @@ def should_save_cache(event_name: str, ref_name: str, repository: str) -> bool:
         repository != "duckdb/duckdb"
         or ref_name == "main"
         or ref_name == "v1.5-variegata"
-        or event_name == "merge_group"
+        or (event_name == "push" and ref_name.startswith("gh-readonly-queue/"))
     )
 
 
 def enabled_jobs(event_name: str, ref_name: str) -> list[str]:
-    if event_name == "merge_group":
+    if event_name == "push" and ref_name.startswith("gh-readonly-queue/"):
         return MERGE_GROUP_JOBS.copy()
 
     if ref_name == "main":
