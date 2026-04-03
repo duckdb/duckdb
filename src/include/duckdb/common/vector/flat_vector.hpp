@@ -100,16 +100,12 @@ private:
 		}
 
 		void SetInvalid(idx_t idx) {
-			if (idx >= count) {
-				throw InternalException("eek");
-			}
+			D_ASSERT(idx < count);
 			validity.SetInvalid(idx);
 		}
 
 		T &operator[](idx_t idx) {
-			if (idx >= count) {
-				throw InternalException("eek");
-			}
+			D_ASSERT(idx < count);
 			return data[idx];
 		}
 
