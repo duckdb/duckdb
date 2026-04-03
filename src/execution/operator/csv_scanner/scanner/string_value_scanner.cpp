@@ -834,7 +834,18 @@ bool StringValueResult::AddRowInternal() {
 		}
 	}
 
+	// Before we add row, invalid all columns that are not populated for this row (i.e., CSV rows have fewer fields
+	// than expected). Otherwise, uninitialized string_t with valid bits set would lead invalid memory access.
+	// Reference: https://github.com/duckdb/duckdb-fuzzer/issues/4379
+	//
+	// Keep the current parse progress, `HandleErrors` reset states.
+	const auto chunk_col_id_before = chunk_col_id;
 	if (current_errors.HandleErrors(*this)) {
+		// Invalid all columns that are not populated for this row.
+		for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < validity_mask.size(); ++cur_col_idx) {
+			validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
+		}
+
 		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
 		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
