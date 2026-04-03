@@ -7,6 +7,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -1104,3 +1105,50 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser_strict.json ./build/release/test/unittest
+
+ summary:
+    name: Summary
+    if: ${{ always() }}
+    runs-on: ubuntu-slim
+    needs:
+      - prepare
+      - linux-debug
+      - linux-debug-tests
+      - regression
+      - tidy-check
+      - extensions
+      - wasm-eh
+      - linux-release
+      - linux-release-tests
+      - linux-release-cli
+      - linux-musl-release-cli
+      - main_julia
+      - upload-libduckdb-src
+      - swift
+      - windows
+      - no-string-inline
+      - vector-sizes
+      - valgrind
+      - threadsan
+      - amalgamation-tests
+      - linux-configs
+    steps:
+      - name: Check CI status
+        shell: bash
+        run: |
+          NEEDS_JSON='${{ toJSON(needs) }}'
+          echo "$NEEDS_JSON"
+
+          failed_or_cancelled=$(
+            jq -r '
+              to_entries[]
+              | select(.value.result == "failure" or .value.result == "cancelled")
+              | "\(.key): \(.value.result)"
+            ' <<<"$NEEDS_JSON"
+          )
+
+          if [[ -n "$failed_or_cancelled" ]]; then
+            echo "One or more required jobs failed or were cancelled."
+            echo "$failed_or_cancelled"
+            exit 1
+          fi

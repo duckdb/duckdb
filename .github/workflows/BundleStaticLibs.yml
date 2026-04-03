@@ -21,6 +21,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/BundleStaticLibs.yml'

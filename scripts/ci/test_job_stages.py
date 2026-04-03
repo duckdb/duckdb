@@ -129,6 +129,55 @@ class JobStagesTest(unittest.TestCase):
             f"jobs in Main.yml but missing from job_stages.ALL_JOBS: {sorted(missing_in_job_stages)}",
         )
 
+    def test_summary_needs_all_other_jobs(self):
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "Main.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        workflow_jobs = self._main_workflow_job_ids()
+
+        lines = workflow_text.splitlines()
+        in_summary = False
+        in_needs = False
+        summary_needs: set[str] = set()
+
+        for line in lines:
+            if not in_summary:
+                if re.match(r"^ summary:\s*$", line):
+                    in_summary = True
+                continue
+
+            # Leave summary block on next top-level job.
+            if re.match(r"^ [a-zA-Z0-9_-]+:\s*$", line):
+                break
+
+            if not in_needs:
+                if re.match(r"^\s+needs:\s*$", line):
+                    in_needs = True
+                continue
+
+            need_match = re.match(r"^\s+-\s+([a-zA-Z0-9_-]+)\s*$", line)
+            if need_match:
+                summary_needs.add(need_match.group(1))
+                continue
+
+            if re.match(r"^\s+steps:\s*$", line):
+                break
+
+        self.assertTrue(in_summary, "failed to locate 'summary' job in Main.yml")
+        self.assertTrue(in_needs, "failed to locate summary.needs in Main.yml")
+
+        expected_needs = workflow_jobs - {"summary"}
+        missing_from_summary = expected_needs - summary_needs
+        extra_in_summary = summary_needs - expected_needs
+
+        self.assertFalse(
+            missing_from_summary,
+            f"summary.needs is missing jobs from Main.yml: {sorted(missing_from_summary)}",
+        )
+        self.assertFalse(
+            extra_in_summary,
+            f"summary.needs references unknown jobs: {sorted(extra_in_summary)}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

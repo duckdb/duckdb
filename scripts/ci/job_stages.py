@@ -45,7 +45,11 @@ PREPARE_JOBS = [
     "prepare",
 ]
 
-ALL_JOBS = set(PREPARE_JOBS) | set(PULL_REQUEST_JOBS) | set(NIGHTLY_JOBS) | set(MERGE_GROUP_JOBS)
+SUMMARY_JOBS = [
+    "summary",
+]
+
+ALL_JOBS = set(PREPARE_JOBS) | set(PULL_REQUEST_JOBS) | set(NIGHTLY_JOBS) | set(MERGE_GROUP_JOBS) | set(SUMMARY_JOBS)
 
 
 @dataclass(frozen=True)
