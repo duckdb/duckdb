@@ -17,11 +17,10 @@ void ConstantVector::SetNull(Vector &vector) {
 	bool needs_new_buffer = !vector.buffer;
 	if (!needs_new_buffer) {
 		auto buffer_type = vector.buffer->GetBufferType();
-		needs_new_buffer = (buffer_type != VectorBufferType::STANDARD_BUFFER &&
-		                    buffer_type != VectorBufferType::STRUCT_BUFFER &&
-		                    buffer_type != VectorBufferType::ARRAY_BUFFER &&
-		                    buffer_type != VectorBufferType::LIST_BUFFER &&
-		                    buffer_type != VectorBufferType::STRING_BUFFER);
+		needs_new_buffer =
+		    (buffer_type != VectorBufferType::STANDARD_BUFFER && buffer_type != VectorBufferType::STRUCT_BUFFER &&
+		     buffer_type != VectorBufferType::ARRAY_BUFFER && buffer_type != VectorBufferType::LIST_BUFFER &&
+		     buffer_type != VectorBufferType::STRING_BUFFER);
 	}
 	if (needs_new_buffer) {
 		if (internal_type == PhysicalType::STRUCT) {
