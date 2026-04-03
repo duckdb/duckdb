@@ -55,10 +55,6 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Dependencies
-      shell: bash
-      run: python scripts/ci/retry.py -- choco install ninja --no-progress
-
     - uses: ./.github/actions/ccache-action
     - uses: ilammy/msvc-dev-cmd@v1
 
@@ -86,8 +82,7 @@ jobs:
       shell: bash
       if: ${{ !inputs.skip_tests }}
       run: |
-        python scripts/ci/retry.py -- choco install wget -y --no-progress
-        python scripts/ci/retry.py -- wget -P ./test https://blobs.duckdb.org/ci/msvcp140.dll
+        python scripts/ci/retry.py -- curl -L --output ./test/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test
         python scripts/ci/run_tests.py test/unittest.exe
         rm ./test/msvcp140.dll
@@ -124,9 +119,12 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python scripts/amalgamation.py
-        /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-amd64.zip duckdb.exe
-        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-amd64.zip duckdb.exe
+        tmp_zip_dir="$(mktemp -d)"
+        lib_archive_path="$(pwd)/libduckdb-windows-amd64.zip"
+        cp src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h "${tmp_zip_dir}/"
+        (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
+        rm -rf "${tmp_zip_dir}"
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
     - uses: actions/upload-artifact@v7
@@ -159,10 +157,6 @@ jobs:
     - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
-
-    - name: Dependencies
-      shell: bash
-      run: python scripts/ci/retry.py -- choco install ninja --no-progress
 
     - uses: ./.github/actions/ccache-action
     - uses: ilammy/msvc-dev-cmd@v1
@@ -203,10 +197,6 @@ jobs:
        with:
          python-version: '3.12'
 
-     - name: Dependencies
-       shell: bash
-       run: python scripts/ci/retry.py -- choco install ninja --no-progress
-
      - uses: ./.github/actions/ccache-action
      - uses: ilammy/msvc-dev-cmd@v1
        with:
@@ -242,9 +232,12 @@ jobs:
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          python scripts/amalgamation.py
-         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-arm64.zip duckdb.exe
-         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-arm64.zip duckdb.exe
+         tmp_zip_dir="$(mktemp -d)"
+         lib_archive_path="$(pwd)/libduckdb-windows-arm64.zip"
+         cp src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h "${tmp_zip_dir}/"
+         (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
+         rm -rf "${tmp_zip_dir}"
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
      - uses: actions/upload-artifact@v7
@@ -279,7 +272,6 @@ jobs:
            python scripts/ci/retry.py -- choco install \
              ccache \
              make \
-             ninja \
              --no-progress
            python scripts/ci/retry.py -- choco install \
              mingw --version 14.2.0 \

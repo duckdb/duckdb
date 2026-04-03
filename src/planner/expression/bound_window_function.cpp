@@ -28,7 +28,7 @@ unique_ptr<Expression> BoundWindowFunction::Copy() const {
 	copy->aggr_type = aggr_type;
 	copy->filter = filter ? filter->Copy() : nullptr;
 	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
-	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
+	copy->arg_order_bys = arg_order_bys ? arg_order_bys->Copy() : nullptr;
 	return std::move(copy);
 }
 

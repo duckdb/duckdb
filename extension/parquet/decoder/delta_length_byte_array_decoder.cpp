@@ -53,8 +53,6 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
 	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
@@ -69,11 +67,12 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	const auto &string_column_reader = reader.Cast<StringColumnReader>();
 
 	const auto start_ptr = block.ptr;
+	auto result_data = FlatVector::Writer<string_t>(result, result_offset + read_count);
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
 		const auto result_idx = result_offset + row_idx;
 		if (HAS_DEFINES) {
 			if (defines[result_idx] != reader.MaxDefine()) {
-				result_mask.SetInvalid(result_idx);
+				result_data.SetInvalid(result_idx);
 				continue;
 			}
 			if (length_idx >= byte_array_count) {

@@ -218,10 +218,10 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 
 			// construct the selection vector with the new order from the result vectors
-			Vector result_vector(Vector::Ref(result_chunk.data[0]));
-			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
 			auto row_count = result_chunk.size();
+			Vector result_vector(Vector::Ref(result_chunk.data[0]));
 
+			auto result_data = FlatVector::Writer<uint32_t>(result_vector, row_count);
 			for (idx_t i = 0; i < row_count; i++) {
 				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
 				D_ASSERT(result_data[i] < lists_size);

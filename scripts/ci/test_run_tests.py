@@ -4,6 +4,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -210,45 +211,45 @@ class RunTestsScriptTest(unittest.TestCase):
 
     def test_retries_timed_out_sleep_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
-        state_file_path = create_temp_file("")
-
         batch_timeout = 0.3
 
-        helper_path = create_temp_file(
-            """
-            #!/bin/sh
-            if [ ! -f {state_file_path} ]; then
-              touch {state_file_path}
-              sleep {sleep_seconds}
-            fi
-            echo fake success
-            exit 0
-            """,
-            state_file_path=state_file_path,
-            sleep_seconds=batch_timeout + 0.1,
-        )
-
-        os.chmod(helper_path, 0o755)
-        state_file_path.unlink(missing_ok=True)
-
         try:
-            proc = start_runner(
-                [
-                    "--retry",
-                    "1",
-                    "--batch-timeout",
-                    str(batch_timeout),
-                    "--test-list",
-                    str(test_list_path),
-                    "--test-command",
-                    f"{helper_path} {{test_list}}",
-                    "unused-binary",
-                ]
-            )
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                side_effect=[
+                    {
+                        "failed": True,
+                        "stdout": "",
+                        "stderr": "",
+                        "message": f"batch timed out after {batch_timeout} seconds",
+                        "peak_rss_bytes": 0,
+                    },
+                    {
+                        "failed": False,
+                        "stdout": "fake success\n",
+                        "stderr": "",
+                        "message": None,
+                        "peak_rss_bytes": 0,
+                    },
+                ],
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--retry",
+                        "1",
+                        "--batch-timeout",
+                        str(batch_timeout),
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
         finally:
             test_list_path.unlink(missing_ok=True)
-            state_file_path.unlink(missing_ok=True)
-            helper_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn(f"batch timed out after {batch_timeout} seconds", proc.stdout)

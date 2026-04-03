@@ -563,7 +563,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 
 	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
 	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
-	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
+	auto result_data = FlatVector::Writer<VALUE_TYPE>(result, count);
 	auto &validity = FlatVector::Validity(result);
 
 	// According to the arrow spec, the 'run_ends' array is always valid

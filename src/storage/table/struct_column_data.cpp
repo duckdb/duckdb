@@ -162,8 +162,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
 		if (!child.should_scan) {
 			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
