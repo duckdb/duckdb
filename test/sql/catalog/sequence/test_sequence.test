@@ -277,6 +277,20 @@ SELECT currval('seq')
 statement ok
 DROP SEQUENCE seq;
 
+# explicit MINVALUE should not be overwritten by a later INCREMENT option
+statement ok
+CREATE SEQUENCE seq MINVALUE 42 INCREMENT 1;
+
+query III
+SELECT start_value, min_value, increment_by
+FROM duckdb_sequences()
+WHERE sequence_name = 'seq';
+----
+42	42	1
+
+statement ok
+DROP SEQUENCE seq;
+
 # START WITH defaults to MINVALUE if increment is positive
 statement ok
 CREATE SEQUENCE seq INCREMENT BY 1 MINVALUE 0 MAXVALUE 2;
