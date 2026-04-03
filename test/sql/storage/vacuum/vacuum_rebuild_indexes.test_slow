@@ -40,16 +40,23 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t')
 ----
 1
 
-# verify index lookups still work after row IDs shifted
-query I
-SELECT COUNT(*) FROM t WHERE i = 122880
+# verify index scan is used after rebuild
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM t WHERE i = 122880
 ----
-1
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
-query I
-SELECT COUNT(*) FROM t WHERE i = 245759
+# verify index lookups return correct row IDs after shift
+# RG0 dropped, RG1 shifts to rowid 0
+query II
+SELECT i, rowid FROM t WHERE i = 122880
 ----
-1
+122880	0
+
+query II
+SELECT i, rowid FROM t WHERE i = 245759
+----
+245759	122879
 
 query I
 SELECT COUNT(*) FROM t
