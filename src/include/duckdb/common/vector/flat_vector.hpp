@@ -177,16 +177,16 @@ public:
 		idx_t count;
 	};
 
-	template <class T>
-	static auto Writer(Vector &vector, idx_t count) {
-		if constexpr (std::is_same_v<T, string_t>) {
-			return FlatStringWriter(vector, count);
-		} else {
-			return FlatVectorWriter<T>(vector, count);
-		}
+	template <class T, typename std::enable_if<std::is_same<T, string_t>::value, int>::type = 0>
+	static FlatStringWriter Writer(Vector &vector, idx_t count) {
+		return FlatStringWriter(vector, count);
+	}
+	template <class T, typename std::enable_if<!std::is_same<T, string_t>::value, int>::type = 0>
+	static FlatVectorWriter<T> Writer(Vector &vector, idx_t count) {
+		return FlatVectorWriter<T>(vector, count);
 	}
 	template <class T>
-	static auto Writer(Vector &vector) {
+	static auto Writer(Vector &vector) -> decltype(Writer<T>(vector, NumericLimits<idx_t>::Maximum())) {
 		return Writer<T>(vector, NumericLimits<idx_t>::Maximum());
 	}
 };
