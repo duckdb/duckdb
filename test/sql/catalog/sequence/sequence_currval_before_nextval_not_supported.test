@@ -2,7 +2,7 @@
 # group: [sequence]
 
 statement ok
-SET storage_compatibility_version = 'v1.4.4';
+SET storage_compatibility_version = 'v1.5.2';
 
 load {TEST_DIR}/mydb.db
 

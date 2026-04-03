@@ -2,7 +2,7 @@
 # group: [sequence]
 
 statement ok
-SET storage_compatibility_version = 'v1.5.0';
+SET storage_compatibility_version = 'v2.0.0';
 
 load {TEST_DIR}/wal_replay.db
 
