@@ -96,14 +96,19 @@ ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {
 	return GetStringBuffer(vector).GetStringAllocator();
 }
 
+StringHeap &StringVector::GetStringHeap(Vector &vector) {
+	auto &string_buffer = GetStringBuffer(vector);
+	return string_buffer.GetHeap();
+}
+
 string_t StringVector::AddString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::BIT);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	auto &string_buffer = GetStringBuffer(vector);
-	return string_buffer.AddString(data);
+	auto &string_heap = GetStringHeap(vector);
+	return string_heap.AddString(data);
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
@@ -112,8 +117,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	auto &string_buffer = GetStringBuffer(vector);
-	return string_buffer.AddBlob(data);
+	return GetStringHeap(vector).AddBlob(data);
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
@@ -121,8 +125,8 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	if (len <= string_t::INLINE_LENGTH) {
 		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
-	auto &string_buffer = GetStringBuffer(vector);
-	return string_buffer.EmptyString(len);
+	auto &string_heap = GetStringHeap(vector);
+	return string_heap.EmptyString(len);
 }
 
 void StringVector::AddAuxiliaryData(Vector &vector, unique_ptr<AuxiliaryDataHolder> data) {
