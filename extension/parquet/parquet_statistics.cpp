@@ -9,7 +9,9 @@
 #include "reader/struct_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -147,6 +149,38 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			return Value();
 		}
 		return Value::DOUBLE(val);
+	}
+	case LogicalTypeId::HUGEINT: {
+		if (schema_ele.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
+			// Backward compat: old DECIMAL(39,0) encoding
+			return Value::HUGEINT(
+			    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele));
+		}
+		// New encoding: 16-byte order-preserving (sign-bit flipped big-endian)
+		if (stats.size() != 16) {
+			return Value();
+		}
+		uint64_t high, low;
+		memcpy(&high, stats_data, sizeof(uint64_t));
+		memcpy(&low, stats_data + sizeof(uint64_t), sizeof(uint64_t));
+		auto high_bytes = reinterpret_cast<uint8_t *>(&high);
+		high_bytes[0] ^= 0x80;
+		hugeint_t val;
+		val.upper = static_cast<int64_t>(BSWAP64(high));
+		val.lower = BSWAP64(low);
+		return Value::HUGEINT(val);
+	}
+	case LogicalTypeId::UHUGEINT: {
+		if (stats.size() != 16) {
+			return Value();
+		}
+		uint64_t high, low;
+		memcpy(&high, stats_data, sizeof(uint64_t));
+		memcpy(&low, stats_data + sizeof(uint64_t), sizeof(uint64_t));
+		uhugeint_t val;
+		val.upper = BSWAP64(high);
+		val.lower = BSWAP64(low);
+		return Value::UHUGEINT(val);
 	}
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
@@ -498,6 +532,8 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DECIMAL:
 		row_group_stats = CreateNumericStats(type, schema, parquet_stats);
 		break;
@@ -656,6 +692,27 @@ static uint64_t ValueXXH64(const Value &constant) {
 		return ValueXH64FixedWidth<float>(constant);
 	case PhysicalType::DOUBLE:
 		return ValueXH64FixedWidth<double>(constant);
+	case PhysicalType::INT128: {
+		// HUGEINT: sign-bit flip + big-endian before hashing
+		data_t bytes[16];
+		auto val = constant.GetValue<hugeint_t>();
+		uint64_t high = BSWAP64(static_cast<uint64_t>(val.upper));
+		uint64_t low = BSWAP64(val.lower);
+		memcpy(bytes, &high, sizeof(uint64_t));
+		memcpy(bytes + sizeof(uint64_t), &low, sizeof(uint64_t));
+		bytes[0] ^= 0x80;
+		return duckdb_zstd::XXH64(bytes, 16, 0);
+	}
+	case PhysicalType::UINT128: {
+		// UHUGEINT: big-endian unsigned before hashing
+		data_t bytes[16];
+		auto val = constant.GetValue<uhugeint_t>();
+		uint64_t high = BSWAP64(val.upper);
+		uint64_t low = BSWAP64(val.lower);
+		memcpy(bytes, &high, sizeof(uint64_t));
+		memcpy(bytes + sizeof(uint64_t), &low, sizeof(uint64_t));
+		return duckdb_zstd::XXH64(bytes, 16, 0);
+	}
 	case PhysicalType::VARCHAR: {
 		auto val = constant.GetValue<string>();
 		return duckdb_zstd::XXH64(val.c_str(), val.length(), 0);
@@ -707,6 +764,8 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const LogicalTypeId &type_id) 
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return true;
