@@ -566,8 +566,8 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 			// (since we're hiding off-path siblings, the branch should end here)
 			auto effective_last = is_last || (options.structure_only && has_expected_byte && on_path);
 			auto branch = effective_last ? NODE_BRANCH_END : NODE_BRANCH_MID;
-			auto child_prefix = StringUtil::Format("%s%s", options.tree_prefix,
-			                                       effective_last ? NODE_SPACE : NODE_VERTICAL);
+			auto child_prefix =
+			    StringUtil::Format("%s%s", options.tree_prefix, effective_last ? NODE_SPACE : NODE_VERTICAL);
 
 			if (on_path) {
 				str += StringUtil::Format("%s%s%s\n", options.tree_prefix, branch, format_byte(child_byte));
