@@ -45,6 +45,10 @@ Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, id
 	}
 }
 
+Vector::Vector(LogicalType type_p, VectorType vector_type, buffer_ptr<VectorBuffer> buffer_p)
+    : vector_type(vector_type), type(std::move(type_p)), buffer(std::move(buffer_p)) {
+}
+
 Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(std::move(type_p), true, false, capacity) {
 }
 
@@ -256,9 +260,8 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		auto entry = old_dict.GetEntryPtr();
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
 			auto &child_vector = entry->data;
-			Vector new_child(Vector::Ref(child_vector));
-			new_child.buffer = make_buffer<VectorStructBuffer>(new_child, sel, count);
-			new_child.buffer->GetValidityMask() = child_vector.buffer->GetValidityMask();
+			auto sliced_buffer = make_buffer<VectorStructBuffer>(child_vector, sel, count);
+			Vector new_child(GetType(), VectorType::FLAT_VECTOR, std::move(sliced_buffer));
 			entry = make_shared_ptr<DictionaryEntry>(std::move(new_child));
 		}
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));

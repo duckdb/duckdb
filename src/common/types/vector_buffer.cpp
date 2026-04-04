@@ -67,6 +67,8 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 	for (auto &child_vector : other_vector) {
 		children.emplace_back(child_vector, sel, count);
 	}
+	validity = other.GetBuffer()->Cast<VectorStructBuffer>().validity;
+	;
 }
 
 VectorStructBuffer::~VectorStructBuffer() {
