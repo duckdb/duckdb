@@ -28,6 +28,9 @@ ExceptionFormatValue::ExceptionFormatValue(uhugeint_t uhuge_val)
 ExceptionFormatValue::ExceptionFormatValue(string str_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val)) {
 }
+ExceptionFormatValue::ExceptionFormatValue(string_view str_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(str_val) {
+}
 ExceptionFormatValue::ExceptionFormatValue(const String &str_val) : ExceptionFormatValue(str_val.ToStdString()) {
 }
 
@@ -49,6 +52,10 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const double &value
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const string &value) {
+	return ExceptionFormatValue(value);
+}
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const string_view &value) {
 	return ExceptionFormatValue(value);
 }
 template <>
