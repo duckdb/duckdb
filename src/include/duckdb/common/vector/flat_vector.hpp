@@ -156,8 +156,7 @@ private:
 public:
 	struct FlatStringWriter {
 		FlatStringWriter(Vector &vector, idx_t count)
-		    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)),
-		      count(count) {
+		    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)), count(count) {
 		}
 
 		void SetInvalid(idx_t idx) {

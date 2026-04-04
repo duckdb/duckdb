@@ -546,7 +546,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	case PhysicalType::VARCHAR: {
 		if (!val.IsNull()) {
-			FlatVector::GetDataMutable<string_t>(*this)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
+			FlatVector::GetDataMutable<string_t>(*this)[index] =
+			    StringVector::AddStringOrBlob(*this, StringValue::Get(val));
 		}
 		break;
 	}

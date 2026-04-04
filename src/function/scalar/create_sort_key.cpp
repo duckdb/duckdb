@@ -941,8 +941,8 @@ void TemplatedDecodeSortKey(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVe
                             const idx_t result_offset, const idx_t count) {
 	const auto is_const = result.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::Validity(result);
-	const auto result_data =
-	    is_const ? ConstantVector::GetData<typename OP::TYPE>(result) : FlatVector::GetDataMutable<typename OP::TYPE>(result);
+	const auto result_data = is_const ? ConstantVector::GetData<typename OP::TYPE>(result)
+	                                  : FlatVector::GetDataMutable<typename OP::TYPE>(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
