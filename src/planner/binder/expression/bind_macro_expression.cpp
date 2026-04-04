@@ -1,37 +1,13 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
-#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
-
-static bool TryEvaluateConstantCaseCondition(ClientContext &context, optional_ptr<vector<DummyBinding>> lambda_bindings,
-                                             const ParsedExpression &when_expr, bool &condition_true) {
-	auto when_expr_copy = when_expr.Copy();
-	auto local_binder = Binder::CreateBinder(context);
-	auto local_expression_binder = ExpressionBinder(*local_binder, context);
-	local_expression_binder.lambda_bindings = lambda_bindings;
-
-	try {
-		auto bound_expression = local_expression_binder.Bind(when_expr_copy);
-		if (!bound_expression->IsFoldable()) {
-			return false;
-		}
-
-		auto condition = ExpressionExecutor::EvaluateScalar(context, *bound_expression).DefaultCastAs(LogicalType::BOOLEAN);
-		condition_true = !condition.IsNull() && BooleanValue::Get(condition);
-		return true;
-	} catch (const Exception &) {
-		return false;
-	}
-}
 
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<unordered_set<string>> &lambda_params) {
@@ -71,38 +47,6 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr,
                                               vector<unordered_set<string>> &lambda_params) {
 	switch (expr->GetExpressionClass()) {
-	case ExpressionClass::CASE: {
-		// If the macro expansion produces constant CASE checks, avoid expanding dead branches.
-		auto &case_expr = expr->Cast<CaseExpression>();
-		vector<CaseCheck> pruned_checks;
-		pruned_checks.reserve(case_expr.case_checks.size());
-		for (auto &case_check : case_expr.case_checks) {
-			ReplaceMacroParameters(case_check.when_expr, lambda_params);
-
-			bool condition_true;
-			auto constant_condition =
-			    TryEvaluateConstantCaseCondition(context, lambda_bindings, *case_check.when_expr, condition_true);
-			if (constant_condition && !condition_true) {
-				continue;
-			}
-
-			ReplaceMacroParameters(case_check.then_expr, lambda_params);
-			pruned_checks.push_back(std::move(case_check));
-			if (constant_condition && condition_true) {
-				break;
-			}
-		}
-
-		if (pruned_checks.empty()) {
-			ReplaceMacroParameters(case_expr.else_expr, lambda_params);
-			expr = std::move(case_expr.else_expr);
-			return;
-		}
-
-		case_expr.case_checks = std::move(pruned_checks);
-		ReplaceMacroParameters(case_expr.else_expr, lambda_params);
-		return;
-	}
 	case ExpressionClass::COLUMN_REF: {
 		// If the expression is a column reference, we replace it with its argument.
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
