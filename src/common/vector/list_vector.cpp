@@ -5,12 +5,9 @@ namespace duckdb {
 
 VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
                                    idx_t child_capacity)
-    : StandardVectorBuffer(allocator, capacity), child(std::move(vector)), capacity(child_capacity) {
+    : StandardVectorBuffer(allocator, capacity * sizeof(list_entry_t)), child(std::move(vector)),
+      capacity(child_capacity) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
-	if (capacity > 0) {
-		allocated_data = allocator.Allocate(capacity * sizeof(list_entry_t));
-		data_ptr = allocated_data.get();
-	}
 }
 VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
                                    idx_t child_capacity)
