@@ -270,6 +270,13 @@ void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
 	function.set_scan_order(std::move(options), bind_data.get());
 }
 
+void LogicalGet::SetScanSkipPrecomputed() {
+	if (!function.set_scan_skip_precomputed) {
+		throw InternalException("LogicalGet::SetScanSkipPrecomputed called but function is not defined");
+	}
+	function.set_scan_skip_precomputed(bind_data.get());
+}
+
 void LogicalGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);

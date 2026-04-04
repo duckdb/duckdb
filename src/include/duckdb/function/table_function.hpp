@@ -355,6 +355,8 @@ typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &con
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_scan_skip_precomputed_t)(optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -475,6 +477,8 @@ public:
 	table_function_get_row_id_columns get_row_id_columns;
 	//! (Optional) sets the order to scan the row groups in
 	table_function_set_scan_order set_scan_order;
+	//! (Optional) sets the scan to skip row groups whose aggregates were pre-computed
+	table_function_scan_skip_precomputed_t set_scan_skip_precomputed = nullptr;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

@@ -287,6 +287,9 @@ public:
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
+		if (bind_data.skip_precomputed_row_groups) {
+			l_state->scan_state.filters.SetSkipPrecomputedRowGroups();
+		}
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
@@ -668,6 +671,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!input.filters) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
+
+	// Skip index scan if the optimizer has pre-computed aggregates for some row groups
+	if (bind_data.skip_precomputed_row_groups) {
+		return DuckTableScanInitGlobal(context, input, storage, bind_data);
+	}
+
 	auto &filter_set = *input.filters;
 
 	// FIXME: We currently only support scanning one ART with one filter.
@@ -862,6 +871,11 @@ void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<F
 	bind_data.order_options = std::move(order_options);
 }
 
+void SetSkipPrecomputedRowGroups(optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	bind_data.skip_precomputed_row_groups = true;
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -887,6 +901,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	scan_function.set_scan_order = SetScanOrder;
+	scan_function.set_scan_skip_precomputed = SetSkipPrecomputedRowGroups;
 	scan_function.supports_pushdown_extract = TableSupportsPushdownExtract;
 	return scan_function;
 }

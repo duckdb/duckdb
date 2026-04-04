@@ -306,6 +306,11 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			// skip this row group
 			continue;
 		}
+		// skip row groups where all filters are always true when optimizer already pre-computed their aggregates
+		if (scan_state.GetFilterInfo().ShouldSkipRowGroup()) {
+			scan_state.row_group = nullptr;
+			continue;
+		}
 		return true;
 	}
 	lock_guard<mutex> l(state.lock);

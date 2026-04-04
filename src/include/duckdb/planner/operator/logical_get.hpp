@@ -85,6 +85,7 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
 	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
+	void SetScanSkipPrecomputed();
 
 	vector<TableIndex> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan

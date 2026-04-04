@@ -208,6 +208,10 @@ public:
 	//! Labels the filters for this specific column as always true
 	//! We do not need to execute them anymore until CheckAllFilters is called
 	void SetFilterAlwaysTrue(idx_t filter_idx);
+	//! Enable skipping row groups whose aggregates were pre-computed by the optimizer
+	void SetSkipPrecomputedRowGroups();
+	//! Whether this row group should be skipped because the optimizer pre-computed its aggregates
+	bool ShouldSkipRowGroup() const;
 
 private:
 	//! The table filters (if any)
@@ -222,6 +226,12 @@ private:
 	unsafe_vector<bool> base_column_has_filter;
 	//! The amount of filters that are always true currently
 	idx_t always_true_filters = 0;
+	//! Whether to skip row groups whose aggregates were pre-computed by the optimizer
+	bool skip_precomputed_row_groups = false;
+
+private:
+	//! Whether all filters are always true for the current row group
+	bool AllFiltersAlwaysTrue() const;
 };
 
 class CollectionScanState {
