@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 
 namespace duckdb {
 
@@ -122,9 +123,17 @@ public:
 
 		//! Constructs an empty string of a given length and returns it
 		//! Note: the empty string must be filled and .Finalize() must be called on it
-		DUCKDB_API string_t &EmptyString(idx_t length);
-		DUCKDB_API string_t &operator=(string_t val);
-		void AssignWithoutCopying(string_t val) {
+		inline string_t &EmptyString(idx_t length) {
+			auto &heap = writer.GetHeap();
+			data[idx] = heap.EmptyString(length);
+			return data[idx];
+		}
+		inline string_t &operator=(string_t val) {
+			auto &heap = writer.GetHeap();
+			data[idx] = heap.AddBlob(val);
+			return data[idx];
+		}
+		inline void AssignWithoutCopying(string_t val) {
 			data[idx] = val;
 		}
 		inline char *GetDataWriteable() {
@@ -149,10 +158,7 @@ public:
 
 public:
 	struct FlatStringWriter {
-		FlatStringWriter(Vector &vector, idx_t count)
-		    : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)),
-		      count(count) {
-		}
+		FlatStringWriter(Vector &vector, idx_t count);
 
 		void SetInvalid(idx_t idx) {
 			D_ASSERT(idx < count);
@@ -164,13 +170,15 @@ public:
 			return StringElement(*this, data, idx);
 		}
 
-		StringHeap &GetHeap();
+		StringHeap &GetHeap() {
+			return heap;
+		}
 
 	private:
 		Vector &vector;
 		string_t *data;
 		ValidityMask &validity;
-		optional_ptr<StringHeap> heap;
+		StringHeap &heap;
 		idx_t count;
 	};
 

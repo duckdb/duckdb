@@ -3,23 +3,9 @@
 
 namespace duckdb {
 
-string_t &FlatVector::StringElement::EmptyString(idx_t length) {
-	auto &heap = writer.GetHeap();
-	data[idx] = heap.EmptyString(length);
-	return data[idx];
-}
-
-string_t &FlatVector::StringElement::operator=(string_t val) {
-	auto &heap = writer.GetHeap();
-	data[idx] = heap.AddBlob(val);
-	return data[idx];
-}
-
-StringHeap &FlatVector::FlatStringWriter::GetHeap() {
-	if (!heap) {
-		heap = StringVector::GetStringHeap(vector);
-	}
-	return *heap;
+FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
+    : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)), count(count),
+      heap(StringVector::GetStringHeap(vector)) {
 }
 
 VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
