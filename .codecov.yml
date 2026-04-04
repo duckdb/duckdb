@@ -1,23 +1,19 @@
-comment: false
+# Hardened Codecov Configuration for Nu64 & Bengal Database
+comment: true
 coverage:
   precision: 2
   round: down
-  range: "0...100"
+  range: "70...100" # Focus on the high-security range
   status:
     project:
       default:
-         # advanced settings
-        if_not_found: success
-        if_ci_failed: failure
-        informational: true
-        only_pulls: false
+        target: auto
+        threshold: 1% # Fail if coverage drops by more than 1%
+        if_not_found: error # STRICT: Do not pass if data is missing
+        if_ci_failed: error
+        informational: false # STRICT: This will now BLOCK insecure PRs
     patch:
       default:
-        branches:
-          - main
-        if_not_found: success
-        if_ci_failed: error
-        informational: true
-        only_pulls: true
-        paths:
-          - "src"
+        target: 100% # Every new line of code MUST be tested
+        if_not_found: error
+        informational: false
