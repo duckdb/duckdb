@@ -32,6 +32,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 		throw InternalException("SetData not supported for struct");
 	}
 	// Preserve the validity mask from the old buffer before replacing it.
+	// FIXME: this can maybe be removed in the future - it seems only the Arrow conversion code relies on this behavior
 	auto old_validity = std::move(vector.buffer->GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
