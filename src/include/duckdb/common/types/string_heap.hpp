@@ -24,39 +24,40 @@ public:
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(StringHeap &other);
 
-	string_t AddString(const char *data, idx_t len) {
+	inline string_t AddString(const char *data, idx_t len) {
 		D_ASSERT(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
 		return AddBlob(data, len);
 	}
 
-	string_t AddString(const char *data) {
+	inline string_t AddString(const char *data) {
 		return AddString(data, strlen(data));
 	}
 
-	string_t AddString(const string &data) {
+	inline string_t AddString(const string &data) {
 		return AddString(data.c_str(), data.size());
 	}
 
-	string_t AddString(const string_t &data) {
-		return AddString(data.GetData(), data.GetSize());
+	inline string_t AddString(const string_t &data) {
+		D_ASSERT(Utf8Proc::Analyze(data.GetData(), data.GetSize()) != UnicodeType::INVALID);
+		return AddBlob(data);
 	}
 
-	string_t AddBlob(const char *data, idx_t len) {
+	inline string_t AddBlob(const char *data, idx_t len) {
 		if (len <= string_t::INLINE_LENGTH) {
 			return string_t(data, UnsafeNumericCast<uint32_t>(len));
 		}
-		auto insert_string = EmptyString(len);
-		auto insert_pos = insert_string.GetDataWriteable();
-		memcpy(insert_pos, data, len);
-		insert_string.Finalize();
-		return insert_string;
+		return AddBlobToHeap(data, len);
 	}
 
-	string_t AddBlob(const string_t &data) {
-		return AddBlob(data.GetData(), data.GetSize());
+	inline string_t AddBlob(const string_t &data) {
+		auto len = data.GetSize();
+		if (len <= string_t::INLINE_LENGTH) {
+			return data;
+		}
+		return AddBlobToHeap(data.GetData(), len);
 	}
 
-	string_t EmptyString(idx_t len) {
+	inline string_t EmptyString(idx_t len) {
 		if (len <= string_t::INLINE_LENGTH) {
 			return string_t(UnsafeNumericCast<uint32_t>(len));
 		}
@@ -76,6 +77,16 @@ public:
 
 	DUCKDB_API ArenaAllocator &GetAllocator() {
 		return allocator;
+	}
+
+private:
+	string_t AddBlobToHeap(const char *data, idx_t len) {
+		D_ASSERT(len > string_t::INLINE_LENGTH);
+		auto insert_string = EmptyString(len);
+		auto insert_pos = insert_string.GetDataWriteable();
+		memcpy(insert_pos, data, len);
+		insert_string.Finalize();
+		return insert_string;
 	}
 
 private:

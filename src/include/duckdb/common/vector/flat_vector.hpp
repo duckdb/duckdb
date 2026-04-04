@@ -160,17 +160,17 @@ public:
 	struct FlatStringWriter {
 		FlatStringWriter(Vector &vector, idx_t count);
 
-		void SetInvalid(idx_t idx) {
+		inline void SetInvalid(idx_t idx) {
 			D_ASSERT(idx < count);
 			validity.SetInvalid(idx);
 		}
 
-		StringElement operator[](idx_t idx) {
+		inline StringElement operator[](idx_t idx) {
 			D_ASSERT(idx < count);
 			return StringElement(*this, data, idx);
 		}
 
-		StringHeap &GetHeap() {
+		inline StringHeap &GetHeap() {
 			return heap;
 		}
 
