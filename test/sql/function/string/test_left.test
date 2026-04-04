@@ -9,34 +9,34 @@ foreach FUN LEFT LEFT_GRAPHEME
 
 # test LEFT on positive positions
 query TTTTT
-SELECT ${FUN}('abcd', 0), ${FUN}('abc', 1), ${FUN}('abc', 2), ${FUN}('abc', 3), ${FUN}('abc', 4)
+SELECT {FUN}('abcd', 0), {FUN}('abc', 1), {FUN}('abc', 2), {FUN}('abc', 3), {FUN}('abc', 4)
 ----
 (empty)	a	ab	abc	abc
 
 query TTTTT
-SELECT ${FUN}('🦆ab', 0), ${FUN}('🦆ab', 1), ${FUN}('🦆ab', 2), ${FUN}('🦆ab', 3), ${FUN}('🦆ab', 4)
+SELECT {FUN}('🦆ab', 0), {FUN}('🦆ab', 1), {FUN}('🦆ab', 2), {FUN}('🦆ab', 3), {FUN}('🦆ab', 4)
 ----
 (empty)	🦆	🦆a	🦆ab	🦆ab
 
 # test LEFT on negative positions
 query TTTTT
-SELECT ${FUN}('abcd', 0), ${FUN}('abc', -1), ${FUN}('abc', -2), ${FUN}('abc', -3), ${FUN}('abc', -4)
+SELECT {FUN}('abcd', 0), {FUN}('abc', -1), {FUN}('abc', -2), {FUN}('abc', -3), {FUN}('abc', -4)
 ----
 (empty)	ab	a	(empty)	(empty)
 
 query TTTTT
-SELECT ${FUN}('🦆ab', 0), ${FUN}('🦆ab', -1), ${FUN}('🦆ab', -2), ${FUN}('🦆ab', -3), ${FUN}('🦆ab', -4)
+SELECT {FUN}('🦆ab', 0), {FUN}('🦆ab', -1), {FUN}('🦆ab', -2), {FUN}('🦆ab', -3), {FUN}('🦆ab', -4)
 ----
 (empty)	🦆a	🦆	(empty)	(empty)
 
 # test LEFT on NULL values
 query TTT
-SELECT ${FUN}(NULL, 0), ${FUN}('abc', NULL), ${FUN}(NULL, NULL)
+SELECT {FUN}(NULL, 0), {FUN}('abc', NULL), {FUN}(NULL, NULL)
 ----
 NULL	NULL	NULL
 
 query TTT
-SELECT ${FUN}(NULL, 0), ${FUN}('🦆ab', NULL), ${FUN}(NULL, NULL)
+SELECT {FUN}(NULL, 0), {FUN}('🦆ab', NULL), {FUN}(NULL, NULL)
 ----
 NULL	NULL	NULL
 
@@ -51,7 +51,7 @@ statement ok
 INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4)
 
 query T
-SELECT ${FUN}(a, b) FROM strings
+SELECT {FUN}(a, b) FROM strings
 ----
 (empty)
 a
@@ -69,7 +69,7 @@ statement ok
 INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4)
 
 query T
-SELECT ${FUN}(a, b) FROM strings
+SELECT {FUN}(a, b) FROM strings
 ----
 (empty)
 ab
@@ -87,7 +87,7 @@ statement ok
 INSERT INTO STRINGS VALUES (NULL, 0), ('abc', NULL), (NULL, NULL)
 
 query T
-SELECT ${FUN}(a, b) FROM strings
+SELECT {FUN}(a, b) FROM strings
 ----
 NULL
 NULL

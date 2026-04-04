@@ -2,7 +2,7 @@
 # description: Test that we reclaim space when updating the values of a column
 # group: [reclaim_space]
 
-load __TEST_DIR__/test_reclaim_space.db
+load {TEST_DIR}/test_reclaim_space.db
 
 statement ok
 PRAGMA force_checkpoint;
@@ -56,7 +56,7 @@ CHECKPOINT;
 # Ensure that the total blocks don't exceed the total blocks by more than 1.2.
 
 query I
-SELECT CASE WHEN ${i} < 10 THEN True
+SELECT CASE WHEN {i} < 10 THEN True
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
 	ELSE False END
 FROM pragma_database_size() AS current, total_blocks_tbl;
@@ -67,7 +67,7 @@ FROM pragma_database_size() AS current, total_blocks_tbl;
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
- 	SELECT CASE WHEN ${i} < 10 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+ 	SELECT CASE WHEN {i} < 10 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
  		ELSE (total_blocks) END);
 
 query III

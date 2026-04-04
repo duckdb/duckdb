@@ -706,7 +706,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element) {
-	return element.IsInlined() ? element : segment.GetStringHeap().AddBlob(element);
+	return segment.GetStringHeap().AddBlob(element);
 }
 
 template <class T>
@@ -1301,7 +1301,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
 		auto &validity = FlatVector::Validity(update_p);
 		for (idx_t i = 0; i < count; i++) {
-			if (validity.RowIsValid(i) && !update_data[i].IsInlined()) {
+			if (validity.RowIsValid(i)) {
 				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
 			}
 		}

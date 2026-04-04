@@ -15,3 +15,30 @@ index afa7446..f0466e1 100644
  
    auto input = UnifiedVectorFormat::GetData<string_t>(vdata);
    bool success = true;
+diff --git a/test/sql/test_inet_storage.test b/test/sql/test_inet_storage.test
+index 7de7620..7cab6c2 100644
+--- a/test/sql/test_inet_storage.test
++++ b/test/sql/test_inet_storage.test
+@@ -8,7 +8,7 @@ require inet
+ require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+ 
+ # load the DB from disk
+-load __TEST_DIR__/store_inet.db
++load {TEST_DIR}/store_inet.db
+ 
+ statement ok
+ PRAGMA enable_verification
+diff --git a/test/sql/test_ipv6_inet_storage.test b/test/sql/test_ipv6_inet_storage.test
+index 7dc1930..c49c259 100644
+--- a/test/sql/test_ipv6_inet_storage.test
++++ b/test/sql/test_ipv6_inet_storage.test
+@@ -4,8 +4,7 @@
+ 
+ require inet
+ 
+-# load the DB from disk
+-load __TEST_DIR__/store_ipv6_inet.db
++load {TEST_DIR}/store_ipv6_inet.db
+ 
+ statement ok
+ PRAGMA enable_verification

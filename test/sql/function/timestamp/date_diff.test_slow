@@ -15,7 +15,7 @@ SELECT '2005-12-31'::DATE AS startdate, '2006-01-01'::DATE AS enddate;
 foreach datepart year quarter month day dayofyear julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM date1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM date1
 ----
 1
 
@@ -24,7 +24,7 @@ endloop
 foreach datepart decade century millennium week yearweek
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM date1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM date1
 ----
 0
 
@@ -65,7 +65,7 @@ SELECT DATEDIFF('isoyear', startdate, enddate) FROM date1
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM date1
+SELECT DATEDIFF('{datepart}', startdate, enddate) + DATEDIFF('{datepart}', enddate, startdate) FROM date1
 ----
 0
 
@@ -75,7 +75,7 @@ endloop
 foreach datepart year month day hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATEDIFF('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 1
@@ -106,7 +106,7 @@ SELECT '2005-12-31 23:59:59.9999999'::TIMESTAMP AS startdate, '2006-01-01 00:00:
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM datetime1
 ----
 1
 
@@ -115,7 +115,7 @@ endloop
 foreach datepart decade century millennium week yearweek isoyear
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM datetime1
 ----
 0
 
@@ -125,7 +125,7 @@ endloop
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1
+SELECT DATEDIFF('{datepart}', startdate, enddate) + DATEDIFF('{datepart}', enddate, startdate) FROM datetime1
 ----
 0
 
@@ -135,7 +135,7 @@ endloop
 foreach datepart year month day hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATEDIFF('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 1
@@ -156,7 +156,7 @@ SELECT '23:59:59.9999999'::TIME AS enddate, '00:00:00.0000000'::TIME AS startdat
 foreach datepart year quarter month day dayofyear decade century millennium week yearweek isoyear julian
 
 statement error
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM time1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM time1
 ----
 
 endloop
@@ -201,7 +201,7 @@ SELECT date_diff('WEEK', '2023-01-22 05:30:00'::timestamp, '2024-09-13 05:30:00'
 foreach datepart hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM time1
+SELECT DATEDIFF('{datepart}', startdate, enddate) + DATEDIFF('{datepart}', enddate, startdate) FROM time1
 ----
 0
 
@@ -211,7 +211,7 @@ endloop
 foreach datepart hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATEDIFF('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '12:52:07.123456'::TIME + INTERVAL (d) HOUR AS startdate FROM range(0, 5) tbl(d)) times
 ----
 1
@@ -231,17 +231,17 @@ foreach datepart year quarter month day dayofyear hour minute second millisecond
 foreach tbl date1 datetime1 time1
 
 query I
-SELECT DATEDIFF('${datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
+SELECT DATEDIFF('{datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM {tbl}
 ----
 NULL
 
 query I
-SELECT DATEDIFF('${datepart}', NULL, enddate) FROM ${tbl}
+SELECT DATEDIFF('{datepart}', NULL, enddate) FROM {tbl}
 ----
 NULL
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, NULL) FROM ${tbl}
+SELECT DATEDIFF('{datepart}', startdate, NULL) FROM {tbl}
 ----
 NULL
 
@@ -252,7 +252,7 @@ endloop
 foreach tbl date1 datetime1 time1
 
 query I
-SELECT DATEDIFF(NULL, startdate, enddate) FROM ${tbl}
+SELECT DATEDIFF(NULL, startdate, enddate) FROM {tbl}
 ----
 NULL
 
@@ -262,7 +262,7 @@ endloop
 foreach datepart year month day hour minute second millisecond microsecond isoyear julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, NULL)
+SELECT DATEDIFF('{datepart}', startdate, NULL)
 FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 NULL
@@ -272,7 +272,7 @@ NULL
 NULL
 
 query I
-SELECT DATEDIFF('${datepart}', NULL, startdate)
+SELECT DATEDIFF('{datepart}', NULL, startdate)
 FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 NULL
@@ -282,7 +282,7 @@ NULL
 NULL
 
 query I
-SELECT DATEDIFF('${datepart}', NULL::TIMESTAMP, NULL)
+SELECT DATEDIFF('{datepart}', NULL::TIMESTAMP, NULL)
 FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 NULL
@@ -317,7 +317,7 @@ foreach lspecial infinity -infinity
 foreach rspecial infinity -infinity
 
 query I
-SELECT DATE_SUB('${specifier}', '${lspecial}'::${ltype}, '${rspecial}'::${rtype});
+SELECT DATE_SUB('{specifier}', '{lspecial}'::{ltype}, '{rspecial}'::{rtype});
 ----
 NULL
 
@@ -352,7 +352,7 @@ INSERT into parts VALUES(NULL);
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 statement ok
-INSERT into parts VALUES('${datepart}');
+INSERT into parts VALUES('{datepart}');
 
 endloop
 

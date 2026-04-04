@@ -13,10 +13,10 @@ COPY (select
 		'b': [null, 1, 2]
 	}::VARIANT
 	from range(10)
-) TO '__TEST_DIR__/integer_variant.parquet';
+) TO '{TEST_DIR}/integer_variant.parquet';
 
 query I
-select * from '__TEST_DIR__/integer_variant.parquet';
+select * from '{TEST_DIR}/integer_variant.parquet';
 ----
 {'a': 42, 'b': [NULL, 1, 2]}
 {'a': 42, 'b': [NULL, 1, 2]}
@@ -33,10 +33,10 @@ statement ok
 COPY (select
 	'[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]'::JSON::VARIANT
 	from range(5)
-) TO '__TEST_DIR__/list_of_list_variant.parquet'
+) TO '{TEST_DIR}/list_of_list_variant.parquet'
 
 query I
-select * from '__TEST_DIR__/list_of_list_variant.parquet';
+select * from '{TEST_DIR}/list_of_list_variant.parquet';
 ----
 [[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
 [[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
@@ -57,10 +57,10 @@ COPY (
 		) t(a)
 	)
 	select a from cte
-) TO '__TEST_DIR__/varied_variant.parquet'
+) TO '{TEST_DIR}/varied_variant.parquet'
 
 query I
-select * from '__TEST_DIR__/varied_variant.parquet';
+select * from '{TEST_DIR}/varied_variant.parquet';
 ----
 {'a': 21, 'b': NULL}
 []
@@ -70,7 +70,7 @@ this is a long string
 this is big enough to not be classified as a "short string" by parquet VARIANT
 
 statement error
-COPY (select [123::VARIANT]) TO '__TEST_DIR__/list_of_variant.parquet'
+COPY (select [123::VARIANT]) TO '{TEST_DIR}/list_of_variant.parquet'
 ----
 Not implemented Error: ColumnWriter of type 'VARIANT' requires a transform, but is not a root column, this isn't supported currently
 
@@ -105,12 +105,12 @@ create macro data() as table (
 statement ok
 COPY (
 	from data()
-) TO '__TEST_DIR__/variant_test_all_types.parquet';
+) TO '{TEST_DIR}/variant_test_all_types.parquet';
 
 query I nosort expected_res
 select * from data();
 ----
 
 query I nosort expected_res
-select * from '__TEST_DIR__/variant_test_all_types.parquet';
+select * from '{TEST_DIR}/variant_test_all_types.parquet';
 ----

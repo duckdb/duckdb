@@ -31,7 +31,7 @@ PREPARE s2 AS INSERT INTO c VALUES ($1)
 loop val 0 1000
 
 statement ok
-EXECUTE s2(${val})
+EXECUTE s2({val})
 
 endloop
 

@@ -70,7 +70,9 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	if (parent) {
 		// propagate empty entries from the parent
 		if (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			state.is_empty.insert(state.is_empty.end(),
+			                      parent->is_empty.begin() +
+			                          NumericCast<duckdb::vector<bool>::difference_type>(state.is_empty.size()),
 			                      parent->is_empty.end());
 		}
 	}

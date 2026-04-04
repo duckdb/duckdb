@@ -155,18 +155,17 @@ void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &stat
 
 void GeoColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
                            Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	return base_column->Update(transaction, data_table, column_index, update_vector, row_ids, update_count,
-	                           row_group_start);
+	throw NotImplementedException("GEOMETRY Update is not supported");
 }
+
 void GeoColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
                                  const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                  idx_t update_count, idx_t depth, idx_t row_group_start) {
-	return base_column->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth,
-	                                 row_group_start);
+	throw NotImplementedException("GEOMETRY Update is not supported");
 }
 
 unique_ptr<BaseStatistics> GeoColumnData::GetUpdateStatistics() {
-	return base_column->GetUpdateStatistics();
+	return nullptr;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

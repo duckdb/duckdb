@@ -89,6 +89,10 @@ string HivePartitioning::Unescape(const string &input) {
 	return StringUtil::URLDecode(input);
 }
 
+bool HivePartitioning::IsNull(const string &input) {
+	return StringUtil::CIEquals(input, "NULL") || input == "__HIVE_DEFAULT_PARTITION__";
+}
+
 // matches hive partitions in file name. For example:
 // 	- s3://bucket/var1=value1/bla/bla/var2=value2
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
@@ -127,7 +131,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
 	// Handle nulls
-	if (StringUtil::CIEquals(str_val, "NULL") || str_val == "__HIVE_DEFAULT_PARTITION__") {
+	if (IsNull(str_val)) {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {

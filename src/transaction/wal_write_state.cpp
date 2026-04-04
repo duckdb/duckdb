@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
@@ -45,6 +46,11 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	auto &parent = entry.Parent();
 
 	switch (parent.type) {
+	case CatalogType::TRIGGER_ENTRY:
+		// Triggers do not support ALTER — always a CREATE
+		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
+		break;
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
@@ -139,6 +145,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			log.WriteDropIndex(entry.Cast<IndexCatalogEntry>());
 			break;
 		}
+		case CatalogType::TRIGGER_ENTRY:
+			log.WriteDropTrigger(entry.Cast<TriggerCatalogEntry>());
+			break;
 		case CatalogType::RENAMED_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:

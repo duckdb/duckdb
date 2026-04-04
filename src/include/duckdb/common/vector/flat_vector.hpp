@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 
 namespace duckdb {
 
@@ -99,7 +100,7 @@ struct FlatVector {
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 
-private:
+public:
 	template <class T>
 	struct FlatVectorWriter {
 		FlatVectorWriter(Vector &vector, idx_t count)
@@ -122,15 +123,32 @@ private:
 		idx_t count;
 	};
 
+	struct FlatStringWriter;
 	struct StringElement {
-		StringElement(Vector &vector, string_t *data, idx_t idx) : vector(vector), data(data), idx(idx) {
+		StringElement(FlatStringWriter &writer, string_t *data, idx_t idx) : writer(writer), data(data), idx(idx) {
 		}
 
 		//! Constructs an empty string of a given length and returns it
 		//! Note: the empty string must be filled and .Finalize() must be called on it
-		DUCKDB_API string_t &EmptyString(idx_t length);
-		DUCKDB_API string_t &operator=(string_t val);
-		void AssignWithoutCopying(string_t val) {
+		inline string_t &EmptyString(idx_t length) {
+			if (length <= string_t::INLINE_LENGTH) {
+				data[idx] = string_t(UnsafeNumericCast<uint32_t>(length));
+			} else {
+				auto &heap = writer.GetHeap();
+				data[idx] = heap.CreateEmptyStringInHeap(length);
+			}
+			return data[idx];
+		}
+		inline string_t &operator=(string_t val) {
+			if (val.IsInlined()) {
+				data[idx] = val;
+			} else {
+				auto &heap = writer.GetHeap();
+				data[idx] = heap.AddBlobToHeap(val.GetData(), val.GetSize());
+			}
+			return data[idx];
+		}
+		inline void AssignWithoutCopying(string_t val) {
 			data[idx] = val;
 		}
 		inline char *GetDataWriteable() {
@@ -148,31 +166,40 @@ private:
 		}
 
 	private:
-		Vector &vector;
+		FlatStringWriter &writer;
 		string_t *data;
 		idx_t idx;
 	};
 
 public:
 	struct FlatStringWriter {
-		FlatStringWriter(Vector &vector, idx_t count)
-		    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)), count(count) {
-		}
+		FlatStringWriter(Vector &vector, idx_t count);
 
-		void SetInvalid(idx_t idx) {
+		inline void SetInvalid(idx_t idx) {
 			D_ASSERT(idx < count);
 			validity.SetInvalid(idx);
 		}
 
-		StringElement operator[](idx_t idx) {
+		inline StringElement operator[](idx_t idx) {
 			D_ASSERT(idx < count);
-			return StringElement(vector, data, idx);
+			return StringElement(*this, data, idx);
 		}
+
+		inline StringHeap &GetHeap() {
+			if (!heap) {
+				InitializeHeap();
+			}
+			return *heap;
+		}
+
+	private:
+		void InitializeHeap();
 
 	private:
 		Vector &vector;
 		string_t *data;
 		ValidityMask &validity;
+		optional_ptr<StringHeap> heap;
 		idx_t count;
 	};
 

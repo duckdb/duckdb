@@ -162,7 +162,7 @@ SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	gstate.Sink(context, chunk, lstate);
 
-	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown && gstate.child == 1) {
 		filter_pushdown->Sink(lstate.table.keys, *lstate.local_filter_state);
 	}
 
@@ -178,7 +178,7 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
-	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown && gstate.child == 1) {
 		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
 	}
 
@@ -191,7 +191,7 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
-	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown && gstate.child == 1) {
 		(void)filter_pushdown->Finalize(client, *gstate.global_filter_state, *this);
 	}
 	auto &table = *gstate.tables[gstate.child];

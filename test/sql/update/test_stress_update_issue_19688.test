@@ -28,17 +28,17 @@ concurrentloop threadid 0 8
 loop i 0 1000
 
 statement maybe
-UPDATE test_stress_update_issue_19688 SET val = (${threadid} * 10000 + ${i}) WHERE id = ${i}
+UPDATE test_stress_update_issue_19688 SET val = ({threadid} * 10000 + {i}) WHERE id = {i}
 ----
 TransactionContext Error
 
 statement maybe
-DELETE FROM test_stress_update_issue_19688 WHERE id = ${i}
+DELETE FROM test_stress_update_issue_19688 WHERE id = {i}
 ----
 TransactionContext Error
 
 statement maybe
-INSERT INTO test_stress_update_issue_19688 VALUES (${i}, ${threadid} * 10000 + ${i})
+INSERT INTO test_stress_update_issue_19688 VALUES ({i}, {threadid} * 10000 + {i})
 ----
 TransactionContext Error
 

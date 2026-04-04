@@ -26,10 +26,10 @@ BEGIN TRANSACTION
 loop i 1 11
 
 statement ok
-UPDATE integers SET i=${i}+1 WHERE i=${i};
+UPDATE integers SET i={i}+1 WHERE i={i};
 
 query I
-SELECT COUNT(*) FROM (SELECT * FROM integers WHERE i > 0 EXCEPT SELECT ${i} + 1) t1;
+SELECT COUNT(*) FROM (SELECT * FROM integers WHERE i > 0 EXCEPT SELECT {i} + 1) t1;
 ----
 0
 
@@ -50,10 +50,10 @@ BEGIN TRANSACTION
 loop i 1 11
 
 statement ok
-UPDATE integers SET i=${i}+1 WHERE i=${i};
+UPDATE integers SET i={i}+1 WHERE i={i};
 
 query I
-SELECT COUNT(*) FROM (SELECT * FROM integers WHERE i > 0 EXCEPT SELECT ${i} + 1) t1;
+SELECT COUNT(*) FROM (SELECT * FROM integers WHERE i > 0 EXCEPT SELECT {i} + 1) t1;
 ----
 0
 

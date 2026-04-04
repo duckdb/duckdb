@@ -52,10 +52,12 @@ select  corr(v, v2) over (partition by k)
 0.998845
 NULL
 
-statement error
+query R
 SELECT corr(a,b) FROM (values (1e301, 0), (-1e301, 0)) tbl(a,b);
 ----
+nan
 
-statement error
+query R
 SELECT corr(b,a) FROM (values (1e301, 0), (-1e301, 0)) tbl(a,b);
 ----
+nan

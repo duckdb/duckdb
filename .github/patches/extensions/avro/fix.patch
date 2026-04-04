@@ -202,6 +202,333 @@ index ebb941a..436fd81 100644
  	AvroType avro_type;
  	LogicalType duckdb_type;
  };
+diff --git a/test/sql/copy/all_types.test b/test/sql/copy/all_types.test
+index 4261f1a..28796f2 100644
+--- a/test/sql/copy/all_types.test
++++ b/test/sql/copy/all_types.test
+@@ -29,14 +29,14 @@ create view vw as select
+ statement ok
+ COPY (
+ 	select * from vw
+-) TO '__TEST_DIR__/all_types.avro';
++) TO '{TEST_DIR}/all_types.avro';
+ 
+ query I nosort basic
+ select * from vw;
+ ----
+ 
+ query I nosort basic
+-select * from read_avro('__TEST_DIR__/all_types.avro')
++select * from read_avro('{TEST_DIR}/all_types.avro')
+ ----
+ 
+ statement ok
+@@ -45,13 +45,13 @@ CREATE TYPE my_enum AS ENUM ('a', 'abc', 'decently long enum value');
+ statement error
+ COPY (
+ 	select 'decently long enum value'::my_enum a
+-) TO '__TEST_DIR__/enum_type.avro';
++) TO '{TEST_DIR}/enum_type.avro';
+ ----
+ Not implemented Error: Can't convert logical type 'ENUM('a', 'abc', 'decently long enum value')' to Avro type
+ 
+ statement error
+ COPY (
+ 	select union_value(b := 'abc')::UNION(a INTEGER, b VARCHAR, c FLOAT) a
+-) TO '__TEST_DIR__/union_type.avro';
++) TO '{TEST_DIR}/union_type.avro';
+ ----
+ Not implemented Error: Can't convert logical type 'UNION(a INTEGER, b VARCHAR, c FLOAT)' to Avro type
+diff --git a/test/sql/copy/duplicate_name.test b/test/sql/copy/duplicate_name.test
+index 31e65a5..9c57b47 100644
+--- a/test/sql/copy/duplicate_name.test
++++ b/test/sql/copy/duplicate_name.test
+@@ -10,10 +10,10 @@ COPY (
+ 			'child': true
+ 		}
+ 	} my_struct
+-) TO '__TEST_DIR__/tmp.avro';
++) TO '{TEST_DIR}/tmp.avro';
+ 
+ query I
+-select * from read_avro('__TEST_DIR__/tmp.avro');
++select * from read_avro('{TEST_DIR}/tmp.avro');
+ ----
+ {'a': {'child': 21}, 'b': {'child': true}}
+ 
+@@ -24,7 +24,7 @@ COPY (
+ 			'field': true
+ 		}
+ 	} structure
+-) TO '__TEST_DIR__/tmp2.avro' ( ROOT_NAME 'a');
++) TO '{TEST_DIR}/tmp2.avro' ( ROOT_NAME 'a');
+ ----
+ Invalid Input Error: Cannot save record schema
+ 
+@@ -35,10 +35,10 @@ COPY (
+ 			'field': true
+ 		}
+ 	} structure
+-) TO '__TEST_DIR__/tmp2.avro' ( ROOT_NAME 'root_a');
++) TO '{TEST_DIR}/tmp2.avro' ( ROOT_NAME 'root_a');
+ 
+ query I
+-select * from read_avro('__TEST_DIR__/tmp2.avro');
++select * from read_avro('{TEST_DIR}/tmp2.avro');
+ ----
+ {'a': {'field': true}}
+ 
+@@ -56,6 +56,6 @@ COPY (
+ 			}
+ 		}
+ 	} structure
+-) TO '__TEST_DIR__/tmp3.avro';
++) TO '{TEST_DIR}/tmp3.avro';
+ ----
+ Binder Error: Avro schema by the name of 'a' already exists, names of 'record', 'enum' and 'fixed' types have to be distinct
+diff --git a/test/sql/copy/empty_struct.test b/test/sql/copy/empty_struct.test
+index fe83c31..fd71afd 100644
+--- a/test/sql/copy/empty_struct.test
++++ b/test/sql/copy/empty_struct.test
+@@ -8,7 +8,7 @@ COPY (
+ 	select {
+ 		'__duckdb_empty_struct_marker': NULL
+ 	} empty_partition
+-) TO '__TEST_DIR__/empty_struct.avro' (
++) TO '{TEST_DIR}/empty_struct.avro' (
+ 	FIELD_IDS {
+ 		'empty_partition': {
+ 			'__duckdb_field_id': 102
+@@ -18,6 +18,6 @@ COPY (
+ );
+ 
+ query I
+-from read_avro('__TEST_DIR__/empty_struct.avro')
++from read_avro('{TEST_DIR}/empty_struct.avro')
+ ----
+ NULL
+diff --git a/test/sql/copy/field_ids.test b/test/sql/copy/field_ids.test
+index 1f561e6..c6c51d4 100644
+--- a/test/sql/copy/field_ids.test
++++ b/test/sql/copy/field_ids.test
+@@ -7,7 +7,7 @@ COPY (
+ 		'b': NULL,
+ 		'c': 'test'
+ 	} field1
+-) TO '__TEST_DIR__/field_ids.avro' (
++) TO '{TEST_DIR}/field_ids.avro' (
+ 	FIELD_IDS {
+ 		'field1': {
+ 			'a': 100,
+@@ -29,7 +29,7 @@ COPY (
+ 			'upper_bound': 'blob blob blob'
+ 		}
+ 	] partitions
+-) TO '__TEST_DIR__/partitions.avro' (
++) TO '{TEST_DIR}/partitions.avro' (
+ 	FIELD_IDS {
+ 		'partitions': {
+ 			'list': {
+diff --git a/test/sql/copy/invalid_name.test b/test/sql/copy/invalid_name.test
+index bac01bd..cbca58b 100644
+--- a/test/sql/copy/invalid_name.test
++++ b/test/sql/copy/invalid_name.test
+@@ -1,6 +1,6 @@
+ require avro
+ 
+ statement error
+-COPY (select range(10000)) TO '__TEST_DIR__/tmp.avro';
++COPY (select range(10000)) TO '{TEST_DIR}/tmp.avro';
+ ----
+ is not a valid Avro identifier
+diff --git a/test/sql/copy/invalid_option.test b/test/sql/copy/invalid_option.test
+index 2d1da31..14daccb 100644
+--- a/test/sql/copy/invalid_option.test
++++ b/test/sql/copy/invalid_option.test
+@@ -3,7 +3,7 @@ require avro
+ statement error
+ COPY (
+ 	select 42 a
+-) TO '__TEST_DIR__/test2.avro' (
++) TO '{TEST_DIR}/test2.avro' (
+ 	NOT_RECOGNIZED,
+ 	ROOT_NAME 'test'
+ );
+@@ -13,7 +13,7 @@ Invalid Configuration Error: The following option(s) are not recognized: key: 'N
+ statement error
+ COPY (
+ 	select 42 a
+-) TO '__TEST_DIR__/test3.avro' (
++) TO '{TEST_DIR}/test3.avro' (
+ 	NOT_RECOGNIZED 'with_value',
+ 	ROOT_NAME 'test'
+ );
+diff --git a/test/sql/copy/large_list.test_slow b/test/sql/copy/large_list.test_slow
+index c786118..213f91b 100644
+--- a/test/sql/copy/large_list.test_slow
++++ b/test/sql/copy/large_list.test_slow
+@@ -7,13 +7,13 @@ create view vw as
+ statement ok
+ COPY (
+ 	select * from vw
+-) TO '__TEST_DIR__/large_list_basic.avro';
++) TO '{TEST_DIR}/large_list_basic.avro';
+ 
+ query I nosort basic
+ select * from vw;
+ ----
+ 
+ query I nosort basic
+-select * from read_avro('__TEST_DIR__/large_list_basic.avro')
++select * from read_avro('{TEST_DIR}/large_list_basic.avro')
+ ----
+ 
+diff --git a/test/sql/copy/large_list_struct_coverage.test_slow b/test/sql/copy/large_list_struct_coverage.test_slow
+index 39619d2..eac87bf 100644
+--- a/test/sql/copy/large_list_struct_coverage.test_slow
++++ b/test/sql/copy/large_list_struct_coverage.test_slow
+@@ -23,13 +23,13 @@ create view vw as
+ statement ok
+ COPY (
+ 	select * from vw
+-) TO '__TEST_DIR__/large_list_struct_coverage.avro';
++) TO '{TEST_DIR}/large_list_struct_coverage.avro';
+ 
+ query I nosort basic
+ select * from vw;
+ ----
+ 
+ query I nosort basic
+-select * from read_avro('__TEST_DIR__/large_list_struct_coverage.avro')
++select * from read_avro('{TEST_DIR}/large_list_struct_coverage.avro')
+ ----
+ 
+diff --git a/test/sql/copy/nullable.test b/test/sql/copy/nullable.test
+index 7030837..16f5292 100644
+--- a/test/sql/copy/nullable.test
++++ b/test/sql/copy/nullable.test
+@@ -7,7 +7,7 @@ require avro
+ statement ok
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_1.avro' (
++) TO '{TEST_DIR}/field_ids_1.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301},
+ 	},
+@@ -18,7 +18,7 @@ COPY (
+ statement ok
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_1_nullable.avro' (
++) TO '{TEST_DIR}/field_ids_1_nullable.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': true},
+ 	},
+@@ -29,7 +29,7 @@ COPY (
+ statement error
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_error.avro' (
++) TO '{TEST_DIR}/field_ids_error.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': false},
+ 	},
+@@ -40,15 +40,15 @@ COPY (
+ 
+ # as the copy failed, the file shouldn't exist
+ statement error
+-select * from read_avro('__TEST_DIR__/field_ids_error.avro');
++select * from read_avro('{TEST_DIR}/field_ids_error.avro');
+ ----
+-IO Error: No files found that match the pattern "__TEST_DIR__/field_ids_error.avro"
++IO Error: No files found that match the pattern "{TEST_DIR}/field_ids_error.avro"
+ 
+ # cannot cast foo to BOOL
+ statement error
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_error.avro' (
++) TO '{TEST_DIR}/field_ids_error.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': 'foo'},
+ 	},
+@@ -63,7 +63,7 @@ COPY (
+ statement ok
+ COPY (
+ 	select 1 field1, 2 field2, 3 field3
+-) TO '__TEST_DIR__/field_ids_2.avro' (
++) TO '{TEST_DIR}/field_ids_2.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': false},
+ 		'field2': 303,
+@@ -73,7 +73,7 @@ COPY (
+ 
+ # read
+ query III
+-select * from read_avro('__TEST_DIR__/field_ids_2.avro');
++select * from read_avro('{TEST_DIR}/field_ids_2.avro');
+ ----
+ 1	2	3
+ 
+@@ -86,7 +86,7 @@ COPY (
+           {
+           	'content': 1,
+           } data_file_not_nullable,
+-) TO '__TEST_DIR__/field_ids_3.avro' (
++) TO '{TEST_DIR}/field_ids_3.avro' (
+ 	FIELD_IDS {
+ 		'manifest_entry': 0,
+ 		'data_file_not_nullable': {
+@@ -112,7 +112,7 @@ create table t1 as select
+ } data_file_nullable;
+ 
+ statement ok
+-COPY t1 TO '__TEST_DIR__/field_ids_4.avro' (
++COPY t1 TO '{TEST_DIR}/field_ids_4.avro' (
+ 	FIELD_IDS {
+ 		'manifest_entry': {
+ 			'__duckdb_field_id': 0
+@@ -131,7 +131,7 @@ COPY t1 TO '__TEST_DIR__/field_ids_4.avro' (
+ );
+ 
+ query III
+-select * from read_avro('__TEST_DIR__/field_ids_4.avro');
++select * from read_avro('{TEST_DIR}/field_ids_4.avro');
+ ----
+ 1	{'content': 1}	{'content': 2}
+ 
+@@ -145,7 +145,7 @@ COPY (select
+       {
+       	'content': NULL,
+       } data_file_nullable
+-) TO '__TEST_DIR__/field_ids_5.avro' (
++) TO '{TEST_DIR}/field_ids_5.avro' (
+ 	FIELD_IDS {
+ 		'manifest_entry': {
+ 			'__duckdb_field_id': 0
+@@ -188,7 +188,7 @@ COPY (select
+       		'b': True,
+       		'c': 1.234::FLOAT
+       	} "field_struct"
+-) TO '__TEST_DIR__/nested_field_types.avro' (
++) TO '{TEST_DIR}/nested_field_types.avro' (
+ 	FIELD_IDS {
+ 		'field_map': {
+ 		    'key': 0,
+diff --git a/test/sql/copy/write_metadata.test b/test/sql/copy/write_metadata.test
+index c370295..b48178e 100644
+--- a/test/sql/copy/write_metadata.test
++++ b/test/sql/copy/write_metadata.test
+@@ -3,7 +3,7 @@ require avro
+ statement ok
+ COPY (
+ 	select 42 a
+-) TO '__TEST_DIR__/test3.avro' (
++) TO '{TEST_DIR}/test3.avro' (
+ 	METADATA {
+ 		'key': 'value',
+ 		'key2': 42
 diff --git a/test/sql/external_file_cache.test b/test/sql/external_file_cache.test
 index 1d4a43a..440574a 100644
 --- a/test/sql/external_file_cache.test

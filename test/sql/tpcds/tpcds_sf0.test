@@ -10,7 +10,7 @@ CALL dsdgen(sf=0)
 loop i 1 100
 
 statement ok
-PRAGMA tpcds(${i})
+PRAGMA tpcds({i})
 
 endloop
 

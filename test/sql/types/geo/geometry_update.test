@@ -1,0 +1,53 @@
+# name: test/sql/types/geo/geometry_update.test
+# group: [geo]
+
+load {TEST_DIR}/test_update_geo.db readwrite v1.4.4
+
+statement ok
+CREATE TABLE t (id INT, geo GEOMETRY)
+
+statement ok
+INSERT INTO t VALUES (1, NULL), (2, 'POINT(1.0 2.0)')
+
+statement ok
+CHECKPOINT
+
+statement ok
+UPDATE t SET geo = 'POINT(0 1)' WHERE id = 1;
+
+statement ok
+CHECKPOINT
+
+query II
+SELECT id, ST_AsText(geo) FROM t ORDER BY id;
+----
+1	POINT (0 1)
+2	POINT (1 2)
+
+
+# Now lets do it with shredding enabled
+load {TEST_DIR}/test_update_geo_2.db readwrite v1.5.0
+
+statement ok
+CREATE TABLE t (id INT, geo GEOMETRY)
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
+INSERT INTO t VALUES (1, NULL), (2, 'POINT(1.0 2.0)')
+
+statement ok
+CHECKPOINT
+
+statement ok
+UPDATE t SET geo = 'POINT(0 1)' WHERE id = 1;
+
+statement ok
+CHECKPOINT
+
+query II
+SELECT id, ST_AsText(geo) FROM t ORDER BY id;
+----
+1	POINT (0 1)
+2	POINT (1 2)

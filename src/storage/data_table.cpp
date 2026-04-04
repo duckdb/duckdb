@@ -1048,6 +1048,13 @@ bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, tr
 	return true;
 }
 
+optional_idx DataTableInfo::CheckpointRowGroupCount(const CheckpointOptions &options) const {
+	if (!last_seen_checkpoint.IsValid() || last_seen_checkpoint.GetIndex() != options.transaction_id) {
+		return optional_idx();
+	}
+	return checkpoint_row_group_count;
+}
+
 void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState &state) {
 	// obtain the append lock for this table
 	if (!state.append_lock) {
@@ -1676,6 +1683,7 @@ unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 }
 
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
+	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
 	row_groups->Checkpoint(writer, global_stats);
@@ -1687,9 +1695,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	if (writer.CanOverrideBaseStats()) {
-		row_groups->SetStats(global_stats);
-	}
+	row_groups->SetStats(global_stats);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
