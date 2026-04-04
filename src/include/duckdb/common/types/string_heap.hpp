@@ -11,7 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 //! A string heap is the owner of a set of strings, strings can be inserted into
@@ -25,7 +24,7 @@ public:
 	DUCKDB_API void Move(StringHeap &other);
 
 	inline string_t AddString(const char *data, idx_t len) {
-		D_ASSERT(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
+		D_ASSERT(Value::StringIsValid(data, len));
 		return AddBlob(data, len);
 	}
 
@@ -38,7 +37,7 @@ public:
 	}
 
 	inline string_t AddString(const string_t &data) {
-		D_ASSERT(Utf8Proc::Analyze(data.GetData(), data.GetSize()) != UnicodeType::INVALID);
+		D_ASSERT(Value::StringIsValid(data.GetData(), data.GetSize()));
 		return AddBlob(data);
 	}
 
