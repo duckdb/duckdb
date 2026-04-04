@@ -1,7 +1,6 @@
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/string_view.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
@@ -24,8 +23,8 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 
 namespace {
 // Tree-style branch characters
-constexpr string_view PREFIX_BRANCH_END = "└── ";
-constexpr string_view PREFIX_SPACE = "    ";
+constexpr const char *const PREFIX_BRANCH_END = "└── ";
+constexpr const char *const PREFIX_SPACE = "    ";
 
 // ASCII printable character range
 constexpr uint8_t PREFIX_ASCII_PRINTABLE_MIN = 32;

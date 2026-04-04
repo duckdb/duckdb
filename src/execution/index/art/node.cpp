@@ -2,7 +2,6 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/string_view.hpp"
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -496,10 +495,10 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 
 namespace {
 // Tree-style branch characters
-constexpr string_view NODE_BRANCH_MID = "├── ";
-constexpr string_view NODE_BRANCH_END = "└── ";
-constexpr string_view NODE_VERTICAL = "│   ";
-constexpr string_view NODE_SPACE = "    ";
+constexpr const char *const NODE_BRANCH_MID = "├── ";
+constexpr const char *const NODE_BRANCH_END = "└── ";
+constexpr const char *const NODE_VERTICAL = "│   ";
+constexpr const char *const NODE_SPACE = "    ";
 
 // ASCII printable character range
 constexpr uint8_t NODE_ASCII_PRINTABLE_MIN = 32;

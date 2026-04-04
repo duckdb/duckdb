@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/string_view.hpp"
 #include "duckdb/common/hugeint.hpp"
 
 #include <vector>
@@ -54,7 +53,6 @@ struct ExceptionFormatValue {
 	DUCKDB_API ExceptionFormatValue(int64_t int_val);       // NOLINT
 	DUCKDB_API ExceptionFormatValue(idx_t uint_val);        // NOLINT
 	DUCKDB_API ExceptionFormatValue(string str_val);        // NOLINT
-	DUCKDB_API ExceptionFormatValue(string_view str_val);   // NOLINT
 	DUCKDB_API ExceptionFormatValue(const String &str_val); // NOLINT
 	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val);      // NOLINT
 	DUCKDB_API ExceptionFormatValue(uhugeint_t uhg_val);    // NOLINT
@@ -87,8 +85,6 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const double &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const string &value);
-template <>
-DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const string_view &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const String &value);
 template <>
