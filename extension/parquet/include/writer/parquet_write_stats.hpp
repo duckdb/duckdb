@@ -257,6 +257,38 @@ public:
 	}
 };
 
+struct ParquetHugeintTargetType {
+	static constexpr const idx_t SIZE = 16;
+	data_t bytes[SIZE];
+};
+
+// HUGEINT/UHUGEINT stats — both encodings are byte-order-preserving,
+// so memcmp-based min/max tracking is correct.
+class HugeintStatisticsState : public ColumnWriterStatistics {
+public:
+	bool has_stats = false;
+	ParquetHugeintTargetType min;
+	ParquetHugeintTargetType max;
+
+public:
+	bool HasStats() override {
+		return has_stats;
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? string(char_ptr_cast(min.bytes), ParquetHugeintTargetType::SIZE) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? string(char_ptr_cast(max.bytes), ParquetHugeintTargetType::SIZE) : string();
+	}
+};
+
 class GeoStatisticsState final : public ColumnWriterStatistics {
 public:
 	explicit GeoStatisticsState() : has_stats(false) {

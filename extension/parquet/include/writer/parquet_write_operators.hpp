@@ -11,6 +11,7 @@
 #include "writer/parquet_write_stats.hpp"
 #include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
@@ -314,42 +315,106 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// HUGEINT: big-endian + sign-bit flip for order-preserving encoding
+//===--------------------------------------------------------------------===//
+struct ParquetHugeintOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		TGT result;
+		uint64_t high = BSWAP64(static_cast<uint64_t>(input.upper));
+		uint64_t low = BSWAP64(input.lower);
+		memcpy(result.bytes, &high, sizeof(uint64_t));
+		memcpy(result.bytes + sizeof(uint64_t), &low, sizeof(uint64_t));
+		// Flip the sign bit so byte-wise unsigned comparison matches signed numeric order
+		result.bytes[0] ^= 0x80;
+		return result;
+	}
+
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.WriteData(target_value.bytes, ParquetHugeintTargetType::SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &target_value) {
+		return ParquetHugeintTargetType::SIZE;
+	}
+
+	template <class SRC, class TGT>
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(target_value.bytes, ParquetHugeintTargetType::SIZE, 0);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<HugeintStatisticsState>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats_p, TGT target_value) {
+		auto &stats = stats_p->Cast<HugeintStatisticsState>();
+		if (!stats.has_stats || memcmp(target_value.bytes, stats.min.bytes, ParquetHugeintTargetType::SIZE) < 0) {
+			stats.min = target_value;
+		}
+		if (!stats.has_stats || memcmp(target_value.bytes, stats.max.bytes, ParquetHugeintTargetType::SIZE) > 0) {
+			stats.max = target_value;
+		}
+		stats.has_stats = true;
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// UHUGEINT: big-endian unsigned — byte order already matches numeric order
+//===--------------------------------------------------------------------===//
+struct ParquetUhugeintOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		TGT result;
+		uint64_t high = BSWAP64(input.upper);
+		uint64_t low = BSWAP64(input.lower);
+		memcpy(result.bytes, &high, sizeof(uint64_t));
+		memcpy(result.bytes + sizeof(uint64_t), &low, sizeof(uint64_t));
+		return result;
+	}
+
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.WriteData(target_value.bytes, ParquetHugeintTargetType::SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &target_value) {
+		return ParquetHugeintTargetType::SIZE;
+	}
+
+	template <class SRC, class TGT>
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(target_value.bytes, ParquetHugeintTargetType::SIZE, 0);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<HugeintStatisticsState>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats_p, TGT target_value) {
+		auto &stats = stats_p->Cast<HugeintStatisticsState>();
+		if (!stats.has_stats || memcmp(target_value.bytes, stats.min.bytes, ParquetHugeintTargetType::SIZE) < 0) {
+			stats.min = target_value;
+		}
+		if (!stats.has_stats || memcmp(target_value.bytes, stats.max.bytes, ParquetHugeintTargetType::SIZE) > 0) {
+			stats.max = target_value;
+		}
+		stats.has_stats = true;
+	}
+};
+
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return input.time().micros;
-	}
-};
-
-struct ParquetHugeintOperator : public BaseParquetOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Hugeint::Cast<double>(input);
-	}
-
-	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<ColumnWriterStatistics>();
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
-	}
-};
-
-struct ParquetUhugeintOperator : public BaseParquetOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Uhugeint::Cast<double>(input);
-	}
-
-	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<ColumnWriterStatistics>();
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
 };
 
