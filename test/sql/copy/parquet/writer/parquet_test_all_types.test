@@ -8,6 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 # intervals are saved with ms precision -> truncate microsecond precision to millisecond
+# hugeint/uhugeint are stored as raw FLBA(16) with DuckDB metadata — full range, exact type round-trip
 statement ok
 CREATE TABLE all_types AS
 SELECT * EXCLUDE (bit, "union") REPLACE (
@@ -19,12 +20,9 @@ statement ok
 COPY all_types TO "{TEST_DIR}/all_types.parquet" (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
-# hugeint/uhugeint is stored as double -> we have to cast
 # TIME WITH TIME ZONE loses the offset
 query I nosort alltypes
 SELECT * REPLACE (
-	hugeint::DOUBLE AS hugeint,
-	uhugeint::DOUBLE AS uhugeint,
 	time_tz::TIME::TIMETZ AS time_tz
 )
 FROM all_types

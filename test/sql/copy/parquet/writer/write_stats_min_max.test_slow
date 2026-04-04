@@ -182,7 +182,7 @@ DROP TABLE tbl
 
 endloop
 
-# no stats for these types
+# hugeint is stored as FLBA(16) with order-preserving encoding — stats are available
 statement ok
 CREATE TABLE hugeint_limits AS SELECT (-170141183460469231731687303715884105728)::HUGEINT min, 170141183460469231731687303715884105727::HUGEINT max
 
@@ -200,25 +200,22 @@ INSERT INTO tbl SELECT max FROM {type}_limits
 statement ok
 COPY tbl TO '{TEST_DIR}/{type}_stats.parquet' (FORMAT PARQUET);
 
+# stats are now written for hugeint (FLBA(16) with sign-bit-flip encoding)
 query I
-SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_min_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
-NULL
 
 query I
-SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_max_value::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
-NULL
 
 query I
-SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_min::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT min FROM {type}_limits
 ----
-NULL
 
 query I
-SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet')
+SELECT stats_max::{type} FROM parquet_metadata('{TEST_DIR}/{type}_stats.parquet') EXCEPT SELECT max FROM {type}_limits
 ----
-NULL
 
 statement ok
 DROP TABLE tbl
