@@ -820,6 +820,8 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
 	serializer.WritePropertyWithDefault(105, "result_ids", unsafe_vector<row_t>());
+	serializer.WritePropertyWithDefault(106, "skip_precomputed_row_groups", bind_data.skip_precomputed_row_groups,
+	                                    false);
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -835,6 +837,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
 	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
 	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
+	deserializer.ReadPropertyWithDefault<bool>(106, "skip_precomputed_row_groups", result->skip_precomputed_row_groups);
 	return std::move(result);
 }
 
