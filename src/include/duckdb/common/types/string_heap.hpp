@@ -60,7 +60,7 @@ public:
 		if (len <= string_t::INLINE_LENGTH) {
 			return string_t(UnsafeNumericCast<uint32_t>(len));
 		}
-		return EmptyString(len);
+		return CreateEmptyStringInHeap(len);
 	}
 
 	inline string_t CreateEmptyStringInHeap(idx_t len) {
