@@ -49,7 +49,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
 	auto components = PathComponents();
 
-	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
+	string link = "https://duckdb.org/docs/current/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
 		link += "?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
@@ -226,7 +226,7 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
 		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
-			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
+			                  "https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions");
 		}
 	}
 
