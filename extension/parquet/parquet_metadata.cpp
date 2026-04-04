@@ -375,6 +375,51 @@ static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatist
 void ParquetRowGroupMetadataProcessor::InitializeInternal(ClientContext &context, ParquetReader &reader) {
 	auto meta_data = reader.GetFileMetadata();
 	column_schemas.clear();
+
+	// Build a map of DuckDB type overrides from key_value_metadata
+	unordered_map<idx_t, LogicalType> type_overrides;
+	if (meta_data->__isset.key_value_metadata) {
+		for (auto &kv : meta_data->key_value_metadata) {
+			if (kv.key != "duckdb:column_types") {
+				continue;
+			}
+			auto &json = kv.value;
+			idx_t pos = 0;
+			while (pos < json.size()) {
+				auto key_start = json.find('"', pos);
+				if (key_start == string::npos) {
+					break;
+				}
+				auto key_end = json.find('"', key_start + 1);
+				if (key_end == string::npos) {
+					break;
+				}
+				auto key_str = json.substr(key_start + 1, key_end - key_start - 1);
+				auto val_start = json.find('"', key_end + 1);
+				if (val_start == string::npos) {
+					break;
+				}
+				auto val_end = json.find('"', val_start + 1);
+				if (val_end == string::npos) {
+					break;
+				}
+				auto val_str = json.substr(val_start + 1, val_end - val_start - 1);
+				pos = val_end + 1;
+				try {
+					auto schema_idx = std::stoull(key_str);
+					if (val_str == "HUGEINT") {
+						type_overrides[schema_idx] = LogicalType::HUGEINT;
+					} else if (val_str == "UHUGEINT") {
+						type_overrides[schema_idx] = LogicalType::UHUGEINT;
+					}
+				} catch (...) {
+					continue;
+				}
+			}
+			break;
+		}
+	}
+
 	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
 		auto &schema_element = meta_data->schema[schema_idx];
 		if (schema_element.num_children > 0) {
@@ -382,6 +427,13 @@ void ParquetRowGroupMetadataProcessor::InitializeInternal(ClientContext &context
 		}
 		ParquetColumnSchema column_schema;
 		column_schema.type = reader.DeriveLogicalType(schema_element, column_schema);
+		// Apply DuckDB type override for HUGEINT/UHUGEINT
+		auto it = type_overrides.find(schema_idx);
+		if (it != type_overrides.end() && column_schema.type.id() == LogicalTypeId::BLOB &&
+		    schema_element.type == Type::FIXED_LEN_BYTE_ARRAY && schema_element.__isset.type_length &&
+		    schema_element.type_length == 16) {
+			column_schema.type = it->second;
+		}
 		column_schemas.push_back(std::move(column_schema));
 	}
 }
