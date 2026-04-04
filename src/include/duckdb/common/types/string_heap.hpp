@@ -60,6 +60,11 @@ public:
 		if (len <= string_t::INLINE_LENGTH) {
 			return string_t(UnsafeNumericCast<uint32_t>(len));
 		}
+		return EmptyString(len);
+	}
+
+	inline string_t CreateEmptyStringInHeap(idx_t len) {
+		D_ASSERT(len > string_t::INLINE_LENGTH);
 		if (len > string_t::MAX_STRING_SIZE) {
 			throw OutOfRangeException(
 			    "Cannot create a string of size: '%d', the maximum supported string size is: '%d'", len,
@@ -67,6 +72,15 @@ public:
 		}
 		auto insert_pos = const_char_ptr_cast(allocator.Allocate(len));
 		return string_t(insert_pos, UnsafeNumericCast<uint32_t>(len));
+	}
+
+	inline string_t AddBlobToHeap(const char *data, idx_t len) {
+		D_ASSERT(len > string_t::INLINE_LENGTH);
+		auto insert_string = CreateEmptyStringInHeap(len);
+		auto insert_pos = insert_string.GetDataWriteable();
+		memcpy(insert_pos, data, len);
+		insert_string.Finalize();
+		return insert_string;
 	}
 
 	//! Size of strings
@@ -79,15 +93,6 @@ public:
 	}
 
 private:
-	string_t AddBlobToHeap(const char *data, idx_t len) {
-		D_ASSERT(len > string_t::INLINE_LENGTH);
-		auto insert_string = EmptyString(len);
-		auto insert_pos = insert_string.GetDataWriteable();
-		memcpy(insert_pos, data, len);
-		insert_string.Finalize();
-		return insert_string;
-	}
-
 private:
 	ArenaAllocator allocator;
 };

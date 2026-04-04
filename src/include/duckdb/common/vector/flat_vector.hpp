@@ -124,13 +124,21 @@ public:
 		//! Constructs an empty string of a given length and returns it
 		//! Note: the empty string must be filled and .Finalize() must be called on it
 		inline string_t &EmptyString(idx_t length) {
-			auto &heap = writer.GetHeap();
-			data[idx] = heap.EmptyString(length);
+			if (length <= string_t::INLINE_LENGTH) {
+				data[idx] = string_t(UnsafeNumericCast<uint32_t>(length));
+			} else {
+				auto &heap = writer.GetHeap();
+				data[idx] = heap.CreateEmptyStringInHeap(length);
+			}
 			return data[idx];
 		}
 		inline string_t &operator=(string_t val) {
-			auto &heap = writer.GetHeap();
-			data[idx] = heap.AddBlob(val);
+			if (val.IsInlined()) {
+				data[idx] = val;
+			} else {
+				auto &heap = writer.GetHeap();
+				data[idx] = heap.AddBlobToHeap(val.GetData(), val.GetSize());
+			}
 			return data[idx];
 		}
 		inline void AssignWithoutCopying(string_t val) {
@@ -171,14 +179,20 @@ public:
 		}
 
 		inline StringHeap &GetHeap() {
-			return heap;
+			if (!heap) {
+				InitializeHeap();
+			}
+			return *heap;
 		}
+
+	private:
+		void InitializeHeap();
 
 	private:
 		Vector &vector;
 		string_t *data;
 		ValidityMask &validity;
-		StringHeap &heap;
+		optional_ptr<StringHeap> heap;
 		idx_t count;
 	};
 

@@ -5,7 +5,11 @@ namespace duckdb {
 
 FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
     : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)),
-      heap(StringVector::GetStringHeap(vector)), count(count) {
+      count(count) {
+}
+
+void FlatVector::FlatStringWriter::InitializeHeap() {
+	heap = StringVector::GetStringHeap(vector);
 }
 
 VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
