@@ -442,7 +442,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 
 	ConvertedJSONHolder json_holder;
 
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -461,7 +461,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 			return false;
 		}
 		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data[offset + i] = StringVector::AddString(result, res);
+		result_data[offset + i] = res;
 		free(json_holder.stringified_json);
 		json_holder.stringified_json = nullptr;
 	}

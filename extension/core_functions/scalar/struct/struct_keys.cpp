@@ -17,9 +17,9 @@ struct StructKeysBindData : public FunctionData {
 
 		ListVector::Reserve(keys_vector, count);
 		auto &list_child = ListVector::GetEntry(keys_vector);
-		auto child_data = FlatVector::GetData<string_t>(list_child);
+		auto child_data = FlatVector::Writer<string_t>(list_child, count);
 		for (idx_t i = 0; i < count; i++) {
-			child_data[i] = StringVector::AddString(list_child, child_types[i].first);
+			child_data[i] = child_types[i].first;
 		}
 		ListVector::SetListSize(keys_vector, count);
 

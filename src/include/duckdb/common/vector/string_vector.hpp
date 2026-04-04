@@ -49,19 +49,6 @@ public:
 		heap = nullptr;
 	}
 
-	string_t AddString(const char *data, idx_t len) {
-		return GetHeap().AddString(data, len);
-	}
-	string_t AddString(string_t data) {
-		return GetHeap().AddString(data);
-	}
-	string_t AddBlob(string_t data) {
-		return GetHeap().AddBlob(data.GetData(), data.GetSize());
-	}
-	string_t EmptyString(idx_t len) {
-		return GetHeap().EmptyString(len);
-	}
-
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}
@@ -96,6 +83,8 @@ struct StringVector {
 	DUCKDB_API static VectorStringBuffer &GetStringBuffer(Vector &vector);
 	//! Returns a reference to the string allocator
 	DUCKDB_API static ArenaAllocator &GetStringAllocator(Vector &vector);
+	//! Returns a reference to the string heap
+	DUCKDB_API static StringHeap &GetStringHeap(Vector &vector);
 	//! Adds a reference to a handle that stores strings of this vector
 	DUCKDB_API static void AddHandle(Vector &vector, BufferHandle handle);
 	//! Add a reference from this vector to the string heap of the provided vector
