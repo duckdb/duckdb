@@ -266,6 +266,17 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v);
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+
+	// Set NULL if input is NULL.
+	auto input_validity = args.data[0].Validity(args.size());
+	if (input_validity.CanHaveNull()) {
+		auto &result_validity = FlatVector::Validity(result);
+		for (idx_t idx = 0; idx < args.size(); ++idx) {
+			if (!input_validity.IsValid(idx)) {
+				result_validity.SetInvalid(idx);
+			}
+		}
+	}
 }
 
 template <class OP, class T>
