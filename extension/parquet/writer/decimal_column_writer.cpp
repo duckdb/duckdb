@@ -1,27 +1,15 @@
 #include "writer/decimal_column_writer.hpp"
+#include "duckdb/common/bswap.hpp"
 
 namespace duckdb {
 
 static void WriteParquetDecimal(hugeint_t input, data_ptr_t result) {
-	bool positive = input >= 0;
-	// numbers are stored as two's complement so some muckery is required
-	if (!positive) {
-		input = NumericLimits<hugeint_t>::Maximum() + input + 1;
-	}
-	uint64_t high_bytes = uint64_t(input.upper);
-	uint64_t low_bytes = input.lower;
-
-	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-		result[i] = (high_bytes >> shift_count) & 0xFF;
-	}
-	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-		result[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
-	}
-	if (!positive) {
-		result[0] |= 0x80;
-	}
+	// C++ stores negative numbers in two's complement, so we just need to
+	// byte-swap each 64-bit half from little-endian to big-endian (Parquet order).
+	uint64_t high = BSWAP64(static_cast<uint64_t>(input.upper));
+	uint64_t low = BSWAP64(input.lower);
+	memcpy(result, &high, sizeof(uint64_t));
+	memcpy(result + sizeof(uint64_t), &low, sizeof(uint64_t));
 }
 
 class FixedDecimalStatistics : public ColumnWriterStatistics {

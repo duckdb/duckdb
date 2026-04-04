@@ -20,8 +20,10 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "writer/variant_column_writer.hpp"
 
 namespace duckdb {
@@ -88,7 +90,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
-		parquet_type = Type::DOUBLE;
+		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
@@ -317,6 +319,14 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 				schema_ele.logicalType.GEOMETRY.crs = crs.GetDefinition();
 			}
 		}
+		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		// Store as raw FLBA(16) with no logical type annotation.
+		// DuckDB-specific key_value_metadata (duckdb:column_types) preserves the exact type.
+		// Other engines will see opaque 16 bytes (BLOB) — this is intentional.
+		schema_ele.type_length = 16;
+		schema_ele.__isset.type_length = true;
 		break;
 	case LogicalTypeId::SQLNULL:
 		schema_ele.__isset.logicalType = true;
@@ -901,6 +911,41 @@ struct UUIDStatsUnifier : public BaseStringStatsUnifier {
 		return result;
 	}
 };
+struct HugeintStatsUnifier : public BaseStringStatsUnifier {
+	string StatsToString(const string &stats) override {
+		if (stats.size() != 16) {
+			return string();
+		}
+		auto data = const_data_ptr_cast(stats.c_str());
+		// Reverse the sign-bit flip and byte-swap to recover hugeint_t
+		uint64_t high, low;
+		memcpy(&high, data, sizeof(uint64_t));
+		memcpy(&low, data + sizeof(uint64_t), sizeof(uint64_t));
+		auto high_bytes = reinterpret_cast<uint8_t *>(&high);
+		high_bytes[0] ^= 0x80;
+		hugeint_t val;
+		val.upper = static_cast<int64_t>(BSWAP64(high));
+		val.lower = BSWAP64(low);
+		return val.ToString();
+	}
+};
+
+struct UhugeintStatsUnifier : public BaseStringStatsUnifier {
+	string StatsToString(const string &stats) override {
+		if (stats.size() != 16) {
+			return string();
+		}
+		auto data = const_data_ptr_cast(stats.c_str());
+		uint64_t high, low;
+		memcpy(&high, data, sizeof(uint64_t));
+		memcpy(&low, data + sizeof(uint64_t), sizeof(uint64_t));
+		uhugeint_t val;
+		val.upper = BSWAP64(high);
+		val.lower = BSWAP64(low);
+		return val.ToString();
+	}
+};
+
 struct NullStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 	}
@@ -946,7 +991,9 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	case LogicalTypeId::FLOAT:
 		return make_uniq<NumericStatsUnifier<float>>();
 	case LogicalTypeId::HUGEINT:
+		return make_uniq<HugeintStatsUnifier>();
 	case LogicalTypeId::UHUGEINT:
+		return make_uniq<UhugeintStatsUnifier>();
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<NumericStatsUnifier<double>>();
 	case LogicalTypeId::DECIMAL: {
@@ -1150,6 +1197,35 @@ void ParquetWriter::InitializeSchemaElements() {
 	file_meta_data.__isset.column_orders = true;
 }
 
+static void CollectHugeintColumns(const ColumnWriter &writer, string &json_entries) {
+	auto type_id = writer.Type().id();
+	if (type_id == LogicalTypeId::HUGEINT || type_id == LogicalTypeId::UHUGEINT) {
+		if (!json_entries.empty()) {
+			json_entries += ", ";
+		}
+		auto type_name = (type_id == LogicalTypeId::HUGEINT) ? "HUGEINT" : "UHUGEINT";
+		json_entries += "\"" + to_string(writer.SchemaIndex()) + "\": \"" + type_name + "\"";
+	}
+	for (auto &child : writer.ChildWriters()) {
+		CollectHugeintColumns(*child, json_entries);
+	}
+}
+
+void ParquetWriter::EmitDuckDBTypeMetadata(duckdb_parquet::FileMetaData &file_meta_data) {
+	string json_entries;
+	for (auto &cw : column_writers) {
+		CollectHugeintColumns(*cw, json_entries);
+	}
+	if (json_entries.empty()) {
+		return;
+	}
+	duckdb_parquet::KeyValue kv;
+	kv.__set_key("duckdb:column_types");
+	kv.__set_value("{" + json_entries + "}");
+	file_meta_data.key_value_metadata.push_back(kv);
+	file_meta_data.__isset.key_value_metadata = true;
+}
+
 void ParquetWriter::Finalize() {
 	InitializeSchemaElements();
 
@@ -1197,6 +1273,9 @@ void ParquetWriter::Finalize() {
 	    geoparquet_version != GeoParquetVersion::NONE) {
 		geoparquet_data->Write(file_meta_data);
 	}
+
+	// Add DuckDB type metadata for HUGEINT/UHUGEINT columns
+	EmitDuckDBTypeMetadata(file_meta_data);
 
 	Write(file_meta_data);
 
