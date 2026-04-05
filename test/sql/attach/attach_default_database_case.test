@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require noforcestorage
+
 statement ok
 ATTACH ':memory:' AS MyDB;
 
