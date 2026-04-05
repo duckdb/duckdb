@@ -1,0 +1,36 @@
+# name: test/sql/attach/attach_default_database_case.test
+# description: Test that detaching the default database works correctly with different cases
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH ':memory:' AS MyDB;
+
+statement ok
+USE MyDB;
+
+query I
+SELECT current_database()
+----
+MyDB
+
+# Detaching with different case should be blocked (it's the default database)
+statement error
+DETACH mydb;
+----
+Cannot detach database
+
+# Detaching with exact case should also be blocked
+statement error
+DETACH MyDB;
+----
+Cannot detach database
+
+# Switch back to the original default
+statement ok
+USE memory;
+
+# Now detaching with different case should work
+statement ok
+DETACH mydb;
