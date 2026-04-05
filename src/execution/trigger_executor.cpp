@@ -69,17 +69,14 @@ static void ExecuteTriggerBody(ClientContext &context, PhysicalPlan &plan) {
 	Executor trigger_executor(context);
 	trigger_executor.Initialize(plan.Root());
 	while (!trigger_executor.ExecutionIsFinished()) {
-		auto result = trigger_executor.ExecuteTask();
-		if (result == PendingExecutionResult::NO_TASKS_AVAILABLE || result == PendingExecutionResult::BLOCKED) {
-			trigger_executor.WaitForTask();
+		trigger_executor.WorkOnTasks();
+		if (trigger_executor.HasError()) {
+			trigger_executor.ThrowException();
 		}
 	}
 	// CancelTasks() spins until all worker threads release their tasks,
 	// preventing a race with ~Executor() which asserts executor_tasks == 0.
 	trigger_executor.CancelTasks();
-	if (trigger_executor.HasError()) {
-		trigger_executor.ThrowException();
-	}
 }
 
 void TriggerExecutor::Fire(ClientContext &context, const vector<TriggerInfo> &triggers, idx_t row_count) {
