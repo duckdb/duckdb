@@ -307,12 +307,14 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				bind_data->geoparquet_version = GeoParquetVersion::NONE;
 			} else if (roption == "V1") {
 				bind_data->geoparquet_version = GeoParquetVersion::V1;
+			} else if (roption == "V1_1") {
+				bind_data->geoparquet_version = GeoParquetVersion::V1_1;
 			} else if (roption == "V2") {
 				bind_data->geoparquet_version = GeoParquetVersion::V2;
 			} else if (roption == "BOTH") {
 				bind_data->geoparquet_version = GeoParquetVersion::BOTH;
 			} else {
-				throw BinderException("Expected geoparquet_version 'NONE', 'V1' or 'BOTH'");
+				throw BinderException("Expected geoparquet_version 'NONE', 'V1', 'V1_1', 'V2' or 'BOTH'");
 			}
 		} else if (loption == "write_timestamp_as_int96") {
 			bind_data->write_timestamp_as_int96 =
@@ -517,6 +519,8 @@ const char *EnumUtil::ToChars<GeoParquetVersion>(GeoParquetVersion value) {
 		return "NONE";
 	case GeoParquetVersion::V1:
 		return "V1";
+	case GeoParquetVersion::V1_1:
+		return "V1_1";
 	case GeoParquetVersion::V2:
 		return "V2";
 	case GeoParquetVersion::BOTH:
@@ -533,6 +537,9 @@ GeoParquetVersion EnumUtil::FromString<GeoParquetVersion>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "V1")) {
 		return GeoParquetVersion::V1;
+	}
+	if (StringUtil::Equals(value, "V1_1")) {
+		return GeoParquetVersion::V1_1;
 	}
 	if (StringUtil::Equals(value, "V2")) {
 		return GeoParquetVersion::V2;

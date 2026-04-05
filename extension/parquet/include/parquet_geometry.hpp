@@ -42,6 +42,13 @@ enum class GeoParquetVersion : uint8_t {
 	// GeoParquet 1.0 has the widest support among readers and writers
 	V1,
 
+	// Write GeoParquet 1.1 metadata
+	// Identical to V1 (WKB encoding) but writes "1.1.0" as the version string.
+	// GeoParquet 1.1 is the current stable specification, required by modern tools
+	// (GDAL 3.9+, geopandas 1.0+, gpq). The optional 'covering' bbox struct column
+	// introduced in 1.1 is not yet written; this is a separate enhancement.
+	V1_1,
+
 	// Write GeoParquet 2.0
 	// The GeoParquet 2.0 options is identical to GeoParquet 1.0 except the underlying storage
 	// of spatial columns is Parquet native geometry, where the Parquet writer will include
