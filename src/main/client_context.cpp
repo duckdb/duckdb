@@ -241,6 +241,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	active_query->query = query;
 
 	query_progress.Initialize();
+	timeout_check_counter = 0;
 	// Set query deadline if max_execution_time is configured
 	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
 	if (max_execution_time > 0) {
@@ -1211,9 +1212,7 @@ void ClientContext::SuppressInterrupts() {
 }
 
 void ClientContext::InterruptCheck() const {
-	// Counter for throttling timeout checks - only check every N iterations
 	static constexpr uint32_t TIMEOUT_CHECK_INTERVAL = 256;
-	thread_local uint32_t timeout_check_counter = 0;
 
 	if (interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
 		throw InterruptException();

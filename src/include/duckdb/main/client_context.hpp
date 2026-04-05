@@ -331,6 +331,8 @@ private:
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress
 	QueryProgress query_progress;
+	//! Counter for throttling timeout checks in InterruptCheck (mutable because InterruptCheck is const)
+	mutable uint32_t timeout_check_counter = 0;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
 };
