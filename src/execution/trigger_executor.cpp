@@ -1,5 +1,6 @@
 #include "duckdb/execution/trigger_executor.hpp"
 
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -50,22 +51,23 @@ static unique_ptr<SQLStatement> WrapQueryNode(QueryNode &body) {
 	}
 }
 
-static void ExecuteTriggerBody(ClientContext &context, QueryNode &body) {
+static unique_ptr<PhysicalPlan> PlanTriggerBody(ClientContext &context, QueryNode &body) {
 	Planner planner(context);
 	planner.CreatePlan(WrapQueryNode(body));
 	if (!planner.plan) {
-		return;
+		return nullptr;
 	}
 
 	Optimizer optimizer(*planner.binder, context);
 	auto logical_plan = optimizer.Optimize(std::move(planner.plan));
 
 	PhysicalPlanGenerator physical_generator(context);
-	auto physical_plan = physical_generator.Plan(std::move(logical_plan));
+	return physical_generator.Plan(std::move(logical_plan));
+}
 
+static void ExecuteTriggerBody(ClientContext &context, PhysicalPlan &plan) {
 	Executor trigger_executor(context);
-	trigger_executor.Initialize(physical_plan->Root());
-
+	trigger_executor.Initialize(plan.Root());
 	while (!trigger_executor.ExecutionIsFinished()) {
 		auto result = trigger_executor.ExecuteTask();
 		if (result == PendingExecutionResult::NO_TASKS_AVAILABLE || result == PendingExecutionResult::BLOCKED) {
@@ -88,14 +90,19 @@ void TriggerExecutor::Fire(ClientContext &context, const vector<TriggerInfo> &tr
 		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded.", MAX_TRIGGER_DEPTH);
 	}
 	TriggerDepthGuard depth_guard(context.trigger_depth);
+
 	for (auto &trigger : triggers) {
+		// Plan the body once regardless of row count
+		auto physical_plan = PlanTriggerBody(context, *trigger.body);
+		if (!physical_plan) {
+			continue;
+		}
 		if (trigger.for_each == TriggerForEach::ROW) {
 			for (idx_t i = 0; i < row_count; i++) {
-				ExecuteTriggerBody(context, *trigger.body);
+				ExecuteTriggerBody(context, *physical_plan);
 			}
 		} else {
-			// FOR EACH STATEMENT: fire once regardless of row count
-			ExecuteTriggerBody(context, *trigger.body);
+			ExecuteTriggerBody(context, *physical_plan);
 		}
 	}
 }

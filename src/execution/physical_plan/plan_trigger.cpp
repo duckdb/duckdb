@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/persistent/physical_trigger.hpp"
-#include "duckdb/execution/trigger_executor.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_trigger.hpp"
 
