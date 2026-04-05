@@ -24,11 +24,11 @@ statement error
 select skewness(*)
 ----
 
-# Constant Value
+# Constant Value (zero variance → NULL, since skewness is mathematically undefined)
 query I
 select skewness (10) from range (5)
 ----
-NAN
+NULL
 
 #Empty Table
 query I

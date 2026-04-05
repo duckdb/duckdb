@@ -58,15 +58,13 @@ struct SkewnessOperation {
 		}
 		double n = state.n;
 		double temp = 1 / n;
-		auto p = std::pow(temp * (state.sum_sqr - state.sum * state.sum * temp), 3);
-		if (p < 0) {
-			p = 0; // Shouldn't be below 0 but floating points are weird
-		}
-		double div = std::sqrt(p);
-		if (div == 0) {
-			target = NAN;
+		double variance = temp * (state.sum_sqr - state.sum * state.sum * temp);
+		if (variance <= 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
+		auto p = std::pow(variance, 3);
+		double div = std::sqrt(p);
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
 		target = temp1 * temp *
 		         (state.sum_cub - 3 * state.sum_sqr * state.sum * temp + 2 * pow(state.sum, 3) * temp * temp) / div;
