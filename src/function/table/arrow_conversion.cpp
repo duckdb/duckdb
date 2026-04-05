@@ -1204,7 +1204,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto members = UnionType::CopyMemberTypes(vector.GetType());
 
 		auto &validity_mask = FlatVector::Validity(vector);
-		auto &union_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
+		auto &union_info = arrow_type.GetTypeInfo<ArrowUnionInfo>();
 		duckdb::vector<Vector> children;
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
 			Vector child(members[child_idx].second, size);
@@ -1237,15 +1237,13 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		}
 
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			auto tag = NumericCast<uint8_t>(type_ids[row_idx]);
+			// Map the Arrow type_id to the child index using the format string mapping
+			auto raw_type_id = type_ids[row_idx];
+			auto child_idx = union_info.TypeIdToChildIndex(raw_type_id);
 
-			auto out_of_range = tag >= array.n_children;
-			if (out_of_range) {
-				throw InvalidInputException("Arrow union tag out of range: %d", tag);
-			}
-
-			const Value &value = children[tag].GetValue(row_idx);
-			vector.SetValue(row_idx, value.IsNull() ? Value() : Value::UNION(members, tag, value));
+			const Value &value = children[child_idx].GetValue(row_idx);
+			vector.SetValue(row_idx,
+			                value.IsNull() ? Value() : Value::UNION(members, NumericCast<uint8_t>(child_idx), value));
 		}
 
 		break;
