@@ -282,7 +282,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			count += stats.count;
 		}
-		for (const auto count_star_idx : count_star_idxs) {
+		// Iterate in reverse order so that insertions at higher indices don't shift
+		// the positions of lower-index insertions
+		for (auto it = count_star_idxs.rbegin(); it != count_star_idxs.rend(); ++it) {
+			auto count_star_idx = *it;
 			auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
 			agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
 			types.insert(types.begin() + NumericCast<int64_t>(count_star_idx), LogicalType::BIGINT);
