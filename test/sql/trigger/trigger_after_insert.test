@@ -247,18 +247,6 @@ SELECT COUNT(*) FROM audit_schema.cross_log;
 ----
 1
 
-# Recursive trigger guard: depth limit error
-statement ok
-CREATE TABLE recurse_tbl (id INTEGER);
-
-statement ok
-CREATE TRIGGER trg_recurse AFTER INSERT ON recurse_tbl INSERT INTO recurse_tbl VALUES (1);
-
-statement error
-INSERT INTO recurse_tbl VALUES (1);
-----
-Invalid Input Error: Trigger recursion depth limit (8) exceeded.
-
 # RETURNING with triggers is not yet supported (temporary — will be lifted when NEW/OLD references land)
 statement ok
 CREATE TABLE returning_tbl (id INTEGER);

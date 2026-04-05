@@ -1,0 +1,20 @@
+# name: test/sql/trigger/trigger_recursive.test_slow
+# description: Test recursive trigger depth limit - isolated as slow because
+# 8-level nested planning+execution exceeds the query timeout in debug builds
+# group: [trigger]
+
+require autocomplete
+
+statement ok
+call enable_peg_parser();
+
+statement ok
+CREATE TABLE recurse_tbl (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_recurse AFTER INSERT ON recurse_tbl INSERT INTO recurse_tbl VALUES (1);
+
+statement error
+INSERT INTO recurse_tbl VALUES (1);
+----
+Invalid Input Error: Trigger recursion depth limit (8) exceeded.
