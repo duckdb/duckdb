@@ -736,7 +736,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 		FlattenRunEndsSwitch<int32_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	case PhysicalType::INT64:
-		FlattenRunEndsSwitch<int32_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
+		FlattenRunEndsSwitch<int64_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	default:
 		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToString(physical_type));
