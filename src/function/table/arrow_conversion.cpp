@@ -1202,6 +1202,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto type_ids = ArrowBufferData<int8_t>(array, array.n_buffers == 1 ? 0 : 1);
 		D_ASSERT(type_ids);
 		auto members = UnionType::CopyMemberTypes(vector.GetType());
+		auto effective_offset =
+		    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 
 		auto &validity_mask = FlatVector::Validity(vector);
 		auto &union_info = arrow_type.GetTypeInfo<ArrowUnionInfo>();
@@ -1238,7 +1240,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 			// Map the Arrow type_id to the child index using the format string mapping
-			auto raw_type_id = type_ids[row_idx];
+			auto raw_type_id = type_ids[effective_offset + row_idx];
 			auto child_idx = union_info.TypeIdToChildIndex(raw_type_id);
 
 			const Value &value = children[child_idx].GetValue(row_idx);

@@ -193,51 +193,50 @@ TEST_CASE("Test Arrow union with non-identity type IDs", "[arrow]") {
 	REQUIRE(result);
 	REQUIRE(!result->HasError());
 
-	auto chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == n_rows);
-	REQUIRE(chunk->ColumnCount() == 1);
-
-	auto &col = chunk->data[0];
+	// Collect all values across chunks (STANDARD_VECTOR_SIZE may be smaller than n_rows)
+	vector<Value> values;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		REQUIRE(chunk->ColumnCount() == 1);
+		auto &col = chunk->data[0];
+		for (idx_t i = 0; i < chunk->size(); i++) {
+			values.push_back(col.GetValue(i));
+		}
+	}
+	REQUIRE(values.size() == n_rows);
 
 	// Row 0: type_id=5 -> child 0 (int32), value=42
-	auto val0 = col.GetValue(0);
-	REQUIRE(!val0.IsNull());
-	REQUIRE(UnionValue::GetTag(val0) == 0);
-	REQUIRE(UnionValue::GetValue(val0) == Value::INTEGER(42));
+	REQUIRE(!values[0].IsNull());
+	REQUIRE(UnionValue::GetTag(values[0]) == 0);
+	REQUIRE(UnionValue::GetValue(values[0]) == Value::INTEGER(42));
 
 	// Row 1: type_id=7 -> child 1 (varchar), value="hello"
-	auto val1 = col.GetValue(1);
-	REQUIRE(!val1.IsNull());
-	REQUIRE(UnionValue::GetTag(val1) == 1);
-	REQUIRE(UnionValue::GetValue(val1) == Value("hello"));
+	REQUIRE(!values[1].IsNull());
+	REQUIRE(UnionValue::GetTag(values[1]) == 1);
+	REQUIRE(UnionValue::GetValue(values[1]) == Value("hello"));
 
 	// Row 2: type_id=9 -> child 2 (float), value=3.14
-	auto val2 = col.GetValue(2);
-	REQUIRE(!val2.IsNull());
-	REQUIRE(UnionValue::GetTag(val2) == 2);
-	REQUIRE(UnionValue::GetValue(val2).GetValue<float>() == Approx(3.14f));
+	REQUIRE(!values[2].IsNull());
+	REQUIRE(UnionValue::GetTag(values[2]) == 2);
+	REQUIRE(UnionValue::GetValue(values[2]).GetValue<float>() == Approx(3.14f));
 
 	// Row 3: type_id=5 -> child 0 (int32), value=100
-	auto val3 = col.GetValue(3);
-	REQUIRE(!val3.IsNull());
-	REQUIRE(UnionValue::GetTag(val3) == 0);
-	REQUIRE(UnionValue::GetValue(val3) == Value::INTEGER(100));
+	REQUIRE(!values[3].IsNull());
+	REQUIRE(UnionValue::GetTag(values[3]) == 0);
+	REQUIRE(UnionValue::GetValue(values[3]) == Value::INTEGER(100));
 
 	// Row 4: type_id=7 -> child 1 (varchar), value="world"
-	auto val4 = col.GetValue(4);
-	REQUIRE(!val4.IsNull());
-	REQUIRE(UnionValue::GetTag(val4) == 1);
-	REQUIRE(UnionValue::GetValue(val4) == Value("world"));
+	REQUIRE(!values[4].IsNull());
+	REQUIRE(UnionValue::GetTag(values[4]) == 1);
+	REQUIRE(UnionValue::GetValue(values[4]) == Value("world"));
 
 	// Row 5: type_id=9 -> child 2 (float), value=2.72
-	auto val5 = col.GetValue(5);
-	REQUIRE(!val5.IsNull());
-	REQUIRE(UnionValue::GetTag(val5) == 2);
-	REQUIRE(UnionValue::GetValue(val5).GetValue<float>() == Approx(2.72f));
+	REQUIRE(!values[5].IsNull());
+	REQUIRE(UnionValue::GetTag(values[5]) == 2);
+	REQUIRE(UnionValue::GetValue(values[5]).GetValue<float>() == Approx(2.72f));
 
-	// Fully consume the result before cleanup
-	auto chunk2 = result->Fetch();
-	REQUIRE(!chunk2);
 	result.reset();
 }
