@@ -469,11 +469,21 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		return install_info;
 	}
 
-	auto decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
+	string decompressed_body;
+	void *extension_data;
+	idx_t extension_size;
+
+	if (GZipFileSystem::CheckIsZip(response->body.data(), response->body.size())) {
+		decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
+		extension_data = (void *)decompressed_body.data();
+		extension_size = decompressed_body.size();
+	} else {
+		extension_data = (void *)response->body.data();
+		extension_size = response->body.size();
+	}
 
 	ExtensionInstallInfo info;
-	CheckExtensionMetadataOnInstall(db, (void *)decompressed_body.data(), decompressed_body.size(), info,
-	                                extension_name);
+	CheckExtensionMetadataOnInstall(db, extension_data, extension_size, info, extension_name);
 	if (response->HasHeader("ETag")) {
 		info.etag = response->GetHeaderValue("ETag");
 	}
@@ -489,8 +499,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	QueryContext query_context(context);
 	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
-	                    decompressed_body.size(), info, db.config);
+	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info,
+	                    db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
