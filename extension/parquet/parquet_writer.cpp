@@ -539,8 +539,9 @@ void ParquetWriter::InitializeColumnWriters() {
 
 	auto &types = options.sql_types;
 
-	// V1 GeoParquet stores geometries as blobs, no logical type
-	auto allow_geometry = options.geoparquet_version != GeoParquetVersion::V1;
+	// V1 and V1_1 GeoParquet store geometries as blobs, no logical type
+	auto allow_geometry = options.geoparquet_version != GeoParquetVersion::V1 &&
+	                      options.geoparquet_version != GeoParquetVersion::V1_1;
 
 	// construct the column writers
 	column_writers.clear();
