@@ -473,7 +473,7 @@ endloop
 query II
 select atanh(1), atanh(-1);
 ----
-inf	inf
+inf	-inf
 
 query III
 select atanh(-0.5), atanh(0), atanh(0.5);
