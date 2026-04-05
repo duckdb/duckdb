@@ -55,7 +55,6 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
 	auto size = name_list.size();
 	options.name_list = std::move(name_list);
 	options.force_quote.resize(size, false);
-	options.force_quote.resize(size, false);
 
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();
@@ -175,9 +174,7 @@ void CSVWriter::FlushInternal(CSVWriterState &local_state) {
 		return;
 	}
 
-	if (!written_anything) {
-		written_anything = true;
-	} else if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
+	if (written_anything && writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
 		write_stream.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
 	}
 

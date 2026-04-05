@@ -188,6 +188,11 @@
         "name": "seed",
         "type": "int64_t",
         "serialize_property": "GetSeed()"
+      },
+      {
+        "id": 104,
+        "name": "repeatable",
+        "type": "bool"
       }
     ],
     "constructor": ["seed"]
@@ -309,11 +314,34 @@
       {
         "id": 102,
         "name": "entries",
-        "type": "vector<PivotColumnEntry>"
+        "type": "vector<PivotColumnEntry>",
+        "serialize_property": "GetEntriesForSerialization(serializer)"
       },
       {
         "id": 103,
         "name": "pivot_enum",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "PivotColumnEntry",
+    "members": [
+      {
+        "id": 100,
+        "name": "values",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 101,
+        "name": "star_expr",
+        "type": "ParsedExpression*",
+        "property": "expr"
+      },
+      {
+        "id": 102,
+        "name": "alias",
         "type": "string"
       }
     ],
@@ -419,12 +447,12 @@
       {
         "id": 100,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 101,
         "name": "column_index",
-        "type": "idx_t"
+        "type": "ProjectionIndex"
       }
     ],
     "pointer_type": "none"
@@ -502,7 +530,7 @@
       {
         "id": 100,
         "name": "filters",
-        "type": "map<idx_t, TableFilter*>"
+        "type": "map<ProjectionIndex, TableFilter*>"
       }
     ],
     "pointer_type": "none"
@@ -1145,21 +1173,31 @@
       },
       {
         "id": 103,
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "id": 104,
         "name": "column_type",
         "type": "OrderByColumnType"
       },
       {
-        "id": 104,
+        "id": 105,
         "name": "row_limit",
         "type": "optional_idx"
       },
       {
-        "id": 105,
+        "id": 106,
         "name": "row_group_offset",
+        "type": "idx_t"
+      },
+      {
+        "id": 107,
+        "name": "leading_null_group_offset",
         "type": "idx_t"
       }
     ],
-    "constructor": ["column_idx", "order_by", "order_type", "column_type", "row_limit", "row_group_offset"]
+    "constructor": ["column_idx", "order_by", "order_type", "null_order", "column_type",  "row_limit", "row_group_offset", "leading_null_group_offset"]
   },
   {
     "class": "StorageIndex",

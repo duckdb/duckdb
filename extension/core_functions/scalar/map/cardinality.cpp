@@ -9,20 +9,16 @@ namespace duckdb {
 
 static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &map = args.data[0];
-	UnifiedVectorFormat map_data;
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<uint64_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto entries = map.Values<list_entry_t>(args.size());
 
-	map.ToUnifiedFormat(args.size(), map_data);
+	auto result_data = FlatVector::Writer<uint64_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
-		auto list_entry = UnifiedVectorFormat::GetData<list_entry_t>(map_data)[map_data.sel->get_index(row)];
-		result_data[row] = list_entry.length;
-		result_validity.Set(row, map_data.validity.RowIsValid(map_data.sel->get_index(row)));
-	}
-
-	if (args.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto entry = entries[row];
+		if (!entry.IsValid()) {
+			result_data.SetInvalid(row);
+			continue;
+		}
+		result_data[row] = entries.GetValueUnsafe(row).length;
 	}
 }
 

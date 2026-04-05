@@ -30,6 +30,8 @@
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -447,8 +449,8 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
-bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<ConstantFilter>> &comparisons,
-                                    vector<reference<InFilter>> &in_filters) {
+bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_reference<ConstantFilter>> &comparisons,
+                                    vector<const_reference<InFilter>> &in_filters) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &comparison = filter.Cast<ConstantFilter>();
@@ -466,7 +468,9 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;
 	}
-	case TableFilterType::BLOOM_FILTER: {
+	case TableFilterType::BLOOM_FILTER:
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {
@@ -483,7 +487,8 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 	}
 }
 
-value_set_t GetUniqueValues(vector<reference<ConstantFilter>> &comparisons, vector<reference<InFilter>> &in_filters) {
+value_set_t GetUniqueValues(const vector<const_reference<ConstantFilter>> &comparisons,
+                            const vector<const_reference<InFilter>> &in_filters) {
 	// Get the combined unique values of the IN filters.
 	value_set_t unique_values;
 	for (idx_t filter_idx = 0; filter_idx < in_filters.size(); filter_idx++) {
@@ -525,23 +530,23 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 	}
 }
 
-vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, unique_ptr<TableFilter> &filter,
+vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
                                                         idx_t storage_idx) {
-	ColumnBinding binding(0, storage_idx);
+	ColumnBinding binding(TableIndex(0), ProjectionIndex(storage_idx));
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 
 	// Extract all comparisons and IN filters from nested filters
 	vector<unique_ptr<Expression>> expressions;
-	vector<reference<ConstantFilter>> comparisons;
-	vector<reference<InFilter>> in_filters;
-	if (ExtractComparisonsAndInFilters(*filter, comparisons, in_filters)) {
+	vector<const_reference<ConstantFilter>> comparisons;
+	vector<const_reference<InFilter>> in_filters;
+	if (ExtractComparisonsAndInFilters(filter, comparisons, in_filters)) {
 		// Deduplicate/deal with conflicting filters, then convert to expressions
 		ExtractExpressionsFromValues(GetUniqueValues(comparisons, in_filters), *bound_ref, expressions);
 	}
 
 	// Attempt matching the top-level filter to the index expression.
 	if (expressions.empty()) {
-		auto filter_expr = filter->ToExpression(*bound_ref);
+		auto filter_expr = filter.ToExpression(*bound_ref);
 		expressions.push_back(std::move(filter_expr));
 	}
 
@@ -565,13 +570,13 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Resolve bound column references in the index_expr against the current input projection
-	column_t updated_index_column;
+	ProjectionIndex updated_index_column;
 	bool found_index_column_in_input = false;
 
 	// Find the indexed column amongst the input columns
 	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
 		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = i;
+			updated_index_column = ProjectionIndex(i);
 			found_index_column_in_input = true;
 			break;
 		}
@@ -598,10 +603,10 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 
 	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
 	// Try to find a filter on the ART column.
-	optional_idx storage_index;
+	ProjectionIndex storage_index;
 	for (idx_t i = 0; i < input.column_indexes.size(); i++) {
 		if (input.column_indexes[i].ToLogical() == col.Logical()) {
-			storage_index = i;
+			storage_index = ProjectionIndex(i);
 			break;
 		}
 	}
@@ -612,8 +617,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Try to find a matching filter for the column.
-	auto filter = filter_set.filters.find(storage_index.GetIndex());
-	if (filter == filter_set.filters.end()) {
+	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
+	if (!filter) {
 		return false;
 	}
 
@@ -621,13 +626,19 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	vector<reference<ART>> arts_to_scan;
 	arts_to_scan.push_back(art);
 	if (entry.deleted_rows_in_use) {
+		if (entry.deleted_rows_in_use->GetIndexType() != ART::TYPE_NAME) {
+			throw InternalException("Concurrent changes made to a non-ART index");
+		}
 		arts_to_scan.push_back(entry.deleted_rows_in_use->Cast<ART>());
 	}
 	if (entry.added_data_during_checkpoint) {
+		if (entry.added_data_during_checkpoint->GetIndexType() != ART::TYPE_NAME) {
+			throw InternalException("Concurrent changes made to a non-ART index");
+		}
 		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
 	}
 
-	auto expressions = ExtractFilterExpressions(col, filter->second, storage_index.GetIndex());
+	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {
 		for (auto &art_ref : arts_to_scan) {
 			auto &art_to_scan = art_ref.get();
@@ -665,7 +676,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	//		1.2. Find + scan one ART for b = 24.
 	//		1.3. Return the intersecting row IDs.
 	// 2. (Reorder and) scan a single ART with a compound key of (a, b).
-	if (filter_set.filters.size() != 1) {
+	if (filter_set.FilterCount() != 1) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
@@ -774,7 +785,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &storage = duck_table.GetStorage();
 	idx_t table_rows = storage.GetTotalRows();
 	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(duck_table.GetStorage());
-	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
+	return make_uniq<NodeStatistics>(estimated_cardinality, estimated_cardinality);
 }
 
 idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {

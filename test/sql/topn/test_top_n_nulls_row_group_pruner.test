@@ -1,0 +1,21 @@
+# name: test/sql/topn/test_top_n_nulls_row_group_pruner.test
+# description: Test row group pruning with NULLS LAST and offset across mixed row groups
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+load {TEST_DIR}/top_n_nulls_row_group_pruner.duckdb
+
+statement ok
+CREATE TABLE integers AS
+SELECT NULL::BIGINT AS i FROM range(122881)
+UNION ALL
+SELECT range::BIGINT AS i FROM range(122880)
+
+restart
+
+query I
+SELECT i FROM integers ORDER BY i NULLS LAST LIMIT 1 OFFSET 122880;
+----
+NULL

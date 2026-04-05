@@ -2,6 +2,8 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -58,9 +60,9 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
-		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
+		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			ConstantVector::SetNull(result);
 		} else {
 			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
@@ -168,6 +170,11 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();
 		filters_nulls = bf.FiltersNullValues();
+		break;
+	}
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
+		filters_nulls = true;
 		break;
 	}
 	default:

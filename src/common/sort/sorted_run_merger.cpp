@@ -296,11 +296,10 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
 		case BlockIteratorStateType::IN_MEMORY:
-			in_memory_states.push_back(BlockIteratorState<BlockIteratorStateType::IN_MEMORY>(key_data));
+			in_memory_states.emplace_back(key_data);
 			break;
 		case BlockIteratorStateType::EXTERNAL:
-			external_states.push_back(
-			    BlockIteratorState<BlockIteratorStateType::EXTERNAL>(key_data, run->payload_data.get()));
+			external_states.emplace_back(key_data, run->payload_data.get());
 			break;
 		default:
 			throw NotImplementedException("SortedRunMergerLocalState::SortedRunMergerLocalState for %s",
@@ -553,7 +552,9 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 
 		// Erase from active if begin is equal to end
 		if (min_run_boundary.begin == min_run_boundary.end) {
-			active_run_idxs.erase(std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx));
+			auto it = std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx);
+			D_ASSERT(it != active_run_idxs.end());
+			active_run_idxs.erase(it);
 		}
 
 		// Update total remaining accordingly

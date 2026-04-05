@@ -6,6 +6,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/ExtendedTests.yml'
@@ -34,17 +35,19 @@ jobs:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -59,7 +62,7 @@ jobs:
     - name: Run Tests
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/${{ matrix.config }}.json "*"
+        python3 scripts/ci/run_tests.py --test-config=test/configs/${{ matrix.config }}.json ./build/reldebug/test/unittest "*"
 
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)
@@ -72,27 +75,29 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
      - name: Install
        shell: bash
-       run: brew install ninja llvm && pip install requests
+       run: |
+         python3 scripts/ci/retry.py -- brew install ninja llvm
+         python3 scripts/ci/retry.py -- pip install requests
 
      - uses: ./.github/actions/ccache-action
 
      - name: Build
        shell: bash
        run: |
-         LTO=full make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         python3 scripts/ci/retry.py -- bash -lc 'LTO=full make'
+         python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
-         make
+         python3 ../scripts/ci/retry.py -- make
          cd ..
 
      - name: Set up benchmarks
@@ -148,27 +153,29 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
      - name: Install
        shell: bash
-       run: brew install ninja llvm && pip install requests
+       run: |
+         python3 scripts/ci/retry.py -- brew install ninja llvm
+         python3 scripts/ci/retry.py -- pip install requests
 
      - uses: ./.github/actions/ccache-action
 
      - name: Build
        shell: bash
        run: |
-         CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         python3 scripts/ci/retry.py -- bash -lc "CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make"
+         python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
-         make
+         python3 ../scripts/ci/retry.py -- make
          cd ..
 
      - name: Set up benchmarks
@@ -224,17 +231,20 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            fetch-depth: 0
 
-       - uses: actions/setup-python@v5
+       - uses: actions/setup-python@v6
          with:
            python-version: '3.12'
 
        - name: Install
          shell: bash
-         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm && pip install requests
+         run: |
+           python3 scripts/ci/retry.py -- make toolsci
+           python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm
+           python3 scripts/ci/retry.py -- pip install requests
 
        - uses: ./.github/actions/ccache-action
 
@@ -246,10 +256,10 @@ jobs:
            # chmod +x llvm.sh
            # sudo ./llvm.sh 17
            #####
-           CMAKE_LLVM_PATH='/usr/lib/llvm-14' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           python3 scripts/ci/retry.py -- bash -lc "CMAKE_LLVM_PATH='/usr/lib/llvm-14' make"
+           python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
-           make
+           python3 ../scripts/ci/retry.py -- make
            cd ..
 
        - name: Set up benchmarks
@@ -305,27 +315,29 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            fetch-depth: 0
 
-       - uses: actions/setup-python@v5
+       - uses: actions/setup-python@v6
          with:
            python-version: '3.12'
 
        - name: Install
          shell: bash
-         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+         run: |
+           python3 scripts/ci/retry.py -- make toolsci
+           python3 scripts/ci/retry.py -- pip install requests
 
        - uses: ./.github/actions/ccache-action
 
        - name: Build
          shell: bash
          run: |
-           LTO='full' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           python3 scripts/ci/retry.py -- bash -lc "LTO='full' make"
+           python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
-           make
+           python3 ../scripts/ci/retry.py -- make
            cd ..
 
        - name: Set up benchmarks

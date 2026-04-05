@@ -188,8 +188,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 	// Wrap all the projected non-pk probe fields in `first` aggregates;
 	vector<unique_ptr<Expression>> aggregates;
-	for (const auto &i : join_op.right_projection_map) {
-		const auto col_idx = op.children[1]->types.size() + i;
+	for (const auto &right_proj : join_op.right_projection_map) {
+		const auto col_idx = op.children[1]->types.size() + right_proj;
 		const auto col_type = join_op.types[col_idx];
 		aggr_types.emplace_back(col_type);
 
@@ -206,7 +206,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 	// Wrap all the projected build fields in `arg_max/min` aggregates using the inequality ordering;
 	// We are doing all this first in case we can't find a matching function.
-	for (const auto &col_idx : join_op.left_projection_map) {
+	for (const auto &left_proj : join_op.left_projection_map) {
+		auto col_idx = left_proj;
 		const auto col_type = join_op.types[col_idx];
 		aggr_types.emplace_back(col_type);
 
@@ -281,6 +282,21 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
+	// If we have a predicate and its a "simple" join, then we can just plan a regular join
+	switch (op.join_type) {
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::MARK:
+		for (const auto &cond : op.conditions) {
+			if (!cond.IsComparison()) {
+				return PhysicalPlanGenerator::PlanComparisonJoin(op);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
@@ -346,7 +362,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	auto asof_end = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_LEAD, asof_type, nullptr, nullptr);
 	asof_end->children.emplace_back(asof_column->Copy());
 	// TODO: If infinities are not supported for a type, fake them by looking at LHS statistics?
-	asof_end->offset_expr = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
+	asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::BIGINT(1)));
 	for (auto equi_idx : equi_indexes) {
 		asof_end->partitions.emplace_back(op.conditions[equi_idx].GetRHS().Copy());
 	}
@@ -354,12 +370,12 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
 		asof_end->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
-		asof_end->default_expr = make_uniq<BoundConstantExpression>(Value::Infinity(asof_type));
+		asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::Infinity(asof_type)));
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_LESSTHAN:
 		asof_end->orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
-		asof_end->default_expr = make_uniq<BoundConstantExpression>(Value::NegativeInfinity(asof_type));
+		asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::NegativeInfinity(asof_type)));
 		break;
 	default:
 		throw InternalException("Invalid ASOF JOIN ordering for WINDOW");

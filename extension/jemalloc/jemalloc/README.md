@@ -119,7 +119,7 @@ int strerror_fixed(int err, char *buf, size_t buflen) {
     }
     else if (r == 0) {
         //
-        // The GNU version always succeds and should never return 0 (NULL).
+        // The GNU version always succeeds and should never return 0 (NULL).
         //
         // "The XSI-compliant strerror_r() function returns 0 on success.
         // On error, a (positive) error number is returned (since glibc

@@ -6,7 +6,7 @@
 // power(corr(y,x), 2)
 
 #include "core_functions/aggregate/algebraic/corr.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
 
 namespace duckdb {
@@ -43,17 +43,11 @@ struct RegrR2Operation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		auto var_pop_x = state.var_pop_x.count > 1 ? (state.var_pop_x.dsquared / state.var_pop_x.count) : 0;
-		if (!Value::DoubleIsFinite(var_pop_x)) {
-			throw OutOfRangeException("VARPOP(X) is out of range!");
-		}
 		if (var_pop_x == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
 		auto var_pop_y = state.var_pop_y.count > 1 ? (state.var_pop_y.dsquared / state.var_pop_y.count) : 0;
-		if (!Value::DoubleIsFinite(var_pop_y)) {
-			throw OutOfRangeException("VARPOP(Y) is out of range!");
-		}
 		if (var_pop_y == 0) {
 			target = 1;
 			return;
@@ -67,11 +61,20 @@ struct RegrR2Operation {
 	}
 };
 
+LogicalType GetRegrR2StateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("corr", CorrFun::GetFunction().GetStateType());
+	state_children.emplace_back("var_pop_x", VarPopFun::GetFunction().GetStateType());
+	state_children.emplace_back("var_pop_y", VarPopFun::GetFunction().GetStateType());
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrR2Fun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrR2StateType);
 }
 
 } // namespace duckdb

@@ -35,7 +35,7 @@ SELECT f::HUGEINT::FLOAT FROM working_floats
 loop i 0 2
 
 statement error
-SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET ${i}) t1
+SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET {i}) t1
 ----
 <REGEX>:Conversion Error.*FLOAT.*is out of range for.*INT128.*
 
@@ -72,7 +72,7 @@ SELECT f::HUGEINT::DOUBLE FROM working_doubles
 loop i 0 4
 
 statement error
-SELECT f::HUGEINT FROM (SELECT f FROM broken_doubles ORDER BY f LIMIT 1 OFFSET ${i}) t1
+SELECT f::HUGEINT FROM (SELECT f FROM broken_doubles ORDER BY f LIMIT 1 OFFSET {i}) t1
 ----
 <REGEX>:Conversion Error.*DOUBLE.*is out of range for.*INT128.*
 
@@ -110,7 +110,7 @@ SELECT f::HUGEINT FROM working_strings
 loop i 0 14
 
 statement error
-SELECT f::HUGEINT FROM (SELECT f FROM broken_strings ORDER BY f LIMIT 1 OFFSET ${i}) t1
+SELECT f::HUGEINT FROM (SELECT f FROM broken_strings ORDER BY f LIMIT 1 OFFSET {i}) t1
 ----
 <REGEX>:Conversion Error.*string.*INT128.*
 

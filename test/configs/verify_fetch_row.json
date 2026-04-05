@@ -26,19 +26,15 @@
       ]
     },
     {
-      "reason": "FIXME: crash/error in test",
+      "reason": "VARIANT storage requires a newer storage version than this configuration uses",
       "paths": [
-        "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
-        "test/sql/storage/compression/roaring/roaring_bool_inverted_run_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
-        "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple_w_null.test",
-        "test/sql/storage/compression/roaring/roaring_bool_run_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_inverted_array_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_first_is_null.test",
-        "test/sql/storage/compression/roaring/roaring_bool_fetch_row.test",
-        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
+        "test/sql/storage/types/variant/extension_types.test"
+      ]
+    },
+    {
+      "reason": "No stats",
+      "paths": [
+        "test/sql/types/geo/geometry_shred_types.test_slow"
       ]
     },
     {
@@ -46,6 +42,26 @@
       "paths": [
         "test/sql/attach/show_databases.test",
         "test/sql/attach/show_schemas.test"
+      ]
+    },
+    {
+      "reason": "Requires latest storage version.",
+      "paths": [
+        "test/geoparquet/mixed.test",
+        "test/parquet/variant/variant_comparison.test",
+        "test/parquet/variant/variant_json_copy.test",
+        "test/sql/storage/types/variant/index_fetch.test",
+        "test/sql/storage/types/variant/update.test",
+        "test/sql/types/geo/geometry_crs.test",
+        "test/sql/types/geo/geometry_stats.test"
+      ]
+    },
+    {
+      "reason": "CREATE TRIGGER requires storage version v2.0.0",
+      "paths": [
+        "test/sql/trigger/create_trigger_catalog.test",
+        "test/sql/trigger/create_trigger_parse.test",
+        "test/sql/trigger/create_trigger_wal.test"
       ]
     }
   ]

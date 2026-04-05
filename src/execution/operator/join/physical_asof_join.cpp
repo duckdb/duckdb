@@ -61,14 +61,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	children.push_back(right);
 
 	//	Fill out the right projection map.
-	right_projection_map = op.right_projection_map;
-	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
-		right_projection_map.reserve(right_count);
-		for (column_t i = 0; i < right_count; ++i) {
-			right_projection_map.emplace_back(i);
-		}
-	}
+	right_projection_map = FillProjectionMap(children[1].get(), op.right_projection_map);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1039,7 +1032,7 @@ void AsOfProbeBuffer::ScanLeft() {
 	}
 
 	// Filter out NULL matches
-	if (!lhs_valid_mask.AllValid()) {
+	if (lhs_valid_mask.CanHaveNull()) {
 		const auto count = lhs_match_count;
 		lhs_match_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
@@ -1596,6 +1589,7 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
 			if (!gsource.HasMoreTasks()) {
 				gsource.UnblockTasks();
+				break;
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
@@ -1629,8 +1623,7 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 		const auto &op = gsource.op;
 		const idx_t left_column_count = op.children[0].get().GetTypes().size();
 		for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(chunk.data[col_idx], true);
+			ConstantVector::SetNull(chunk.data[col_idx]);
 		}
 		for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
 			const auto rhs_idx = op.right_projection_map[col_idx];

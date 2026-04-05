@@ -115,11 +115,12 @@ public:
 
 		static bool ComputeOffset(ClientContext &context, BoundWindowExpression &wexpr, int64_t &offset) {
 			offset = 1;
-			if (wexpr.offset_expr) {
-				if (wexpr.offset_expr->HasParameter() || !wexpr.offset_expr->IsFoldable()) {
+			if (wexpr.children.size() > 1) {
+				auto &offset_expr = wexpr.children[1];
+				if (offset_expr->HasParameter() || !offset_expr->IsFoldable()) {
 					return false;
 				}
-				auto offset_value = ExpressionExecutor::EvaluateScalar(context, *wexpr.offset_expr);
+				auto offset_value = ExpressionExecutor::EvaluateScalar(context, *offset_expr);
 				if (offset_value.IsNull()) {
 					return false;
 				}
@@ -138,15 +139,16 @@ public:
 		}
 
 		static bool ComputeDefault(ClientContext &context, BoundWindowExpression &wexpr, Value &result) {
-			if (!wexpr.default_expr) {
+			if (wexpr.children.size() < 3) {
 				result = Value(wexpr.return_type);
 				return true;
 			}
 
-			if (wexpr.default_expr && (wexpr.default_expr->HasParameter() || !wexpr.default_expr->IsFoldable())) {
+			auto &default_expr = wexpr.children[2];
+			if (default_expr && (default_expr->HasParameter() || !default_expr->IsFoldable())) {
 				return false;
 			}
-			auto dflt_value = ExpressionExecutor::EvaluateScalar(context, *wexpr.default_expr);
+			auto dflt_value = ExpressionExecutor::EvaluateScalar(context, *default_expr);
 			return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
 		}
 
@@ -541,7 +543,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
 				auto &prev = *state.const_vectors[expr_idx];
-				if (validity.AllValid()) {
+				if (validity.CannotHaveNull()) {
 					prev.Reference(arg.GetValue(0));
 					result.Reference(prev);
 				} else {
@@ -576,7 +578,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				UnifiedVectorFormat unified;
 				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
-				if (validity.AllValid()) {
+				if (validity.CannotHaveNull()) {
 					VectorOperations::Copy(arg, result, count, 0, 0);
 				} else {
 					//	Copy the data as it may be a reference to the argument
@@ -760,6 +762,7 @@ InsertionOrderPreservingMap<string> PhysicalStreamingWindow::ParamsToString() co
 		projections += select_list[i]->GetName();
 	}
 	result["Projections"] = projections;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -10,6 +12,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -337,7 +340,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 54>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 53>(input.child_stats);
 		}
 	};
 
@@ -426,7 +429,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000000000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999999>(input.child_stats);
 		}
 	};
 
@@ -438,7 +441,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999>(input.child_stats);
 		}
 	};
 
@@ -450,7 +453,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60000>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999>(input.child_stats);
 		}
 	};
 
@@ -462,7 +465,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
 		}
 	};
 
@@ -474,7 +477,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
 		}
 	};
 
@@ -2012,20 +2015,18 @@ struct StructDatePart {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
-				ConstantVector::SetNull(result, false);
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
-					ConstantVector::SetNull(*child_entry, false);
 					const auto part_index = size_t(info.part_codes[col]);
 					if (owners[part_index] == col) {
 						if (IsBigintDatepart(info.part_codes[col])) {
 							bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-							    ConstantVector::GetData<int64_t>(*child_entry);
+							    ConstantVector::GetData<int64_t>(child_entry);
 						} else {
 							double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-							    ConstantVector::GetData<double>(*child_entry);
+							    ConstantVector::GetData<double>(child_entry);
 						}
 					}
 				}
@@ -2034,16 +2035,12 @@ struct StructDatePart {
 					DatePart::StructOperator::Operation(bigint_values, double_values, tdata[0], 0, part_mask);
 				} else {
 					for (auto &child_entry : child_entries) {
-						ConstantVector::SetNull(*child_entry, true);
+						ConstantVector::SetNull(child_entry);
 					}
 				}
 			}
 		} else {
-			UnifiedVectorFormat rdata;
-			input.ToUnifiedFormat(count, rdata);
-
-			const auto &arg_valid = rdata.validity;
-			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
+			auto entries = input.template Values<INPUT_TYPE>(count);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -2055,8 +2052,8 @@ struct StructDatePart {
 			// Start with valid children
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
-				child_entry->SetVectorType(VectorType::FLAT_VECTOR);
-				auto &child_validity = FlatVector::Validity(*child_entry);
+				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
+				auto &child_validity = FlatVector::Validity(child_entry);
 				if (child_validity.GetData()) {
 					child_validity.SetAllValid(count);
 				}
@@ -2066,28 +2063,28 @@ struct StructDatePart {
 				if (owners[part_index] == col) {
 					if (IsBigintDatepart(info.part_codes[col])) {
 						bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-						    FlatVector::GetData<int64_t>(*child_entry);
+						    FlatVector::GetData<int64_t>(child_entry);
 					} else {
 						double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-						    FlatVector::GetData<double>(*child_entry);
+						    FlatVector::GetData<double>(child_entry);
 					}
 				}
 			}
 
 			for (idx_t i = 0; i < count; ++i) {
-				const auto idx = rdata.sel->get_index(i);
-				if (arg_valid.RowIsValid(idx)) {
-					if (Value::IsFinite(tdata[idx])) {
-						DatePart::StructOperator::Operation(bigint_values, double_values, tdata[idx], i, part_mask);
+				auto entry = entries[i];
+				if (entry.IsValid()) {
+					if (Value::IsFinite(entry.value)) {
+						DatePart::StructOperator::Operation(bigint_values, double_values, entry.value, i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
-							FlatVector::Validity(*child_entry).SetInvalid(i);
+							FlatVector::Validity(child_entry).SetInvalid(i);
 						}
 					}
 				} else {
 					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(*child_entry).SetInvalid(i);
+						FlatVector::Validity(child_entry).SetInvalid(i);
 					}
 				}
 			}
@@ -2098,7 +2095,7 @@ struct StructDatePart {
 			const auto part_index = size_t(info.part_codes[col]);
 			const auto owner = owners[part_index];
 			if (owner != col) {
-				child_entries[col]->Reference(*child_entries[owner]);
+				child_entries[col].Reference(child_entries[owner]);
 			}
 		}
 

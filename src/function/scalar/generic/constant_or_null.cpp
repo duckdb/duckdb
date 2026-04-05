@@ -33,7 +33,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		switch (args.data[idx].GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
 			auto &input_mask = FlatVector::Validity(args.data[idx]);
-			if (!input_mask.AllValid()) {
+			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
@@ -45,23 +45,21 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		case VectorType::CONSTANT_VECTOR: {
 			if (ConstantVector::IsNull(args.data[idx])) {
 				// input is constant null, return constant null
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
 				auto &result_mask = ConstantVector::Validity(result);
 				auto &input_mask = ConstantVector::Validity(args.data[idx]);
 				result_mask.Initialize(input_mask);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 				return;
 			}
 			break;
 		}
 		default: {
-			UnifiedVectorFormat vdata;
-			args.data[idx].ToUnifiedFormat(args.size(), vdata);
-			if (!vdata.validity.AllValid()) {
+			auto entries = args.data[idx].Validity(args.size());
+			if (entries.CanHaveNull()) {
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
 				for (idx_t i = 0; i < args.size(); i++) {
-					if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+					if (!entries.IsValid(i)) {
 						result_mask.SetInvalid(i);
 					}
 				}

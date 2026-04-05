@@ -60,7 +60,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 }
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, result_offset + scan_count);
 
 	// Handling non-bitpacking-group-aligned start values;
 	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;

@@ -2,7 +2,7 @@
 # description: Test dropping a table when we have many blocks
 # group: [partial_blocks]
 
-load __TEST_DIR__/many_columns.db
+load {TEST_DIR}/many_columns.db
 
 statement ok
 BEGIN TRANSACTION
@@ -31,25 +31,25 @@ COMMIT
 loop i 0 100
 
 query I
-SELECT i${i}=${i} FROM integers
+SELECT i{i}={i} FROM integers
 ----
 true
 false
 
 query I
-SELECT i${i}=${i}+1 FROM integers
+SELECT i{i}={i}+1 FROM integers
 ----
 false
 true
 
 query I
-SELECT i${i}=${i} FROM integers2
+SELECT i{i}={i} FROM integers2
 ----
 true
 false
 
 query I
-SELECT i${i}=${i}+1 FROM integers2
+SELECT i{i}={i}+1 FROM integers2
 ----
 false
 true
@@ -62,13 +62,13 @@ DROP TABLE integers2
 loop i 0 100
 
 query I
-SELECT i${i}=${i} FROM integers
+SELECT i{i}={i} FROM integers
 ----
 true
 false
 
 query I
-SELECT i${i}=${i}+1 FROM integers
+SELECT i{i}={i}+1 FROM integers
 ----
 false
 true

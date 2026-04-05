@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
@@ -50,8 +51,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		auto &map = args.data[i];
 		map.ToUnifiedFormat(count, map_formats[i]);
 	}
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
-
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		// Loop through all the maps per list
 		// we cant do better because all the entries of the child vector have to be contiguous
@@ -116,11 +116,6 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			ListVector::PushBack(result, list_entry);
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 bool IsEmptyMap(const LogicalType &map) {

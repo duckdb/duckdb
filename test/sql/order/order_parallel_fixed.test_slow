@@ -28,10 +28,10 @@ foreach pragma true false
 foreach mem 50 500
 
 statement ok
-PRAGMA debug_force_external=${pragma}
+PRAGMA debug_force_external={pragma}
 
 statement ok
-PRAGMA memory_limit='${mem}MB'
+PRAGMA memory_limit='{mem}MB'
 
 statement ok
 create table test as (select range i from range(100000));

@@ -605,7 +605,7 @@ public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
 	ColumnDataCheckpointData &checkpoint_data;
 	PartialBlockManager &partial_block_manager;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 
 	//! --- Analyzed Data ---
 	//! The amount of tuples we're writing
@@ -934,8 +934,8 @@ public:
 		for (idx_t i = 0; i < count; i++) {
 			uncompressed_length += string_lengths[i];
 		}
-		auto &buffer = StringVector::GetStringBuffer(result);
-		auto uncompressed_data = buffer.AllocateShrinkableBuffer(uncompressed_length);
+		auto &allocator = StringVector::GetStringAllocator(result);
+		auto uncompressed_data = StringVector::AllocateShrinkableBuffer(allocator, uncompressed_length);
 		auto string_data = FlatVector::GetData<string_t>(result);
 
 		DecompressString(scan_state, uncompressed_data, uncompressed_length);

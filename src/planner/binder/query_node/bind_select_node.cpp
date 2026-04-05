@@ -253,7 +253,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 }
 
 unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
-                                             const vector<LogicalType> &sql_types, idx_t table_index, idx_t index) {
+                                             const vector<LogicalType> &sql_types, TableIndex table_index,
+                                             ProjectionIndex index) {
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
@@ -265,7 +266,7 @@ unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const 
 	return std::move(result);
 }
 
-unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index,
+unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, TableIndex table_index,
                                                    const vector<string> &names, const vector<LogicalType> &sql_types,
                                                    const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
@@ -290,7 +291,7 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 		if (struct_values.size() == 2) {
 			collation = StringValue::Get(struct_values[1]);
 		}
-		auto result = CreateOrderExpression(std::move(expr), names, sql_types, table_index, index);
+		auto result = CreateOrderExpression(std::move(expr), names, sql_types, table_index, ProjectionIndex(index));
 		if (!collation.empty()) {
 			if (sql_types[index].id() != LogicalTypeId::VARCHAR) {
 				throw BinderException(*result, "COLLATE can only be applied to varchar columns");
@@ -304,7 +305,7 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index, const vector<string> &names,
+static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<string> &names,
                              const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	if (!expr) {
 		return;
@@ -319,7 +320,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index, co
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
-void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
                            const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
@@ -359,7 +360,8 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				auto null_order = order.orders[0].null_order;
 				order.orders.clear();
 				for (idx_t i = 0; i < sql_types.size(); i++) {
-					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(table_index, i));
+					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i],
+					                                                ColumnBinding(table_index, ProjectionIndex(i)));
 					if (i < names.size()) {
 						expr->SetAlias(names[i]);
 					}
@@ -491,7 +493,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			// the reason we want the unbound copy is because we want to figure out whether an expression
 			// is a group reference BEFORE binding in the SELECT/HAVING binder
 			group_binder.unbound_expression = group_expressions[i]->Copy();
-			group_binder.bind_index = i;
+			group_binder.bind_index = ProjectionIndex(i);
 
 			// bind the groups
 			LogicalType group_type;
@@ -507,7 +509,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			if (!contains_subquery && requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
-				info.collated_groups[i] = result.aggregates.size();
 
 				auto first_fun = FirstFunctionGetter::GetFunction(bound_expr_ref.return_type);
 				vector<unique_ptr<Expression>> first_children;
@@ -517,7 +518,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				function->SetAlias("__collated_group");
-				result.aggregates.push_back(std::move(function));
+
+				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
+				info.collated_groups[ProjectionIndex(i)] = collated_idx;
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 
@@ -527,7 +530,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = std::move(group_binder.unbound_expression);
 			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
-			info.map[*unbound_groups[i]] = i;
+			info.map[*unbound_groups[i]] = ProjectionIndex(i);
 		}
 		this->can_contain_nulls = prev_can_contain_nulls;
 	}
@@ -634,19 +637,19 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	}
 
 	// push the GROUP BY ALL expressions into the group set
-
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result.select_list[group_by_all_index];
-		auto group_ref = make_uniq<BoundColumnRefExpression>(
-		    expr->return_type, ColumnBinding(result.group_index, result.groups.group_expressions.size()));
-		result.groups.group_expressions.push_back(std::move(expr));
+		auto &return_type = expr->return_type;
+		auto group_proj_idx = ColumnBinding::PushExpression(result.groups.group_expressions, std::move(expr));
+		auto group_ref =
+		    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.group_index, group_proj_idx));
 		expr = std::move(group_ref);
 	}
-	set<idx_t> group_by_all_indexes_set;
+	set<ProjectionIndex> group_by_all_indexes_set;
 	if (!group_by_all_indexes.empty()) {
 		idx_t num_set_indexes = result.groups.group_expressions.size();
 		for (idx_t i = 0; i < num_set_indexes; i++) {
-			group_by_all_indexes_set.insert(i);
+			group_by_all_indexes_set.emplace(i);
 		}
 		D_ASSERT(result.groups.grouping_sets.empty());
 		result.groups.grouping_sets.push_back(group_by_all_indexes_set);

@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
@@ -48,8 +53,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		HandleCastError::AssignError(msg, parameters);
 		if (!parameters.strict) {
 			// if this was a TRY_CAST, we know every row will fail, so just return null
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return false;
 		}
 	}
@@ -59,7 +63,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		}
 
 		auto &source_cc = ArrayVector::GetEntry(source);

@@ -1,0 +1,35 @@
+# name: test/parquet/variant/variant_legacy_encoding.test
+# group: [variant]
+
+load {TEST_DIR}/variant_legacy_encoding.db readwrite v1.5.0
+
+require parquet
+
+query I
+select current_setting('__delta_only_variant_encoding_enabled')
+----
+false
+
+statement error
+set __delta_only_variant_encoding_enabled = true;
+----
+Invalid Input Error: This setting is not adjustable by a user
+
+statement error
+reset __delta_only_variant_encoding_enabled;
+----
+Invalid Input Error: This setting is not adjustable by a user
+
+statement ok
+create table tbl(col VARIANT)
+
+statement ok
+insert into tbl select 42;
+
+statement ok
+copy (select * from tbl) to '{TEST_DIR}/variant_parquet_simple.parquet'
+
+query I
+select * from '{TEST_DIR}/variant_parquet_simple.parquet';
+----
+42

@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
+LogicalDelete::LogicalDelete(TableCatalogEntry &table, TableIndex table_index)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),
       return_chunk(false) {
 }
@@ -24,8 +24,8 @@ idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
-vector<idx_t> LogicalDelete::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalDelete::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
@@ -34,7 +34,7 @@ vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
 		auto virtual_columns = table.GetVirtualColumns();
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + virtual_columns.size());
 	}
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 void LogicalDelete::ResolveTypes() {
@@ -53,7 +53,7 @@ void LogicalDelete::ResolveTypes() {
 string LogicalDelete::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

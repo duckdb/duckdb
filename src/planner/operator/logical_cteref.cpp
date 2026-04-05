@@ -6,19 +6,19 @@ namespace duckdb {
 
 InsertionOrderPreservingMap<string> LogicalCTERef::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["CTE Index"] = StringUtil::Format("%llu", cte_index);
+	result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
 	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
-vector<idx_t> LogicalCTERef::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalCTERef::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalCTERef::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

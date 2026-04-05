@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/exceed_single_block_types.db
+load {TEST_DIR}/exceed_single_block_types.db
 
 statement ok
 SET force_compression='uncompressed'
@@ -17,10 +17,10 @@ INSERT INTO test VALUES (repeat('a', 64), 1)
 loop i 2 6
 
 statement ok
-INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, ${i} FROM test
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, {i} FROM test
 
 statement ok
-DELETE FROM test WHERE j=${i} - 1
+DELETE FROM test WHERE j={i} - 1
 
 endloop
 

@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/operator/projection/physical_unnest.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
@@ -236,8 +239,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			    ListVector::GetListSize(list_vector) == 0) {
 				// UNNEST(NULL) or UNNEST([])
 				// we cannot slice empty lists - but if our child list is empty we can only return NULL anyway
-				result_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result_vector, true);
+				ConstantVector::SetNull(result_vector);
 				continue;
 			}
 			auto &child_vector = ListVector::GetEntry(list_vector);

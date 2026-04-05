@@ -9,18 +9,18 @@ pragma enable_verification
 foreach type <integral>
 
 query I
-SELECT list_value(1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+SELECT list_value(1::{type}, 2::{type}, 3::{type}, 4::{type}, 5::{type});
 ----
 [1, 2, 3, 4, 5]
 
 query I
-SELECT list_value(NULL::${type}, 1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+SELECT list_value(NULL::{type}, 1::{type}, 2::{type}, 3::{type}, 4::{type}, 5::{type});
 ----
 [NULL, 1, 2, 3, 4, 5]
 
 # in a table
 statement ok
-CREATE TABLE tbl (i ${type}, j ${type}, k ${type}, l ${type}, m ${type});
+CREATE TABLE tbl (i {type}, j {type}, k {type}, l {type}, m {type});
 
 statement ok
 INSERT INTO tbl VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20);
@@ -44,18 +44,18 @@ foreach type_a <signed>
 foreach type_b <signed>
 
 query I
-SELECT list_value(1::${type_a}, 2::${type_b}, 3::${type_b}, 4::${type_a}, 5::${type_a});
+SELECT list_value(1::{type_a}, 2::{type_b}, 3::{type_b}, 4::{type_a}, 5::{type_a});
 ----
 [1, 2, 3, 4, 5]
 
 query I
-SELECT list_value(NULL::${type_a}, 1::${type_b}, 2::${type_a}, 3::${type_b}, 4::${type_a}, 5::${type_a});
+SELECT list_value(NULL::{type_a}, 1::{type_b}, 2::{type_a}, 3::{type_b}, 4::{type_a}, 5::{type_a});
 ----
 [NULL, 1, 2, 3, 4, 5]
 
 # in a table
 statement ok
-CREATE TABLE tbl (i ${type_b}, j ${type_b}, k ${type_a}, l ${type_b}, m ${type_a});
+CREATE TABLE tbl (i {type_b}, j {type_b}, k {type_a}, l {type_b}, m {type_a});
 
 statement ok
 INSERT INTO tbl VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20);
@@ -78,18 +78,18 @@ endloop
 foreach type float double
 
 query I
-SELECT list_value(1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+SELECT list_value(1::{type}, 2::{type}, 3::{type}, 4::{type}, 5::{type});
 ----
 [1.0, 2.0, 3.0, 4.0, 5.0]
 
 query I
-SELECT list_value(NULL::${type}, 1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+SELECT list_value(NULL::{type}, 1::{type}, 2::{type}, 3::{type}, 4::{type}, 5::{type});
 ----
 [NULL, 1.0, 2.0, 3.0, 4.0, 5.0]
 
 # in a table
 statement ok
-CREATE TABLE tbl (i ${type}, j ${type}, k ${type}, l ${type}, m ${type});
+CREATE TABLE tbl (i {type}, j {type}, k {type}, l {type}, m {type});
 
 statement ok
 INSERT INTO tbl VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20);

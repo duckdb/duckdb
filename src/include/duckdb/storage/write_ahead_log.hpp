@@ -27,6 +27,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class ScalarMacroCatalogEntry;
 class ViewCatalogEntry;
+class TriggerCatalogEntry;
 class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
@@ -35,7 +36,6 @@ class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
 
 enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
-enum class WALReplayState { MAIN_WAL, CHECKPOINT_WAL };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -55,6 +55,7 @@ public:
 	                                        const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
+	StorageManager &GetStorageManager();
 
 	const string &GetPath() const {
 		return wal_path;
@@ -94,6 +95,9 @@ public:
 
 	void WriteCreateType(const TypeCatalogEntry &entry);
 	void WriteDropType(const TypeCatalogEntry &entry);
+
+	void WriteCreateTrigger(const TriggerCatalogEntry &entry);
+	void WriteDropTrigger(const TriggerCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(const string &schema, const string &table);
 
@@ -112,19 +116,13 @@ public:
 	//! -> 0 (first subcolumn of INT)
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
-	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
+	//! Truncate the WAL to a previous size, and clear anything currently set in the writer.
+	//! Used during RevertCommit.
 	void Truncate(idx_t size);
 	void Flush();
-	//! Increment the WAL entry count (for autocheckpoint threshold)
+	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
-
 	void WriteCheckpoint(MetaBlockPointer meta_block);
-
-protected:
-	//! Internally replay all WAL entries. QueryContext is passed for metric collection purposes only!!
-	static unique_ptr<WriteAheadLog> ReplayInternal(QueryContext context, StorageManager &storage_manager,
-	                                                unique_ptr<FileHandle> handle,
-	                                                WALReplayState replay_state = WALReplayState::MAIN_WAL);
 
 protected:
 	StorageManager &storage_manager;

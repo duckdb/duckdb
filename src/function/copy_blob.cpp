@@ -95,16 +95,11 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 
 	auto &handle = state.handle;
 
-	UnifiedVectorFormat vdata;
-	input.data[0].ToUnifiedFormat(input.size(), vdata);
-	const auto blobs = UnifiedVectorFormat::GetData<string_t>(vdata);
-
 	QueryContext query_context(context.client);
 
-	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
-		const auto out_idx = vdata.sel->get_index(row_idx);
-		if (vdata.validity.RowIsValid(out_idx)) {
-			auto &blob = blobs[out_idx];
+	for (auto entry : input.data[0].Values<string_t>(input.size())) {
+		if (entry.IsValid()) {
+			auto &blob = entry.value;
 			auto blob_len = blob.GetSize();
 			auto blob_ptr = blob.GetDataWriteable();
 			auto blob_end = blob_ptr + blob_len;

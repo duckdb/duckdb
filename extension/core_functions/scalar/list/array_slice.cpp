@@ -168,7 +168,7 @@ void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vect
 	auto step_valid = step_vector && !ConstantVector::IsNull(*step_vector);
 
 	if (!str_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -213,7 +213,7 @@ void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vect
 
 	// Try to slice
 	if (!clamp_result) {
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 	} else if (step == 1) {
 		result_data[0] = OP::SliceValue(result, str, begin, end);
 	} else {
@@ -242,9 +242,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		sel.Initialize(ListVector::GetListSize(list_vector));
 	}
 
-	auto result_data = FlatVector::GetData<INPUT_TYPE>(result);
-	auto &result_mask = FlatVector::Validity(result);
-
+	auto result_data = FlatVector::Writer<INPUT_TYPE>(result, count);
 	for (idx_t i = 0; i < count; ++i) {
 		auto list_idx = list_data.sel->get_index(i);
 		auto begin_idx = begin_data.sel->get_index(i);
@@ -257,14 +255,14 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-			result_mask.SetInvalid(i);
+			result_data.SetInvalid(i);
 			continue;
 		}
 
-		auto sliced = reinterpret_cast<INPUT_TYPE *>(list_data.data)[list_idx];
-		auto begin = begin_is_empty ? 0 : reinterpret_cast<INDEX_TYPE *>(begin_data.data)[begin_idx];
-		auto end = end_is_empty ? OP::ValueLength(sliced) : reinterpret_cast<INDEX_TYPE *>(end_data.data)[end_idx];
-		auto step = step_vector ? reinterpret_cast<INDEX_TYPE *>(step_data.data)[step_idx] : 1;
+		auto sliced = UnifiedVectorFormat::GetData<INPUT_TYPE>(list_data)[list_idx];
+		auto begin = begin_is_empty ? 0 : UnifiedVectorFormat::GetData<INDEX_TYPE>(begin_data)[begin_idx];
+		auto end = end_is_empty ? OP::ValueLength(sliced) : UnifiedVectorFormat::GetData<INDEX_TYPE>(end_data)[end_idx];
+		auto step = step_vector ? UnifiedVectorFormat::GetData<INDEX_TYPE>(step_data)[step_idx] : 1;
 
 		if (step < 0) {
 			swap(begin, end);
@@ -285,7 +283,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		sel_length += length;
 
 		if (!clamp_result) {
-			result_mask.SetInvalid(i);
+			result_data.SetInvalid(i);
 		} else if (!step_vector) {
 			result_data[i] = OP::SliceValue(result, sliced, begin, end);
 		} else {
@@ -336,8 +334,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
 
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -353,8 +350,6 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &info = func_expr.bind_info->Cast<ListSliceBindData>();
 	auto begin_is_empty = info.begin_is_empty;
 	auto end_is_empty = info.end_is_empty;
-
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST: {
 		// Share the value dictionary as we are just going to slice it

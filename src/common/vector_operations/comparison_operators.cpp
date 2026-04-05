@@ -156,8 +156,7 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 
 	if ((left_constant && ConstantVector::IsNull(left)) || (right_constant && ConstantVector::IsNull(right))) {
 		// either left or right is constant NULL: result is constant NULL
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -182,7 +181,7 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	UnifiedVectorFormat leftv, rightv;
 	left.ToUnifiedFormat(count, leftv);
 	right.ToUnifiedFormat(count, rightv);
-	if (!leftv.validity.AllValid() || !rightv.validity.AllValid()) {
+	if (leftv.validity.CanHaveNull() || rightv.validity.CanHaveNull()) {
 		ComparesNotNull(leftv, rightv, result_validity, count);
 	}
 	ValidityMask original_mask;

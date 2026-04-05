@@ -37,7 +37,7 @@ static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const S
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rsel.get_index(i);
 		// allocate an empty string of the required size
@@ -82,19 +82,11 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	UnifiedVectorFormat vdata;
 	separator.ToUnifiedFormat(args.size(), vdata);
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			break;
-		}
-	}
 	switch (separator.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		// no null values

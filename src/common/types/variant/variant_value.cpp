@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant_value.hpp"
 #include "yyjson.hpp"
 
@@ -660,7 +664,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	auto &keys = VariantVector::GetKeys(result);
 	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	DataChunk conversion_offsets;
 	conversion_offsets.Initialize(

@@ -15,11 +15,7 @@ void DictionaryAnalyzeState::AddNewString(string_t str) {
 	current_tuple_count++;
 	current_unique_count++;
 	current_dict_size += str.GetSize();
-	if (str.IsInlined()) {
-		current_set.insert(str);
-	} else {
-		current_set.insert(heap.AddBlob(str));
-	}
+	current_set.insert(heap.AddBlob(str));
 	current_width = next_width;
 }
 

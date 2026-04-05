@@ -72,7 +72,7 @@ void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<double>(result);
+	auto result_data = FlatVector::Writer<double>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i] = lstate.random_engine.NextRandom();
 	}
@@ -90,8 +90,7 @@ void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<hugeint_t>(result);
-
+	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i] = UUIDv4::GenerateRandomUUID(lstate.random_engine);
 	}
@@ -102,8 +101,7 @@ void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<hugeint_t>(result);
-
+	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i] = UUIDv7::GenerateRandomUUID(lstate.random_engine);
 	}

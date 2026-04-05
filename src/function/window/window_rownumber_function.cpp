@@ -1,6 +1,8 @@
 #include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
+#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -48,11 +50,25 @@ public:
 //===--------------------------------------------------------------------===//
 class WindowRowNumberLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowRowNumberLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
+	WindowRowNumberLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
 	    : WindowExecutorBoundsLocalState(context, grstate), grstate(grstate) {
 		if (grstate.token_tree) {
 			local_tree = grstate.token_tree->GetLocalState(context);
 		}
+
+		auto &required = state.required;
+		required.clear();
+
+		const auto &wexpr = grstate.executor.wexpr;
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -90,6 +106,11 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
+WindowFunction RowNumberFunc::GetFunction() {
+	WindowFunction fun("row_number", {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
+	return fun;
+}
+
 WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
 	for (const auto &order : wexpr.arg_orders) {
@@ -139,10 +160,42 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowNtileExecutor
 //===--------------------------------------------------------------------===//
+class WindowNtileLocalState : public WindowRowNumberLocalState {
+public:
+	WindowNtileLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
+	    : WindowRowNumberLocalState(context, grstate) {
+		const auto &wexpr = grstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+			required.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
+	}
+};
+
+WindowFunction NtileFunc::GetFunction() {
+	WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
+	return fun;
+}
+
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowRowNumberExecutor(wexpr, shared) {
 	// NTILE has one argument
 	ntile_idx = shared.RegisterEvaluate(wexpr.children[0]);
+}
+
+unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocalState(ExecutionContext &context,
+                                                              const GlobalSinkState &gstate) const {
+	return make_uniq<WindowNtileLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
 void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,

@@ -171,7 +171,7 @@ NULL	NULL	NULL	NULL	NULL
 foreach part timezone timezone_hour timezone_minute
 
 query II
-SELECT tns, DATE_PART('${part}', tns) p
+SELECT tns, DATE_PART('{part}', tns) p
 FROM times
 WHERE p <> 0
 ----
@@ -261,12 +261,12 @@ WHERE p <> {'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 foreach part year month day quarter dow isodow doy week yearweek 
 
 statement error
-SELECT date_part('${part}', '23:59:59.123456789'::TIME_NS);
+SELECT date_part('{part}', '23:59:59.123456789'::TIME_NS);
 ----
 Binder Error: No function matches the given name and argument types
 
 statement error
-SELECT date_part(['${part}'], '23:59:59.123456789'::TIME_NS);
+SELECT date_part(['{part}'], '23:59:59.123456789'::TIME_NS);
 ----
 not recognized
 
@@ -275,12 +275,12 @@ endloop
 foreach isoyear era
 
 statement error
-SELECT date_part('${part}', '23:59:59.123456789'::TIME_NS);
+SELECT date_part('{part}', '23:59:59.123456789'::TIME_NS);
 ----
 not recognized
 
 statement error
-SELECT date_part(['${part}'], '23:59:59.123456789'::TIME_NS);
+SELECT date_part(['{part}'], '23:59:59.123456789'::TIME_NS);
 ----
 not recognized
 

@@ -44,7 +44,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	executor.Execute(input, keys);
 
 	// Do not operate on primary key directly to avoid modifying the input chunk
-	Vector primary = keys.data[0];
+	auto primary = Vector::Ref(keys.data[0]);
 	// Count the NULLs so we can exclude them later
 	has_null += MergeNulls(primary, global_table.op.conditions);
 	count += keys.size();
@@ -349,23 +349,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	children.push_back(right);
 
 	//	Fill out the left projection map.
-	left_projection_map = op.left_projection_map;
-	if (left_projection_map.empty()) {
-		const auto left_count = children[0].get().GetTypes().size();
-		left_projection_map.reserve(left_count);
-		for (column_t i = 0; i < left_count; ++i) {
-			left_projection_map.emplace_back(i);
-		}
-	}
-	//	Fill out the right projection map.
-	right_projection_map = op.right_projection_map;
-	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
-		right_projection_map.reserve(right_count);
-		for (column_t i = 0; i < right_count; ++i) {
-			right_projection_map.emplace_back(i);
-		}
-	}
+	left_projection_map = FillProjectionMap(children[0].get(), op.left_projection_map);
+	right_projection_map = FillProjectionMap(children[1].get(), op.right_projection_map);
 
 	//	Construct the unprojected type layout from the children's types
 	unprojected_types = children[0].get().GetTypes();
@@ -400,10 +385,11 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
 				// Create a new validity mask to avoid modifying original mask
+				// FIXME: why?
 				auto &pvalidity = ConstantVector::Validity(primary);
 				ValidityMask pvalidity_copy = ConstantVector::Validity(primary);
 				pvalidity.Copy(pvalidity_copy, count);
-				ConstantVector::SetNull(primary, true);
+				ConstantVector::SetNull(primary);
 				return count;
 			}
 		}
@@ -427,7 +413,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			UnifiedVectorFormat vdata;
 			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
-			if (vvalidity.AllValid()) {
+			if (vvalidity.CannotHaveNull()) {
 				continue;
 			}
 			pvalidity.EnsureWritable();
@@ -487,14 +473,16 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
-	for (idx_t i = 0; i < result.size(); ++i) {
+	const auto result_size = NumericCast<idx_t>(result.size());
+
+	for (idx_t i = 0; i < result_size; ++i) {
 		const auto idx = state.GetIndex(chunk_idx, result[i]);
 		sort_keys[i] = &itr[idx];
 	}
 
 	// Scan
 	chunk.Reset();
-	scan_state.Scan(sorted_run, sort_key_pointers, result.size(), chunk);
+	scan_state.Scan(sorted_run, sort_key_pointers, result_size, chunk);
 }
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,

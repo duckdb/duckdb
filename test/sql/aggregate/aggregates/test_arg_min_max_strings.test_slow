@@ -54,21 +54,21 @@ INSERT INTO tbl VALUES (
 foreach type DATE TIMESTAMP INTEGER BIGINT VARCHAR
 
 query I
-SELECT arg_min("VARCHAR", "${type}") FROM tbl
+SELECT arg_min("VARCHAR", "{type}") FROM tbl
 ----
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 query I
-SELECT arg_min("${type}", "VARCHAR") FROM tbl EXCEPT SELECT MIN("${type}") FROM tbl
+SELECT arg_min("{type}", "VARCHAR") FROM tbl EXCEPT SELECT MIN("{type}") FROM tbl
 ----
 
 query I
-SELECT arg_max("VARCHAR", "${type}") FROM tbl
+SELECT arg_max("VARCHAR", "{type}") FROM tbl
 ----
 zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
 
 query I
-SELECT arg_max("${type}", "VARCHAR") FROM tbl EXCEPT SELECT MAX("${type}") FROM tbl
+SELECT arg_max("{type}", "VARCHAR") FROM tbl EXCEPT SELECT MAX("{type}") FROM tbl
 ----
 
 endloop

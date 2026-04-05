@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -5,6 +7,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 
 namespace duckdb {
 
@@ -130,7 +133,7 @@ child_list_t<Value> StructStats::ToStruct(const BaseStatistics &stats) {
 void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		stats.child_stats[i].Verify(*child_entries[i], sel, count, true);
+		stats.child_stats[i].Verify(child_entries[i], sel, count, true);
 	}
 }
 

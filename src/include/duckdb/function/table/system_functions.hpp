@@ -115,6 +115,10 @@ struct DuckDBMemoryFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBEvictionQueuesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBExternalFileCacheFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -128,6 +132,10 @@ struct DuckDBSecretTypesFun {
 };
 
 struct DuckDBSequencesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBTriggersFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

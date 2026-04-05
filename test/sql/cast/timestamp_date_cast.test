@@ -30,7 +30,7 @@ foreach source TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
 query I
 WITH t AS (
     SELECT
-        '2020-09-13 00:30:00'::${source} AS a,
+        '2020-09-13 00:30:00'::{source} AS a,
 )
 SELECT
     a::DATE = '2020-09-13'::DATE,

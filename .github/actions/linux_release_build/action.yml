@@ -1,0 +1,70 @@
+name: Linux Release Build
+description: Build a DuckDB linux release, optionally run smoke tests, and upload an artifact.
+inputs:
+  artifact_name:
+    description: Uploaded artifact name
+    required: true
+  artifact_tarball:
+    description: Output tarball path
+    required: false
+    default: build/release-artifact.tar.gz
+  build_benchmark:
+    description: Whether to build benchmark binaries
+    required: false
+    default: "1"
+  build_jemalloc:
+    description: Whether to build jemalloc
+    required: false
+    default: "1"
+  core_extensions:
+    description: Core extensions to build
+    required: false
+    default: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+  disable_sanitizer:
+    description: Whether to disable sanitizer
+    required: false
+    default: "1"
+  run_smoke_tests:
+    description: Whether to run smoke tests
+    required: false
+    default: "true"
+  changed_tests_file:
+    description: Path to a newline-delimited list of changed tests to include in smoke tests
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      with:
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
+    - name: Build release
+      shell: bash
+      env:
+        BUILD_BENCHMARK: ${{ inputs.build_benchmark }}
+        BUILD_JEMALLOC: ${{ inputs.build_jemalloc }}
+        CORE_EXTENSIONS: ${{ inputs.core_extensions }}
+        DISABLE_SANITIZER: ${{ inputs.disable_sanitizer }}
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
+      run: python3 scripts/ci/retry.py -- make release
+
+    - name: Smoke tests
+      if: ${{ inputs.run_smoke_tests == 'true' }}
+      shell: bash
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest T="--changed-tests=${{ inputs.changed_tests_file }}"
+
+    - name: Prepare release artifact
+      shell: bash
+      run: make release-artifact
+
+    - name: Upload release build artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ inputs.artifact_tarball }}
+        if-no-files-found: error

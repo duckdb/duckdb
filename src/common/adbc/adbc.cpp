@@ -112,6 +112,7 @@ enum class IngestionMode { CREATE = 0, APPEND = 1, REPLACE = 2, CREATE_APPEND = 
 
 struct DuckDBAdbcStatementWrapper {
 	duckdb_connection connection;
+	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
 	duckdb_prepared_statement statement;
 	char *ingestion_table_name;
 	char *target_catalog;
@@ -122,12 +123,22 @@ struct DuckDBAdbcStatementWrapper {
 	uint64_t plan_length;
 };
 
+struct MaterializedData {
+	ArrowArray *batches;
+	idx_t count;
+	idx_t current;
+};
+
 struct DuckDBAdbcStreamWrapper {
 	duckdb_result result;
 	char *last_error;
 	AdbcStatusCode status_code;
 	AdbcError adbc_error;
+	MaterializedData *materialized;
+	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
 };
+
+static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper);
 
 static bool IsInterruptError(const char *message) {
 	if (!message) {
@@ -953,6 +964,15 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error) {
 	if (connection && connection->private_data) {
 		auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+		// Materialize active streams before disconnecting so they remain readable
+		MaterializeActiveStreams(conn_wrapper);
+		// Detach active streams before deleting conn_wrapper to avoid dangling pointers
+		for (auto *stream_wrapper : conn_wrapper->active_streams) {
+			if (stream_wrapper) {
+				stream_wrapper->conn_wrapper = nullptr;
+			}
+		}
+		conn_wrapper->active_streams.clear();
 		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
 		delete conn_wrapper;
@@ -1001,6 +1021,20 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	}
 	out->release = nullptr;
 	auto result_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
+
+	// If the stream has been materialized, return from stored batches
+	if (result_wrapper->materialized) {
+		auto mat = result_wrapper->materialized;
+		if (mat->current >= mat->count) {
+			return DuckDBSuccess; // end of stream
+		}
+		// Transfer ownership of the batch to the caller
+		*out = mat->batches[mat->current];
+		mat->batches[mat->current].release = nullptr;
+		mat->current++;
+		return DuckDBSuccess;
+	}
+
 	auto duckdb_chunk = duckdb_fetch_chunk(result_wrapper->result);
 	if (!duckdb_chunk) {
 		// End of stream or error; distinguish by checking the result error message.
@@ -1038,6 +1072,26 @@ void release(struct ArrowArrayStream *stream) {
 	}
 	auto result_wrapper = reinterpret_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
 	if (result_wrapper) {
+		// Unregister from connection's active_streams
+		if (result_wrapper->conn_wrapper) {
+			auto &active = result_wrapper->conn_wrapper->active_streams;
+			auto it = std::find(active.begin(), active.end(), result_wrapper);
+			if (it != active.end()) {
+				active.erase(it);
+			}
+		}
+		// Clean up materialized data if present
+		if (result_wrapper->materialized) {
+			auto mat = result_wrapper->materialized;
+			for (idx_t i = mat->current; i < mat->count; i++) {
+				if (mat->batches[i].release) {
+					mat->batches[i].release(&mat->batches[i]);
+				}
+			}
+			free(mat->batches);
+			free(mat);
+			result_wrapper->materialized = nullptr;
+		}
 		duckdb_destroy_result(&result_wrapper->result);
 		if (result_wrapper->last_error) {
 			free(result_wrapper->last_error);
@@ -1229,8 +1283,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, create_sql.c_str(), &result) == DuckDBError) {
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&result);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
 		break;
@@ -1242,8 +1297,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&result);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
 		break;
@@ -1316,6 +1372,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
 
 	statement_wrapper->connection = conn_wrapper->connection;
+	statement_wrapper->conn_wrapper = conn_wrapper;
 	statement_wrapper->statement = nullptr;
 	statement_wrapper->ingestion_stream.release = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
@@ -1449,6 +1506,75 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 	              rows_affected);
 }
 
+// Materialize all active streams on a connection so that a new query can execute.
+// This fetches remaining data from each streaming result into memory, making the
+// streams independent of the connection's active query context.
+static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper) {
+	for (auto *result_wrapper : conn_wrapper->active_streams) {
+		if (!result_wrapper || result_wrapper->materialized) {
+			continue;
+		}
+
+		// Collect remaining batches from the streaming result
+		duckdb::vector<ArrowArray> batches;
+		auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
+		while (true) {
+			ArrowArray array;
+			std::memset(&array, 0, sizeof(ArrowArray));
+
+			auto duckdb_chunk = duckdb_fetch_chunk(result_wrapper->result);
+			if (!duckdb_chunk) {
+				break;
+			}
+			auto conversion_err = duckdb_data_chunk_to_arrow(arrow_options, duckdb_chunk, &array);
+			duckdb_destroy_data_chunk(&duckdb_chunk);
+
+			if (conversion_err) {
+				duckdb_destroy_error_data(&conversion_err);
+				if (array.release) {
+					array.release(&array);
+				}
+				break;
+			}
+			batches.push_back(array);
+		}
+		duckdb_destroy_arrow_options(&arrow_options);
+
+		// Store materialized data
+		auto mat = static_cast<MaterializedData *>(malloc(sizeof(MaterializedData)));
+		if (!mat) {
+			// Allocation failed — release fetched batches and skip materialization
+			for (auto &batch : batches) {
+				if (batch.release) {
+					batch.release(&batch);
+				}
+			}
+			continue;
+		}
+		mat->current = 0;
+		mat->count = static_cast<idx_t>(batches.size());
+		if (!batches.empty()) {
+			mat->batches = static_cast<ArrowArray *>(malloc(sizeof(ArrowArray) * batches.size()));
+			if (!mat->batches) {
+				// Allocation failed — release fetched batches and skip materialization
+				for (auto &batch : batches) {
+					if (batch.release) {
+						batch.release(&batch);
+					}
+				}
+				free(mat);
+				continue;
+			}
+			for (idx_t i = 0; i < batches.size(); i++) {
+				mat->batches[i] = batches[i];
+			}
+		} else {
+			mat->batches = nullptr;
+		}
+		result_wrapper->materialized = mat;
+	}
+}
+
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error) {
 	if (!statement) {
@@ -1463,6 +1589,13 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (!wrapper->connection) {
 		SetError(error, "Invalid connection");
 		return ADBC_STATUS_INVALID_STATE;
+	}
+
+	// Materialize any active streams on this connection before executing a new query.
+	// Without materialization, executing a new query would silently invalidate any existing streaming results on the
+	// same connection.
+	if (wrapper->conn_wrapper) {
+		MaterializeActiveStreams(wrapper->conn_wrapper);
 	}
 
 	// TODO: Set affected rows, careful with early return
@@ -1499,6 +1632,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	}
 	stream_wrapper->last_error = nullptr;
 	stream_wrapper->status_code = ADBC_STATUS_OK;
+	stream_wrapper->materialized = nullptr;
+	stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
 	std::memset(&stream_wrapper->adbc_error, 0, sizeof(stream_wrapper->adbc_error));
 	std::memset(&stream_wrapper->result, 0, sizeof(stream_wrapper->result));
 	// Only process the stream if there are parameters to bind
@@ -1575,9 +1710,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			if (res != DuckDBSuccess) {
 				auto err = duckdb_result_error(&stream_wrapper->result);
 				SetError(error, err);
+				bool interrupted = IsInterruptError(err);
 				duckdb_destroy_result(&stream_wrapper->result);
 				free(stream_wrapper);
-				return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+				return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			// Recreate wrappers for next iteration
 			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
@@ -1588,9 +1724,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		if (res != DuckDBSuccess) {
 			auto err = duckdb_result_error(&stream_wrapper->result);
 			SetError(error, err);
+			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_result(&stream_wrapper->result);
 			free(stream_wrapper);
-			return IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
 
@@ -1616,6 +1753,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		out->get_next = get_next;
 		out->release = release;
 		out->get_last_error = get_last_error;
+		// Register this stream wrapper so it can be materialized if another query runs
+		if (wrapper->conn_wrapper) {
+			wrapper->conn_wrapper->active_streams.push_back(stream_wrapper);
+		}
 	} else {
 		// Caller didn't request a stream; clean up resources
 		duckdb_destroy_result(&stream_wrapper->result);
@@ -1659,6 +1800,12 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	}
 
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+
+	// Materialize any active streams before preparing
+	if (wrapper->conn_wrapper) {
+		MaterializeActiveStreams(wrapper->conn_wrapper);
+	}
+
 	if (wrapper->ingestion_stream.release) {
 		// Release any resources currently held by the ingestion stream before we overwrite it
 		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
@@ -2085,7 +2232,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 
 				SELECT
 					catalog_name,
-					LIST({
+					COALESCE(LIST({
 						db_schema_name: schema_name,
 						db_schema_tables: []::STRUCT(
 							table_name VARCHAR,
@@ -2118,7 +2265,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
 							)[]
 						)[],
-					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null), []) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
@@ -2174,7 +2321,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					SELECT
 						catalog_name,
 						schema_name,
-						db_schema_tables,
+						COALESCE(db_schema_tables, []) AS db_schema_tables,
 					FROM information_schema.schemata
 					LEFT JOIN tables
 					USING (catalog_name, schema_name)
@@ -2183,10 +2330,10 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 
 				SELECT
 					catalog_name,
-					LIST({
+					COALESCE(LIST({
 						db_schema_name: schema_name,
 						db_schema_tables: db_schema_tables,
-					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null), []) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
@@ -2267,8 +2414,8 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						LIST({
 							table_name: table_name,
 							table_type: table_type,
-							table_columns: table_columns,
-							table_constraints: table_constraints,
+							table_columns: COALESCE(table_columns, []),
+							table_constraints: COALESCE(table_constraints, []),
 						}) db_schema_tables
 					FROM information_schema.tables
 					LEFT JOIN columns
@@ -2282,7 +2429,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					SELECT
 						catalog_name,
 						schema_name,
-						db_schema_tables,
+						COALESCE(db_schema_tables, []) AS db_schema_tables,
 					FROM information_schema.schemata
 					LEFT JOIN tables
 					USING (catalog_name, schema_name)
@@ -2291,10 +2438,10 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 
 				SELECT
 					catalog_name,
-					LIST({
+					COALESCE(LIST({
 						db_schema_name: schema_name,
 						db_schema_tables: db_schema_tables,
-					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null), []) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs

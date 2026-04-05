@@ -397,7 +397,7 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 }
 
 EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
+    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(Vector::Ref(values_insert_order_p)),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
 }
 

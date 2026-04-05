@@ -9431,6 +9431,7 @@ namespace detail {
     class Opt : public ParserRefImpl<Opt> {
     protected:
         std::vector<std::string> m_optNames;
+        bool m_acceptsMany = false;
 
     public:
         template<typename LambdaT>
@@ -9447,6 +9448,18 @@ namespace detail {
         auto operator[]( std::string const &optName ) -> Opt & {
             m_optNames.push_back( optName );
             return *this;
+        }
+
+        auto acceptingMultiple() -> Opt & {
+            m_acceptsMany = true;
+            return *this;
+        }
+
+        auto cardinality() const -> size_t override {
+            if (m_acceptsMany) {
+                return 0;
+            }
+            return ParserRefImpl::cardinality();
         }
 
         auto getHelpColumns() const -> std::vector<HelpColumns> {
@@ -9785,15 +9798,14 @@ namespace Catch {
                 while( std::getline( f, line ) ) {
                     line = trim(line);
                     if( !line.empty() && !startsWith( line, '#' ) ) {
+                        if( !config.testsOrTags.empty() ) {
+                            config.testsOrTags.emplace_back( "," );
+                        }
                         if( !startsWith( line, '"' ) )
                             line = '"' + line + '"';
                         config.testsOrTags.push_back( line );
-                        config.testsOrTags.emplace_back( "," );
                     }
                 }
-                //Remove comma in the end
-                if(!config.testsOrTags.empty())
-                    config.testsOrTags.erase( config.testsOrTags.end()-1 );
                 config.testListFile = filename;
                 return ParserResult::ok( ParseResultType::Matched );
             };
@@ -9913,6 +9925,7 @@ namespace Catch {
                 ( "show test durations for tests taking at least the given number of seconds" )
             | Opt( loadTestNamesFromFile, "filename" )
                 ["-f"]["--input-file"]
+                .acceptingMultiple()
                 ( "load test names to run from a file" )
             | Opt( config.filenamesAsTags )
                 ["-#"]["--filenames-as-tags"]

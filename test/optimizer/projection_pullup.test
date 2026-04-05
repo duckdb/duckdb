@@ -96,3 +96,11 @@ query II
 EXPLAIN SELECT * FROM range(5) INTERSECT SELECT * FROM range(5);
 ----
 logical_opt	<REGEX>:.*INTERSECT.*PROJECTION.*
+
+#Test that the projection on the RHS of a semi join is not removed, but the plan is optimized deeper
+query II
+explain
+select * from(select a.a, b.b from (select * from t1) a join (select * from t2) b on a.a = b.b) as join12
+semi join(select c.c, d.d as newD from (select * from t3) c join (select * from t4) d on c.c = d.d) as join34 on join12.a = join34.c;
+----
+logical_opt	<!REGEX>:.*INNER.*PROJECTION.*

@@ -16,7 +16,7 @@ public:
 
 	void Optimize(unique_ptr<LogicalOperator> &op);
 	void PopParents(const LogicalOperator &op);
-	void InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, bool stop_at_op);
+	void InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, unique_ptr<LogicalOperator> &child, bool stop_at_op);
 
 private:
 	Optimizer &optimizer;

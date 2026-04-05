@@ -37,12 +37,13 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 
 JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
-                             const vector<idx_t> &output_columns_p, unique_ptr<ResidualPredicateInfo> residual_p,
-                             optional_ptr<Expression> predicate_ptr, const vector<idx_t> &output_in_probe)
+                             const idx_t initial_radix_bits, const vector<idx_t> &output_columns_p,
+                             unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr,
+                             const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      residual_predicate(predicate_ptr), radix_bits(INITIAL_RADIX_BITS) {
+      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -88,7 +89,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	layout_ptr = std::move(layout);
 
-	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality
+	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality preds
 	if (!non_equality_predicates.empty()) {
 		row_matcher_probe = unique_ptr<RowMatcher>(new RowMatcher());
 		row_matcher_probe_no_match_sel = unique_ptr<RowMatcher>(new RowMatcher());
@@ -121,7 +122,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 		single_join_error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
 	}
 
-	if (conditions.size() == 1 &&
+	if (non_equality_predicates.empty() && !residual_predicate &&
 	    (join_type == JoinType::SEMI || join_type == JoinType::ANTI || join_type == JoinType::MARK)) {
 		insert_duplicate_keys = false;
 	}
@@ -474,7 +475,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 			continue;
 		}
 		auto &col_key_data = vector_data[col_idx].unified;
-		if (col_key_data.validity.AllValid()) {
+		if (col_key_data.validity.CannotHaveNull()) {
 			continue;
 		}
 		added_count = FilterNullValues(col_key_data, *current_sel, added_count, sel);
@@ -616,7 +617,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	idx_t remaining_count = count;
 	const auto *remaining_sel = FlatVector::IncrementalSelectionVector();
 
-	const auto all_valid = layout.AllValid();
+	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();
 
 	if (PropagatesBuildSide(ht.join_type)) {
@@ -729,12 +730,31 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 		bloom_filter.InsertHashes(hashes_v, count);
 	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
-	auto row_locations = chunk_state.row_locations;
+	auto &row_locations = chunk_state.row_locations;
 	if (parallel) {
 		InsertHashesLoop<true>(atomic_entries, row_locations, hashes_v, count, insert_state, *data_collection, *this);
 	} else {
 		InsertHashesLoop<false>(atomic_entries, row_locations, hashes_v, count, insert_state, *data_collection, *this);
 	}
+}
+
+unique_ptr<PrefixRangeFilter::BuildState> JoinHashTable::InitializePrefixRangeBuildState() {
+	D_ASSERT(prefix_range_filter);
+	return prefix_range_filter->InitializeBuildState(context);
+}
+
+void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count,
+                                           PrefixRangeFilter::BuildState &state) {
+	D_ASSERT(prefix_range_filter);
+	Vector build_keys(layout_ptr->GetTypes()[0], count);
+	auto &sel = *FlatVector::IncrementalSelectionVector();
+	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
+	prefix_range_filter->InsertKeys(build_keys, count, state);
+}
+
+void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state) {
+	D_ASSERT(prefix_range_filter);
+	prefix_range_filter->MergeBuildState(state);
 }
 
 void JoinHashTable::AllocatePointerTable() {
@@ -780,7 +800,8 @@ void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx
 	std::fill_n(entries + entry_idx_from, entry_idx_to - entry_idx_from, ht_entry_t());
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
+                             optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -800,6 +821,9 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
+		if (prefix_range_state) {
+			InsertPrefixRangeChunk(chunk_state, count, *prefix_range_state);
+		}
 	} while (iterator.Next());
 }
 
@@ -946,8 +970,8 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 
 	// If there is a matcher for the probing side because of non-equality predicates, use it
 	idx_t result_count;
+	idx_t no_match_count = 0;
 	if (ht.needs_chain_matcher) {
-		idx_t no_match_count = 0;
 		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
 		D_ASSERT(matcher);
 
@@ -961,7 +985,9 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 	}
 
 	if (ht.residual_predicate && ht.residual_info && result_count > 0) {
-		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel);
+		// Pass no_match_count as offset so residual non-matches are appended after non-equality non-matches
+		// instead of overwriting them (which would cause AdvancePointers to read stale data)
+		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel, no_match_count);
 	}
 
 	// Update total probe match count
@@ -971,7 +997,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 }
 
 idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-                                            SelectionVector *no_match_sel) {
+                                            SelectionVector *no_match_sel, idx_t no_match_offset) {
 	D_ASSERT(residual_state);
 	D_ASSERT(residual_executor);
 
@@ -1007,10 +1033,10 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	if (no_match_sel) {
-		idx_t no_match_count = match_count - new_match_count;
-		for (idx_t i = 0; i < no_match_count; i++) {
+		idx_t residual_no_match_count = match_count - new_match_count;
+		for (idx_t i = 0; i < residual_no_match_count; i++) {
 			idx_t dense_idx = remaining_sel.get_index(i);
-			no_match_sel->set_index(i, match_sel.get_index(dense_idx));
+			no_match_sel->set_index(no_match_offset + i, match_sel.get_index(dense_idx));
 		}
 	}
 
@@ -1224,8 +1250,6 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
-
 	// first scan for key matches
 	ScanKeyMatches(keys, probe_data);
 
@@ -1236,8 +1260,6 @@ void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 }
 
 void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
-
 	// first scan for key matches
 	ScanKeyMatches(keys, probe_data);
 
@@ -1253,7 +1275,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);
 
-		if (ht.non_equality_predicates.empty()) {
+		if (ht.non_equality_predicates.empty() && !ht.residual_predicate) {
 			// we only have equality predicates - the match is found for the entire chain
 			for (idx_t i = 0; i < result_count; i++) {
 				const auto idx = chain_match_sel_vector.get_index(i);
@@ -1313,7 +1335,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 		}
 		UnifiedVectorFormat jdata;
 		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
-		if (!jdata.validity.AllValid()) {
+		if (jdata.validity.CanHaveNull()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
 				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
@@ -1447,8 +1469,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
 				Vector &vec = result.data[i];
-				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(vec, true);
+				ConstantVector::SetNull(vec);
 			}
 		}
 		finished = true;
@@ -1570,8 +1591,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	// set the left side as a constant NULL
 	for (idx_t i = 0; i < left_column_count; i++) {
 		Vector &vec = result.data[i];
-		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(vec, true);
+		ConstantVector::SetNull(vec);
 	}
 
 	// gather the values from the RHS
@@ -1720,6 +1740,10 @@ idx_t JoinHashTable::CurrentPartitionCount() const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	D_ASSERT(current_partitions.Capacity() == num_partitions);
 	return current_partitions.CountValid(num_partitions);
+}
+
+const ValidityMask &JoinHashTable::GetCurrentPartitions() const {
+	return current_partitions;
 }
 
 idx_t JoinHashTable::FinishedPartitionCount() const {

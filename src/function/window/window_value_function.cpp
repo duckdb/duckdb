@@ -8,6 +8,8 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
+#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -65,6 +67,14 @@ public:
 				sort_nulls.Initialize();
 			}
 		}
+
+		auto &required = state.required;
+		required.clear();
+
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+
+		WindowBoundariesState::AddImpliedBounds(required, gvstate.executor.wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -99,14 +109,10 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 		// then build an SV to hold them
 		const auto coll_count = coll_chunk.size();
 		auto &child = coll_chunk.data[gvstate.child_idx];
-		UnifiedVectorFormat child_data;
-		child.ToUnifiedFormat(coll_count, child_data);
-		const auto &validity = child_data.validity;
-		if (gvstate.executor.IgnoreNulls() && !validity.AllValid()) {
-			const auto &sel = *child_data.sel;
+		auto validity = child.Validity(coll_count);
+		if (gvstate.executor.IgnoreNulls() && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
-				const auto idx = sel.get_index(i);
-				if (validity.RowIsValidUnsafe(idx)) {
+				if (validity.IsValid(i)) {
 					sort_nulls[filtered++] = i;
 				}
 			}
@@ -147,12 +153,12 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSha
 		child_idx = shared.RegisterCollection(wexpr.children[0], IgnoreNulls());
 
 		if (wexpr.children.size() > 1) {
-			nth_idx = shared.RegisterEvaluate(wexpr.children[1]);
+			offset_idx = nth_idx = shared.RegisterEvaluate(wexpr.children[1]);
+		}
+		if (wexpr.children.size() > 2) {
+			default_idx = shared.RegisterEvaluate(wexpr.children[2]);
 		}
 	}
-
-	offset_idx = shared.RegisterEvaluate(wexpr.offset_expr);
-	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
 }
 
 unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
@@ -235,6 +241,22 @@ public:
 		if (gstate.row_tree) {
 			local_row = gstate.row_tree->GetLocalState(context);
 		}
+
+		const auto &wexpr = gstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+			required.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -273,6 +295,30 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 //===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
+WindowFunctionSet LeadFun::GetFunctions() {
+	WindowFunctionSet funcs("lead");
+
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
+	                                 ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(
+	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD));
+
+	return funcs;
+}
+
+WindowFunctionSet LagFun::GetFunctions() {
+	WindowFunctionSet funcs("lag");
+
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
+	                                 ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(
+	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY, ExpressionType::WINDOW_LEAD));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD));
+
+	return funcs;
+}
+
 WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
 }
@@ -298,6 +344,9 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	WindowInputExpression leadlag_offset(eval_chunk, offset_idx);
 	WindowInputExpression leadlag_default(eval_chunk, default_idx);
 
+	const bool has_offset = (offset_idx != DConstants::INVALID_INDEX);
+	const bool has_default = (default_idx != DConstants::INVALID_INDEX);
+
 	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
 	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
 
@@ -308,7 +357,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 		auto &frame = frames[0];
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
 			int64_t offset = 1;
-			if (wexpr.offset_expr) {
+			if (has_offset) {
 				if (leadlag_offset.CellIsNull(i)) {
 					FlatVector::SetNull(result, i, true);
 					continue;
@@ -338,7 +387,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 				} else {
 					cursor.CopyCell(0, nth_index.first, result, i);
 				}
-			} else if (wexpr.default_expr) {
+			} else if (has_default) {
 				leadlag_default.CopyCell(result, i);
 			} else {
 				FlatVector::SetNull(result, i, true);
@@ -359,18 +408,18 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
 	// or if we are using framing (the frame may change on each row)
 	auto &ignore_nulls = glstate.ignore_nulls;
-	bool can_shift = ignore_nulls->AllValid() && !glstate.use_framing;
-	if (wexpr.offset_expr) {
-		can_shift = can_shift && wexpr.offset_expr->IsFoldable();
+	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
+	if (has_offset) {
+		can_shift = can_shift && wexpr.children[1]->IsFoldable();
 	}
-	if (wexpr.default_expr) {
-		can_shift = can_shift && wexpr.default_expr->IsFoldable();
+	if (has_default) {
+		can_shift = can_shift && wexpr.children[2]->IsFoldable();
 	}
 
 	const auto row_end = row_idx + count;
 	for (idx_t i = 0; i < count;) {
 		int64_t offset = 1;
-		if (wexpr.offset_expr) {
+		if (offset_idx != DConstants::INVALID_INDEX) {
 			if (leadlag_offset.CellIsNull(i)) {
 				FlatVector::SetNull(result, i, true);
 				++i;
@@ -417,7 +466,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 					index += copied;
 					width -= copied;
 				}
-			} else if (wexpr.default_expr) {
+			} else if (has_default) {
 				const auto width = MinValue(delta, target_limit);
 				leadlag_default.CopyCell(result, i, width);
 				i += width;
@@ -430,7 +479,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 		} else {
 			if (!delta) {
 				cursor.CopyCell(0, NumericCast<idx_t>(val_idx), result, i);
-			} else if (wexpr.default_expr) {
+			} else if (has_default) {
 				leadlag_default.CopyCell(result, i);
 			} else {
 				FlatVector::SetNull(result, i, true);
@@ -439,6 +488,11 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 			++row_idx;
 		}
 	}
+}
+
+WindowFunction FirstValueFun::GetFunction() {
+	WindowFunction fun("first_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE);
+	return fun;
 }
 
 WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -492,6 +546,11 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 		// Didn't find one
 		FlatVector::SetNull(result, i, true);
 	});
+}
+
+WindowFunction LastValueFun::GetFunction() {
+	WindowFunction fun("last_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE);
+	return fun;
 }
 
 WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -551,6 +610,12 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 		// Didn't find one
 		FlatVector::SetNull(result, i, true);
 	});
+}
+
+WindowFunction NthValueFun::GetFunction() {
+	WindowFunction fun("nth_value", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
+	                   ExpressionType::WINDOW_NTH_VALUE);
+	return fun;
 }
 
 WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -840,6 +905,11 @@ static fill_value_t GetFillValueFunction(const LogicalType &type) {
 	}
 }
 
+WindowFunction FillFun::GetFunction() {
+	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL);
+	return fun;
+}
+
 WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
                                        WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
@@ -893,11 +963,22 @@ class WindowFillLocalState : public WindowLeadLagLocalState {
 public:
 	WindowFillLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gvstate)
 	    : WindowLeadLagLocalState(context, gvstate) {
-		//	If we optimised the ordering, force computation of the validity range.
-		if (!gvstate.value_tree) {
-			state.required.insert(VALID_BEGIN);
-			state.required.insert(VALID_END);
+		const auto &wexpr = gvstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+
+		if (wexpr.arg_orders.empty() || !gvstate.value_tree) {
+			//	FILL uses the validity ranges to quickly eliminate indexes that can't be interpolated.
+			//	This only works for non-secondary orderings
+			required.insert(VALID_BEGIN);
+			required.insert(VALID_END);
 		}
+
+		WindowBoundariesState::AddImpliedBounds(required, gvstate.executor.wexpr);
 	}
 
 	//! Finish the sinking and prepare to scan
@@ -938,9 +1019,8 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 	WindowFillCopy(cursor, result, count, row_idx, 0);
 
 	//	If all are valid, we are done
-	UnifiedVectorFormat arg_data;
-	result.ToUnifiedFormat(count, arg_data);
-	if (arg_data.validity.AllValid()) {
+	auto validity = result.Validity(count);
+	if (!validity.CanHaveNull()) {
 		return;
 	}
 
@@ -967,8 +1047,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		auto &frame = frames[0];
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
 			//	If this value is valid, move on
-			const auto idx = arg_data.sel->get_index(i);
-			if (arg_data.validity.RowIsValid(idx)) {
+			if (validity.IsValid(i)) {
 				continue;
 			}
 
@@ -1091,8 +1170,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		}
 
 		//	If this value is valid,
-		const auto idx = arg_data.sel->get_index(i);
-		if (arg_data.validity.RowIsValid(idx)) {
+		if (validity.IsValid(i)) {
 			//	If it is usable, track it for the next gap.
 			if (value_func(row_idx, cursor)) {
 				prev_valid = row_idx;

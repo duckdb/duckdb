@@ -134,29 +134,20 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		}
 
 		if (stats) {
-			ColumnBinding binding(get.table_index, i);
+			ColumnBinding binding(get.table_index, ProjectionIndex(i));
 			statistics_map.insert(make_pair(binding, std::move(stats)));
 		}
 	}
 	// push table filters into the statistics
-	vector<idx_t> column_indexes;
-	column_indexes.reserve(get.table_filters.filters.size());
-	for (auto &kv : get.table_filters.filters) {
-		column_indexes.push_back(kv.first);
+	vector<ProjectionIndex> filter_columns;
+	filter_columns.reserve(get.table_filters.FilterCount());
+	for (auto &kv : get.table_filters) {
+		filter_columns.push_back(kv.GetIndex());
 	}
 
-	for (auto &table_filter_column : column_indexes) {
-		idx_t column_index;
-		for (column_index = 0; column_index < column_ids.size(); column_index++) {
-			if (column_ids[column_index].GetPrimaryIndex() == table_filter_column) {
-				break;
-			}
-		}
-		D_ASSERT(column_index < column_ids.size());
-		D_ASSERT(column_ids[column_index].GetPrimaryIndex() == table_filter_column);
-
+	for (auto &table_filter_column : filter_columns) {
 		// find the stats
-		ColumnBinding stats_binding(get.table_index, column_index);
+		ColumnBinding stats_binding(get.table_index, table_filter_column);
 		auto entry = statistics_map.find(stats_binding);
 		if (entry == statistics_map.end()) {
 			// no stats for this entry
@@ -165,22 +156,20 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		auto &stats = *entry->second;
 
 		// fetch the table filter
-		D_ASSERT(get.table_filters.filters.count(table_filter_column) > 0);
-		auto &filter = get.table_filters.filters[table_filter_column];
-		auto propagate_result = PropagateTableFilter(stats_binding, stats, *filter);
+		auto &filter = get.table_filters.GetFilterByColumnIndexMutable(table_filter_column);
+		auto propagate_result = PropagateTableFilter(stats_binding, stats, filter);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
 			// erase this condition
-			get.table_filters.filters.erase(table_filter_column);
+			get.table_filters.RemoveFilterByColumnIndex(table_filter_column);
 			break;
 		case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
-			if (IsConstantOrNullFilter(*get.table_filters.filters[table_filter_column]) &&
-			    !CanReplaceConstantOrNull(*get.table_filters.filters[table_filter_column])) {
+			if (IsConstantOrNullFilter(filter) && !CanReplaceConstantOrNull(filter)) {
 				break;
 			}
 			// filter is true or null; we can replace this with a not null filter
-			get.table_filters.filters[table_filter_column] = make_uniq<IsNotNullFilter>();
+			get.table_filters.SetFilterByColumnIndex(table_filter_column, make_uniq<IsNotNullFilter>());
 			break;
 		}
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
@@ -190,7 +179,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			return make_uniq<NodeStatistics>(0U, 0U);
 		default:
 			// general case: filter can be true or false, update this columns' statistics
-			UpdateFilterStatistics(stats, *filter);
+			UpdateFilterStatistics(stats, filter);
 			break;
 		}
 	}

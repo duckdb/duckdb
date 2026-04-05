@@ -1,0 +1,11 @@
+# name: test/sql/storage/bc/test_broken_view_v092.test
+# group: [bc]
+
+require vector_size 2048
+
+unzip data/storage/broken_views_092.db.gz {TEST_DIR}/broken_views_092.db
+
+load {TEST_DIR}/broken_views_092.db readonly
+
+statement ok
+FROM duckdb_columns();

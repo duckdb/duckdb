@@ -10,6 +10,9 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 
@@ -72,7 +75,7 @@ private:
 		ASSERT_RESTRICT(ldata, ldata + max_index, result_data, result_data + count);
 #endif
 
-		if (!mask.AllValid()) {
+		if (mask.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (mask.RowIsValidUnsafe(idx)) {
@@ -97,7 +100,7 @@ private:
 	                               ValidityMask &mask, ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
-		if (!mask.AllValid()) {
+		if (mask.CanHaveNull()) {
 			if (!adds_nulls) {
 				result_mask.Initialize(mask);
 			} else {
@@ -149,7 +152,7 @@ private:
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				ConstantVector::SetNull(result, false);
 				*result_data = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
@@ -294,7 +297,7 @@ private:
 	template <class INPUT_TYPE, class FUNC = std::function<bool(INPUT_TYPE)>>
 	static inline idx_t SelectLoopSwitch(UnifiedVectorFormat &input_data, const SelectionVector *sel, const idx_t count,
 	                                     FUNC fun, SelectionVector *true_sel, SelectionVector *false_sel) {
-		if (!input_data.validity.AllValid()) {
+		if (input_data.validity.CanHaveNull()) {
 			return SelectLoopSelSwitch<INPUT_TYPE, FUNC, false>(input_data, sel, count, fun, true_sel, false_sel);
 		} else {
 			return SelectLoopSelSwitch<INPUT_TYPE, FUNC, true>(input_data, sel, count, fun, true_sel, false_sel);

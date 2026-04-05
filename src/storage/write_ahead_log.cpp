@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -40,6 +42,10 @@ WriteAheadLog::~WriteAheadLog() {
 
 AttachedDatabase &WriteAheadLog::GetDatabase() {
 	return storage_manager.GetAttached();
+}
+
+StorageManager &WriteAheadLog::GetStorageManager() {
+	return storage_manager;
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
@@ -427,6 +433,23 @@ void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 }
 
 //===--------------------------------------------------------------------===//
+// TRIGGERS
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateTrigger(const TriggerCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::CREATE_TRIGGER);
+	serializer.WriteProperty(101, "trigger", &entry);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteDropTrigger(const TriggerCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::DROP_TRIGGER);
+	serializer.WriteProperty(101, "schema", entry.schema.name);
+	serializer.WriteProperty(102, "name", entry.name);
+	serializer.WriteProperty(103, "table", entry.base_table->table_name);
+	serializer.End();
+}
+
+//===--------------------------------------------------------------------===//
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(const ViewCatalogEntry &entry) {
@@ -476,6 +499,12 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
 	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
+
+	// mark written blocks as checkpointed
+	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
+	for (auto &block_id : data.GetBlockIds()) {
+		block_manager.MarkBlockAsCheckpointed(block_id);
+	}
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
