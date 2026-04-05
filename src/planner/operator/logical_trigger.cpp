@@ -1,7 +1,7 @@
 #include "duckdb/planner/operator/logical_trigger.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -11,12 +11,11 @@ namespace duckdb {
 void CollectTriggers(ClientContext &context, TableCatalogEntry &table, TriggerTiming timing,
                      TriggerEventType event_type, vector<unique_ptr<QueryNode>> &trigger_bodies,
                      vector<TriggerForEach> &trigger_for_each) {
-	table.ParentSchema().Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
+	auto &duck_table = table.Cast<DuckTableEntry>();
+	auto transaction = table.ParentCatalog().GetCatalogTransaction(context);
+	duck_table.ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
 		if (trigger.timing != timing || trigger.event_type != event_type) {
-			return;
-		}
-		if (trigger.base_table->table_name != table.name) {
 			return;
 		}
 		D_ASSERT(trigger.trigger_action);

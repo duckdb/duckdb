@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -120,12 +121,12 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 	{
 		// Disable parallel insert when the table has AFTER INSERT triggers.
 		// Triggers fire per-row inside Sink(), which only runs on the non-parallel path.
-		auto &schema = op.table.ParentSchema();
+		auto &duck_table = op.table.Cast<DuckTableEntry>();
+		auto transaction = op.table.ParentCatalog().GetCatalogTransaction(context);
 		bool has_after_insert_trigger = false;
-		schema.Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
+		duck_table.ScanTriggers(transaction, [&](CatalogEntry &entry) {
 			auto &trigger = entry.Cast<TriggerCatalogEntry>();
-			if (trigger.timing == TriggerTiming::AFTER && trigger.event_type == TriggerEventType::INSERT_EVENT &&
-			    trigger.base_table->table_name == op.table.name) {
+			if (trigger.timing == TriggerTiming::AFTER && trigger.event_type == TriggerEventType::INSERT_EVENT) {
 				has_after_insert_trigger = true;
 			}
 		});
