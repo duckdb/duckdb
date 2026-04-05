@@ -3,27 +3,13 @@
 
 namespace duckdb {
 
-string_t &FlatVector::StringElement::EmptyString(idx_t length) {
-	auto &heap = writer.GetHeap();
-	data[idx] = heap.EmptyString(length);
-	return data[idx];
+FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
+    : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)),
+      count(count) {
 }
 
-string_t &FlatVector::StringElement::operator=(string_t val) {
-	if (val.IsInlined()) {
-		data[idx] = val;
-	} else {
-		auto &heap = writer.GetHeap();
-		data[idx] = heap.AddBlob(val);
-	}
-	return data[idx];
-}
-
-StringHeap &FlatVector::FlatStringWriter::GetHeap() {
-	if (!heap) {
-		heap = StringVector::GetStringHeap(vector);
-	}
-	return *heap;
+void FlatVector::FlatStringWriter::InitializeHeap() {
+	heap = StringVector::GetStringHeap(vector);
 }
 
 VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
@@ -116,28 +102,17 @@ StringHeap &StringVector::GetStringHeap(Vector &vector) {
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::BIT);
-	if (data.IsInlined()) {
-		// string will be inlined: no need to store in string heap
-		return data;
-	}
 	auto &string_heap = GetStringHeap(vector);
 	return string_heap.AddString(data);
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (data.IsInlined()) {
-		// string will be inlined: no need to store in string heap
-		return data;
-	}
 	return GetStringHeap(vector).AddBlob(data);
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (len <= string_t::INLINE_LENGTH) {
-		return string_t(UnsafeNumericCast<uint32_t>(len));
-	}
 	auto &string_heap = GetStringHeap(vector);
 	return string_heap.EmptyString(len);
 }

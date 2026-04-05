@@ -385,7 +385,7 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
+		return meta_data.segment.heap->AddBlob(input);
 	}
 };
 
