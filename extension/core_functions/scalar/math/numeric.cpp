@@ -1433,14 +1433,19 @@ namespace {
 struct AcoshOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
+		if (input < 1) {
+			throw InvalidInputException("ACOSH is undefined for values less than 1");
+		}
 		return (double)std::acosh(input);
 	}
 };
 } // namespace
 
 ScalarFunction AcoshFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, AcoshOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, AcoshOperator>);
+	function.SetFallible();
+	return function;
 }
 
 //===--------------------------------------------------------------------===//

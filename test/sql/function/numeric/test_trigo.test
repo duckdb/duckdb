@@ -481,10 +481,25 @@ select atanh(-0.5), atanh(0), atanh(0.5);
 -0.5493061443340549	0.0	0.5493061443340549
 
 # ACOSH
-query IIII
-select acosh(-1), acosh(0), acosh(1), acosh(2);
+query II
+select acosh(1), acosh(2);
 ----
-NaN	NaN	0.0	1.3169578969248166
+0.0	1.3169578969248166
+
+statement error
+select acosh(0);
+----
+Invalid Input Error: ACOSH is undefined for values less than 1
+
+statement error
+select acosh(-1);
+----
+Invalid Input Error: ACOSH is undefined for values less than 1
+
+statement error
+select acosh(0.5);
+----
+Invalid Input Error: ACOSH is undefined for values less than 1
 
 # ASINH
 query III
