@@ -634,7 +634,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 		if (return_chunk) {
 			gstate.return_collection.Append(insert_chunk);
 		}
-
 		// When action_type is throw, we already verify constraints in `OnConflictHandling`
 		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints,
 		                    action_type == OnConflictAction::THROW);
@@ -720,6 +719,11 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	}
 
 	return SinkCombineResultType::FINISHED;
+}
+
+SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                          OperatorSinkFinalizeInput &input) const {
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//

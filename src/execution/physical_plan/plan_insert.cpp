@@ -1,4 +1,3 @@
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -10,7 +9,6 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -117,23 +115,6 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		// When we potentially need to perform updates, we have to check that row is not updated twice
 		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
 		parallel_streaming_insert = false;
-	}
-	{
-		// Disable parallel insert when the table has AFTER INSERT triggers.
-		// Triggers fire per-row inside Sink(), which only runs on the non-parallel path.
-		auto &duck_table = op.table.Cast<DuckTableEntry>();
-		auto transaction = op.table.ParentCatalog().GetCatalogTransaction(context);
-		bool has_after_insert_trigger = false;
-		duck_table.ScanTriggers(transaction, [&](CatalogEntry &entry) {
-			auto &trigger = entry.Cast<TriggerCatalogEntry>();
-			if (trigger.timing == TriggerTiming::AFTER && trigger.event_type == TriggerEventType::INSERT_EVENT) {
-				has_after_insert_trigger = true;
-			}
-		});
-		if (has_after_insert_trigger) {
-			parallel_streaming_insert = false;
-			use_batch_index = false;
-		}
 	}
 	if (!op.column_index_map.empty()) {
 		plan = planner.ResolveDefaultsProjection(op, *plan);
