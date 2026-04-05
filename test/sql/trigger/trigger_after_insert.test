@@ -258,3 +258,18 @@ statement error
 INSERT INTO recurse_tbl VALUES (1);
 ----
 Invalid Input Error: Trigger recursion depth limit (8) exceeded.
+
+# RETURNING with triggers is not yet supported (temporary — will be lifted when NEW/OLD references land)
+statement ok
+CREATE TABLE returning_tbl (id INTEGER);
+
+statement ok
+CREATE TABLE returning_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_returning AFTER INSERT ON returning_tbl INSERT INTO returning_audit VALUES ('fired');
+
+statement error
+INSERT INTO returning_tbl VALUES (1) RETURNING id;
+----
+Not implemented Error: RETURNING is not yet supported on tables with AFTER INSERT triggers

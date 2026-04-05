@@ -595,6 +595,18 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	}
 
 	insert->AddChild(std::move(root));
+
+	D_ASSERT(result.types.size() == result.names.size());
+
+	// BEFORE is not yet supported
+	vector<unique_ptr<QueryNode>> trigger_bodies;
+	vector<TriggerForEach> trigger_for_each;
+	CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT, trigger_bodies,
+	                trigger_for_each);
+	if (!trigger_bodies.empty() && !node.returning_list.empty()) {
+		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER INSERT triggers");
+	}
+
 	if (!node.returning_list.empty()) {
 		insert->return_chunk = true;
 		auto insert_table_index = GenerateTableIndex();
@@ -604,14 +616,6 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		return BindReturning(std::move(node.returning_list), table, node.table_ref ? node.table_ref->alias : string(),
 		                     insert_table_index, std::move(index_as_logicaloperator));
 	}
-
-	D_ASSERT(result.types.size() == result.names.size());
-
-	// BEFORE is not yet supported
-	vector<unique_ptr<QueryNode>> trigger_bodies;
-	vector<TriggerForEach> trigger_for_each;
-	CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT, trigger_bodies,
-	                trigger_for_each);
 	if (!trigger_bodies.empty()) {
 		auto trigger = make_uniq<LogicalTrigger>(table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT,
 		                                         std::move(trigger_bodies), std::move(trigger_for_each));
