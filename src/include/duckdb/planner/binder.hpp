@@ -416,6 +416,9 @@ private:
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 	BoundStatement Bind(MergeIntoStatement &stmt);
 
+	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
+	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
+	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
