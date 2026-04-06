@@ -773,9 +773,8 @@ struct DatePart {
 template <class OP, class T>
 void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState<OP>>();
-	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
-	    args.data[0], result, args.size(),
-	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractElement(input, mask, idx); });
+	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
+	                                   [&](T input) { return lstate.cache.ExtractElement(input); });
 }
 
 template <>

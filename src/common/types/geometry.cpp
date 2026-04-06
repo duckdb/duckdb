@@ -1025,16 +1025,14 @@ bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool stri
 	}
 
 	auto all_ok = true;
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
-	                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
-		                                                    string_t geom;
-		                                                    if (!FromBinary(wkb, geom, heap, false)) {
-			                                                    all_ok = false;
-			                                                    mask.SetInvalid(idx);
-			                                                    return string_t();
-		                                                    }
-		                                                    return geom;
-	                                                    });
+	UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) -> optional<string_t> {
+		string_t geom;
+		if (!FromBinary(wkb, geom, heap, false)) {
+			all_ok = false;
+			return {};
+		}
+		return geom;
+	});
 	return all_ok;
 }
 

@@ -288,16 +288,15 @@ struct ICUDatePart : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		UnaryExecutor::ExecuteWithNulls<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
-		                                                         [&](INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
-			                                                         if (Timestamp::IsFinite(input)) {
-				                                                         const auto micros = SetTime(calendar, input);
-				                                                         return info.adapters[0](calendar, micros);
-			                                                         } else {
-				                                                         mask.SetInvalid(idx);
-				                                                         return RESULT_TYPE();
-			                                                         }
-		                                                         });
+		UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
+		                                                [&](INPUT_TYPE input) -> optional<RESULT_TYPE> {
+			                                                if (Timestamp::IsFinite(input)) {
+				                                                const auto micros = SetTime(calendar, input);
+				                                                return info.adapters[0](calendar, micros);
+			                                                } else {
+				                                                return {};
+			                                                }
+		                                                });
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>

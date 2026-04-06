@@ -12,21 +12,18 @@ static bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParame
 	auto res_enum_type = result.GetType();
 
 	VectorTryCastData vector_cast_data(result, parameters);
-	UnaryExecutor::ExecuteWithNulls<SRC_TYPE, RES_TYPE>(
-	    source, result, count, [&](SRC_TYPE value, ValidityMask &mask, idx_t row_idx) {
-		    auto key = EnumType::GetPos(res_enum_type, dictionary_data[value]);
-		    if (key == -1) {
-			    if (!parameters.error_message) {
-				    return HandleVectorCastError::Operation<RES_TYPE>(CastExceptionText<SRC_TYPE, RES_TYPE>(value),
-				                                                      mask, row_idx, vector_cast_data);
-			    } else {
-				    mask.SetInvalid(row_idx);
-			    }
-			    return RES_TYPE();
-		    } else {
-			    return UnsafeNumericCast<RES_TYPE>(key);
-		    }
-	    });
+	UnaryExecutor::Execute<SRC_TYPE, RES_TYPE>(source, result, count, [&](SRC_TYPE value) -> optional<RES_TYPE> {
+		auto key = EnumType::GetPos(res_enum_type, dictionary_data[value]);
+		if (key == -1) {
+			if (!parameters.error_message) {
+				HandleCastError::AssignError(CastExceptionText<SRC_TYPE, RES_TYPE>(value), vector_cast_data.parameters);
+				vector_cast_data.all_converted = false;
+			}
+			return {};
+		} else {
+			return UnsafeNumericCast<RES_TYPE>(key);
+		}
+	});
 	return vector_cast_data.all_converted;
 }
 

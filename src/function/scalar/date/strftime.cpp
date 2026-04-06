@@ -180,19 +180,17 @@ struct StrpTimeFunction {
 			return;
 		}
 
-		UnaryExecutor::ExecuteWithNulls<string_t, T>(args.data[0], result, args.size(),
-		                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
-			                                             T result;
-			                                             string error;
-			                                             for (auto &format : info.formats) {
-				                                             if (StrpTimeTryResult(format, input, result, error)) {
-					                                             return result;
-				                                             }
-			                                             }
+		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) -> optional<T> {
+			T result;
+			string error;
+			for (auto &format : info.formats) {
+				if (StrpTimeTryResult(format, input, result, error)) {
+					return result;
+				}
+			}
 
-			                                             mask.SetInvalid(idx);
-			                                             return T();
-		                                             });
+			return {};
+		});
 	}
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
