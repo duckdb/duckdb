@@ -44,7 +44,7 @@ public:
 	virtual void InsertKeys(Vector &keys, idx_t count, BuildState &state) const = 0;
 	virtual void MergeBuildState(BuildState &state) = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
-	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) const = 0;
+	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
 	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);

@@ -206,21 +206,21 @@ struct StringPrefixConverter {
 	}
 };
 
-uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
-	return string_t(StringStats::Min(stats)).GetPrefixIntegerComparable();
+uint32_t StringMinComparable(const Value &value) {
+	return StringPrefixConverter::Convert(value.GetValueUnsafe<string_t>());
 }
 
-uint32_t StringStatsMaxComparable(const BaseStatistics &stats) {
-	const auto max_string = StringStats::Max(stats);
-	if (max_string.size() >= string_t::PREFIX_BYTES) {
-		return string_t(max_string).GetPrefixIntegerComparable();
+uint32_t StringMaxComparable(const Value &value) {
+	const auto max_string = value.GetValueUnsafe<string_t>();
+	if (max_string.GetSize() >= string_t::PREFIX_BYTES) {
+		return max_string.GetPrefixIntegerComparable();
 	}
 
 	// Pad string prefix with 0xFF to keep correctness if max is truncated at \0 char, e.g., ab\0c -> ab
 	array<char, string_t::PREFIX_BYTES> padded_prefix;
 	padded_prefix.fill(char(0xFF));
-	for (idx_t i = 0; i < max_string.size(); i++) {
-		padded_prefix[i] = max_string[i];
+	for (idx_t i = 0; i < max_string.GetSize(); i++) {
+		padded_prefix[i] = max_string.GetData()[i];
 	}
 	return string_t(padded_prefix.data(), string_t::PREFIX_BYTES).GetPrefixIntegerComparable();
 }
@@ -259,25 +259,19 @@ public:
 		return bitmap.template LookupKeys<T, NumericConverter<T>>(keys, result_sel, count);
 	}
 
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
-		if (stats.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(stats)) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		const auto min = NumericStats::Min(stats).GetValueUnsafe<T>();
-		const auto max = NumericStats::Max(stats).GetValueUnsafe<T>();
-		if (min > max) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
+	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
+		const auto lb = lower_bound.GetValueUnsafe<T>();
+		const auto ub = upper_bound.GetValueUnsafe<T>();
 
 		const auto bitmap_min = static_cast<T>(bitmap.Min());
 		const auto bitmap_max = static_cast<T>(bitmap.Min() + bitmap.Span());
-		if (max < bitmap_min || min > bitmap_max) {
+		if (ub < bitmap_min || lb > bitmap_max) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
-		const auto lower_bound = NumericConverter<T>::Convert(MaxValue<T>(min, bitmap_min));
-		const auto upper_bound = NumericConverter<T>::Convert(MinValue<T>(max, bitmap_max));
-		return bitmap.LookupRange(lower_bound, upper_bound);
+		const auto adjusted_lb = NumericConverter<T>::Convert(MaxValue<T>(lb, bitmap_min));
+		const auto adjusted_ub = NumericConverter<T>::Convert(MinValue<T>(ub, bitmap_max));
+		return bitmap.LookupRange(adjusted_lb, adjusted_ub);
 	}
 
 	bool IsInitialized() const override {
@@ -319,27 +313,22 @@ public:
 		return bitmap.template LookupKeys<string_t, StringPrefixConverter>(keys, result_sel, count);
 	}
 
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
-		if (stats.GetStatsType() != StatisticsType::STRING_STATS || !stats.CanHaveNoNull() ||
-		    !StringStats::HasMaxStringLength(stats)) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-
-		auto lower_bound = StringStatsMinComparable(stats);
-		auto upper_bound = StringStatsMaxComparable(stats);
-		if (lower_bound > upper_bound) {
+	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
+		auto lower_bound_comparable = StringMinComparable(lower_bound);
+		auto upper_bound_comparable = StringMaxComparable(upper_bound);
+		if (lower_bound_comparable > upper_bound_comparable) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 
 		const auto bitmap_min = bitmap.Min();
 		const auto bitmap_max = bitmap.Min() + bitmap.Span();
-		if (upper_bound < bitmap_min || lower_bound > bitmap_max) {
+		if (upper_bound_comparable < bitmap_min || lower_bound_comparable > bitmap_max) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
-		lower_bound = MaxValue<uint32_t>(lower_bound, bitmap_min);
-		upper_bound = MinValue<uint32_t>(upper_bound, bitmap_max);
-		return bitmap.LookupRange(lower_bound, upper_bound);
+		lower_bound_comparable = MaxValue<uint32_t>(lower_bound_comparable, bitmap_min);
+		upper_bound_comparable = MinValue<uint32_t>(upper_bound_comparable, bitmap_max);
+		return bitmap.LookupRange(lower_bound_comparable, upper_bound_comparable);
 	}
 
 	bool IsInitialized() const override {
@@ -525,7 +514,41 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 	if (!filter || !filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return filter->CheckStatistics(stats);
+
+	Value min;
+	Value max;
+	switch (stats.GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
+		if (!NumericStats::HasMinMax(stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		min = NumericStats::Min(stats);
+		max = NumericStats::Max(stats);
+		break;
+	case StatisticsType::STRING_STATS:
+		if (stats.GetType().id() != LogicalTypeId::VARCHAR || key_type.id() != LogicalTypeId::VARCHAR) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		min = Value(StringStats::Min(stats));
+		max = Value(StringStats::Max(stats));
+		break;
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	if (min > max) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// The filter was built with key_type (condition_type), but stats are in storage_type.
+	if (stats.GetType() != key_type && (!min.DefaultTryCastAs(key_type) || !max.DefaultTryCastAs(key_type))) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	return filter->LookupRange(min, max);
 }
 
 bool PrefixRangeTableFilter::Equals(const TableFilter &other_p) const {
