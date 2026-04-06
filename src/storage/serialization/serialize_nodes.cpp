@@ -266,7 +266,7 @@ void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates", payload_aggregates);
 	if (serializer.ShouldSerialize(8)) {
-		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node", query_node);
+		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(105, "query_node", query_node);
 	}
 }
 
@@ -276,7 +276,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 	auto materialized = deserializer.ReadProperty<CTEMaterialize>(102, "materialized");
 	auto key_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets");
 	auto payload_aggregates = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates");
-	auto query_node = deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(106, "query_node");
+	auto query_node = deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(105, "query_node");
 	auto result = duckdb::unique_ptr<CommonTableExpressionInfo>(new CommonTableExpressionInfo(std::move(query), std::move(query_node)));
 	result->aliases = std::move(aliases);
 	result->materialized = materialized;
