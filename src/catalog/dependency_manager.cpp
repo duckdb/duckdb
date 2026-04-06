@@ -367,7 +367,7 @@ static string EntryToString(CatalogEntryInfo &info) {
 		return StringUtil::Format("index \"%s\"", info.name);
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		return StringUtil::Format("index \"%s\"", info.name);
+		return StringUtil::Format("sequence \"%s\"", info.name);
 	}
 	case CatalogType::COLLATION_ENTRY: {
 		return StringUtil::Format("collation \"%s\"", info.name);
