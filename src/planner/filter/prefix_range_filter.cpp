@@ -73,11 +73,14 @@ public:
 		return make_uniq<PrefixRangeBitmapBuildState>(std::move(state_data), state_bitmap);
 	}
 
-	inline void Insert(U key, uint64_t *state_bitmap) const {
-		const U y = key - min;
-		// All keys are in-range by construction, so the range check can be omitted here.
-		const U idx = y >> shift;
-		state_bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
+	template <typename T, typename CONVERTER>
+	void InsertKeys(Vector &keys, idx_t count, uint64_t *state_bitmap) const {
+		for (const auto &entry : keys.template ValidValues<T>(count)) {
+			const U y = CONVERTER::Convert(entry.value) - min;
+			// All keys are in-range by construction, so the range check can be omitted here.
+			const U idx = y >> shift;
+			state_bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
+		}
 	}
 
 	void MergeBuildState(PrefixRangeBitmapBuildState &state) {
@@ -87,14 +90,38 @@ public:
 		initialized = true;
 	}
 
-	inline idx_t Lookup(U key) const {
-		const U y = key - min;
+	template <typename T, typename CONVERTER>
+	inline bool LookupOne(const Value &value) const {
+		if (value.IsNull()) {
+			return false;
+		}
+
+		const U comparable = CONVERTER::Convert(value.GetValueUnsafe<T>());
+		const U y = comparable - min;
 		const U bit_idx = y >> shift;
 		const uint8_t in_range = y <= span;
-		const uint32_t word_idx = UnsafeNumericCast<uint32_t>(bit_idx >> WORD_SHIFT) & (0U - in_range);
+		const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
 		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 		return bit & in_range;
 	}
+
+	template <typename T, typename CONVERTER>
+	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const {
+		idx_t found_count = 0;
+		for (const auto &entry : keys.template ValidValues<T>(count)) {
+			const U comparable = CONVERTER::Convert(entry.value);
+			const U y = comparable - min;
+			const U bit_idx = y >> shift;
+			const uint8_t in_range = y <= span;
+			const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
+			const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
+
+			result_sel.set_index(found_count, entry.index);
+			found_count += bit & in_range;
+		}
+		return found_count;
+	}
+
 	FilterPropagateResult LookupRange(U lower_bound, U upper_bound) const {
 		const U lb_y = lower_bound - min;
 		const U lb_bit_idx = lb_y >> shift;
@@ -148,7 +175,7 @@ public:
 		return span;
 	}
 
-public:
+private:
 	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
 	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
 	static constexpr idx_t WORD_SHIFT = 6;
@@ -161,6 +188,22 @@ public:
 	idx_t word_count;
 	AllocatedData buf_;
 	uint64_t *bitmap;
+};
+
+template <typename T>
+struct NumericConverter {
+	using comparable_type = typename MakeUnsigned<T>::type;
+
+	static inline comparable_type Convert(T value) {
+		// Overflow is explicitly allowed for unsigned to signed cast
+		return static_cast<comparable_type>(value);
+	}
+};
+
+struct StringPrefixConverter {
+	static inline uint32_t Convert(const string_t &value) {
+		return value.GetPrefixIntegerComparable();
+	}
 };
 
 uint32_t StringStatsMinComparable(const BaseStatistics &stats) {
@@ -191,8 +234,8 @@ public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
-		const auto min = ToComparable(min_val.GetValueUnsafe<T>());
-		const auto max = ToComparable(max_val.GetValueUnsafe<T>());
+		const auto min = NumericConverter<T>::Convert(min_val.GetValueUnsafe<T>());
+		const auto max = NumericConverter<T>::Convert(max_val.GetValueUnsafe<T>());
 		bitmap.Initialize(context, min, max - min);
 	}
 
@@ -202,13 +245,7 @@ public:
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		auto *state_bitmap = bitmap_state.bitmap;
-		for (const auto &entry : keys.template ValidValues<T>(count)) {
-			const Comparable y = static_cast<Comparable>(entry.value) - bitmap.min;
-			// All keys are in-range by construction, so the range check can be omitted here.
-			const Comparable idx = y >> bitmap.shift;
-			state_bitmap[idx >> bitmap.WORD_SHIFT] |= 1ULL << (idx & bitmap.WORD_MASK);
-		}
+		bitmap.template InsertKeys<T, NumericConverter<T>>(keys, count, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
@@ -217,27 +254,9 @@ public:
 
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
 		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			return LookupOneValue(keys.GetValue(0)) ? count : 0;
+			return bitmap.template LookupOne<T, NumericConverter<T>>(keys.GetValue(0)) ? count : 0;
 		}
-
-		idx_t found_count = 0;
-		for (const auto &entry : keys.template ValidValues<T>(count)) {
-			result_sel.set_index(found_count, entry.index);
-			const Comparable y = static_cast<Comparable>(entry.value) - bitmap.min;
-			const Comparable bit_idx = y >> bitmap.shift;
-			const uint8_t in_range = y <= bitmap.span;
-			const uint32_t word_idx = UnsafeNumericCast<uint32_t>(bit_idx >> bitmap.WORD_SHIFT) & (0U - in_range);
-			const uint8_t bit = (bitmap.bitmap[word_idx] >> (bit_idx & bitmap.WORD_MASK)) & 1ULL;
-			found_count += bit & in_range;
-		}
-		return found_count;
-	}
-
-	bool LookupOneValue(const Value &key) const override {
-		if (key.IsNull()) {
-			return false;
-		}
-		return bitmap.Lookup(ToComparable(key.GetValueUnsafe<T>()));
+		return bitmap.template LookupKeys<T, NumericConverter<T>>(keys, result_sel, count);
 	}
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
@@ -256,8 +275,8 @@ public:
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
-		const auto lower_bound = ToComparable(MaxValue<T>(min, bitmap_min));
-		const auto upper_bound = ToComparable(MinValue<T>(max, bitmap_max));
+		const auto lower_bound = NumericConverter<T>::Convert(MaxValue<T>(min, bitmap_min));
+		const auto upper_bound = NumericConverter<T>::Convert(MinValue<T>(max, bitmap_max));
 		return bitmap.LookupRange(lower_bound, upper_bound);
 	}
 
@@ -265,13 +284,8 @@ public:
 		return bitmap.IsInitialized();
 	}
 
-public:
+private:
 	PrefixRangeBitmap<Comparable> bitmap;
-
-	static inline Comparable ToComparable(T value) {
-		// Overflow is explicitly allowed for unsigned to signed cast
-		return static_cast<Comparable>(value);
-	}
 };
 
 class StringPrefixRangeFilter : public PrefixRangeFilter {
@@ -279,8 +293,8 @@ public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
-		const auto min = ToComparable(min_val.GetValueUnsafe<string_t>());
-		const auto max = ToComparable(max_val.GetValueUnsafe<string_t>());
+		const auto min = StringPrefixConverter::Convert(min_val.GetValueUnsafe<string_t>());
+		const auto max = StringPrefixConverter::Convert(max_val.GetValueUnsafe<string_t>());
 		D_ASSERT(min <= max);
 		bitmap.Initialize(context, min, max - min);
 	}
@@ -291,10 +305,7 @@ public:
 
 	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		auto *state_bitmap = bitmap_state.bitmap;
-		for (const auto &entry : keys.template ValidValues<string_t>(count)) {
-			bitmap.Insert(ToComparable(entry.value), state_bitmap);
-		}
+		bitmap.template InsertKeys<string_t, StringPrefixConverter>(keys, count, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
@@ -303,22 +314,9 @@ public:
 
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
 		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			return LookupOneValue(keys.GetValue(0)) ? count : 0;
+			return bitmap.template LookupOne<string_t, StringPrefixConverter>(keys.GetValue(0)) ? count : 0;
 		}
-
-		idx_t found_count = 0;
-		for (const auto &entry : keys.template ValidValues<string_t>(count)) {
-			result_sel.set_index(found_count, entry.index);
-			found_count += bitmap.Lookup(ToComparable(entry.value));
-		}
-		return found_count;
-	}
-
-	bool LookupOneValue(const Value &key) const override {
-		if (key.IsNull()) {
-			return false;
-		}
-		return bitmap.Lookup(ToComparable(key.GetValueUnsafe<string_t>()));
+		return bitmap.template LookupKeys<string_t, StringPrefixConverter>(keys, result_sel, count);
 	}
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
@@ -349,10 +347,6 @@ public:
 	}
 
 private:
-	static inline uint32_t ToComparable(const string_t &value) {
-		return value.GetPrefixIntegerComparable();
-	}
-
 	PrefixRangeBitmap<uint32_t> bitmap;
 };
 
