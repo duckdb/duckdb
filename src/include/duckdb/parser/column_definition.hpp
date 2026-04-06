@@ -47,6 +47,10 @@ public:
 	DUCKDB_API const Value &Comment() const;
 	void SetComment(const Value &comment);
 
+	//! tags
+	DUCKDB_API const InsertionOrderPreservingMap<string> &Tags() const;
+	void SetTags(InsertionOrderPreservingMap<string> new_tags);
+
 	//! compression_type
 	const duckdb::CompressionType &CompressionType() const;
 	void SetCompressionType(duckdb::CompressionType compression_type);
@@ -104,7 +108,7 @@ private:
 	//! Comment on this column
 	Value comment;
 	//! Tags on this column
-	unordered_map<string, string> tags;
+	InsertionOrderPreservingMap<string> tags;
 };
 
 } // namespace duckdb
