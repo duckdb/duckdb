@@ -188,6 +188,17 @@ static void ConvertCRS(ClientContext &context, GeoParquetColumnMetadata &column,
 	column.projjson = crs.GetDefinition();
 }
 
+void GeoParquetFileMetadata::RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name) {
+	lock_guard<mutex> glock(write_lock);
+	const auto it = geometry_columns.find(geom_column_name);
+	if (it != geometry_columns.end()) {
+		it->second.bbox_column_name = bbox_column_name;
+	} else {
+		// Column not yet registered via AddGeoParquetStats; store for later
+		pending_bbox_columns[geom_column_name] = bbox_column_name;
+	}
+}
+
 void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const string &column_name,
                                                 const LogicalType &type, const GeometryStatsData &stats,
                                                 GeoParquetVersion version) {
@@ -208,6 +219,12 @@ void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const st
 		column.stats.Merge(stats);
 		column.insertion_index = geometry_columns.size() - 1;
 
+		// Apply any pending bbox covering registration
+		const auto pending_it = pending_bbox_columns.find(column_name);
+		if (pending_it != pending_bbox_columns.end()) {
+			column.bbox_column_name = pending_it->second;
+			pending_bbox_columns.erase(pending_it);
+		}
 	} else {
 		it->second.stats.Merge(stats);
 	}
@@ -297,6 +314,18 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_max);
 				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_max);
 				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.z_max);
+			}
+		}
+
+		// If a bbox covering column is registered, write the 'covering' field (GeoParquet 1.1+)
+		if (!column.second.bbox_column_name.empty()) {
+			const auto &bcol = column.second.bbox_column_name;
+			const auto covering = yyjson_mut_obj_add_obj(doc, column_json, "covering");
+			const auto bbox_covering = yyjson_mut_obj_add_obj(doc, covering, "bbox");
+			for (const auto *coord : {"xmin", "ymin", "xmax", "ymax"}) {
+				const auto arr = yyjson_mut_obj_add_arr(doc, bbox_covering, coord);
+				yyjson_mut_arr_add_strncpy(doc, arr, bcol.c_str(), bcol.size());
+				yyjson_mut_arr_add_str(doc, arr, coord);
 			}
 		}
 
