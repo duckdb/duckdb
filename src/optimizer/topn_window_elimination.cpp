@@ -1078,7 +1078,17 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 			if (op.HasProjectionMap()) {
 				auto &filter = op.Cast<LogicalFilter>();
 				for (const auto rowid_idx : rhs_rowid_idxs) {
-					filter.projection_map.push_back(rowid_idx);
+					//	The rowid_idx is the index into the rhs_get.column_ids,
+					//	not the index of the rhs_get schema.
+					auto schema_idx = rowid_idx;
+					if (last_table_idx == rhs_get.table_index && !rhs_get.projection_ids.empty()) {
+						for (schema_idx = 0; schema_idx < rhs_get.projection_ids.size(); ++schema_idx) {
+							if (rhs_get.projection_ids[schema_idx] == rowid_idx) {
+								break;
+							}
+						}
+					}
+					filter.projection_map.push_back(schema_idx);
 				}
 			}
 			break;
