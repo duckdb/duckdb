@@ -19,7 +19,7 @@ CREATE TABLE t1(c1 INT, CHECK(${fun}('seq')));
 statement error
 DROP SEQUENCE seq;
 ----
-<REGEX>:Dependency Error.*table "t1" depends on index "seq".*
+<REGEX>:Dependency Error.*table "t1" depends on sequence "seq".*
 
 statement ok
 DROP SEQUENCE seq CASCADE;
