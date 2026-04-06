@@ -53,11 +53,11 @@ public:
 		shift = 0;
 
 		if (span >= CAP_BITS) {
-			const auto q = NumericCast<uint64_t>(span >> MAX_PREFIX_LENGTH);
+			const auto q = UnsafeNumericCast<uint64_t>(span >> MAX_PREFIX_LENGTH);
 			shift = (q <= 1) ? 0 : (64 - CountZeros<uint64_t>::Leading(q - 1));
 		}
 
-		const idx_t buckets = NumericCast<idx_t>((span >> shift) + 1);
+		const idx_t buckets = UnsafeNumericCast<idx_t>((span >> shift) + 1);
 		word_count = buckets == 0 ? 1 : (buckets + 63) >> WORD_SHIFT;
 
 		buf_ = AllocateBitmap(context, word_count, bitmap);
