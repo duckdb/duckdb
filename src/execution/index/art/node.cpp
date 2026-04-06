@@ -4,9 +4,9 @@
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
-#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
@@ -56,16 +56,25 @@ void Node::FreeNode(ART &art, Node &node) {
 	node.Clear();
 }
 
-void Node::FreeTree(ART &art, Node &node) {
-	auto handler = [&art](Node &node) {
-		const auto type = node.GetType();
+void Node::FreeTree(ART &art, Node &tree) {
+	if (!tree.HasMetadata()) {
+		return;
+	}
+	// All nodes should be pushed onto the stack.
+	auto filter = [](Node &child) -> Node {
+		D_ASSERT(child.HasMetadata());
+		return child;
+	};
+	// We freed the subtree pointed to by the current node. Free the node.
+	auto post_handler = [&](Node current) {
+		D_ASSERT(current.HasMetadata());
+		auto type = current.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			node.Clear();
-			return ARTHandlingResult::NONE;
+			break;
 		case NType::LEAF:
-			Leaf::DeprecatedFree(art, node);
-			return ARTHandlingResult::NONE;
+			Leaf::DeprecatedFree(art, current);
+			break;
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
@@ -74,17 +83,14 @@ void Node::FreeTree(ART &art, Node &node) {
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
+			FreeNode(art, current);
 			break;
 		default:
-			throw InternalException("invalid node type for Free: %d", type);
+			throw InternalException("invalid node type for FreeTree: %d", type);
 		}
-
-		FreeNode(art, node);
-		return ARTHandlingResult::NONE;
 	};
-
-	ARTScanner<ARTScanHandling::POP, Node> scanner(art, handler, node);
-	scanner.Scan(handler);
+	ARTScanPostorder(art, tree, filter, post_handler);
+	tree.Clear();
 }
 
 //===--------------------------------------------------------------------===//
@@ -227,6 +233,42 @@ unsafe_optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte, co
 	return GetChildInternal(art, *this, byte, unsafe);
 }
 
+Node Node::GetChildNode(const ART &art, const uint8_t byte) const {
+	D_ASSERT(HasMetadata());
+	auto type = GetType();
+	ConstNodeHandle handle(art, *this);
+	switch (type) {
+	case NType::NODE_4:
+		return Node4::GetChildNode(handle.Get<Node4>(), byte);
+	case NType::NODE_16:
+		return Node16::GetChildNode(handle.Get<Node16>(), byte);
+	case NType::NODE_48:
+		return Node48::GetChildNode(handle.Get<Node48>(), byte);
+	case NType::NODE_256:
+		return Node256::GetChildNode(handle.Get<Node256>(), byte);
+	default:
+		throw InternalException("Invalid node type for GetChildNode: %d.", type);
+	}
+}
+
+Node Node::GetNextChildNode(const ART &art, uint8_t &byte) const {
+	D_ASSERT(HasMetadata());
+	auto type = GetType();
+	ConstNodeHandle handle(art, *this);
+	switch (type) {
+	case NType::NODE_4:
+		return Node4::GetNextChildNode(handle.Get<Node4>(), byte);
+	case NType::NODE_16:
+		return Node16::GetNextChildNode(handle.Get<Node16>(), byte);
+	case NType::NODE_48:
+		return Node48::GetNextChildNode(handle.Get<Node48>(), byte);
+	case NType::NODE_256:
+		return Node256::GetNextChildNode(handle.Get<Node256>(), byte);
+	default:
+		throw InternalException("Invalid node type for GetNextChildNode: %d.", type);
+	}
+}
+
 template <class NODE>
 unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &byte) {
 	D_ASSERT(node.HasMetadata());
@@ -359,58 +401,45 @@ bool Node::IsAnyLeaf() const {
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
-template <class NODE>
-static void TransformToDeprecatedPushChildren(ART &art, Node &node, NType type, vector<reference<Node>> &stack) {
-	auto ptr = Node::InMemoryRef<NODE>(art, node, type);
-	if (ptr) {
-		NODE::Iterator(*ptr, [&](Node &child) { stack.emplace_back(child); });
-	}
-}
-
 void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
-	vector<reference<Node>> stack;
-	stack.emplace_back(node);
-
-	while (!stack.empty()) {
-		Node &current = stack.back().get();
-		stack.pop_back();
-
-		D_ASSERT(current.HasMetadata());
-
-		if (current.GetGateStatus() == GateStatus::GATE_SET) {
-			D_ASSERT(current.GetType() != NType::LEAF_INLINED);
-			Leaf::TransformToDeprecated(art, current);
-			continue;
-		}
-
+	auto filter = [&](Node current) -> ScanNodeResult {
 		auto type = current.GetType();
-		switch (type) {
-		case NType::PREFIX: {
-			auto child = PrefixHandle::TransformToDeprecated(art, current, state);
-			if (child) {
-				stack.emplace_back(*child);
+		if (type == NType::NODE_4 || type == NType::NODE_16 || type == NType::NODE_48 || type == NType::NODE_256) {
+			auto &alloc = Node::GetAllocator(art, type);
+			if (!alloc.LoadedFromStorage(current)) {
+				return ScanNodeResult::SKIP;
 			}
-			break;
 		}
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto pre_handler = [&](Node &child) -> Node {
+		D_ASSERT(child.HasMetadata());
+		if (child.GetGateStatus() == GateStatus::GATE_SET) {
+			Leaf::TransformToDeprecated(art, child);
+			return Node();
+		}
+		auto type = child.GetType();
+		switch (type) {
+		case NType::PREFIX:
+			return PrefixHandle::TransformToDeprecated(art, child, state);
 		case NType::LEAF_INLINED:
 		case NType::LEAF:
-			break;
+			return Node();
 		case NType::NODE_4:
-			TransformToDeprecatedPushChildren<Node4>(art, current, type, stack);
-			break;
 		case NType::NODE_16:
-			TransformToDeprecatedPushChildren<Node16>(art, current, type, stack);
-			break;
 		case NType::NODE_48:
-			TransformToDeprecatedPushChildren<Node48>(art, current, type, stack);
-			break;
 		case NType::NODE_256:
-			TransformToDeprecatedPushChildren<Node256>(art, current, type, stack);
-			break;
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			return child;
 		default:
 			throw InternalException("invalid node type for TransformToDeprecated: %d", type);
 		}
-	}
+	};
+
+	ARTScanPreorder(art, node, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -452,40 +481,40 @@ void Node::Verify(ART &art) const {
 void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
 
-	auto handler = [&art, &node_counts](const Node &node) {
-		ARTHandlingResult result;
-		const auto type = node.GetType();
+	auto filter = [](Node) -> ScanNodeResult {
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto pre_handler = [&](Node &child) -> Node {
+		D_ASSERT(child.HasMetadata());
+		auto type = child.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return ARTHandlingResult::SKIP;
+			return Node();
 		case NType::LEAF: {
-			auto &leaf = Ref<Leaf>(art, node, type);
+			auto &leaf = Ref<Leaf>(art, child, type);
 			leaf.DeprecatedVerifyAllocations(art, node_counts);
-			return ARTHandlingResult::SKIP;
+			return Node();
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF: {
-			result = ARTHandlingResult::SKIP;
-			break;
-		}
+		case NType::NODE_256_LEAF:
+			node_counts[GetAllocatorIdx(type)]++;
+			return Node();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
-		case NType::NODE_256: {
-			result = ARTHandlingResult::CONTINUE;
-			break;
-		}
+		case NType::NODE_256:
+			node_counts[GetAllocatorIdx(type)]++;
+			return child;
 		default:
 			throw InternalException("invalid node type for VerifyAllocations: %d", type);
 		}
-		node_counts[GetAllocatorIdx(type)]++;
-		return result;
 	};
 
-	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art, handler, *this);
-	scanner.Scan(handler);
+	Node root = *this;
+	ARTScanPreorder(art, root, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//

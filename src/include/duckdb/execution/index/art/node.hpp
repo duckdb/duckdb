@@ -15,6 +15,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/execution/index/art/node_handle.hpp"
 
 namespace duckdb {
 
@@ -136,12 +137,6 @@ public:
 		D_ASSERT(ptr.GetType() != NType::PREFIX);
 		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
 	}
-	//! Get a node pointer, if the node is in memory, else nullptr.
-	template <class NODE>
-	static inline unsafe_optional_ptr<NODE> InMemoryRef(const ART &art, const Node ptr, const NType type) {
-		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return GetAllocator(art, type).GetIfLoaded<NODE>(ptr);
-	}
 
 	//! Replace the child at byte.
 	void ReplaceChild(const ART &art, const uint8_t byte, const Node child = Node()) const;
@@ -151,6 +146,10 @@ public:
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
 	                        const ARTKey &row_id);
 
+	//! Get the child node at byte (returns Node by value via ConstNodeHandle).
+	Node GetChildNode(const ART &art, const uint8_t byte) const;
+	//! Get the first child node >= byte (returns Node by value, updates byte).
+	Node GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
@@ -226,14 +225,6 @@ public:
 private:
 	//! Prints only the children of an internal node (used for tree-style printing).
 	string ToStringChildren(ART &art, const ToStringOptions &options) const;
-
-	template <class NODE>
-	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
-	                                          TransformToDeprecatedState &state) {
-		if (ptr) {
-			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, state); });
-		}
-	}
 };
 
 //! NodeChildren holds the extracted bytes of a node, and their respective children.
@@ -245,59 +236,6 @@ struct NodeChildren {
 
 	array_ptr<uint8_t> bytes;
 	array_ptr<Node> children;
-};
-
-//! NodeHandle is a mutable wrapper to access and modify a node.
-//! A segment handle is used for memory management and marks memory as modified.
-//! For read-only access, use ConstNodeHandle instead.
-template <class T>
-class NodeHandle {
-public:
-	NodeHandle(ART &art, const Node node)
-	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
-		handle.MarkModified();
-	}
-	NodeHandle() = delete;
-	NodeHandle(const NodeHandle &) = delete;
-	NodeHandle &operator=(const NodeHandle &) = delete;
-
-	NodeHandle(NodeHandle &&other) noexcept : handle(std::move(other.handle)), n(handle.GetRef<T>()) {
-	}
-	NodeHandle &operator=(NodeHandle &&other) noexcept = delete;
-
-public:
-	T &Get() {
-		return n;
-	}
-
-private:
-	SegmentHandle handle;
-	T &n;
-};
-
-//! ConstNodeHandle is a read-only wrapper to access a node.
-//! A segment handle is used for memory management, but it is not marked as modified.
-//! For mutable access, use NodeHandle instead.
-template <class T>
-class ConstNodeHandle {
-public:
-	ConstNodeHandle(const ART &art, const Node node)
-	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
-	}
-	ConstNodeHandle() = delete;
-	ConstNodeHandle(const ConstNodeHandle &) = delete;
-	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;
-	ConstNodeHandle(ConstNodeHandle &&other) noexcept = delete;
-	ConstNodeHandle &operator=(ConstNodeHandle &&other) noexcept = delete;
-
-public:
-	const T &Get() const {
-		return n;
-	}
-
-private:
-	SegmentHandle handle;
-	const T &n;
 };
 
 } // namespace duckdb

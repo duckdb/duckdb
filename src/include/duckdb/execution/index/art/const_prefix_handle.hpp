@@ -13,24 +13,10 @@
 
 namespace duckdb {
 
-//! ConstPrefixHandle is a read-only wrapper to access a prefix node.
-//! The prefix contains up to the ART's prefix size bytes, an additional byte for the count,
-//! and a Node pointer to a child node.
-//! A segment handle is used for memory management, but it is not marked as modified.
+//! ConstPrefixHandle provides static methods for read-only prefix operations.
 class ConstPrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
-
-	ConstPrefixHandle(const ART &art, const Node node);
-	ConstPrefixHandle() = delete;
-	ConstPrefixHandle(const ConstPrefixHandle &) = delete;
-	ConstPrefixHandle &operator=(const ConstPrefixHandle &) = delete;
-	ConstPrefixHandle(ConstPrefixHandle &&) = delete;
-	ConstPrefixHandle &operator=(ConstPrefixHandle &&) = delete;
-
-public:
-	uint8_t GetCount(const ART &art) const;
-	uint8_t GetByte(const idx_t pos) const;
 
 	//! Traverses and verifies the node and its subtree.
 	static void Verify(ART &art, const Node &node);
@@ -42,20 +28,18 @@ private:
 	template <class F>
 	static void Iterator(ART &art, reference<const Node> &ref, const bool exit_gate, F &&lambda) {
 		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
-			ConstPrefixHandle handle(art, ref);
-			lambda(handle);
+			ConstNodeHandle handle(art, ref);
+			auto data = handle.GetPtr();
+			auto &child = *reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
 
-			ref = *handle.child;
+			lambda(handle, data, child);
+
+			ref = child;
 			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}
 		}
 	}
-
-private:
-	SegmentHandle segment_handle;
-	data_ptr_t data;
-	Node *child;
 };
 
 } // namespace duckdb

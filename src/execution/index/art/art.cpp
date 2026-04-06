@@ -574,8 +574,8 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 			continue;
 		}
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		D_ASSERT(leaf);
-		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
+		D_ASSERT(leaf.HasMetadata());
+		D_ASSERT(ARTOperator::LookupInLeaf(*this, leaf, row_id_keys[i]));
 	}
 #endif
 	return ErrorData();
@@ -671,8 +671,8 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 			continue;
 		}
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		if (leaf) {
-			auto contains_row_id = ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]);
+		if (leaf.HasMetadata()) {
+			auto contains_row_id = ARTOperator::LookupInLeaf(*this, leaf, row_id_keys[i]);
 			D_ASSERT(!contains_row_id);
 		}
 	}
@@ -696,12 +696,12 @@ bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
-	if (!leaf) {
+	if (!leaf.HasMetadata()) {
 		return true;
 	}
 
 	Iterator it(*this);
-	it.FindMinimum(*leaf);
+	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, max_count);
 	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
@@ -853,14 +853,14 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete
 		for (auto &index : *delete_index_info.delete_indexes) {
 			auto &delete_art = index.get().Cast<ART>();
 			auto deleted_leaf = ARTOperator::Lookup(delete_art, delete_art.tree, key, 0);
-			if (!deleted_leaf) {
+			if (!deleted_leaf.HasMetadata()) {
 				continue;
 			}
 			// All leaves in the delete ART are inlined.
-			if (deleted_leaf->GetType() != NType::LEAF_INLINED) {
+			if (deleted_leaf.GetType() != NType::LEAF_INLINED) {
 				throw InternalException("Non-inlined leaf?");
 			}
-			auto deleted_row_id = deleted_leaf->GetRowId();
+			auto deleted_row_id = deleted_leaf.GetRowId();
 			deleted_row_ids.push_back(deleted_row_id);
 		}
 	}
@@ -946,10 +946,10 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 		}
 
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		if (!leaf) {
+		if (!leaf.HasMetadata()) {
 			continue;
 		}
-		VerifyLeaf(*leaf, keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
+		VerifyLeaf(leaf, keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
 	}
 
 	manager.FinishLookup();
@@ -1175,6 +1175,25 @@ void ART::FinalizeVacuum(const unordered_set<uint8_t> &indexes) {
 	}
 }
 
+static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexes, Node &node) {
+	const auto type = node.GetType();
+	if (type == NType::LEAF_INLINED) {
+		return;
+	}
+	const auto idx = Node::GetAllocatorIdx(type);
+	if (indexes.find(idx) == indexes.end()) {
+		return;
+	}
+	auto &allocator = Node::GetAllocator(art, type);
+	if (!allocator.NeedsVacuum(node)) {
+		return;
+	}
+	const auto status = node.GetGateStatus();
+	node = allocator.VacuumPointer(node);
+	node.SetMetadata(static_cast<uint8_t>(type));
+	node.SetGateStatus(status);
+}
+
 void ART::Vacuum(IndexLock &state) {
 	D_ASSERT(owns_data);
 
@@ -1184,7 +1203,6 @@ void ART::Vacuum(IndexLock &state) {
 		}
 		return;
 	}
-
 	// True, if an allocator needs a vacuum, false otherwise.
 	unordered_set<uint8_t> indexes;
 	InitializeVacuum(indexes);
@@ -1194,53 +1212,28 @@ void ART::Vacuum(IndexLock &state) {
 		return;
 	}
 
-	// Traverse the allocated memory of the tree to perform a vacuum.
 	auto &art = *this;
-	auto handler = [&art, &indexes](Node &node) {
-		ARTHandlingResult result;
-		const auto type = node.GetType();
-		switch (type) {
-		case NType::LEAF_INLINED:
-			return ARTHandlingResult::SKIP;
-		case NType::LEAF: {
-			if (indexes.find(Node::GetAllocatorIdx(type)) == indexes.end()) {
-				return ARTHandlingResult::SKIP;
+
+	auto filter = [&](Node current) -> ScanNodeResult {
+		D_ASSERT(current.HasMetadata());
+		if (current.GetType() == NType::LEAF_INLINED) {
+			return ScanNodeResult::SKIP;
+		}
+		if (current.GetType() == NType::LEAF) {
+			if (indexes.find(Node::GetAllocatorIdx(NType::LEAF)) != indexes.end()) {
+				Leaf::DeprecatedVacuum(art, current);
 			}
-			Leaf::DeprecatedVacuum(art, node);
-			return ARTHandlingResult::SKIP;
+			return ScanNodeResult::SKIP;
 		}
-		case NType::NODE_7_LEAF:
-		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF: {
-			result = ARTHandlingResult::SKIP;
-			break;
-		}
-		case NType::PREFIX:
-		case NType::NODE_4:
-		case NType::NODE_16:
-		case NType::NODE_48:
-		case NType::NODE_256: {
-			result = ARTHandlingResult::CONTINUE;
-			break;
-		}
-		default:
-			throw InternalException("invalid node type for Vacuum: %d", type);
-		}
-
-		const auto idx = Node::GetAllocatorIdx(type);
-		auto &allocator = Node::GetAllocator(art, type);
-		const auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
-		if (needs_vacuum) {
-			const auto status = node.GetGateStatus();
-			node = allocator.VacuumPointer(node);
-			node.SetMetadata(static_cast<uint8_t>(type));
-			node.SetGateStatus(status);
-		}
-		return result;
+		return ScanNodeResult::SCAN_CHILDREN;
 	};
-
-	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(*this, handler, tree);
-	scanner.Scan(handler);
+	auto preorder_handler = [&](Node &child) -> Node {
+		// Vacuums the pointer if needed and updates in place within the parent.
+		VacuumPointerIfNeeded(art, indexes, child);
+		// We want to return the new pointer to be pushed onto the stack to do a vacuum traversel on the subtree.
+		return child;
+	};
+	ARTScanPreorder(art, tree, filter, preorder_handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1257,24 +1250,49 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 	}
 }
 
-void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
-	D_ASSERT(node.HasMetadata());
+void ART::InitializeMerge(Node &other_tree, unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(other_tree.HasMetadata());
 
-	auto handler = [&upper_bounds](Node &node) {
-		const auto type = node.GetType();
-		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTHandlingResult::NONE;
+	auto filter = [](Node node) -> ScanNodeResult {
+		D_ASSERT(node.HasMetadata());
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto pre_handler = [&](Node &child) -> Node {
+		D_ASSERT(child.HasMetadata());
+		auto type = child.GetType();
+		// no-op
+		if (type == NType::LEAF_INLINED) {
+			return Node();
 		}
+		// FIXME: Implement merging for deprecated leaves.
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
-		const auto idx = Node::GetAllocatorIdx(type);
-		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTHandlingResult::NONE;
+		auto original = child;
+		// remap BufferId in-place within the parent.
+		auto idx = Node::GetAllocatorIdx(type);
+		child.IncreaseBufferId(upper_bounds[idx]);
+
+		switch (type) {
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			// no-op
+			return Node();
+		case NType::PREFIX:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256:
+			// Original pointer is pushed onto the stack.
+			return original;
+		default:
+			throw InternalException("invalid node type for InitializeMerge: %d", type);
+		}
 	};
 
-	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);
-	scanner.Scan(handler);
+	ARTScanPreorder(*this, other_tree, filter, pre_handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {

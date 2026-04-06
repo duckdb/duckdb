@@ -31,12 +31,12 @@ private:
 
 public:
 	//! Get a new BaseLeaf and initialize it.
-	static NodeHandle<BaseLeaf> New(ART &art, Node &node) {
+	static NodeHandle New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		NodeHandle<BaseLeaf> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<BaseLeaf>();
 
 		n.count = 0;
 		return handle;
@@ -72,7 +72,7 @@ public:
 
 private:
 	static void InsertByteInternal(BaseLeaf &n, const uint8_t byte);
-	static NodeHandle<BaseLeaf> DeleteByteInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle DeleteByteInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node7Leaf holds up to seven sorted bytes.

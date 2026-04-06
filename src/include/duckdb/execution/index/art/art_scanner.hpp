@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/stack.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
@@ -16,105 +15,167 @@
 
 namespace duckdb {
 
-enum class ARTScanHandling : uint8_t {
-	EMPLACE,
-	POP,
+//===--------------------------------------------------------------------===//
+// ARTScanPreOrder
+//===--------------------------------------------------------------------===//
+
+enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
+
+//! Pins the parent node and calls preorder_handler on all the children, which can perform in-place updates within
+//! the parent while it is pinned, as well as defines the return Node value that should be pushed onto the
+//! stack for further traversal.
+template <class NODE_TYPE, class PRE_HANDLER>
+static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<Node> &stack) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE_TYPE>();
+	NODE_TYPE::Iterator(n, [&](Node &child) {
+		auto push = pre_handler(child);
+		if (push.HasMetadata()) {
+			stack.push_back(push);
+		}
+	});
+}
+
+//! Pre-order scanner: each child is processed by pre_handler before being pushed onto the stack.
+//! When a node is popped, the filter decides whether to scan its children or skip it.
+//! If the children need to be scanned, the parent is pinned in ScanChildren and any updates are performed in place
+//! within the pinned parent node using preorder_handler (which also defines what Node to push onto the stack
+//! for further traversal).
+template <class FILTER, class PRE_HANDLER>
+void ARTScanPreorder(ART &art, Node &root, FILTER &&filter, PRE_HANDLER &&preorder_handler) {
+	vector<Node> stack;
+
+	// root node is always pinned, handle it first.
+	auto push_node = preorder_handler(root);
+	if (push_node.HasMetadata()) {
+		stack.push_back(push_node);
+	}
+
+	while (!stack.empty()) {
+		Node current = stack.back();
+		stack.pop_back();
+
+		if (filter(current) == ScanNodeResult::SKIP) {
+			continue;
+		}
+
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			NodeHandle handle(art, current);
+			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+			push_node = preorder_handler(child);
+			if (push_node.HasMetadata()) {
+				stack.push_back(push_node);
+			}
+			break;
+		}
+		case NType::NODE_4:
+			ScanChildren<Node4>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_16:
+			ScanChildren<Node16>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_48:
+			ScanChildren<Node48>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_256:
+			ScanChildren<Node256>(art, current, preorder_handler, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for ARTScanPreOrder: %d", current.GetType());
+		}
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// ARTScanPostOrder
+//===--------------------------------------------------------------------===//
+
+struct ScanEntry {
+	ScanEntry(Node node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
+	}
+
+	Node node;
+	bool children_visited;
 };
 
-//! ARTScanner scans the entire ART and processes each node.
-template <ARTScanHandling HANDLING, class NODE>
-class ARTScanner {
-public:
-	template <class FUNC>
-	explicit ARTScanner(ART &art, FUNC &&handler, NODE &root) : art(art) {
-		Emplace(handler, root);
-	}
+//! Pins the parent node and iterates over all the children. The filter receives each child by reference
+//! and returns the Node value that should be pushed onto the stack for further traversal.
+template <class NODE_TYPE, class FILTER>
+static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry> &stack) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE_TYPE>();
+	NODE_TYPE::Iterator(n, [&](Node &child) {
+		auto push_node = filter(child);
+		if (push_node.HasMetadata()) {
+			stack.push_back(ScanEntry {push_node, false});
+		}
+	});
+}
 
-public:
-	template <class FUNC>
-	void Scan(FUNC &&handler) {
-		while (!s.empty()) {
-			auto &entry = s.top();
-			if (entry.exhausted) {
-				Pop(handler, entry.node);
-				continue;
-			}
-			entry.exhausted = true;
+//! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
+//! On the first visit (children_visited = false), the node is marked as visited and the filter decides which
+//! children to push onto the stack. The filter receives each child by reference and returns the Node
+//! to push for further traversal.
+//! On the second visit (children_visited = true, after all descendants have been processed),
+//! post_handler fires on the node and then we pop it from the stack.
+template <class FILTER, class POST_HANDLER>
+void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&postorder_handler) {
+	vector<ScanEntry> stack;
 
-			const auto type = entry.node.GetType();
-			switch (type) {
-			case NType::LEAF_INLINED:
-			case NType::LEAF:
-			case NType::NODE_7_LEAF:
-			case NType::NODE_15_LEAF:
-			case NType::NODE_256_LEAF:
-				break;
-			case NType::PREFIX: {
-				Prefix prefix(art, entry.node, true);
-				Emplace(handler, *prefix.ptr);
-				break;
-			}
+	D_ASSERT(root.HasMetadata());
+	stack.push_back(ScanEntry {root, false});
 
-			case NType::NODE_4: {
-				IterateChildren<FUNC, Node4>(handler, entry.node, type);
-				break;
+	while (!stack.empty()) {
+		auto &entry = stack.back();
+
+		if (entry.children_visited) {
+			postorder_handler(entry.node);
+			stack.pop_back();
+			continue;
+		}
+
+		entry.children_visited = true;
+		auto current = entry.node;
+
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			NodeHandle handle(art, current);
+			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto push_node = filter(child);
+			if (push_node.HasMetadata()) {
+				stack.push_back(ScanEntry {push_node, false});
 			}
-			case NType::NODE_16: {
-				IterateChildren<FUNC, Node16>(handler, entry.node, type);
-				break;
-			}
-			case NType::NODE_48: {
-				IterateChildren<FUNC, Node48>(handler, entry.node, type);
-				break;
-			}
-			case NType::NODE_256: {
-				IterateChildren<FUNC, Node256>(handler, entry.node, type);
-				break;
-			}
-			default:
-				throw InternalException("invalid node type for ART ARTScanner: %d", type);
-			}
+			break;
+		}
+		case NType::NODE_4:
+			ScanChildren<Node4>(art, current, filter, stack);
+			break;
+		case NType::NODE_16:
+			ScanChildren<Node16>(art, current, filter, stack);
+			break;
+		case NType::NODE_48:
+			ScanChildren<Node48>(art, current, filter, stack);
+			break;
+		case NType::NODE_256:
+			ScanChildren<Node256>(art, current, filter, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for ARTScanPostOrder: %d", current.GetType());
 		}
 	}
-
-private:
-	template <class FUNC>
-	void Emplace(FUNC &&handler, NODE &node) {
-		if (HANDLING == ARTScanHandling::EMPLACE) {
-			auto result = handler(node);
-			if (result == ARTHandlingResult::SKIP) {
-				return;
-			}
-			D_ASSERT(result == ARTHandlingResult::CONTINUE);
-		}
-		s.emplace(node);
-	}
-
-	template <class FUNC>
-	void Pop(FUNC &&handler, NODE &node) {
-		if (HANDLING == ARTScanHandling::POP) {
-			handler(node);
-		}
-		s.pop();
-	}
-
-	template <class FUNC, class NODE_TYPE>
-	void IterateChildren(FUNC &&handler, NODE &node, const NType type) {
-		auto &n = Node::Ref<NODE_TYPE>(art, node, type);
-		NODE_TYPE::Iterator(n, [&](NODE &child) { Emplace(handler, child); });
-	}
-
-private:
-	struct NodeEntry {
-		NodeEntry() = delete;
-		explicit NodeEntry(NODE &node) : node(node), exhausted(false) {};
-
-		NODE &node;
-		bool exhausted;
-	};
-
-	ART &art;
-	stack<NodeEntry> s;
-};
+}
 
 } // namespace duckdb

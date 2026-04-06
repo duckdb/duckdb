@@ -139,10 +139,10 @@ public:
 	ARTScanResult Scan(const ARTKey &upper_bound, Output &output, bool equal);
 
 	//! Finds the minimum (leaf) of the current subtree.
-	void FindMinimum(const Node &node);
+	void FindMinimum(Node node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART.
-	bool LowerBound(const Node &node, const ARTKey &key, const bool equal);
+	bool LowerBound(Node node, const ARTKey &key, const bool equal);
 
 	//! Returns the nested depth.
 	uint8_t GetNestedDepth() const {

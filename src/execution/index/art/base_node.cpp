@@ -30,10 +30,9 @@ void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t by
 }
 
 template <uint8_t CAPACITY, NType TYPE>
-NodeHandle<BaseNode<CAPACITY, TYPE>> BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node,
-                                                                                   const uint8_t byte) {
-	NodeHandle<BaseNode<CAPACITY, TYPE>> handle(art, node);
-	auto &n = handle.Get();
+NodeHandle BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<BaseNode<CAPACITY, TYPE>>();
 
 	uint8_t child_pos = 0;
 	for (; child_pos < n.count; child_pos++) {
@@ -61,8 +60,8 @@ NodeHandle<BaseNode<CAPACITY, TYPE>> BaseNode<CAPACITY, TYPE>::DeleteChildIntern
 
 void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	{
-		NodeHandle<Node4> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<Node4>();
 
 		if (n.count != CAPACITY) {
 			InsertChildInternal(n, byte, child);
@@ -82,7 +81,7 @@ void Node4::DeleteChild(ART &art, Node &node, Node &parent, const uint8_t byte, 
 
 	{
 		auto handle = DeleteChildInternal(art, node, byte);
-		auto &n = handle.Get();
+		auto &n = handle.Get<Node4>();
 
 		if (n.count != 1) {
 			return;
@@ -103,11 +102,11 @@ void Node4::DeleteChild(ART &art, Node &node, Node &parent, const uint8_t byte, 
 void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	{
 		auto n4_handle = New(art, node4);
-		auto &n4 = n4_handle.Get();
+		auto &n4 = n4_handle.Get<Node4>();
 		node4.SetGateStatus(node16.GetGateStatus());
 
-		NodeHandle<Node16> n16_handle(art, node16);
-		auto &n16 = n16_handle.Get();
+		NodeHandle n16_handle(art, node16);
+		auto &n16 = n16_handle.Get<Node16>();
 
 		n4.count = n16.count;
 		for (uint8_t i = 0; i < n16.count; i++) {
@@ -124,8 +123,8 @@ void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 
 void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	{
-		NodeHandle<Node16> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<Node16>();
 		if (n.count != CAPACITY) {
 			InsertChildInternal(n, byte, child);
 			return;
@@ -141,7 +140,7 @@ void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	{
 		auto handle = DeleteChildInternal(art, node, byte);
-		auto &n = handle.Get();
+		auto &n = handle.Get<Node16>();
 		if (n.count >= Node4::CAPACITY) {
 			return;
 		}
@@ -153,11 +152,11 @@ void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 void Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 	{
-		NodeHandle<Node4> n4_handle(art, node4);
-		auto &n4 = n4_handle.Get();
+		NodeHandle n4_handle(art, node4);
+		auto &n4 = n4_handle.Get<Node4>();
 
 		auto n16_handle = New(art, node16);
-		auto &n16 = n16_handle.Get();
+		auto &n16 = n16_handle.Get<Node16>();
 		node16.SetGateStatus(node4.GetGateStatus());
 
 		n16.count = n4.count;
@@ -172,11 +171,11 @@ void Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 void Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	{
 		auto n16_handle = New(art, node16);
-		auto &n16 = n16_handle.Get();
+		auto &n16 = n16_handle.Get<Node16>();
 		node16.SetGateStatus(node48.GetGateStatus());
 
-		NodeHandle<Node48> n48_handle(art, node48);
-		auto &n48 = n48_handle.Get();
+		NodeHandle n48_handle(art, node48);
+		auto &n48 = n48_handle.Get<Node48>();
 
 		n16.count = 0;
 		for (uint16_t i = 0; i < Node256::CAPACITY; i++) {
