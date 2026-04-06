@@ -171,17 +171,17 @@ int NumericHelper::UnsignedLength(hugeint_t value) {
 }
 
 template <>
-string_t NumericHelper::FormatSigned(hugeint_t value, Vector &vector) {
+string_t NumericHelper::FormatSigned(hugeint_t value, StringHeap &heap) {
 	int negative = value.upper < 0;
 	if (negative) {
 		if (value == NumericLimits<hugeint_t>::Minimum()) {
-			string_t result = StringVector::AddString(vector, Hugeint::HUGEINT_MINIMUM_STRING);
+			string_t result = heap.AddString(Hugeint::HUGEINT_MINIMUM_STRING);
 			return result;
 		}
 		Hugeint::NegateInPlace(value);
 	}
 	int length = UnsignedLength(value) + negative;
-	string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(length));
+	string_t result = heap.EmptyString(NumericCast<size_t>(length));
 	auto dataptr = result.GetDataWriteable();
 	auto endptr = dataptr + length;
 	if (value.upper == 0) {

@@ -21,8 +21,8 @@ namespace duckdb {
 template <class OP>
 struct VectorStringCastOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, Vector &data) {
-		return OP::template Operation<INPUT_TYPE>(input, data);
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, StringHeap &heap) {
+		return OP::template Operation<INPUT_TYPE>(input, heap);
 	}
 };
 
@@ -142,7 +142,8 @@ struct VectorCastHelpers {
 	template <class SRC, class OP, class RES = string_t>
 	static bool StringCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
-		UnaryExecutor::GenericExecute<SRC, RES, VectorStringCastOperator<OP>>(source, result, count, result);
+		auto &heap = StringVector::GetStringHeap(result);
+		UnaryExecutor::GenericExecute<SRC, RES, VectorStringCastOperator<OP>>(source, result, count, heap);
 		return true;
 	}
 
