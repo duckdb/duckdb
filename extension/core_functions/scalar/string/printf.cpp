@@ -177,7 +177,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 		// finally actually perform the format
 		string dynamic_result = FORMAT_FUN::template OP<CTX>(format_string.c_str(), format_args);
-		result_data[idx] = StringVector::AddString(result, dynamic_result);
+		result_data[idx] = dynamic_result;
 	}
 }
 

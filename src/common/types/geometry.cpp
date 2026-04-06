@@ -986,7 +986,7 @@ void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 namespace duckdb {
 constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
 
-bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict) {
+bool Geometry::FromBinary(const string_t &wkb, string_t &result, StringHeap &heap, bool strict) {
 	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
 
 	const auto analysis = AnalyzeWKB(reader);
@@ -1000,7 +1000,7 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 	if (analysis.any_be || analysis.any_ewkb) {
 		reader.Reset();
 		// Make a new WKB with all LE
-		auto blob = StringVector::EmptyString(result_vector, analysis.size);
+		auto blob = heap.EmptyString(analysis.size);
 		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob.GetSize()));
 		ConvertWKB(reader, writer);
 		blob.Finalize();
@@ -1009,15 +1009,16 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 	}
 
 	// Copy the WKB as-is
-	result = StringVector::AddStringOrBlob(result_vector, wkb.GetData(), wkb.GetSize());
+	result = heap.AddBlob(wkb.GetData(), wkb.GetSize());
 	return true;
 }
 
 bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
+	auto &heap = StringVector::GetStringHeap(result);
 	if (strict) {
 		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
 			string_t geom;
-			FromBinary(wkb, geom, result, true);
+			FromBinary(wkb, geom, heap, true);
 			return geom;
 		});
 		return true;
@@ -1027,7 +1028,7 @@ bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool stri
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
 	                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
 		                                                    string_t geom;
-		                                                    if (!FromBinary(wkb, geom, result, false)) {
+		                                                    if (!FromBinary(wkb, geom, heap, false)) {
 			                                                    all_ok = false;
 			                                                    mask.SetInvalid(idx);
 			                                                    return string_t();
@@ -1042,18 +1043,18 @@ void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
 	result.Reinterpret(source);
 }
 
-bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
+bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
 	BlobWriter writer;
 
 	FromStringRecursive(reader, writer, 0, false, false);
 
 	const auto &buffer = writer.GetBuffer();
-	result = StringVector::AddStringOrBlob(result_vector, buffer.data(), buffer.size());
+	result = heap.AddBlob(buffer.data(), buffer.size());
 	return true;
 }
 
-string_t Geometry::ToString(Vector &result, const string_t &geom) {
+string_t Geometry::ToString(StringHeap &heap, const string_t &geom) {
 	BlobReader reader(geom.GetData(), static_cast<uint32_t>(geom.GetSize()));
 	TextWriter writer;
 
@@ -1061,7 +1062,7 @@ string_t Geometry::ToString(Vector &result, const string_t &geom) {
 
 	// Convert the buffer to string_t
 	const auto &buffer = writer.GetBuffer();
-	return StringVector::AddString(result, buffer.data(), buffer.size());
+	return heap.AddString(buffer.data(), buffer.size());
 }
 
 pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {

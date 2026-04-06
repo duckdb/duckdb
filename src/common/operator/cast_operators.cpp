@@ -1601,7 +1601,7 @@ hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	return Geometry::FromString(input, result, result_vector, parameters.strict);
+	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//

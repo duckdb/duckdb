@@ -71,9 +71,9 @@ struct BignumIntermediate {
 	//! Add a BignumIntermediate to another BignumIntermediate, equivalent of a +=
 	void AddInPlace(ArenaAllocator &allocator, const BignumIntermediate &rhs);
 	//! Adds two BignumIntermediates and returns a string_t result, equivalent of a +
-	static string_t Add(Vector &result, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
+	static string_t Add(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
 	//! Negates a value, e.g., -x
-	string_t Negate(Vector &result_vector) const;
+	string_t Negate(StringHeap &heap) const;
 	void NegateInPlace();
 	//! Exports to a bignum, either arena allocated
 	bignum_t ToBignum(ArenaAllocator &allocator);
