@@ -1,7 +1,8 @@
 # name: test/sql/trigger/trigger_recursive.test_slow
 # description: Test recursive trigger depth limit - isolated as slow because
-# 8-level nested planning+execution exceeds the query timeout in debug builds
 # group: [trigger]
+
+# 8-level nested planning+execution exceeds the query timeout in debug builds
 
 require autocomplete
 

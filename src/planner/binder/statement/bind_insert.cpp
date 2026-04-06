@@ -530,8 +530,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 	if (node.on_conflict_info) {
 		if (!trigger_bodies.empty()) {
-			throw NotImplementedException(
-			    "ON CONFLICT is not yet supported on tables with AFTER INSERT triggers");
+			throw NotImplementedException("ON CONFLICT is not yet supported on tables with AFTER INSERT triggers");
 		}
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(node, table);
