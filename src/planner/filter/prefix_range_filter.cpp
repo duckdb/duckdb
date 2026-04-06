@@ -95,7 +95,6 @@ public:
 		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 		return bit & in_range;
 	}
-
 	FilterPropagateResult LookupRange(U lower_bound, U upper_bound) const {
 		const U lb_y = lower_bound - min;
 		const U lb_bit_idx = lb_y >> shift;
@@ -149,7 +148,7 @@ public:
 		return span;
 	}
 
-private:
+public:
 	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
 	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
 	static constexpr idx_t WORD_SHIFT = 6;
@@ -205,7 +204,10 @@ public:
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
 		auto *state_bitmap = bitmap_state.bitmap;
 		for (const auto &entry : keys.template ValidValues<T>(count)) {
-			bitmap.Insert(ToComparable(entry.value), state_bitmap);
+			const Comparable y = static_cast<Comparable>(entry.value) - bitmap.min;
+			// All keys are in-range by construction, so the range check can be omitted here.
+			const Comparable idx = y >> bitmap.shift;
+			state_bitmap[idx >> bitmap.WORD_SHIFT] |= 1ULL << (idx & bitmap.WORD_MASK);
 		}
 	}
 
@@ -221,7 +223,12 @@ public:
 		idx_t found_count = 0;
 		for (const auto &entry : keys.template ValidValues<T>(count)) {
 			result_sel.set_index(found_count, entry.index);
-			found_count += bitmap.Lookup(ToComparable(entry.value));
+			const Comparable y = static_cast<Comparable>(entry.value) - bitmap.min;
+			const Comparable bit_idx = y >> bitmap.shift;
+			const uint8_t in_range = y <= bitmap.span;
+			const uint32_t word_idx = UnsafeNumericCast<uint32_t>(bit_idx >> bitmap.WORD_SHIFT) & (0U - in_range);
+			const uint8_t bit = (bitmap.bitmap[word_idx] >> (bit_idx & bitmap.WORD_MASK)) & 1ULL;
+			found_count += bit & in_range;
 		}
 		return found_count;
 	}
@@ -258,7 +265,7 @@ public:
 		return bitmap.IsInitialized();
 	}
 
-private:
+public:
 	PrefixRangeBitmap<Comparable> bitmap;
 
 	static inline Comparable ToComparable(T value) {
