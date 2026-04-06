@@ -291,6 +291,80 @@ SELECT COUNT(*) FROM del_log;
 ----
 0
 
+# ON CONFLICT interactions - currently not supported on tables with triggers (throws an error).
+# Once supported, the correct behavior (per PostgreSQL) is:
+#   - ON CONFLICT DO NOTHING: trigger fires for rows that were actually inserted
+#   - ON CONFLICT DO UPDATE:  trigger does NOT fire (the row was updated, not inserted)
+# Remove mode skip / mode unskip when ON CONFLICT + triggers is implemented.
+
+statement ok
+CREATE TABLE oc_src (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE oc_audit (cnt INTEGER);
+
+statement ok
+INSERT INTO oc_audit VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_oc AFTER INSERT ON oc_src FOR EACH STATEMENT
+    UPDATE oc_audit SET cnt = cnt + 1;
+
+mode skip
+
+# ON CONFLICT DO NOTHING, no actual conflict - trigger should fire once
+statement ok
+INSERT INTO oc_src VALUES (1) ON CONFLICT DO NOTHING;
+
+query I
+SELECT cnt FROM oc_audit;
+----
+1
+
+# ON CONFLICT DO NOTHING, partial conflict - row 1 conflicts, row 2 is new - trigger should fire once
+statement ok
+INSERT INTO oc_src VALUES (1), (2) ON CONFLICT DO NOTHING;
+
+query I
+SELECT cnt FROM oc_audit;
+----
+2
+
+# ON CONFLICT DO NOTHING, all rows conflict - trigger should not fire
+statement ok
+INSERT INTO oc_src VALUES (1) ON CONFLICT DO NOTHING;
+
+query I
+SELECT cnt FROM oc_audit;
+----
+1
+
+# ON CONFLICT DO UPDATE, all rows conflict - trigger should not fire
+statement ok
+INSERT INTO oc_src VALUES (1) ON CONFLICT (id) DO UPDATE SET id = excluded.id;
+
+query I
+SELECT cnt FROM oc_audit;
+----
+2
+
+# ON CONFLICT DO UPDATE, partial conflict - row 2 conflicts, row 3 is new - trigger should fire once
+statement ok
+INSERT INTO oc_src VALUES (2), (3) ON CONFLICT (id) DO UPDATE SET id = excluded.id;
+
+query I
+SELECT cnt FROM oc_audit;
+----
+3
+
+mode unskip
+
+# ON CONFLICT is not yet supported on tables with AFTER INSERT triggers
+statement error
+INSERT INTO oc_src VALUES (3) ON CONFLICT DO NOTHING;
+----
+Not implemented Error: ON CONFLICT is not yet supported on tables with AFTER INSERT triggers
+
 # RETURNING with triggers is not yet supported (temporary - will be lifted when NEW/OLD references land)
 statement ok
 CREATE TABLE returning_tbl (id INTEGER);

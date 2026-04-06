@@ -523,6 +523,14 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
 	if (node.on_conflict_info) {
+		vector<unique_ptr<QueryNode>> conflict_trigger_bodies;
+		vector<TriggerForEach> conflict_trigger_for_each;
+		CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT,
+		                conflict_trigger_bodies, conflict_trigger_for_each);
+		if (!conflict_trigger_bodies.empty()) {
+			throw NotImplementedException(
+			    "ON CONFLICT is not yet supported on tables with AFTER INSERT triggers");
+		}
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(node, table);
 		return Bind(*merge_into);
