@@ -266,6 +266,17 @@ struct ArrowLosslessConversionSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ArrowOutputDenseUnionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "arrow_output_dense_union";
+	static constexpr const char *Description =
+	    "Whether Arrow UNION columns should be exported using dense union layout instead of sparse";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ArrowOutputListViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_output_list_view";

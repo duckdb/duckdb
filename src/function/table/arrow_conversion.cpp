@@ -1199,35 +1199,69 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	}
 	case LogicalTypeId::UNION: {
-		auto type_ids = ArrowBufferData<int8_t>(array, array.n_buffers == 1 ? 0 : 1);
+		auto &union_info = arrow_type.GetTypeInfo<ArrowUnionInfo>();
+		bool is_dense = union_info.IsDense();
+
+		// Buffer layout per the C Data Interface:
+		//   Sparse union: buffers = [null_bitmap (always null), type_ids] => n_buffers=2
+		//   Dense union:  buffers = [null_bitmap (always null), type_ids, offsets] => n_buffers=3
+		// DuckDB's own sparse output uses n_buffers=1 (no null bitmap slot), so handle both conventions.
+		idx_t type_ids_buf_idx;
+		if (is_dense) {
+			type_ids_buf_idx = (array.n_buffers == 2) ? 0 : 1;
+		} else {
+			type_ids_buf_idx = (array.n_buffers == 1) ? 0 : 1;
+		}
+
+		// Adjust type_ids and offsets pointers by the effective offset to account for
+		// array.offset, parent_offset, and chunk_offset when scanning in chunks.
+		auto effective_offset =
+		    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+		auto type_ids = ArrowBufferData<int8_t>(array, type_ids_buf_idx) + effective_offset;
 		D_ASSERT(type_ids);
+
+		int32_t *offsets = nullptr;
+		if (is_dense) {
+			offsets = ArrowBufferData<int32_t>(array, type_ids_buf_idx + 1) + effective_offset;
+			D_ASSERT(offsets);
+		}
+
 		auto members = UnionType::CopyMemberTypes(vector.GetType());
 
 		auto &validity_mask = FlatVector::Validity(vector);
-		auto &union_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		duckdb::vector<Vector> children;
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
-			Vector child(members[child_idx].second, size);
 			auto &child_array = *array.children[child_idx];
 			auto &child_state = array_state.GetChild(child_idx);
 			auto &child_type = union_info.GetChild(child_idx);
 
-			ArrowToDuckDBConversion::SetValidityMask(child, child_array, chunk_offset, size,
-			                                         NumericCast<int64_t>(parent_offset), nested_offset);
+			// For dense unions, each child array has its own independent coordinate system —
+			// use child_array.length for sizing, chunk_offset=0, and nested_offset=-1.
+			// For sparse unions, children share the parent's layout.
+			idx_t child_size = is_dense ? NumericCast<idx_t>(child_array.length) : size;
+			idx_t child_chunk_offset = is_dense ? 0 : chunk_offset;
+			int64_t child_nested_offset = is_dense ? -1 : nested_offset;
+			Vector child(members[child_idx].second, child_size);
+
+			// For dense children, parent_offset=0 since they have independent coordinate systems.
+			int64_t child_parent_offset = is_dense ? 0 : NumericCast<int64_t>(parent_offset);
+			ArrowToDuckDBConversion::SetValidityMask(child, child_array, child_chunk_offset, child_size,
+			                                         child_parent_offset, child_nested_offset);
 			auto array_physical_type = child_type.GetPhysicalType();
 
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child, child_array, chunk_offset, child_state,
-				                                                       size, child_type);
+				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child, child_array, child_chunk_offset,
+				                                                       child_state, child_size, child_type);
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
-				ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child, child_array, chunk_offset, child_state,
-				                                                          size, child_type);
+				ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child, child_array, child_chunk_offset,
+				                                                          child_state, child_size, child_type);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
-				ArrowToDuckDBConversion::ColumnArrowToDuckDB(child, child_array, chunk_offset, child_state, size,
-				                                             child_type, nested_offset, &validity_mask, false);
+				ArrowToDuckDBConversion::ColumnArrowToDuckDB(child, child_array, child_chunk_offset, child_state,
+				                                             child_size, child_type, child_nested_offset,
+				                                             &validity_mask, /*parent_offset=*/0);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1237,14 +1271,16 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		}
 
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			auto tag = NumericCast<uint8_t>(type_ids[row_idx]);
+			auto raw_type_id = type_ids[row_idx];
+			auto child_idx = union_info.GetChildIndexForTypeId(raw_type_id);
 
-			auto out_of_range = tag >= array.n_children;
-			if (out_of_range) {
-				throw InvalidInputException("Arrow union tag out of range: %d", tag);
+			if (child_idx >= NumericCast<idx_t>(array.n_children)) {
+				throw InvalidInputException("Arrow union tag out of range: %d", raw_type_id);
 			}
 
-			const Value &value = children[tag].GetValue(row_idx);
+			idx_t value_idx = is_dense ? NumericCast<idx_t>(offsets[row_idx]) : row_idx;
+			const Value &value = children[child_idx].GetValue(value_idx);
+			auto tag = NumericCast<uint8_t>(child_idx);
 			vector.SetValue(row_idx, value.IsNull() ? Value() : Value::UNION(members, tag, value));
 		}
 

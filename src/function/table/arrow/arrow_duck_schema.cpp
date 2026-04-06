@@ -257,14 +257,25 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 		auto struct_type = make_uniq<ArrowType>(LogicalType::STRUCT(std::move(child_types)), std::move(type_info));
 		return struct_type;
 	} else if (format[0] == '+' && format[1] == 'u') {
-		if (format[2] != 's') {
+		bool is_dense;
+		if (format[2] == 's') {
+			is_dense = false;
+		} else if (format[2] == 'd') {
+			is_dense = true;
+		} else {
 			throw NotImplementedException("Unsupported Internal Arrow Type: \"%c\" Union", format[2]);
 		}
 		D_ASSERT(format[3] == ':');
 
-		std::string prefix = "+us:";
-		// TODO: what are these type ids actually for?
-		auto type_ids = StringUtil::Split(format.substr(prefix.size()), ',');
+		std::string prefix = is_dense ? "+ud:" : "+us:";
+		auto type_id_strings = StringUtil::Split(format.substr(prefix.size()), ',');
+
+		// Build mapping from type_id values (in the buffer) to child indices
+		unordered_map<int8_t, idx_t> type_id_to_child_idx;
+		for (idx_t i = 0; i < type_id_strings.size(); i++) {
+			auto type_id = NumericCast<int8_t>(std::stoi(type_id_strings[i]));
+			type_id_to_child_idx[type_id] = i;
+		}
 
 		child_list_t<LogicalType> members;
 		vector<shared_ptr<ArrowType>> children;
@@ -278,7 +289,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
-		auto type_info = make_uniq<ArrowStructInfo>(std::move(children));
+		auto type_info = make_uniq<ArrowUnionInfo>(std::move(children), is_dense, std::move(type_id_to_child_idx));
 		auto union_type = make_uniq<ArrowType>(LogicalType::UNION(members), std::move(type_info));
 		return union_type;
 	} else if (format == "+r") {
@@ -367,7 +378,7 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return LogicalType::MAP(StructType::GetChildType(struct_type, 0), StructType::GetChildType(struct_type, 1));
 	}
 	case LogicalTypeId::UNION: {
-		auto &union_info = type_info->Cast<ArrowStructInfo>();
+		auto &union_info = type_info->Cast<ArrowUnionInfo>();
 		child_list_t<LogicalType> new_children;
 		for (idx_t i = 0; i < union_info.ChildCount(); i++) {
 			auto &child = union_info.GetChild(i);

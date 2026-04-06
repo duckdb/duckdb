@@ -18,11 +18,12 @@ namespace duckdb {
 struct ClientProperties {
 	ClientProperties(string time_zone_p, const ArrowOffsetSize arrow_offset_size_p, const bool arrow_use_list_view_p,
 	                 const bool produce_arrow_string_view_p, const bool lossless_conversion,
-	                 const ArrowFormatVersion arrow_output_version, const optional_ptr<ClientContext> client_context)
+	                 const ArrowFormatVersion arrow_output_version, const bool arrow_output_dense_union_p,
+	                 const optional_ptr<ClientContext> client_context)
 	    : time_zone(std::move(time_zone_p)), arrow_offset_size(arrow_offset_size_p),
 	      arrow_use_list_view(arrow_use_list_view_p), produce_arrow_string_view(produce_arrow_string_view_p),
 	      arrow_lossless_conversion(lossless_conversion), arrow_output_version(arrow_output_version),
-	      client_context(client_context) {
+	      arrow_output_dense_union(arrow_output_dense_union_p), client_context(client_context) {
 	}
 	ClientProperties() {};
 
@@ -32,6 +33,7 @@ struct ClientProperties {
 	bool produce_arrow_string_view = false;
 	bool arrow_lossless_conversion = false;
 	ArrowFormatVersion arrow_output_version = ArrowFormatVersion::V1_0;
+	bool arrow_output_dense_union = false;
 	optional_ptr<ClientContext> client_context;
 };
 } // namespace duckdb
