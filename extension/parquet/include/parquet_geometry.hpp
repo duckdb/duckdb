@@ -93,6 +93,9 @@ struct GeoParquetColumnMetadata {
 	// The crs of the geometry column (if any) in PROJJSON format
 	string projjson;
 
+	// Name of the bbox struct column used for GeoParquet 1.1 covering (empty = no covering)
+	string bbox_column_name;
+
 	// Used to track the "primary" geometry column (if any)
 	idx_t insertion_index = 0;
 
@@ -119,11 +122,17 @@ public:
 
 	bool IsGeometryColumn(const string &column_name) const;
 
+	// Register a bbox struct column name as the covering source for a geometry column.
+	// Must be called before Write(). Safe to call before AddGeoParquetStats().
+	void RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name);
+
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
 
 private:
 	mutex write_lock;
 	unordered_map<string, GeoParquetColumnMetadata> geometry_columns;
+	// Pending bbox column registrations (geom_col -> bbox_col) set before AddGeoParquetStats runs
+	unordered_map<string, string> pending_bbox_columns;
 	GeoParquetVersion version;
 };
 
