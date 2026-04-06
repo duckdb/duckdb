@@ -1504,8 +1504,11 @@ struct AtanhOperator {
 		if (input < -1 || input > 1) {
 			throw InvalidInputException("ATANH is undefined outside [-1,1]");
 		}
-		if (input == -1 || input == 1) {
+		if (input == 1) {
 			return INFINITY;
+		}
+		if (input == -1) {
+			return -INFINITY;
 		}
 		return (double)std::atanh(input);
 	}

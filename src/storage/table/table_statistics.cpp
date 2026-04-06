@@ -129,6 +129,9 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
 }
 
 void TableStatistics::MergeStats(TableStatistics &other) {
