@@ -947,12 +947,13 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	if (!table_name.empty()) {
-		auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
-		auto &duck_table = table.Cast<DuckTableEntry>();
-		auto transaction = catalog.GetCatalogTransaction(context);
-		duck_table.DropTrigger(transaction, info.name, info.cascade);
+	if (table_name.empty()) {
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"", info.name);
 	}
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+	auto &duck_table = table.Cast<DuckTableEntry>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	duck_table.DropTrigger(transaction, info.name, info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
