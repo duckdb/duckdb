@@ -522,12 +522,14 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
+
+	vector<unique_ptr<QueryNode>> trigger_bodies;
+	vector<TriggerForEach> trigger_for_each;
+	CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT, trigger_bodies,
+	                trigger_for_each);
+
 	if (node.on_conflict_info) {
-		vector<unique_ptr<QueryNode>> conflict_trigger_bodies;
-		vector<TriggerForEach> conflict_trigger_for_each;
-		CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT,
-		                conflict_trigger_bodies, conflict_trigger_for_each);
-		if (!conflict_trigger_bodies.empty()) {
+		if (!trigger_bodies.empty()) {
 			throw NotImplementedException(
 			    "ON CONFLICT is not yet supported on tables with AFTER INSERT triggers");
 		}
@@ -607,10 +609,6 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	D_ASSERT(result.types.size() == result.names.size());
 
 	// BEFORE is not yet supported
-	vector<unique_ptr<QueryNode>> trigger_bodies;
-	vector<TriggerForEach> trigger_for_each;
-	CollectTriggers(context, table, TriggerTiming::AFTER, TriggerEventType::INSERT_EVENT, trigger_bodies,
-	                trigger_for_each);
 	if (!trigger_bodies.empty() && !node.returning_list.empty()) {
 		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER INSERT triggers");
 	}
