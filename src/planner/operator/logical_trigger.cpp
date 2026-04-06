@@ -11,6 +11,9 @@ namespace duckdb {
 void CollectTriggers(ClientContext &context, TableCatalogEntry &table, TriggerTiming timing,
                      TriggerEventType event_type, vector<unique_ptr<QueryNode>> &trigger_bodies,
                      vector<TriggerForEach> &trigger_for_each) {
+	if (!table.IsDuckTable()) {
+		return;
+	}
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = table.ParentCatalog().GetCatalogTransaction(context);
 	duck_table.ScanTriggers(transaction, [&](CatalogEntry &entry) {

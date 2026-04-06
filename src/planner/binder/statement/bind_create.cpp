@@ -453,10 +453,14 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	                                   create_trigger_info.base_table->table_name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("CREATE TRIGGER requires a base table");
+	}
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto table_ptr = get.GetTable();
-	if (!table_ptr) {
-		throw BinderException("CREATE TRIGGER requires a base table");
+	D_ASSERT(table_ptr);
+	if (!table_ptr->IsDuckTable()) {
+		throw BinderException("CREATE TRIGGER is only supported on DuckDB tables");
 	}
 	auto &table = *table_ptr;
 

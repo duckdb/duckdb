@@ -92,3 +92,29 @@ statement error
 CREATE TRIGGER my_trigger INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
 yntax error
+
+# CREATE TRIGGER on a view is rejected - triggers require a base table
+statement ok
+CREATE TABLE base_tbl (id INTEGER);
+
+statement ok
+CREATE VIEW base_view AS SELECT * FROM base_tbl;
+
+statement error
+CREATE TRIGGER trg_on_view AFTER INSERT ON base_view INSERT INTO base_tbl VALUES (1);
+----
+CREATE TRIGGER requires a base table
+
+# CREATE TRIGGER on a non-DuckDB table (SQLite) is rejected with a clear error
+require sqlite_scanner
+
+statement ok
+ATTACH ':memory:' AS sqlite_db (TYPE SQLITE);
+
+statement ok
+CREATE TABLE sqlite_db.main.ext_tbl (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_on_sqlite AFTER INSERT ON sqlite_db.main.ext_tbl INSERT INTO sqlite_db.main.ext_tbl VALUES (1);
+----
+CREATE TRIGGER is only supported on DuckDB tables
