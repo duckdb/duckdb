@@ -834,17 +834,10 @@ bool StringValueResult::AddRowInternal() {
 		}
 	}
 
-	// Before we add row, invalid all columns that are not populated for this row (i.e., CSV rows have fewer fields
-	// than expected). Otherwise, uninitialized string_t with valid bits set would lead invalid memory access.
-	// Reference: https://github.com/duckdb/duckdb-fuzzer/issues/4379
-	//
-	// Keep the current parse progress, `HandleErrors` reset states.
 	const auto chunk_col_id_before = chunk_col_id;
 	if (current_errors.HandleErrors(*this)) {
-		// There're two cases here:
-		// - ignore errors = true, with last row being removed
-		// - store rejects = true, with last row index being added to borked rows
-		// Invalid all columns that are not populated for this row, when the row still exists.
+		// Before we add row, invalid all columns that are not populated for this row (i.e., CSV rows have fewer fields
+		// than expected). Otherwise, uninitialized string_t with valid bits set would lead invalid memory access.
 		if (borked_rows.find(static_cast<idx_t>(number_of_rows)) != borked_rows.end()) {
 			for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < validity_mask.size(); ++cur_col_idx) {
 				validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
