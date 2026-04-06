@@ -69,6 +69,91 @@ JOIN prf_build_string b
 analyzed_plan	<REGEX>:.*IN PRF\(k\).*
 
 statement ok
+CREATE OR REPLACE TABLE prf_probe_string_long AS
+SELECT * FROM (VALUES
+	('aaab_long_probe_0001', 0, 1),
+	('aaac_long_probe_0002', 0, 2),
+	('aaad_long_probe_0003', 1, 3),
+	('zzzz_long_probe_9999', 0, 4),
+	(NULL, 0, 5)
+) AS t(k, g, id);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_long AS
+SELECT * FROM (VALUES
+	('aaab_long_build_1001', 0, 100),
+	('aaac_long_build_1002', 0, 101),
+	('aaad_long_build_1003', 0, 102),
+	('aaaz_long_build_1999', 0, 103),
+	(NULL, 0, 104)
+) AS t(k, g, payload);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string_long p
+JOIN prf_build_string_long b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string_long_single AS
+SELECT * FROM (VALUES
+	('aaab_long_single_value_0001', 0, 1),
+	('aaab_long_single_value_0001', 1, 2),
+	('zzzz_long_single_value_9999', 0, 3),
+	(NULL, 0, 4)
+) AS t(k, g, id);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_long_single AS
+SELECT * FROM (VALUES
+	('aaab_long_single_value_0001', 0, 200),
+	('aaab_long_single_value_0001', 1, 201),
+	(NULL, 0, 202)
+) AS t(k, g, payload);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string_long_single p
+JOIN prf_build_string_long_single b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string_long_same_prefix AS
+SELECT * FROM (VALUES
+	('aaaa_probe_suffix_0001', 0, 1),
+	('aaaa_probe_suffix_0002', 1, 2),
+	('zzzz_probe_suffix_9999', 0, 3),
+	(NULL, 0, 4)
+) AS t(k, g, id);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_long_same_prefix AS
+SELECT * FROM (VALUES
+	('aaaa_build_suffix_1001', 0, 300),
+	('aaaa_build_suffix_2002', 0, 301),
+	('aaaa_build_suffix_3003', 1, 302),
+	(NULL, 0, 303)
+) AS t(k, g, payload);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string_long_same_prefix p
+JOIN prf_build_string_long_same_prefix b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+
+statement ok
 ATTACH '{TEST_DIR}/prf_string_nul_stats.db' AS prf_string_nul_stats (ROW_GROUP_SIZE 2048);
 
 statement ok
