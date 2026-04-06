@@ -110,12 +110,21 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			}
 		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
-			if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR ||
-			    filter_info->join_type == JoinType::INNER || filter_info->join_type == JoinType::INVALID) {
-				// Currently we do not interpret Conjunction expressions as INNER joins
-				// for hyper graph edges. These are most likely OR conjunctions, and
-				// will be pushed down into a join later in the optimizer.
-				// Conjunction filters are mostly to help plan semi and anti joins at the moment.
+			if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
+				// Multi-relation ORs are filters the cardinality estimator should see,
+				// even though they're not hyper-graph edges.
+				auto &relation_set = filter_info->set.get();
+				if (relation_set.count >= 2) {
+					auto entry = or_filter_selectivities.find(relation_set);
+					if (entry == or_filter_selectivities.end()) {
+						or_filter_selectivities.emplace(relation_set, RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+					} else {
+						entry->second *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+					}
+				}
+				continue;
+			}
+			if (filter_info->join_type == JoinType::INNER || filter_info->join_type == JoinType::INVALID) {
 				continue;
 			}
 			unordered_set<RelationIndex> left_bindings, right_bindings;

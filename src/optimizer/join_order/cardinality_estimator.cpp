@@ -409,20 +409,37 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 // based on stats (see CalculateUpdatedDenom()).
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
-	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
-		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
+	double result;
+	auto it = relation_set_2_cardinality.find(new_set.ToString());
+	if (it != relation_set_2_cardinality.end()) {
+		result = it->second.cardinality_before_filters;
+	} else {
+		// can happen if a table has cardinality 0, or a tdom is set to 0
+		auto denom = GetDenominator(new_set);
+		// we pass numerator relations, because for semi and anti joins, we don't want to
+		// include cardinalities of relations on the RHS of a semi/anti join.
+		auto numerator = GetNumerator(denom.numerator_relations);
+		result = numerator / denom.denominator;
+		relation_set_2_cardinality[new_set.ToString()] = CardinalityHelper(result);
 	}
+	return ApplyOrFilterSelectivities(new_set, result);
+}
 
-	// can happen if a table has cardinality 0, or a tdom is set to 0
-	auto denom = GetDenominator(new_set);
-	// we pass numerator relations, because for semi and anti joins, we don't want to
-	// include cardinalities of relations on the RHS of a semi/anti join.
-	auto numerator = GetNumerator(denom.numerator_relations);
+double CardinalityEstimator::ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const {
+	if (!or_filter_selectivities || or_filter_selectivities->empty()) {
+		return cardinality;
+	}
+	for (auto &entry : *or_filter_selectivities) {
+		if (JoinRelationSet::IsSubset(new_set, entry.first.get())) {
+			cardinality *= entry.second;
+		}
+	}
+	return cardinality;
+}
 
-	double result = numerator / denom.denominator;
-	auto new_entry = CardinalityHelper(result);
-	relation_set_2_cardinality[new_set.ToString()] = new_entry;
-	return result;
+void CardinalityEstimator::SetOrFilterSelectivities(
+    optional_ptr<const reference_map_t<JoinRelationSet, double>> selectivities) {
+	or_filter_selectivities = selectivities;
 }
 
 template <>

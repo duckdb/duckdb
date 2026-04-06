@@ -451,6 +451,7 @@ void PlanEnumerator::InitLeafPlans() {
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 
 	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
+	cost_model.cardinality_estimator.SetOrFilterSelectivities(&query_graph_manager.or_filter_selectivities);
 	cost_model.cardinality_estimator.AddRelationNamesToRelationStats(relation_stats);
 
 	// then update the total domains based on the cardinalities of each relation.
