@@ -690,14 +690,15 @@ def test_output_off_no_error(shell):
     result = test.run()
     assert "Error" not in result.stderr
 
-def test_output_invalid_path_error(shell):
+def test_output_invalid_path_error(shell, tmp_path):
     # .output to an invalid path should print an error to stderr
+    invalid_path = (tmp_path / "nonexistent_dir" / "file.txt").as_posix()
     test = (
         ShellTest(shell)
-        .statement(".output /dev/null/nonexistent/path.txt")
+        .statement(f".output {invalid_path}")
     )
     result = test.run()
-    result.check_stderr("Error: cannot open")
+    result.check_stderr("Error: cannot write to")
 
 def test_once_temp_file_cleanup(shell, tmp_path):
     # Verify that temp files created by .once are cleaned up
