@@ -335,12 +335,15 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
 	}
 	if (existing_entry->type != info.type) {
-		auto suggested_drop = info.Copy();
-		suggested_drop->type = existing_entry->type;
-		auto entry_qualifier = ParseInfo::QualifierToString(info.catalog, info.schema, info.name);
+		DropInfo suggested_drop;
+		suggested_drop.type = existing_entry->type;
+		suggested_drop.schema = info.schema;
+		suggested_drop.name = info.name;
+		suggested_drop.if_not_found = info.if_not_found;
+		auto entry_qualifier = ParseInfo::QualifierToString("", info.schema, info.name);
 		throw CatalogException("Existing object %s is of type %s, not %s. Use '%s' instead.", entry_qualifier,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type),
-		                       suggested_drop->ToString());
+		                       suggested_drop.ToString());
 	}
 
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;

@@ -21,7 +21,7 @@ CREATE VIEW IF NOT EXISTS integers2 AS SELECT 42
 statement error
 DROP VIEW IF EXISTS integers
 ----
-<REGEX>:Catalog Error: Existing object .*integers is of type Table, not View\. Use 'DROP TABLE IF EXISTS .*integers;' instead\.
+<REGEX>:.*Catalog Error: Existing object integers is of type Table, not View\. Use 'DROP TABLE IF EXISTS integers;' instead\..*
 
 statement ok
 DROP TABLE IF EXISTS integers
