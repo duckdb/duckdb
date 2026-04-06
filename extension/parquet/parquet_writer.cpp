@@ -1251,6 +1251,10 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 	return *geoparquet_data;
 }
 
+void ParquetWriter::RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name) {
+	GetGeoParquetData().RegisterBBoxCovering(geom_column_name, bbox_column_name);
+}
+
 void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {
 	if (encryption_config) {
 		return;
