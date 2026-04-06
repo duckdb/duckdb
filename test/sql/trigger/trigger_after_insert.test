@@ -247,7 +247,51 @@ SELECT COUNT(*) FROM audit_schema.cross_log;
 ----
 1
 
-# RETURNING with triggers is not yet supported (temporary — will be lifted when NEW/OLD references land)
+# Trigger body is an UPDATE statement
+statement ok
+CREATE TABLE upd_src (id INTEGER);
+
+statement ok
+CREATE TABLE upd_audit (fired INTEGER);
+
+statement ok
+INSERT INTO upd_audit VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_update_body AFTER INSERT ON upd_src FOR EACH STATEMENT
+    UPDATE upd_audit SET fired = fired + 1;
+
+statement ok
+INSERT INTO upd_src VALUES (1), (2), (3);
+
+query I
+SELECT fired FROM upd_audit;
+----
+1
+
+# Trigger body is a DELETE statement
+statement ok
+CREATE TABLE del_src (id INTEGER);
+
+statement ok
+CREATE TABLE del_log (msg VARCHAR);
+
+statement ok
+INSERT INTO del_log VALUES ('before');
+
+statement ok
+CREATE TRIGGER trg_delete_body AFTER INSERT ON del_src FOR EACH STATEMENT
+    DELETE FROM del_log;
+
+statement ok
+INSERT INTO del_src VALUES (1);
+
+query I
+SELECT COUNT(*) FROM del_log;
+----
+0
+
+# RETURNING with triggers is not yet supported (temporary - will be lifted when NEW/OLD references land)
 statement ok
 CREATE TABLE returning_tbl (id INTEGER);
 
