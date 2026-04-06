@@ -320,9 +320,9 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		auto member_entries = member.Values<string_t>(count);
 		auto member_entry = member_entries[i];
 		if (member_entry.IsValid()) {
-			result_data[i] = StringVector::AddString(result, member_entry.value);
+			result_data[i] = member_entry.value;
 		} else {
-			result_data[i] = StringVector::AddString(result, "NULL");
+			result_data[i] = "NULL";
 		}
 	}
 

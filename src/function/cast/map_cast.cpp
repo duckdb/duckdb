@@ -107,8 +107,8 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += NULL_LENGTH;
 			}
 		}
-		result_data[i] = StringVector::EmptyString(result, string_length);
-		auto dataptr = result_data[i].GetDataWriteable();
+		auto &result_str = result_data[i].EmptyString(string_length);
+		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 
 		dataptr[offset++] = '{';
@@ -140,7 +140,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 			}
 		}
 		dataptr[offset++] = '}';
-		result_data[i].Finalize();
+		result_str.Finalize();
 	}
 
 	if (constant) {

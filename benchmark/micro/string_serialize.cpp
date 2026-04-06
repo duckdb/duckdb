@@ -12,11 +12,11 @@ using namespace duckdb;
 static Vector string_vector(LogicalType::VARCHAR, STANDARD_VECTOR_SIZE);
 
 static void InitStringVector() {
-	auto string_data = FlatVector::GetData<string_t>(string_vector);
+	auto string_data = FlatVector::Writer<string_t>(string_vector, STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		string_data[i] = StringVector::AddString(string_vector, StringUtil::Repeat("X", i % 100));
+		string_data[i] = StringUtil::Repeat("X", i % 100);
 		if (i % 10 == 0) {
-			FlatVector::SetNull(string_vector, i, true);
+			string_data.SetInvalid(i);
 		}
 	}
 }
