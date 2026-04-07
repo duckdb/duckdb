@@ -87,6 +87,8 @@ struct VectorOperations {
 	static void DistinctLessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
 	// result := comparator(A, B) with nulls being maximal (NULLS LAST), returns -1/0/1 as int8_t
 	static void DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result := comparator(A, B) with nulls being minimal (NULLS FIRST), returns -1/0/1 as int8_t
+	static void DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Select Comparisons

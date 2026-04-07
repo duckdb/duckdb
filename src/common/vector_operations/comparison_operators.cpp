@@ -860,8 +860,28 @@ void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &r
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<int8_t>(result);
 	SelectionVector sel(count);
-	sel.Initialize(*FlatVector::IncrementalSelectionVector());
+	for (idx_t i = 0; i < count; i++) {
+		sel.set_index(i, i);
+	}
 	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, sel, sel, count);
+}
+
+void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result, idx_t count) {
+	// run the NULLS LAST comparator, then flip the sign for NULL-involving rows
+	VectorOperations::DistinctComparator(left, right, result, count);
+	auto result_data = FlatVector::GetData<int8_t>(result);
+	auto left_validity = left.Validity(count);
+	auto right_validity = right.Validity(count);
+	if (!left_validity.CanHaveNull() && !right_validity.CanHaveNull()) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		bool left_null = !left_validity.IsValid(i);
+		bool right_null = !right_validity.IsValid(i);
+		if ((left_null || right_null) && !(left_null && right_null)) {
+			result_data[i] = -result_data[i];
+		}
+	}
 }
 
 } // namespace duckdb

@@ -174,6 +174,20 @@ struct DistinctComparator {
 	}
 };
 
+struct DistinctComparatorNullsFirst {
+	template <class T>
+	static inline int8_t Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		if (DUCKDB_UNLIKELY(left_null || right_null)) {
+			if (left_null && right_null) {
+				return 0;
+			}
+			// NULLS FIRST: NULL is smaller than any non-NULL value
+			return left_null ? -1 : 1;
+		}
+		return Comparator::Operation<T>(left, right);
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Comparison Operator Wrappers (so (Not)DistinctFrom have the same API)
 //===--------------------------------------------------------------------===//
