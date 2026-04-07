@@ -63,15 +63,19 @@ struct LessThanEquals {
 };
 
 struct Comparator {
+	static constexpr int8_t LEFT_IS_GREATER = 1;
+	static constexpr int8_t RIGHT_IS_GREATER = -1;
+	static constexpr int8_t VALUES_ARE_EQUAL = 0;
+
 	template <class T>
 	static inline int8_t Operation(const T &left, const T &right) {
 		if (GreaterThan::Operation(left, right)) {
-			return 1;
+			return LEFT_IS_GREATER;
 		}
 		if (GreaterThan::Operation(right, left)) {
-			return -1;
+			return RIGHT_IS_GREATER;
 		}
-		return 0;
+		return VALUES_ARE_EQUAL;
 	}
 };
 

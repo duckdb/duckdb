@@ -205,7 +205,7 @@ idx_t VectorOperations::Equals(Vector &left, Vector &right, optional_ptr<const S
 		return result;
 	}
 	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v == 0; });
+	                                 [](int8_t v) { return v == Comparator::VALUES_ARE_EQUAL; });
 }
 
 idx_t VectorOperations::NotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
@@ -217,7 +217,7 @@ idx_t VectorOperations::NotEquals(Vector &left, Vector &right, optional_ptr<cons
 		return result;
 	}
 	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v != 0; });
+	                                 [](int8_t v) { return v != Comparator::VALUES_ARE_EQUAL; });
 }
 
 idx_t VectorOperations::GreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
