@@ -452,7 +452,6 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		out_schema->private_data = root_holder.release();
 		out_schema->release = ReleaseDuckDBArrowSchema;
 	});
-
 }
 
 } // namespace duckdb
