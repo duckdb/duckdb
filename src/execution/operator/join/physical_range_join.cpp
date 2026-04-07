@@ -44,9 +44,15 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	executor.Execute(input, keys);
 
 	Vector primary(keys.data[0].GetType());
-	VectorOperations::Copy(keys.data[0], primary, keys.size(), 0, 0);
-	// Count the NULLs so we can exclude them later
-	has_null += MergeNulls(primary, global_table.op.conditions);
+	if (keys.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(keys.data[0])) {
+		// Primary is already NULL - no need to merge NULLs
+		primary.Reference(keys.data[0]);
+		has_null += keys.size();
+	} else {
+		VectorOperations::Copy(keys.data[0], primary, keys.size(), 0, 0);
+		// Count the NULLs so we can exclude them later
+		has_null += MergeNulls(primary, global_table.op.conditions);
+	}
 	count += keys.size();
 
 	//	Only sort the primary key
@@ -372,11 +378,6 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 	}
 
 	if (all_constant == keys.data.size()) {
-		//	Either all NULL or no NULLs
-		if (ConstantVector::IsNull(primary)) {
-			// Primary is already NULL
-			return count;
-		}
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
 			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
