@@ -366,7 +366,6 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 	}
 
 	auto result_data = FlatVector::GetData<T>(result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	const idx_t result_end = result_offset + scan_count;
 	while (result_offset < result_end) {
@@ -417,8 +416,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		return;
 	}
 
-	auto result_data = FlatVector::GetData<T>(result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::Writer<T>(result, sel_count);
 
 	idx_t prev_idx = 0;
 	for (idx_t i = 0; i < sel_count; i++) {

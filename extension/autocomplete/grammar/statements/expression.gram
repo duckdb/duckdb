@@ -138,7 +138,7 @@ IsNull <- 'ISNULL'
 IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
-ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
+ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator 'NOT'* BetweenInLikeExpression)*
 ComparisonOperator <-
     OperatorEqual /
     OperatorNotEqual /
@@ -176,8 +176,8 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
-AnyAllOperator <- ComparisonOperator AnyOrAll
+    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'
 SubqueryAll <- 'ALL'
@@ -185,6 +185,8 @@ InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
+QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
 BitOperator <- '&' / '|' / '<<' / '>>'
@@ -205,7 +207,7 @@ AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'

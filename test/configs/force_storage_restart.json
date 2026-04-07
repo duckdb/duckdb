@@ -16,6 +16,7 @@
     {
       "reason": "External file cache cannot persist across database restarts when force_restart is enabled.",
       "paths": [
+        "test/sql/json/table/read_json.test",
         "test/sql/storage/external_file_cache/external_file_cache_validate.test",
         "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow"
       ]
@@ -30,8 +31,15 @@
       "reason": "Logging setting doesn't survive restarts",
       "paths": [
         "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
+        "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/physical_operator_logging.test_slow",
         "test/logging/warnings_as_errors.test"
+      ]
+    },
+    {
+      "reason": "Parquet metadata cache doesn't survive restarts",
+      "paths": [
+        "test/sql/copy/parquet/parquet_glob_cache.test"
       ]
     }
   ]

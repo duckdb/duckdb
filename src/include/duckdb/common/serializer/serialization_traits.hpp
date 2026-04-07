@@ -15,6 +15,7 @@
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/table_index.hpp"
 
 namespace duckdb {
@@ -347,6 +348,17 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, TableIndex>::value, T>::type &value) {
 		return value.index == 0;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, ProjectionIndex>::value, T>::type GetDefault() {
+		return ProjectionIndex(0);
+	}
+
+	template <typename T = void>
+	static inline bool
+	IsDefault(const typename std::enable_if<std::is_same<T, ProjectionIndex>::value, T>::type &value) {
+		return value.GetIndexUnsafe() == 0;
 	}
 };
 

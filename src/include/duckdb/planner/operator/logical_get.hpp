@@ -39,7 +39,7 @@ public:
 	//! A mapping of column index -> type/name for all virtual columns
 	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
-	vector<idx_t> projection_ids;
+	vector<ProjectionIndex> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
 	//! The set of input parameters for the table function
@@ -76,8 +76,9 @@ public:
 
 public:
 	void SetColumnIds(vector<ColumnIndex> &&column_ids);
-	void AddColumnId(column_t column_id);
+	ProjectionIndex AddColumnId(column_t column_id);
 	void ClearColumnIds();
+	ProjectionIndex TryGetProjectionIndex(idx_t col_idx) const;
 	const vector<ColumnIndex> &GetColumnIds() const;
 	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
@@ -93,6 +94,9 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
+	const ColumnIndex &GetColumnIndex(ColumnBinding binding) const;
+	const ColumnIndex &GetColumnIndex(ProjectionIndex proj_index) const;
 
 protected:
 	void ResolveTypes() override;

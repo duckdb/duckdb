@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "test_helpers.hpp"
 
@@ -8,7 +9,6 @@
 #include <cstring>
 
 using namespace duckdb;
-using namespace std;
 
 struct OptionValuePair {
 	OptionValuePair() {
@@ -66,7 +66,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
 	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
-	    {"allow_parser_override_extension", {"fallback"}},
+	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
@@ -131,7 +131,9 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
-	    {"pin_threads", {"off"}}};
+	    {"pin_threads", {"off"}},
+	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
+	    {"checkpoint_on_detach", {"ENABLED"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -156,7 +158,9 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
+	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
 	    "schema",
@@ -211,7 +215,7 @@ void RequireValueEqual(const string &option_name, const Value &left, const Value
 	}
 	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
 	                                option_name, left.ToString(), right.ToString());
-	cerr << error << endl;
+	std::cerr << error << std::endl;
 	REQUIRE(false);
 }
 
@@ -278,7 +282,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			auto error = StringUtil::Format(
 			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", option.name,
 			    option.value.ToString(), options);
-			cerr << error << endl;
+			std::cerr << error << std::endl;
 			REQUIRE(false);
 		}
 		auto original_value = GetValueForSetting(con, option.name, option.type);

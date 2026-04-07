@@ -18,8 +18,11 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -445,11 +448,11 @@ unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &c
 CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::INSERT_STATEMENT:
-		return statement.Cast<InsertStatement>().cte_map;
+		return statement.Cast<InsertStatement>().node->cte_map;
 	case StatementType::DELETE_STATEMENT:
-		return statement.Cast<DeleteStatement>().cte_map;
+		return statement.Cast<DeleteStatement>().node->cte_map;
 	case StatementType::UPDATE_STATEMENT:
-		return statement.Cast<UpdateStatement>().cte_map;
+		return statement.Cast<UpdateStatement>().node->cte_map;
 	case StatementType::MERGE_INTO_STATEMENT:
 		return statement.Cast<MergeIntoStatement>().cte_map;
 	default:
@@ -480,7 +483,7 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 
 	// Create the CTE info.
 	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
+	cte_info->query_node = std::move(cte_select->node);
 	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 
 	// Add the appender data as a CTE to the CTE map of the statement.

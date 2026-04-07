@@ -4,11 +4,11 @@
 namespace duckdb {
 
 TableFilterSet::ConstTableFilterIteratorEntry::ConstTableFilterIteratorEntry(
-    map<idx_t, unique_ptr<TableFilter>>::const_iterator it)
+    map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator it)
     : iterator(it) {
 }
 
-idx_t TableFilterSet::ConstTableFilterIteratorEntry::ColumnIndex() const {
+ProjectionIndex TableFilterSet::ConstTableFilterIteratorEntry::GetIndex() const {
 	return iterator->first;
 }
 
@@ -16,11 +16,12 @@ const TableFilter &TableFilterSet::ConstTableFilterIteratorEntry::Filter() const
 	return *iterator->second;
 }
 
-TableFilterSet::TableFilterIteratorEntry::TableFilterIteratorEntry(map<idx_t, unique_ptr<TableFilter>>::iterator it)
+TableFilterSet::TableFilterIteratorEntry::TableFilterIteratorEntry(
+    map<ProjectionIndex, unique_ptr<TableFilter>>::iterator it)
     : iterator(it) {
 }
 
-idx_t TableFilterSet::TableFilterIteratorEntry::ColumnIndex() const {
+ProjectionIndex TableFilterSet::TableFilterIteratorEntry::GetIndex() const {
 	return iterator->first;
 }
 
@@ -42,11 +43,11 @@ bool TableFilterSet::HasFilters() const {
 idx_t TableFilterSet::FilterCount() const {
 	return filters.size();
 }
-bool TableFilterSet::HasFilter(idx_t col_idx) const {
+bool TableFilterSet::HasFilter(ProjectionIndex col_idx) const {
 	return filters.find(col_idx) != filters.end();
 }
 
-const TableFilter &TableFilterSet::GetFilterByColumnIndex(idx_t col_idx) const {
+const TableFilter &TableFilterSet::GetFilterByColumnIndex(ProjectionIndex col_idx) const {
 	auto filter = TryGetFilterByColumnIndex(col_idx);
 	if (!filter) {
 		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx);
@@ -54,7 +55,10 @@ const TableFilter &TableFilterSet::GetFilterByColumnIndex(idx_t col_idx) const {
 	return *filter;
 }
 
-optional_ptr<const TableFilter> TableFilterSet::TryGetFilterByColumnIndex(idx_t col_idx) const {
+optional_ptr<const TableFilter> TableFilterSet::TryGetFilterByColumnIndex(ProjectionIndex col_idx) const {
+	if (!col_idx.IsValid()) {
+		throw InternalException("TableFilterSet::TryGetFilterByColumnIndex called with invalid column index");
+	}
 	auto entry = filters.find(col_idx);
 	if (entry == filters.end()) {
 		return nullptr;
@@ -62,7 +66,7 @@ optional_ptr<const TableFilter> TableFilterSet::TryGetFilterByColumnIndex(idx_t 
 	return *entry->second;
 }
 
-TableFilter &TableFilterSet::GetFilterByColumnIndexMutable(idx_t col_idx) {
+TableFilter &TableFilterSet::GetFilterByColumnIndexMutable(ProjectionIndex col_idx) {
 	auto filter = TryGetFilterByColumnIndexMutable(col_idx);
 	if (!filter) {
 		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx);
@@ -70,7 +74,7 @@ TableFilter &TableFilterSet::GetFilterByColumnIndexMutable(idx_t col_idx) {
 	return *filter;
 }
 
-optional_ptr<TableFilter> TableFilterSet::TryGetFilterByColumnIndexMutable(idx_t col_idx) {
+optional_ptr<TableFilter> TableFilterSet::TryGetFilterByColumnIndexMutable(ProjectionIndex col_idx) {
 	auto entry = filters.find(col_idx);
 	if (entry == filters.end()) {
 		return nullptr;
@@ -78,11 +82,11 @@ optional_ptr<TableFilter> TableFilterSet::TryGetFilterByColumnIndexMutable(idx_t
 	return *entry->second;
 }
 
-void TableFilterSet::RemoveFilterByColumnIndex(idx_t col_idx) {
+void TableFilterSet::RemoveFilterByColumnIndex(ProjectionIndex col_idx) {
 	filters.erase(col_idx);
 }
 
-void TableFilterSet::SetFilterByColumnIndex(idx_t col_idx, unique_ptr<TableFilter> filter) {
+void TableFilterSet::SetFilterByColumnIndex(ProjectionIndex col_idx, unique_ptr<TableFilter> filter) {
 	filters[col_idx] = std::move(filter);
 }
 
@@ -124,12 +128,14 @@ unique_ptr<TableFilterSet> TableFilterSet::Copy() const {
 	return copy;
 }
 
-void TableFilterSet::PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter) {
-	auto column_index = col_idx.GetPrimaryIndex();
-	auto entry = filters.find(column_index);
+void TableFilterSet::PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter) {
+	if (!col_idx.IsValid()) {
+		throw InternalException("Cannot push a filter over an invalid ProjectionIndex");
+	}
+	auto entry = filters.find(col_idx);
 	if (entry == filters.end()) {
 		// no filter yet: push the filter directly
-		filters[column_index] = std::move(filter);
+		filters[col_idx] = std::move(filter);
 	} else {
 		// there is already a filter: AND it together
 		if (entry->second->filter_type == TableFilterType::CONJUNCTION_AND) {
@@ -139,7 +145,7 @@ void TableFilterSet::PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilt
 			auto and_filter = make_uniq<ConjunctionAndFilter>();
 			and_filter->child_filters.push_back(std::move(entry->second));
 			and_filter->child_filters.push_back(std::move(filter));
-			filters[column_index] = std::move(and_filter);
+			filters[col_idx] = std::move(and_filter);
 		}
 	}
 }
@@ -149,7 +155,8 @@ void DynamicTableFilterSet::ClearFilters(const PhysicalOperator &op) {
 	filters.erase(op);
 }
 
-void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter) {
+void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, ProjectionIndex column_index,
+                                       unique_ptr<TableFilter> filter) {
 	lock_guard<mutex> l(lock);
 	auto entry = filters.find(op);
 	optional_ptr<TableFilterSet> filter_ptr;
@@ -160,7 +167,7 @@ void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, idx_t column_
 	} else {
 		filter_ptr = entry->second.get();
 	}
-	filter_ptr->PushFilter(ColumnIndex(column_index), std::move(filter));
+	filter_ptr->PushFilter(column_index, std::move(filter));
 }
 
 bool DynamicTableFilterSet::HasFilters() const {
@@ -176,12 +183,12 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
 		for (auto &filter_entry : *existing_filters) {
-			result->PushFilter(ColumnIndex(filter_entry.ColumnIndex()), filter_entry.Filter().Copy());
+			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Copy());
 		}
 	}
 	for (auto &entry : filters) {
 		for (auto &filter_entry : *entry.second) {
-			result->PushFilter(ColumnIndex(filter_entry.ColumnIndex()), filter_entry.Filter().Copy());
+			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Copy());
 		}
 	}
 	if (!result->HasFilters()) {

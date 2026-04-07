@@ -28,7 +28,7 @@ LogicalOperator::~LogicalOperator() {
 }
 
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
-	return {ColumnBinding(TableIndex(0), 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 TableIndex LogicalOperator::GetRootIndex() {
@@ -105,12 +105,13 @@ vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(TableIndex table_i
 	vector<ColumnBinding> result;
 	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
-		result.emplace_back(table_idx, i);
+		result.emplace_back(table_idx, ProjectionIndex(i));
 	}
 	return result;
 }
 
-vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map) {
+vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types,
+                                              const vector<ProjectionIndex> &projection_map) {
 	if (projection_map.empty()) {
 		return types;
 	} else {
@@ -124,14 +125,13 @@ vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, 
 }
 
 vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &bindings,
-                                                   const vector<idx_t> &projection_map) {
+                                                   const vector<ProjectionIndex> &projection_map) {
 	if (projection_map.empty()) {
 		return bindings;
 	} else {
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
-			D_ASSERT(index < bindings.size());
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;

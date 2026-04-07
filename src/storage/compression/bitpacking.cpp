@@ -323,13 +323,8 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
+	for (auto entry : input.Values<T>(count)) {
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry.value, entry.is_valid)) {
 			return false;
 		}
 	}
@@ -616,6 +611,10 @@ public:
 		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
 		bitpacking_metadata_ptr =
 		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
+		if (bitpacking_metadata_ptr >= handle.Ptr() + current_segment.GetBlockSize()) {
+			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
+			                        segment.block->BlockId());
+		}
 
 		// load the first group
 		LoadNextGroup();

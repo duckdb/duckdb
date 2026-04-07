@@ -9,6 +9,7 @@
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ public:
 		return GetMap<TYPE>().empty();
 	}
 
-	void Insert(const idx_t original, const idx_t canonical) {
+	void Insert(const ProjectionIndex original, const ProjectionIndex canonical) {
 		D_ASSERT(to_canonical.find(original) == to_canonical.end());
 		D_ASSERT(restore_original.find(canonical) == restore_original.end());
 		to_canonical.emplace(make_pair(original, canonical));
@@ -40,21 +41,21 @@ public:
 	}
 
 	template <ConversionType TYPE>
-	idx_t Get(const idx_t index) const {
+	ProjectionIndex Get(const ProjectionIndex index) const {
 		D_ASSERT(!Empty<TYPE>());
 		return GetMap<TYPE>().at(index);
 	}
 
 private:
 	template <ConversionType TYPE>
-	const arena_unordered_map<idx_t, idx_t> &GetMap() const {
+	const arena_unordered_map<ProjectionIndex, ProjectionIndex> &GetMap() const {
 		return TYPE == ConversionType::TO_CANONICAL ? to_canonical : restore_original;
 	}
 
 private:
 	//! Map from original column index to canonical column index (and reverse)
-	arena_unordered_map<idx_t, idx_t> to_canonical;
-	arena_unordered_map<idx_t, idx_t> restore_original;
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> to_canonical;
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> restore_original;
 };
 
 class PlanSignatureTableIndexMap {
@@ -268,12 +269,12 @@ private:
 				auto &column_index_map = table_index_map.at(table_indices[0]);
 				if (projection_ids.empty()) {
 					for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-						const auto primary_index = column_ids[col_idx].GetPrimaryIndex();
-						column_index_map.Insert(col_idx, primary_index);
+						ProjectionIndex primary_index(column_ids[col_idx].GetPrimaryIndex());
+						column_index_map.Insert(ProjectionIndex(col_idx), primary_index);
 					}
 				} else {
 					for (const auto &proj_id : projection_ids) {
-						const auto primary_index = column_ids[proj_id].GetPrimaryIndex();
+						ProjectionIndex primary_index(column_ids[proj_id].GetPrimaryIndex());
 						column_index_map.Insert(proj_id, primary_index);
 					}
 				}
@@ -380,11 +381,11 @@ private:
 	//! Temporary vector to store table indices
 	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps
-	vector<vector<idx_t>> projection_maps;
+	vector<vector<ProjectionIndex>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
-	vector<idx_t> projection_ids;
+	vector<ProjectionIndex> projection_ids;
 	vector<pair<string, optional_idx>> expression_info;
 	vector<unique_ptr<LogicalOperator>> children;
 };
@@ -797,6 +798,28 @@ public:
 				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
 			}
 			const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
+			column_binding_map_t<idx_t> primary_binding_index;
+			for (idx_t i = 0; i < primary_subplan_bindings.size(); i++) {
+				primary_binding_index.emplace(primary_subplan_bindings[i], i);
+			}
+			vector<vector<idx_t>> cte_column_indexes(subplan_info.subplans.size());
+			vector<bool> needs_projection(subplan_info.subplans.size(), false);
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+				const auto &subplan = subplan_info.subplans[subplan_idx];
+				const auto &canonical_bindings = subplan.canonical_bindings;
+				cte_column_indexes[subplan_idx].reserve(canonical_bindings.size());
+				needs_projection[subplan_idx] = canonical_bindings.size() != types.size();
+				for (idx_t i = 0; i < canonical_bindings.size(); i++) {
+					const auto &cb = canonical_bindings[i];
+					const auto entry = primary_binding_index.find(cb);
+					D_ASSERT(entry != primary_binding_index.end()); // guaranteed by FilterSubplans
+					const auto cte_col_idx = entry->second;
+					// Types must match: same canonical binding = same base column = same type
+					D_ASSERT(subplan.op.get()->types[i] == types[cte_col_idx]);
+					cte_column_indexes[subplan_idx].push_back(cte_col_idx);
+					needs_projection[subplan_idx] = needs_projection[subplan_idx] || cte_col_idx != i;
+				}
+			}
 
 			// Create CTE refs and figure out column binding replacements
 			vector<unique_ptr<LogicalOperator>> cte_refs;
@@ -810,20 +833,13 @@ public:
 				}
 				const auto old_bindings = subplan.op.get()->GetColumnBindings();
 				auto new_bindings = cte_refs.back()->GetColumnBindings();
-				if (old_bindings.size() != new_bindings.size()) {
-					// Different number of output columns - project columns out
-					const auto &canonical_bindings = subplan.canonical_bindings;
+				if (needs_projection[subplan_idx]) {
+					// Preserve each subplan's original output order when it differs from the
+					// primary materialized CTE.
 					vector<unique_ptr<Expression>> select_list;
-					for (auto &cb : canonical_bindings) {
-						idx_t cte_col_idx = 0;
-						for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
-							if (cb == primary_subplan_bindings[cte_col_idx]) {
-								break;
-							}
-						}
-						D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+					for (auto cte_col_idx : cte_column_indexes[subplan_idx]) {
 						select_list.emplace_back(make_uniq<BoundColumnRefExpression>(
-						    types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
+						    types[cte_col_idx], ColumnBinding(cte_ref_index, ProjectionIndex(cte_col_idx))));
 					}
 
 					// Place the projection on top

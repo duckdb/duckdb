@@ -42,6 +42,7 @@
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -68,7 +69,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
+	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
+	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 
 #ifdef DEBUG
@@ -233,7 +235,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes unused columns
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
-		RemoveUnusedColumns unused(*this, true);
+		RemoveUnusedColumns unused(*this);
 		unused.VisitOperator(plan);
 	});
 

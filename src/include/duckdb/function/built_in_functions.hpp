@@ -32,6 +32,8 @@ public:
 	void AddFunction(TableFunctionSet set);
 	void AddFunction(TableFunction function);
 	void AddFunction(CopyFunction function);
+	void AddFunction(WindowFunction function);
+	void AddFunction(WindowFunctionSet set);
 
 	void AddCollation(string name, ScalarFunction function, bool combinable = false,
 	                  bool not_required_for_equality = false);
@@ -59,6 +61,9 @@ private:
 
 	// pragmas
 	void RegisterPragmaFunctions();
+
+	// standard window functions
+	void RegisterWindowFunctions();
 
 	void AddExtensionFunction(ScalarFunctionSet set);
 };

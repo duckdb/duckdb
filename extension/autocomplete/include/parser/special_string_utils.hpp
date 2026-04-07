@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-enum class SpecialStringCharacter { STANDARD = 0, NATIONAL_STRING, HEXADECIMAL_STRING, ESCAPE_STRING };
+enum class SpecialStringCharacter { STANDARD = 0, NATIONAL_STRING, HEXADECIMAL_STRING, ESCAPE_STRING, BIT_STRING };
 
 struct SpecialStringInfo {
 	SpecialStringCharacter type;
 	idx_t prefix_len;
 };
 
-static SpecialStringInfo GetSpecialStringInfo(const string &text) {
+inline SpecialStringInfo GetSpecialStringInfo(const string &text) {
 	if (text.empty()) {
 		return {SpecialStringCharacter::STANDARD, 0};
 	}
@@ -28,6 +28,9 @@ static SpecialStringInfo GetSpecialStringInfo(const string &text) {
 		case 'X':
 		case 'x':
 			return {SpecialStringCharacter::HEXADECIMAL_STRING, 2};
+		case 'B':
+		case 'b':
+			return {SpecialStringCharacter::BIT_STRING, 2};
 		case 'E':
 		case 'e':
 			return {SpecialStringCharacter::ESCAPE_STRING, 2};

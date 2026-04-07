@@ -126,6 +126,8 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
+    {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
+    {"lance", "Adds support for querying Lance datasets", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -246,8 +248,11 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
-		return true;
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
+			ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+			return true;
+		}
+		return false;
 	} catch (...) {
 		return false;
 	}

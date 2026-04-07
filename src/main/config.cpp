@@ -7,9 +7,11 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/path.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -63,6 +65,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 
 static const ConfigurationOption internal_options[] = {
 
+    DUCKDB_GLOBAL(DeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
@@ -73,6 +76,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_SETTING_CALLBACK(AllowUnredactedSecretsSetting),
     DUCKDB_SETTING_CALLBACK(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowedConfigsSetting),
     DUCKDB_GLOBAL(AllowedDirectoriesSetting),
     DUCKDB_GLOBAL(AllowedPathsSetting),
     DUCKDB_SETTING(ArrowLargeBufferSizeSetting),
@@ -86,8 +90,10 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(AutoloadKnownExtensionsSetting),
     DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
+    DUCKDB_SETTING_CALLBACK(CheckpointOnDetachSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_LOCAL(ConfigureProfilingSetting),
+    DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_SETTING(DebugAsofIejoinSetting),
@@ -204,14 +210,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 24),
-                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 24),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 97),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 40),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 117),
-                                                     DUCKDB_SETTING_ALIAS("user", 132),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 23),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 131),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 27),
+                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 101),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 44),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 121),
+                                                     DUCKDB_SETTING_ALIAS("user", 136),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 135),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -548,10 +554,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
-	} else if (StringUtil::Contains(options.database_path, "?")) {
-		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
-		options.temporary_directory = options.database_path + ".tmp";
+		options.temporary_directory = Path::AddSuffixToPath(options.database_path, ".tmp");
 	}
 }
 
@@ -564,6 +568,14 @@ void DBConfig::CheckLock(const String &name) {
 	if (allowed_settings.find(name.ToStdString()) != allowed_settings.end()) {
 		// we are always allowed to change these settings
 		return;
+	}
+	if (!options.allowed_configs.empty()) {
+		auto option = GetOptionByName(name);
+		auto canonical_name = option ? string(option->name) : name.ToStdString();
+		if (options.allowed_configs.find(canonical_name) != options.allowed_configs.end()) {
+			// settings that are allowed through allowed_configs
+			return;
+		}
 	}
 	// not allowed!
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
@@ -797,6 +809,37 @@ string DBConfig::SanitizeAllowedPath(const string &path_p) const {
 	return result;
 }
 
+void DBConfig::AddAllowedConfig(const string &config_name) {
+	if (config_name.empty()) {
+		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
+	}
+	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
+	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
+		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+	}
+	// Validate that the config name refers to a known setting (built-in or extension)
+	// and resolve aliases to canonical names
+	auto option = GetOptionByName(config_name);
+	if (option) {
+		// Store the canonical name so alias lookups work in CheckLock
+		options.allowed_configs.insert(option->name);
+		return;
+	}
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(config_name, extension_option)) {
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	// Check if the setting belongs to a known extension (even if not yet loaded)
+	auto extension_name = ExtensionHelper::FindExtensionInEntries(config_name, EXTENSION_SETTINGS);
+	if (!extension_name.empty()) {
+		// Accept the setting - the extension may be autoloaded later when the setting is used
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
+}
+
 void DBConfig::AddAllowedDirectory(const string &path) {
 	auto allowed_directory = SanitizeAllowedPath(path);
 	if (allowed_directory.empty()) {
@@ -857,62 +900,14 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
 }
 
-SerializationCompatibility SerializationCompatibility::FromDatabase(AttachedDatabase &db) {
-	return FromIndex(db.GetStorageManager().GetStorageVersion());
+void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
+	lock_guard<mutex> guard(http_util_lock);
+	old_http_utils.push_back(http_util);
+	http_util.atomic_store(new_http_util);
 }
 
-SerializationCompatibility SerializationCompatibility::FromIndex(const idx_t version) {
-	SerializationCompatibility result;
-	result.duckdb_version = "";
-	result.serialization_version = version;
-	result.manually_set = false;
-	return result;
-}
-
-SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
-	if (input.empty()) {
-		throw InvalidInputException("Version string can not be empty");
-	}
-
-	auto serialization_version = GetSerializationVersion(input.c_str());
-	if (!serialization_version.IsValid()) {
-		auto candidates = GetSerializationCandidates();
-		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
-		                            input, StringUtil::Join(candidates, ", "));
-	}
-	SerializationCompatibility result;
-	result.duckdb_version = input;
-	result.serialization_version = serialization_version.GetIndex();
-	result.manually_set = true;
-	return result;
-}
-
-SerializationCompatibility SerializationCompatibility::Default() {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	auto res = FromString("latest");
-	res.manually_set = false;
-	return res;
-#else
-#ifdef DUCKDB_LATEST_STORAGE
-	auto res = FromString("latest");
-	res.manually_set = false;
-	return res;
-#else
-	auto res = FromString("v0.10.2");
-	res.manually_set = false;
-	return res;
-#endif
-#endif
-}
-
-SerializationCompatibility SerializationCompatibility::Latest() {
-	auto res = FromString("latest");
-	res.manually_set = false;
-	return res;
-}
-
-bool SerializationCompatibility::Compare(idx_t property_version) const {
-	return property_version <= serialization_version;
+HTTPUtil &DBConfig::GetHTTPUtil() const {
+	return *http_util.atomic_load();
 }
 
 } // namespace duckdb

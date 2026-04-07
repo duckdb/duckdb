@@ -53,7 +53,7 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 }
 
 void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<LogicalOperator> &child,
-                                                                   vector<idx_t> &projection_map) {
+                                                                   vector<ProjectionIndex> &projection_map) {
 	const auto child_bindings_before = child->GetColumnBindings();
 	VisitOperator(child);
 	if (projection_map.empty()) {
@@ -66,7 +66,7 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<Lo
 	}
 	// The desired order is 'projection_map' applied to 'child_bindings_before'
 	// We create 'new_projection_map', which ensures this order even if 'child_bindings_after' is different
-	vector<idx_t> new_projection_map;
+	vector<ProjectionIndex> new_projection_map;
 	new_projection_map.reserve(projection_map.size());
 	for (const auto proj_idx_before : projection_map) {
 		auto &desired_binding = child_bindings_before[proj_idx_before];
@@ -82,7 +82,7 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<Lo
 			new_projection_map.clear();
 			break;
 		}
-		new_projection_map.push_back(proj_idx_after);
+		new_projection_map.push_back(ProjectionIndex(proj_idx_after));
 	}
 	projection_map = std::move(new_projection_map);
 }
@@ -295,7 +295,7 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { VisitExpression(&expr); });
 }
 
-// these are all default methods that can be overriden
+// these are all default methods that can be overridden
 // we don't care about coverage here
 // LCOV_EXCL_START
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,

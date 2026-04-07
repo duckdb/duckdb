@@ -1,0 +1,34 @@
+# name: test/sql/pivot/pivot_star.test
+# group: [pivot]
+
+load {TEST_DIR}/pivot_star.db readwrite v1.5.0
+
+statement ok
+CREATE TABLE t(id INT, jan INT, feb INT);
+
+statement ok
+CREATE VIEW poison_view AS SELECT * FROM t UNPIVOT (val FOR col IN (*));
+
+statement ok
+CREATE VIEW expr_view AS SELECT * FROM t UNPIVOT (val FOR col IN (1+2+id));
+
+statement ok
+CREATE VIEW v AS PIVOT t ON id IN (CASE WHEN true THEN 'a' END) USING (SUM(feb))
+
+
+# ON v1.4.4 storage arbitrary expressions not supported
+load {TEST_DIR}/pivot_star_old.db readwrite v1.4.4
+
+statement ok
+CREATE TABLE t(id INT, jan INT, feb INT);
+
+statement ok
+CREATE VIEW poison_view AS SELECT * FROM t UNPIVOT (val FOR col IN (*));
+
+statement ok
+CREATE VIEW expr_view AS SELECT * FROM t UNPIVOT (val FOR col IN (1+2+id));
+
+statement error
+CREATE VIEW v AS PIVOT t ON id IN (CASE WHEN true THEN 'a' END) USING (SUM(feb))
+----
+Cannot serialize non-constant expression 'CASE  WHEN (CAST('t' AS BOOLEAN)) THEN ('a') ELSE NULL END' in pivot list when targeting database storage version

@@ -19,6 +19,7 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -125,6 +126,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 	auto &parent = entry.Parent();
 
 	switch (parent.type) {
+	case CatalogType::TRIGGER_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
@@ -160,6 +162,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::TYPE_ENTRY:
 			case CatalogType::MACRO_ENTRY:
 			case CatalogType::TABLE_MACRO_ENTRY:
+			case CatalogType::TRIGGER_ENTRY:
 				(void)column_name;
 				break;
 			default:
@@ -174,6 +177,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::TYPE_ENTRY:
 			case CatalogType::MACRO_ENTRY:
 			case CatalogType::TABLE_MACRO_ENTRY:
+			case CatalogType::TRIGGER_ENTRY:
 				break;
 			default:
 				throw InternalException("Don't know how to create this type!");

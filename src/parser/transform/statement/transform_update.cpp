@@ -1,5 +1,6 @@
 #include "duckdb/parser/statement/update_extensions_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -24,20 +25,22 @@ unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery:
 
 unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt) {
 	auto result = make_uniq<UpdateStatement>();
+	auto &node = *result->node;
+
 	if (stmt.withClause) {
 		auto with_clause = PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause);
-		TransformCTE(*with_clause, result->cte_map);
+		TransformCTE(*with_clause, node.cte_map);
 	}
 
-	result->table = TransformRangeVar(*stmt.relation);
+	node.table = TransformRangeVar(*stmt.relation);
 	if (stmt.fromClause) {
-		result->from_table = TransformFrom(stmt.fromClause);
+		node.from_table = TransformFrom(stmt.fromClause);
 	}
-	result->set_info = TransformUpdateSetInfo(stmt.targetList, stmt.whereClause);
+	node.set_info = TransformUpdateSetInfo(stmt.targetList, stmt.whereClause);
 
 	// Grab and transform the returning columns from the parser.
 	if (stmt.returningList) {
-		TransformExpressionList(*stmt.returningList, result->returning_list);
+		TransformExpressionList(*stmt.returningList, node.returning_list);
 	}
 	return result;
 }

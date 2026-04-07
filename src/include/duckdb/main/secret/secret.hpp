@@ -19,6 +19,7 @@ class BaseSecret;
 struct SecretEntry;
 struct FileOpenerInfo;
 struct CreateSecretInfo;
+class FileOpener;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };

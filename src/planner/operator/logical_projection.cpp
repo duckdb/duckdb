@@ -31,4 +31,15 @@ string LogicalProjection::GetName() const {
 	return LogicalOperator::GetName();
 }
 
+const Expression &LogicalProjection::GetExpression(ColumnBinding binding) const {
+	if (binding.table_index != table_index) {
+		throw InternalException("LogicalProjection::GetExpression - table index mismatch");
+	}
+	return *expressions[binding.column_index];
+}
+
+const Expression &LogicalProjection::GetExpression(ProjectionIndex proj_index) const {
+	return GetExpression(ColumnBinding(table_index, proj_index));
+}
+
 } // namespace duckdb

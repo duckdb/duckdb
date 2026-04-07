@@ -21,8 +21,8 @@
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/serialization_compatibility.hpp"
 
 namespace duckdb {
 
@@ -373,6 +373,9 @@ protected:
 	}
 	void WriteValue(TableIndex value) {
 		WriteValue(value.index);
+	}
+	void WriteValue(ProjectionIndex value) {
+		WriteValue(value.GetIndexUnsafe());
 	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);

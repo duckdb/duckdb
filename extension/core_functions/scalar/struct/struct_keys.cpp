@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
@@ -16,9 +17,9 @@ struct StructKeysBindData : public FunctionData {
 
 		ListVector::Reserve(keys_vector, count);
 		auto &list_child = ListVector::GetEntry(keys_vector);
-		auto child_data = FlatVector::GetData<string_t>(list_child);
+		auto child_data = FlatVector::Writer<string_t>(list_child, count);
 		for (idx_t i = 0; i < count; i++) {
-			child_data[i] = StringVector::AddString(list_child, child_types[i].first);
+			child_data[i] = child_types[i].first;
 		}
 		ListVector::SetListSize(keys_vector, count);
 
@@ -51,7 +52,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (args.AllConstant()) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		ConstantVector::Reference(result, keys_vector, 0, count);
@@ -61,12 +62,9 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	// Non-constant input: return a DICTIONARY_VECTOR over two entries (keys list and NULL) to preserve per-row NULLs
 	// Build the dictionary selection: 0 for non-null input, 1 for null input
 	SelectionVector sel(count);
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	auto validity_entries = input.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		const bool is_valid = input_data.validity.RowIsValid(idx);
-		sel.set_index(i, !is_valid);
+		sel.set_index(i, !validity_entries.IsValid(i));
 	}
 
 	result.Slice(keys_vector, sel, count);

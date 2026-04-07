@@ -17,7 +17,7 @@ FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_small.csv', delim = 'aa', 
 loop buffer_size 9 13
 
 query II
-FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = {buffer_size})
 ----
 1	2
 1	2
@@ -40,7 +40,7 @@ FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header
 1a	b2
 
 query II
-FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = {buffer_size})
 ----
 1	2
 1	2
@@ -67,7 +67,7 @@ endloop
 loop buffer_size 13 17
 
 query II
-FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = {buffer_size})
 ----
 1	2
 1	2
@@ -90,7 +90,7 @@ FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa',
 1a	a2
 
 query II
-FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = {buffer_size})
 ----
 1	2
 1	2

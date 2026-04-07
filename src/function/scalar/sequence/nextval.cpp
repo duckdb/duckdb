@@ -75,15 +75,15 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (!func_expr.bind_info) {
 		// no bind info - return null
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<NextValLocalState>();
 	// sequence to use is hard coded
 	// increment the sequence
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<int64_t>(result);
+
+	auto result_data = FlatVector::Writer<int64_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		// get the next value from the sequence
 		result_data[i] = OP::Operation(lstate.transaction, lstate.sequence);

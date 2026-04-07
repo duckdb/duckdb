@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
@@ -26,7 +27,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 	map_vec.ToUnifiedFormat(count, lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
-	const auto inc_list_data = ListVector::GetData(map_vec);
+	const auto inc_list_data = UnifiedVectorFormat::GetData<list_entry_t>(lst_format);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto lst_idx = lst_format.sel->get_index(row_idx);

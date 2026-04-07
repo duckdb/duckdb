@@ -70,6 +70,9 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(218, "preserve_order", preserve_order, PreserveOrderType::AUTOMATIC);
 	serializer.WritePropertyWithDefault(219, "hive_file_pattern", hive_file_pattern, true);
 	serializer.WritePropertyWithDefault(220, "file_size_bytes", file_size_bytes, optional_idx());
+	serializer.WritePropertyWithDefault(221, "batch_size", batch_size, optional_idx());
+	serializer.WritePropertyWithDefault(222, "batch_size_bytes", batch_size_bytes, optional_idx());
+	serializer.WritePropertyWithDefault(223, "batches_per_file", batches_per_file, optional_idx());
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -119,6 +122,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	    deserializer.ReadPropertyWithExplicitDefault(218, "preserve_order", PreserveOrderType::AUTOMATIC);
 	auto hive_file_pattern = deserializer.ReadPropertyWithExplicitDefault(219, "hive_file_pattern", true);
 	auto file_size_bytes = deserializer.ReadPropertyWithExplicitDefault(220, "file_size_bytes", optional_idx());
+	auto batch_size = deserializer.ReadPropertyWithExplicitDefault(221, "batch_size", optional_idx());
+	auto batch_size_bytes = deserializer.ReadPropertyWithExplicitDefault(222, "batch_size_bytes", optional_idx());
+	auto batches_per_file = deserializer.ReadPropertyWithExplicitDefault(223, "batches_per_file", optional_idx());
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -150,6 +156,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->preserve_order = preserve_order;
 	result->hive_file_pattern = hive_file_pattern;
 	result->file_size_bytes = file_size_bytes;
+	result->batch_size = batch_size;
+	result->batch_size_bytes = batch_size_bytes;
+	result->batches_per_file = batches_per_file;
 
 	return std::move(result);
 }
@@ -157,8 +166,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
 	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
 	vector<ColumnBinding> result;
-	for (idx_t i = 0; i < return_column_count; i++) {
-		result.emplace_back(TableIndex(0), i);
+	for (auto return_col_idx : ProjectionIndex::GetIndexes(return_column_count)) {
+		result.emplace_back(TableIndex(0), return_col_idx);
 	}
 	return result;
 }

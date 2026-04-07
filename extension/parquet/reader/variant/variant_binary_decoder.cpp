@@ -34,8 +34,6 @@ static constexpr uint8_t OBJECT_IS_LARGE_SHIFT = 4;
 static constexpr uint8_t ARRAY_IS_LARGE_MASK = 0x1;
 static constexpr uint8_t ARRAY_IS_LARGE_SHIFT = 2;
 
-using namespace duckdb_yyjson;
-
 namespace duckdb {
 
 namespace {
@@ -292,7 +290,7 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 
 	auto field_ids = data;
 	auto field_offsets = data + (num_elements * field_id_size);
-	auto values = field_offsets + ((num_elements + 1) * field_offset_size);
+	auto values = field_offsets + (NumericCast<idx_t>(num_elements + 1) * field_offset_size);
 
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {
@@ -325,7 +323,7 @@ VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
 	}
 
 	auto field_offsets = data;
-	auto values = field_offsets + ((num_elements + 1) * field_offset_size);
+	auto values = field_offsets + (NumericCast<idx_t>(num_elements) + 1) * field_offset_size;
 
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {

@@ -4,6 +4,9 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 namespace duckdb {
 
@@ -11,11 +14,50 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 	executor.AddExpression(expression);
 }
 
+JoinFilterTableFilterState::JoinFilterTableFilterState(const LogicalType &key_logical_type)
+    : current_capacity(0), hashes_v(LogicalType::HASH, current_capacity),
+      keys_sliced_v(key_logical_type, current_capacity), probe_sel(current_capacity) {
+}
+
+void JoinFilterTableFilterState::PrepareSlicedKeys(Vector &keys_v, SelectionVector &sel,
+                                                   const idx_t approved_tuple_count) {
+	if (current_capacity < approved_tuple_count) {
+		hashes_v.Initialize(false, approved_tuple_count);
+		keys_sliced_v.Initialize(false, approved_tuple_count);
+		probe_sel.Initialize(approved_tuple_count);
+		current_capacity = approved_tuple_count;
+	}
+
+	if (keys_sliced_v.GetType() == keys_v.GetType()) {
+		keys_sliced_v.Slice(keys_v, sel, approved_tuple_count);
+	} else {
+		// Apply sel first (into keys_v space), then cast to key_type
+		Vector sliced_src(keys_v.GetType());
+		sliced_src.Slice(keys_v, sel, approved_tuple_count);
+		sliced_src.Flatten(approved_tuple_count);
+		VectorOperations::DefaultCast(sliced_src, keys_sliced_v, approved_tuple_count);
+	}
+}
+
+const LogicalType &GetTableFilterKeyType(const TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::BLOOM_FILTER) {
+		return filter.Cast<BFTableFilter>().GetKeyType();
+	}
+	if (filter.filter_type == TableFilterType::PERFECT_HASH_JOIN_FILTER) {
+		return filter.Cast<PerfectHashJoinFilter>().GetKeyType();
+	}
+	if (filter.filter_type == TableFilterType::PREFIX_RANGE_FILTER) {
+		return filter.Cast<PrefixRangeTableFilter>().GetKeyType();
+	}
+	throw NotImplementedException("Unknown filter type");
+}
+
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	switch (filter.filter_type) {
-	case TableFilterType::BLOOM_FILTER: {
-		auto &bf = filter.Cast<BFTableFilter>();
-		return make_uniq<BFTableFilterState>(bf.GetKeyType());
+	case TableFilterType::BLOOM_FILTER:
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
+		return make_uniq<JoinFilterTableFilterState>(GetTableFilterKeyType(filter));
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		// the optional filter may be executed if it is a SelectivityOptionalFilter
@@ -50,7 +92,6 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
 		// root nodes - create an empty filter state
 		return make_uniq<TableFilterState>();
 	default:

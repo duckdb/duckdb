@@ -152,7 +152,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 
 			// find the matching dummy column in the lambda binding
 			for (idx_t column_idx = 0; column_idx < binding.GetColumnCount(); column_idx++) {
-				if (column_idx == bound_lambda_ref.binding.column_index) {
+				if (ProjectionIndex(column_idx) == bound_lambda_ref.binding.column_index) {
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
 					replacement =

@@ -173,11 +173,15 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {
-		// perform all LIST unnests
+		// perform all LIST/ARRAY unnests
 		auto type = child_type;
 		list_unnests = 0;
-		while (type.id() == LogicalTypeId::LIST) {
-			type = ListType::GetChildType(type);
+		while (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
+			if (type.id() == LogicalTypeId::LIST) {
+				type = ListType::GetChildType(type);
+			} else {
+				type = ArrayType::GetChildType(type);
+			}
 			list_unnests++;
 			if (list_unnests >= max_depth) {
 				break;
@@ -198,7 +202,14 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	for (idx_t current_depth = 0; current_depth < list_unnests; current_depth++) {
 		if (return_type.id() == LogicalTypeId::LIST) {
 			return_type = ListType::GetChildType(return_type);
+		} else if (return_type.id() == LogicalTypeId::ARRAY) {
+			return_type = ArrayType::GetChildType(return_type);
 		}
+
+		if (unnest_expr->return_type.id() == LogicalTypeId::ARRAY) {
+			unnest_expr = BoundCastExpression::AddArrayCastToList(context, std::move(unnest_expr));
+		}
+
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->child = std::move(unnest_expr);
 		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias();
@@ -206,18 +217,16 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		auto current_level = unnest_level + list_unnests - current_depth - 1;
 		auto entry = node.unnests.find(current_level);
 		TableIndex unnest_table_index;
-		idx_t unnest_column_index;
+		ProjectionIndex unnest_column_index;
 		if (entry == node.unnests.end()) {
 			BoundUnnestNode unnest_node;
 			unnest_node.index = binder.GenerateTableIndex();
-			unnest_node.expressions.push_back(std::move(result));
 			unnest_table_index = unnest_node.index;
-			unnest_column_index = 0;
+			unnest_column_index = ColumnBinding::PushExpression(unnest_node.expressions, std::move(result));
 			node.unnests.insert(make_pair(current_level, std::move(unnest_node)));
 		} else {
 			unnest_table_index = entry->second.index;
-			unnest_column_index = entry->second.expressions.size();
-			entry->second.expressions.push_back(std::move(result));
+			unnest_column_index = ColumnBinding::PushExpression(entry->second.expressions, std::move(result));
 		}
 		// now create a column reference referring to the unnest
 		unnest_expr = make_uniq<BoundColumnRefExpression>(

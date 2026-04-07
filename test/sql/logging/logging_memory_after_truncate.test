@@ -1,0 +1,34 @@
+# name: test/sql/logging/logging_memory_after_truncate.test
+# group: [logging]
+
+statement ok
+SET GLOBAL logging_level = 'INFO';
+
+statement ok
+SET GLOBAL logging_storage = 'memory';
+
+statement ok
+SET GLOBAL enable_logging = true;
+
+statement error
+LOAD invalid_extension;
+----
+<REGEX>:IO Error: Extension.*not found.*
+
+query I
+SELECT COUNT(*) FROM duckdb_logs WHERE starts_with(message, 'Failed to load');
+----
+1
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement error
+LOAD invalid_extension;
+----
+<REGEX>:IO Error: Extension.*not found.*
+
+query I
+SELECT COUNT(*) FROM duckdb_logs WHERE starts_with(message, 'Failed to load');
+----
+1

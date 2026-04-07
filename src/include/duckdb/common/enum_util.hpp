@@ -106,6 +106,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CacheBlockState : uint8_t;
+
 enum class CacheValidationMode : uint8_t;
 
 enum class CachingMode : uint8_t;
@@ -116,7 +118,11 @@ enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
 
+enum class CheckpointOnDetach : uint8_t;
+
 enum class ChunkInfoType : uint8_t;
+
+enum class ClientInterruptState : uint8_t;
 
 enum class ColumnDataAllocatorType : uint8_t;
 
@@ -128,8 +134,6 @@ enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
 
-enum class CompressionFunctionSetLoadResult : uint8_t;
-
 enum class CompressionType : uint8_t;
 
 enum class CompressionValidity : uint8_t;
@@ -139,6 +143,8 @@ enum class ConflictManagerMode : uint8_t;
 enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
+
+enum class CopyFunctionFlushBatchReason : uint8_t;
 
 enum class CopyFunctionReturnType : uint8_t;
 
@@ -394,6 +400,8 @@ enum class SecretPersistType : uint8_t;
 
 enum class SecretSerializationType : uint8_t;
 
+enum class SelectivityOptionalFilterType : uint8_t;
+
 enum class SequenceInfo : uint8_t;
 
 enum class SetOperationType : uint8_t;
@@ -460,9 +468,17 @@ enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionInvalidationPolicy : uint8_t;
+
 enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
+
+enum class TriggerEventType : uint8_t;
+
+enum class TriggerForEach : uint8_t;
+
+enum class TriggerTiming : uint8_t;
 
 enum class TupleDataNestednessType : uint8_t;
 
@@ -481,8 +497,6 @@ enum class VariantLogicalType : uint8_t;
 enum class VariantStatsShreddingState : uint8_t;
 
 enum class VariantValueType : uint8_t;
-
-enum class VectorAuxiliaryDataType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
@@ -617,6 +631,9 @@ template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template<>
+const char* EnumUtil::ToChars<CacheBlockState>(CacheBlockState value);
+
+template<>
 const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value);
 
 template<>
@@ -632,7 +649,13 @@ template<>
 const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value);
 
 template<>
+const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value);
+
+template<>
 const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ClientInterruptState>(ClientInterruptState value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
@@ -650,9 +673,6 @@ template<>
 const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMaterializationDirection value);
 
 template<>
-const char* EnumUtil::ToChars<CompressionFunctionSetLoadResult>(CompressionFunctionSetLoadResult value);
-
-template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
 
 template<>
@@ -666,6 +686,9 @@ const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
 const char* EnumUtil::ToChars<CoordinateReferenceSystemType>(CoordinateReferenceSystemType value);
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionFlushBatchReason>(CopyFunctionFlushBatchReason value);
 
 template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
@@ -1049,6 +1072,9 @@ template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
 
 template<>
+const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptionalFilterType value);
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
@@ -1148,10 +1174,22 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
+
+template<>
+const char* EnumUtil::ToChars<TriggerEventType>(TriggerEventType value);
+
+template<>
+const char* EnumUtil::ToChars<TriggerForEach>(TriggerForEach value);
+
+template<>
+const char* EnumUtil::ToChars<TriggerTiming>(TriggerTiming value);
 
 template<>
 const char* EnumUtil::ToChars<TupleDataNestednessType>(TupleDataNestednessType value);
@@ -1179,9 +1217,6 @@ const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingS
 
 template<>
 const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
-
-template<>
-const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
@@ -1326,6 +1361,9 @@ template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template<>
+CacheBlockState EnumUtil::FromString<CacheBlockState>(const char *value);
+
+template<>
 CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value);
 
 template<>
@@ -1341,7 +1379,13 @@ template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value);
 
 template<>
+CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value);
+
+template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value);
+
+template<>
+ClientInterruptState EnumUtil::FromString<ClientInterruptState>(const char *value);
 
 template<>
 ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char *value);
@@ -1359,9 +1403,6 @@ template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value);
 
 template<>
-CompressionFunctionSetLoadResult EnumUtil::FromString<CompressionFunctionSetLoadResult>(const char *value);
-
-template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
 
 template<>
@@ -1375,6 +1416,9 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
 CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType>(const char *value);
+
+template<>
+CopyFunctionFlushBatchReason EnumUtil::FromString<CopyFunctionFlushBatchReason>(const char *value);
 
 template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
@@ -1758,6 +1802,9 @@ template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
 
 template<>
+SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType>(const char *value);
+
+template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);
 
 template<>
@@ -1857,10 +1904,22 @@ template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
 
 template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);
+
+template<>
 TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
+
+template<>
+TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value);
+
+template<>
+TriggerForEach EnumUtil::FromString<TriggerForEach>(const char *value);
+
+template<>
+TriggerTiming EnumUtil::FromString<TriggerTiming>(const char *value);
 
 template<>
 TupleDataNestednessType EnumUtil::FromString<TupleDataNestednessType>(const char *value);
@@ -1888,9 +1947,6 @@ VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(cons
 
 template<>
 VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
-
-template<>
-VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);

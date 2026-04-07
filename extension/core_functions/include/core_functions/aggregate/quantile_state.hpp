@@ -77,7 +77,7 @@ struct QuantileOperation {
 	static idx_t FrameSize(QuantileIncluded<INPUT_TYPE> &included, const SubFrames &frames) {
 		//	Count the number of valid values
 		idx_t n = 0;
-		if (included.AllValid()) {
+		if (included.CannotHaveNull()) {
 			for (const auto &frame : frames) {
 				n += frame.end - frame.start;
 			}

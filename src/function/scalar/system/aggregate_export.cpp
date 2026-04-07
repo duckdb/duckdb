@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -139,7 +143,7 @@ struct LoadFieldOp {
 	template <class T>
 	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data,
 	                      idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
 		for (idx_t row = 0; row < count; row++) {
@@ -157,8 +161,8 @@ struct LoadFieldOp {
 struct StoreFieldOp {
 	template <class T>
 	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
+		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
+		auto child_data = FlatVector::Writer<T>(child, count);
 
 		for (idx_t row = 0; row < count; row++) {
 			auto src = sources[row] + field_offset;
@@ -167,32 +171,14 @@ struct StoreFieldOp {
 	}
 };
 
-// Specialization for string_t to handle big strings correctly
-// For big strings (>12 bytes), string_t contains a pointer to the actual data.
-// We need to copy the actual string data to the result vector's string heap,
-// not just copy the pointer (which would point to aggregate allocator memory).
-template <>
-void StoreFieldOp::Operation<string_t>(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources,
-                                       idx_t field_offset) {
-	auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
-
-	for (idx_t row = 0; row < count; row++) {
-		auto src = sources[row] + field_offset;
-		string_t source_str = *reinterpret_cast<string_t *>(src);
-		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
-	}
-}
-
 struct CopyFromInputFieldOp {
 	template <class T>
 	static void Operation(Vector &input_vec, Vector &result_vec, idx_t field_idx, const SelectionVector &sel,
 	                      idx_t count, const UnifiedVectorFormat &input_data) {
-		auto &input_child = *StructVector::GetEntries(input_vec)[field_idx];
+		auto &input_child = StructVector::GetEntries(input_vec)[field_idx];
 		auto input_child_data = FlatVector::GetData<T>(input_child);
 
-		auto &result_child = *StructVector::GetEntries(result_vec)[field_idx];
+		auto &result_child = StructVector::GetEntries(result_vec)[field_idx];
 		auto result_child_data = FlatVector::GetData<T>(result_child);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -208,7 +194,7 @@ struct LoadFieldForSelectedRowsOp {
 	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, const UnifiedVectorFormat &state_data,
 	                      data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -224,8 +210,8 @@ struct StoreFieldForSelectedRowsOp {
 	template <class T>
 	static void Operation(const AggregateStateLayout &layout, Vector &result, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(result)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
+		auto &child = StructVector::GetEntries(result)[field_idx];
+		auto child_data = FlatVector::Writer<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
@@ -234,24 +220,6 @@ struct StoreFieldForSelectedRowsOp {
 		}
 	}
 };
-
-// Specialization for string_t to handle big strings correctly
-// Same fix as StoreFieldOp - copy actual string data, not just pointers
-template <>
-void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout &layout, Vector &result,
-                                                      idx_t field_idx, const SelectionVector &sel, idx_t count,
-                                                      data_ptr_t base_ptr, idx_t field_offset) {
-	auto &child = *StructVector::GetEntries(result)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
-
-	for (idx_t i = 0; i < count; i++) {
-		idx_t row = sel.get_index(i);
-		auto src = base_ptr + i * layout.aligned_state_size + field_offset;
-		string_t source_str = *reinterpret_cast<string_t *>(src);
-		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
-	}
-}
 
 idx_t GetRecursivePhysicalSize(const LogicalType &type) {
 	if (type.id() != LogicalTypeId::STRUCT) {
@@ -281,7 +249,7 @@ void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stri
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
 			auto &struct_entries = StructVector::GetEntries(struct_vec);
-			DeserializeStructFields(child_layout, root_stride, *struct_entries[field_idx], state_data, count,
+			DeserializeStructFields(child_layout, root_stride, struct_entries[field_idx], state_data, count,
 			                        dest_buffer + offset_in_state);
 		} else {
 			TemplateDispatch<LoadFieldOp>(physical, root_stride, struct_vec, field_idx, state_data, count, dest_buffer,
@@ -315,7 +283,7 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 			}
 
 			auto &struct_entries = StructVector::GetEntries(result);
-			SerializeStructFields(child_layout, *struct_entries.get(field_idx), count, child_ptrs);
+			SerializeStructFields(child_layout, struct_entries[field_idx], count, child_ptrs);
 		} else {
 			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
 		}
@@ -761,10 +729,10 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		return;
 	}
 
-	auto blob_ptr = FlatVector::GetData<string_t>(result);
+	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
+		blob_ptr[row_idx] = string_t(const_char_ptr_cast(data_ptr), state_size);
 	}
 }
 
@@ -812,7 +780,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	UnifiedVectorFormat sdata;
 	states.ToUnifiedFormat(count, sdata);
-	auto state_ptrs = reinterpret_cast<data_ptr_t *>(sdata.data);
+	auto state_ptrs = UnifiedVectorFormat::GetData<data_ptr_t>(sdata);
 
 	inputs[0].Flatten(count);
 

@@ -10,6 +10,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
@@ -46,7 +48,7 @@ private:
 	                               const SelectionVector &asel, const SelectionVector &bsel,
 	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
 	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
-		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
+		if (avalidity.CanHaveNull() || bvalidity.CanHaveNull() || cvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
@@ -76,7 +78,7 @@ public:
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				auto adata = ConstantVector::GetData<A_TYPE>(a);
 				auto bdata = ConstantVector::GetData<B_TYPE>(b);
@@ -180,7 +182,7 @@ private:
 	static inline idx_t SelectLoopSwitch(UnifiedVectorFormat &adata, UnifiedVectorFormat &bdata,
 	                                     UnifiedVectorFormat &cdata, const SelectionVector *sel, idx_t count,
 	                                     SelectionVector *true_sel, SelectionVector *false_sel) {
-		if (!adata.validity.AllValid() || !bdata.validity.AllValid() || !cdata.validity.AllValid()) {
+		if (adata.validity.CanHaveNull() || bdata.validity.CanHaveNull() || cdata.validity.CanHaveNull()) {
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
 			                                                              false_sel);
 		} else {

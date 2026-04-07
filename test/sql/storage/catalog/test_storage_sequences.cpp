@@ -3,7 +3,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Use sequences over different runs without checkpointing", "[storage]") {
 	duckdb::unique_ptr<QueryResult> result;

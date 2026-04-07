@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
 #include "duckdb/common/fast_mem.hpp"
@@ -110,6 +115,19 @@ void TupleDataCollection::SetPartitionIndex(const idx_t index) {
 	D_ASSERT(Count() == 0);
 	partition_index = index;
 	allocator->SetPartitionIndex(index);
+}
+
+vector<pair<idx_t, idx_t>> TupleDataCollection::GetChunkRangesForPartition(const idx_t partition_idx) const {
+	idx_t chunk_idx_start = 0;
+	vector<pair<idx_t, idx_t>> chunk_ranges;
+	for (const auto &segment : segments) {
+		const idx_t segment_partition_idx = segment->allocator->GetPartitionIndex();
+		if (partition_idx == segment_partition_idx) {
+			chunk_ranges.emplace_back(chunk_idx_start, chunk_idx_start + segment->ChunkCount());
+		}
+		chunk_idx_start += segment->ChunkCount();
+	}
+	return chunk_ranges;
 }
 
 vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
@@ -311,7 +329,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		auto &entries = StructVector::GetEntries(vector);
 		D_ASSERT(format.children.size() == entries.size());
 		for (idx_t struct_col_idx = 0; struct_col_idx < entries.size(); struct_col_idx++) {
-			ToUnifiedFormatInternal(format.children[struct_col_idx], *entries[struct_col_idx], count);
+			ToUnifiedFormatInternal(format.children[struct_col_idx], entries[struct_col_idx], count);
 		}
 		break;
 	}

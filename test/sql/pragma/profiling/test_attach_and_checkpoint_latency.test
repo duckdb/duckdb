@@ -26,7 +26,7 @@ PRAGMA disable_checkpoint_on_shutdown;
 # CHECKPOINT_LATENCY.
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
+ATTACH '{TEST_DIR}/profile_fs.db';
 
 statement ok
 CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(100_000);
@@ -35,7 +35,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"WAITING_TO_ATTACH_LATENCY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "CHECKPOINT_LATENCY": "true"}';
@@ -50,7 +50,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.json';
 
 query I
 SELECT
@@ -72,13 +72,13 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
+ATTACH '{TEST_DIR}/profile_fs.db';
 
 statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.json';
 
 query I
 SELECT

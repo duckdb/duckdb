@@ -247,7 +247,7 @@ foreach type <integral>
 
 # list tests
 statement ok
-CREATE TABLE test0 (i ${type}[])
+CREATE TABLE test0 (i {type}[])
 
 statement ok
 INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), ([2, 3])
@@ -374,7 +374,7 @@ foreach type float double
 
 # list tests
 statement ok
-CREATE TABLE test0 (i ${type}[])
+CREATE TABLE test0 (i {type}[])
 
 statement ok
 INSERT INTO test0 VALUES ([2.0]), ([1.0]), ([1.0, 2.0]), ([]), ([2.0, 2.0]), ([NULL]), ([2.0, 3.0])

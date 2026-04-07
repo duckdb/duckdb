@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
@@ -120,7 +121,7 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 	}
 	auto index = field_index.GetIndex();
 	auto &children = StructVector::GetEntries(result);
-	return *children[index];
+	return children[index];
 }
 
 static void ScanChild(ColumnScanState &state, Vector &result, const std::function<idx_t(Vector &target)> &callback) {
@@ -144,30 +145,40 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
-	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
-	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(result)) {
-		// struct is constant NULL - don't scan more
-		return scan_count;
+	idx_t scan_count;
+	if (!state.storage_index.IsPushdownExtract()) {
+		// if we are scanning the entire struct we need to scan the validity
+		scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
+		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			if (!ConstantVector::IsNull(result)) {
+				throw InternalException("StructColumnData::Scan returned a constant but not NULL vector ");
+			}
+			// constant NULL struct - we don't need to scan any children, everything is already NULL
+			return scan_count;
+		}
 	}
 	auto struct_children = GetStructChildren(state);
 	for (auto &child : struct_children) {
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
 		if (!child.should_scan) {
 			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
-			return child.col.Scan(transaction, vector_index, child.state, child_result, target_count);
+			scan_count = child.col.Scan(transaction, vector_index, child.state, child_result, target_count);
+			return scan_count;
 		});
 	}
 	return scan_count;
 }
 
 idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto scan_count = validity->ScanCount(state.child_states[0], result, count);
-
+	idx_t scan_count;
+	if (!state.storage_index.IsPushdownExtract()) {
+		// if we are scanning the entire struct we need to scan the validity
+		scan_count = validity->ScanCount(state.child_states[0], result, count);
+	}
 	auto struct_children = GetStructChildren(state);
 	for (auto &child : struct_children) {
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
@@ -178,7 +189,8 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
-			return child.col.ScanCount(child.state, child_result, count, result_offset);
+			scan_count = child.col.ScanCount(child.state, child_result, count, result_offset);
+			return scan_count;
 		});
 	}
 	return scan_count;
@@ -211,7 +223,7 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
-		Vector append_vector(vector);
+		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten(count);
 		Append(stats, state, append_vector, count);
 		return;
@@ -222,7 +234,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], *child_entries[i],
+		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], child_entries[i],
 		                       count);
 	}
 	this->count += count;
@@ -249,7 +261,7 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	idx_t scan_count = validity->Fetch(state.child_states[0], row_id, result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, *child_entries[i]);
+		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, child_entries[i]);
 	}
 	return scan_count;
 }
@@ -259,7 +271,7 @@ void StructColumnData::Update(TransactionData transaction, DataTable &data_table
 	validity->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, row_group_start);
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, data_table, column_index, *child_entries[i], row_ids, update_count,
+		sub_columns[i]->Update(transaction, data_table, column_index, child_entries[i], row_ids, update_count,
 		                       row_group_start);
 	}
 }
@@ -329,7 +341,7 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	auto &child_entries = StructVector::GetEntries(result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, *child_entries[i], result_idx);
+		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, child_entries[i], result_idx);
 	}
 }
 

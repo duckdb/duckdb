@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -26,6 +27,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -81,14 +83,14 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
-	case StatementType::INSERT_STATEMENT:
-		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
+	case StatementType::INSERT_STATEMENT:
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::DELETE_STATEMENT:
-		return BindWithCTE(statement.Cast<DeleteStatement>());
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return BindWithCTE(statement.Cast<UpdateStatement>());
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:

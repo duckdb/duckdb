@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -157,8 +159,7 @@ unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalT
 	// set the NULL columns correctly
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		if (!ValidSampleType(types[col_idx]) && stats_sample) {
-			new_sample_chunk->chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx], true);
+			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx]);
 		}
 	}
 	return new_sample_chunk;

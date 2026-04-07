@@ -4,6 +4,16 @@
 // functions
 //===--------------------------------------------------------------------===//
 
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/fsst_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/sequence_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"
@@ -51,9 +61,13 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			auto &child = DictionaryVector::Child(*source);
 			auto &dict_sel = DictionaryVector::SelVector(*source);
 			// merge the selection vectors and verify the child
-			auto new_buffer = dict_sel.Slice(*sel, source_count);
-			owned_sel.Initialize(new_buffer);
-			sel = &owned_sel;
+			if (sel->IsSet()) {
+				auto new_buffer = dict_sel.Slice(*sel, source_count);
+				owned_sel.Initialize(new_buffer);
+				sel = &owned_sel;
+			} else {
+				sel = &dict_sel;
+			}
 			source = &child;
 			break;
 		}
@@ -161,12 +175,12 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		break;
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(*source);
-		auto tdata = FlatVector::GetData<string_t>(target);
+		auto tdata = FlatVector::Writer<string_t>(target, target_offset + copy_count);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (tmask.RowIsValid(target_idx)) {
-				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
+				tdata[target_idx] = ldata[source_idx];
 			}
 		}
 		break;
@@ -176,7 +190,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		auto &target_children = StructVector::GetEntries(target);
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
-			VectorOperations::Copy(*source_children[i], *target_children[i], sel_p, source_count, source_offset,
+			VectorOperations::Copy(source_children[i], target_children[i], sel_p, source_count, source_offset,
 			                       target_offset, copy_count);
 		}
 		break;

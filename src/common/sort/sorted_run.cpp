@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -109,7 +112,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 			if (opc.is_payload) {
 				break;
 			}
-			chunk.data[opc.output_col_idx].Reference(*decoded_key_entries[opc.layout_col_idx]);
+			chunk.data[opc.output_col_idx].Reference(decoded_key_entries[opc.layout_col_idx]);
 		}
 
 		gathered_payload = true;
@@ -215,9 +218,9 @@ template <class SORT_KEY>
 struct SkaExtractKey {
 	using result_type = uint64_t;
 	SkaExtractKey(bool requires_next_sort_p, idx_t ska_sort_width_p, const vector<idx_t> &sort_skippable_bytes_p,
-	              atomic<bool> &interrupted_p)
+	              atomic<ClientInterruptState> &interrupt_state_p)
 	    : requires_next_sort(requires_next_sort_p), ska_sort_width(ska_sort_width_p),
-	      sort_skippable_bytes(sort_skippable_bytes_p), interrupted(interrupted_p) {
+	      sort_skippable_bytes(sort_skippable_bytes_p), interrupt_state(interrupt_state_p) {
 	}
 
 	const result_type &operator()(const SORT_KEY &key) const {
@@ -230,13 +233,13 @@ struct SkaExtractKey {
 	}
 
 	bool Interrupted() const {
-		return interrupted.load(std::memory_order_relaxed);
+		return interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED;
 	}
 
 	bool requires_next_sort;
 	idx_t ska_sort_width;
 	const vector<idx_t> &sort_skippable_bytes;
-	atomic<bool> &interrupted;
+	atomic<ClientInterruptState> &interrupt_state;
 };
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -256,7 +259,7 @@ static void TemplatedSort(ClientContext &context, const TupleDataCollection &key
 	const auto ska_sort_width = MinValue<idx_t>(layout.GetSortWidth(), sizeof(uint64_t));
 	const auto &sort_skippable_bytes = layout.GetSortSkippableBytes();
 	auto ska_extract_key =
-	    SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width, sort_skippable_bytes, context.interrupted);
+	    SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width, sort_skippable_bytes, context.interrupt_state);
 
 	const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);

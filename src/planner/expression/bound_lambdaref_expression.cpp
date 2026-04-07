@@ -24,7 +24,7 @@ unique_ptr<Expression> BoundLambdaRefExpression::Copy() const {
 hash_t BoundLambdaRefExpression::Hash() const {
 	auto result = Expression::Hash();
 	result = CombineHash(result, duckdb::Hash<uint64_t>(lambda_idx));
-	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.column_index));
+	result = CombineHash(result, duckdb::Hash<ProjectionIndex>(binding.column_index));
 	result = CombineHash(result, duckdb::Hash<TableIndex>(binding.table_index));
 	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }

@@ -3,7 +3,6 @@
 #include "catch.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test Bignum::FromByteArray", "[api]") {
 	{ // 0

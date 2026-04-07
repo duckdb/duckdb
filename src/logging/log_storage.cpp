@@ -553,6 +553,7 @@ void BufferingLogStorage::ResetLogBuffers() {
 		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
 		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
 	}
+	registered_contexts.clear();
 }
 
 void BufferingLogStorage::ResetAllBuffers() {

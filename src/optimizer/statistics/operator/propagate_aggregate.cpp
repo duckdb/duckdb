@@ -15,6 +15,7 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -77,6 +78,9 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
+	if (!column_stats) {
+		return false;
+	}
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
 		return false;
 	}
@@ -144,11 +148,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		for (auto &binding : min_max_bindings) {
-			auto &expr = child_ref.get().expressions[binding.column_index];
-			if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+			auto &proj = child_ref.get().Cast<LogicalProjection>();
+			auto &expr = proj.GetExpression(binding);
+			if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
 				return;
 			}
-			binding = expr->Cast<BoundColumnRefExpression>().binding;
+			binding = expr.Cast<BoundColumnRefExpression>().binding;
 		}
 		child_ref = *child_ref.get().children[0];
 	}
@@ -178,7 +183,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<StorageIndex> min_max_storage_indexes(min_max_bindings.size());
 	for (idx_t i = 0; i < min_max_bindings.size(); i++) {
 		auto &binding = min_max_bindings[i];
-		auto &column_index = get.GetColumnIds()[binding.column_index];
+		auto &column_index = get.GetColumnIndex(binding);
 		if (!get.TryGetStorageIndex(column_index, min_max_storage_indexes[i])) {
 			//! Can't get a storage index for this column, so it doesn't have stats we can use
 			//! This happens when we're dealing with a generated column for example
@@ -192,9 +197,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (get.table_filters.HasFilters()) {
 		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
 		for (auto &entry : get.table_filters) {
-			auto col_idx = entry.ColumnIndex();
+			auto filter_idx = entry.GetIndex();
 			auto &filter = entry.Filter();
-			auto column_index = ColumnIndex(col_idx);
+			auto &column_index = get.GetColumnIndex(filter_idx);
 			StorageIndex storage_index;
 			if (!get.TryGetStorageIndex(column_index, storage_index)) {
 				return;
@@ -316,7 +321,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 			stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			continue;
 		}
-		ColumnBinding group_binding(aggr.group_index, group_idx);
+		ColumnBinding group_binding(aggr.group_index, ProjectionIndex(group_idx));
 		statistics_map[group_binding] = std::move(stats);
 	}
 
@@ -346,7 +351,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		if (!stats) {
 			continue;
 		}
-		ColumnBinding aggregate_binding(aggr.aggregate_index, aggregate_idx);
+		ColumnBinding aggregate_binding(aggr.aggregate_index, ProjectionIndex(aggregate_idx));
 		statistics_map[aggregate_binding] = std::move(stats);
 	}
 

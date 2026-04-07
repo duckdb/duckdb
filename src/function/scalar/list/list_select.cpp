@@ -30,7 +30,7 @@ struct SetSelectionVectorSelect {
 	}
 
 	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
-	                            Vector selection_entry, idx_t selection_idx) {
+	                            const Vector &selection_entry, idx_t selection_idx) {
 		result_length += selection_data[selection_idx].length;
 	}
 };
@@ -44,13 +44,15 @@ struct SetSelectionVectorWhere {
 			return;
 		}
 
-		selection_vector.set_index(target_offset, input_offset + child_idx);
-		if (!input_validity.RowIsValid(input_offset + child_idx)) {
-			validity_mask.SetInvalid(target_offset);
-		}
-
 		if (child_idx >= target_length) {
 			selection_vector.set_index(target_offset, 0);
+			validity_mask.SetInvalid(target_offset);
+			target_offset++;
+			return;
+		}
+
+		selection_vector.set_index(target_offset, input_offset + child_idx);
+		if (!input_validity.RowIsValid(input_offset + child_idx)) {
 			validity_mask.SetInvalid(target_offset);
 		}
 
@@ -58,7 +60,7 @@ struct SetSelectionVectorWhere {
 	}
 
 	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
-	                            Vector selection_entry, idx_t selection_idx) {
+	                            const Vector &selection_entry, idx_t selection_idx) {
 		for (idx_t child_idx = 0; child_idx < selection_data[selection_idx].length; child_idx++) {
 			if (selection_entry.GetValue(selection_data[selection_idx].offset + child_idx).IsNull()) {
 				throw InvalidInputException("NULLs are not allowed as list elements in the second input parameter.");
@@ -145,7 +147,6 @@ void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	result_entry.Flatten(offset);
 	ListVector::SetListSize(result, offset);
 	FlatVector::SetValidity(result_entry, entry_validity_mask);
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 
 } // namespace

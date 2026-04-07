@@ -1,0 +1,795 @@
+diff --git a/test/extension/autoloading_base.test b/test/extension/autoloading_base.test
+index 1aca133..86f2dbb 100644
+--- a/test/extension/autoloading_base.test
++++ b/test/extension/autoloading_base.test
+@@ -10,7 +10,7 @@ require-env LOCAL_EXTENSION_REPO
+ 
+ # Ensure we have a clean extension directory without any preinstalled extensions
+ statement ok
+-set extension_directory='__TEST_DIR__/autoloading_base'
++set extension_directory='{TEST_DIR}/autoloading_base'
+ 
+ query I
+ SELECT (count(*) > 0) FROM duckdb_extensions() WHERE install_path ILIKE '%duckdb_extension'
+diff --git a/test/extension/autoloading_current_setting.test b/test/extension/autoloading_current_setting.test
+index 119e63f..5567c12 100644
+--- a/test/extension/autoloading_current_setting.test
++++ b/test/extension/autoloading_current_setting.test
+@@ -9,7 +9,7 @@ require-env LOCAL_EXTENSION_REPO
+ require httpfs
+ 
+ statement ok
+-set extension_directory='__TEST_DIR__/autoloading_current_setting'
++set extension_directory='{TEST_DIR}/autoloading_current_setting'
+ 
+ ### No autoloading: throw error with installation hint
+ statement ok
+diff --git a/test/extension/autoloading_filesystems.test b/test/extension/autoloading_filesystems.test
+index 8ad6b90..fde60fc 100644
+--- a/test/extension/autoloading_filesystems.test
++++ b/test/extension/autoloading_filesystems.test
+@@ -13,7 +13,7 @@ set allow_persistent_secrets=false;
+ 
+ # Ensure we have a clean extension directory without any preinstalled extensions
+ statement ok
+-set extension_directory='__TEST_DIR__/autoloading_filesystems'
++set extension_directory='{TEST_DIR}/autoloading_filesystems'
+ 
+ ### No autoloading nor installing: throw error with installation hint
+ statement ok
+diff --git a/test/extension/autoloading_load_only.test b/test/extension/autoloading_load_only.test
+index 5bbda34..eaa4031 100644
+--- a/test/extension/autoloading_load_only.test
++++ b/test/extension/autoloading_load_only.test
+@@ -10,7 +10,7 @@ require-env LOCAL_EXTENSION_REPO
+ 
+ # Ensure we have a clean extension directory without any preinstalled extensions
+ statement ok
+-set extension_directory='__TEST_DIR__/autoloading_load_only'
++set extension_directory='{TEST_DIR}/autoloading_load_only'
+ 
+ ### No autoloading nor installing: throw error with installation hint
+ statement ok
+diff --git a/test/extension/autoloading_reset_setting.test b/test/extension/autoloading_reset_setting.test
+index 999102a..5726ee3 100644
+--- a/test/extension/autoloading_reset_setting.test
++++ b/test/extension/autoloading_reset_setting.test
+@@ -9,7 +9,7 @@ require httpfs
+ require-env LOCAL_EXTENSION_REPO
+ 
+ statement ok
+-set extension_directory='__TEST_DIR__/autoloading_reset_setting'
++set extension_directory='{TEST_DIR}/autoloading_reset_setting'
+ 
+ ### No autoloading: throw error with installation hint
+ statement ok
+diff --git a/test/extension/duckdb_extension_settings.test b/test/extension/duckdb_extension_settings.test
+index 2ec44ce..9947264 100644
+--- a/test/extension/duckdb_extension_settings.test
++++ b/test/extension/duckdb_extension_settings.test
+@@ -14,10 +14,10 @@ statement ok
+ SET autoload_known_extensions = true;
+ 
+ statement ok
+-SET extension_directory = '__TEST_DIR__/custom_extension_directory';
++SET extension_directory = '{TEST_DIR}/custom_extension_directory';
+ 
+ statement ok
+-SET custom_extension_repository = '__TEST_DIR__/not_existing_folder'
++SET custom_extension_repository = '{TEST_DIR}/not_existing_folder'
+ 
+ statement error
+ FROM read_csv('https://some.org/file.csv');
+@@ -25,7 +25,7 @@ FROM read_csv('https://some.org/file.csv');
+ not_existing_folder
+ 
+ statement ok
+-SET autoinstall_extension_repository = '__TEST_DIR__/other_folder';
++SET autoinstall_extension_repository = '{TEST_DIR}/other_folder';
+ 
+ statement error
+ FROM read_csv('https://some.org/file.csv');
+diff --git a/test/sql/copy/csv/test_csv_httpfs.test_slow b/test/sql/copy/csv/test_csv_httpfs.test_slow
+index 4406665..206e55d 100644
+--- a/test/sql/copy/csv/test_csv_httpfs.test_slow
++++ b/test/sql/copy/csv/test_csv_httpfs.test_slow
+@@ -28,6 +28,6 @@ query I
+         case WHEN regexp_matches(birthYear,'[0-9]+') THEN CAST(birthYear as integer) END as birthYear
+       )
+     FROM read_csv_auto('https://datasets.imdbws.com/name.basics.tsv.gz', delim='\t', quote='')
+-  ) to '__TEST_DIR__/name_basics.parquet' (FORMAT 'parquet', CODEC 'ZSTD')
++  ) to '{TEST_DIR}/name_basics.parquet' (FORMAT 'parquet', CODEC 'ZSTD')
+ ----
+ 12783090
+diff --git a/test/sql/copy/encryption/different_aes_engines.test b/test/sql/copy/encryption/different_aes_engines.test
+index 229a889..3fc9317 100644
+--- a/test/sql/copy/encryption/different_aes_engines.test
++++ b/test/sql/copy/encryption/different_aes_engines.test
+@@ -7,7 +7,7 @@ statement ok
+ SET force_mbedtls_unsafe = 'true';
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ statement ok
+ CREATE TABLE enc.test (a INTEGER, b INTEGER);
+@@ -23,7 +23,7 @@ restart
+ require httpfs
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ query II
+ FROM enc.test
+@@ -45,7 +45,7 @@ foreach cipher GCM CTR
+ require httpfs
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ statement ok
+ CREATE TABLE enc.test (a INTEGER, b INTEGER);
+@@ -59,7 +59,7 @@ DETACH enc
+ restart
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ query II
+ FROM enc.test
+diff --git a/test/sql/copy/parquet/parquet_encryption_httpfs.test b/test/sql/copy/parquet/parquet_encryption_httpfs.test
+index 370d2a9..86bfbb9 100644
+--- a/test/sql/copy/parquet/parquet_encryption_httpfs.test
++++ b/test/sql/copy/parquet/parquet_encryption_httpfs.test
+@@ -24,10 +24,10 @@ PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+ foreach key_len 128 192 256
+ 
+ statement ok
+-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+ 
+ query I
+-SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
+ ----
+ 42
+ 
+@@ -35,7 +35,7 @@ statement ok
+ CREATE OR REPLACE TABLE test (i INTEGER)
+ 
+ statement ok
+-COPY test FROM '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY test FROM '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+ 
+ query I
+ SELECT * FROM test
+@@ -46,21 +46,21 @@ endloop
+ 
+ # what happens if we don't try to decrypt even if the file is encrypted?
+ statement error
+-SELECT * FROM read_parquet('__TEST_DIR__/encrypted128_openssl.parquet')
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted128_openssl.parquet')
+ ----
+ Invalid Input Error
+ 
+ # what if we try to decrypt with the wrong key?
+ statement error
+-SELECT * FROM read_parquet('__TEST_DIR__/encrypted128_openssl.parquet', encryption_config={footer_key: 'key192'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted128_openssl.parquet', encryption_config={footer_key: 'key192'})
+ ----
+ Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+ 
+ # what if we don't encrypt, but try to decrypt?
+ statement ok
+-COPY (SELECT 42 i) to '__TEST_DIR__/unencrypted.parquet'
++COPY (SELECT 42 i) to '{TEST_DIR}/unencrypted.parquet'
+ 
+ statement error
+-SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
++SELECT * FROM read_parquet('{TEST_DIR}/unencrypted.parquet', encryption_config={footer_key: 'key256'})
+ ----
+ Invalid Input Error
+diff --git a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+index 42eae8e..77e9642 100644
+--- a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
++++ b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+@@ -25,18 +25,18 @@ foreach key_len 128 192 256
+ 
+ # write files with OpenSSL enabled (is enabled by default)
+ statement ok
+-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+ 
+ statement ok
+ SET force_mbedtls_unsafe = true;
+ 
+ # write files with mbedtls enabled
+ statement ok
+-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+ 
+ # read OpenSSL encrypted files by using mbedtls
+ query I
+-SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
+ ----
+ 42
+ 
+@@ -45,7 +45,7 @@ SET force_mbedtls_unsafe = false;
+ 
+ # read mbedtls encrypted files with OpenSSL
+ query I
+-SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'})
+ ----
+ 42
+ 
+diff --git a/test/sql/copy/parquet/test_yellow_cab.test_slow b/test/sql/copy/parquet/test_yellow_cab.test_slow
+index 83ec356..b45157e 100644
+--- a/test/sql/copy/parquet/test_yellow_cab.test_slow
++++ b/test/sql/copy/parquet/test_yellow_cab.test_slow
+@@ -20,14 +20,14 @@ select min(VendorID::VARCHAR), max(VendorID::VARCHAR), min(tpep_pickup_datetime:
+ 
+ # writer round-trip
+ statement ok
+-COPY yellow_cab TO '__TEST_DIR__/yellowcab.parquet' (FORMAT PARQUET);
++COPY yellow_cab TO '{TEST_DIR}/yellowcab.parquet' (FORMAT PARQUET);
+ 
+ query IIIIIIIIIIIIIIIIIII nosort yellowcab
+ SELECT * FROM yellow_cab
+ ----
+ 
+ query IIIIIIIIIIIIIIIIIII nosort yellowcab
+-SELECT * FROM '__TEST_DIR__/yellowcab.parquet'
++SELECT * FROM '{TEST_DIR}/yellowcab.parquet'
+ ----
+ 
+ 
+diff --git a/test/sql/crypto/test_openssl_crypto.test b/test/sql/crypto/test_openssl_crypto.test
+index 9527051..8e7fa21 100644
+--- a/test/sql/crypto/test_openssl_crypto.test
++++ b/test/sql/crypto/test_openssl_crypto.test
+@@ -5,7 +5,7 @@
+ require httpfs
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
++ATTACH '{TEST_DIR}/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
+ 
+ statement ok
+ CREATE TABLE enc.test AS SELECT 1 as a;
+diff --git a/test/sql/json/table/internal_issue_6807.test_slow b/test/sql/json/table/internal_issue_6807.test_slow
+index a354a7f..e759862 100644
+--- a/test/sql/json/table/internal_issue_6807.test_slow
++++ b/test/sql/json/table/internal_issue_6807.test_slow
+@@ -13,6 +13,6 @@ statement ok
+ CREATE TABLE T AS FROM 'https://data.gharchive.org/2023-02-08-0.json.gz';
+ 
+ query I
+-SELECT count(*) < 20 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
++SELECT count(*) < 60 FROM duckdb_logs_parsed('HTTP') WHERE request.type = 'GET' GROUP BY request.type;
+ ----
+ true
+diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
+index 6aa2ed0..19f135b 100644
+--- a/test/sql/logging/file_system_logging.test
++++ b/test/sql/logging/file_system_logging.test
+@@ -12,10 +12,10 @@ statement ok
+ set logging_level='trace';
+ 
+ statement ok
+-COPY (SELECT 1 as a) TO '__TEST_DIR__/test.csv'
++COPY (SELECT 1 as a) TO '{TEST_DIR}/test.csv'
+ 
+ statement ok
+-FROM '__TEST_DIR__/test.csv'
++FROM '{TEST_DIR}/test.csv'
+ 
+ statement ok
+ pragma threads=1
+@@ -43,7 +43,6 @@ require httpfs
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+ 
+-# FIXME: investigate why we call READ twice?
+ query IIII
+ SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
+ FROM duckdb_logs
+@@ -52,5 +51,4 @@ ORDER BY timestamp
+ ----
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
+-CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"CLOSE"}
+diff --git a/test/sql/metadata_stats.test b/test/sql/metadata_stats.test
+index 27cb0a6..dfe7a26 100644
+--- a/test/sql/metadata_stats.test
++++ b/test/sql/metadata_stats.test
+@@ -18,4 +18,4 @@ SET force_download=false;
+ query II
+ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+ ----
+-analyzed_plan	<REGEX>:.*GET: 2.*
++analyzed_plan	<REGEX>:.*GET: 1.*
+diff --git a/test/sql/secrets/create_secret_minio.test b/test/sql/secrets/create_secret_minio.test
+index 58b8a6a..5787236 100644
+--- a/test/sql/secrets/create_secret_minio.test
++++ b/test/sql/secrets/create_secret_minio.test
+@@ -22,13 +22,13 @@ require-env DUCKDB_S3_USE_SSL
+ 
+ set ignore_error_messages
+ 
+-load __TEST_DIR__/persistent_secrets.db
++load {TEST_DIR}/persistent_secrets.db
+ 
+ statement ok
+ PRAGMA enable_verification;
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_minio'
++set secret_directory='{TEST_DIR}/create_secret_minio'
+ 
+ # first need to unset the duckdb settings: currently the env variables are loaded automatically making all queries auth
+ statement ok
+@@ -66,7 +66,7 @@ copy (select 1 as a) to 's3://test-bucket/only-this-file-gets-auth.parquet'
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_minio'
++set secret_directory='{TEST_DIR}/create_secret_minio'
+ 
+ # persistent secrets survive restart
+ statement ok
+@@ -89,7 +89,7 @@ statement ok
+ set s3_secret_access_key='';
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_minio'
++set secret_directory='{TEST_DIR}/create_secret_minio'
+ 
+ concurrentloop i 0 10
+ 
+diff --git a/test/sql/secrets/create_secret_name_conflicts.test b/test/sql/secrets/create_secret_name_conflicts.test
+index 8c48080..4baa7c0 100644
+--- a/test/sql/secrets/create_secret_name_conflicts.test
++++ b/test/sql/secrets/create_secret_name_conflicts.test
+@@ -5,12 +5,12 @@
+ statement ok
+ PRAGMA enable_verification;
+ 
+-load __TEST_DIR__/persistent_secrets.db
++load {TEST_DIR}/persistent_secrets.db
+ 
+ require httpfs
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_name_conflicts'
++set secret_directory='{TEST_DIR}/create_secret_name_conflicts'
+ 
+ statement ok
+ CREATE TEMPORARY SECRET s1 ( TYPE S3 )
+@@ -56,7 +56,7 @@ s1	local_file
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_name_conflicts'
++set secret_directory='{TEST_DIR}/create_secret_name_conflicts'
+ 
+ statement ok
+ CREATE TEMPORARY SECRET s1 ( TYPE S3 )
+diff --git a/test/sql/secrets/create_secret_non_writable_persistent_dir.test b/test/sql/secrets/create_secret_non_writable_persistent_dir.test
+index 1091eb6..38af25d 100644
+--- a/test/sql/secrets/create_secret_non_writable_persistent_dir.test
++++ b/test/sql/secrets/create_secret_non_writable_persistent_dir.test
+@@ -5,17 +5,17 @@
+ statement ok
+ PRAGMA enable_verification;
+ 
+-load __TEST_DIR__/create_secret_non_writable_persistent_dir.db
++load {TEST_DIR}/create_secret_non_writable_persistent_dir.db
+ 
+ require httpfs
+ 
+ # First we create any file
+ statement ok
+-COPY (SELECT 1 as a) to '__TEST_DIR__/file_to_prevent_the_secret_dir_from_being_created.csv'
++COPY (SELECT 1 as a) to '{TEST_DIR}/file_to_prevent_the_secret_dir_from_being_created.csv'
+ 
+ # Then we set the secret dir to this.
+ statement ok
+-set secret_directory='__TEST_DIR__/file_to_prevent_the_secret_dir_from_being_created.csv'
++set secret_directory='{TEST_DIR}/file_to_prevent_the_secret_dir_from_being_created.csv'
+ 
+ # Now on creation of a tmp secret, the secret manager is initialized, but the persistent secret directory creation is impossible
+ statement ok
+@@ -36,7 +36,7 @@ restart
+ 
+ # Try with a correct, deeply nested path: AOK?
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_non_writable_persistent_dir/a/deeply/nested/folder/will/be/created'
++set secret_directory='{TEST_DIR}/create_secret_non_writable_persistent_dir/a/deeply/nested/folder/will/be/created'
+ 
+ statement maybe
+ CREATE PERSISTENT SECRET my_tmp_secret (
+diff --git a/test/sql/secrets/create_secret_persistence.test b/test/sql/secrets/create_secret_persistence.test
+index bc44ab7..18d8dc9 100644
+--- a/test/sql/secrets/create_secret_persistence.test
++++ b/test/sql/secrets/create_secret_persistence.test
+@@ -5,12 +5,12 @@
+ statement ok
+ PRAGMA enable_verification;
+ 
+-load __TEST_DIR__/persistent_secrets.db
++load {TEST_DIR}/persistent_secrets.db
+ 
+ require httpfs
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Create some s3 secret, the normally the default is TEMPORARY
+ statement ok
+@@ -46,7 +46,7 @@ my_tmp_secret_3	['s3://bucket3']
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Persistent secrets are restored automatically
+ query II
+@@ -57,7 +57,7 @@ my_tmp_secret_3	['s3://bucket3']
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Trying to create same name TMP secret fails
+ statement error
+@@ -71,7 +71,7 @@ Invalid Input Error: Persistent secret with name 'my_tmp_secret_3' already exist
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Trying to create same name PERSISTENT secret fails
+ statement error
+@@ -85,7 +85,7 @@ Invalid Input Error: Persistent secret with name 'my_tmp_secret_3' already exist
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Note: this will be a temporary secret: there are now 2 secrets with the same name
+ statement ok
+@@ -104,7 +104,7 @@ my_tmp_secret_3	memory	['s3://bucket3_not_used']
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Ignoring already existing persistent secret is fine
+ statement ok
+@@ -129,7 +129,7 @@ my_tmp_secret_3	['s3://bucket3']
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Secret is still unmodified after restart
+ query II
+@@ -153,7 +153,7 @@ my_tmp_secret_3	['s3://bucket3_updated']
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Survives restart!
+ query II
+@@ -186,7 +186,7 @@ my_tmp_secret_4	['s3://another_secret']
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence'
++set secret_directory='{TEST_DIR}/create_secret_persistence'
+ 
+ # Secret is actually deleted
+ query III
+diff --git a/test/sql/secrets/create_secret_persistence_error_handling.test b/test/sql/secrets/create_secret_persistence_error_handling.test
+index 93c102e..6c28e8f 100644
+--- a/test/sql/secrets/create_secret_persistence_error_handling.test
++++ b/test/sql/secrets/create_secret_persistence_error_handling.test
+@@ -5,20 +5,20 @@
+ statement ok
+ PRAGMA enable_verification;
+ 
+-load __TEST_DIR__/create_secret_persistence_error_handling.db
++load {TEST_DIR}/create_secret_persistence_error_handling.db
+ 
+ require httpfs
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence_error_handling'
++set secret_directory='{TEST_DIR}/create_secret_persistence_error_handling'
+ 
+ # Hacky way to make duckdb create the create_secret_persistence_error_handling dir
+ statement ok
+-COPY (select 1 as a, 2 as b ) to '__TEST_DIR__/create_secret_persistence_error_handling/' (FORMAT csv, PARTITION_BY a)
++COPY (select 1 as a, 2 as b ) to '{TEST_DIR}/create_secret_persistence_error_handling/' (FORMAT csv, PARTITION_BY a)
+ 
+ # Now write a corrupt secret file
+ statement ok
+-COPY (select 1 as a ) to '__TEST_DIR__/create_secret_persistence_error_handling/s1.duckdb_secret' (FORMAT csv)
++COPY (select 1 as a ) to '{TEST_DIR}/create_secret_persistence_error_handling/s1.duckdb_secret' (FORMAT csv)
+ 
+ statement error
+ FROM duckdb_secrets();
+@@ -27,7 +27,7 @@ FROM duckdb_secrets();
+ restart 
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence_error_handling2'
++set secret_directory='{TEST_DIR}/create_secret_persistence_error_handling2'
+ 
+ statement ok
+ CREATE PERSISTENT SECRET s1 (TYPE S3);
+@@ -35,7 +35,7 @@ CREATE PERSISTENT SECRET s1 (TYPE S3);
+ restart no_extension_load
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_persistence_error_handling2'
++set secret_directory='{TEST_DIR}/create_secret_persistence_error_handling2'
+ 
+ # Disable autoloading
+ statement ok
+diff --git a/test/sql/secrets/create_secret_r2.test b/test/sql/secrets/create_secret_r2.test
+index d66e00c..3c39008 100644
+--- a/test/sql/secrets/create_secret_r2.test
++++ b/test/sql/secrets/create_secret_r2.test
+@@ -8,7 +8,7 @@ PRAGMA enable_verification;
+ require httpfs
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_r2'
++set secret_directory='{TEST_DIR}/create_secret_r2'
+ 
+ # R2 is secrets will instead of requiring manually constructing the endpoint of <ACCOUNT_ID>.r2.cloudflarestorage.com,
+ # use the account_id to configure it. Also the region is not required at all. Also the scope defaults to r2://
+diff --git a/test/sql/secrets/create_secret_r2_serialization.test b/test/sql/secrets/create_secret_r2_serialization.test
+index 6ba8d54..88bf610 100644
+--- a/test/sql/secrets/create_secret_r2_serialization.test
++++ b/test/sql/secrets/create_secret_r2_serialization.test
+@@ -8,13 +8,13 @@ require httpfs
+ 
+ require parquet
+ 
+-load __TEST_DIR__/test_serialize_secrets.db
++load {TEST_DIR}/test_serialize_secrets.db
+ 
+ statement ok
+ PRAGMA enable_verification;
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_r2_serialization'
++set secret_directory='{TEST_DIR}/create_secret_r2_serialization'
+ 
+ statement ok
+ CREATE OR REPLACE PERSISTENT SECRET s1 (
+@@ -44,7 +44,7 @@ restart
+ 
+ # Now setting the secret dir somehwere nonexistent will yield no persistent secrets
+ statement ok
+-set secret_directory='__TEST_DIR__/does_not_exist2'
++set secret_directory='{TEST_DIR}/does_not_exist2'
+ 
+ query I
+ select count(*) FROM duckdb_secrets();
+@@ -55,7 +55,7 @@ restart
+ 
+ # However setting it to the dir that does, we can suddenly see our persisted secrets
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_r2_serialization'
++set secret_directory='{TEST_DIR}/create_secret_r2_serialization'
+ 
+ # After restart secret is still there
+ query IIII
+diff --git a/test/sql/secrets/create_secret_s3_serialization.test b/test/sql/secrets/create_secret_s3_serialization.test
+index 4d127e6..06d9644 100644
+--- a/test/sql/secrets/create_secret_s3_serialization.test
++++ b/test/sql/secrets/create_secret_s3_serialization.test
+@@ -6,13 +6,13 @@ require httpfs
+ 
+ require parquet
+ 
+-load __TEST_DIR__/test_serialize_secrets.db
++load {TEST_DIR}/test_serialize_secrets.db
+ 
+ statement ok
+ PRAGMA enable_verification;
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_s3_serialization'
++set secret_directory='{TEST_DIR}/create_secret_s3_serialization'
+ 
+ statement ok
+ CREATE OR REPLACE PERSISTENT SECRET s1 (
+@@ -72,7 +72,7 @@ restart
+ 
+ # Now setting the secret dir somehwere nonexistent will yield no persistent secrets
+ statement ok
+-set secret_directory='__TEST_DIR__/does_not_exist1'
++set secret_directory='{TEST_DIR}/does_not_exist1'
+ 
+ query I
+ select count(*) FROM duckdb_secrets(redact=false);
+@@ -83,7 +83,7 @@ restart
+ 
+ # However setting it to the dir that does, we can suddenly see our persisted secrets
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_s3_serialization'
++set secret_directory='{TEST_DIR}/create_secret_s3_serialization'
+ 
+ # After restart secrets are still there
+ query IIII
+diff --git a/test/sql/secrets/create_secret_scope_matching.test b/test/sql/secrets/create_secret_scope_matching.test
+index 3d5dd2a..e85f0a1 100644
+--- a/test/sql/secrets/create_secret_scope_matching.test
++++ b/test/sql/secrets/create_secret_scope_matching.test
+@@ -2,7 +2,7 @@
+ # description: Test scope matching behaviour is correct
+ # group: [secrets]
+ 
+-load __TEST_DIR__/create_secret_scope_matching.db
++load {TEST_DIR}/create_secret_scope_matching.db
+ 
+ statement ok
+ PRAGMA enable_verification;
+@@ -10,7 +10,7 @@ PRAGMA enable_verification;
+ require httpfs
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_scope_matching'
++set secret_directory='{TEST_DIR}/create_secret_scope_matching'
+ 
+ # No match
+ query I
+diff --git a/test/sql/secrets/create_secret_settings.test b/test/sql/secrets/create_secret_settings.test
+index 6200424..88eb536 100644
+--- a/test/sql/secrets/create_secret_settings.test
++++ b/test/sql/secrets/create_secret_settings.test
+@@ -5,12 +5,12 @@
+ statement ok
+ PRAGMA enable_verification;
+ 
+-load __TEST_DIR__/secrets_settings.db
++load {TEST_DIR}/secrets_settings.db
+ 
+ require httpfs
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_settings1'
++set secret_directory='{TEST_DIR}/create_secret_settings1'
+ 
+ statement ok
+ set allow_persistent_secrets=true;
+@@ -28,7 +28,7 @@ SELECT name, scope from duckdb_secrets();
+ my_perm_secret	['s3://bucket1']
+ 
+ statement error
+-set secret_directory='__TEST_DIR__/create_secret_settings2'
++set secret_directory='{TEST_DIR}/create_secret_settings2'
+ ----
+ Invalid Input Error: Changing Secret Manager settings after the secret manager is used is not allowed!
+ 
+@@ -63,7 +63,7 @@ set allow_persistent_secrets=true
+ 
+ # setting the path right it will work
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_settings1'
++set secret_directory='{TEST_DIR}/create_secret_settings1'
+ 
+ query II
+ SELECT name, scope from duckdb_secrets();
+diff --git a/test/sql/secrets/create_secret_storage_backends.test b/test/sql/secrets/create_secret_storage_backends.test
+index 5daa06d..33f591b 100644
+--- a/test/sql/secrets/create_secret_storage_backends.test
++++ b/test/sql/secrets/create_secret_storage_backends.test
+@@ -2,7 +2,7 @@
+ # description: Test different storage backends
+ # group: [secrets]
+ 
+-load __TEST_DIR__/create_secret_storage_backends.db
++load {TEST_DIR}/create_secret_storage_backends.db
+ 
+ statement ok
+ PRAGMA enable_verification;
+@@ -36,7 +36,7 @@ statement ok
+ set allow_persistent_secrets=true;
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_storages'
++set secret_directory='{TEST_DIR}/create_secret_storages'
+ 
+ # Default for persistent secret is currently LOCAL_FILE (only native persistent storage method currently)
+ statement ok
+@@ -69,7 +69,7 @@ statement ok
+ set default_secret_storage='currently-non-existent'
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_storages'
++set secret_directory='{TEST_DIR}/create_secret_storages'
+ 
+ statement error
+ CREATE PERSISTENT SECRET s1 ( TYPE S3 )
+@@ -83,7 +83,7 @@ CREATE PERSISTENT SECRET s1 IN LOCAL_FILE ( TYPE S3 )
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_storages'
++set secret_directory='{TEST_DIR}/create_secret_storages'
+ 
+ # Let's restore and now things work again
+ statement ok
+diff --git a/test/sql/secrets/create_secret_transactional.test b/test/sql/secrets/create_secret_transactional.test
+index 79a4157..332dcd9 100644
+--- a/test/sql/secrets/create_secret_transactional.test
++++ b/test/sql/secrets/create_secret_transactional.test
+@@ -7,10 +7,10 @@ PRAGMA enable_verification;
+ 
+ require httpfs
+ 
+-load __TEST_DIR__/create_secret_transactional.db
++load {TEST_DIR}/create_secret_transactional.db
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_transactional'
++set secret_directory='{TEST_DIR}/create_secret_transactional'
+ 
+ statement ok
+ PRAGMA threads=1
+@@ -101,7 +101,7 @@ CREATE PERSISTENT SECRET perm_s1 (TYPE S3)
+ restart
+ 
+ statement ok
+-set secret_directory='__TEST_DIR__/create_secret_transactional'
++set secret_directory='{TEST_DIR}/create_secret_transactional'
+ 
+ # After restart, we create 2 connections that each add their own tmp secret; the perm secret is now lazily loaded!
+ statement ok con1
+diff --git a/test/sql/secrets/persistent_key_value_secret.test b/test/sql/secrets/persistent_key_value_secret.test
+index d8fbc16..bcc3958 100644
+--- a/test/sql/secrets/persistent_key_value_secret.test
++++ b/test/sql/secrets/persistent_key_value_secret.test
+@@ -1,7 +1,7 @@
+ # name: test/sql/secrets/persistent_key_value_secret.test
+ # group: [secrets]
+ 
+-load __TEST_DIR__/persistent_extra_headers
++load {TEST_DIR}/persistent_extra_headers
+ 
+ require httpfs
+ 
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+index 13c989b..d74864a 100644
+--- a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
++++ b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+@@ -18,7 +18,7 @@ statement ok
+ SET memory_limit='1GB';
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ statement ok
+ USE enc;

@@ -1,4 +1,6 @@
 #pragma once
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
@@ -24,8 +26,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<RETURN_TYPE>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
 
 	idx_t total_matches = 0;
 
@@ -34,7 +35,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 
 		// The entire list is NULL, the result is also NULL.
 		if (!list_format.validity.RowIsValid(list_entry_idx)) {
-			result_validity.SetInvalid(row_idx);
+			result_data.SetInvalid(row_idx);
 			continue;
 		}
 
@@ -47,7 +48,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 		if (finished || list_entries[list_entry_idx].length == 0) {
 			if (finished || return_pos) {
 				// Return NULL as the position.
-				result_validity.SetInvalid(row_idx);
+				result_data.SetInvalid(row_idx);
 			} else {
 				// Set 'contains' to false.
 				result_data[row_idx] = false;
@@ -79,7 +80,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 
 		if (!found) {
 			if (return_pos) {
-				result_validity.SetInvalid(row_idx);
+				result_data.SetInvalid(row_idx);
 			} else {
 				result_data[row_idx] = false;
 			}

@@ -85,6 +85,9 @@ bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
 	if (c == 'E' || c == 'e') {
 		return true;
 	}
+	if (c == 'B' || c == 'b') {
+		return true;
+	}
 	return false;
 }
 
@@ -425,6 +428,7 @@ bool BaseTokenizer::TokenizeInput() {
 		case TokenizeState::MULTI_LINE_COMMENT:
 			if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
 				i++;
+				PushToken(last_pos, i + 1, TokenType::COMMENT);
 				last_pos = i + 1;
 				state = TokenizeState::STANDARD;
 			}

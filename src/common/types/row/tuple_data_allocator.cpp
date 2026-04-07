@@ -115,6 +115,10 @@ void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
 	partition_index = index;
 }
 
+idx_t TupleDataAllocator::GetPartitionIndex() const {
+	return partition_index.GetIndex();
+}
+
 bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                        TupleDataChunkState &chunk_state, const idx_t append_offset,
                                        const idx_t append_count) {
@@ -477,7 +481,7 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
 	for (idx_t i = 0; i < count; i++) {
 		const auto &row_location = row_locations[offset + i] + base_col_offset;
 		const auto valid =
-		    layout.AllValid() ||
+		    layout.CannotHaveNull() ||
 		    ValidityBytes::RowIsValid(
 		        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 		if (valid) {
@@ -554,7 +558,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 
-	const auto all_valid = layout.AllValid();
+	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();
 
 	for (const auto &col_idx : layout.GetVariableColumns()) {
@@ -638,7 +642,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 
-	const auto all_valid = layout.AllValid();
+	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();
 
 	for (const auto &col_idx : layout.GetVariableColumns()) {

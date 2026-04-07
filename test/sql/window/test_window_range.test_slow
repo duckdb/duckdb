@@ -26,12 +26,12 @@ SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RA
 foreach type <numeric>
 
 statement ok
-CREATE VIEW c1 AS SELECT a::${type} AS a, b FROM t1;
+CREATE VIEW c1 AS SELECT a::{type} AS a, b FROM t1;
 
 query II
 SELECT a, sum(b) OVER win 
 FROM c1 
-WINDOW win AS ( ORDER BY a RANGE BETWEEN 5::${type} PRECEDING AND 5::${type} FOLLOWING )
+WINDOW win AS ( ORDER BY a RANGE BETWEEN 5::{type} PRECEDING AND 5::{type} FOLLOWING )
 ----
 5	30
 10	112
@@ -149,7 +149,7 @@ WINDOW w AS (ORDER BY t RANGE INTERVAL 2 HOUR PRECEDING);
 foreach type boolean varchar
 
 statement ok
-CREATE VIEW c1 AS SELECT a::${type} AS a, b FROM t1;
+CREATE VIEW c1 AS SELECT a::{type} AS a, b FROM t1;
 
 statement error
 SELECT a, sum(b) OVER win FROM c1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
