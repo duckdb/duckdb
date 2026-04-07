@@ -106,16 +106,15 @@ struct ICUCalendarSub : public ICUDateFunc {
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				auto part_func = SubtractFactory(GetDatePartSpecifier(specifier));
-				BinaryExecutor::ExecuteWithNulls<T, T, int64_t>(
-				    startdate_arg, enddate_arg, result, args.size(),
-				    [&](T start_date, T end_date, ValidityMask &mask, idx_t idx) {
-					    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
-						    return part_func(calendar.get(), start_date, end_date);
-					    } else {
-						    mask.SetInvalid(idx);
-						    return int64_t(0);
-					    }
-				    });
+				BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result, args.size(),
+				                                       [&](T start_date, T end_date) -> optional<int64_t> {
+					                                       if (Timestamp::IsFinite(start_date) &&
+					                                           Timestamp::IsFinite(end_date)) {
+						                                       return part_func(calendar.get(), start_date, end_date);
+					                                       } else {
+						                                       return {};
+					                                       }
+				                                       });
 			}
 		} else {
 			TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
@@ -238,14 +237,13 @@ struct ICUCalendarDiff : public ICUDateFunc {
 				const auto part = GetDatePartSpecifier(specifier);
 				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
-				BinaryExecutor::ExecuteWithNulls<T, T, int64_t>(
+				BinaryExecutor::Execute<T, T, int64_t>(
 				    startdate_arg, enddate_arg, result, args.size(),
-				    [&](T start_date, T end_date, ValidityMask &mask, idx_t idx) {
+				    [&](T start_date, T end_date) -> optional<int64_t> {
 					    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 					    } else {
-						    mask.SetInvalid(idx);
-						    return int64_t(0);
+						    return {};
 					    }
 				    });
 			}

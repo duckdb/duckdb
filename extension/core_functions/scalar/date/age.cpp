@@ -31,14 +31,13 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
 
-	BinaryExecutor::ExecuteWithNulls<timestamp_t, timestamp_t, interval_t>(
+	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [&](timestamp_t input1, timestamp_t input2, ValidityMask &mask, idx_t idx) {
+	    [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
 		    if (Timestamp::IsFinite(input1) && Timestamp::IsFinite(input2)) {
 			    return Interval::GetAge(input1, input2);
 		    } else {
-			    mask.SetInvalid(idx);
-			    return interval_t();
+			    return {};
 		    }
 	    });
 }

@@ -102,21 +102,14 @@ public:
 				casted_paths = make_uniq<Vector>(LogicalTypeId::VARCHAR);
 				VectorOperations::DefaultCast(args.data[1], *casted_paths, args.size(), true);
 			}
-			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-			    inputs, *casted_paths, result, args.size(),
-			    [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
+			BinaryExecutor::Execute<string_t, string_t, T>(
+			    inputs, *casted_paths, result, args.size(), [&](string_t input, string_t path) -> optional<T> {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 				    auto val = JSONCommon::Get(doc->root, path, args.data[1].GetType().IsIntegral());
 				    if (SET_NULL_IF_NOT_FOUND && !val) {
-					    mask.SetInvalid(idx);
-					    return T {};
+					    return {};
 				    } else {
-					    auto fun_result = fun(val, alc, result);
-					    if (fun_result.has_value()) {
-						    return fun_result.value();
-					    }
-					    mask.SetInvalid(idx);
-					    return T {};
+					    return fun(val, alc, result);
 				    }
 			    });
 		}

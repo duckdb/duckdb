@@ -23,15 +23,13 @@ struct DateSub {
 
 	template <class TA, class TB, class TR, class OP>
 	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
-		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
-				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
-			    } else {
-				    mask.SetInvalid(idx);
-				    return TR();
-			    }
-		    });
+		BinaryExecutor::Execute<TA, TB, TR>(left, right, result, count, [&](TA startdate, TB enddate) -> optional<TR> {
+			if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+				return OP::template Operation<TA, TB, TR>(startdate, enddate);
+			} else {
+				return {};
+			}
+		});
 	}
 
 	struct MonthOperator {

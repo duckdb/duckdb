@@ -438,9 +438,8 @@ struct ICUStrftime : public ICUDateFunc {
 				});
 			}
 		} else {
-			BinaryExecutor::ExecuteWithNulls<timestamp_t, string_t, string_t>(
-			    src_arg, fmt_arg, result, args.size(),
-			    [&](timestamp_t input, string_t format_specifier, ValidityMask &mask, idx_t idx) {
+			BinaryExecutor::Execute<timestamp_t, string_t, string_t>(
+			    src_arg, fmt_arg, result, args.size(), [&](timestamp_t input, string_t format_specifier) {
 				    if (Timestamp::IsFinite(input)) {
 					    StrfTimeFormat format;
 					    ParseFormatSpecifier(format_specifier, format);
