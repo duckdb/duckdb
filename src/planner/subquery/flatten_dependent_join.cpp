@@ -7,6 +7,8 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -14,8 +16,6 @@
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_cte_scan.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -53,6 +53,105 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 		cond.right = make_uniq<BoundColumnRefExpression>(col.name, col.type, bindings[binding_idx]);
 		cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		delim_join.conditions.push_back(std::move(cond));
+	}
+}
+
+static bool TryExtractSingleBinding(Expression &expr, ColumnBinding &binding) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		binding = expr.Cast<BoundColumnRefExpression>().binding;
+		return true;
+	}
+	bool found_binding = false;
+	bool multiple_bindings = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		if (!found_binding) {
+			binding = colref.binding;
+			found_binding = true;
+		} else if (binding != colref.binding) {
+			multiple_bindings = true;
+		}
+	});
+	return found_binding && !multiple_bindings;
+}
+
+static bool OutputBindingDependsOn(LogicalOperator &op, const ColumnBinding &candidate_output,
+                                   const ColumnBinding &target_binding) {
+	if (candidate_output == target_binding) {
+		return true;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = op.Cast<LogicalProjection>();
+		if (candidate_output.table_index != projection.table_index) {
+			return false;
+		}
+		ColumnBinding child_binding;
+		if (!TryExtractSingleBinding(const_cast<Expression &>(projection.GetExpression(candidate_output)),
+		                             child_binding)) {
+			return false;
+		}
+		return OutputBindingDependsOn(*projection.children[0], child_binding, target_binding);
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggregate = op.Cast<LogicalAggregate>();
+		if (candidate_output.table_index != aggregate.group_index) {
+			return false;
+		}
+		ColumnBinding child_binding;
+		if (!TryExtractSingleBinding(const_cast<Expression &>(aggregate.GetExpression(candidate_output)),
+		                             child_binding)) {
+			return false;
+		}
+		return OutputBindingDependsOn(*aggregate.children[0], child_binding, target_binding);
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		if (op.children.empty()) {
+			return false;
+		}
+		auto output_bindings = op.GetColumnBindings();
+		auto child_bindings = op.children[0]->GetColumnBindings();
+		for (idx_t i = 0; i < output_bindings.size(); i++) {
+			if (output_bindings[i] != candidate_output) {
+				continue;
+			}
+			if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+				auto &filter = op.Cast<LogicalFilter>();
+				if (!filter.projection_map.empty()) {
+					return OutputBindingDependsOn(*op.children[0], child_bindings[filter.projection_map[i]],
+					                              target_binding);
+				}
+			}
+			if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+				auto &order = op.Cast<LogicalOrder>();
+				if (!order.projection_map.empty()) {
+					return OutputBindingDependsOn(*op.children[0], child_bindings[order.projection_map[i]],
+					                              target_binding);
+				}
+			}
+			return OutputBindingDependsOn(*op.children[0], child_bindings[i], target_binding);
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
+static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
+	auto left_bindings = left_side.GetColumnBindings();
+	for (auto &column : correlated_columns) {
+		for (const auto &binding : left_bindings) {
+			if (!OutputBindingDependsOn(left_side, binding, column.binding)) {
+				continue;
+			}
+			column.binding = binding;
+			break;
+		}
 	}
 }
 
@@ -147,6 +246,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
+		RemapCorrelatedBindings(op.correlated_columns, *op.children[0]);
 
 		op.duplicate_eliminated_columns.clear();
 		op.mark_types.clear();
