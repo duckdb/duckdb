@@ -599,14 +599,6 @@ ShellCommandResult SetUICommand(BaseShellState &base_state, const vector<string>
 	return ShellCommandResult::SUCCESS;
 }
 
-#if defined(_WIN32) || defined(WIN32)
-ShellCommandResult SetUTF8Mode(BaseShellState &base_state, const vector<string> &args) {
-	auto &state = static_cast<ShellState &>(base_state);
-	state.win_utf8_mode = true;
-	return ShellCommandResult::SUCCESS;
-}
-#endif
-
 ShellCommandResult ToggleHighlighting(BaseShellState &base_state, const vector<string> &args) {
 	auto &state = static_cast<ShellState &>(base_state);
 	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
