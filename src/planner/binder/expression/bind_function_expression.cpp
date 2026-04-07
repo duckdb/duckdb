@@ -341,9 +341,11 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, func->Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
-	default:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		// aggregate function
 		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
+	default:
+		throw InvalidInputException("Unsupported catalog type when binding function");
 	}
 }
 
