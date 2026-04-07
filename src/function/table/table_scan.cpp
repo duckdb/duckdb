@@ -425,6 +425,10 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 			filtered_column_indexes.push_back(col_idx);
 		}
 	}
+	if (g_state->row_number_col_index.IsValid()) {
+		g_state->state.scan_state.row_number_base = 0;
+		g_state->state.local_state.row_number_base = 0;
+	}
 	storage.InitializeParallelScan(context, g_state->state, filtered_column_indexes);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
