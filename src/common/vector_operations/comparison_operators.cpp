@@ -7,11 +7,14 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -649,6 +652,59 @@ static void ArrayComparator(Vector &left, Vector &right, int8_t *result_data,
 }
 
 template <bool IS_DISTINCT>
+static void VariantComparator(Vector &left, Vector &right, int8_t *result_data,
+                              const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                              ValidityMask *result_validity = nullptr) {
+	RecursiveUnifiedVectorFormat left_recursive_data, right_recursive_data;
+	Vector::RecursiveToUnifiedFormat(left, sel_count, left_recursive_data);
+	Vector::RecursiveToUnifiedFormat(right, sel_count, right_recursive_data);
+
+	UnifiedVariantVectorData left_variant(left_recursive_data);
+	UnifiedVariantVectorData right_variant(right_recursive_data);
+
+	auto &left_data = left_recursive_data.unified;
+	auto &right_data = right_recursive_data.unified;
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto left_idx = left_data.sel->get_index(lhs_sel.get_index(i));
+		auto right_idx = right_data.sel->get_index(rhs_sel.get_index(i));
+
+		bool left_null = !left_data.validity.RowIsValid(left_idx);
+		bool right_null = !right_data.validity.RowIsValid(right_idx);
+
+		if (left_null || right_null) {
+			if (IS_DISTINCT) {
+				result_data[i] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
+			} else {
+				result_data[i] = 0;
+				if (result_validity) {
+					result_validity->SetInvalid(i);
+				}
+			}
+			continue;
+		}
+
+		// both non-NULL: convert to Values and compare
+		auto left_val = VariantUtils::ConvertVariantToValue(left_variant, lhs_sel.get_index(i), 0);
+		auto right_val = VariantUtils::ConvertVariantToValue(right_variant, rhs_sel.get_index(i), 0);
+
+		LogicalType max_logical_type;
+		if (!LogicalType::TryGetMaxLogicalTypeUnchecked(left_val.type(), right_val.type(), max_logical_type)) {
+			throw InvalidInputException(
+			    "Can't compare values of type %s (%s) and type %s (%s) - an explicit cast is required",
+			    left_val.type().ToString(), left_val.ToString(), right_val.type().ToString(), right_val.ToString());
+		}
+
+		if (ValueOperations::DistinctGreaterThan(left_val, right_val)) {
+			result_data[i] = 1;
+		} else if (ValueOperations::DistinctGreaterThan(right_val, left_val)) {
+			result_data[i] = -1;
+		} else {
+			result_data[i] = 0;
+		}
+	}
+}
+
+template <bool IS_DISTINCT>
 static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, int8_t *result_data,
                                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
                                                  idx_t sel_count) {
@@ -698,7 +754,11 @@ static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, in
 		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::STRUCT:
-		StructComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		if (left.GetType().id() == LogicalTypeId::VARIANT) {
+			VariantComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		} else {
+			StructComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		}
 		break;
 	case PhysicalType::LIST:
 		ListComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
@@ -775,7 +835,9 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 			sel.set_index(i, i);
 		}
 		auto physical_type = left.GetType().InternalType();
-		if (physical_type == PhysicalType::STRUCT) {
+		if (physical_type == PhysicalType::STRUCT && left.GetType().id() == LogicalTypeId::VARIANT) {
+			VariantComparator<false>(left, right, result_data, sel, sel, count, &validity);
+		} else if (physical_type == PhysicalType::STRUCT) {
 			StructComparator<false>(left, right, result_data, sel, sel, count, &validity);
 		} else if (physical_type == PhysicalType::LIST) {
 			ListComparator<false>(left, right, result_data, sel, sel, count, &validity);
