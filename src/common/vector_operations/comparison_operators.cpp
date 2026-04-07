@@ -390,9 +390,7 @@ template <bool IS_DISTINCT, class ACCESSOR>
 static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
                                   const SelectionVector &rhs_sel, idx_t sel_count, ACCESSOR accessor,
                                   ValidityMask *result_validity = nullptr) {
-	// flatten the list/array vectors and their children so they can be indexed directly
-	left.Flatten(sel_count);
-	right.Flatten(sel_count);
+	// recursively flatten child vectors so they can be indexed directly via selection vectors
 	accessor.FlattenChild(left);
 	accessor.FlattenChild(right);
 	// step 1: handle top-level validity
