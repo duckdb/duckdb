@@ -134,6 +134,7 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 class HTTPLibClient : public HTTPClient {
 public:
 	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) {
+		base_url = proto_host_port;
 		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
 		Initialize(http_params);
 	}
@@ -223,6 +224,10 @@ private:
 
 unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const string &proto_host_port) {
 	return make_uniq<HTTPLibClient>(http_params, proto_host_port);
+}
+
+void HTTPUtil::CloseClient(unique_ptr<HTTPClient> &&) {
+	// default: no-op, client is destroyed
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {

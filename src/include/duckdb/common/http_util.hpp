@@ -228,6 +228,9 @@ public:
 	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
+
+	//! The base URL (scheme + host + port) this client was created for
+	string base_url;
 };
 
 class HTTPUtil {
@@ -249,6 +252,9 @@ public:
 	                                                    optional_ptr<FileOpenerInfo> info);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
+
+	//! Close a client — implementations may cache it for reuse
+	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
