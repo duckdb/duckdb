@@ -331,7 +331,7 @@ public:
 						base = l_state.scan_state.table_state.row_number_base.GetIndex();
 					}
 					base += l_state.current_row_number_index;
-					row_number_vec.Sequence(base + 1, 1, output.size());
+					row_number_vec.Sequence(NumericCast<int64_t>(base + 1), 1, output.size());
 					l_state.current_row_number_index += output.size();
 				}
 				return;
