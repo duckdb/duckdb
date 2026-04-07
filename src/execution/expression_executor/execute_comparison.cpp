@@ -29,6 +29,11 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
+	bool all_constant = false;
+	if (state->intermediate_chunk.AllConstant()) {
+		count = 1;
+		all_constant = true;
+	}
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::COMPARE_EQUAL:
 		VectorOperations::Equals(left, right, result, count);
@@ -56,6 +61,9 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 		break;
 	default:
 		throw InternalException("Unknown comparison type!");
+	}
+	if (all_constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
