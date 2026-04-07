@@ -15,8 +15,8 @@ namespace duckdb {
 
 class StandardVectorBuffer : public VectorBuffer {
 public:
-	StandardVectorBuffer(Allocator &allocator, idx_t data_size);
-	explicit StandardVectorBuffer(idx_t data_size);
+	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(data_ptr_t data_ptr_p);
 	explicit StandardVectorBuffer(AllocatedData &&data_p);
 

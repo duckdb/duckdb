@@ -6,15 +6,15 @@
 
 namespace duckdb {
 
-StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t data_size)
+StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size)
     : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
-	if (data_size > 0) {
-		allocated_data = allocator.Allocate(data_size);
+	if (capacity > 0) {
+		allocated_data = allocator.Allocate(capacity * type_size);
 		data_ptr = allocated_data.get();
 	}
 }
-StandardVectorBuffer::StandardVectorBuffer(idx_t data_size)
-    : StandardVectorBuffer(Allocator::DefaultAllocator(), data_size) {
+StandardVectorBuffer::StandardVectorBuffer(idx_t capacity, idx_t type_size)
+    : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size) {
 }
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p)
     : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {

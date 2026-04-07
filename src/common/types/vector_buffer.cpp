@@ -23,7 +23,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, i
 	if (type == PhysicalType::VARCHAR) {
 		return make_buffer<VectorStringBuffer>(capacity);
 	}
-	return make_buffer<StandardVectorBuffer>(capacity * GetTypeIdSize(type));
+	return make_buffer<StandardVectorBuffer>(capacity, GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
@@ -33,7 +33,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 	if (type == PhysicalType::VARCHAR) {
 		return make_buffer<VectorStringBuffer>(1);
 	}
-	return make_buffer<StandardVectorBuffer>(GetTypeIdSize(type));
+	return make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &type) {

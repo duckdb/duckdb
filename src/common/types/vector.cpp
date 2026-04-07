@@ -418,13 +418,14 @@ void Vector::AddHeapReference(const Vector &other) {
 void Vector::Resize(idx_t current_size, idx_t new_size) {
 	// The vector does not contain any data.
 	if (!buffer) {
-		if (GetType().InternalType() == PhysicalType::LIST) {
+		auto internal_type = GetType().InternalType();
+		if (internal_type == PhysicalType::LIST) {
 			throw InternalException("Resize for empty list not supported");
 		}
-		if (GetType().InternalType() == PhysicalType::VARCHAR) {
+		if (internal_type == PhysicalType::VARCHAR) {
 			buffer = make_buffer<VectorStringBuffer>(idx_t(0));
 		} else {
-			buffer = make_buffer<StandardVectorBuffer>(0);
+			buffer = make_buffer<StandardVectorBuffer>(0, GetTypeIdSize(internal_type));
 		}
 	}
 
