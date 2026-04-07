@@ -55,7 +55,7 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 	}
 }
 
-static bool TryExtractSingleBinding(Expression &expr, ColumnBinding &binding) {
+static bool TryExtractSingleBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		binding = expr.Cast<BoundColumnRefExpression>().binding;
 		return true;
@@ -85,8 +85,7 @@ static bool OutputBindingDependsOn(LogicalOperator &op, const ColumnBinding &can
 			return false;
 		}
 		ColumnBinding child_binding;
-		if (!TryExtractSingleBinding(const_cast<Expression &>(projection.GetExpression(candidate_output)),
-		                             child_binding)) {
+		if (!TryExtractSingleBinding(projection.GetExpression(candidate_output), child_binding)) {
 			return false;
 		}
 		return OutputBindingDependsOn(*projection.children[0], child_binding, target_binding);
@@ -97,8 +96,7 @@ static bool OutputBindingDependsOn(LogicalOperator &op, const ColumnBinding &can
 			return false;
 		}
 		ColumnBinding child_binding;
-		if (!TryExtractSingleBinding(const_cast<Expression &>(aggregate.GetExpression(candidate_output)),
-		                             child_binding)) {
+		if (!TryExtractSingleBinding(aggregate.GetExpression(candidate_output), child_binding)) {
 			return false;
 		}
 		return OutputBindingDependsOn(*aggregate.children[0], child_binding, target_binding);
