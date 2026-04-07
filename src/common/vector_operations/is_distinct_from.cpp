@@ -629,6 +629,18 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 	Vector lchild(lentry_flattened, lcursor, count);
 	Vector rchild(rentry_flattened, rcursor, count);
 
+	// Struct vectors cannot be dictionary vectors, so updating the cursor selection vector
+	// after construction does not update the struct child. We need to re-slice after cursor updates.
+	bool is_struct_child = lentry_flattened.GetType().InternalType() == PhysicalType::STRUCT;
+	auto ReSliceChildren = [&]() {
+		if (is_struct_child) {
+			lchild.Reference(lentry_flattened);
+			lchild.Slice(lcursor, count);
+			rchild.Reference(rentry_flattened);
+			rchild.Slice(rcursor, count);
+		}
+	};
+
 	// To perform the positional comparison, we use a vectorisation of the following algorithm:
 	// bool CompareLists(T *left, idx_t nleft, T *right, nright) {
 	// 	for (idx_t pos = 0; ; ++pos) {
@@ -674,6 +686,7 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 		// Set up the cursors for the current position
 		PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
 		PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+		ReSliceChildren();
 
 		// Tie-break the pairs where one of the LISTs is exhausted.
 		idx_t true_count = 0;
@@ -706,6 +719,7 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 			DensifyNestedSelection(true_sel, count, slice_sel);
 			PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
 			PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+			ReSliceChildren();
 		}
 
 		// Find everything that definitely matches
@@ -725,6 +739,7 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 			DensifyNestedSelection(false_sel, count, slice_sel);
 			PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
 			PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+			ReSliceChildren();
 		}
 
 		// Find what might match on the next position
