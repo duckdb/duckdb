@@ -171,6 +171,43 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 #endif
 }
 
+static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+                                  Vector &result) {
+	if (expr.return_type != LogicalType::BOOLEAN) {
+		throw InternalException("Function %s only has a select callback but returns %s", expr.function.name,
+		                        expr.return_type.ToString());
+	}
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto count = args.size();
+	auto result_data = FlatVector::GetData<bool>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = false;
+	}
+
+	auto &result_validity = FlatVector::Validity(result);
+	result_validity.SetAllValid(count);
+	if (expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		for (auto &arg : args.data) {
+			auto entries = arg.Validity(count);
+			if (!entries.CanHaveNull()) {
+				continue;
+			}
+			for (idx_t i = 0; i < count; i++) {
+				if (!entries.IsValid(i)) {
+					result_validity.SetInvalid(i);
+				}
+			}
+		}
+	}
+
+	SelectionVector true_sel(count);
+	auto true_count = expr.function.GetSelectCallback()(args, state, &true_sel, nullptr);
+	for (idx_t i = 0; i < true_count; i++) {
+		result_data[true_sel.get_index(i)] = true;
+	}
+}
+
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
@@ -198,10 +235,15 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.SetCardinality(all_constant ? 1 : count);
 	arguments.Verify(context ? context->db : nullptr);
 
-	D_ASSERT(expr.function.HasFunctionCallback());
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	if (all_constant || !execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
+	if (expr.function.HasFunctionCallback() &&
+	    (all_constant || !execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result))) {
 		expr.function.GetFunctionCallback()(arguments, *state, result);
+	} else if (expr.function.HasSelectCallback()) {
+		ExecuteSelectFunction(expr, arguments, *state, result);
+	} else {
+		throw InternalException("Scalar function %s has neither an execution nor a select callback",
+		                        expr.function.name);
 	}
 	if (all_constant) {
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
