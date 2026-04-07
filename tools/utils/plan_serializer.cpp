@@ -115,7 +115,10 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 
+		con.Rollback();
+
 		// Now execute the original statement as well and compare results
+		con.BeginTransaction();
 		Parser p;
 		p.ParseQuery(target_stmt);
 		Planner planner(*con.context);
