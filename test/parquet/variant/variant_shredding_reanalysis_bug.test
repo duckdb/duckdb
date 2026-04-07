@@ -1,0 +1,40 @@
+# name: test/parquet/variant/variant_shredding_reanalysis_bug.test
+# description: Variant schema should be locked after first row group even if first row group cannot be shredded
+# group: [variant]
+
+require parquet
+
+# Create data where the first ~2048 rows are UINT8 (not supported by
+# ConstructShreddedType) and the remaining rows include INT32 (supported).
+# With ROW_GROUP_SIZE=2048, the first row group contains only UINT8 values,
+# so ConstructShreddedType determines it cannot shred. A later row group
+# contains INT32 values where ConstructShreddedType succeeds, which
+# previously caused AnalyzeSchemaFinalize to modify the locked schema.
+statement ok
+CREATE TABLE repro AS
+SELECT
+    CASE WHEN i <= 5000
+        THEN (i % 200)::UTINYINT::VARIANT
+        ELSE (i % 200)::INTEGER::VARIANT
+    END as v1,
+    i::INTEGER as some_int
+FROM generate_series(1, 10000) t(i);
+
+statement ok
+COPY repro TO '__TEST_DIR__/variant_reanalysis.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+# Verify data round-trips correctly
+query I
+SELECT count(*) FROM '__TEST_DIR__/variant_reanalysis.parquet';
+----
+10000
+
+query II
+SELECT v1, some_int FROM '__TEST_DIR__/variant_reanalysis.parquet' WHERE some_int = 1;
+----
+1	1
+
+query II
+SELECT v1, some_int FROM '__TEST_DIR__/variant_reanalysis.parquet' WHERE some_int = 6000;
+----
+0	6000
