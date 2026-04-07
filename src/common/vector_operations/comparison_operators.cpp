@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -440,10 +441,42 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data,
 	}
 }
 
-template <bool IS_DISTINCT>
-static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
-                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
-	// step 1: handle list-level validity
+struct ListEntryAccessor {
+	static Vector &GetChild(Vector &vector) {
+		return ListVector::GetEntry(vector);
+	}
+	static idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
+		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(format);
+		auto idx = format.sel->get_index(sel_idx);
+		return entries[idx].offset;
+	}
+	static idx_t GetLength(UnifiedVectorFormat &format, idx_t sel_idx) {
+		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(format);
+		auto idx = format.sel->get_index(sel_idx);
+		return entries[idx].length;
+	}
+};
+
+struct ArrayEntryAccessor {
+	explicit ArrayEntryAccessor(idx_t array_size) : array_size(array_size) {
+	}
+	Vector &GetChild(Vector &vector) {
+		return ArrayVector::GetEntry(vector);
+	}
+	idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
+		return format.sel->get_index(sel_idx) * array_size;
+	}
+	idx_t GetLength(UnifiedVectorFormat &, idx_t) {
+		return array_size;
+	}
+	idx_t array_size;
+};
+
+template <bool IS_DISTINCT, class ACCESSOR>
+static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_data,
+                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                                  ACCESSOR accessor) {
+	// step 1: handle top-level validity
 	auto left_validity = left.Validity(sel_count);
 	auto right_validity = right.Validity(sel_count);
 	bool has_nulls = left_validity.CanHaveNull() || right_validity.CanHaveNull();
@@ -484,40 +517,36 @@ static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
 		return;
 	}
 
-	// step 2: get list entries and child vector
+	// step 2: get entries and child vector
 	UnifiedVectorFormat left_format, right_format;
 	left.ToUnifiedFormat(sel_count, left_format);
 	right.ToUnifiedFormat(sel_count, right_format);
-	auto left_entries = UnifiedVectorFormat::GetData<list_entry_t>(left_format);
-	auto right_entries = UnifiedVectorFormat::GetData<list_entry_t>(right_format);
-	auto &left_child = ListVector::GetEntry(left);
-	auto &right_child = ListVector::GetEntry(right);
+	auto &left_child = accessor.GetChild(left);
+	auto &right_child = accessor.GetChild(right);
 
-	// step 3: iterate position-by-position through list elements
+	// step 3: iterate position-by-position through elements
 	SelectionVector left_child_sel(remaining_count);
 	SelectionVector right_child_sel(remaining_count);
 	auto child_result = make_unsafe_uniq_array<int8_t>(remaining_count);
 
 	for (idx_t pos = 0; remaining_count > 0; pos++) {
-		// partition remaining into: exhausted (one or both lists ended) vs active (both have element at pos)
+		// partition remaining into: exhausted (one or both ended) vs active (both have element at pos)
 		idx_t active_count = 0;
-		idx_t new_remaining_count = 0;
 		for (idx_t i = 0; i < remaining_count; i++) {
-			auto lidx = left_format.sel->get_index(remaining_lhs_sel.get_index(i));
-			auto ridx = right_format.sel->get_index(remaining_rhs_sel.get_index(i));
-			auto &lentry = left_entries[lidx];
-			auto &rentry = right_entries[ridx];
-			bool left_exhausted = pos >= lentry.length;
-			bool right_exhausted = pos >= rentry.length;
+			auto left_length = accessor.GetLength(left_format, remaining_lhs_sel.get_index(i));
+			auto right_length = accessor.GetLength(right_format, remaining_rhs_sel.get_index(i));
+			bool left_exhausted = pos >= left_length;
+			bool right_exhausted = pos >= right_length;
 			if (left_exhausted || right_exhausted) {
 				if (!left_exhausted || !right_exhausted) {
 					result_data[remaining_result_sel.get_index(i)] = left_exhausted ? -1 : 1;
 				}
 				// else: same length, all elements matched - result stays 0
 			} else {
-				left_child_sel.set_index(active_count, lentry.offset + pos);
-				right_child_sel.set_index(active_count, rentry.offset + pos);
-				// keep remaining entries for active rows
+				auto left_offset = accessor.GetOffset(left_format, remaining_lhs_sel.get_index(i));
+				auto right_offset = accessor.GetOffset(right_format, remaining_rhs_sel.get_index(i));
+				left_child_sel.set_index(active_count, left_offset + pos);
+				right_child_sel.set_index(active_count, right_offset + pos);
 				remaining_lhs_sel.set_index(active_count, remaining_lhs_sel.get_index(i));
 				remaining_rhs_sel.set_index(active_count, remaining_rhs_sel.get_index(i));
 				remaining_result_sel.set_index(active_count, remaining_result_sel.get_index(i));
@@ -528,12 +557,12 @@ static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
 			break;
 		}
 
-		// compare child elements at this position - pass child selection vectors directly
+		// compare child elements at this position
 		DistinctComparatorTypeSwitch(left_child, right_child, child_result.get(),
 		                             left_child_sel, right_child_sel, active_count);
 
 		// partition active into resolved vs still-remaining
-		new_remaining_count = 0;
+		idx_t new_remaining_count = 0;
 		for (idx_t i = 0; i < active_count; i++) {
 			if (child_result[i] != 0) {
 				result_data[remaining_result_sel.get_index(i)] = child_result[i];
@@ -546,6 +575,20 @@ static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
 		}
 		remaining_count = new_remaining_count;
 	}
+}
+
+template <bool IS_DISTINCT>
+static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
+                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+	ListEntryAccessor accessor;
+	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor);
+}
+
+template <bool IS_DISTINCT>
+static void ArrayComparator(Vector &left, Vector &right, int8_t *result_data,
+                            const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+	ArrayEntryAccessor accessor(ArrayType::GetSize(left.GetType()));
+	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor);
 }
 
 template <bool IS_DISTINCT>
@@ -602,6 +645,9 @@ static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, in
 		break;
 	case PhysicalType::LIST:
 		ListComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		break;
+	case PhysicalType::ARRAY:
+		ArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	default:
 		throw InternalException("Invalid type for comparator");
@@ -662,15 +708,19 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 		StandardComparatorExecute::Execute<string_t>(left, right, result, count);
 		break;
 	case PhysicalType::STRUCT:
-	case PhysicalType::LIST: {
+	case PhysicalType::LIST:
+	case PhysicalType::ARRAY: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<int8_t>(result);
 		SelectionVector sel(count);
 		sel.Initialize(*FlatVector::IncrementalSelectionVector());
-		if (left.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto physical_type = left.GetType().InternalType();
+		if (physical_type == PhysicalType::STRUCT) {
 			StructComparator<false>(left, right, result_data, sel, sel, count);
-		} else {
+		} else if (physical_type == PhysicalType::LIST) {
 			ListComparator<false>(left, right, result_data, sel, sel, count);
+		} else {
+			ArrayComparator<false>(left, right, result_data, sel, sel, count);
 		}
 		break;
 	}
