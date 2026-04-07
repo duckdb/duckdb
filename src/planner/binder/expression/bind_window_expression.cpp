@@ -271,7 +271,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto window_bound_function =
 		    function_binder.BindWindowFunction(bound_function, std::move(children), window.orders, window.arg_orders);
 
-		window_func = make_uniq<WindowFunction>(window_bound_function->function);
+		window_func = std::move(window_bound_function->window);
 		bind_info = std::move(window_bound_function->bind_info);
 		children = std::move(window_bound_function->children);
 		sql_type = window_bound_function->return_type;
