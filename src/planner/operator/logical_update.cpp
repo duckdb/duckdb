@@ -56,8 +56,9 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 		return;
 	}
 	auto needs_reinsert = false;
-	for (auto &col : update.table.GetColumns().GetColumnTypes()) {
-		if (!col.SupportsRegularUpdate()) {
+	for (auto &col_idx : update.columns) {
+		auto &column = update.table.GetColumns().GetColumn(col_idx);
+		if (!column.Type().SupportsRegularUpdate()) {
 			needs_reinsert = true;
 			break;
 		}
