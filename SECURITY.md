@@ -1,6 +1,6 @@
 # DuckDB Security Vulnerability Response Policy
 
-Please see the "[Securing DuckDB](https://duckdb.org/docs/stable/operations_manual/securing_duckdb/overview)" page first. To quote:
+Please see the "[Securing DuckDB](https://duckdb.org/docs/current/operations_manual/securing_duckdb/overview)" page first. To quote:
 > DuckDB is a powerful analytical database engine. It can read and write files, access the network, load extensions, and use system resources. Like any powerful tool, these capabilities require appropriate configuration when working with sensitive data or in shared environments.
 
 ## Supported Versions

@@ -264,36 +264,36 @@ prepare q2 as select array_resize(?, ?);
 foreach q q1 q2
 
 query I
-execute ${q}([1, 2, 3], 4);
+execute {q}([1, 2, 3], 4);
 ----
 [1, 2, 3, NULL]
 
 query I
-execute ${q}([1, 2, 3], 2);
+execute {q}([1, 2, 3], 2);
 ----
 [1, 2]
 
 query I
-execute ${q}([1, 2, 3], 0);
+execute {q}([1, 2, 3], 0);
 ----
 []
 
 query I
-execute ${q}([1, 2, 3], NULL);
+execute {q}([1, 2, 3], NULL);
 ----
 []
 
 query I
-execute ${q}([1, 2, 3], 1.4);
+execute {q}([1, 2, 3], 1.4);
 ----
 [1]
 
 statement ok
-execute ${q}([2], 2::TINYINT);
+execute {q}([2], 2::TINYINT);
 
 
 statement error
-execute ${q}([1, 2, 3], -1);
+execute {q}([1, 2, 3], -1);
 ----
 Conversion Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
 

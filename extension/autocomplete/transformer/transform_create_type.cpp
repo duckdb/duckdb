@@ -54,11 +54,10 @@ LogicalType PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer
 	auto string_literal_list = ExtractParseResultsFromList(string_list_opt.optional_result);
 
 	Vector enum_vector(LogicalType::VARCHAR, string_literal_list.size());
-	auto string_data = FlatVector::GetData<string_t>(enum_vector);
+	auto string_data = FlatVector::Writer<string_t>(enum_vector, string_literal_list.size());
 	idx_t pos = 0;
 	for (auto string_literal : string_literal_list) {
-		string_data[pos++] =
-		    StringVector::AddString(enum_vector, string_literal->Cast<StringLiteralParseResult>().result);
+		string_data[pos++] = string_literal->Cast<StringLiteralParseResult>().result;
 	}
 	return LogicalType::ENUM(enum_vector, string_literal_list.size());
 }

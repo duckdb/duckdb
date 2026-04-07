@@ -81,7 +81,7 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		SortKeys(root);
 
-		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
+		result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
 }

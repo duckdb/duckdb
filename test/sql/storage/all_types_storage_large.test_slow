@@ -2,7 +2,7 @@
 # description: Test all types storage (large)
 # group: [storage]
 
-load __TEST_DIR__/all_types_storage.db
+load {TEST_DIR}/all_types_storage.db
 
 statement ok
 PRAGMA enable_verification
@@ -10,7 +10,7 @@ PRAGMA enable_verification
 foreach compression <compression>
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='{compression}'
 
 statement ok
 CREATE TABLE all_types AS SELECT * FROM test_all_types();

@@ -616,9 +616,9 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
                                                     const LogicalType &original_type, idx_t null_render_length) {
 	vector.Flatten(count);
-	auto data = FlatVector::GetData<string_t>(vector);
+	auto data = FlatVector::Writer<string_t>(vector, count);
 	auto &validity = FlatVector::Validity(vector);
-	auto render_length_data = FlatVector::GetData<uint64_t>(render_lengths);
+	auto render_length_data = FlatVector::Writer<uint64_t>(render_lengths, count);
 	for (idx_t r = 0; r < count; r++) {
 		if (!validity.RowIsValid(r)) {
 			// null - no need to convert
@@ -629,7 +629,7 @@ void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &rend
 		// non-null - convert value
 		auto result_str = ConvertRenderValue(data[r].GetString(), original_type);
 		render_length_data[r] = Utf8Proc::RenderWidth(result_str);
-		data[r] = StringVector::AddString(vector, result_str);
+		data[r] = result_str;
 	}
 }
 
@@ -1920,8 +1920,8 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 
 	// check if we shortened any columns that would be rendered and if we can expand them
 	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
-	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count + 5 < config.max_rows &&
-	    pruned_columns.empty()) {
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count > 0 &&
+	    row_count + 5 < config.max_rows && pruned_columns.empty()) {
 		max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
 		if (max_rows_per_row > 1) {
 			// we can expand rows - check if we should expand any rows

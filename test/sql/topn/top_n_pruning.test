@@ -6,7 +6,7 @@
 require no_alternative_verify
 
 statement ok
-ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+ATTACH '{TEST_DIR}/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE db
@@ -47,7 +47,7 @@ INSERT INTO t SELECT i FROM repeat(NULL, 2000000) t1(i)
 
 # Work-around for unsetting version info
 statement ok
-ATTACH '__TEST_DIR__/tmp.duckdb' AS tmp
+ATTACH '{TEST_DIR}/tmp.duckdb' AS tmp
 
 statement ok
 USE tmp
@@ -56,7 +56,7 @@ statement ok
 DETACH db
 
 statement ok
-ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+ATTACH '{TEST_DIR}/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE db

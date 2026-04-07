@@ -2,7 +2,7 @@
 # group: [zstd]
 
 statement ok
-ATTACH '__TEST_DIR__/zstd.db' (STORAGE_VERSION 'latest', BLOCK_SIZE 16384);
+ATTACH '{TEST_DIR}/zstd.db' (STORAGE_VERSION 'latest', BLOCK_SIZE 16384);
 
 statement ok
 USE zstd

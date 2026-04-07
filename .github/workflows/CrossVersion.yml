@@ -14,6 +14,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/CrossVersion.yml'
@@ -52,7 +53,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja file
+        run: python3 scripts/ci/retry.py -- brew install ninja file
 
       - name: Build
         shell: bash
@@ -104,7 +105,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
 

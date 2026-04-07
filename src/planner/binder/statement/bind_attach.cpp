@@ -12,6 +12,18 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
+	// resolve the path expression if set by the parser
+	if (stmt.info->parsed_path) {
+		TableFunctionBinder path_binder(*this, context, "Attach", "Attach path");
+		auto bound_path = path_binder.Bind(stmt.info->parsed_path);
+		auto path_val = ExpressionExecutor::EvaluateScalar(context, *bound_path);
+		if (path_val.IsNull()) {
+			throw BinderException("ATTACH path expression must not evaluate to NULL");
+		}
+		stmt.info->path = path_val.ToString();
+		stmt.info->parsed_path.reset();
+	}
+
 	// bind the options
 	TableFunctionBinder option_binder(*this, context, "Attach", "Attach parameter");
 	unordered_map<string, Value> kv_options;

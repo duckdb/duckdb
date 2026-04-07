@@ -16,6 +16,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 
@@ -295,15 +296,17 @@ string PrefixRangeTableFilter::ToString(const string &column_name) const {
 	return column_name + " IN PRF(" + key_column_name + ")";
 }
 
-idx_t PrefixRangeTableFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const {
+idx_t PrefixRangeTableFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
+                                     JoinFilterTableFilterState &state) const {
 	if (!filter || !filter->IsInitialized()) {
 		return approved_tuple_count;
 	}
 
+	state.PrepareSlicedKeys(keys, sel, approved_tuple_count);
+
 	const auto approved_before = approved_tuple_count;
-	Vector keys_sliced(keys, sel, approved_before);
 	SelectionVector result_sel(approved_before);
-	approved_tuple_count = filter->LookupKeys(keys_sliced, result_sel, approved_before);
+	approved_tuple_count = filter->LookupKeys(state.keys_sliced_v, result_sel, approved_before);
 
 	if (approved_tuple_count == approved_before) {
 		// Nothing was filtered
@@ -327,11 +330,16 @@ bool PrefixRangeTableFilter::FilterValue(const Value &value) const {
 	if (!filter || !filter->IsInitialized()) {
 		return true;
 	}
-	Vector keys(value);
+
+	auto cast_value = value;
+	if (!cast_value.DefaultTryCastAs(GetKeyType())) {
+		return true;
+	}
+
+	Vector keys(cast_value);
 	SelectionVector sel;
 	idx_t approved_tuple_count = 1;
-	Filter(keys, sel, approved_tuple_count);
-	return approved_tuple_count == 1;
+	return filter->LookupKeys(keys, sel, approved_tuple_count) == 1;
 }
 
 FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &stats) const {
@@ -343,9 +351,14 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	const auto min = NumericStats::Min(stats);
-	const auto max = NumericStats::Max(stats);
+	auto min = NumericStats::Min(stats);
+	auto max = NumericStats::Max(stats);
 	if (min > max) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// The filter was built with key_type (condition_type), but stats are in storage_type
+	if (stats.GetType() != key_type && (!min.DefaultTryCastAs(key_type) || !max.DefaultTryCastAs(key_type))) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 

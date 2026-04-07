@@ -151,7 +151,7 @@ NULL	NULL	0
 foreach windowmode "window" "combine" "separate"
 
 statement ok
-PRAGMA debug_window_mode=${windowmode}
+PRAGMA debug_window_mode={windowmode}
 
 query III
 WITH t(r) AS (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (NULL), (NULL), (NULL))

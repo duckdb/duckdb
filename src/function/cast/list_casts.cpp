@@ -77,7 +77,6 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 }
 
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
@@ -129,8 +128,8 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				list_length += NULL_LENGTH;
 			}
 		}
-		result_data[i] = StringVector::EmptyString(result, list_length);
-		auto dataptr = result_data[i].GetDataWriteable();
+		auto &result_str = result_data[i].EmptyString(list_length);
+		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
@@ -147,7 +146,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 		}
 		dataptr[offset] = ']';
-		result_data[i].Finalize();
+		result_str.Finalize();
 	}
 	return true;
 }

@@ -11,10 +11,10 @@ CREATE INDEX i_index ON integers using art(i);
 loop i 0 2048
 
 statement ok
-INSERT INTO integers VALUES (${i} * ${i});
+INSERT INTO integers VALUES ({i} * {i});
 
 query I
-select COUNT(*) - ${i} - 1 FROM integers WHERE i >= 0;
+select COUNT(*) - {i} - 1 FROM integers WHERE i >= 0;
 ----
 0
 
@@ -39,12 +39,12 @@ DELETE FROM integers WHERE i=(SELECT i FROM integers ORDER BY RANDOM() LIMIT 1);
 # verify the table count
 
 query I
-SELECT COUNT(*) + ${i} + 1 FROM integers
+SELECT COUNT(*) + {i} + 1 FROM integers
 ----
 2048
 
 query I
-SELECT COUNT(*) + ${i} + 1 FROM integers WHERE i>= 0
+SELECT COUNT(*) + {i} + 1 FROM integers WHERE i>= 0
 ----
 2048
 

@@ -78,6 +78,7 @@ struct FSSTVector {
 
 private:
 	static VectorFSSTStringBuffer &GetFSSTBuffer(const Vector &vector);
+	static StringHeap &GetStringHeap(const Vector &vector);
 };
 
 } // namespace duckdb

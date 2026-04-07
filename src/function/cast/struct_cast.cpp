@@ -191,8 +191,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 		}
 
-		result_data[i] = StringVector::EmptyString(result, string_length);
-		auto dataptr = result_data[i].GetDataWriteable();
+		auto &result_str = result_data[i].EmptyString(string_length);
+		auto dataptr = result_str.GetDataWriteable();
 
 		//! Serialize the struct to the string
 		idx_t offset = 0;
@@ -225,7 +225,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 		}
 		dataptr[offset++] = is_unnamed ? ')' : '}';
-		result_data[i].Finalize();
+		result_str.Finalize();
 	}
 
 	if (constant) {
@@ -298,13 +298,13 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
 	Vector varchar_keys(LogicalType::VARCHAR, total_count);
-	auto key_data = FlatVector::GetData<string_t>(varchar_keys);
+	auto key_data = FlatVector::Writer<string_t>(varchar_keys, count * field_count);
 	auto &field_types = StructType::GetChildTypes(source.GetType());
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
 			auto global_idx = row_idx * field_count + field_idx;
 			auto &field_name = field_types[field_idx].first;
-			key_data[global_idx] = StringVector::AddString(varchar_keys, field_name);
+			key_data[global_idx] = field_name;
 		}
 	}
 

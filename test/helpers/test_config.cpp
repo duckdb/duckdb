@@ -125,7 +125,13 @@ void TestConfiguration::UpdateEnvironment() {
 	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
 
 	string temp_dir = TestDirectoryPath();
+	auto fs = FileSystem::CreateLocal();
+	string temp_dir_absolute = temp_dir;
+	if (!fs->IsPathAbsolute(temp_dir_absolute)) {
+		temp_dir_absolute = fs->JoinPath(working_dir, temp_dir_absolute);
+	}
 	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // default: {WORKING_DIR}/duckdb_unittest_tempdir/$PID
 	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
 }
 
@@ -425,13 +431,23 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 
 void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	path = StringUtil::Replace(path, "{TEST_DIR}", TestDirectoryPath());
+	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", FileSystem::GetWorkingDirectory());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	path = StringUtil::Replace(path, "{TEST_NAME}", test_name);
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
-	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
-	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	if (StringUtil::Contains(path, "__TEST_DIR__")) {
+		Printer::PrintF("Replacing deprecated string __TEST_DIR__ in path \"%s\" - please replace with {TEST_DIR}",
+		                path);
+		path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	}
+	if (StringUtil::Contains(path, "__WORKING_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
+		                "{WORKING_DIRECTORY}",
+		                path);
+		path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	}
 }
 
 template <class T, class VAL_T>

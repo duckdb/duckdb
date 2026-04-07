@@ -2,7 +2,7 @@
 # description: Test interleaved buffered index replays with multi-chunk batches
 # group: [storage]
 
-load __TEST_DIR__/test_interleaved_replays.db
+load {TEST_DIR}/test_interleaved_replays.db
 
 statement ok
 SET wal_autocheckpoint = '1TB';
@@ -19,10 +19,10 @@ CREATE UNIQUE INDEX idx_i ON tbl (i);
 loop i 0 9
 
 statement ok
-INSERT INTO tbl SELECT r FROM range(${i} * 10000, ${i} * 10000 + 3000) t(r);
+INSERT INTO tbl SELECT r FROM range({i} * 10000, {i} * 10000 + 3000) t(r);
 
 statement ok
-DELETE FROM tbl WHERE i >= ${i} * 10000 AND i < ${i} * 10000 + 2500;
+DELETE FROM tbl WHERE i >= {i} * 10000 AND i < {i} * 10000 + 2500;
 
 endloop
 

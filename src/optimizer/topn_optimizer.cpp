@@ -68,8 +68,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
 	bool nulls_first = op.orders[0].null_order == OrderByNullType::NULLS_FIRST;
 	auto &type = op.orders[0].expression->return_type;
-	if (!TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
-		// only supported for integral types currently
+	if (!TypeIsNumeric(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
+		// only supported for numeric and varchar types
 		return;
 	}
 	if (op.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {

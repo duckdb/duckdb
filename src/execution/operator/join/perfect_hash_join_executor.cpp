@@ -9,6 +9,10 @@ PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p,
     : join(join_p), ht(ht_p) {
 }
 
+const LogicalType &PerfectHashJoinExecutor::GetKeyType() const {
+	return ht.equality_types[0];
+}
+
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -129,7 +133,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 //===--------------------------------------------------------------------===//
 // Build
 //===--------------------------------------------------------------------===//
-bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
+bool PerfectHashJoinExecutor::BuildPerfectHashTable() {
 	// First, allocate memory for each build column
 	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
@@ -141,15 +145,15 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	bitmap_build_idx.SetAllInvalid(build_size);
 
 	// Now fill columns with build data
-	return FullScanHashTable(key_type);
+	return FullScanHashTable();
 }
 
-bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
+bool PerfectHashJoinExecutor::FullScanHashTable() {
 	auto &data_collection = ht.GetDataCollection();
 
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-	Vector build_vector(key_type, ht.Count());
+	Vector build_vector(GetKeyType(), ht.Count());
 	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
 
 	// Now fill the selection vector using the build keys and create a sequential vector

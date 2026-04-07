@@ -133,6 +133,26 @@ class ShellTest:
         stderr = res.stderr.decode("utf8").strip()
         return stdout, stderr
 
+    def run_raw(self, stdin_text):
+        """Run the shell with raw stdin text (no statement processing)."""
+        command = self.arguments
+        input_data = stdin_text.encode("utf8") if isinstance(stdin_text, str) else stdin_text
+
+        my_env = os.environ.copy()
+        for key, val in self.environment.items():
+            my_env[key] = val
+
+        res = subprocess.run(
+            command,
+            input=input_data,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=my_env,
+        )
+        stdout = res.stdout.decode("utf8").strip()
+        stderr = res.stderr.decode("utf8").strip()
+        return TestResult(stdout, stderr, res.returncode)
+
     def run(self):
         statements = self.get_statements()
         command = self.get_command(statements)

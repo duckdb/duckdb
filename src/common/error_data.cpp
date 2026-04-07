@@ -68,7 +68,7 @@ string ErrorData::ConstructFinalMessage() const {
 	if (type == ExceptionType::INTERNAL) {
 		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
-		         "https://duckdb.org/docs/stable/dev/internal_errors";
+		         "https://duckdb.org/docs/current/dev/internal_errors";
 
 		// Ensure that we print the stack trace for internal and fatal exceptions.
 		auto entry = extra_info.find("stack_trace_pointers");
@@ -142,6 +142,7 @@ void ErrorData::AddErrorLocation(const string &query) {
 		auto entry = extra_info.find("position");
 		if (entry != extra_info.end()) {
 			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+			extra_info.erase(entry);
 		}
 	}
 	{

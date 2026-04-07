@@ -90,6 +90,18 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		return copied_view;
 	}
 
+	// PostgreSQL allows `ALTER TABLE ... RENAME TO` on views, so we convert it
+	// to the equivalent ALTER VIEW operation to support tools like dbt-postgres.
+	if (info.type == AlterType::ALTER_TABLE) {
+		auto &table_info = info.Cast<AlterTableInfo>();
+		if (table_info.alter_table_type == AlterTableType::RENAME_TABLE) {
+			auto &rename_info = table_info.Cast<RenameTableInfo>();
+			auto copied_view = Copy(context);
+			copied_view->name = rename_info.new_table_name;
+			return copied_view;
+		}
+	}
+
 	if (info.type != AlterType::ALTER_VIEW) {
 		throw CatalogException("Can only modify view with ALTER VIEW statement");
 	}

@@ -30,33 +30,33 @@ foreach FUN substr substring_grapheme
 
 # negative lengths and offsets
 query T
-SELECT ${FUN}(s, -4, 4) FROM strings
+SELECT {FUN}(s, -4, 4) FROM strings
 ----
 🦆end
 
 query T
-SELECT ${FUN}(s, -1, -4) FROM strings
+SELECT {FUN}(s, -1, -4) FROM strings
 ----
 r🦆en
 
 query T
-SELECT ${FUN}(s, 0, -4) FROM strings
+SELECT {FUN}(s, 0, -4) FROM strings
 ----
 (empty)
 
 query T
-SELECT ${FUN}(s, 0, 5) FROM strings
+SELECT {FUN}(s, 0, 5) FROM strings
 ----
 twoñ
 
 query T
-SELECT ${FUN}(s, 5, -5) FROM strings
+SELECT {FUN}(s, 5, -5) FROM strings
 ----
 twoñ
 
 # length is optional
 query T
-SELECT ${FUN}(s, 5) FROM strings
+SELECT {FUN}(s, 5) FROM strings
 ----
 three₡four🦆end
 

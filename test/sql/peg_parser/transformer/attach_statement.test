@@ -12,10 +12,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-set allow_parser_override_extension=strict_when_supported;
+call enable_peg_parser();
 
 statement ok
-ATTACH '__TEST_DIR__/first.db' (TYPE DUCKDB);
+ATTACH '{TEST_DIR}/first.db' (TYPE DUCKDB);
 
 statement ok
 ATTACH DATABASE ':memory:' AS database;
@@ -35,38 +35,36 @@ statement ok
 ATTACH ':memory:' AS db1 (TYPE getvariable('db_type'));
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
 ----
 Binder Error: "true" is not a valid key. A key must be of type VARCHAR
 
 statement ok
-ATTACH '__TEST_DIR__/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
+ATTACH '{TEST_DIR}/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '{TEST_DIR}/persistent_attach.db'
 
 statement error
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '{TEST_DIR}/persistent_attach.db'
 ----
 
 statement error
-ATTACH '__TEST_DIR__/error.db' (TYPE DUCKDB, HELLO, OPTION 2);
+ATTACH '{TEST_DIR}/error.db' (TYPE DUCKDB, HELLO, OPTION 2);
 ----
 <REGEX>:Binder Error.*Unrecognized option for attach.*
 
 statement error
-ATTACH '__TEST_DIR__/error.db' (HELLO, OPTION 2);
+ATTACH '{TEST_DIR}/error.db' (HELLO, OPTION 2);
 ----
 <REGEX>:Binder Error.*Unrecognized option for attach.*
 
 # create a database file and close it again
 statement ok
-ATTACH '__TEST_DIR__/attach_read_only.db' AS db2
+ATTACH '{TEST_DIR}/attach_read_only.db' AS db2
 
 statement ok
 DETACH db2
 
 statement ok
-ATTACH '__TEST_DIR__/attach_read_only.db' AS db2 (READONLY 1);
-
-
+ATTACH '{TEST_DIR}/attach_read_only.db' AS db2 (READONLY 1);

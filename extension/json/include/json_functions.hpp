@@ -90,6 +90,7 @@ private:
 	static ScalarFunctionSet GetArrayToJSONFunction();
 	static ScalarFunctionSet GetRowToJSONFunction();
 	static ScalarFunctionSet GetMergePatchFunction();
+	static ScalarFunctionSet GetMergePatchDiffFunction();
 	static ScalarFunctionSet GetDeepMergeFunction();
 
 	static ScalarFunctionSet GetStructureFunction();
@@ -109,6 +110,7 @@ private:
 
 	static ScalarFunctionSet GetPrettyPrintFunction();
 	static ScalarFunctionSet GetNormalizeFunction();
+	static ScalarFunctionSet GetStripNullsFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
