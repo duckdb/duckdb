@@ -30,9 +30,10 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	// and can only be a seq_scan
 	auto &get = window_ch->Cast<LogicalGet>();
-	if (get.function.name != "seq_scan") {
+
+	// the get must support the row_number virtual column
+	if (get.virtual_columns.find(COLUMN_IDENTIFIER_ROW_NUMBER) == get.virtual_columns.end()) {
 		return false;
 	}
 
