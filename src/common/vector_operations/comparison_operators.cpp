@@ -277,7 +277,8 @@ static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *re
 
 template <bool IS_DISTINCT>
 static void StructComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                             const SelectionVector &rhs_sel, idx_t sel_count, optional_ptr<ValidityMask> result_validity = nullptr) {
+                             const SelectionVector &rhs_sel, idx_t sel_count,
+                             optional_ptr<ValidityMask> result_validity = nullptr) {
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
@@ -499,7 +500,8 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 
 template <bool IS_DISTINCT>
 static void ListComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                           const SelectionVector &rhs_sel, idx_t sel_count, optional_ptr<ValidityMask> result_validity = nullptr) {
+                           const SelectionVector &rhs_sel, idx_t sel_count,
+                           optional_ptr<ValidityMask> result_validity = nullptr) {
 	ListEntryAccessor accessor;
 	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor,
 	                                   result_validity);
@@ -507,7 +509,8 @@ static void ListComparator(Vector &left, Vector &right, int8_t *result_data, con
 
 template <bool IS_DISTINCT>
 static void ArrayComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                            const SelectionVector &rhs_sel, idx_t sel_count, optional_ptr<ValidityMask> result_validity = nullptr) {
+                            const SelectionVector &rhs_sel, idx_t sel_count,
+                            optional_ptr<ValidityMask> result_validity = nullptr) {
 	ArrayEntryAccessor accessor(ArrayType::GetSize(left.GetType()));
 	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor,
 	                                   result_validity);
