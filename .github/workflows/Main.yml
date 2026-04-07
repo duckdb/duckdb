@@ -477,7 +477,7 @@ jobs:
         if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
           make allunit
         else
-          make unittest_release
+          make unittest_release SKIP_BUILD=1
         fi
 
  linux-release-cli:
