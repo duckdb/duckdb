@@ -120,7 +120,7 @@ select id, g::VARCHAR from t3 order by id;
 statement error
 select 'GEOMETRYCOLLECTION Z (POINT Z (1 1 2), LINESTRING (0 0, 1 1))'::GEOMETRY;
 ----
-Invalid Input Error: Geometry has inconsistent Z/M dimensions
+Invalid Input Error: Failed to parse geometry: Geometry has inconsistent Z/M dimensions at offset 50
 
 # Scientific notation coordinates must not be corrupted during text rendering
 # (exponents ending in 0 were previously truncated, e.g. 1e+20 -> 1e+2)
