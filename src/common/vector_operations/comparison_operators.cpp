@@ -8,6 +8,7 @@
 
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -346,79 +347,219 @@ struct StandardComparatorExecute {
 
 struct DistinctComparatorExecute {
 	template <class T>
-	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+	static void Execute(Vector &left, Vector &right, int8_t *result_data, idx_t count,
+	                    const SelectionVector &sel, idx_t sel_count) {
 		auto left_values = left.Values<T>(count);
 		auto right_values = right.Values<T>(count);
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::Writer<int8_t>(result, count);
-		for (idx_t i = 0; i < count; i++) {
-			auto lentry = left_values[i];
-			auto rentry = right_values[i];
-			result_data[i] =
+		for (idx_t i = 0; i < sel_count; i++) {
+			auto idx = sel.get_index(i);
+			auto lentry = left_values[idx];
+			auto rentry = right_values[idx];
+			result_data[idx] =
 			    duckdb::DistinctComparator::Operation<T>(lentry.value, rentry.value, !lentry.IsValid(), !rentry.IsValid());
 		}
 	}
 };
 
-template <class EXECUTOR>
-static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
-	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
-	         result.GetType() == LogicalType::TINYINT);
+// forward declaration - StructComparator calls DistinctComparator recursively for children
+static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data, idx_t count,
+                                         const SelectionVector &sel, idx_t sel_count);
+
+template <bool IS_DISTINCT>
+static void StructComparator(Vector &left, Vector &right, int8_t *result_data, idx_t count,
+                             const SelectionVector &sel, idx_t sel_count) {
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
+	D_ASSERT(lchildren.size() == rchildren.size());
+
+	// step 1: handle struct-level validity
+	auto left_validity = left.Validity(count);
+	auto right_validity = right.Validity(count);
+	bool has_nulls = left_validity.CanHaveNull() || right_validity.CanHaveNull();
+
+	// initialize the selection vector of remaining (undecided) rows
+	SelectionVector remaining_sel(sel_count);
+	idx_t remaining_count;
+	if (!has_nulls) {
+		// no nulls - all selected rows need child comparison
+		remaining_sel.Initialize(sel);
+		remaining_count = sel_count;
+		for (idx_t i = 0; i < sel_count; i++) {
+			result_data[sel.get_index(i)] = 0;
+		}
+	} else {
+		remaining_count = 0;
+		for (idx_t i = 0; i < sel_count; i++) {
+			auto idx = sel.get_index(i);
+			bool left_null = !left_validity.IsValid(idx);
+			bool right_null = !right_validity.IsValid(idx);
+			if (left_null || right_null) {
+				if (IS_DISTINCT) {
+					// NULLS LAST: NULL == NULL → 0, NULL > non-NULL → 1, non-NULL < NULL → -1
+					result_data[idx] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
+				} else {
+					// regular comparator: NULL propagates as NULL in the result
+					// result_data value is unused, caller must set validity
+					result_data[idx] = 0;
+				}
+			} else {
+				result_data[idx] = 0;
+				remaining_sel.set_index(remaining_count++, idx);
+			}
+		}
+	}
+
+	// step 2: compare child vectors one by one
+	// once a child produces a non-zero result for a row, that row is resolved
+	for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
+		// always use DistinctComparator for struct children
+		DistinctComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], result_data, count, remaining_sel,
+		                             remaining_count);
+
+		// partition remaining into resolved vs still-undecided
+		idx_t new_remaining_count = 0;
+		for (idx_t i = 0; i < remaining_count; i++) {
+			auto row_idx = remaining_sel.get_index(i);
+			if (result_data[row_idx] == 0) {
+				remaining_sel.set_index(new_remaining_count++, row_idx);
+			}
+		}
+		remaining_count = new_remaining_count;
+	}
+}
+
+template <bool IS_DISTINCT>
+static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, int8_t *result_data, idx_t count,
+                                                 const SelectionVector &sel, idx_t sel_count) {
+	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		EXECUTOR::template Execute<int8_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<int8_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::INT16:
-		EXECUTOR::template Execute<int16_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<int16_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::INT32:
-		EXECUTOR::template Execute<int32_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<int32_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::INT64:
-		EXECUTOR::template Execute<int64_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<int64_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::UINT8:
-		EXECUTOR::template Execute<uint8_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<uint8_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::UINT16:
-		EXECUTOR::template Execute<uint16_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<uint16_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::UINT32:
-		EXECUTOR::template Execute<uint32_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<uint32_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::UINT64:
-		EXECUTOR::template Execute<uint64_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<uint64_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::INT128:
-		EXECUTOR::template Execute<hugeint_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<hugeint_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::UINT128:
-		EXECUTOR::template Execute<uhugeint_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<uhugeint_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::FLOAT:
-		EXECUTOR::template Execute<float>(left, right, result, count);
+		DistinctComparatorExecute::Execute<float>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::DOUBLE:
-		EXECUTOR::template Execute<double>(left, right, result, count);
+		DistinctComparatorExecute::Execute<double>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::INTERVAL:
-		EXECUTOR::template Execute<interval_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<interval_t>(left, right, result_data, count, sel, sel_count);
 		break;
 	case PhysicalType::VARCHAR:
-		EXECUTOR::template Execute<string_t>(left, right, result, count);
+		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, count, sel, sel_count);
+		break;
+	case PhysicalType::STRUCT:
+		StructComparator<IS_DISTINCT>(left, right, result_data, count, sel, sel_count);
 		break;
 	default:
 		throw InternalException("Invalid type for comparator");
 	}
 }
 
+static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data, idx_t count,
+                                         const SelectionVector &sel, idx_t sel_count) {
+	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, count, sel, sel_count);
+}
+
+static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
+	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
+	         result.GetType() == LogicalType::TINYINT);
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		StandardComparatorExecute::Execute<int8_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT16:
+		StandardComparatorExecute::Execute<int16_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT32:
+		StandardComparatorExecute::Execute<int32_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT64:
+		StandardComparatorExecute::Execute<int64_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT8:
+		StandardComparatorExecute::Execute<uint8_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT16:
+		StandardComparatorExecute::Execute<uint16_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT32:
+		StandardComparatorExecute::Execute<uint32_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT64:
+		StandardComparatorExecute::Execute<uint64_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT128:
+		StandardComparatorExecute::Execute<hugeint_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT128:
+		StandardComparatorExecute::Execute<uhugeint_t>(left, right, result, count);
+		break;
+	case PhysicalType::FLOAT:
+		StandardComparatorExecute::Execute<float>(left, right, result, count);
+		break;
+	case PhysicalType::DOUBLE:
+		StandardComparatorExecute::Execute<double>(left, right, result, count);
+		break;
+	case PhysicalType::INTERVAL:
+		StandardComparatorExecute::Execute<interval_t>(left, right, result, count);
+		break;
+	case PhysicalType::VARCHAR:
+		StandardComparatorExecute::Execute<string_t>(left, right, result, count);
+		break;
+	case PhysicalType::STRUCT: {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto result_data = FlatVector::GetData<int8_t>(result);
+		SelectionVector sel(count);
+		sel.Initialize(*FlatVector::IncrementalSelectionVector());
+		StructComparator<false>(left, right, result_data, count, sel, count);
+		break;
+	}
+	default:
+		throw InternalException("Invalid type for comparator");
+	}
+}
+
 void VectorOperations::Comparator(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparatorTypeSwitch<StandardComparatorExecute>(left, right, result, count);
+	ComparatorTypeSwitch(left, right, result, count);
 }
 
 void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparatorTypeSwitch<DistinctComparatorExecute>(left, right, result, count);
+	D_ASSERT(result.GetType() == LogicalType::TINYINT);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<int8_t>(result);
+	SelectionVector sel(count);
+	sel.Initialize(*FlatVector::IncrementalSelectionVector());
+	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, count, sel, count);
 }
 
 } // namespace duckdb
