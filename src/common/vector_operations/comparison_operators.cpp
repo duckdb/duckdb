@@ -8,6 +8,7 @@
 
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
@@ -347,81 +348,92 @@ struct StandardComparatorExecute {
 
 struct DistinctComparatorExecute {
 	template <class T>
-	static void Execute(Vector &left, Vector &right, int8_t *result_data, idx_t count,
-	                    const SelectionVector &sel, idx_t sel_count) {
-		auto left_values = left.Values<T>(count);
-		auto right_values = right.Values<T>(count);
+	static void Execute(Vector &left, Vector &right, int8_t *result_data,
+	                    const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+		UnifiedVectorFormat left_format, right_format;
+		left.ToUnifiedFormat(sel_count, left_format);
+		right.ToUnifiedFormat(sel_count, right_format);
+		auto ldata = UnifiedVectorFormat::GetData<T>(left_format);
+		auto rdata = UnifiedVectorFormat::GetData<T>(right_format);
 		for (idx_t i = 0; i < sel_count; i++) {
-			auto idx = sel.get_index(i);
-			auto lentry = left_values[idx];
-			auto rentry = right_values[idx];
-			result_data[idx] =
-			    duckdb::DistinctComparator::Operation<T>(lentry.value, rentry.value, !lentry.IsValid(), !rentry.IsValid());
+			auto lidx = left_format.sel->get_index(lhs_sel.get_index(i));
+			auto ridx = right_format.sel->get_index(rhs_sel.get_index(i));
+			bool left_null = !left_format.validity.RowIsValid(lidx);
+			bool right_null = !right_format.validity.RowIsValid(ridx);
+			result_data[i] =
+			    duckdb::DistinctComparator::Operation<T>(ldata[lidx], rdata[ridx], left_null, right_null);
 		}
 	}
 };
 
-// forward declaration - StructComparator calls DistinctComparator recursively for children
-static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data, idx_t count,
-                                         const SelectionVector &sel, idx_t sel_count);
+// forward declaration - nested comparators call DistinctComparator recursively for children
+static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data,
+                                         const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
+                                         idx_t sel_count);
 
 template <bool IS_DISTINCT>
-static void StructComparator(Vector &left, Vector &right, int8_t *result_data, idx_t count,
-                             const SelectionVector &sel, idx_t sel_count) {
+static void StructComparator(Vector &left, Vector &right, int8_t *result_data,
+                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
 
-	// step 1: handle struct-level validity
-	auto left_validity = left.Validity(count);
-	auto right_validity = right.Validity(count);
+	// step 1: handle struct-level validity and initialize results
+	auto left_validity = left.Validity(sel_count);
+	auto right_validity = right.Validity(sel_count);
 	bool has_nulls = left_validity.CanHaveNull() || right_validity.CanHaveNull();
 
-	// initialize the selection vector of remaining (undecided) rows
-	SelectionVector remaining_sel(sel_count);
+	// remaining tracks which dense output positions still need child comparison
+	// along with their corresponding lhs/rhs selection indices
+	SelectionVector remaining_lhs_sel(sel_count);
+	SelectionVector remaining_rhs_sel(sel_count);
+	SelectionVector remaining_result_sel(sel_count);
 	idx_t remaining_count;
 	if (!has_nulls) {
-		// no nulls - all selected rows need child comparison
-		remaining_sel.Initialize(sel);
+		remaining_lhs_sel.Initialize(lhs_sel);
+		remaining_rhs_sel.Initialize(rhs_sel);
 		remaining_count = sel_count;
+		memset(result_data, 0, sel_count * sizeof(int8_t));
 		for (idx_t i = 0; i < sel_count; i++) {
-			result_data[sel.get_index(i)] = 0;
+			remaining_result_sel.set_index(i, i);
 		}
 	} else {
 		remaining_count = 0;
 		for (idx_t i = 0; i < sel_count; i++) {
-			auto idx = sel.get_index(i);
-			bool left_null = !left_validity.IsValid(idx);
-			bool right_null = !right_validity.IsValid(idx);
+			bool left_null = !left_validity.IsValid(lhs_sel.get_index(i));
+			bool right_null = !right_validity.IsValid(rhs_sel.get_index(i));
 			if (left_null || right_null) {
 				if (IS_DISTINCT) {
-					// NULLS LAST: NULL == NULL → 0, NULL > non-NULL → 1, non-NULL < NULL → -1
-					result_data[idx] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
+					result_data[i] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
 				} else {
-					// regular comparator: NULL propagates as NULL in the result
-					// result_data value is unused, caller must set validity
-					result_data[idx] = 0;
+					result_data[i] = 0;
 				}
 			} else {
-				result_data[idx] = 0;
-				remaining_sel.set_index(remaining_count++, idx);
+				result_data[i] = 0;
+				remaining_lhs_sel.set_index(remaining_count, lhs_sel.get_index(i));
+				remaining_rhs_sel.set_index(remaining_count, rhs_sel.get_index(i));
+				remaining_result_sel.set_index(remaining_count, i);
+				remaining_count++;
 			}
 		}
 	}
 
 	// step 2: compare child vectors one by one
-	// once a child produces a non-zero result for a row, that row is resolved
+	// child results are written densely, then scattered back to the correct output positions
+	auto child_result = make_unsafe_uniq_array<int8_t>(remaining_count);
 	for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
-		// always use DistinctComparator for struct children
-		DistinctComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], result_data, count, remaining_sel,
-		                             remaining_count);
+		DistinctComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(),
+		                             remaining_lhs_sel, remaining_rhs_sel, remaining_count);
 
-		// partition remaining into resolved vs still-undecided
 		idx_t new_remaining_count = 0;
 		for (idx_t i = 0; i < remaining_count; i++) {
-			auto row_idx = remaining_sel.get_index(i);
-			if (result_data[row_idx] == 0) {
-				remaining_sel.set_index(new_remaining_count++, row_idx);
+			if (child_result[i] != 0) {
+				result_data[remaining_result_sel.get_index(i)] = child_result[i];
+			} else {
+				remaining_lhs_sel.set_index(new_remaining_count, remaining_lhs_sel.get_index(i));
+				remaining_rhs_sel.set_index(new_remaining_count, remaining_rhs_sel.get_index(i));
+				remaining_result_sel.set_index(new_remaining_count, remaining_result_sel.get_index(i));
+				new_remaining_count++;
 			}
 		}
 		remaining_count = new_remaining_count;
@@ -429,64 +441,177 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data, i
 }
 
 template <bool IS_DISTINCT>
-static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, int8_t *result_data, idx_t count,
-                                                 const SelectionVector &sel, idx_t sel_count) {
+static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
+                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+	// step 1: handle list-level validity
+	auto left_validity = left.Validity(sel_count);
+	auto right_validity = right.Validity(sel_count);
+	bool has_nulls = left_validity.CanHaveNull() || right_validity.CanHaveNull();
+
+	SelectionVector remaining_lhs_sel(sel_count);
+	SelectionVector remaining_rhs_sel(sel_count);
+	SelectionVector remaining_result_sel(sel_count);
+	idx_t remaining_count;
+	if (!has_nulls) {
+		remaining_lhs_sel.Initialize(lhs_sel);
+		remaining_rhs_sel.Initialize(rhs_sel);
+		remaining_count = sel_count;
+		memset(result_data, 0, sel_count * sizeof(int8_t));
+		for (idx_t i = 0; i < sel_count; i++) {
+			remaining_result_sel.set_index(i, i);
+		}
+	} else {
+		remaining_count = 0;
+		for (idx_t i = 0; i < sel_count; i++) {
+			bool left_null = !left_validity.IsValid(lhs_sel.get_index(i));
+			bool right_null = !right_validity.IsValid(rhs_sel.get_index(i));
+			if (left_null || right_null) {
+				if (IS_DISTINCT) {
+					result_data[i] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
+				} else {
+					result_data[i] = 0;
+				}
+			} else {
+				result_data[i] = 0;
+				remaining_lhs_sel.set_index(remaining_count, lhs_sel.get_index(i));
+				remaining_rhs_sel.set_index(remaining_count, rhs_sel.get_index(i));
+				remaining_result_sel.set_index(remaining_count, i);
+				remaining_count++;
+			}
+		}
+	}
+	if (remaining_count == 0) {
+		return;
+	}
+
+	// step 2: get list entries and child vector
+	UnifiedVectorFormat left_format, right_format;
+	left.ToUnifiedFormat(sel_count, left_format);
+	right.ToUnifiedFormat(sel_count, right_format);
+	auto left_entries = UnifiedVectorFormat::GetData<list_entry_t>(left_format);
+	auto right_entries = UnifiedVectorFormat::GetData<list_entry_t>(right_format);
+	auto &left_child = ListVector::GetEntry(left);
+	auto &right_child = ListVector::GetEntry(right);
+
+	// step 3: iterate position-by-position through list elements
+	SelectionVector left_child_sel(remaining_count);
+	SelectionVector right_child_sel(remaining_count);
+	auto child_result = make_unsafe_uniq_array<int8_t>(remaining_count);
+
+	for (idx_t pos = 0; remaining_count > 0; pos++) {
+		// partition remaining into: exhausted (one or both lists ended) vs active (both have element at pos)
+		idx_t active_count = 0;
+		idx_t new_remaining_count = 0;
+		for (idx_t i = 0; i < remaining_count; i++) {
+			auto lidx = left_format.sel->get_index(remaining_lhs_sel.get_index(i));
+			auto ridx = right_format.sel->get_index(remaining_rhs_sel.get_index(i));
+			auto &lentry = left_entries[lidx];
+			auto &rentry = right_entries[ridx];
+			bool left_exhausted = pos >= lentry.length;
+			bool right_exhausted = pos >= rentry.length;
+			if (left_exhausted || right_exhausted) {
+				if (!left_exhausted || !right_exhausted) {
+					result_data[remaining_result_sel.get_index(i)] = left_exhausted ? -1 : 1;
+				}
+				// else: same length, all elements matched - result stays 0
+			} else {
+				left_child_sel.set_index(active_count, lentry.offset + pos);
+				right_child_sel.set_index(active_count, rentry.offset + pos);
+				// keep remaining entries for active rows
+				remaining_lhs_sel.set_index(active_count, remaining_lhs_sel.get_index(i));
+				remaining_rhs_sel.set_index(active_count, remaining_rhs_sel.get_index(i));
+				remaining_result_sel.set_index(active_count, remaining_result_sel.get_index(i));
+				active_count++;
+			}
+		}
+		if (active_count == 0) {
+			break;
+		}
+
+		// compare child elements at this position - pass child selection vectors directly
+		DistinctComparatorTypeSwitch(left_child, right_child, child_result.get(),
+		                             left_child_sel, right_child_sel, active_count);
+
+		// partition active into resolved vs still-remaining
+		new_remaining_count = 0;
+		for (idx_t i = 0; i < active_count; i++) {
+			if (child_result[i] != 0) {
+				result_data[remaining_result_sel.get_index(i)] = child_result[i];
+			} else {
+				remaining_lhs_sel.set_index(new_remaining_count, remaining_lhs_sel.get_index(i));
+				remaining_rhs_sel.set_index(new_remaining_count, remaining_rhs_sel.get_index(i));
+				remaining_result_sel.set_index(new_remaining_count, remaining_result_sel.get_index(i));
+				new_remaining_count++;
+			}
+		}
+		remaining_count = new_remaining_count;
+	}
+}
+
+template <bool IS_DISTINCT>
+static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, int8_t *result_data,
+                                                 const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
+                                                 idx_t sel_count) {
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		DistinctComparatorExecute::Execute<int8_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<int8_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::INT16:
-		DistinctComparatorExecute::Execute<int16_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<int16_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::INT32:
-		DistinctComparatorExecute::Execute<int32_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<int32_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::INT64:
-		DistinctComparatorExecute::Execute<int64_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<int64_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::UINT8:
-		DistinctComparatorExecute::Execute<uint8_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<uint8_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::UINT16:
-		DistinctComparatorExecute::Execute<uint16_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<uint16_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::UINT32:
-		DistinctComparatorExecute::Execute<uint32_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<uint32_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::UINT64:
-		DistinctComparatorExecute::Execute<uint64_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<uint64_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::INT128:
-		DistinctComparatorExecute::Execute<hugeint_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<hugeint_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::UINT128:
-		DistinctComparatorExecute::Execute<uhugeint_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<uhugeint_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::FLOAT:
-		DistinctComparatorExecute::Execute<float>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<float>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::DOUBLE:
-		DistinctComparatorExecute::Execute<double>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<double>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::INTERVAL:
-		DistinctComparatorExecute::Execute<interval_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<interval_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::VARCHAR:
-		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, count, sel, sel_count);
+		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::STRUCT:
-		StructComparator<IS_DISTINCT>(left, right, result_data, count, sel, sel_count);
+		StructComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		break;
+	case PhysicalType::LIST:
+		ListComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	default:
 		throw InternalException("Invalid type for comparator");
 	}
 }
 
-static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data, idx_t count,
-                                         const SelectionVector &sel, idx_t sel_count) {
-	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, count, sel, sel_count);
+static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data,
+                                         const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
+                                         idx_t sel_count) {
+	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 }
 
 static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
@@ -536,12 +661,17 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	case PhysicalType::VARCHAR:
 		StandardComparatorExecute::Execute<string_t>(left, right, result, count);
 		break;
-	case PhysicalType::STRUCT: {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<int8_t>(result);
 		SelectionVector sel(count);
 		sel.Initialize(*FlatVector::IncrementalSelectionVector());
-		StructComparator<false>(left, right, result_data, count, sel, count);
+		if (left.GetType().InternalType() == PhysicalType::STRUCT) {
+			StructComparator<false>(left, right, result_data, sel, sel, count);
+		} else {
+			ListComparator<false>(left, right, result_data, sel, sel, count);
+		}
 		break;
 	}
 	default:
@@ -559,7 +689,7 @@ void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &r
 	auto result_data = FlatVector::GetData<int8_t>(result);
 	SelectionVector sel(count);
 	sel.Initialize(*FlatVector::IncrementalSelectionVector());
-	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, count, sel, count);
+	DistinctComparatorTypeSwitchInternal<true>(left, right, result_data, sel, sel, count);
 }
 
 } // namespace duckdb
