@@ -297,6 +297,9 @@ private:
 	void InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 
+	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
+	void RebuildIndexes();
+
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
 	                                DataChunk &chunk, VerifyExistenceType type);

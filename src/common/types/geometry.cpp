@@ -205,9 +205,19 @@ public:
 		buffer.push_back(c);
 	}
 	void Write(double value) {
+		auto start = buffer.size();
 		duckdb_fmt::format_to(std::back_inserter(buffer), "{}", value);
-		// Remove trailing zero
-		if (buffer.back() == '0') {
+		// Remove trailing ".0" (e.g. "10.0" -> "10"), but only when the number
+		// is in fixed notation. Scientific notation like "1e+20" must not be
+		// touched — stripping the trailing '0' would corrupt the exponent.
+		bool has_exponent = false;
+		for (auto i = start; i < buffer.size(); i++) {
+			if (buffer[i] == 'e' || buffer[i] == 'E') {
+				has_exponent = true;
+				break;
+			}
+		}
+		if (!has_exponent && buffer.back() == '0') {
 			buffer.pop_back();
 			if (buffer.back() == '.') {
 				buffer.pop_back();

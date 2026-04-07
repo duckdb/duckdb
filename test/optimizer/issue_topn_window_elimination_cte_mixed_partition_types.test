@@ -74,3 +74,26 @@ SELECT tenant, lang, descr, categ FROM v1
 ----
 mytenant	en	mydescr	mycat
 
+# issue #21820
+statement ok
+CREATE OR REPLACE TABLE t1 (
+     t  INTEGER,
+     d  VARCHAR,
+     v  VARCHAR,
+     b  BOOLEAN,
+     v2 VARCHAR
+);
+
+statement ok
+INSERT INTO t1 VALUES (5, 'd', 'v', FALSE, 'a');
+
+statement ok
+CREATE OR REPLACE TABLE t2 (c1 VARCHAR, c2 VARCHAR);
+
+statement ok
+INSERT INTO t2
+SELECT t, v2
+FROM t1
+WHERE v IN ('n', 'v')
+  AND b = FALSE
+QUALIFY ROW_NUMBER() OVER (PARTITION BY d ORDER BY t DESC) = 1;

@@ -45,6 +45,12 @@ public:
 	void SetRowGroupCount(optional_idx row_group_count_p) {
 		row_group_count = row_group_count_p;
 	}
+	bool GetRebuildIndexes() const {
+		return rebuild_indexes;
+	}
+	void SetRebuildIndexes() {
+		rebuild_indexes = true;
+	}
 
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
@@ -56,6 +62,7 @@ protected:
 	vector<RowGroupPointer> row_group_pointers;
 
 	optional_idx row_group_count;
+	bool rebuild_indexes = false;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {
