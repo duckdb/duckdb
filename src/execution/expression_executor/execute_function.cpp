@@ -240,11 +240,14 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.Verify(context ? context->db : nullptr);
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	if (expr.function.HasFunctionCallback() &&
-	    (all_constant || !execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result))) {
+	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
+	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
+	if (expr.function.HasFunctionCallback() && !dictionary_executed) {
 		expr.function.GetFunctionCallback()(arguments, *state, result);
 	} else if (expr.function.HasSelectCallback()) {
 		ExecuteSelectFunction(expr, arguments, *state, result);
+	} else if (dictionary_executed) {
+		D_ASSERT(expr.function.HasFunctionCallback());
 	} else {
 		throw InternalException("Scalar function %s has neither an execution nor a select callback",
 		                        expr.function.name);

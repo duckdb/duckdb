@@ -103,8 +103,8 @@ TEST_CASE("Test scalar function select hook fallback paths", "[api]") {
 	REQUIRE(CHECK_COLUMN(projection_result, 0, {1, 2, Value(nullptr), 4}));
 	REQUIRE(CHECK_COLUMN(projection_result, 1, {false, true, Value(nullptr), true}));
 
-	auto function_only_filter = con.Query(
-	    "SELECT i FROM (VALUES (1), (2), (3), (4), (NULL)) tbl(i) WHERE is_even_function_only(i) ORDER BY i");
+	auto function_only_filter =
+	    con.Query("SELECT i FROM (VALUES (1), (2), (3), (4), (NULL)) tbl(i) WHERE is_even_function_only(i) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(function_only_filter, 0, {2, 4}));
 
 	auto select_only_filter = con.Query(
@@ -117,7 +117,8 @@ TEST_CASE("Test scalar function select hook with special null handling", "[api]"
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	ScalarFunction select_only_special("null_or_even_select_only", {LogicalType::INTEGER}, LogicalType::BOOLEAN, nullptr);
+	ScalarFunction select_only_special("null_or_even_select_only", {LogicalType::INTEGER}, LogicalType::BOOLEAN,
+	                                   nullptr);
 	select_only_special.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	select_only_special.SetSelectCallback(NullOrEvenSelectFunction);
 	RegisterScalarFunction(con, std::move(select_only_special));
@@ -126,9 +127,7 @@ TEST_CASE("Test scalar function select hook with special null handling", "[api]"
 	    con.Query("SELECT i FROM (VALUES (1), (2), (3), (4), (NULL)) tbl(i) WHERE null_or_even_select_only(i)");
 	REQUIRE(CHECK_COLUMN(filter_result, 0, {2, 4, Value(nullptr)}));
 
-	auto projection_result =
-	    con.Query("SELECT null_or_even_select_only(i) FROM (VALUES (1), (2), (NULL)) tbl(i)");
+	auto projection_result = con.Query("SELECT null_or_even_select_only(i) FROM (VALUES (1), (2), (NULL)) tbl(i)");
 	REQUIRE_FAIL(projection_result);
-	REQUIRE_THAT(projection_result->GetError(),
-	             Contains("only has a select callback with SPECIAL_HANDLING"));
+	REQUIRE_THAT(projection_result->GetError(), Contains("only has a select callback with SPECIAL_HANDLING"));
 }
