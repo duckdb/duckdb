@@ -74,81 +74,77 @@ static bool TryExtractSingleBinding(const Expression &expr, ColumnBinding &bindi
 	return found_binding && !multiple_bindings;
 }
 
-static bool OutputBindingDependsOn(LogicalOperator &op, const ColumnBinding &candidate_output,
-                                   const ColumnBinding &target_binding) {
-	if (candidate_output == target_binding) {
+static bool TryRemapCorrelatedBinding(const LogicalProjection &projection, const ColumnBinding &current_binding,
+                                      ColumnBinding &new_binding) {
+	for (auto i : ProjectionIndex::GetIndexes(projection.expressions.size())) {
+		ColumnBinding expression_binding;
+		if (!TryExtractSingleBinding(projection.GetExpression(i), expression_binding)) {
+			continue;
+		}
+		if (expression_binding != current_binding) {
+			continue;
+		}
+		new_binding = ColumnBinding(projection.table_index, i);
 		return true;
 	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		if (candidate_output.table_index != projection.table_index) {
-			return false;
+	return false;
+}
+
+static bool TryRemapCorrelatedBinding(const LogicalAggregate &aggregate, const ColumnBinding &current_binding,
+                                      ColumnBinding &new_binding) {
+	for (auto i : ProjectionIndex::GetIndexes(aggregate.groups.size())) {
+		ColumnBinding expression_binding;
+		if (!TryExtractSingleBinding(aggregate.GetGroupExpression(i), expression_binding)) {
+			continue;
 		}
-		ColumnBinding child_binding;
-		if (!TryExtractSingleBinding(projection.GetExpression(candidate_output), child_binding)) {
-			return false;
+		if (expression_binding != current_binding) {
+			continue;
 		}
-		return OutputBindingDependsOn(*projection.children[0], child_binding, target_binding);
+		new_binding = ColumnBinding(aggregate.group_index, i);
+		return true;
 	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggregate = op.Cast<LogicalAggregate>();
-		if (candidate_output.table_index != aggregate.group_index) {
-			return false;
+	for (auto i : ProjectionIndex::GetIndexes(aggregate.expressions.size())) {
+		auto output_binding = ColumnBinding(aggregate.aggregate_index, i);
+		ColumnBinding expression_binding;
+		if (!TryExtractSingleBinding(aggregate.GetExpression(output_binding), expression_binding)) {
+			continue;
 		}
-		ColumnBinding child_binding;
-		if (!TryExtractSingleBinding(aggregate.GetExpression(candidate_output), child_binding)) {
-			return false;
+		if (expression_binding != current_binding) {
+			continue;
 		}
-		return OutputBindingDependsOn(*aggregate.children[0], child_binding, target_binding);
+		new_binding = output_binding;
+		return true;
 	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_TOP_N:
-	case LogicalOperatorType::LOGICAL_SAMPLE:
-	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		if (op.children.empty()) {
-			return false;
-		}
-		auto output_bindings = op.GetColumnBindings();
-		auto child_bindings = op.children[0]->GetColumnBindings();
-		for (idx_t i = 0; i < output_bindings.size(); i++) {
-			if (output_bindings[i] != candidate_output) {
-				continue;
-			}
-			if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
-				auto &filter = op.Cast<LogicalFilter>();
-				if (!filter.projection_map.empty()) {
-					return OutputBindingDependsOn(*op.children[0], child_bindings[filter.projection_map[i]],
-					                              target_binding);
-				}
-			}
-			if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-				auto &order = op.Cast<LogicalOrder>();
-				if (!order.projection_map.empty()) {
-					return OutputBindingDependsOn(*op.children[0], child_bindings[order.projection_map[i]],
-					                              target_binding);
-				}
-			}
-			return OutputBindingDependsOn(*op.children[0], child_bindings[i], target_binding);
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
+	return false;
 }
 
 static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
 	auto left_bindings = left_side.GetColumnBindings();
 	for (auto &column : correlated_columns) {
+		bool binding_present = false;
 		for (const auto &binding : left_bindings) {
-			if (!OutputBindingDependsOn(left_side, binding, column.binding)) {
-				continue;
+			if (binding == column.binding) {
+				binding_present = true;
+				break;
 			}
-			column.binding = binding;
+		}
+		if (binding_present) {
+			continue;
+		}
+		ColumnBinding new_binding;
+		bool found_binding = false;
+		switch (left_side.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalProjection>(), column.binding, new_binding);
 			break;
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalAggregate>(), column.binding, new_binding);
+			break;
+		default:
+			break;
+		}
+		if (found_binding) {
+			column.binding = new_binding;
 		}
 	}
 }
