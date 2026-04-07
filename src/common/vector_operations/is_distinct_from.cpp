@@ -779,6 +779,18 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 	Vector lchild(lentry_flattened, lcursor, count);
 	Vector rchild(rentry_flattened, rcursor, count);
 
+	// Struct vectors cannot be dictionary vectors, so updating the cursor selection vector
+	// after construction does not update the struct child. We need to re-slice after cursor updates.
+	bool is_struct_child = lentry_flattened.GetType().InternalType() == PhysicalType::STRUCT;
+	auto ReSliceChildren = [&]() {
+		if (is_struct_child) {
+			lchild.Reference(lentry_flattened);
+			lchild.Slice(lcursor, count);
+			rchild.Reference(rentry_flattened);
+			rchild.Slice(rcursor, count);
+		}
+	};
+
 	// Get pointers to the list entries
 	UnifiedVectorFormat lvdata;
 	left.ToUnifiedFormat(count, lvdata);
@@ -808,6 +820,7 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 		// Set up the cursors for the current position
 		PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
 		PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+		ReSliceChildren();
 
 		idx_t true_count = 0;
 		idx_t false_count = 0;
@@ -829,6 +842,7 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 			DensifyNestedSelection(false_sel, count, slice_sel);
 			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
 			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+			ReSliceChildren();
 		}
 
 		// Find what might match on the next position
