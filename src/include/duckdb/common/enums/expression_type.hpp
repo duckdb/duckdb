@@ -91,7 +91,6 @@ enum class ExpressionType : uint8_t {
 	WINDOW_AGGREGATE = 110,
 	WINDOW_FUNCTION = 111,
 
-	//	Deprecated builtin types
 	WINDOW_RANK = 120,
 	WINDOW_RANK_DENSE = 121,
 	WINDOW_NTILE = 122,
@@ -205,7 +204,6 @@ enum class ExpressionClass : uint8_t {
 	BOUND_UNNEST = 40,
 	BOUND_LAMBDA = 41,
 	BOUND_LAMBDA_REF = 42,
-	BOUND_WINDOW_FUNCTION = 43,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//
