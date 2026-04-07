@@ -11,6 +11,8 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity,
 	if (capacity > 0) {
 		allocated_data = allocator.Allocate(capacity * type_size);
 		data_ptr = allocated_data.get();
+		// resize the validity
+		validity.Resize(capacity);
 	}
 }
 StandardVectorBuffer::StandardVectorBuffer(idx_t capacity, idx_t type_size)

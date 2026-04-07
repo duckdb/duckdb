@@ -363,7 +363,6 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 			memset(data, 0, capacity * type_size);
 		}
 	}
-	buffer->GetValidityMask().Resize(capacity);
 }
 
 void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
