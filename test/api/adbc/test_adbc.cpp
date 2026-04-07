@@ -4470,4 +4470,51 @@ TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)",
 	db.adbc_error.release(&db.adbc_error);
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
 }
+
+TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+
+	// Create a table large enough that streaming requires multiple fetch calls.
+	auto r = db.Query("CREATE TABLE big AS SELECT * FROM range(500000) r(i)");
+	REQUIRE(!r->HasError());
+
+	constexpr int ITERATIONS = 50;
+
+	for (int iter = 0; iter < ITERATIONS; iter++) {
+		AdbcStatement query_stmt;
+		ArrowArrayStream stream;
+		stream.release = nullptr;
+		int64_t rows_affected;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &query_stmt, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&query_stmt, "SELECT * FROM big", &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&query_stmt, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&query_stmt, &db.adbc_error)));
+
+		std::thread releaser([&stream]() {
+			if (stream.release) {
+				stream.release(&stream);
+			}
+		});
+
+		{
+			AdbcStatement materialize_stmt;
+			auto status = AdbcStatementNew(&db.adbc_connection, &materialize_stmt, &db.adbc_error);
+			if (status == ADBC_STATUS_OK) {
+				AdbcStatementSetSqlQuery(&materialize_stmt, "SELECT 1", &db.adbc_error);
+				AdbcStatementRelease(&materialize_stmt, &db.adbc_error);
+			}
+		}
+
+		releaser.join();
+		if (stream.release) {
+			stream.release(&stream);
+		}
+	}
+}
+
 } // namespace duckdb

@@ -242,7 +242,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
-	if (GetDefaultDatabase(context) == name) {
+	if (StringUtil::CIEquals(GetDefaultDatabase(context), name)) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
@@ -305,7 +305,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 		databases[new_name] = attached_db;
 	}
 
-	if (default_database == old_name) {
+	if (StringUtil::CIEquals(default_database, old_name)) {
 		default_database = new_name;
 	}
 }
