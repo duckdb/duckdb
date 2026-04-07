@@ -1491,8 +1491,9 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, CastPara
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(hugeint_t)) {
-		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
-		                          GetTypeId<hugeint_t>());
+		HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<hugeint_t>()),
+		                             parameters);
+		return false;
 	}
 	Bit::BitToNumeric(input, result);
 	return (true);
@@ -1503,8 +1504,9 @@ bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, CastPar
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(uhugeint_t)) {
-		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
-		                          GetTypeId<uhugeint_t>());
+		HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<uhugeint_t>()),
+		                             parameters);
+		return false;
 	}
 	Bit::BitToNumeric(input, result);
 	return (true);
