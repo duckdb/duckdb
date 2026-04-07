@@ -124,6 +124,65 @@ int8_t Comparator::Operation(const double &left, const double &right) {
 	return ComparatorFloat<double>(left, right);
 }
 
+//===--------------------------------------------------------------------===//
+// Fast path: direct BinaryExecutor for primitive types (single pass, no intermediate vector)
+//===--------------------------------------------------------------------===//
+template <class OP>
+static bool TryPrimitiveComparisonExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+#ifdef DUCKDB_SMALLER_BINARY
+	return false;
+#else
+	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		BinaryExecutor::Execute<int8_t, int8_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::INT16:
+		BinaryExecutor::Execute<int16_t, int16_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::INT32:
+		BinaryExecutor::Execute<int32_t, int32_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::INT64:
+		BinaryExecutor::Execute<int64_t, int64_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::UINT8:
+		BinaryExecutor::Execute<uint8_t, uint8_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::UINT16:
+		BinaryExecutor::Execute<uint16_t, uint16_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::UINT32:
+		BinaryExecutor::Execute<uint32_t, uint32_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::UINT64:
+		BinaryExecutor::Execute<uint64_t, uint64_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::INT128:
+		BinaryExecutor::Execute<hugeint_t, hugeint_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::UINT128:
+		BinaryExecutor::Execute<uhugeint_t, uhugeint_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::FLOAT:
+		BinaryExecutor::Execute<float, float, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::DOUBLE:
+		BinaryExecutor::Execute<double, double, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::INTERVAL:
+		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result, count);
+		return true;
+	case PhysicalType::VARCHAR:
+		BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result, count);
+		return true;
+	default:
+		return false;
+	}
+#endif
+}
+
 template <class PREDICATE>
 static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx_t count, PREDICATE predicate) {
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
@@ -158,26 +217,44 @@ static void DistinctComparatorToBoolean(Vector &left, Vector &right, Vector &res
 }
 
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result, count)) {
+		return;
+	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v == 0; });
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result, count)) {
+		return;
+	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v != 0; });
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (TryPrimitiveComparisonExecute<duckdb::GreaterThan>(left, right, result, count)) {
+		return;
+	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v > 0; });
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(left, right, result, count)) {
+		return;
+	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v >= 0; });
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (TryPrimitiveComparisonExecute<duckdb::GreaterThan>(right, left, result, count)) {
+		return;
+	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v < 0; });
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(right, left, result, count)) {
+		return;
+	}
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v <= 0; });
 }
 
