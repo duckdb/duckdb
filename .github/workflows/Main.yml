@@ -440,37 +440,6 @@ jobs:
         artifact_name: linux-release-build
         changed_tests_file: ${{ runner.temp }}/changed_tests.txt
 
-    - name: Build linux default release
-      run: make clean release
-
-    - name: Symbol Checks
-      run: make -j4 --output-sync=target symbol-checks
-
- linux-release-tests:
-    name: Linux Release Tests
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
-    needs:
-      - prepare
-      - linux-release
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-
-    steps:
-    - uses: actions/checkout@v6
-    - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
-
-    - name: Download release build artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-release-build
-        path: build
-
-    - name: Extract release build artifact
-      shell: bash
-      run: |
-        rm -rf build/release
-        tar -xzf build/release-artifact.tar.gz -C build
-
     - name: Test
       shell: bash
       run: |
@@ -480,12 +449,18 @@ jobs:
           make unittest_release SKIP_BUILD=1
         fi
 
+    - name: Build linux default release
+      run: make clean release
+
+    - name: Symbol Checks
+      run: make -j4 --output-sync=target symbol-checks
+
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -579,7 +554,7 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-musl-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -1148,7 +1123,6 @@ jobs:
       - extensions
       - wasm-eh
       - linux-release
-      - linux-release-tests
       - linux-release-cli
       - linux-musl-release-cli
       - main_julia
