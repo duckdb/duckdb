@@ -722,7 +722,7 @@ template <class T, bool HAS_APPEND_SEL, bool HAS_SOURCE_SEL, bool ALL_VALID>
 #endif
 static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVectorFormat &source_format,
                                               const SelectionVector &append_sel, const idx_t append_count,
-                                              const TupleDataLayout &layout, const Vector &row_locations,
+                                              const TupleDataLayout &layout, Vector &row_locations,
                                               Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &,
                                               const vector<TupleDataScatterFunction> &) {
 	// Source
@@ -767,8 +767,8 @@ static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVec
 template <class T>
 static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                       const SelectionVector &append_sel, const idx_t append_count,
-                                      const TupleDataLayout &layout, const Vector &row_locations,
-                                      Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
+                                      const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
+                                      const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
                                       const vector<TupleDataScatterFunction> &child_functions) {
 #ifdef DUCKDB_SMALLER_BINARY
 	TupleDataTemplatedScatterInternal<T>(source, source_format, append_sel, append_count, layout, row_locations,
@@ -825,8 +825,8 @@ static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVecto
 template <class T, SortKeyType SORT_KEY_TYPE>
 void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source_format,
                              const SelectionVector &append_sel, const idx_t append_count, const TupleDataLayout &layout,
-                             const Vector &row_locations, Vector &heap_locations, const idx_t,
-                             const UnifiedVectorFormat &, const vector<TupleDataScatterFunction> &) {
+                             Vector &row_locations, Vector &heap_locations, const idx_t, const UnifiedVectorFormat &,
+                             const vector<TupleDataScatterFunction> &) {
 	D_ASSERT(layout.IsSortKeyLayout());
 	D_ASSERT(layout.GetSortKeyType() == SORT_KEY_TYPE);
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
@@ -838,7 +838,7 @@ void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source
 	const auto &validity = source_data.validity;
 
 	// Target
-	const auto target_locations = FlatVector::GetDataMutable<SORT_KEY *>(const_cast<Vector &>(row_locations));
+	const auto target_locations = FlatVector::GetDataMutable<SORT_KEY *>(row_locations);
 	const auto target_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	if (validity.CannotHaveNull()) {
@@ -866,7 +866,7 @@ void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source
 
 static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                    const SelectionVector &append_sel, const idx_t append_count,
-                                   const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
+                                   const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                    const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
                                    const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
@@ -925,7 +925,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 //------------------------------------------------------------------------------
 static void TupleDataListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                  const SelectionVector &append_sel, const idx_t append_count,
-                                 const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
+                                 const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                  const idx_t col_idx, const UnifiedVectorFormat &,
                                  const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
@@ -974,7 +974,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 //------------------------------------------------------------------------------
 static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                   const SelectionVector &append_sel, const idx_t append_count,
-                                  const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
+                                  const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                   const idx_t col_idx, const UnifiedVectorFormat &,
                                   const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
@@ -1025,7 +1025,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 template <class T>
 static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const TupleDataVectorFormat &source_format,
                                                       const SelectionVector &append_sel, const idx_t append_count,
-                                                      const TupleDataLayout &, const Vector &, Vector &heap_locations,
+                                                      const TupleDataLayout &, Vector &, Vector &heap_locations,
                                                       const idx_t, const UnifiedVectorFormat &list_data,
                                                       const vector<TupleDataScatterFunction> &) {
 	// Parent list data
@@ -1082,7 +1082,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const Tupl
 
 static void TupleDataStructWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                                    const SelectionVector &append_sel, const idx_t append_count,
-                                                   const TupleDataLayout &layout, const Vector &row_locations,
+                                                   const TupleDataLayout &layout, Vector &row_locations,
                                                    Vector &heap_locations, const idx_t,
                                                    const UnifiedVectorFormat &list_data,
                                                    const vector<TupleDataScatterFunction> &child_functions) {
@@ -1142,13 +1142,12 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 }
 
 template <class COLLECTION_VECTOR>
-static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
-                                                       const TupleDataVectorFormat &child_list_format,
-                                                       const SelectionVector &append_sel, const idx_t append_count,
-                                                       const TupleDataLayout &layout, const Vector &row_locations,
-                                                       Vector &heap_locations, const idx_t col_idx,
-                                                       const UnifiedVectorFormat &list_data,
-                                                       const vector<TupleDataScatterFunction> &child_functions) {
+static void
+TupleDataCollectionWithinCollectionScatter(const Vector &child_list, const TupleDataVectorFormat &child_list_format,
+                                           const SelectionVector &append_sel, const idx_t append_count,
+                                           const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
+                                           const idx_t col_idx, const UnifiedVectorFormat &list_data,
+                                           const vector<TupleDataScatterFunction> &child_functions) {
 	// Parent list data
 	const auto &list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
