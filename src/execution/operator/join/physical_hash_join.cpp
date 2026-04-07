@@ -418,13 +418,10 @@ static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bo
 }
 
 static idx_t GetTupleWidth(const vector<LogicalType> &types, bool &all_constant) {
-	idx_t tuple_width = 0;
-	all_constant = true;
-	for (auto &type : types) {
-		tuple_width += GetTypeIdSize(type.InternalType());
-		all_constant &= TypeIsConstantSize(type.InternalType());
-	}
-	return tuple_width + AlignValue(types.size()) / 8 + GetTypeIdSize(PhysicalType::UINT64);
+	TupleDataLayout layout;
+	layout.Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	all_constant = layout.AllConstant();
+	return layout.GetRowWidth();
 }
 
 static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vector<LogicalType> &types,
@@ -433,7 +430,11 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width + 1;
+	if (tuple_width == 0) {
+		throw InternalException("GetPartitioningSpaceRequirement: tuple width should not be 0");
+	}
+
+	auto tuples_per_block = MaxValue<idx_t>(buffer_manager.GetBlockSize() / tuple_width, 1);
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;
