@@ -151,6 +151,16 @@ bool Transformer::InWindowDefinition() {
 	return false;
 }
 
+bool Transformer::InMacroDefinition() {
+	if (in_macro_definition) {
+		return true;
+	}
+	if (parent) {
+		return parent->InMacroDefinition();
+	}
+	return false;
+}
+
 static bool IsOrderableWindowFunction(ExpressionType type) {
 	switch (type) {
 	case ExpressionType::WINDOW_FIRST_VALUE:
@@ -404,7 +414,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
-	} else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
+	} else if (lowercase_name == "list" && order_bys->orders.size() == 1 && !InMacroDefinition()) {
 		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
 		if (children.size() != 1) {
 			throw ParserException("Wrong number of arguments to LIST.");
