@@ -143,20 +143,6 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	}
 }
 
-template <class PREDICATE>
-static void DistinctComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx_t count,
-                                        PREDICATE predicate) {
-	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
-	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::DistinctComparator(left, right, comparator_result, count);
-	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<bool>(result, count);
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = predicate(cmp_data[i]);
-	}
-}
-
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
 	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v == 0; });
 }
