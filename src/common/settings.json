@@ -565,6 +565,13 @@
         "custom_implementation": true
     },
     {
+        "name": "error_on_duplicate_columns_in_select",
+        "description": "Throw an error when duplicate column names are produced in a SELECT clause",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
