@@ -1,0 +1,23 @@
+# name: test/issues/general/test_21890.test
+# description: Issue 21890 - correlated HAVING subquery with TRY() should not leave stale delim join bindings
+# group: [general]
+
+statement ok
+CREATE TABLE tbl(val INT);
+
+statement ok
+INSERT INTO tbl VALUES (1), (2);
+
+query I
+SELECT val
+FROM tbl
+GROUP BY val
+HAVING (
+  SELECT COUNT(*)
+  FROM tbl tbl2
+  WHERE TRY(tbl.val) > 0
+) > 0
+ORDER BY val
+----
+1
+2
