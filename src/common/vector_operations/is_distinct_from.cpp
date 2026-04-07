@@ -1212,11 +1212,27 @@ void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t co
 } // namespace
 
 void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ExecuteDistinct<duckdb::DistinctFrom>(left, right, result, count);
+	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
+	Vector comparator_result(LogicalType::TINYINT, count);
+	VectorOperations::DistinctComparator(left, right, comparator_result, count);
+	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<bool>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = cmp_data[i] != 0;
+	}
 }
 
 void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ExecuteDistinct<duckdb::NotDistinctFrom>(left, right, result, count);
+	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
+	Vector comparator_result(LogicalType::TINYINT, count);
+	VectorOperations::DistinctComparator(left, right, comparator_result, count);
+	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<bool>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = cmp_data[i] == 0;
+	}
 }
 
 // true := A != B with nulls being equal

@@ -316,28 +316,61 @@ public:
 };
 } // namespace
 
+template <class PREDICATE>
+static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx_t count, PREDICATE predicate) {
+	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
+	Vector comparator_result(LogicalType::TINYINT, count);
+	VectorOperations::Comparator(left, right, comparator_result, count);
+	auto cmp_data = comparator_result.Values<int8_t>(count);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::Writer<bool>(result, count);
+	auto &result_validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto entry = cmp_data[i];
+		if (!entry.IsValid()) {
+			result_validity.SetInvalid(i);
+		} else {
+			result_data[i] = predicate(entry.value);
+		}
+	}
+}
+
+template <class PREDICATE>
+static void DistinctComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx_t count,
+                                        PREDICATE predicate) {
+	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
+	Vector comparator_result(LogicalType::TINYINT, count);
+	VectorOperations::DistinctComparator(left, right, comparator_result, count);
+	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::Writer<bool>(result, count);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = predicate(cmp_data[i]);
+	}
+}
+
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::Equals>(left, right, result, count);
+	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v == 0; });
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::NotEquals>(left, right, result, count);
-}
-
-void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::GreaterThanEquals>(left, right, result, count);
-}
-
-void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::GreaterThanEquals>(right, left, result, count);
+	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v != 0; });
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::GreaterThan>(left, right, result, count);
+	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v > 0; });
+}
+
+void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v >= 0; });
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::GreaterThan>(right, left, result, count);
+	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v < 0; });
+}
+
+void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v <= 0; });
 }
 
 struct StandardComparatorExecute {
@@ -374,7 +407,8 @@ static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *re
 
 template <bool IS_DISTINCT>
 static void StructComparator(Vector &left, Vector &right, int8_t *result_data,
-                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                             ValidityMask *result_validity = nullptr) {
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
@@ -391,11 +425,11 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data,
 	SelectionVector remaining_result_sel(sel_count);
 	idx_t remaining_count;
 	if (!has_nulls) {
-		remaining_lhs_sel.Initialize(lhs_sel);
-		remaining_rhs_sel.Initialize(rhs_sel);
 		remaining_count = sel_count;
 		memset(result_data, 0, sel_count * sizeof(int8_t));
 		for (idx_t i = 0; i < sel_count; i++) {
+			remaining_lhs_sel.set_index(i, lhs_sel.get_index(i));
+			remaining_rhs_sel.set_index(i, rhs_sel.get_index(i));
 			remaining_result_sel.set_index(i, i);
 		}
 	} else {
@@ -408,6 +442,9 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data,
 					result_data[i] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
 				} else {
 					result_data[i] = 0;
+					if (result_validity) {
+						result_validity->SetInvalid(i);
+					}
 				}
 			} else {
 				result_data[i] = 0;
@@ -445,6 +482,10 @@ struct ListEntryAccessor {
 	static Vector &GetChild(Vector &vector) {
 		return ListVector::GetEntry(vector);
 	}
+	static void FlattenChild(Vector &vector) {
+		auto &child = ListVector::GetEntry(vector);
+		child.Flatten(ListVector::GetListSize(vector));
+	}
 	static idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
 		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto idx = format.sel->get_index(sel_idx);
@@ -463,6 +504,10 @@ struct ArrayEntryAccessor {
 	Vector &GetChild(Vector &vector) {
 		return ArrayVector::GetEntry(vector);
 	}
+	void FlattenChild(Vector &vector) {
+		auto &child = ArrayVector::GetEntry(vector);
+		child.Flatten(ArrayVector::GetTotalSize(vector));
+	}
 	idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
 		return format.sel->get_index(sel_idx) * array_size;
 	}
@@ -475,7 +520,12 @@ struct ArrayEntryAccessor {
 template <bool IS_DISTINCT, class ACCESSOR>
 static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_data,
                                   const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                                  ACCESSOR accessor) {
+                                  ACCESSOR accessor, ValidityMask *result_validity = nullptr) {
+	// flatten the list/array vectors and their children so they can be indexed directly
+	left.Flatten(sel_count);
+	right.Flatten(sel_count);
+	accessor.FlattenChild(left);
+	accessor.FlattenChild(right);
 	// step 1: handle top-level validity
 	auto left_validity = left.Validity(sel_count);
 	auto right_validity = right.Validity(sel_count);
@@ -486,11 +536,11 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 	SelectionVector remaining_result_sel(sel_count);
 	idx_t remaining_count;
 	if (!has_nulls) {
-		remaining_lhs_sel.Initialize(lhs_sel);
-		remaining_rhs_sel.Initialize(rhs_sel);
 		remaining_count = sel_count;
 		memset(result_data, 0, sel_count * sizeof(int8_t));
 		for (idx_t i = 0; i < sel_count; i++) {
+			remaining_lhs_sel.set_index(i, lhs_sel.get_index(i));
+			remaining_rhs_sel.set_index(i, rhs_sel.get_index(i));
 			remaining_result_sel.set_index(i, i);
 		}
 	} else {
@@ -503,6 +553,9 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 					result_data[i] = (left_null && right_null) ? 0 : (left_null ? 1 : -1);
 				} else {
 					result_data[i] = 0;
+					if (result_validity) {
+						result_validity->SetInvalid(i);
+					}
 				}
 			} else {
 				result_data[i] = 0;
@@ -579,16 +632,20 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 
 template <bool IS_DISTINCT>
 static void ListComparator(Vector &left, Vector &right, int8_t *result_data,
-                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                           ValidityMask *result_validity = nullptr) {
 	ListEntryAccessor accessor;
-	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor);
+	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor,
+	                                   result_validity);
 }
 
 template <bool IS_DISTINCT>
 static void ArrayComparator(Vector &left, Vector &right, int8_t *result_data,
-                            const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count) {
+                            const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                            ValidityMask *result_validity = nullptr) {
 	ArrayEntryAccessor accessor(ArrayType::GetSize(left.GetType()));
-	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor);
+	ListOrArrayComparator<IS_DISTINCT>(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor,
+	                                   result_validity);
 }
 
 template <bool IS_DISTINCT>
@@ -712,15 +769,18 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	case PhysicalType::ARRAY: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<int8_t>(result);
+		auto &validity = FlatVector::Validity(result);
 		SelectionVector sel(count);
-		sel.Initialize(*FlatVector::IncrementalSelectionVector());
+		for (idx_t i = 0; i < count; i++) {
+			sel.set_index(i, i);
+		}
 		auto physical_type = left.GetType().InternalType();
 		if (physical_type == PhysicalType::STRUCT) {
-			StructComparator<false>(left, right, result_data, sel, sel, count);
+			StructComparator<false>(left, right, result_data, sel, sel, count, &validity);
 		} else if (physical_type == PhysicalType::LIST) {
-			ListComparator<false>(left, right, result_data, sel, sel, count);
+			ListComparator<false>(left, right, result_data, sel, sel, count, &validity);
 		} else {
-			ArrayComparator<false>(left, right, result_data, sel, sel, count);
+			ArrayComparator<false>(left, right, result_data, sel, sel, count, &validity);
 		}
 		break;
 	}
