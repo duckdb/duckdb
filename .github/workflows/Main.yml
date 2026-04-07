@@ -1134,7 +1134,6 @@ jobs:
         shell: bash
         run: |
           NEEDS_JSON='${{ toJSON(needs) }}'
-          echo "$NEEDS_JSON"
 
           failed_or_cancelled=$(
             jq -r '
