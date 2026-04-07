@@ -177,6 +177,11 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 		throw InternalException("Function %s only has a select callback but returns %s", expr.function.name,
 		                        expr.return_type.ToString());
 	}
+	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
+		throw InternalException("Function %s only has a select callback with SPECIAL_HANDLING but projected execution "
+		                        "requires a scalar callback to produce NULL results",
+		                        expr.function.name);
+	}
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto count = args.size();
@@ -187,16 +192,15 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 
 	auto &result_validity = FlatVector::Validity(result);
 	result_validity.SetAllValid(count);
-	if (expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		for (auto &arg : args.data) {
-			auto entries = arg.Validity(count);
-			if (!entries.CanHaveNull()) {
-				continue;
-			}
-			for (idx_t i = 0; i < count; i++) {
-				if (!entries.IsValid(i)) {
-					result_validity.SetInvalid(i);
-				}
+	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	for (auto &arg : args.data) {
+		auto entries = arg.Validity(count);
+		if (!entries.CanHaveNull()) {
+			continue;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			if (!entries.IsValid(i)) {
+				result_validity.SetInvalid(i);
 			}
 		}
 	}
