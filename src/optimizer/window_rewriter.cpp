@@ -36,6 +36,13 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
+	// cannot rewrite if there are table filters pushed into the scan
+	// the virtual row_number column counts absolute row positions in storage,
+	// which does not match row_number() over() when rows are filtered out
+	if (get.table_filters.HasFilters()) {
+		return false;
+	}
+
 	return true;
 }
 

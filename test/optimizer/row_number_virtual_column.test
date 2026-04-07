@@ -103,6 +103,105 @@ JOIN (SELECT row_number() OVER () AS row_num, b FROM bar) b ON f.row_num = b.row
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
 
+# -------------------------------------------------------------------
+# Multi-column tables with various types
+# -------------------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE TABLE multi_types (col1 INT, col2 DATE, col3 VARCHAR);
+
+statement ok
+INSERT INTO multi_types VALUES (1, '2024-01-01', 'hello'), (2, '2024-06-15', 'world'), (3, '2024-12-31', 'foo');
+
+query II
+SELECT col3, row_number() OVER () FROM multi_types ORDER BY col1;
+----
+hello	1
+world	2
+foo	3
+
+query III
+SELECT col1, col2, row_number() OVER () FROM multi_types ORDER BY col1;
+----
+1	2024-01-01	1
+2	2024-06-15	2
+3	2024-12-31	3
+
+query IIII
+SELECT row_number() OVER (), col1, col2, col3 FROM multi_types ORDER BY col1;
+----
+1	1	2024-01-01	hello
+2	2	2024-06-15	world
+3	3	2024-12-31	foo
+
+query II
+SELECT col2, row_number() OVER () FROM multi_types WHERE col1 > 1 ORDER BY col1;
+----
+2024-06-15	1
+2024-12-31	2
+
+# select only non-rowid columns alongside row_number in a subquery
+query III
+SELECT rn, col3, col2 FROM (SELECT row_number() OVER () AS rn, col2, col3 FROM multi_types) sub ORDER BY rn;
+----
+1	hello	2024-01-01
+2	world	2024-06-15
+3	foo	2024-12-31
+
+# row_number with expressions on other columns
+query II
+SELECT col1 * 10, row_number() OVER () FROM multi_types ORDER BY col1;
+----
+10	1
+20	2
+30	3
+
+# verify the optimization still kicks in with mixed column types
+query II
+EXPLAIN SELECT col3, row_number() OVER () FROM multi_types;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+# -------------------------------------------------------------------
+# row_number should not be rewritten when there are pushed-down filters
+# -------------------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE TABLE filter_test (col1 INT, col2 VARCHAR);
+
+statement ok
+INSERT INTO filter_test VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma'), (4, 'delta'), (5, 'epsilon');
+
+# with a WHERE filter the optimization should NOT kick in
+query II
+EXPLAIN SELECT col2, row_number() OVER () FROM filter_test WHERE col1 > 2;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+SELECT col2, row_number() OVER () FROM filter_test WHERE col1 > 2 ORDER BY col1;
+----
+gamma	1
+delta	2
+epsilon	3
+
+# same with transaction-local data and a filter
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO filter_test VALUES (6, 'zeta');
+
+query II
+SELECT col2, row_number() OVER () FROM filter_test WHERE col1 > 3 ORDER BY col1;
+----
+delta	1
+epsilon	2
+zeta	3
+
+statement ok
+COMMIT;
+
 statement ok
 pragma disable_optimizer;
 
