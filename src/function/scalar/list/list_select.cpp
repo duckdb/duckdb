@@ -79,7 +79,6 @@ void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	Vector &selection_list = args.data[1];
 	idx_t count = args.size();
 
-
 	UnifiedVectorFormat selection_lists;
 	selection_list.ToUnifiedFormat(count, selection_lists);
 	auto selection_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(selection_lists);
