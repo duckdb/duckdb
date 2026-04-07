@@ -121,9 +121,8 @@ static void SetupUnionTable(Connection &con, idx_t num_rows, bool with_nulls = f
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(s := 'val' || i::VARCHAR) FROM range(" +
 	                          to_string(num_rows) + ") tbl(i) WHERE i % 2 = 1"));
 	if (with_nulls) {
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO union_tbl SELECT NULL::UNION(i INT, s VARCHAR) FROM range(" +
-		              to_string(num_rows / 5) + ") tbl(i)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT NULL::UNION(i INT, s VARCHAR) FROM range(" +
+		                          to_string(num_rows / 5) + ") tbl(i)"));
 	}
 }
 
