@@ -8,7 +8,7 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
-#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
@@ -150,7 +150,7 @@ unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, Windo
 
 vector<column_t> WindowValueExecutor::Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared) {
 	//	The children have to be handled separately because only the first one is global
-	D_ASSERT(!children.empty());
+	D_ASSERT(!wexpr.children.empty());
 
 	vector<column_t> child_idx;
 	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls));
@@ -312,8 +312,8 @@ unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, Win
 	return nullptr;
 }
 
-static WindowFunctionSet GetLeadLagFunctionSet(const ExpressionType &type) {
-	WindowFunctionSet funcs(type == ExpressionType::WINDOW_LEAD ? "lead" : "lag");
+static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const ExpressionType &type) {
+	WindowFunctionSet funcs(name);
 
 	auto bind = WindowLeadLagExecutor::Bind;
 	auto bounds = WindowLeadLagLocalState::GetBounds;
@@ -329,11 +329,11 @@ static WindowFunctionSet GetLeadLagFunctionSet(const ExpressionType &type) {
 }
 
 WindowFunctionSet LeadFun::GetFunctions() {
-	return GetLeadLagFunctionSet(ExpressionType::WINDOW_LEAD);
+	return GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
 }
 
 WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
-	auto funcs = GetLeadLagFunctionSet(ExpressionType::WINDOW_LEAD);
+	auto funcs = GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
 
 	for (auto &func : funcs.functions) {
 		if (func.arguments.size() != nargs) {
@@ -351,7 +351,7 @@ WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
 }
 
 WindowFunctionSet LagFun::GetFunctions() {
-	return GetLeadLagFunctionSet(ExpressionType::WINDOW_LAG);
+	return GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LAG);
 }
 
 WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -529,7 +529,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 }
 
 WindowFunction FirstValueFun::GetFunction() {
-	WindowFunction fun("first_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
+	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
 	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds);
 	return fun;
 }
@@ -588,7 +588,7 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 }
 
 WindowFunction LastValueFun::GetFunction() {
-	WindowFunction fun("last_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
+	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
 	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds);
 	return fun;
 }
@@ -653,7 +653,7 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 }
 
 WindowFunction NthValueFun::GetFunction() {
-	WindowFunction fun("nth_value", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
+	WindowFunction fun(Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ExpressionType::WINDOW_NTH_VALUE, WindowFirstValueExecutor::Bind,
 	                   WindowValueLocalState::GetBounds);
 	return fun;
@@ -994,7 +994,6 @@ vector<column_t> WindowFillExecutor::Children(const BoundWindowExpression &wexpr
 
 	return child_idx;
 }
-
 WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
                                        WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
@@ -1081,7 +1080,7 @@ void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr col
 }
 
 WindowFunction FillFun::GetFunction() {
-	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
+	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
 	fun.SetChildrenCallback(WindowFillExecutor::Children);

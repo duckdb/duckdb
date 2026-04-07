@@ -125,8 +125,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 			auto &tz_vec = input.data.back();
 			if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				if (ConstantVector::IsNull(tz_vec)) {
-					result.SetVectorType(VectorType::CONSTANT_VECTOR);
-					ConstantVector::SetNull(result, true);
+					ConstantVector::SetNull(result);
 				} else {
 					SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
 					SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(

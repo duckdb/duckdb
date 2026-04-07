@@ -385,10 +385,11 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
 				// Create a new validity mask to avoid modifying original mask
+				// FIXME: why?
 				auto &pvalidity = ConstantVector::Validity(primary);
 				ValidityMask pvalidity_copy = ConstantVector::Validity(primary);
 				pvalidity.Copy(pvalidity_copy, count);
-				ConstantVector::SetNull(primary, true);
+				ConstantVector::SetNull(primary);
 				return count;
 			}
 		}

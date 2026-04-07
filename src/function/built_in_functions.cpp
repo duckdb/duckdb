@@ -90,18 +90,6 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 	catalog.CreateCopyFunction(transaction, info);
 }
 
-void BuiltinFunctions::AddFunction(WindowFunction function) {
-	CreateWindowFunctionInfo info(std::move(function));
-	info.internal = true;
-	catalog.CreateFunction(transaction, info);
-}
-
-void BuiltinFunctions::AddFunction(WindowFunctionSet set) {
-	CreateWindowFunctionInfo info(std::move(set));
-	info.internal = true;
-	catalog.CreateFunction(transaction, info);
-}
-
 struct ExtensionFunctionInfo : public ScalarFunctionInfo {
 	explicit ExtensionFunctionInfo(string extension_p) : extension(std::move(extension_p)) {
 	}

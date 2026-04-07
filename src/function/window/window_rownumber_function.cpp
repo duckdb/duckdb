@@ -1,7 +1,7 @@
 #include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
-#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -98,8 +98,8 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
-WindowFunction RowNumberFunc::GetFunction() {
-	WindowFunction fun("row_number", {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
+WindowFunction RowNumberFun::GetFunction() {
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
 	fun.SetBoundsCallback(WindowRowNumberLocalState::GetBounds);
 	return fun;
 }
@@ -171,8 +171,8 @@ public:
 	}
 };
 
-WindowFunction NtileFunc::GetFunction() {
-	WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
+WindowFunction NtileFun::GetFunction() {
+	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
 	fun.SetBoundsCallback(WindowNtileLocalState::GetBounds);
 	return fun;
 }

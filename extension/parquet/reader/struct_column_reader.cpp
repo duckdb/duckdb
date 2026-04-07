@@ -48,8 +48,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 		auto &target_vector = struct_entries[i];
 		if (!child) {
 			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 			continue;
 		}
 		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector);

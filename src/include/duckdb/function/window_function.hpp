@@ -14,7 +14,7 @@
 namespace duckdb {
 
 class BoundWindowExpression;
-class WindowSharedExpressions;
+struct WindowSharedExpressions;
 
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {

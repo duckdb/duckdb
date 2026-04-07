@@ -121,8 +121,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 			auto target_idx = cast_data.target_null_indexes[i];
 			auto &target_vector = target_children[target_idx];
 
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 		}
 	}
 
@@ -153,7 +152,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::Validity(varchar_struct);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
@@ -162,7 +161,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, i, true);
+			result_data.SetInvalid(i);
 			continue;
 		}
 
@@ -281,7 +280,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 		count = 1;
 		if (ConstantVector::IsNull(source)) {
 			// If there's only a null in there we don't need to cast anything
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return true;
 		}
 	}

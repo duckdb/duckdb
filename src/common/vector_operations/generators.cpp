@@ -18,7 +18,8 @@ static void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start
 		throw InternalException("Sequence start or increment out of type range");
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<T>(result);
+
+	auto result_data = FlatVector::Writer<T>(result, count);
 	auto value = T(start);
 	for (idx_t i = 0; i < count; i++) {
 		if (i > 0) {

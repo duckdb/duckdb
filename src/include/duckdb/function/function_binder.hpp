@@ -13,7 +13,6 @@
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/planner/expression/bound_window_function.hpp"
 #include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
@@ -77,7 +76,7 @@ public:
 	                                           optional_ptr<vector<GroupingSet>> grouping_sets);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
-	DUCKDB_API unique_ptr<BoundWindowFunction>
+	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(WindowFunction bound_function, vector<unique_ptr<Expression>> children,
 	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders,
 	                   AggregateType aggr_type = AggregateType::NON_DISTINCT);

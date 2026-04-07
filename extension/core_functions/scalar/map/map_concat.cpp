@@ -51,8 +51,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		auto &map = args.data[i];
 		map.ToUnifiedFormat(count, map_formats[i]);
 	}
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
-
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		// Loop through all the maps per list
 		// we cant do better because all the entries of the child vector have to be contiguous

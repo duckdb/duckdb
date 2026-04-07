@@ -112,7 +112,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	auto last_entry = data[scan_count - 1].value;
 
 	// shift all offsets so they are 0 at the first entry
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, scan_count);
 	auto base_offset = state.last_offset;
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {

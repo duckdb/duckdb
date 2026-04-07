@@ -30,6 +30,10 @@ on:
       runners:
         type: string
         required: true
+      save_cache:
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -69,6 +73,11 @@ on:
         type: string
         required: false
         default: '{}'
+      save_cache:
+        description: 'Override whether extension build caches should be saved'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -199,7 +208,7 @@ jobs:
       use_merged_vcpkg_manifest: '1'
       duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests }}
-      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
+      save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
       extensions_test_selection: 'complete'
       extra_extension_config: ${{ matrix.extension_config }}
       runners: ${{ inputs.runners }}
