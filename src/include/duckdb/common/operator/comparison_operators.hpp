@@ -62,6 +62,24 @@ struct LessThanEquals {
 	}
 };
 
+struct Comparator {
+	template <class T>
+	static inline int8_t Operation(const T &left, const T &right) {
+		if (GreaterThan::Operation(left, right)) {
+			return 1;
+		}
+		if (GreaterThan::Operation(right, left)) {
+			return -1;
+		}
+		return 0;
+	}
+};
+
+template <>
+DUCKDB_API int8_t Comparator::Operation(const float &left, const float &right);
+template <>
+DUCKDB_API int8_t Comparator::Operation(const double &left, const double &right);
+
 template <>
 DUCKDB_API bool Equals::Operation(const float &left, const float &right);
 template <>
@@ -139,6 +157,20 @@ struct DistinctLessThanEquals {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return !DistinctGreaterThan::Operation(left, right, left_null, right_null);
+	}
+};
+
+struct DistinctComparator {
+	template <class T>
+	static inline int8_t Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		if (DUCKDB_UNLIKELY(left_null || right_null)) {
+			if (left_null && right_null) {
+				return 0;
+			}
+			// NULLS LAST: NULL is greater than any non-NULL value
+			return left_null ? 1 : -1;
+		}
+		return Comparator::Operation<T>(left, right);
 	}
 };
 

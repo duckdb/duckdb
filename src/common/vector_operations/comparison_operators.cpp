@@ -7,6 +7,8 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -86,6 +88,36 @@ template <>
 bool GreaterThanEquals::Operation(const double &left, const double &right) {
 	return GreaterThanEqualsFloat<double>(left, right);
 }
+
+template <class T>
+static int8_t ComparatorFloat(T left, T right) {
+	bool left_is_nan = Value::IsNan(left);
+	bool right_is_nan = Value::IsNan(right);
+	if (DUCKDB_UNLIKELY(left_is_nan || right_is_nan)) {
+		if (left_is_nan && right_is_nan) {
+			return 0;
+		}
+		return left_is_nan ? 1 : -1;
+	}
+	if (left < right) {
+		return -1;
+	}
+	if (left > right) {
+		return 1;
+	}
+	return 0;
+}
+
+template <>
+int8_t Comparator::Operation(const float &left, const float &right) {
+	return ComparatorFloat<float>(left, right);
+}
+
+template <>
+int8_t Comparator::Operation(const double &left, const double &right) {
+	return ComparatorFloat<double>(left, right);
+}
+
 namespace {
 struct ComparisonSelector {
 	template <typename OP>
@@ -303,6 +335,90 @@ void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, 
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
 	ComparisonExecutor::Execute<duckdb::GreaterThan>(right, left, result, count);
+}
+
+struct StandardComparatorExecute {
+	template <class T>
+	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		BinaryExecutor::Execute<T, T, int8_t, duckdb::Comparator>(left, right, result, count);
+	}
+};
+
+struct DistinctComparatorExecute {
+	template <class T>
+	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		auto left_values = left.Values<T>(count);
+		auto right_values = right.Values<T>(count);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto result_data = FlatVector::Writer<int8_t>(result, count);
+		for (idx_t i = 0; i < count; i++) {
+			auto lentry = left_values[i];
+			auto rentry = right_values[i];
+			result_data[i] =
+			    duckdb::DistinctComparator::Operation<T>(lentry.value, rentry.value, !lentry.IsValid(), !rentry.IsValid());
+		}
+	}
+};
+
+template <class EXECUTOR>
+static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
+	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
+	         result.GetType() == LogicalType::TINYINT);
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		EXECUTOR::template Execute<int8_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT16:
+		EXECUTOR::template Execute<int16_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT32:
+		EXECUTOR::template Execute<int32_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT64:
+		EXECUTOR::template Execute<int64_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT8:
+		EXECUTOR::template Execute<uint8_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT16:
+		EXECUTOR::template Execute<uint16_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT32:
+		EXECUTOR::template Execute<uint32_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT64:
+		EXECUTOR::template Execute<uint64_t>(left, right, result, count);
+		break;
+	case PhysicalType::INT128:
+		EXECUTOR::template Execute<hugeint_t>(left, right, result, count);
+		break;
+	case PhysicalType::UINT128:
+		EXECUTOR::template Execute<uhugeint_t>(left, right, result, count);
+		break;
+	case PhysicalType::FLOAT:
+		EXECUTOR::template Execute<float>(left, right, result, count);
+		break;
+	case PhysicalType::DOUBLE:
+		EXECUTOR::template Execute<double>(left, right, result, count);
+		break;
+	case PhysicalType::INTERVAL:
+		EXECUTOR::template Execute<interval_t>(left, right, result, count);
+		break;
+	case PhysicalType::VARCHAR:
+		EXECUTOR::template Execute<string_t>(left, right, result, count);
+		break;
+	default:
+		throw InternalException("Invalid type for comparator");
+	}
+}
+
+void VectorOperations::Comparator(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparatorTypeSwitch<StandardComparatorExecute>(left, right, result, count);
+}
+
+void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparatorTypeSwitch<DistinctComparatorExecute>(left, right, result, count);
 }
 
 } // namespace duckdb

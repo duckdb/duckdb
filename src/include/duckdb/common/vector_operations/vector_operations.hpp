@@ -70,6 +70,9 @@ struct VectorOperations {
 	// result = left <= right
 	static void LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
 
+	// result = -1 if left < right, 0 if left == right, 1 if left > right (stored in int8_t TINYINT result vector)
+	static void Comparator(Vector &left, Vector &right, Vector &result, idx_t count);
+
 	// result = A != B with nulls being equal
 	static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
 	// result := A == B with nulls being equal
@@ -82,6 +85,8 @@ struct VectorOperations {
 	static void DistinctLessThan(Vector &left, Vector &right, Vector &result, idx_t count);
 	// result := A <= B with nulls being maximal
 	static void DistinctLessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result := comparator(A, B) with nulls being maximal (NULLS LAST), returns -1/0/1 as int8_t
+	static void DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Select Comparisons
