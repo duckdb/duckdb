@@ -146,8 +146,8 @@ struct DatePart {
 
 	template <typename OP>
 	struct PartOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		template <class TA, class TR, class DATA_TYPE>
+		static inline TR Operation(TA input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
 			if (Value::IsFinite(input)) {
 				return OP::template Operation<TA, TR>(input);
 			} else {
@@ -161,7 +161,8 @@ struct DatePart {
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
 		using IOP = PartOperator<OP>;
-		UnaryExecutor::GenericExecute<TA, TR, IOP>(input.data[0], result, input.size(), nullptr, true);
+		std::nullptr_t no_data = nullptr;
+		UnaryExecutor::GenericExecute<TA, TR, IOP>(input.data[0], result, input.size(), no_data, true);
 	}
 
 	struct YearOperator {

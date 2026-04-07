@@ -442,8 +442,8 @@ extension/extension_config_local.cmake:
 build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake extension/extension_config.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config RelWithDebInfo
+	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build . --config Release
 
 unittest: debug
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)

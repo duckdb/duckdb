@@ -38,17 +38,18 @@ index d3dc0b6..471bc4c 100644
  #include "duckdb/planner/filter/constant_filter.hpp"
  
 diff --git a/src/postgres_binary_reader.cpp b/src/postgres_binary_reader.cpp
-index c7fd72e..ca74d7c 100644
+index c7fd72e..4f26b2a 100644
 --- a/src/postgres_binary_reader.cpp
 +++ b/src/postgres_binary_reader.cpp
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,7 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/string_vector.hpp"
 +#include "duckdb/common/vector/struct_vector.hpp"
  #include "postgres_binary_reader.hpp"
  #include "postgres_scanner.hpp"
  
-@@ -167,13 +170,13 @@ void PostgresBinaryReader::ReadGeometry(const LogicalType &type, const PostgresT
+@@ -167,13 +171,13 @@ void PostgresBinaryReader::ReadGeometry(const LogicalType &type, const PostgresT
  	default:
  		throw InternalException("Unsupported type for ReadGeometry");
  	}
@@ -64,7 +65,7 @@ index c7fd72e..ca74d7c 100644
  	for (idx_t i = 0; i < element_count; i++) {
  		child_data[child_offset + i] = ReadDouble();
  	}
-@@ -183,7 +186,7 @@ void PostgresBinaryReader::ReadGeometry(const LogicalType &type, const PostgresT
+@@ -183,7 +187,7 @@ void PostgresBinaryReader::ReadGeometry(const LogicalType &type, const PostgresT
  void PostgresBinaryReader::ReadArray(const LogicalType &type, const PostgresType &postgres_type, Vector &out_vec,
                                       idx_t output_offset, uint32_t current_count, uint32_t dimensions[],
                                       uint32_t ndim) {
@@ -73,7 +74,7 @@ index c7fd72e..ca74d7c 100644
  	auto child_offset = ListVector::GetListSize(out_vec);
  	auto child_dimension = dimensions[0];
  	auto child_count = current_count * child_dimension;
-@@ -221,39 +224,39 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -221,39 +225,39 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  	switch (type.id()) {
  	case LogicalTypeId::SMALLINT:
  		D_ASSERT(value_len == sizeof(int16_t));
@@ -121,7 +122,7 @@ index c7fd72e..ca74d7c 100644
  		break;
  	}
  
-@@ -273,7 +276,7 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -273,22 +277,22 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  				value_len--;
  			}
  		}
@@ -130,8 +131,11 @@ index c7fd72e..ca74d7c 100644
  		break;
  	}
  	case LogicalTypeId::GEOMETRY: {
-@@ -283,12 +286,12 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
- 		if (!Geometry::FromBinary(string_t(str, value_len), res_val, out_vec, true)) {
+ 		const auto str = ReadString(value_len);
+ 
+ 		string_t res_val;
+-		if (!Geometry::FromBinary(string_t(str, value_len), res_val, out_vec, true)) {
++		if (!Geometry::FromBinary(string_t(str, value_len), res_val, StringVector::GetStringHeap(out_vec), true)) {
  			throw InvalidInputException("Failed to parse Postgres geometry data");
  		}
 -		FlatVector::GetData<string_t>(out_vec)[output_offset] = res_val;
@@ -145,7 +149,7 @@ index c7fd72e..ca74d7c 100644
  		break;
  	case LogicalTypeId::DECIMAL: {
  		if (value_len < sizeof(uint16_t) * 4) {
-@@ -296,16 +299,16 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -296,16 +300,16 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  		}
  		switch (type.InternalType()) {
  		case PhysicalType::INT16:
@@ -166,7 +170,7 @@ index c7fd72e..ca74d7c 100644
  			break;
  		default:
  			throw InvalidInputException("Unsupported decimal storage type");
-@@ -315,24 +318,24 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -315,24 +319,24 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  
  	case LogicalTypeId::DATE: {
  		D_ASSERT(value_len == sizeof(int32_t));
@@ -195,7 +199,7 @@ index c7fd72e..ca74d7c 100644
  		break;
  	}
  	case LogicalTypeId::ENUM: {
-@@ -343,14 +346,14 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -343,14 +347,14 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  		}
  		switch (type.InternalType()) {
  		case PhysicalType::UINT8:
@@ -213,7 +217,7 @@ index c7fd72e..ca74d7c 100644
  			break;
  
  		default:
-@@ -361,16 +364,16 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -361,16 +365,16 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  		break;
  	}
  	case LogicalTypeId::INTERVAL: {
@@ -233,7 +237,7 @@ index c7fd72e..ca74d7c 100644
  		auto child_offset = ListVector::GetListSize(out_vec);
  
  		if (value_len < 1) {
-@@ -427,8 +430,8 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -427,8 +431,8 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  		auto &child_entries = StructVector::GetEntries(out_vec);
  		if (postgres_type.info == PostgresTypeAnnotation::GEOM_POINT) {
  			D_ASSERT(value_len == sizeof(double) * 2);
@@ -244,7 +248,7 @@ index c7fd72e..ca74d7c 100644
  			break;
  		}
  		auto entry_count = ReadInteger<uint32_t>();
-@@ -437,7 +440,7 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -437,7 +441,7 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  			                        entry_count);
  		}
  		for (idx_t c = 0; c < entry_count; c++) {
@@ -342,17 +346,18 @@ index c2f981a..cabe77f 100644
  
  		if (filter_text.empty()) {
 diff --git a/src/postgres_text_reader.cpp b/src/postgres_text_reader.cpp
-index 9a1bbed..0286750 100644
+index 9a1bbed..cd2e5e9 100644
 --- a/src/postgres_text_reader.cpp
 +++ b/src/postgres_text_reader.cpp
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,7 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/string_vector.hpp"
 +#include "duckdb/common/vector/struct_vector.hpp"
  #include "postgres_text_reader.hpp"
  #include "postgres_scanner.hpp"
  #include "duckdb/common/types/blob.hpp"
-@@ -33,7 +36,7 @@ struct PostgresListParser {
+@@ -33,7 +37,7 @@ struct PostgresListParser {
  		if (!quoted && str == "NULL") {
  			FlatVector::SetNull(vector, size, true);
  		} else {
@@ -361,7 +366,7 @@ index 9a1bbed..0286750 100644
  		}
  		size++;
  		quoted = false;
-@@ -70,7 +73,7 @@ struct PostgresStructParser {
+@@ -70,7 +74,7 @@ struct PostgresStructParser {
  		if (!quoted && str == "NULL") {
  			FlatVector::SetNull(col, row_offset, true);
  		} else {
@@ -370,7 +375,7 @@ index 9a1bbed..0286750 100644
  		}
  		column_offset++;
  	}
-@@ -203,7 +206,7 @@ void PostgresTextReader::ConvertList(Vector &source, Vector &target, const Postg
+@@ -203,7 +207,7 @@ void PostgresTextReader::ConvertList(Vector &source, Vector &target, const Postg
  	source.ToUnifiedFormat(count, vdata);
  
  	auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -379,7 +384,7 @@ index 9a1bbed..0286750 100644
  
  	PostgresListParser list_parser;
  	for (idx_t i = 0; i < count; i++) {
-@@ -245,7 +248,7 @@ void PostgresTextReader::ConvertStruct(Vector &source, Vector &target, const Pos
+@@ -245,7 +249,7 @@ void PostgresTextReader::ConvertStruct(Vector &source, Vector &target, const Pos
  		ParsePostgresStruct(struct_parser, strings[i]);
  	}
  	for (idx_t c = 0; c < children.size(); c++) {
@@ -388,7 +393,7 @@ index 9a1bbed..0286750 100644
  		              c >= postgres_type.children.size() ? PostgresType() : postgres_type.children[c], count);
  	}
  }
-@@ -255,7 +258,7 @@ void PostgresTextReader::ConvertCTID(Vector &source, Vector &target, idx_t count
+@@ -255,7 +259,7 @@ void PostgresTextReader::ConvertCTID(Vector &source, Vector &target, idx_t count
  	UnifiedVectorFormat vdata;
  	source.ToUnifiedFormat(count, vdata);
  	auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -397,7 +402,7 @@ index 9a1bbed..0286750 100644
  
  	for (idx_t i = 0; i < count; i++) {
  		if (!vdata.validity.RowIsValid(i)) {
-@@ -276,7 +279,7 @@ void PostgresTextReader::ConvertBlob(Vector &source, Vector &target, idx_t count
+@@ -276,7 +280,7 @@ void PostgresTextReader::ConvertBlob(Vector &source, Vector &target, idx_t count
  	UnifiedVectorFormat vdata;
  	source.ToUnifiedFormat(count, vdata);
  	auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -406,7 +411,7 @@ index 9a1bbed..0286750 100644
  
  	for (idx_t i = 0; i < count; i++) {
  		if (!vdata.validity.RowIsValid(i)) {
-@@ -309,7 +312,7 @@ static void ConvertGeometry(Vector &source, Vector &target, idx_t count) {
+@@ -309,7 +313,7 @@ static void ConvertGeometry(Vector &source, Vector &target, idx_t count) {
  	UnifiedVectorFormat vdata;
  	source.ToUnifiedFormat(count, vdata);
  	const auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -415,7 +420,16 @@ index 9a1bbed..0286750 100644
  
  	string result_blob;
  
-@@ -397,7 +400,7 @@ PostgresReadResult PostgresTextReader::Read(DataChunk &output) {
+@@ -343,7 +347,7 @@ static void ConvertGeometry(Vector &source, Vector &target, idx_t count) {
+ 		}
+ 
+ 		// Finally convert from WKB (which will handle big-endian format too)
+-		if (!Geometry::FromBinary(result_blob, result[out_idx], target, true)) {
++		if (!Geometry::FromBinary(result_blob, result[out_idx], StringVector::GetStringHeap(target), true)) {
+ 			throw InvalidInputException("Failed to parse geometry from WKB - invalid format");
+ 		}
+ 	}
+@@ -397,7 +401,7 @@ PostgresReadResult PostgresTextReader::Read(DataChunk &output) {
  				FlatVector::SetNull(out_vec, output_offset, true);
  				continue;
  			}

@@ -226,6 +226,7 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 	Vector trim_extension(false);
 	ReadOptionalArgs(args, separator, trim_extension, true);
 
+	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    path, separator, result, args.size(), [&](string_t input_path, string_t input_sep) {
 		    auto path = input_path.GetData();
@@ -238,11 +239,11 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 		    }
 		    idx_t new_size = (IsIdxValid(last_sep, path_size)) ? last_sep : 0;
 
-		    auto target = StringVector::EmptyString(result, new_size);
+		    auto target = heap.EmptyString(new_size);
 		    auto output = target.GetDataWriteable();
 		    memcpy(output, path, new_size);
 		    target.Finalize();
-		    return StringVector::AddString(result, target);
+		    return target;
 	    });
 }
 
