@@ -326,9 +326,9 @@ public:
 					// If local_state has an active row group, we are scanning transaction-local data
 					idx_t base;
 					if (l_state.scan_state.local_state.row_group) {
-						base = l_state.scan_state.local_state.row_number_base;
+						base = l_state.scan_state.local_state.row_number_base.GetIndex();
 					} else {
-						base = l_state.scan_state.table_state.row_number_base;
+						base = l_state.scan_state.table_state.row_number_base.GetIndex();
 					}
 					base += l_state.current_row_number_index;
 					row_number_vec.Sequence(base + 1, 1, output.size());
@@ -427,7 +427,6 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 	if (g_state->row_number_col_index.IsValid()) {
 		g_state->state.scan_state.row_number_base = 0;
-		g_state->state.local_state.row_number_base = 0;
 	}
 	storage.InitializeParallelScan(context, g_state->state, filtered_column_indexes);
 	if (!input.CanRemoveFilterColumns()) {

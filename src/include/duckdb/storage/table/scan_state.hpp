@@ -243,7 +243,8 @@ public:
 	//! The current batch index
 	idx_t batch_index;
 	//! The row_number base for the current batch (number of committed rows before this batch)
-	idx_t row_number_base;
+	//! Only set when the row_number virtual column is being scanned
+	optional_idx row_number_base;
 	//! The valid selection
 	SelectionVector valid_sel;
 
