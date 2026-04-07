@@ -247,7 +247,7 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 				    parent_op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 					auto &join = parent_op.Cast<LogicalComparisonJoin>();
 					if (join.join_type == JoinType::LEFT || join.join_type == JoinType::RIGHT ||
-					    join.join_type == JoinType::OUTER) {
+					    join.join_type == JoinType::OUTER || join.join_type == JoinType::ANTI) {
 						// Recurse into child without pulling up
 						ProjectionPullup next(optimizer, root);
 						next.Optimize(proj.children[0]);
