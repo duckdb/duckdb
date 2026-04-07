@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
 
 namespace duckdb {
 
@@ -99,6 +100,11 @@ public:
 	                                     bind_cast_function_t function, int64_t implicit_cast_cost = -1);
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);
+
+	//! Registers a shell dot-command for this extension.
+	//! The extension's command name must exactly match the extension name.
+	//! e.g. the "ducklake" extension may only register ".ducklake".
+	DUCKDB_API void RegisterShellCommand(ShellCommandExtension extension);
 
 private:
 	void FinalizeLoad();
