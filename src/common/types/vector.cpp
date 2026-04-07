@@ -33,7 +33,6 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
-#include <cstring> // strlen() on Solaris
 namespace duckdb {
 
 enum class VectorConstructorAction { REFERENCE_VECTOR };
@@ -251,19 +250,17 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		// dictionary on a constant is just a constant
 		return;
 	}
+	auto internal_type = GetType().InternalType();
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		if (internal_type == PhysicalType::STRUCT) {
+			throw InternalException("Struct vectors cannot be dictionary vectors");
+		}
 		// already a dictionary, slice the current dictionary
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
 		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto sliced_dictionary = old_dict.GetSelVector().Slice(sel, count);
 		auto entry = old_dict.GetEntryPtr();
-		if (GetType().InternalType() == PhysicalType::STRUCT) {
-			auto &child_vector = entry->data;
-			auto sliced_buffer = make_buffer<VectorStructBuffer>(child_vector, sel, count);
-			Vector new_child(GetType(), VectorType::FLAT_VECTOR, std::move(sliced_buffer));
-			entry = make_shared_ptr<DictionaryEntry>(std::move(new_child));
-		}
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
 		if (dictionary_size.IsValid()) {
 			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
@@ -277,13 +274,14 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		Flatten(sel, count);
 		return;
 	}
-
-	Vector child_vector(Vector::Ref(*this));
-	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		child_vector.buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
-		child_vector.buffer->GetValidityMask() = buffer->GetValidityMask();
+		// structs should not be sliced themselves - only their children are sliced
+		buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
+		return;
 	}
+
+	// move this vector as a child vector in the dictionary
+	Vector child_vector(Vector::Ref(*this));
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
 	vector_type = VectorType::DICTIONARY_VECTOR;
@@ -302,15 +300,16 @@ void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVect
 }
 
 void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel) {
-	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		throw InternalException("Struct vectors cannot be dictionaries");
+	}
 	D_ASSERT(type == reusable_dict->data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
-
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && GetType().InternalType() != PhysicalType::STRUCT) {
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary vector: need to merge dictionaries
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
@@ -1708,7 +1707,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	}
 	if (vector_p.GetVectorType() == VectorType::SHREDDED_VECTOR) {
 		auto &shredded = ShreddedVector::GetShreddedVector(vector_p);
-		auto &unshredded = ShreddedVector::GetShreddedVector(vector_p);
+		auto &unshredded = ShreddedVector::GetUnshreddedVector(vector_p);
 		Verify(shredded, sel_p, count);
 		Verify(unshredded, sel_p, count);
 		return;
@@ -1833,6 +1832,8 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
+		// struct vectors cannot be dictionary vectors
+		D_ASSERT(vector->GetVectorType() != VectorType::DICTIONARY_VECTOR);
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
 
@@ -1979,7 +1980,6 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
 		// Reusable dictionary API does not work for STRUCT
 		vector.Dictionary(inverted_vector, verify_count, original_sel, count);
-		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(reusable_dict->id);
 	} else {
 		vector.Dictionary(reusable_dict, original_sel);
 	}
