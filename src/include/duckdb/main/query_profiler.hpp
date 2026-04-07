@@ -67,7 +67,7 @@ struct OperatorInformation {
 			break;
 		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
 			if (metric > system_peak_buffer_manager_memory) {
-				system_peak_buffer_manager_memory += LossyNumericCast<idx_t>(metric);
+				system_peak_buffer_manager_memory = LossyNumericCast<idx_t>(metric);
 			}
 			break;
 		}
