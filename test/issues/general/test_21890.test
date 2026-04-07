@@ -21,3 +21,20 @@ ORDER BY val
 ----
 1
 2
+
+statement ok
+PRAGMA disable_optimizer
+
+query I
+SELECT val
+FROM tbl
+GROUP BY val
+HAVING (
+  SELECT COUNT(*)
+  FROM tbl tbl2
+  WHERE TRY(tbl.val) > 0
+) > 0
+ORDER BY val
+----
+1
+2
