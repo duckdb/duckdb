@@ -1,7 +1,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -12,30 +11,6 @@
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 namespace duckdb {
-
-static void RemapDelimBindings(LogicalComparisonJoin &comp_join, const vector<ColumnBinding> &bindings_before,
-                               const vector<ColumnBinding> &bindings_after) {
-	if (bindings_before.size() != bindings_after.size()) {
-		return;
-	}
-	ColumnBindingReplacer replacer;
-	for (idx_t i = 0; i < bindings_before.size(); i++) {
-		if (bindings_before[i] == bindings_after[i]) {
-			continue;
-		}
-		replacer.replacement_bindings.emplace_back(bindings_before[i], bindings_after[i]);
-	}
-	if (replacer.replacement_bindings.empty()) {
-		return;
-	}
-	for (auto &cond : comp_join.conditions) {
-		auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
-		replacer.VisitExpression(&expr);
-	}
-	for (auto &expr : comp_join.duplicate_eliminated_columns) {
-		replacer.VisitExpression(&expr);
-	}
-}
 
 ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
 }
@@ -92,9 +67,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		// get bindings from the duplicate-eliminated side
 		auto &delim_side = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
-		auto delim_bindings_before = delim_side.GetColumnBindings();
 		VisitOperator(delim_side);
-		RemapDelimBindings(comp_join, delim_bindings_before, bindings);
 		for (auto &cond : comp_join.conditions) {
 			auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
 			VisitExpression(&expr);
