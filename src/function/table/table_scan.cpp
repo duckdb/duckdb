@@ -44,8 +44,6 @@ struct TableScanLocalState : public LocalTableFunctionState {
 
 	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
-	//! The current "row_number" index (if row_number is emitted)
-	idx_t current_row_number_index = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -265,8 +263,6 @@ public:
 
 public:
 	ParallelTableScanState state;
-	//! The index of the row_number column in the output, if any
-	optional_idx row_number_col_index;
 
 private:
 	const TableScanBindData &bind_data;
@@ -282,9 +278,6 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
-			if (col.IsRowNumberColumn()) {
-				continue;
-			}
 			storage_ids.push_back(bind_data.table.GetStorageIndex(col));
 		}
 
@@ -319,29 +312,12 @@ public:
 				storage.Scan(tx, output, l_state.scan_state);
 			}
 			if (output.size() > 0) {
-				if (row_number_col_index.IsValid()) {
-					auto col_idx = row_number_col_index.GetIndex();
-					auto &row_number_vec = output.data[col_idx];
-					// Use the row_number_base from the active scan state for deterministic numbering
-					// If local_state has an active row group, we are scanning transaction-local data
-					idx_t base;
-					if (l_state.scan_state.local_state.row_group) {
-						base = l_state.scan_state.local_state.row_number_base.GetIndex();
-					} else {
-						base = l_state.scan_state.table_state.row_number_base.GetIndex();
-					}
-					base += l_state.current_row_number_index;
-					row_number_vec.Sequence(NumericCast<int64_t>(base + 1), 1, output.size());
-					l_state.current_row_number_index += output.size();
-				}
 				return;
 			}
 
 			// We have fully processed a row group. Add to scanned_rows
 			l_state.rows_scanned += l_state.rows_in_current_row_group;
 			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
-			// Reset row_number count for the new batch
-			l_state.current_row_number_index = 0;
 
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
@@ -411,24 +387,14 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 	}
 
-	// Detect row_number column
+	// Check if row_number column is requested and initialize row_number_base
 	for (idx_t i = 0; i < input.column_ids.size(); i++) {
 		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
-			g_state->row_number_col_index = i;
+			g_state->state.scan_state.row_number_base = 0;
 			break;
 		}
 	}
-	// Filter out row_number columns before passing to storage layer
-	vector<ColumnIndex> filtered_column_indexes;
-	for (const auto &col_idx : input.column_indexes) {
-		if (!col_idx.IsRowNumberColumn()) {
-			filtered_column_indexes.push_back(col_idx);
-		}
-	}
-	if (g_state->row_number_col_index.IsValid()) {
-		g_state->state.scan_state.row_number_base = 0;
-	}
-	storage.InitializeParallelScan(context, g_state->state, filtered_column_indexes);
+	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}

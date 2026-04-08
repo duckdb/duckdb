@@ -228,6 +228,7 @@ private:
 	ColumnData &GetColumn(const StorageIndex &c) const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
+	void LoadRowNumberColumnData() const;
 	void SetCount(idx_t count);
 
 	bool HasUnloadedDeletes() const;
@@ -246,6 +247,10 @@ private:
 	mutable unique_ptr<ColumnData> row_id_column_data;
 	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)
 	mutable atomic<bool> row_id_is_loaded;
+	//! The row number column data (mutable because `const` can lazy load)
+	mutable unique_ptr<ColumnData> row_number_column_data;
+	//! Whether or not `row_number_column_data` is loaded (mutable because `const` can lazy load)
+	mutable atomic<bool> row_number_is_loaded;
 	atomic<bool> has_changes;
 };
 
