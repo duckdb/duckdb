@@ -78,7 +78,7 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	return &owned_sel;
 }
 
-void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
+void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t position, idx_t count) {
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {

@@ -12,7 +12,7 @@ namespace {
 
 struct SetSelectionVectorSelect {
 	static void SetSelectionVector(SelectionVector &selection_vector, ValidityMask &validity_mask,
-	                               ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
+	                               const ValidityMask &input_validity, const Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
 		auto sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int64_t>() - 1;
@@ -29,7 +29,7 @@ struct SetSelectionVectorSelect {
 		target_offset++;
 	}
 
-	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
+	static void GetResultLength(const DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
 	                            const Vector &selection_entry, idx_t selection_idx) {
 		result_length += selection_data[selection_idx].length;
 	}
@@ -37,7 +37,7 @@ struct SetSelectionVectorSelect {
 
 struct SetSelectionVectorWhere {
 	static void SetSelectionVector(SelectionVector &selection_vector, ValidityMask &validity_mask,
-	                               const ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
+	                               const ValidityMask &input_validity, const Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
 		if (!selection_entry.GetValue(selection_offset + child_idx).GetValue<bool>()) {
@@ -59,7 +59,7 @@ struct SetSelectionVectorWhere {
 		target_offset++;
 	}
 
-	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
+	static void GetResultLength(const DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
 	                            const Vector &selection_entry, idx_t selection_idx) {
 		for (idx_t child_idx = 0; child_idx < selection_data[selection_idx].length; child_idx++) {
 			if (selection_entry.GetValue(selection_data[selection_idx].offset + child_idx).IsNull()) {
@@ -73,10 +73,10 @@ struct SetSelectionVectorWhere {
 };
 
 template <class OP>
-void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
-	Vector &list = args.data[0];
-	Vector &selection_list = args.data[1];
+	auto &list = args.data[0];
+	auto &selection_list = args.data[1];
 	idx_t count = args.size();
 
 	UnifiedVectorFormat selection_lists;
