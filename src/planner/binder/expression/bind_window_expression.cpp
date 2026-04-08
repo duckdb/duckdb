@@ -60,10 +60,6 @@ static bool IsRangeType(const LogicalType &type) {
 	}
 }
 
-static bool IsFillType(const LogicalType &type) {
-	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
-}
-
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
 	vector<unique_ptr<Expression>> children;
@@ -97,14 +93,13 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	return bound->return_type;
 }
 
-BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
+BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
 	//	Check for macros pretending to be aggregates
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.function_name, error_context);
 	auto entry = GetCatalogEntry(window.catalog, window.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
-	if (window.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE && entry &&
-	    entry->type == CatalogType::MACRO_ENTRY) {
+	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro_expr = window.Copy();
 		auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
 		                                           std::move(window.children), std::move(window.filter_expr), nullptr,
@@ -206,6 +201,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	//  Determine the function type.
 	LogicalType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<WindowFunction> window_func;
 	unique_ptr<FunctionData> bind_info;
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
@@ -247,92 +243,41 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		// found a matching function! bind it as a window
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
-		//	TODO: Create real bind functions
-		if (window.distinct) {
-			throw BinderException(error_context, "DISTINCT is not implemented for non-aggregate window functions!");
+		if (window.distinct && !bound_function.can_distinct) {
+			throw BinderException(error_context, "DISTINCT is not implemented for the window function \"%s\"",
+			                      window.function_name);
 		}
-		if (window.filter_expr) {
-			throw BinderException(error_context, "FILTER is not implemented for non-aggregate window functions!");
+		if (window.filter_expr && !bound_function.can_filter) {
+			throw BinderException(error_context, "FILTER is not implemented for the window function \"%s\"",
+			                      window.function_name);
 		}
-		if (!window.arg_orders.empty() && window.GetExpressionType() == ExpressionType::WINDOW_RANK_DENSE) {
+		if (!window.arg_orders.empty() && !bound_function.can_order_by) {
 			throw BinderException(error_context, "ORDER BY is not supported for the window function \"%s\"",
 			                      window.function_name);
 		}
+		if (window.exclude_clause != WindowExcludeMode::NO_OTHER && !window.arg_orders.empty() &&
+		    !bound_function.can_exclude) {
+			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
+			                      bound_function.name);
+		}
 
+		//	Check for unresolved arguments
 		for (const auto &type : types) {
 			if (type.id() == LogicalTypeId::UNKNOWN) {
 				throw ParameterNotResolvedException();
 			}
 		}
 
-		sql_type = bound_function.return_type;
-		if (sql_type.id() == LogicalTypeId::ANY) {
-			sql_type = types[0];
-			bound_function.arguments[0] = types[0];
-		}
+		auto window_bound_function =
+		    function_binder.BindWindowFunction(bound_function, std::move(children), window.orders, window.arg_orders);
 
-		bool can_exclude = false;
-
-		switch (bound_function.window_enum) {
-		case ExpressionType::WINDOW_LEAD:
-		case ExpressionType::WINDOW_LAG:
-			if (children.size() > 2) {
-				bound_function.arguments[2] = types[2];
-				children[2] =
-				    BoundCastExpression::AddCastToType(context, std::move(children[2]), children[0]->return_type);
-			}
-			if (children.size() > 1) {
-				children[1] = BoundCastExpression::AddCastToType(context, std::move(children[1]), LogicalType::BIGINT);
-			}
-			break;
-		case ExpressionType::WINDOW_NTILE:
-			// ntile(bigint)
-			children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), LogicalType::BIGINT);
-			break;
-		case ExpressionType::WINDOW_NTH_VALUE:
-			// nth_value(<expr>, index)
-			children[1] = BoundCastExpression::AddCastToType(context, std::move(children[1]), LogicalType::BIGINT);
-			can_exclude = true;
-			break;
-		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_LAST_VALUE:
-			can_exclude = true;
-			break;
-		case ExpressionType::WINDOW_FILL: {
-			if (window.arg_orders.size() > 1 || (window.arg_orders.empty() && window.orders.size() != 1)) {
-				throw BinderException(error_context, "FILL functions must have only one ORDER BY expression");
-			}
-			//	Check FILL arguments support subtraction
-			if (!IsFillType(children[0]->return_type)) {
-				throw BinderException(error_context, "FILL argument must support subtraction");
-			}
-			LogicalType order_type;
-			if (window.arg_orders.empty()) {
-				D_ASSERT(!window.orders.empty());
-				auto &order_expr = window.orders[0].expression;
-				auto &bound = BoundExpression::GetExpression(*order_expr);
-				order_type = bound->return_type;
-			} else {
-				auto &order_expr = window.arg_orders[0].expression;
-				auto &bound = BoundExpression::GetExpression(*order_expr);
-				order_type = bound->return_type;
-			}
-			if (!IsFillType(order_type)) {
-				throw BinderException(error_context, "FILL ordering must support subtraction");
-			}
-			break;
-		}
-		default:
-			break;
-		}
-
-		if (window.exclude_clause != WindowExcludeMode::NO_OTHER && !window.arg_orders.empty() && !can_exclude) {
-			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
-			                      bound_function.name);
-		}
+		window_func = std::move(window_bound_function->window);
+		bind_info = std::move(window_bound_function->bind_info);
+		children = std::move(window_bound_function->children);
+		sql_type = window_bound_function->return_type;
 	}
-	auto result = make_uniq<BoundWindowExpression>(window.GetExpressionType(), sql_type, std::move(aggregate),
-	                                               std::move(bind_info));
+	auto result =
+	    make_uniq<BoundWindowExpression>(sql_type, std::move(aggregate), std::move(window_func), std::move(bind_info));
 	result->children = std::move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));

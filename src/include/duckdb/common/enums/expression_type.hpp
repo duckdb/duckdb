@@ -89,6 +89,7 @@ enum class ExpressionType : uint8_t {
 	// Window Functions
 	// -----------------------------
 	WINDOW_AGGREGATE = 110,
+	WINDOW_FUNCTION = 111,
 
 	WINDOW_RANK = 120,
 	WINDOW_RANK_DENSE = 121,
