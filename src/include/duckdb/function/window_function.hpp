@@ -15,6 +15,7 @@ namespace duckdb {
 
 class BoundWindowExpression;
 struct WindowSharedExpressions;
+class WindowExecutor;
 
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
@@ -64,9 +65,8 @@ typedef void (*window_validate_function_t)(ClientContext &context, WindowFunctio
 //! Requests framing bounds that the function uses
 typedef void (*window_bounds_function_t)(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr);
 
-//! Requests child evaluation lifetime. Returns the shared expression indices.
-typedef vector<column_t> (*window_children_function_t)(const BoundWindowExpression &wexpr,
-                                                       WindowSharedExpressions &shared);
+//! Requests expression sharing. If not provided, all children will be registered for evaluate time.
+typedef void (*window_sharing_function_t)(WindowExecutor &executor, WindowSharedExpressions &sharing);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -77,16 +77,16 @@ class WindowFunction : public BaseScalarFunction { // NOLINT: work-around bug in
 public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
-	               window_bounds_function_t bounds = nullptr, window_children_function_t children = nullptr)
+	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
 	                         LogicalType(LogicalTypeId::INVALID), FunctionNullHandling::DEFAULT_NULL_HANDLING),
-	      window_enum(window_enum), bind(bind), bounds(bounds), children(children) {
+	      window_enum(window_enum), bind(bind), bounds(bounds), sharing(sharing) {
 	}
 
 	WindowFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, ExpressionType window_enum,
 	               window_bind_function_t bind = nullptr, window_bounds_function_t bounds = nullptr,
-	               window_children_function_t children = nullptr)
-	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, children) {
+	               window_sharing_function_t sharing = nullptr)
+	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing) {
 	}
 
 	// clang-format off
@@ -102,9 +102,9 @@ public:
 	window_bounds_function_t GetBoundsCallback() const { return bounds; }
 	void SetBoundsCallback(window_bounds_function_t callback) { bounds = callback; }
 
-	bool HasChildrenCallback() const { return children != nullptr; }
-	window_children_function_t GetChildrenCallback() const { return children; }
-	void SetChildrenCallback(window_children_function_t callback) { children = callback; }
+	bool HasSharingCallback() const { return sharing != nullptr; }
+	window_sharing_function_t GetSharingCallback() const { return sharing; }
+	void SetSharingCallback(window_sharing_function_t callback) { sharing = callback; }
 
 	bool HasSerializationCallbacks() const { return false; }
 	void SetSerializeCallback(window_serialize_t callback) { serialize = callback; }
@@ -132,7 +132,7 @@ public:
 	//! The framing bounds lists
 	window_bounds_function_t bounds = nullptr;
 	//! The children sharing requirements
-	window_children_function_t children = nullptr;
+	window_sharing_function_t sharing = nullptr;
 
 	//! Serialization specialization. Not yet implemented
 	window_serialize_t serialize = nullptr;

@@ -143,16 +143,16 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	function.return_type = arguments[0]->return_type;
-	function.children = WindowValueExecutor::Children;
 
 	return nullptr;
 }
 
-vector<column_t> WindowValueExecutor::Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared) {
+void WindowValueExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	//	The children have to be handled separately because only the first one is global
+	const auto &wexpr = executor.wexpr;
 	D_ASSERT(!wexpr.children.empty());
 
-	vector<column_t> child_idx;
+	auto &child_idx = executor.child_idx;
 	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls));
 
 	if (wexpr.children.size() > 1) {
@@ -161,15 +161,14 @@ vector<column_t> WindowValueExecutor::Children(const BoundWindowExpression &wexp
 	if (wexpr.children.size() > 2) {
 		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[2]));
 	}
-
-	return child_idx;
+	auto &arg_order_idx = executor.arg_order_idx;
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
 }
 
 WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
-	for (const auto &order : wexpr.arg_orders) {
-		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
-	}
 }
 
 unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
@@ -317,13 +316,13 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 
 	auto bind = WindowLeadLagExecutor::Bind;
 	auto bounds = WindowLeadLagLocalState::GetBounds;
-	auto children = WindowLeadLagExecutor::Children;
+	auto sharing = WindowLeadLagExecutor::GetSharing;
 
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 type, bind, bounds, children));
+	                                 type, bind, bounds, sharing));
 	funcs.AddFunction(
-	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds, children));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, children));
+	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds, sharing));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing));
 
 	return funcs;
 }
@@ -530,7 +529,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
-	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds);
+	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds,
+	                   WindowFirstValueExecutor::GetSharing);
 	return fun;
 }
 
@@ -589,7 +589,8 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 
 WindowFunction LastValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
-	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds);
+	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds,
+	                   WindowFirstValueExecutor::GetSharing);
 	return fun;
 }
 
@@ -655,7 +656,7 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 WindowFunction NthValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ExpressionType::WINDOW_NTH_VALUE, WindowFirstValueExecutor::Bind,
-	                   WindowValueLocalState::GetBounds);
+	                   WindowValueLocalState::GetBounds, WindowFirstValueExecutor::GetSharing);
 	return fun;
 }
 
@@ -987,16 +988,19 @@ void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &functi
 	}
 }
 
-vector<column_t> WindowFillExecutor::Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared) {
+void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
+	const auto &wexpr = executor.wexpr;
+	D_ASSERT(!wexpr.children.empty());
+
 	//! Never ignore nulls (that's the point!)
-	vector<column_t> child_idx;
+	auto &child_idx = executor.child_idx;
 	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], false));
 
-	return child_idx;
-}
-WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
-                                       WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, shared) {
+	auto &arg_order_idx = executor.arg_order_idx;
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
+
 	//	If the argument order is prefix of the partition ordering,
 	//	then we can just use the partition ordering.
 	auto &arg_orders = wexpr.arg_orders;
@@ -1007,16 +1011,21 @@ WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientConte
 	//	We need the sort values for interpolation, so either use the range or the secondary ordering expression
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
-		if (!range_expr) {
+		if (!executor.range_expr) {
 			D_ASSERT(wexpr.orders.size() == 1);
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
-			range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
+			executor.range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
 		}
 	} else {
 		//	For secondary sorts, we need the entire collection so we can interpolate using the values
 		D_ASSERT(arg_order_idx.size() == 1);
-		order_idx = shared.RegisterCollection(wexpr.arg_orders[0].expression, false);
+		executor.aux_idx.emplace_back(shared.RegisterCollection(wexpr.arg_orders[0].expression, false));
 	}
+}
+
+WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
+                                       WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, shared) {
 }
 
 static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, idx_t row_idx, column_t col_idx = 0) {
@@ -1035,7 +1044,7 @@ public:
 	WindowFillGlobalState(ClientContext &client, const WindowFillExecutor &executor, const idx_t payload_count,
 	                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowLeadLagGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      order_idx(executor.order_idx) {
+	      order_idx(executor.aux_idx.empty() ? DConstants::INVALID_INDEX : executor.aux_idx[0]) {
 	}
 
 	//! Collection index of the secondary sort values
@@ -1081,9 +1090,8 @@ void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr col
 
 WindowFunction FillFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
-	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds);
+	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
-	fun.SetChildrenCallback(WindowFillExecutor::Children);
 
 	return fun;
 }

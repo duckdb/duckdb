@@ -17,7 +17,7 @@ class WindowValueExecutor : public WindowExecutor {
 public:
 	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments);
-	static vector<column_t> Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
 	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
@@ -80,7 +80,7 @@ public:
 	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
 	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 
-	static vector<column_t> Children(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
 	WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
 
@@ -93,9 +93,6 @@ public:
 	                                           const ValidityMask &partition_mask,
 	                                           const ValidityMask &order_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
-
-	//! Secondary order collection index
-	idx_t order_idx = DConstants::INVALID_INDEX;
 
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,

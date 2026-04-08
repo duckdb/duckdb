@@ -106,6 +106,9 @@ public:
 	//! The column indices of any ORDER BY argument expressions
 	vector<column_t> arg_order_idx;
 
+	//! The column indices of any other expressions the function may need
+	vector<column_t> aux_idx;
+
 protected:
 	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
 	                              idx_t row_idx, OperatorSinkInput &sink) const = 0;
