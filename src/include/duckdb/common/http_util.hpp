@@ -217,6 +217,9 @@ struct PostRequestInfo : public BaseRequest {
 
 class HTTPClient {
 public:
+	HTTPClient() = default;
+	explicit HTTPClient(const string &proto_host_port) : base_url(proto_host_port) {
+	}
 	virtual ~HTTPClient() = default;
 	virtual void Initialize(HTTPParams &http_params) = 0;
 
@@ -229,16 +232,13 @@ public:
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 
-	void SetBaseUrl(const string &url) {
-		base_url = url;
-	}
 	const string &GetBaseUrl() const {
 		return base_url;
 	}
 
 private:
 	//! The base URL (scheme + host + port) this client was created for
-	string base_url;
+	const string base_url;
 };
 
 class HTTPUtil {
