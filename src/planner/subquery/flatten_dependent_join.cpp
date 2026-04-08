@@ -7,8 +7,6 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -56,68 +54,6 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 	}
 }
 
-static bool TryExtractSingleBinding(const Expression &expr, ColumnBinding &binding) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		binding = expr.Cast<BoundColumnRefExpression>().binding;
-		return true;
-	}
-	bool found_binding = false;
-	bool multiple_bindings = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		if (!found_binding) {
-			binding = colref.binding;
-			found_binding = true;
-		} else if (binding != colref.binding) {
-			multiple_bindings = true;
-		}
-	});
-	return found_binding && !multiple_bindings;
-}
-
-static bool TryRemapCorrelatedBinding(const LogicalProjection &projection, const ColumnBinding &current_binding,
-                                      ColumnBinding &new_binding) {
-	for (auto i : ProjectionIndex::GetIndexes(projection.expressions.size())) {
-		ColumnBinding expression_binding;
-		if (!TryExtractSingleBinding(projection.GetExpression(i), expression_binding)) {
-			continue;
-		}
-		if (expression_binding != current_binding) {
-			continue;
-		}
-		new_binding = ColumnBinding(projection.table_index, i);
-		return true;
-	}
-	return false;
-}
-
-static bool TryRemapCorrelatedBinding(const LogicalAggregate &aggregate, const ColumnBinding &current_binding,
-                                      ColumnBinding &new_binding) {
-	for (auto i : ProjectionIndex::GetIndexes(aggregate.groups.size())) {
-		ColumnBinding expression_binding;
-		if (!TryExtractSingleBinding(aggregate.GetGroupExpression(i), expression_binding)) {
-			continue;
-		}
-		if (expression_binding != current_binding) {
-			continue;
-		}
-		new_binding = ColumnBinding(aggregate.group_index, i);
-		return true;
-	}
-	for (auto i : ProjectionIndex::GetIndexes(aggregate.expressions.size())) {
-		auto output_binding = ColumnBinding(aggregate.aggregate_index, i);
-		ColumnBinding expression_binding;
-		if (!TryExtractSingleBinding(aggregate.GetExpression(output_binding), expression_binding)) {
-			continue;
-		}
-		if (expression_binding != current_binding) {
-			continue;
-		}
-		new_binding = output_binding;
-		return true;
-	}
-	return false;
-}
-
 static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
 	auto left_bindings = left_side.GetColumnBindings();
 	for (auto &column : correlated_columns) {
@@ -131,20 +67,26 @@ static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, Logic
 		if (binding_present) {
 			continue;
 		}
-		ColumnBinding new_binding;
-		bool found_binding = false;
-		switch (left_side.type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalProjection>(), column.binding, new_binding);
-			break;
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalAggregate>(), column.binding, new_binding);
-			break;
-		default:
-			break;
-		}
-		if (found_binding) {
-			column.binding = new_binding;
+		if (left_side.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &proj = left_side.Cast<LogicalProjection>();
+			for (auto i : ProjectionIndex::GetIndexes(proj.expressions.size())) {
+				auto &expr = proj.GetExpression(i);
+				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+				    expr.Cast<BoundColumnRefExpression>().binding == column.binding) {
+					column.binding = ColumnBinding(proj.table_index, i);
+					break;
+				}
+			}
+		} else if (left_side.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			auto &agg = left_side.Cast<LogicalAggregate>();
+			for (auto i : ProjectionIndex::GetIndexes(agg.groups.size())) {
+				auto &expr = agg.GetGroupExpression(i);
+				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+				    expr.Cast<BoundColumnRefExpression>().binding == column.binding) {
+					column.binding = ColumnBinding(agg.group_index, i);
+					break;
+				}
+			}
 		}
 	}
 }
