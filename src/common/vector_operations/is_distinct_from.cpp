@@ -792,12 +792,12 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 	Vector rentry_flattened(Vector::Ref(ArrayVector::GetEntry(right)));
 	lentry_flattened.Flatten(ArrayVector::GetTotalSize(left));
 	rentry_flattened.Flatten(ArrayVector::GetTotalSize(right));
-	Vector lchild(lentry_flattened, lcursor, count);
-	Vector rchild(rentry_flattened, rcursor, count);
 
 	// Struct vectors cannot be dictionary vectors, so updating the cursor selection vector
 	// after construction does not update the struct child. We need to re-slice after cursor updates.
 	bool is_struct_child = lentry_flattened.GetType().InternalType() == PhysicalType::STRUCT;
+	auto lchild = is_struct_child ? Vector::Ref(lentry_flattened) : Vector(lentry_flattened, lcursor, count);
+	auto rchild = is_struct_child ? Vector::Ref(rentry_flattened) : Vector(rentry_flattened, rcursor, count);
 	auto ReSliceChildren = [&]() {
 		if (is_struct_child) {
 			lchild.Reference(lentry_flattened);
