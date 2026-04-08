@@ -143,6 +143,16 @@ void FixedSizeAllocator::Reset() {
 	total_segment_count = 0;
 }
 
+void FixedSizeAllocator::CommitDrop() {
+	for (auto &entry : buffers) {
+		auto &buffer = *entry.second;
+		if (buffer.OnDisk()) {
+			block_manager.MarkBlockAsModified(buffer.block_pointer.block_id);
+			buffer.commit_dropped = true;
+		}
+	}
+}
+
 idx_t FixedSizeAllocator::GetInMemorySize() const {
 	idx_t memory_usage = 0;
 	for (auto &buffer : buffers) {

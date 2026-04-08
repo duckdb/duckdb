@@ -103,6 +103,8 @@ private:
 	bool vacuum;
 	//! True: has been loaded from disk.
 	bool loaded;
+	//! True: on-disk blocks have been marked as modified during CommitDrop.
+	bool commit_dropped;
 
 	//! Partial block id and offset
 	BlockPointer block_pointer;

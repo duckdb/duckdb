@@ -64,6 +64,12 @@ void BoundIndex::CommitDrop() {
 	CommitDrop(index_lock);
 }
 
+void BoundIndex::ResetStorage() {
+	IndexLock index_lock;
+	InitializeLock(index_lock);
+	ResetStorage(index_lock);
+}
+
 idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
                             optional_ptr<SelectionVector> non_deleted_sel) {
 	IndexLock state;

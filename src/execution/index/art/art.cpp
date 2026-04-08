@@ -617,6 +617,12 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 
 void ART::CommitDrop(IndexLock &index_lock) {
 	for (auto &allocator : *allocators) {
+		allocator->CommitDrop();
+	}
+}
+
+void ART::ResetStorage(IndexLock &index_lock) {
+	for (auto &allocator : *allocators) {
 		allocator->Reset();
 	}
 	tree.Clear();

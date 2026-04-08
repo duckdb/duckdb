@@ -113,6 +113,8 @@ public:
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
 	void Reset();
+	//! Marks on-disk blocks as modified for reclamation, without destroying in-memory data
+	void CommitDrop();
 
 	//! Returns the in-memory size in bytes
 	idx_t GetInMemorySize() const;

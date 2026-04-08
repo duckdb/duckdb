@@ -1,0 +1,65 @@
+# name: test/tmp1.test
+# group: [test]
+
+load __TEST_DIR__/test_revert_commit_index_corruption_drop_table.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t1 SELECT i FROM range(10) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i FROM range(10) tbl(i)
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DELETE FROM t1 WHERE id < 5
+
+statement ok con1
+DROP TABLE t1
+
+statement ok con1
+DELETE FROM t2 WHERE id < 5
+
+statement ok con2
+DROP TABLE t2
+
+# con1's delete on t2 conflicts with con2's DROP of t2.
+# this means t1 should still be intact.
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+# table still has 10 rows.
+query I
+SELECT COUNT(*) FROM t1
+----
+10
+
+# table scan works
+query I
+SELECT * from t1 LIMIT 1
+----
+0
+
+# index should be intact.
+query I
+SELECT id FROM t1 WHERE id = 5
+----
+5
+
+# however, on revert commit we re-inserted the elements we tried to delete into the reset index.
+statement error
+INSERT INTO t1 VALUES (1)
+----
+Duplicate key

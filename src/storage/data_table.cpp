@@ -367,7 +367,7 @@ void DataTable::RebuildIndexes() {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
 		auto &bound_index = index.Cast<BoundIndex>();
-		bound_index.CommitDrop();
+		bound_index.ResetStorage();
 
 		auto &col_ids = bound_index.GetColumnIds();
 
@@ -1484,7 +1484,8 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
                                   IndexRemovalType removal_type, optional_idx active_checkpoint) {
-	D_ASSERT(IsMainTable());
+	D_ASSERT(IsMainTable() || removal_type == IndexRemovalType::REVERT_MAIN_INDEX ||
+	         removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY);
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
