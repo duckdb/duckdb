@@ -8,11 +8,19 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 enum class StarExpressionType : uint8_t { STAR, COLUMNS, UNPACKED, NONE };
 

@@ -1,6 +1,14 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 
+#include <stdint.h>
+#include <memory>
+#include <utility>
+
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+
 namespace duckdb {
+class ClientContext;
 
 LogicalSample::LogicalSample() : LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE) {
 }

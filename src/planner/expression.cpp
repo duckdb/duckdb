@@ -1,11 +1,14 @@
 #include "duckdb/planner/expression.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <stdint.h>
+#include <functional>
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 

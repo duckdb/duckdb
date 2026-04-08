@@ -8,12 +8,17 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/parser/tokens.hpp"
-
 #include <functional>
 
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/tokens.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+
 namespace duckdb {
+class ParsedExpression;
+class QueryNode;
+class TableRef;
+enum class ExpressionClass : uint8_t;
 
 class ParsedExpressionIterator {
 public:

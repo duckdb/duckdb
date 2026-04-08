@@ -1,7 +1,14 @@
 #include "duckdb/parser/column_list.hpp"
+
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 

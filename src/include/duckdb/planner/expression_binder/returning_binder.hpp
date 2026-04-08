@@ -9,8 +9,13 @@
 #pragma once
 
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ParsedExpression;
 
 //! The RETURNING binder is responsible for binding expressions within the RETURNING statement
 class ReturningBinder : public ExpressionBinder {

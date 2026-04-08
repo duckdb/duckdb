@@ -1,9 +1,21 @@
 #include "duckdb/optimizer/rule/case_simplification.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check

@@ -1,7 +1,15 @@
 #include "duckdb/function/function_set.hpp"
+
+#include <vector>
+
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 ScalarFunctionSet::ScalarFunctionSet() : FunctionSet("") {
 }

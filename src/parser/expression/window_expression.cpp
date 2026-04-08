@@ -1,6 +1,12 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 

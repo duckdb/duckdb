@@ -1,5 +1,11 @@
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 
+#include <memory>
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+
 namespace duckdb {
 
 LogicalPositionalJoin::LogicalPositionalJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)

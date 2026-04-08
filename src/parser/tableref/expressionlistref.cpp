@@ -1,5 +1,12 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+
 namespace duckdb {
 
 string ExpressionListRef::ToString() const {

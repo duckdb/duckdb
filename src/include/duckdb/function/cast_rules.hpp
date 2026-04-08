@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {

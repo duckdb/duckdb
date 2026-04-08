@@ -8,9 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 //! A set of column definitions
 class ColumnList {

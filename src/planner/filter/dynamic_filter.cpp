@@ -1,8 +1,13 @@
 #include "duckdb/planner/filter/dynamic_filter.hpp"
+
+#include <utility>
+
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 
 DynamicFilter::DynamicFilter() : TableFilter(TableFilterType::DYNAMIC_FILTER) {
 }

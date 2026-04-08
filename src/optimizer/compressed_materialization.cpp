@@ -1,5 +1,12 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/operators.hpp"
@@ -11,8 +18,20 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
+struct uhugeint_t;
 
 CMChildInfo::CMChildInfo(LogicalOperator &op, const column_binding_set_t &referenced_bindings)
     : bindings_before(op.GetColumnBindings()), types(op.types), can_compress(bindings_before.size(), true) {

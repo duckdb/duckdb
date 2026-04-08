@@ -8,11 +8,23 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <memory>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+struct TableIndex;
 
 //! JoinCondition represents a left-right comparison join condition
 struct JoinCondition {

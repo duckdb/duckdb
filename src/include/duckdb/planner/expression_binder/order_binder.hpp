@@ -8,16 +8,26 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class Binder;
 class Expression;
 class SelectNode;
 struct SelectBindState;
+class ParsedExpression;
 
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
 class OrderBinder {

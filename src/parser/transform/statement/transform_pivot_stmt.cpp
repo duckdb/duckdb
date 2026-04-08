@@ -1,3 +1,7 @@
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
@@ -7,15 +11,34 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
-#include "duckdb/parser/statement/drop_statement.hpp"
-#include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

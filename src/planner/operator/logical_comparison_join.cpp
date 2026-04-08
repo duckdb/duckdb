@@ -1,8 +1,16 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+
+#include <stddef.h>
+#include <utility>
+
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
+enum class JoinType : uint8_t;
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
     : LogicalJoin(join_type, logical_type) {

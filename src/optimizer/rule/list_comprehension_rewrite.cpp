@@ -1,5 +1,10 @@
 #include "duckdb/optimizer/rule/list_comprehension_rewrite.hpp"
 
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
@@ -12,8 +17,20 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
+class ClientContext;
+class ExpressionRewriter;
+class LogicalOperator;
 
 namespace {
 

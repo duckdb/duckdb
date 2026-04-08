@@ -1,9 +1,13 @@
-#include "duckdb/parser/expression/columnref_expression.hpp"
+#include <algorithm>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
-#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
@@ -12,10 +16,42 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/storage/data_table.hpp"
-
-#include <algorithm>
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/database_modification_type.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

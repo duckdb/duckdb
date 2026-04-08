@@ -1,7 +1,13 @@
 #include "duckdb/parser/expression_util.hpp"
+
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 

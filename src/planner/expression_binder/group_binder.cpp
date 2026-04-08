@@ -1,14 +1,26 @@
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, TableIndex group_index,
                          SelectBindState &bind_state, case_insensitive_map_t<ProjectionIndex> &group_alias_map)

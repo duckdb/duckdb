@@ -8,15 +8,22 @@
 
 #pragma once
 
+#include <unordered_map>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
-
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class Binder;
+class Expression;
+struct TableIndex;
 
 //! While it is possible to copy a logical plan using `Copy()`, both, the original and the copy
 //! are—by design—identical. This includes any table_idx values etc. This is bad, when we try

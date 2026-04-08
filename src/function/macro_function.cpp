@@ -1,16 +1,21 @@
 #include "duckdb/function/macro_function.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include <vector>
+
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/scalar_macro_function.hpp"
-#include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 

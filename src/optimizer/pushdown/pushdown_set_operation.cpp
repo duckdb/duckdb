@@ -1,11 +1,27 @@
+#include <stdint.h>
+#include <functional>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

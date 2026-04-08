@@ -1,6 +1,24 @@
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

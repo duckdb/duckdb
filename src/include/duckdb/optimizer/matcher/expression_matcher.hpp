@@ -14,8 +14,13 @@
 #include "duckdb/optimizer/matcher/type_matcher.hpp"
 #include "duckdb/optimizer/matcher/function_matcher.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class Expression;
 
 //! The ExpressionMatcher class contains a set of matchers that can be used to pattern match Expressions
 class ExpressionMatcher {

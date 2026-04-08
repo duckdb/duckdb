@@ -1,12 +1,30 @@
 #include "duckdb/planner/expression_binder/having_binder.hpp"
 
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ErrorData;
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
                            AggregateHandling aggregate_handling)

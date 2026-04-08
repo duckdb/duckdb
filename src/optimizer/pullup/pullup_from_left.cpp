@@ -1,6 +1,12 @@
+#include <memory>
+#include <utility>
+
 #include "duckdb/optimizer/filter_pullup.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

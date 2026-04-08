@@ -1,5 +1,10 @@
 #include "duckdb/parser/expression/case_expression.hpp"
-#include "duckdb/common/exception.hpp"
+
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 

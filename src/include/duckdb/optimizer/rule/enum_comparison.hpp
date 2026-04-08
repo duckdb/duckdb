@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 // The Enum Comparison rule rewrites cases where two Enums are compared on an equality check
 class EnumComparisonRule : public Rule {

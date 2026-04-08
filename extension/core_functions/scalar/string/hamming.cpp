@@ -1,10 +1,19 @@
-#include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include <stdint.h>
+#include <memory>
 
-#include <ctype.h>
-#include <algorithm>
+#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 static int64_t MismatchesScalarFunction(Vector &result, const string_t str, string_t tgt) {
 	idx_t str_len = str.GetSize();

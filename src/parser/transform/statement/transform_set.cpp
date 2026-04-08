@@ -1,8 +1,24 @@
-#include "duckdb/parser/statement/set_statement.hpp"
+#include <string>
+#include <utility>
 
+#include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/set_scope.hpp"
+#include "duckdb/common/enums/set_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
 
 namespace duckdb {
 

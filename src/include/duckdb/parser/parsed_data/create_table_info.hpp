@@ -8,13 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/column_list.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
+class Deserializer;
+class Serializer;
 
 struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo();

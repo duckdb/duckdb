@@ -1,10 +1,18 @@
 #include "duckdb/parser/query_node.hpp"
 
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/query_node/set_operation_node.hpp"
-#include "duckdb/parser/query_node/recursive_cte_node.hpp"
-#include "duckdb/parser/query_node/cte_node.hpp"
-#include "duckdb/common/limits.hpp"
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/common/exception_format_value.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+
 namespace duckdb {
 
 CommonTableExpressionMap::CommonTableExpressionMap() {

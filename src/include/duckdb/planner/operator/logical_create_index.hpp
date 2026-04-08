@@ -8,11 +8,24 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
+class TableCatalogEntry;
+struct CreateInfo;
+struct ParseInfo;
 
 class LogicalCreateIndex : public LogicalOperator {
 public:

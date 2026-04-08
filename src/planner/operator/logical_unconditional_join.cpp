@@ -1,5 +1,11 @@
 #include "duckdb/planner/operator/logical_unconditional_join.hpp"
 
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/types.hpp"
+
 namespace duckdb {
 
 LogicalUnconditionalJoin::LogicalUnconditionalJoin(LogicalOperatorType logical_type, unique_ptr<LogicalOperator> left,

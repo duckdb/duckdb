@@ -1,14 +1,14 @@
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
-#include "duckdb/catalog/catalog_entry/list.hpp"
-#include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/operator/logical_copy_database.hpp"
 #include "duckdb/execution/operator/persistent/physical_export.hpp"
-#include "duckdb/planner/operator/logical_create_table.hpp"
-#include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
@@ -16,8 +16,35 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry_map.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/database_modification_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_data/copy_database_info.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

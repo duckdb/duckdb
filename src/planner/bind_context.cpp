@@ -1,8 +1,12 @@
 #include "duckdb/planner/bind_context.hpp"
 
-#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include <algorithm>
+#include <functional>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -10,16 +14,23 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/binder.hpp"
-
-#include <algorithm>
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/qualified_name_set.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
+struct ColumnIndex;
 
 BindContext::BindContext(Binder &binder) : binder(binder) {
 }

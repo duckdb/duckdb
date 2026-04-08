@@ -8,10 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class CatalogType : uint8_t;
 
 struct CreateMacroInfo : public CreateFunctionInfo {
 	explicit CreateMacroInfo(CatalogType type);

@@ -1,12 +1,31 @@
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
 
 namespace duckdb {
+enum class SecretPersistType : uint8_t;
 
 static Value GetConstantExpressionValue(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::VALUE_CONSTANT) {

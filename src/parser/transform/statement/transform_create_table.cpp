@@ -1,4 +1,6 @@
-#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -6,6 +8,32 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/primnodes.hpp"
+#include "nodes/value.hpp"
+#include "pg_definitions.hpp"
 
 namespace duckdb {
 

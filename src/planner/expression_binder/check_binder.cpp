@@ -1,10 +1,26 @@
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 
+#include <utility>
+
 #include "duckdb/planner/table_binding.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p, const ColumnList &columns,
                          physical_index_set_t &bound_columns)

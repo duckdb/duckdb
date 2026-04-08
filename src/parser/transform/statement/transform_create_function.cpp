@@ -1,9 +1,31 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/macro_function.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "pg_definitions.hpp"
 
 namespace duckdb {
 

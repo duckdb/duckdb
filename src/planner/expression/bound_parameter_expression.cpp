@@ -1,7 +1,15 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+
+#include <functional>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

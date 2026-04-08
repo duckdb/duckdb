@@ -1,8 +1,14 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ColumnRefExpression;
 
 WhereBinder::WhereBinder(Binder &binder, ClientContext &context, optional_ptr<ColumnAliasBinder> column_alias_binder)
     : ExpressionBinder(binder, context), column_alias_binder(column_alias_binder) {

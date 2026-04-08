@@ -1,5 +1,15 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 

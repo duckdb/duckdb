@@ -1,4 +1,8 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+
+#include <functional>
+#include <vector>
+
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -8,10 +12,18 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 using Filter = FilterPushdown::Filter;
 

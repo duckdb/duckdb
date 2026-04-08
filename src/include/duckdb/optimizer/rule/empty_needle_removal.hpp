@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 // The Empty_needle_removal Optimization rule folds some foldable ConstantExpression
 //(e.g.: PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)

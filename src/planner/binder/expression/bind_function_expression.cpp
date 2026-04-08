@@ -1,7 +1,10 @@
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include <functional>
+#include <exception>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -15,10 +18,41 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/settings.hpp"
-
-#include <functional>
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/lambda_syntax.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
+class AggregateFunctionCatalogEntry;
+class ClientContext;
+class ScalarMacroCatalogEntry;
+struct ColumnBinding;
 
 namespace {
 

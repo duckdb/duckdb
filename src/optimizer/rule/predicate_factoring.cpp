@@ -1,11 +1,27 @@
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 
+#include <functional>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
 
 PredicateFactoringRule::PredicateFactoringRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// Match on a ConjunctionExpression that has at least one ConjunctionExpression as a child

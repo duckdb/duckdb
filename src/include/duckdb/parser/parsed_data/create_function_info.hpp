@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+enum class CatalogType : uint8_t;
 
 struct FunctionDescription {
 	//! Parameter types (if any)

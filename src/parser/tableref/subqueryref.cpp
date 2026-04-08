@@ -1,6 +1,10 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
-#include "duckdb/common/limits.hpp"
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 

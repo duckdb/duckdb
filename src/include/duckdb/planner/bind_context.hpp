@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/column_index.hpp"
@@ -19,16 +21,32 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/table_binding.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 class Binder;
 class LogicalGet;
 struct BoundStatement;
-
 class StarExpression;
-
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
+class ErrorData;
+class PositionalReferenceExpression;
+class SubqueryRef;
+class TableFunctionRef;
+class ViewCatalogEntry;
+struct ColumnIndex;
+struct TableIndex;
 
 struct UsingColumnSet {
 	BindingAlias primary_binding;

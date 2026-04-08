@@ -8,13 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 class LogicalPivot : public LogicalOperator {
 public:

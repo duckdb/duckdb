@@ -1,12 +1,20 @@
 
 #include "duckdb/optimizer/rule/constant_folding.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 //! The ConstantFoldingExpressionMatcher matches on any scalar expression (i.e. Expression::IsFoldable is true)
 class ConstantFoldingExpressionMatcher : public FoldableConstantMatcher {

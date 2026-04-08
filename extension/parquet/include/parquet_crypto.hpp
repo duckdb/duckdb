@@ -8,14 +8,38 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+
 #include "parquet_types.h"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/storage/object_cache.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+namespace protocol {
+class TProtocol;
+}  // namespace protocol
+}  // namespace thrift
+}  // namespace duckdb_apache
 
 namespace duckdb {
 class ParquetAdditionalAuthenticatedData;
+class ClientContext;
+class Deserializer;
+class EncryptionUtil;
+class Serializer;
+struct FunctionParameters;
 
 using duckdb_apache::thrift::TBase;
 using duckdb_apache::thrift::protocol::TProtocol;

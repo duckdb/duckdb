@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/common/types.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

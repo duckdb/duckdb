@@ -5,9 +5,16 @@
 // 1                    if var_pop(y) = 0 and var_pop(x) <> 0, else
 // power(corr(y,x), 2)
 
+#include <math.h>
+#include <utility>
+
 #include "core_functions/aggregate/algebraic/corr.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
+#include "core_functions/aggregate/algebraic/stddev.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
 
 namespace duckdb {
 

@@ -8,10 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Deserializer;
+class Serializer;
 
 class BoundLambdaExpression : public Expression {
 public:

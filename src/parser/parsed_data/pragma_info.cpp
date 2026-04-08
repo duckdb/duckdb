@@ -1,5 +1,14 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+
 namespace duckdb {
 
 unique_ptr<PragmaInfo> PragmaInfo::Copy() const {

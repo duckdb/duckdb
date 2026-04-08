@@ -1,11 +1,12 @@
 #include "duckdb/parser/query_node/statement_node.hpp"
-#include "duckdb/parser/query_node/update_query_node.hpp"
-#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
 

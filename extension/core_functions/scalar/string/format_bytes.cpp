@@ -1,8 +1,22 @@
+#include <stdint.h>
+#include <string>
+
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
+struct string_t;
 
 template <int64_t MULTIPLIER>
 static void FormatBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {

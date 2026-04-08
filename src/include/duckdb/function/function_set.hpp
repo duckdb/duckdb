@@ -8,13 +8,23 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/window_function.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 template <class T>
 class FunctionSet {

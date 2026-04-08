@@ -1,7 +1,15 @@
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
+#include <memory>
+#include <utility>
+
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
 
 namespace duckdb {
 

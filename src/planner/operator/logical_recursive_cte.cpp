@@ -1,6 +1,13 @@
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
-#include "duckdb/main/config.hpp"
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 

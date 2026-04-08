@@ -1,6 +1,11 @@
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 
+#include <utility>
+
+#include "duckdb/common/assert.hpp"
+
 namespace duckdb {
+enum class CatalogType : uint8_t;
 
 CreateFunctionInfo::CreateFunctionInfo(CatalogType type, string schema) : CreateInfo(type, std::move(schema)) {
 	D_ASSERT(type == CatalogType::SCALAR_FUNCTION_ENTRY || type == CatalogType::AGGREGATE_FUNCTION_ENTRY ||

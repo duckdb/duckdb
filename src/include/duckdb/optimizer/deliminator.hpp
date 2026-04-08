@@ -9,10 +9,16 @@
 #pragma once
 
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 struct DelimCandidate;
+class LogicalComparisonJoin;
 
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {

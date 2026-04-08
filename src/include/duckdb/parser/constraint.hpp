@@ -8,9 +8,15 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 

@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 // The Arithmetic Simplification rule applies arithmetic expressions to which the answer is known (e.g. X + 0 => X, X *
 // 0 => 0)

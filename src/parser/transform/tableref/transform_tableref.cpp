@@ -1,8 +1,14 @@
+#include <memory>
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/primnodes.hpp"
 
 namespace duckdb {
+class TableRef;
 
 unique_ptr<TableRef> Transformer::TransformTableRefNode(duckdb_libpgquery::PGNode &n) {
 	auto stack_checker = StackCheck();

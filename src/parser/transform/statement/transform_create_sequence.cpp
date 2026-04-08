@@ -1,9 +1,26 @@
+#include <stdint.h>
+#include <string>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/enum_class_hash.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

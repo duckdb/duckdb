@@ -1,4 +1,10 @@
 #include "duckdb/optimizer/window_self_join.hpp"
+
+#include <stddef.h>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -10,10 +16,26 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 

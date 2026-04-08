@@ -1,7 +1,10 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/planner/expression.hpp"
-
 #include <functional>
 
+#include "duckdb/common/common.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+
 namespace duckdb {
+enum class ExpressionClass : uint8_t;
 
 class ExpressionIterator {
 public:

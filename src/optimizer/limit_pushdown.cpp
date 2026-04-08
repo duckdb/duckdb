@@ -1,7 +1,13 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/operator/logical_limit.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

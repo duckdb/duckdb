@@ -1,6 +1,12 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

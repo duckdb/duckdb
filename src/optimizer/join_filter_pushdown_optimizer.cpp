@@ -1,5 +1,8 @@
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -14,6 +17,24 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 

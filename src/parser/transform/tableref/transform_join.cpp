@@ -1,10 +1,28 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/primnodes.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

@@ -8,10 +8,22 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundConstantExpression;
+class ExpressionRewriter;
+class LogicalOperator;
+enum class DatePartSpecifier : uint8_t;
 
 // DateTruncSimplificationRule rewrites an expression of the form
 //

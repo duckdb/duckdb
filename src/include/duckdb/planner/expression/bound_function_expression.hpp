@@ -8,11 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
 class ScalarFunctionCatalogEntry;
+class BaseExpression;
+class Deserializer;
+class Serializer;
 
 //! Represents a function call that has been bound to a base function
 class BoundFunctionExpression : public Expression {

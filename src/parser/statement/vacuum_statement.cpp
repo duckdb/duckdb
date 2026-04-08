@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 VacuumStatement::VacuumStatement(const VacuumOptions &options)

@@ -8,11 +8,22 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class ColumnAliasBinder;
+class Binder;
+class ClientContext;
+class Expression;
+class ParsedExpression;
 
 //! The Projection binder
 class ProjectionBinder : public ExpressionBinder {

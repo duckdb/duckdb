@@ -1,5 +1,9 @@
+#include <utility>
+
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/algebraic/covar.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
 

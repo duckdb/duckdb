@@ -1,5 +1,12 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <set>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -13,10 +20,27 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 

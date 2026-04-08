@@ -8,15 +8,27 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 struct AlterInfo;
+class Deserializer;
+class Serializer;
+enum class CatalogType : uint8_t;
 
 struct CreateInfo : public ParseInfo {
 public:

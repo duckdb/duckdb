@@ -1,11 +1,19 @@
-#include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/string_util.hpp"
+#include <stdint.h>
+#include <memory>
 
-#include <ctype.h>
-#include <algorithm>
+#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 // See: https://www.kdnuggets.com/2020/10/optimizing-levenshtein-distance-measuring-text-similarity.html
 // And: Iterative 2-row algorithm: https://en.wikipedia.org/wiki/Levenshtein_distance

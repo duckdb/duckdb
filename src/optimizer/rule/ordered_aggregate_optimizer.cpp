@@ -1,14 +1,42 @@
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/optimizer/rule.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 OrderedAggregateOptimizer::OrderedAggregateOptimizer(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// we match on an OR expression within a LogicalFilter node

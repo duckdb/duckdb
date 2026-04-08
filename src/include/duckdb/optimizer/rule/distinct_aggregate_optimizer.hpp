@@ -10,8 +10,17 @@
 
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundAggregateExpression;
+class BoundWindowExpression;
+class ClientContext;
+class ExpressionRewriter;
+class LogicalOperator;
 
 class DistinctAggregateOptimizer : public Rule {
 public:

@@ -1,14 +1,27 @@
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

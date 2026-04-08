@@ -1,10 +1,34 @@
+#include <stdint.h>
+#include <iterator>
+#include <memory>
+#include <string>
+
 #include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "fmt/core.h"
 
 namespace duckdb {
+class ClientContext;
+struct ExpressionState;
 
 struct FMTPrintf {
 	template <class CTX>

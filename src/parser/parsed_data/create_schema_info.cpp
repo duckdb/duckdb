@@ -1,5 +1,11 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
+#include <utility>
+
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 CreateSchemaInfo::CreateSchemaInfo() : CreateInfo(CatalogType::SCHEMA_ENTRY) {

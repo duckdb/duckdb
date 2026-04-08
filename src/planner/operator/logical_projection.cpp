@@ -1,6 +1,11 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-#include "duckdb/main/config.hpp"
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 

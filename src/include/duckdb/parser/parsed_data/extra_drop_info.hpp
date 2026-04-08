@@ -8,12 +8,21 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class SecretPersistType : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t {
 	INVALID = 0,

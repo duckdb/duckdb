@@ -8,10 +8,22 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
+enum class ExplainFormat : uint8_t;
 
 class LogicalExplain : public LogicalOperator {
 	explicit LogicalExplain(ExplainType explain_type)

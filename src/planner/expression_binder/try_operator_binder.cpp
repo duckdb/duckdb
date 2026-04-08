@@ -1,8 +1,17 @@
 #include "duckdb/planner/expression_binder/try_operator_binder.hpp"
 
-#include "duckdb/planner/binder.hpp"
+#include <memory>
+
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
+class AggregateFunctionCatalogEntry;
+class Binder;
+class ClientContext;
+class ColumnRefExpression;
+class FunctionExpression;
+class ParsedExpression;
 
 TryOperatorBinder::TryOperatorBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context, true) {
 }

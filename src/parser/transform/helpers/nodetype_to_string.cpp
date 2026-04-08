@@ -1,4 +1,7 @@
+#include <string>
+
 #include "duckdb/parser/transformer.hpp"
+#include "nodes/nodes.hpp"
 
 namespace duckdb {
 

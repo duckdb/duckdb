@@ -8,12 +8,26 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class ColumnBindingResolver;
+class ClientContext;
+class Deserializer;
+class PhysicalOperator;
+class PhysicalPlanGenerator;
+class Serializer;
+struct ColumnBinding;
 
 struct LogicalExtensionOperator : public LogicalOperator {
 public:

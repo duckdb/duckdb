@@ -1,5 +1,11 @@
 #include "duckdb/function/function_binder.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
@@ -14,8 +20,22 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/collation_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/pragma_function.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), context(context_p) {
 }

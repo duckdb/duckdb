@@ -1,6 +1,10 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
 

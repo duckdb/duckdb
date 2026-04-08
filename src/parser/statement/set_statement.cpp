@@ -1,5 +1,12 @@
 #include "duckdb/parser/statement/set_statement.hpp"
+
+#include <utility>
+
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/set_scope.hpp"
+#include "duckdb/common/enums/set_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

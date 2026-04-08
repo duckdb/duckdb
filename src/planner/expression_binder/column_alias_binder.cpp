@@ -1,10 +1,15 @@
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 
+#include <memory>
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 

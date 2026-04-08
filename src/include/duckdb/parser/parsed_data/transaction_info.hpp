@@ -8,9 +8,16 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
 

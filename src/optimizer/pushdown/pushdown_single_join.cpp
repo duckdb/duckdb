@@ -1,7 +1,17 @@
+#include <memory>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+struct TableIndex;
 
 using Filter = FilterPushdown::Filter;
 

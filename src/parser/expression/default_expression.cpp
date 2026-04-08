@@ -1,5 +1,9 @@
 #include "duckdb/parser/expression/default_expression.hpp"
 
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 DefaultExpression::DefaultExpression() : ParsedExpression(ExpressionType::VALUE_DEFAULT, ExpressionClass::DEFAULT) {

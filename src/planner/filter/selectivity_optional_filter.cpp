@@ -8,14 +8,23 @@
 
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
-#include "duckdb/planner/table_filter_state.hpp"
+#include <memory>
 
+#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+class ClientContext;
+class Vector;
+struct SelectionVector;
+struct UnifiedVectorFormat;
 
 SelectivityOptionalFilterState::SelectivityStats::SelectivityStats(const idx_t n_vectors_to_check,
                                                                    const float selectivity_threshold)

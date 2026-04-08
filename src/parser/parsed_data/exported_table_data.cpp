@@ -1,8 +1,12 @@
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+
+#include <utility>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 ExportedTableInfo::ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data_p,
                                      vector<string> &not_null_columns_p)

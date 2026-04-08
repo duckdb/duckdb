@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <string>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -23,21 +27,46 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/enums/collation_type.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class Binder;
 class ClientContext;
 class QueryNode;
-
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
 class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
-
 struct DummyBinding;
 struct SelectBindState;
+class BetweenExpression;
+class BoundLambdaExpression;
+class CaseExpression;
+class CastExpression;
+class CollateExpression;
+class ColumnRefExpression;
+class ComparisonExpression;
+class ConjunctionExpression;
+class ConstantExpression;
+class FunctionExpression;
+class LambdaExpression;
+class LambdaRefExpression;
+class OperatorExpression;
+class ParameterExpression;
+class SubqueryExpression;
+class TypeExpression;
+enum class LambdaSyntaxType : uint8_t;
+struct ColumnBinding;
+struct EntryLookupInfo;
 
 struct BoundColumnReferenceInfo {
 	string name;

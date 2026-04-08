@@ -1,8 +1,19 @@
+#include <memory>
+
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 struct URLEncodeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>

@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ParsedExpression;
 
 //! The AggregateBinder is responsible for binding aggregate statements extracted from a SELECT clause (by the
 //! SelectBinder)

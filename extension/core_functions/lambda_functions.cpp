@@ -1,13 +1,26 @@
 #include "duckdb/function/lambda_functions.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <vector>
+
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //===--------------------------------------------------------------------===//
 // Helper functions

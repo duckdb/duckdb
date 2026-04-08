@@ -1,12 +1,30 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/database_modification_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

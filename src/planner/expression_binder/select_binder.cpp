@@ -1,9 +1,18 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
+
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : BaseSelectBinder(binder, context, node, info) {

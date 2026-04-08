@@ -8,10 +8,22 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 enum class WindowBoundary : uint8_t {
 	INVALID = 0,

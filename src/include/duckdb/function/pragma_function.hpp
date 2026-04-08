@@ -8,12 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 class ClientContext;
+enum class PragmaType : uint8_t;
 
 //! Return a substitute query to execute instead of this pragma statement
 typedef string (*pragma_query_t)(ClientContext &context, const FunctionParameters &parameters);

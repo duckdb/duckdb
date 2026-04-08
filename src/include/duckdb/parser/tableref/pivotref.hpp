@@ -8,10 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 struct PivotColumnEntry {
 	//! The set of values to match on (PIVOT only)

@@ -1,9 +1,15 @@
 #include "duckdb/parser/expression/star_expression.hpp"
+
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/parser/expression/operator_expression.hpp"
-
-#include "duckdb/common/exception.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 

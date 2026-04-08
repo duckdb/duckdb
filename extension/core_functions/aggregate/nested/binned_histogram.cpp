@@ -1,16 +1,45 @@
+#include <stdint.h>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
+struct AggregateInputData;
+struct ExpressionState;
+struct HistogramFunctor;
+struct HistogramGenericFunctor;
+struct HistogramStringFunctor;
+struct string_t;
 
 namespace {
 

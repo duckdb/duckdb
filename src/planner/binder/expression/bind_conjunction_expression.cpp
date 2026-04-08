@@ -1,7 +1,19 @@
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

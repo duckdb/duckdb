@@ -8,10 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundFunctionExpression;
+class ExpressionRewriter;
+class LogicalOperator;
+class ScalarFunction;
 
 // The Like Optimization rule rewrites LIKE to optimized scalar functions (e.g.: prefix, suffix, and contains)
 class LikeOptimizationRule : public Rule {

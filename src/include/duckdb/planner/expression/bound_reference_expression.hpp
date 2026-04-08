@@ -8,9 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Deserializer;
+class Serializer;
 
 //! A BoundReferenceExpression represents a physical index into a DataChunk
 class BoundReferenceExpression : public Expression {

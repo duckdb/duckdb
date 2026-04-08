@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
@@ -18,8 +23,11 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/column_binding.hpp"
-
-#include <functional>
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/optimizer/join_order/relation_index.hpp"
 
 namespace duckdb {
 

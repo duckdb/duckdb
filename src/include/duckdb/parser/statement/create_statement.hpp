@@ -8,8 +8,13 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 

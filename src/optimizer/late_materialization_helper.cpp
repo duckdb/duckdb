@@ -1,5 +1,14 @@
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 
+#include <string>
+
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/binder.hpp"
+
 namespace duckdb {
 
 unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet &rhs, Binder &binder) {

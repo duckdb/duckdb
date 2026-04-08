@@ -8,12 +8,17 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class Optimizer;
 class AggregateRewriteRule;
+class LogicalOperator;
 
 //! Rewrites aggregate functions. Currently registered rules:
 //! AVG(x) -> SUM(x) / COUNT(x)

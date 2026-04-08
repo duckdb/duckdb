@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ParsedExpression;
 
 //! The Constant binder can bind ONLY constant foldable expressions (i.e. no subqueries, column refs, etc)
 class ConstantBinder : public ExpressionBinder {

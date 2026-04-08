@@ -8,9 +8,18 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class LambdaRefExpression;
+class ParsedExpression;
 
 //! The table function binder can bind standard table function parameters (i.e., non-table-in-out functions)
 class TableFunctionBinder : public ExpressionBinder {

@@ -1,6 +1,12 @@
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 
+#include <utility>
+
+#include "duckdb/common/exception.hpp"
+
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 BoundRefWrapper::BoundRefWrapper(BoundStatement bound_ref_p, shared_ptr<Binder> binder_p)
     : TableRef(TableReferenceType::BOUND_TABLE_REF), bound_ref(std::move(bound_ref_p)), binder(std::move(binder_p)) {

@@ -1,8 +1,19 @@
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 
+#include <functional>
+#include <memory>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

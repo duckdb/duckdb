@@ -8,11 +8,18 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class SQLStatement;
+class Serializer;
 
 class StatementNode : public QueryNode {
 public:

@@ -1,10 +1,7 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/operator/list.hpp"
-
 namespace duckdb {
+struct JoinRelationSet;
 
 DPJoinNode::DPJoinNode(JoinRelationSet &set) : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set) {
 }

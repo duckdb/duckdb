@@ -1,6 +1,12 @@
 #include "duckdb/parser/query_node/statement_node.hpp"
 
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 StatementNode::StatementNode(SQLStatement &stmt_p) : QueryNode(QueryNodeType::STATEMENT_NODE), stmt(stmt_p) {
 }

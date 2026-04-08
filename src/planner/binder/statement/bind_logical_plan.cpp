@@ -1,6 +1,22 @@
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include <algorithm>
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

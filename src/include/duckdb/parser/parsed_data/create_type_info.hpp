@@ -8,10 +8,25 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 class TypeArgument {
 public:

@@ -1,11 +1,16 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 BoundOnConflictInfo::BoundOnConflictInfo()
     : action_type(OnConflictAction::THROW), excluded_table_index(0), update_is_del_and_insert(false) {

@@ -8,11 +8,22 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class ExpressionExecutor;
+class BaseStatistics;
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 class ExpressionFilter : public TableFilter {
 public:

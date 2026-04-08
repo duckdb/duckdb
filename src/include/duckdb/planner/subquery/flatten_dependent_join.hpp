@@ -8,12 +8,24 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class Binder;
+struct CorrelatedColumns;
+struct TableIndex;
 
 //! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
 //! flattened subquery

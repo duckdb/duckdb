@@ -1,3 +1,9 @@
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -6,6 +12,24 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/macro_function.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
 

@@ -1,6 +1,14 @@
+#include <memory>
+#include <utility>
+
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/bind_context.hpp"
 
 namespace duckdb {
 

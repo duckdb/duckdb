@@ -9,8 +9,12 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+class ExtensionLoader;
 
 typedef ScalarFunction (*get_scalar_function_t)();
 typedef ScalarFunctionSet (*get_scalar_function_set_t)();

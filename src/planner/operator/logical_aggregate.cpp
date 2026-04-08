@@ -1,9 +1,15 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/config.hpp"
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_index,
                                    vector<unique_ptr<Expression>> select_list)

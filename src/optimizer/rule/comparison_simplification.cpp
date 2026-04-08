@@ -1,11 +1,28 @@
-#include "duckdb/planner/expression/list.hpp"
-#include "duckdb/optimizer/rule/comparison_simplification.hpp"
+#include <functional>
+#include <string>
+#include <utility>
 
+#include "duckdb/optimizer/rule/comparison_simplification.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/optimizer/rule.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that has a ConstantExpression as a check

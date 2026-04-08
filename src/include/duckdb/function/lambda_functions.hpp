@@ -8,15 +8,37 @@
 
 #pragma once
 
+#include <memory>
+#include <utility>
+
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class ScalarFunction;
+class Serializer;
+struct ValidityMask;
 
 struct ListLambdaBindData final : public FunctionData {
 public:

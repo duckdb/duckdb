@@ -1,12 +1,19 @@
 #include "duckdb/optimizer/rule/distributivity.hpp"
 
+#include <functional>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/optimizer/matcher/expression_type_matcher.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// we match on an OR expression within a LogicalFilter node

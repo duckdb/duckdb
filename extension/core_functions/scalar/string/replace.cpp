@@ -1,14 +1,22 @@
-#include "core_functions/scalar/string_functions.hpp"
-
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/ternary_executor.hpp"
-
 #include <string.h>
-#include <ctype.h>
-#include <unordered_map>
+#include <stdint.h>
+#include <vector>
+
+#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 static idx_t NextNeedle(const char *input_haystack, idx_t size_haystack, const char *input_needle,
                         const idx_t size_needle) {

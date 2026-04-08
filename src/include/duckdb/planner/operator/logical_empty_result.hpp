@@ -8,9 +8,20 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 //! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that certain parts of
 //! the tree will always return an empty result.

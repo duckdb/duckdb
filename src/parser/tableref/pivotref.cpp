@@ -1,15 +1,24 @@
 #include "duckdb/parser/tableref/pivotref.hpp"
-#include "duckdb/parser/expression_util.hpp"
-#include "duckdb/common/limits.hpp"
 
-#include "duckdb/common/exception/conversion_exception.hpp"
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

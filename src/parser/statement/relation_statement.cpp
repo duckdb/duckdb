@@ -1,5 +1,6 @@
 #include "duckdb/parser/statement/relation_statement.hpp"
-#include "duckdb/main/relation/query_relation.hpp"
+
+#include <utility>
 
 namespace duckdb {
 

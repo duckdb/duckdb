@@ -10,8 +10,14 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_database_info.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+struct CopyDatabaseInfo;
+struct ParseInfo;
 
 class LogicalCopyDatabase : public LogicalOperator {
 public:

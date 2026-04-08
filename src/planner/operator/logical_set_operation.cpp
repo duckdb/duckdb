@@ -1,6 +1,8 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
-#include "duckdb/main/config.hpp"
+#include <utility>
+
+#include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 

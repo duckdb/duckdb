@@ -1,12 +1,18 @@
 #include "duckdb/parser/transformer.hpp"
 
-#include "duckdb/parser/expression/list.hpp"
-#include "duckdb/parser/query_node/delete_query_node.hpp"
-#include "duckdb/parser/query_node/insert_query_node.hpp"
-#include "duckdb/parser/statement/list.hpp"
-#include "duckdb/parser/query_node/update_query_node.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
+#include <functional>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/parser_options.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 

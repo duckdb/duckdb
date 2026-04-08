@@ -8,15 +8,27 @@
 
 #pragma once
 
+#include <memory>
+#include <unordered_map>
+
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class BoundColumnRefExpression;
 class WindowExpression;
-
 class BoundSelectNode;
+class AggregateFunctionCatalogEntry;
+class Binder;
+class ClientContext;
+class FunctionExpression;
+class OperatorExpression;
+class ParsedExpression;
 
 struct BoundGroupInformation {
 	parsed_expression_map_t<ProjectionIndex> map;

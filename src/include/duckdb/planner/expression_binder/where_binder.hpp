@@ -8,11 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
 class ColumnAliasBinder;
+class Binder;
+class ClientContext;
+class ColumnRefExpression;
+class ParsedExpression;
 
 //! The WHERE binder is responsible for binding an expression within the WHERE clause of a SQL statement
 class WhereBinder : public ExpressionBinder {

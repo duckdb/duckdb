@@ -1,4 +1,7 @@
-#include "duckdb/parser/constraint.hpp"
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
@@ -10,8 +13,27 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
 
 namespace duckdb {
 

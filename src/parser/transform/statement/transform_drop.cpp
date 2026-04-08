@@ -1,6 +1,24 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/statement/drop_statement.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/main/secret/secret.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

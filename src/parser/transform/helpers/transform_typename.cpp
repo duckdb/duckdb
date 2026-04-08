@@ -1,12 +1,27 @@
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
+#include <string>
+#include <utility>
 
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

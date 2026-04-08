@@ -1,14 +1,16 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/filename_pattern.hpp"
-#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -22,11 +24,57 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
-#include "duckdb/common/algorithm.hpp"
-
 #include "duckdb/main/extension_entries.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/enums/preserve_order.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/index_vector.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/copy_function.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/main/query_result.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name_set.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();

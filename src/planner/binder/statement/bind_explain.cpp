@@ -1,6 +1,17 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

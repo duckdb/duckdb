@@ -1,5 +1,15 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 

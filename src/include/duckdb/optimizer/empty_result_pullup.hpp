@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 

@@ -10,10 +10,25 @@
 
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 class TableFilterSet;
 class TableFilter;
+class BoundBetweenExpression;
+class BoundCaseExpression;
+class BoundCastExpression;
+class BoundComparisonExpression;
+class BoundConjunctionExpression;
+class BoundFunctionExpression;
+class BoundOperatorExpression;
+class Optimizer;
+enum class ExpressionType : uint8_t;
 
 class ExpressionHeuristics : public LogicalOperatorVisitor {
 public:

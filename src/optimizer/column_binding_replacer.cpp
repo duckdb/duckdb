@@ -1,8 +1,14 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 ReplacementBinding::ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding)
     : old_binding(old_binding), new_binding(new_binding), replace_type(false) {

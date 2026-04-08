@@ -8,19 +8,31 @@
 
 #pragma once
 
+#include <functional>
+#include <map>
+#include <string>
+
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-
 #include "duckdb/storage/data_table.hpp"
-#include <functional>
-#include <map>
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 class Optimizer;
+class BoundComparisonExpression;
+class ClientContext;
+class LogicalGet;
+enum class ExpressionType : uint8_t;
 
 enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
 enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };

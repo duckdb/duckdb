@@ -8,15 +8,24 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/common/constants.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/common/table_column.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class LogicalOperator;
 class LogicalGet;
 class LogicalLimit;
 class Optimizer;
+struct ProjectionIndex;
+struct TableIndex;
 
 //! Transform
 class LateMaterialization : public BaseColumnPruner {

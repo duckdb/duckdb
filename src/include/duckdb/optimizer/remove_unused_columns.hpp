@@ -8,21 +8,40 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <functional>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/column_index_map.hpp"
-
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 class Optimizer;
+class BoundReferenceExpression;
+class LogicalGet;
+class LogicalOperator;
+class LogicalProjection;
+struct ColumnBinding;
+struct LogicalType;
+struct ProjectionIndex;
 
 struct ReferencedExtractComponent {
 public:

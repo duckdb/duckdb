@@ -8,11 +8,17 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
+enum class ExpressionClass : uint8_t;
 
 //!  The BaseExpression class is a base class that can represent any expression
 //!  part of a SQL statement.

@@ -8,10 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Deserializer;
+class Serializer;
 
 class BoundParameterExpression : public Expression {
 public:

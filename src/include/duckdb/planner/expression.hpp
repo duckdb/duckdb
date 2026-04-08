@@ -8,12 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/base_expression.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class BaseStatistics;
 class ClientContext;
+class Deserializer;
+class Serializer;
+enum class ExpressionClass : uint8_t;
 
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {

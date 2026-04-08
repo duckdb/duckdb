@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/base_expression.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class ParsedExpression;

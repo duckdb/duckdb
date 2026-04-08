@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <string>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
@@ -15,14 +18,18 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
 struct DBConfig;
-
 class EncodingFunction;
-
 struct CSVEncoderBuffer;
+
 //! Decode function, basically takes information about the decoded and the encoded buffers.
 typedef void (*encode_t)(CSVEncoderBuffer &encoded_buffer, char *decoded_buffer, idx_t &decoded_buffer_current_position,
                          const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,

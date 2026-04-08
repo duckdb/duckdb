@@ -1,5 +1,10 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
-#include "duckdb/common/string_util.hpp"
+
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

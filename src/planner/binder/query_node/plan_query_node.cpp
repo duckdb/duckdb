@@ -1,9 +1,21 @@
-#include "duckdb/parser/query_node.hpp"
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

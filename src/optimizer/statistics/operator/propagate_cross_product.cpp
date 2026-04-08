@@ -1,7 +1,13 @@
+#include <memory>
+
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCrossProduct &cp,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {

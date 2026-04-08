@@ -1,11 +1,11 @@
+#include <stdint.h>
+
 #include "core_functions/scalar/string_functions.hpp"
-
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "utf8proc.hpp"
-
-#include <string.h>
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 

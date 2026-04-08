@@ -11,8 +11,16 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
+class BoundSubqueryExpression;
+class LogicalOperator;
 
 //! Helper class to rewrite correlated expressions within a single LogicalOperator
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {

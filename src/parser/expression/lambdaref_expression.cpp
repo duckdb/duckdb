@@ -1,7 +1,13 @@
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
 
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/table_binding.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

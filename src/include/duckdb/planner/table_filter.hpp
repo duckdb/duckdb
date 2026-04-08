@@ -8,16 +8,24 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class BaseStatistics;
 class Expression;
 class PhysicalOperator;
 class PhysicalTableScan;
+class Deserializer;
+class Serializer;
 
 enum class TableFilterType : uint8_t {
 	CONSTANT_COMPARISON = 0,       // constant comparison (e.g. =C, >C, >=C, <C, <=C)

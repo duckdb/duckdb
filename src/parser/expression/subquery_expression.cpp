@@ -1,6 +1,11 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 
+#include <utility>
+
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/subquery_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 

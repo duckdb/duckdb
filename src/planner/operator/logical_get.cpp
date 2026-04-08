@@ -1,17 +1,31 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
+#include <stdint.h>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }

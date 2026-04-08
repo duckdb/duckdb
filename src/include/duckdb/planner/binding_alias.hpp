@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 class StandardEntry;

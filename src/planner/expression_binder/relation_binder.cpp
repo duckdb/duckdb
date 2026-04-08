@@ -1,6 +1,14 @@
 #include "duckdb/planner/expression_binder/relation_binder.hpp"
 
+#include <utility>
+
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op)
     : ExpressionBinder(binder, context), op(std::move(op)) {

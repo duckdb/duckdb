@@ -8,11 +8,24 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 struct DynamicFilterData;
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 //! LogicalTopN represents a comibination of ORDER BY and LIMIT clause, using Min/Max Heap
 class LogicalTopN : public LogicalOperator {

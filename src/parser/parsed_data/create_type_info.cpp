@@ -1,5 +1,10 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 

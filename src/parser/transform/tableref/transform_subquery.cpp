@@ -1,5 +1,13 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

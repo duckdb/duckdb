@@ -1,5 +1,11 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/expression/between_expression.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

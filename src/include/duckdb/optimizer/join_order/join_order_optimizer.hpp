@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
@@ -18,10 +23,16 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-
-#include <functional>
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class JoinOrderOptimizer {
 public:

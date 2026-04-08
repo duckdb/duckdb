@@ -1,3 +1,9 @@
+#include <utility>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/helper.hpp"
@@ -5,7 +11,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -24,9 +29,15 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include <utility>
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 using Filter = FilterPushdown::Filter;
 

@@ -8,11 +8,22 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Expression;
+class TableFilter;
 
 //! Thread-local state for executing a table filter
 struct TableFilterState {

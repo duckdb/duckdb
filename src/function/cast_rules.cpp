@@ -1,7 +1,16 @@
 #include "duckdb/function/cast_rules.hpp"
+
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 

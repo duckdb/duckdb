@@ -14,12 +14,16 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
 class LogicalOperator;
 class Optimizer;
 struct BoundParameterData;
+class Expression;
 
 class CTEInlining {
 public:

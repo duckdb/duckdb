@@ -1,6 +1,9 @@
+#include <utility>
+
 #include "core_functions/aggregate/algebraic_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "core_functions/aggregate/algebraic/stddev.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
 

@@ -1,6 +1,13 @@
 #include "duckdb/parser/statement/update_statement.hpp"
+
+#include <vector>
+
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 

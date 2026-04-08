@@ -1,5 +1,10 @@
+#include <stddef.h>
+#include <functional>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -14,8 +19,30 @@
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //! Check if a filter can be safely pushed to the left child
 //! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.

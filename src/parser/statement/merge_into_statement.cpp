@@ -1,5 +1,15 @@
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/enums/merge_action_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+
 namespace duckdb {
 
 MergeIntoStatement::MergeIntoStatement() : SQLStatement(StatementType::MERGE_INTO_STATEMENT) {

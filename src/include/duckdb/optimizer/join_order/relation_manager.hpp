@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
@@ -17,11 +21,22 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class JoinOrderOptimizer;
 class FilterInfo;
+class ClientContext;
+class Expression;
+class JoinRelationSetManager;
+enum class LogicalOperatorType : uint8_t;
+struct RelationIndex;
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {

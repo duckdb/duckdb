@@ -8,9 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 class DelimGetRef : public TableRef {
 public:

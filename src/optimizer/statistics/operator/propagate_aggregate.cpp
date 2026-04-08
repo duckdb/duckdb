@@ -1,5 +1,12 @@
+#include <stdint.h>
+#include <functional>
+#include <map>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -23,6 +30,29 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 

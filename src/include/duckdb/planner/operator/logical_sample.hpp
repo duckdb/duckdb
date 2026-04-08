@@ -10,8 +10,16 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 //! LogicalSample represents a SAMPLE clause
 class LogicalSample : public LogicalOperator {

@@ -1,6 +1,16 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

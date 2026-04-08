@@ -8,10 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 //! The CheckConstraint contains an expression that must evaluate to TRUE for
 //! every row in a table

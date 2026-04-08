@@ -1,6 +1,24 @@
 #include "core_functions/scalar/enum_functions.hpp"
 
+#include <stdint.h>
+#include <memory>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/expression.hpp"
+
 namespace duckdb {
+class ClientContext;
+struct ExpressionState;
 
 static void EnumFirstFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto types = input.GetTypes();

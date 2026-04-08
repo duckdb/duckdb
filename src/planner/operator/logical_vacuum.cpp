@@ -1,13 +1,23 @@
 #include "duckdb/planner/operator/logical_vacuum.hpp"
 
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include <utility>
+
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
+class ClientContext;
+class TableCatalogEntry;
 
 LogicalVacuum::LogicalVacuum() : LogicalOperator(LogicalOperatorType::LOGICAL_VACUUM) {
 }

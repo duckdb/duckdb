@@ -1,5 +1,8 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
+
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

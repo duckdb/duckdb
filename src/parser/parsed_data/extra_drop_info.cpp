@@ -1,5 +1,7 @@
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 
+#include <utility>
+
 namespace duckdb {
 
 ExtraDropTriggerInfo::ExtraDropTriggerInfo() : ExtraDropInfo(ExtraDropInfoType::TRIGGER_INFO) {

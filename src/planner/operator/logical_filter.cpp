@@ -1,5 +1,12 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
+
+#include <utility>
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

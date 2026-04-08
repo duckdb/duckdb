@@ -1,5 +1,11 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

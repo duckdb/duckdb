@@ -1,5 +1,11 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
+
+#include <vector>
+
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 

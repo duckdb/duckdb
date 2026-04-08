@@ -1,5 +1,12 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

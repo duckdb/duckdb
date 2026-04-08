@@ -1,4 +1,13 @@
-#include "duckdb/common/exception.hpp"
+#include <math.h>
+#include <stdint.h>
+#include <string.h>
+#include <limits>
+#include <new>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
@@ -6,6 +15,35 @@
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/planner/expression.hpp"
+
+namespace duckdb {
+class ArenaAllocator;
+class ClientContext;
+}  // namespace duckdb
 
 // MODE( <expr1> )
 // Returns the most frequent value for the values within expr1.

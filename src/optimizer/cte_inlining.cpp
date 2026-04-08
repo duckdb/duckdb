@@ -1,19 +1,32 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 
-#include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/list.hpp"
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
-
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
-
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
 
 namespace duckdb {
 

@@ -11,10 +11,13 @@
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class Binder;
 struct CSEReplacementState;
+class Expression;
+class LogicalOperator;
 
 //! The CommonSubExpression optimizer traverses the expressions of a LogicalOperator to look for duplicate expressions
 //! if there are any, it pushes a projection under the operator that resolves these expressions

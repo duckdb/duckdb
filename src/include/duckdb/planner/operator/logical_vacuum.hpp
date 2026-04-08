@@ -8,12 +8,25 @@
 
 #pragma once
 
+#include <memory>
+#include <unordered_map>
+
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
+class TableCatalogEntry;
 
 //! LogicalVacuum represents a simple logical operator that only passes on the parse info
 class LogicalVacuum : public LogicalOperator {

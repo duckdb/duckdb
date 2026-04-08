@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -16,6 +18,12 @@
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -25,6 +33,7 @@ struct PGList;
 namespace duckdb {
 
 class GroupByNode;
+struct ParserOverrideResult;
 
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a

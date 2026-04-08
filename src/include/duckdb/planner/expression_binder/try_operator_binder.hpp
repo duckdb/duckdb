@@ -9,8 +9,16 @@
 #pragma once
 
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class AggregateFunctionCatalogEntry;
+class Binder;
+class ClientContext;
+class ColumnRefExpression;
+class FunctionExpression;
+class ParsedExpression;
 
 //! This binder is used for the TRY expression
 class TryOperatorBinder : public ExpressionBinder {

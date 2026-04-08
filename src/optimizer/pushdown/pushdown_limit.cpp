@@ -1,8 +1,12 @@
+#include <utility>
+
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

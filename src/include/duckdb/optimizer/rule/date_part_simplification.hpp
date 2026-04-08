@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 // The DatePart Simplification rule rewrites date_part with a constant specifier into a specialized function (e.g.
 // date_part('year', x) => year(x))

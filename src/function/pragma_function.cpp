@@ -1,5 +1,9 @@
 #include "duckdb/function/pragma_function.hpp"
+
+#include <utility>
+
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
 
 namespace duckdb {
 

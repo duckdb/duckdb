@@ -1,5 +1,14 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+
+#include <utility>
+
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
 

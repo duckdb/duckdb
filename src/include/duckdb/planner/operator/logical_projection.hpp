@@ -8,9 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+struct ProjectionIndex;
 
 //! LogicalProjection represents the projection list in a SELECT clause
 class LogicalProjection : public LogicalOperator {

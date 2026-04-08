@@ -1,7 +1,11 @@
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 
+#include <stdint.h>
+#include <algorithm>
+#include <array>
+#include <utility>
+
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/array.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
@@ -16,13 +20,20 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 namespace {
 

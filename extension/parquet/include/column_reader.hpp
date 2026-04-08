@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
 #include "parquet_statistics.hpp"
@@ -22,16 +26,41 @@
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_crypto.hpp"
-
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+namespace protocol {
+class TProtocol;
+}  // namespace protocol
+}  // namespace thrift
+}  // namespace duckdb_apache
 
 namespace duckdb {
 class ParquetReader;
 struct TableFilterState;
+class Allocator;
+class RleBpDecoder;
+class ThriftFileTransport;
+class Vector;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 

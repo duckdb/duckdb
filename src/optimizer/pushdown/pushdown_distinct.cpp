@@ -1,6 +1,12 @@
+#include <memory>
+#include <utility>
+
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

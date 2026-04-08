@@ -8,14 +8,25 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+class Value;
+enum class IndexConstraintType : uint8_t;
 
 struct CreateIndexInfo : public CreateInfo {
 	CreateIndexInfo();

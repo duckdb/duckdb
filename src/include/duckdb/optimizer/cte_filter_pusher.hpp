@@ -8,7 +8,12 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

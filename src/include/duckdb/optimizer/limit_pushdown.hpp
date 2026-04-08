@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class LogicalOperator;

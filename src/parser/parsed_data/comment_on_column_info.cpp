@@ -1,6 +1,15 @@
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
-#include "duckdb/catalog/catalog.hpp"
+
+#include <utility>
+
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

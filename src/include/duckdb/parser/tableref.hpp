@@ -8,13 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class Deserializer;
+class ExternalDependency;
+class Serializer;
 
 //! Represents a generic expression that returns a table.
 class TableRef {

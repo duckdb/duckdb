@@ -8,13 +8,25 @@
 
 #pragma once
 
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 class ConstantExpression;
 class ColumnRefExpression;
 struct SelectBindState;
+class Binder;
+class ClientContext;
+class SelectNode;
 
 //! The GROUP binder is responsible for binding expressions in the GROUP BY clause
 class GroupBinder : public ExpressionBinder {

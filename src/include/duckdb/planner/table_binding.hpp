@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -18,6 +20,16 @@
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -29,6 +41,10 @@ class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class StandardEntry;
 struct ColumnBinding;
+class Binder;
+class LambdaRefExpression;
+class QueryNode;
+struct ColumnIndex;
 
 enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 

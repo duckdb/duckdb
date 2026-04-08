@@ -1,8 +1,10 @@
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

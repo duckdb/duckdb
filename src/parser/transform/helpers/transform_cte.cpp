@@ -1,8 +1,11 @@
-#include "duckdb/common/enums/set_operation_type.hpp"
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -12,6 +15,21 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

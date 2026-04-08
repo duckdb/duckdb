@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 class Serializer;
@@ -18,7 +26,6 @@ class Deserializer;
 class OnConflictInfo;
 class ExpressionListRef;
 class SelectStatement;
-
 enum class InsertColumnOrder : uint8_t;
 
 //! InsertQueryNode represents an INSERT DML statement as a QueryNode,

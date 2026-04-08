@@ -8,13 +8,21 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <utility>
+
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class Deserializer;
 class Serializer;
+enum class OrderByNullType : uint8_t;
 
 enum class ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,

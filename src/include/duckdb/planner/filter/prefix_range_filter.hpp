@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -16,10 +18,22 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 struct JoinFilterTableFilterState;
+class BaseStatistics;
+class ClientContext;
+class Deserializer;
+class Serializer;
+class Vector;
+struct SelectionVector;
+struct uhugeint_t;
 
 class PrefixRangeFilter {
 public:

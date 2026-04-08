@@ -12,6 +12,8 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class Expression;
+class LogicalOperator;
 
 //! Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
 class OuterJoinSimplification : public LogicalOperatorVisitor {

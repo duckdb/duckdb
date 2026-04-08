@@ -9,10 +9,13 @@
 
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
 struct NeighborInfo;
+struct JoinRelationSet;
 
 class DPJoinNode {
 public:

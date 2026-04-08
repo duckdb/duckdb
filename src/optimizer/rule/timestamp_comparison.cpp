@@ -1,10 +1,14 @@
 
 #include "duckdb/optimizer/rule/timestamp_comparison.hpp"
+
+#include <stdint.h>
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/common/constants.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -13,8 +17,18 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/optimizer/matcher/expression_type_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
 
 namespace duckdb {
+class LogicalOperator;
+struct timestamp_t;
 
 TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(rewriter), context(rewriter.context) {
 	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children

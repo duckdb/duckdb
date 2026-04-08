@@ -1,13 +1,16 @@
 #include "duckdb/planner/expression_binder/qualify_binder.hpp"
 
+#include <string>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : BaseSelectBinder(binder, context, node, info), column_alias_binder(node.bind_state) {

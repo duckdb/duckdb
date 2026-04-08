@@ -1,5 +1,16 @@
+#include <string>
+
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ParsedExpression;
 
 //! The relation binder is a binder used to bind expressions in the relation API
 class RelationBinder : public ExpressionBinder {

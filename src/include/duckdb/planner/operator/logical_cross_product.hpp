@@ -9,8 +9,13 @@
 #pragma once
 
 #include "duckdb/planner/operator/logical_unconditional_join.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 //! LogicalCrossProduct represents a cross product between two relations
 class LogicalCrossProduct : public LogicalUnconditionalJoin {

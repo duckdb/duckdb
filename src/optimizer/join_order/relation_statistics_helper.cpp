@@ -1,17 +1,46 @@
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
-#include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/operator/list.hpp"
+
+#include <math.h>
+#include <functional>
+#include <set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-
-#include <math.h>
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_delim_get.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();

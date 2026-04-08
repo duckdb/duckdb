@@ -1,8 +1,17 @@
 #include "duckdb/optimizer/empty_result_pullup.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

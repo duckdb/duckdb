@@ -1,13 +1,27 @@
 #include "duckdb/planner/collation_binding.hpp"
+
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
+class ClientContext;
+
 constexpr const char *CollateCatalogEntry::Name;
 
 bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,

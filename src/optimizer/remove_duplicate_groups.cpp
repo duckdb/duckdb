@@ -1,8 +1,21 @@
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 
-#include "duckdb/common/pair.hpp"
+#include <algorithm>
+#include <functional>
+#include <set>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

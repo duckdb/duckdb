@@ -1,10 +1,25 @@
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
+struct TableIndex;
 
 using Filter = FilterPushdown::Filter;
 

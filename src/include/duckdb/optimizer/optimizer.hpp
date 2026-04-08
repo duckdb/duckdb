@@ -8,15 +8,22 @@
 
 #pragma once
 
+#include <functional>
+#include <string>
+
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
-
-#include <functional>
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class Binder;
+class ClientContext;
+enum class OptimizerType : uint32_t;
 
 class Optimizer {
 public:

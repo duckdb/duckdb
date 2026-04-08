@@ -10,8 +10,17 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class SchemaCatalogEntry;
+class Serializer;
 
 //! LogicalCreate represents a CREATE operator
 class LogicalCreate : public LogicalOperator {

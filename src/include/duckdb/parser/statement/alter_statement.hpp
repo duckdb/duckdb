@@ -8,9 +8,15 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {
 

@@ -12,8 +12,11 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class LogicalProjection;
 
 class FilterPullup {
 public:

@@ -8,10 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class ParsedExpression;
 
 class ExecuteStatement : public SQLStatement {
 public:

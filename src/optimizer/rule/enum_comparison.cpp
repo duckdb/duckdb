@@ -1,12 +1,25 @@
 
 #include "duckdb/optimizer/rule/enum_comparison.hpp"
 
-#include "duckdb/execution/expression_executor.hpp"
+#include <functional>
+#include <string>
+#include <utility>
+
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/optimizer/matcher/type_matcher_id.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/expression_type_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

@@ -8,9 +8,24 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 //! LogicalExpressionGet represents a scan operation over a set of to-be-executed expressions
 class LogicalExpressionGet : public LogicalOperator {

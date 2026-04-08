@@ -1,12 +1,25 @@
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
+#include <set>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
-#include "duckdb/function/function_serialization.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
+class ClientContext;
+enum class CopyOverwriteMode : uint8_t;
 
 vector<LogicalType> LogicalCopyToFile::GetTypesWithoutPartitions(const vector<LogicalType> &col_types,
                                                                  const vector<idx_t> &part_cols, bool write_part_cols) {

@@ -8,11 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 struct BindingAlias;
+class Deserializer;
+class Serializer;
 
 //! Represents a reference to a column from either the FROM clause or from an
 //! alias

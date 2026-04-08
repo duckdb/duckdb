@@ -1,8 +1,29 @@
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+
+namespace duckdb_re2 {
+class RE2;
+}  // namespace duckdb_re2
 
 namespace duckdb {
 

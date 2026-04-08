@@ -1,5 +1,10 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 
+#include <utility>
+
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

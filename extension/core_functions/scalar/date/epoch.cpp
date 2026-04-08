@@ -1,10 +1,22 @@
-#include "core_functions/scalar/date_functions.hpp"
+#include <stdint.h>
+#include <memory>
 
+#include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 namespace {
 

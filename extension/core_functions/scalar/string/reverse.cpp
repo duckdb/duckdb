@@ -1,13 +1,20 @@
-#include "core_functions/scalar/string_functions.hpp"
+#include <string.h>
+#include <string>
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "utf8proc_wrapper.hpp"
-
-#include <string.h>
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 //! Fast ASCII string reverse, returns false if the input data is not ascii
 static bool StrReverseASCII(const char *input, idx_t n, char *output) {

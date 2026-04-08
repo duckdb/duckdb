@@ -1,14 +1,23 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+
+#include <stdint.h>
+#include <functional>
+#include <utility>
+
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/parser/base_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 static BoundCastInfo BindCastFunction(ClientContext &context, const LogicalType &source, const LogicalType &target) {
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();

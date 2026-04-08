@@ -1,8 +1,27 @@
-#include "duckdb/function/lambda_functions.hpp"
+#include <string>
+#include <unordered_map>
+
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/function/create_sort_key.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 

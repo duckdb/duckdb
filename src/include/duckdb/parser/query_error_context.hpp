@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 class ParsedExpression;

@@ -1,3 +1,7 @@
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
@@ -5,6 +9,18 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

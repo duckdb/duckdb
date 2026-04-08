@@ -1,6 +1,16 @@
 #include "duckdb/planner/operator/logical_create.hpp"
 
+#include <memory>
+#include <utility>
+
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+
 namespace duckdb {
+class ClientContext;
+class SchemaCatalogEntry;
 
 LogicalCreate::LogicalCreate(LogicalOperatorType type, unique_ptr<CreateInfo> info,
                              optional_ptr<SchemaCatalogEntry> schema)

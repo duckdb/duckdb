@@ -1,6 +1,10 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
-#include "duckdb/common/exception.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

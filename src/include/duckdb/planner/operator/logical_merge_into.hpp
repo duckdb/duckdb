@@ -8,15 +8,31 @@
 
 #pragma once
 
+#include <map>
+
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/index_vector.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
 class LogicalGet;
 class LogicalProjection;
+class ClientContext;
+class Deserializer;
+class Serializer;
+enum class MergeActionCondition : uint8_t;
+struct CreateInfo;
 
 class BoundMergeIntoAction {
 public:

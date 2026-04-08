@@ -1,5 +1,11 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 
+#include <utility>
+
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/planner/expression.hpp"
+
 namespace duckdb {
 
 LogicalOrder::LogicalOrder(vector<BoundOrderByNode> orders)

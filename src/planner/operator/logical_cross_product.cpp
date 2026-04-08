@@ -1,5 +1,9 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 LogicalCrossProduct::LogicalCrossProduct(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)

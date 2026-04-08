@@ -1,5 +1,11 @@
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
+#include <algorithm>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
@@ -7,9 +13,21 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/relation_index.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
+class JoinOrderOptimizer;
 
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>

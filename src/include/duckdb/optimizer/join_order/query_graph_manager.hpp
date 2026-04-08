@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <functional>
+#include <utility>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -21,12 +24,18 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-
-#include <functional>
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class QueryGraphEdges;
+class ClientContext;
+class DPJoinNode;
+class JoinOrderOptimizer;
 
 struct GenerateJoinRelation {
 	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)

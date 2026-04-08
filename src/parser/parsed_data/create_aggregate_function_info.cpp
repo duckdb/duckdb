@@ -1,5 +1,14 @@
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+
 namespace duckdb {
 
 CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunction function)

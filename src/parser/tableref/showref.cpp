@@ -1,5 +1,9 @@
 #include "duckdb/parser/tableref/showref.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

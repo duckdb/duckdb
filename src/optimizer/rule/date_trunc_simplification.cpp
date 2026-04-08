@@ -1,6 +1,9 @@
 #include "duckdb/optimizer/rule/date_trunc_simplification.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <functional>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -12,10 +15,15 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
-#include "duckdb/function/function.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 DateTruncSimplificationRule::DateTruncSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto op = make_uniq<ComparisonExpressionMatcher>();

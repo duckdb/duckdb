@@ -1,7 +1,17 @@
 #include "duckdb/planner/expression_binder/projection_binder.hpp"
+
+#include <utility>
+
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, TableIndex proj_index_p,
                                    vector<unique_ptr<Expression>> &proj_expressions_p, string clause_p)

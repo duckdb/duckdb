@@ -9,8 +9,15 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundConjunctionExpression;
+class ExpressionRewriter;
+class LogicalOperator;
 
 // The Conjunction Simplification rule rewrites conjunctions with a constant
 class ConjunctionSimplificationRule : public Rule {

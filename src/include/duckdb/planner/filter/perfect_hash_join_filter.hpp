@@ -8,14 +8,30 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class PerfectHashJoinExecutor;
+class BaseStatistics;
+class Deserializer;
+class Serializer;
+class Vector;
+struct JoinFilterTableFilterState;
+struct SelectionVector;
 
 class PerfectHashJoinFilter final : public TableFilter {
 public:

@@ -1,10 +1,18 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
+
+#include <vector>
+
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings) {
 	// general case

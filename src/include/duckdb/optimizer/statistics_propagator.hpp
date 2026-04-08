@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -16,6 +18,9 @@
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
@@ -24,6 +29,32 @@ class ClientContext;
 class LogicalOperator;
 class TableFilter;
 struct BoundOrderByNode;
+class BoundAggregateExpression;
+class BoundBetweenExpression;
+class BoundCaseExpression;
+class BoundCastExpression;
+class BoundColumnRefExpression;
+class BoundComparisonExpression;
+class BoundConjunctionExpression;
+class BoundConstantExpression;
+class BoundFunctionExpression;
+class BoundOperatorExpression;
+class Expression;
+class LogicalAggregate;
+class LogicalAnyJoin;
+class LogicalComparisonJoin;
+class LogicalCrossProduct;
+class LogicalFilter;
+class LogicalGet;
+class LogicalJoin;
+class LogicalLimit;
+class LogicalOrder;
+class LogicalPositionalJoin;
+class LogicalProjection;
+class LogicalSetOperation;
+class LogicalWindow;
+enum class ExpressionType : uint8_t;
+struct ColumnBinding;
 
 class StatisticsPropagator {
 public:

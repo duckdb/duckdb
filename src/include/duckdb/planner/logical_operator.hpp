@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <algorithm>
+#include <functional>
+#include <string>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
@@ -17,11 +21,20 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
-
-#include <algorithm>
-#include <functional>
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree

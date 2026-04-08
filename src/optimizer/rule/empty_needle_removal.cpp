@@ -1,14 +1,26 @@
 
 #include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression

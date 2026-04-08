@@ -1,10 +1,28 @@
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/table_binding.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name_p,
                                          string clause_p)

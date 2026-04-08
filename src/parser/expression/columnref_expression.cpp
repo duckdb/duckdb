@@ -1,9 +1,14 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/binding_alias.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

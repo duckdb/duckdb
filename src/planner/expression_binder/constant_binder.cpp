@@ -1,7 +1,15 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause)
     : ExpressionBinder(binder, context), clause(std::move(clause)) {

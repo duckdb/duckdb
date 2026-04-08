@@ -1,7 +1,18 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 

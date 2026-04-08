@@ -8,13 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 struct ExtraDropInfo;
+class Deserializer;
+class Serializer;
+enum class CatalogType : uint8_t;
 
 struct DropInfo : public ParseInfo {
 public:

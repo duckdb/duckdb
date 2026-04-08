@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <unordered_map>
+#include <unordered_set>
+
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -18,10 +21,16 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class JoinElimination;
 class PipelineInfo;
+class BoundColumnRefExpression;
+struct ColumnBinding;
 
 struct DistinctGroupRef {
 	column_binding_set_t distinct_group;

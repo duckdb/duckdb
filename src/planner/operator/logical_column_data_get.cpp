@@ -1,7 +1,8 @@
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/main/config.hpp"
+#include <utility>
+
+#include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 

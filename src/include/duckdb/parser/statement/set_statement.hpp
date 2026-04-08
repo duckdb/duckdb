@@ -8,12 +8,18 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+enum class SetScope : uint8_t;
 
 class SetStatement : public SQLStatement {
 public:

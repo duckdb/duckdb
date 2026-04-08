@@ -8,16 +8,21 @@
 
 #pragma once
 
+#include <functional>
+#include <string>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/table_index.hpp"
 #include "duckdb/common/projection_index.hpp"
-
-#include <functional>
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class Serializer;
 class Deserializer;
+class Expression;
 
 struct ColumnBinding {
 	ColumnBinding();

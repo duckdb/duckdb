@@ -8,10 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+class Deserializer;
+class Serializer;
 
 class ConjunctionFilter : public TableFilter {
 public:

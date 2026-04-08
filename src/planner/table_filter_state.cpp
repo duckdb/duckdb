@@ -1,14 +1,22 @@
 #include "duckdb/planner/table_filter_state.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Expression;
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
 	executor.AddExpression(expression);

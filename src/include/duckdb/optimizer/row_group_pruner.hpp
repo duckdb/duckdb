@@ -12,10 +12,19 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 
 namespace duckdb {
 class LogicalGet;
 class LogicalOperator;
+class ClientContext;
+class LogicalLimit;
+struct BoundOrderByNode;
+struct ColumnIndex;
+struct StorageIndex;
 
 class RowGroupPruner {
 public:

@@ -1,10 +1,25 @@
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 

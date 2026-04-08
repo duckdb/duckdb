@@ -1,11 +1,26 @@
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 
-#include "duckdb/main/client_context.hpp"
+#include <stddef.h>
+#include <stdint.h>
+#include <algorithm>
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/main/settings.hpp"
-
-#include <cmath>
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
+#include "duckdb/optimizer/join_order/cost_model.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/relation_index.hpp"
+#include "duckdb/optimizer/join_order/relation_manager.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
 

@@ -8,13 +8,20 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
 class ColumnRefExpression;
 struct SelectBindState;
+class ExpressionBinder;
+class ParsedExpression;
+struct BindResult;
 
 //! A helper binder for WhereBinder and HavingBinder which support alias as a columnref.
 class ColumnAliasBinder {

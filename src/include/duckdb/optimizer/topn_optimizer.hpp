@@ -10,6 +10,8 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class LogicalOperator;

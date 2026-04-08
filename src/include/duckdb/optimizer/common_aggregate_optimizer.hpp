@@ -10,8 +10,15 @@
 
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
+class LogicalAggregate;
+class LogicalOperator;
+struct ColumnBinding;
+
 //! The CommonAggregateOptimizer optimizer eliminates duplicate aggregates from aggregate nodes
 class CommonAggregateOptimizer : public LogicalOperatorVisitor {
 public:

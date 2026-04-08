@@ -8,10 +8,26 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/function/function.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class AggregateFunction;
+class AggregateFunctionSet;
+class Catalog;
+class CopyFunction;
+class PragmaFunction;
+class PragmaFunctionSet;
+class ScalarFunction;
+class ScalarFunctionSet;
+class TableFunction;
+class TableFunctionSet;
+class WindowFunction;
+class WindowFunctionSet;
 
 class BuiltinFunctions {
 public:

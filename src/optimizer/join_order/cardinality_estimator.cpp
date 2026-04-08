@@ -1,15 +1,34 @@
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include <math.h>
+#include <algorithm>
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/storage/data_table.hpp"
-
-#include <math.h>
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/relation_index.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

@@ -8,9 +8,16 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 //! The AT clause specifies which version of a table to read
 class AtClause {

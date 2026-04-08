@@ -8,15 +8,31 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 struct JoinFilterTableFilterState;
+class BaseStatistics;
+class ClientContext;
+class Deserializer;
+class Serializer;
+class Vector;
+struct SelectionVector;
 
 class BloomFilter {
 public:

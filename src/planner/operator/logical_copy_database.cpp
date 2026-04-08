@@ -1,5 +1,13 @@
 #include "duckdb/planner/operator/logical_copy_database.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
+
+#include <memory>
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_data/copy_database_info.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 

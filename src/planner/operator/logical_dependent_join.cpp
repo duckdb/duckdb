@@ -1,6 +1,11 @@
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
+enum class JoinType : uint8_t;
 
 LogicalDependentJoin::LogicalDependentJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
                                            CorrelatedColumns correlated_columns, JoinType type,

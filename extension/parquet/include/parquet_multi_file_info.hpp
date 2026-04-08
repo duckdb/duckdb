@@ -8,10 +8,36 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "parquet_reader.hpp"
+#include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
+class ClientContext;
+class ExecutionContext;
+enum class FileExpandResult : uint8_t;
+struct LogicalType;
+struct MultiFileBindData;
+struct MultiFileGlobalState;
+struct MultiFileOptions;
 
 class ParquetFileReaderOptions : public BaseFileReaderOptions {
 public:

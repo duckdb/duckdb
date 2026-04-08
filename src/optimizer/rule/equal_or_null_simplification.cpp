@@ -1,10 +1,20 @@
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/expression_type_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on OR conjunction

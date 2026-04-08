@@ -1,6 +1,19 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

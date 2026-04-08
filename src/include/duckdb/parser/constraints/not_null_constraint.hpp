@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 class NotNullConstraint : public Constraint {
 public:

@@ -8,13 +8,24 @@
 
 #pragma once
 
+#include <memory>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 class Optimizer;
+class ClientContext;
+struct ColumnBinding;
 
 class FilterPushdown {
 public:

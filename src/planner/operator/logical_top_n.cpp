@@ -1,6 +1,9 @@
 #include "duckdb/planner/operator/logical_top_n.hpp"
 
+#include <utility>
+
 namespace duckdb {
+class ClientContext;
 
 LogicalTopN::LogicalTopN(vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
     : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(std::move(orders)), limit(limit), offset(offset) {

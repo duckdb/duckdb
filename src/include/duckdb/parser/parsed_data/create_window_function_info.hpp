@@ -10,8 +10,11 @@
 
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
+class WindowFunction;
 
 struct CreateWindowFunctionInfo : public CreateFunctionInfo {
 	explicit CreateWindowFunctionInfo(WindowFunction function);

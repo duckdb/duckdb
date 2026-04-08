@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 
+#include "duckdb/common/string_util.hpp"
+
 namespace duckdb {
 
 InsertionOrderPreservingMap<string> LogicalMaterializedCTE::ParamsToString() const {

@@ -8,9 +8,19 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Expression;
+class Serializer;
 
 //! LogicalFilter represents a filter operation (e.g. WHERE or HAVING clause)
 class LogicalFilter : public LogicalOperator {

@@ -8,11 +8,25 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 class LogicalRecursiveCTE : public LogicalCTE {
 	LogicalRecursiveCTE();

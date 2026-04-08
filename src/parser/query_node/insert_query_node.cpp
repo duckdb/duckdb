@@ -1,9 +1,24 @@
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 
 namespace duckdb {
 

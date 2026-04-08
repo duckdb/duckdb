@@ -1,5 +1,10 @@
 #include "duckdb/planner/column_binding.hpp"
+
+#include <utility>
+
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 

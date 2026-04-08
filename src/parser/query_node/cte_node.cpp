@@ -1,5 +1,7 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
 
+#include "duckdb/common/exception.hpp"
+
 namespace duckdb {
 
 string CTENode::ToString() const {

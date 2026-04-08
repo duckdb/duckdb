@@ -1,10 +1,34 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <utility>
+
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;

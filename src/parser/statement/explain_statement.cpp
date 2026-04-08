@@ -1,5 +1,9 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
+
+#include <utility>
+
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

@@ -1,7 +1,10 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <utility>
+
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 

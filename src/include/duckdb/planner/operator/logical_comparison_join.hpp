@@ -8,14 +8,31 @@
 
 #pragma once
 
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
+enum class JoinRefType : uint8_t;
+struct TableIndex;
 
 //! LogicalComparisonJoin represents a join that involves comparisons between the LHS and RHS
 class LogicalComparisonJoin : public LogicalJoin {

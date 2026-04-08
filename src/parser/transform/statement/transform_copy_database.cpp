@@ -1,7 +1,20 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

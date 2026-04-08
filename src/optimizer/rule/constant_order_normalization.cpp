@@ -1,10 +1,25 @@
 #include "duckdb/optimizer/rule/constant_order_normalization.hpp"
 
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 class RecursiveFunctionExpressionMatcher : public ExpressionMatcher {
 public:

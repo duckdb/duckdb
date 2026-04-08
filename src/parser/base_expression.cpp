@@ -1,6 +1,5 @@
 #include "duckdb/parser/base_expression.hpp"
 
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/printer.hpp"
 
 namespace duckdb {

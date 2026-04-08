@@ -1,10 +1,11 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class Expression;
+class Value;
 
 unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value &input) {
 	return BaseStatistics::FromConstant(input).ToUnique();

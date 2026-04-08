@@ -8,14 +8,26 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/common/limits.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class OrderByNullType : uint8_t;
 
 //! A ResultModifier
 class BoundResultModifier {

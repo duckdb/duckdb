@@ -1,6 +1,16 @@
+#include <utility>
+
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/pg_list.hpp"
 
 namespace duckdb {
 

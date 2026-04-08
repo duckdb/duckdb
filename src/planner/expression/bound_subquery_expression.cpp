@@ -1,8 +1,11 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
+#include <utility>
+
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
+class BaseExpression;
 
 BoundSubqueryExpression::BoundSubqueryExpression(LogicalType return_type)
     : Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, std::move(return_type)) {

@@ -8,13 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 //! Represents a JOIN between two expressions
 class JoinRef : public TableRef {

@@ -1,7 +1,17 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+
+#include <memory>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 

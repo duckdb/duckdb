@@ -1,6 +1,12 @@
 #include "duckdb/planner/bound_parameter_map.hpp"
+
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

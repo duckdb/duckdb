@@ -10,8 +10,16 @@
 
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundConjunctionExpression;
+class ExpressionRewriter;
+class LogicalOperator;
 
 // (X AND B) OR (X AND C) OR (X AND D) = X AND (B OR C OR D)
 class DistributivityRule : public Rule {

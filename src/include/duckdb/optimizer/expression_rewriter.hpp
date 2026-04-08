@@ -11,9 +11,15 @@
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class ClientContext;
+class LogicalOperator;
 
 //! The ExpressionRewriter performs a set of fixed rewrite rules on the expressions that occur in a SQL statement
 class ExpressionRewriter : public LogicalOperatorVisitor {

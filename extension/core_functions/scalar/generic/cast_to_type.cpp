@@ -1,7 +1,20 @@
+#include <memory>
+#include <utility>
+
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class DataChunk;
+class Vector;
+struct ExpressionState;
 
 namespace {
 

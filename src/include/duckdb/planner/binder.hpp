@@ -8,6 +8,13 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
@@ -28,6 +35,36 @@
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enable_shared_from_this_ipp.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 //! fwd declare
 namespace duckdb_re2 {
@@ -47,7 +84,6 @@ class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 class LogicalVacuum;
-
 class ColumnList;
 class ExternalDependency;
 class TableFunction;
@@ -55,7 +91,6 @@ class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
 class BoundAtClause;
-
 struct CreateInfo;
 struct CreateTriggerInfo;
 struct BoundCreateTableInfo;
@@ -74,6 +109,70 @@ struct BoundCTEData;
 enum class CopyToType : uint8_t;
 template <class T, class INDEX_TYPE>
 class IndexVector;
+class AlterStatement;
+class AttachStatement;
+class BaseTableRef;
+class BoundJoinRef;
+class BoundQueryNode;
+class BoundRefWrapper;
+class BoundSetOperationNode;
+class BoundSubqueryExpression;
+class CallStatement;
+class Catalog;
+class ColumnDataRef;
+class ColumnDefinition;
+class CopyDatabaseStatement;
+class CopyFunction;
+class CopyStatement;
+class CreateStatement;
+class DeleteQueryNode;
+class DeleteStatement;
+class DelimGetRef;
+class DetachStatement;
+class DropStatement;
+class EmptyTableRef;
+class ErrorData;
+class ExecuteStatement;
+class ExplainStatement;
+class ExportStatement;
+class ExtensionStatement;
+class FunctionExpression;
+class InsertQueryNode;
+class InsertStatement;
+class JoinRef;
+class LimitPercentModifier;
+class LoadStatement;
+class LogicalGet;
+class LogicalMergeInto;
+class LogicalPlanStatement;
+class PivotRef;
+class PragmaStatement;
+class PrepareStatement;
+class RecursiveCTENode;
+class RelationStatement;
+class ResetVariableStatement;
+class SQLStatement;
+class SchemaCatalogEntry;
+class SelectStatement;
+class SetOperationNode;
+class SetStatement;
+class SetVariableStatement;
+class ShowRef;
+class StatementNode;
+class SubqueryRef;
+class TableFunctionCatalogEntry;
+class TableFunctionRef;
+class TableRef;
+class TransactionStatement;
+class UpdateExtensionsStatement;
+class UpdateQueryNode;
+class UpdateStatement;
+class VacuumStatement;
+enum class CopyOptionMode;
+enum class OnEntryNotFound : uint8_t;
+struct CreateViewInfo;
+struct PragmaInfo;
+struct SelectBindState;
 
 enum class BindingMode : uint8_t {
 	STANDARD_BINDING,

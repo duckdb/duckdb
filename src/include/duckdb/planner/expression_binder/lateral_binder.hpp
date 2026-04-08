@@ -8,12 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
 class ColumnAliasBinder;
+class ClientContext;
+class Expression;
+class LogicalOperator;
+class ParsedExpression;
 
 //! The LATERAL binder is responsible for binding an expression within a LATERAL join
 class LateralBinder : public ExpressionBinder {

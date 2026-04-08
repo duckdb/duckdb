@@ -1,5 +1,12 @@
 #include "duckdb/parser/result_modifier.hpp"
+
+#include <vector>
+
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

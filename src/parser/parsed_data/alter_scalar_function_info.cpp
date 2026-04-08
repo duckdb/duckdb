@@ -1,5 +1,11 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
 

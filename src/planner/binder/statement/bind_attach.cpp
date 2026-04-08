@@ -1,9 +1,28 @@
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

@@ -1,10 +1,18 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/function/function_serialization.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalCreateIndex::LogicalCreateIndex(unique_ptr<CreateIndexInfo> info_p, vector<unique_ptr<Expression>> expressions_p,
                                        TableCatalogEntry &table_p, unique_ptr<AlterTableInfo> alter_table_info)

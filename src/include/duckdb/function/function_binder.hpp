@@ -8,14 +8,44 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
+class AggregateFunction;
+class AggregateFunctionSet;
+class BaseScalarFunction;
+class BoundWindowExpression;
+class ClientContext;
+class ErrorData;
+class PragmaFunctionSet;
+class ScalarFunction;
+class ScalarFunctionCatalogEntry;
+class ScalarFunctionSet;
+class SimpleFunction;
+class TableFunctionSet;
+class Value;
+class WindowFunctionSet;
+template <class T> class FunctionSet;
 
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {

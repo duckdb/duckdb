@@ -1,5 +1,14 @@
 #include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/window_function.hpp"
+
 namespace duckdb {
 
 CreateWindowFunctionInfo::CreateWindowFunctionInfo(WindowFunction function)

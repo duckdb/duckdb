@@ -1,12 +1,27 @@
 #include "duckdb/optimizer/rule/arithmetic_simplification.hpp"
 
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on an OperatorExpression that has a ConstantExpression as child

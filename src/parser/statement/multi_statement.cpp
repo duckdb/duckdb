@@ -1,5 +1,9 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 
+#include <vector>
+
+#include "duckdb/common/string_util.hpp"
+
 namespace duckdb {
 
 MultiStatement::MultiStatement() : SQLStatement(StatementType::MULTI_STATEMENT) {

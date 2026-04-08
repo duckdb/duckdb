@@ -8,11 +8,24 @@
 
 #pragma once
 
+#include <memory>
+#include <string>
+
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include <memory>
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Deserializer;
+class Serializer;
 
 class BoundAggregateExpression : public Expression {
 public:

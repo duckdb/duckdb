@@ -1,6 +1,12 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 
+#include <memory>
+#include <utility>
+
+#include "duckdb/common/types.hpp"
+
 namespace duckdb {
+class ClientContext;
 
 LogicalLimit::LogicalLimit(BoundLimitNode limit_val, BoundLimitNode offset_val)
     : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(std::move(limit_val)),

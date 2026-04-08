@@ -8,11 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class SubqueryType : uint8_t;
 
 //! Represents a subquery
 class SubqueryExpression : public ParsedExpression {

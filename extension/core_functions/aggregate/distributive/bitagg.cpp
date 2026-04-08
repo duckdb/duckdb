@@ -1,12 +1,24 @@
+#include <stdint.h>
+#include <string.h>
+#include <utility>
+#include <vector>
+
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
+struct hugeint_t;
+struct uhugeint_t;
 
 namespace {
 

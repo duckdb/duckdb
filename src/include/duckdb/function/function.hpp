@@ -8,12 +8,24 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <utility>
+
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -22,7 +34,6 @@ class ClientContext;
 class Expression;
 class ExpressionExecutor;
 class Transaction;
-
 class AggregateFunction;
 class AggregateFunctionSet;
 class CopyFunction;
@@ -35,7 +46,6 @@ class TableFunction;
 class SimpleFunction;
 class WindowFunction;
 class WindowFunctionSet;
-
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out

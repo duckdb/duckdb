@@ -1,17 +1,78 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 
+#include <stdint.h>
+#include <algorithm>
+#include <cstddef>
+#include <exception>
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/planner/operator/list.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
+#include "duckdb/common/arena_stl_allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/string.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/operator/logical_pivot.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //===--------------------------------------------------------------------===//
 // Subplan Signature/Info

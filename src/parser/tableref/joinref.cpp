@@ -1,7 +1,13 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

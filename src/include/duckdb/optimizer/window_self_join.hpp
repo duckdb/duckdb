@@ -9,10 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/optimizer.hpp"
-
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class BoundWindowExpression;
+class ColumnBindingReplacer;
+class Optimizer;
 
 class WindowSelfJoinOptimizer {
 public:

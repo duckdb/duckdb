@@ -1,5 +1,11 @@
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+
+#include <utility>
+
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception_format_value.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

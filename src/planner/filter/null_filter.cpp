@@ -1,6 +1,13 @@
 #include "duckdb/planner/filter/null_filter.hpp"
+
+#include <utility>
+
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

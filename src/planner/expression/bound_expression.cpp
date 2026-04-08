@@ -1,7 +1,12 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/common/enum_util.hpp"
+
+#include <utility>
+
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Serializer;
 
 BoundExpression::BoundExpression(unique_ptr<Expression> expr_p)
     : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr_p)) {

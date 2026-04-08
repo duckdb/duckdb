@@ -8,13 +8,22 @@
 
 #pragma once
 
+#include <string>
+#include <unordered_map>
+
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+class Value;
 
 struct AttachInfo : public ParseInfo {
 public:

@@ -1,7 +1,17 @@
 #include "duckdb/planner/table_filter_set.hpp"
+
+#include <functional>
+#include <unordered_map>
+
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class PhysicalOperator;
+class PhysicalTableScan;
 
 TableFilterSet::ConstTableFilterIteratorEntry::ConstTableFilterIteratorEntry(
     map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator it)

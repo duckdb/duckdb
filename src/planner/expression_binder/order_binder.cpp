@@ -1,20 +1,33 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/expression_map.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

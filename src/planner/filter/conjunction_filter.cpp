@@ -1,8 +1,16 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }

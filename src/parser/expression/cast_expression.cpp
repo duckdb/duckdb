@@ -1,5 +1,9 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/common/exception.hpp"
+
+#include <utility>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

@@ -8,11 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/tableref/at_clause.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 //! Represents a TableReference to a base table in a catalog and schema.
 class BaseTableRef : public TableRef {

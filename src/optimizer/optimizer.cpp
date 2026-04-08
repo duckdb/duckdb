@@ -1,5 +1,10 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
+#include <set>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -29,7 +34,6 @@
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
-#include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
@@ -43,8 +47,38 @@
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/optimizer/rule.hpp"
+#include "duckdb/optimizer/rule/arithmetic_simplification.hpp"
+#include "duckdb/optimizer/rule/case_simplification.hpp"
+#include "duckdb/optimizer/rule/comparison_simplification.hpp"
+#include "duckdb/optimizer/rule/conjunction_simplification.hpp"
+#include "duckdb/optimizer/rule/constant_folding.hpp"
+#include "duckdb/optimizer/rule/constant_order_normalization.hpp"
+#include "duckdb/optimizer/rule/date_part_simplification.hpp"
+#include "duckdb/optimizer/rule/date_trunc_simplification.hpp"
+#include "duckdb/optimizer/rule/distributivity.hpp"
+#include "duckdb/optimizer/rule/empty_needle_removal.hpp"
+#include "duckdb/optimizer/rule/enum_comparison.hpp"
+#include "duckdb/optimizer/rule/like_optimizations.hpp"
+#include "duckdb/optimizer/rule/list_comprehension_rewrite.hpp"
+#include "duckdb/optimizer/rule/move_constants.hpp"
+#include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
+#include "duckdb/optimizer/rule/regex_optimizations.hpp"
+#include "duckdb/optimizer/rule/timestamp_comparison.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 

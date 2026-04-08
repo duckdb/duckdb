@@ -1,5 +1,10 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

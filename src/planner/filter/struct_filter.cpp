@@ -1,13 +1,22 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
+
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 
 StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<TableFilter> child_filter_p)
     : TableFilter(TableFilterType::STRUCT_EXTRACT), child_idx(child_idx_p), child_name(std::move(child_name_p)),

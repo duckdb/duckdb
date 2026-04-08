@@ -1,19 +1,31 @@
+#include <stdint.h>
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
-#include "duckdb/common/string_util.hpp"
-
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
+enum class CollationType;
 
 bool ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> &source,
                                      const LogicalType &sql_type, CollationType type) {

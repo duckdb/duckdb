@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
+#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 namespace duckdb {
 

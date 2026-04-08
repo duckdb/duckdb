@@ -8,9 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+
 class PositionalReferenceExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::POSITIONAL_REFERENCE;

@@ -10,11 +10,15 @@
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class Optimizer;
 struct JoinFilterPushdownColumn;
 struct PushdownFilterTarget;
+class LogicalComparisonJoin;
+class LogicalOperator;
 
 //! The JoinFilterPushdownOptimizer links comparison joins to data sources to enable dynamic execution-time filter
 //! pushdown

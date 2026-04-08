@@ -1,5 +1,17 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception_format_value.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

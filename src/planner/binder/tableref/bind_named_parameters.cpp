@@ -1,6 +1,18 @@
+#include <map>
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
+class QueryErrorContext;
 
 template <typename T>
 map<string, T> order_case_insensitive_map(const case_insensitive_map_t<T> &input_map) {

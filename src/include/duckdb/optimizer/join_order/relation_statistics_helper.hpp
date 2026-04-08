@@ -7,12 +7,34 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class CardinalityEstimator;
+class BaseStatistics;
+class ClientContext;
+class LogicalAggregate;
+class LogicalDelimGet;
+class LogicalDummyScan;
+class LogicalEmptyResult;
+class LogicalExpressionGet;
+class LogicalGet;
+class LogicalOperator;
+class LogicalProjection;
+class LogicalWindow;
+class TableFilter;
+struct ColumnIndex;
 
 struct DistinctCount {
 	idx_t distinct_count;

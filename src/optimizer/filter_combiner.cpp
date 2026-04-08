@@ -1,5 +1,13 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include <stddef.h>
+#include <stdint.h>
+#include <algorithm>
+#include <memory>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -28,8 +36,24 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
 

@@ -1,9 +1,20 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
+
+#include <utility>
+
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/array_ptr.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 

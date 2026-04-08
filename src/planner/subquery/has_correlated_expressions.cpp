@@ -1,11 +1,19 @@
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 
+#include <algorithm>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
-
-#include <algorithm>
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 HasCorrelatedExpressions::HasCorrelatedExpressions(const CorrelatedColumns &correlated, bool lateral,
                                                    idx_t lateral_depth)

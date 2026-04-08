@@ -8,13 +8,22 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/enums/collation_type.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 struct MapCastInfo;
 struct MapCastNode;
 struct DBConfig;
+class ClientContext;
+class DatabaseInstance;
 
 typedef bool (*try_push_collation_t)(ClientContext &context, unique_ptr<Expression> &source,
                                      const LogicalType &sql_type, CollationType type);

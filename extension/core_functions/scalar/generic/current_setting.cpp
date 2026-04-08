@@ -1,13 +1,29 @@
-#include "core_functions/scalar/generic_functions.hpp"
+#include <string>
+#include <utility>
 
-#include "duckdb/main/database.hpp"
+#include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/setting_info.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class DataChunk;
 
 namespace {
 struct CurrentSettingBindData : public FunctionData {

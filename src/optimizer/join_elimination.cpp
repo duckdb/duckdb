@@ -1,12 +1,14 @@
 #include "duckdb/optimizer/join_elimination.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -16,7 +18,9 @@
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include <utility>
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {

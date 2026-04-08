@@ -1,3 +1,8 @@
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/planner/operator/logical_pragma.hpp"
@@ -7,6 +12,32 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/pragma_function.hpp"
+#include "duckdb/parser/parsed_data/bound_pragma_info.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

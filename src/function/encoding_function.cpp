@@ -1,7 +1,17 @@
 #include "duckdb/function/encoding_function.hpp"
-#include "duckdb/main/config.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <unordered_map>
+#include <utility>
+
+#include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

@@ -1,10 +1,16 @@
 #include "duckdb/function/function.hpp"
 
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

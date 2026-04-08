@@ -1,5 +1,9 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

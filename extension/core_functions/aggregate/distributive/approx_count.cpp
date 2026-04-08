@@ -1,8 +1,24 @@
+#include <stdint.h>
+#include <memory>
+#include <new>
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
+struct AggregateFinalizeData;
+struct AggregateInputData;
 
 // Algorithms from
 // "New cardinality estimation algorithms for HyperLogLog sketches"

@@ -8,11 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Serializer;
 
 //! BoundExpression is an intermediate dummy class used by the binder. It is a ParsedExpression but holds an Expression.
 //! It represents a successfully bound expression. It is used in the Binder to prevent re-binding of already bound parts

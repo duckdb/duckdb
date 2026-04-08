@@ -1,5 +1,10 @@
 #include "duckdb/optimizer/rule/regex_optimizations.hpp"
 
+#include <ctype.h>
+#include <stdint.h>
+#include <functional>
+#include <utility>
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -7,11 +12,21 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "utf8proc_wrapper.hpp"
-
 #include "re2/re2.h"
 #include "re2/regexp.h"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "re2/stringpiece.h"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();

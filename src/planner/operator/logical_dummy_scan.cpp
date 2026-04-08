@@ -1,8 +1,9 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
-#include "duckdb/main/config.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalDummyScan::LogicalDummyScan(TableIndex table_index)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {

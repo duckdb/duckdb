@@ -1,5 +1,8 @@
 #include "duckdb/parser/statement/update_extensions_statement.hpp"
 
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
+
 namespace duckdb {
 
 UpdateExtensionsStatement::UpdateExtensionsStatement() : SQLStatement(StatementType::UPDATE_EXTENSIONS_STATEMENT) {

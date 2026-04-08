@@ -1,6 +1,10 @@
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 
-#include "duckdb/main/client_context.hpp"
+#include <functional>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -14,8 +18,19 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class BoundReferenceExpression;
 
 void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(const vector<ColumnBinding> &bindings,
                                                          column_binding_set_t &unused_bindings) {

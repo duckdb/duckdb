@@ -1,4 +1,12 @@
+#include <string>
+
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/primnodes.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
 

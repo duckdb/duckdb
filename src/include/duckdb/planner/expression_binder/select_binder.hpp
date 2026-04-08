@@ -8,9 +8,22 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
+class Binder;
+class BoundSelectNode;
+class ClientContext;
+class ColumnRefExpression;
+class FunctionExpression;
+struct ColumnBinding;
 
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement
 class SelectBinder : public BaseSelectBinder {

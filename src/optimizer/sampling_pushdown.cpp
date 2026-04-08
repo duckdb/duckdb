@@ -1,7 +1,16 @@
 #include "duckdb/optimizer/sampling_pushdown.hpp"
+
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+
 namespace duckdb {
 
 unique_ptr<LogicalOperator> SamplingPushdown::Optimize(unique_ptr<LogicalOperator> op) {

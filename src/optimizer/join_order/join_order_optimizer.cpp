@@ -1,15 +1,16 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 
-#include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/pair.hpp"
+#include <utility>
+
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
-#include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/operator/list.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/optimizer/join_order/relation_manager.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 JoinOrderOptimizer::JoinOrderOptimizer(ClientContext &context)
     : context(context), query_graph_manager(context), depth(1) {

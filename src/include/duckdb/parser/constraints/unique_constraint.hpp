@@ -8,11 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class ColumnList;
+class Deserializer;
+class Serializer;
 
 class UniqueConstraint : public Constraint {
 public:

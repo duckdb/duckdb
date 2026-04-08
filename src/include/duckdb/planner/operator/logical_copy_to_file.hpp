@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -15,8 +18,21 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
+enum class CopyOverwriteMode : uint8_t;
 
 class LogicalCopyToFile : public LogicalOperator {
 public:

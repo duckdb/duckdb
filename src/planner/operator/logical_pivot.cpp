@@ -1,6 +1,10 @@
 #include "duckdb/planner/operator/logical_pivot.hpp"
 
-#include "duckdb/main/config.hpp"
+#include <utility>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 

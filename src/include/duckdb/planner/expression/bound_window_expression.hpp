@@ -8,13 +8,26 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 class AggregateFunction;
+class BaseExpression;
+class Deserializer;
+class Serializer;
 class WindowFunction;
 
 class BoundWindowExpression : public Expression {

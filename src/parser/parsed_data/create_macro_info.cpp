@@ -1,8 +1,14 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
+enum class CatalogType : uint8_t;
 
 CreateMacroInfo::CreateMacroInfo(CatalogType type) : CreateFunctionInfo(type, INVALID_SCHEMA) {
 }

@@ -8,12 +8,22 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Deserializer;
+class Serializer;
+struct ParseInfo;
 
 class LogicalExport : public LogicalOperator {
 public:

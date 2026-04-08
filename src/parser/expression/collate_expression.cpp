@@ -1,5 +1,11 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
-#include "duckdb/common/exception.hpp"
+
+#include <utility>
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception_format_value.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

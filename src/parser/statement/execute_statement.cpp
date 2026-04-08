@@ -1,5 +1,12 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 
+#include <unordered_map>
+#include <utility>
+
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+
 namespace duckdb {
 
 ExecuteStatement::ExecuteStatement() : SQLStatement(StatementType::EXECUTE_STATEMENT) {

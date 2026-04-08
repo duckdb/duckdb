@@ -8,16 +8,34 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <utility>
+
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
 
 class ScalarMacroFunction;
+class Binder;
+class Deserializer;
+class FunctionExpression;
+class Serializer;
 
 enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2 };
 

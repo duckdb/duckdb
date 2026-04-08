@@ -2,10 +2,22 @@
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 
+#include <functional>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/parser/base_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
 

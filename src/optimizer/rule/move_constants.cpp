@@ -1,13 +1,30 @@
 #include "duckdb/optimizer/rule/move_constants.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/function_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/optimizer/matcher/type_matcher.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto op = make_uniq<ComparisonExpressionMatcher>();

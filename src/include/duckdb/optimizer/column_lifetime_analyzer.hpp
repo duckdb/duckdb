@@ -11,11 +11,17 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class Optimizer;
 class BoundColumnRefExpression;
+class BoundReferenceExpression;
+class LogicalOperator;
+struct ProjectionIndex;
 
 //! The ColumnLifetimeAnalyzer optimizer traverses the logical operator tree and ensures that columns are removed from
 //! the plan when no longer required

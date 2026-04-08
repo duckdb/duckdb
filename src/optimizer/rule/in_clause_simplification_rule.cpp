@@ -1,10 +1,28 @@
 
+#include <stddef.h>
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
-#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/set_matcher.hpp"
+#include "duckdb/optimizer/rule.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on InClauseExpression that has a ConstantExpression as a check

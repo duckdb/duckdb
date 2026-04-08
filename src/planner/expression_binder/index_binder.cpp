@@ -1,18 +1,38 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/column_binding.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/index/index_type.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Binder;
+struct AlterTableInfo;
 
 IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<TableCatalogEntry> table,
                          optional_ptr<CreateIndexInfo> info)

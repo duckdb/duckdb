@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 

@@ -1,5 +1,10 @@
 #include "duckdb/parser/statement/export_statement.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

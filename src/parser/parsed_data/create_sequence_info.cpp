@@ -1,5 +1,14 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
+#include <sstream>
+#include <utility>
+
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 CreateSequenceInfo::CreateSequenceInfo()

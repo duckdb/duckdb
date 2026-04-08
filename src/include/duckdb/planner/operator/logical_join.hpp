@@ -8,11 +8,22 @@
 
 #pragma once
 
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
+class Expression;
+enum class JoinType : uint8_t;
 
 //! LogicalJoin represents a join between two relations
 class LogicalJoin : public LogicalOperator {

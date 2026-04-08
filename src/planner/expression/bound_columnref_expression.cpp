@@ -1,9 +1,15 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
+struct ProjectionIndex;
+struct TableIndex;
 
 BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)),

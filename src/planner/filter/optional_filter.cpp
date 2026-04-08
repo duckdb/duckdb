@@ -1,8 +1,21 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/expression.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+class Expression;
+class Vector;
+enum class FilterPropagateResult : uint8_t;
+struct SelectionVector;
+struct TableFilterState;
+struct UnifiedVectorFormat;
 
 OptionalFilter::OptionalFilter(unique_ptr<TableFilter> filter)
     : TableFilter(TableFilterType::OPTIONAL_FILTER), child_filter(std::move(filter)) {

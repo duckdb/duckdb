@@ -10,8 +10,16 @@
 
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
+class BoundSubqueryExpression;
+class LogicalOperator;
+struct CorrelatedColumns;
 
 //! Helper class to recursively detect correlated expressions inside a single LogicalOperator
 class HasCorrelatedExpressions : public LogicalOperatorVisitor {

@@ -8,12 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/parser/column_list.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
+class ColumnList;
+class ColumnRefExpression;
+class ParsedExpression;
+
 //! The CHECK binder is responsible for binding an expression within a CHECK constraint
 class CheckBinder : public ExpressionBinder {
 public:

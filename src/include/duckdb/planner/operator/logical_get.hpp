@@ -8,13 +8,39 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 
 namespace duckdb {
 class DynamicTableFilterSet;
+class ClientContext;
+class Deserializer;
+class Serializer;
+struct StorageIndex;
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {

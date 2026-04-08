@@ -1,9 +1,15 @@
 #include "duckdb/planner/operator/logical_export.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+
+#include <utility>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalExport::LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info,
                              unique_ptr<BoundExportData> exported_tables)

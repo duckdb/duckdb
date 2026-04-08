@@ -8,10 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
+class PragmaFunction;
 
 struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
 	DUCKDB_API explicit CreatePragmaFunctionInfo(PragmaFunction function);

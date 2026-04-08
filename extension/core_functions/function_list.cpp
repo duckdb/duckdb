@@ -1,4 +1,5 @@
 #include "core_functions/function_list.hpp"
+
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
@@ -14,12 +15,12 @@
 #include "core_functions/scalar/math_functions.hpp"
 #include "core_functions/scalar/operators_functions.hpp"
 #include "core_functions/scalar/random_functions.hpp"
-#include "core_functions/scalar/secret_functions.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
 #include "core_functions/scalar/union_functions.hpp"
 #include "core_functions/scalar/array_functions.hpp"
 #include "core_functions/scalar/debug_functions.hpp"
+#include "duckdb/function/function_list.hpp"
 
 namespace duckdb {
 

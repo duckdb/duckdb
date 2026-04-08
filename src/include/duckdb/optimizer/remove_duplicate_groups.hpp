@@ -10,10 +10,16 @@
 
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class BoundColumnRefExpression;
+class LogicalAggregate;
+class LogicalOperator;
 
 //! The RemoveDuplicateGroups optimizer traverses the logical operator tree and removes any duplicate aggregate groups
 //! Duplicate groups may be introduced when joins columns are removed, e.g., by Deliminator or RemoveUnusedColumns

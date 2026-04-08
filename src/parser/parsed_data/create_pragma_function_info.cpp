@@ -1,5 +1,11 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
+#include <utility>
+
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/function/pragma_function.hpp"
+
 namespace duckdb {
 
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)

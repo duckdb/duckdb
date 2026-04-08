@@ -1,5 +1,9 @@
 #include "duckdb/parser/statement/copy_database_statement.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 

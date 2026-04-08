@@ -8,11 +8,20 @@
 
 #pragma once
 
+#include <memory>
+#include <unordered_set>
+
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 

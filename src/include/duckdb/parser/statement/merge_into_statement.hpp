@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <map>
+#include <string>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
@@ -15,8 +18,13 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 
 namespace duckdb {
+enum class MergeActionCondition : uint8_t;
 
 class MergeIntoAction {
 public:

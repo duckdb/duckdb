@@ -1,9 +1,12 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include <utility>
+#include <vector>
+
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

@@ -8,14 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 class CatalogEntryRetriever;
 class ClientContext;
 class CatalogEntry;
+class Deserializer;
+class Serializer;
+enum class OnEntryNotFound : uint8_t;
 
 struct SetColumnCommentInfo : public AlterInfo {
 public:

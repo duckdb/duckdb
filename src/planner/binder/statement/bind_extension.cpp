@@ -1,6 +1,21 @@
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

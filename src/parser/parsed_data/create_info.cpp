@@ -1,9 +1,5 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/parser/parsed_data/alter_info.hpp"
-#include "duckdb/parser/parsed_data/create_macro_info.hpp"
-
 namespace duckdb {
 
 void CreateInfo::CopyProperties(CreateInfo &other) const {

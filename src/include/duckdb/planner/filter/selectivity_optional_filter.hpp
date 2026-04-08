@@ -8,9 +8,25 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+class ClientContext;
+class Deserializer;
+class Serializer;
+class Vector;
+struct SelectionVector;
+struct UnifiedVectorFormat;
 
 struct SelectivityOptionalFilterState final : public TableFilterState {
 	enum class FilterStatus { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };

@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 
+#include <utility>
+
 namespace duckdb {
 
 TransactionStatement::TransactionStatement(unique_ptr<TransactionInfo> info)

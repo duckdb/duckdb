@@ -8,12 +8,19 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class ParsedExpression;
+enum class OnCreateConflict : uint8_t;
 
 struct CreateSecretInfo : public CreateInfo { // NOLINT: work-around bug in clang-tidy
 public:

@@ -1,7 +1,5 @@
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 
-#include "duckdb/main/config.hpp"
-
 namespace duckdb {
 
 vector<TableIndex> LogicalDelimGet::GetTableIndex() const {

@@ -8,14 +8,36 @@
 
 #pragma once
 
+#include <functional>
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/common/projection_index.hpp"
-
-#include <functional>
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundAggregateExpression;
+class BoundBetweenExpression;
+class BoundCaseExpression;
+class BoundCastExpression;
+class BoundColumnRefExpression;
+class BoundComparisonExpression;
+class BoundConjunctionExpression;
+class BoundConstantExpression;
+class BoundDefaultExpression;
+class BoundFunctionExpression;
+class BoundOperatorExpression;
+class BoundParameterExpression;
+class BoundReferenceExpression;
+class BoundSubqueryExpression;
+class BoundUnnestExpression;
+class BoundWindowExpression;
+class LogicalOperator;
+struct ProjectionIndex;
+
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor {

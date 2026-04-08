@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 //! The Predicate Factoring rule extracts predicates on a common column from disjunctive or conjunctive clauses
 class PredicateFactoringRule : public Rule {

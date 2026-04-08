@@ -1,8 +1,16 @@
-#include "duckdb/parser/statement/load_statement.hpp"
+#include <memory>
+#include <utility>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/update_extensions_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include <algorithm>
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

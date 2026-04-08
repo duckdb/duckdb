@@ -1,14 +1,43 @@
-#include "duckdb/parser/query_node/cte_node.hpp"
+#include <stdint.h>
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
-#include "duckdb/parser/query_node/list.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/statement_node.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
+class ExpressionBinder;
+enum class CTEMaterialize : uint8_t;
 
 struct BoundCTEData {
 	string ctename;

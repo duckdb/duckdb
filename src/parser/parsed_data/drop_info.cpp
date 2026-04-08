@@ -1,6 +1,12 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 

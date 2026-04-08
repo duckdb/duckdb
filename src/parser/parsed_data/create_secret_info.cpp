@@ -1,8 +1,16 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
+enum class OnCreateConflict : uint8_t;
 
 CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict_p, SecretPersistType persist_type)
     : CreateInfo(CatalogType::SECRET_ENTRY), persist_type(persist_type), options() {

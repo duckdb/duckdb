@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 DropStatement::DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), info(make_uniq<DropInfo>()) {

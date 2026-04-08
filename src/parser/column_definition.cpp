@@ -1,8 +1,17 @@
 #include "duckdb/parser/column_definition.hpp"
+
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

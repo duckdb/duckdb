@@ -1,10 +1,17 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 
+#include <functional>
+#include <vector>
+
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Expression;
 
 LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
     : LogicalOperator(logical_type), join_type(join_type) {

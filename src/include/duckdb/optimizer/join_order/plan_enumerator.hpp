@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <functional>
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
@@ -19,12 +23,18 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-
-#include <functional>
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class QueryGraphManager;
+class CostModel;
+struct JoinRelationSet;
+struct RelationIndex;
 
 class PlanEnumerator {
 public:

@@ -1,7 +1,18 @@
-#include "duckdb/parser/parsed_expression.hpp"
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "nodes/nodes.hpp"
+#include "nodes/parsenodes.hpp"
+#include "nodes/pg_list.hpp"
+#include "nodes/value.hpp"
 
 namespace duckdb {
+class ParsedExpression;
 
 unique_ptr<ParsedExpression> Transformer::TransformMultiAssignRef(duckdb_libpgquery::PGMultiAssignRef &root) {
 	// Early-out, if the root is not a function call.

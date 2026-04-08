@@ -1,10 +1,19 @@
 #include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
+
+#include <functional>
+#include <memory>
+
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
+class ClientContext;
+class LogicalOperator;
 
 DistinctAggregateOptimizer::DistinctAggregateOptimizer(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	root = make_uniq<ExpressionMatcher>();

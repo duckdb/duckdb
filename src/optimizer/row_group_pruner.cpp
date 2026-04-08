@@ -1,5 +1,10 @@
 #include "duckdb/optimizer/row_group_pruner.hpp"
 
+#include <stdint.h>
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
@@ -7,10 +12,27 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 RowGroupPruner::RowGroupPruner(ClientContext &context_p) : context(context_p) {
 }

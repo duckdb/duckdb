@@ -1,7 +1,18 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

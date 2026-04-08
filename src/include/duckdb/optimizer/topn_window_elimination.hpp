@@ -8,12 +8,36 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <map>
+
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
+class ClientContext;
+class ColumnBindingReplacer;
+class LogicalFilter;
+class LogicalGet;
+class LogicalWindow;
+class Optimizer;
+enum class OrderType : uint8_t;
+struct ProjectionIndex;
+struct TableIndex;
 
 enum class TopNPayloadType { SINGLE_COLUMN, STRUCT_PACK };
 

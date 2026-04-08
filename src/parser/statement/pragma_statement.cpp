@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 PragmaStatement::PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_uniq<PragmaInfo>()) {

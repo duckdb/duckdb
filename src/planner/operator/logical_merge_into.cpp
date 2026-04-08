@@ -1,10 +1,18 @@
 #include "duckdb/planner/operator/logical_merge_into.hpp"
 
+#include <memory>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalMergeInto::LogicalMergeInto(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_MERGE_INTO), table(table) {

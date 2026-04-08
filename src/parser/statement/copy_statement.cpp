@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 CopyStatement::CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_uniq<CopyInfo>()) {

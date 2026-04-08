@@ -8,11 +8,21 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Expression;
+class LogicalOperator;
 
 struct BuildSize {
 	double left_side;

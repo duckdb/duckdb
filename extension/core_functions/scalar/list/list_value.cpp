@@ -1,20 +1,47 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/parser/query_error_context.hpp"
-#include "duckdb/parser/tableref/at_clause.hpp"
-#include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class ClientContext;
+struct ExpressionState;
 
 namespace {
 

@@ -1,5 +1,9 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 
+#include <algorithm>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
@@ -8,14 +12,19 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {

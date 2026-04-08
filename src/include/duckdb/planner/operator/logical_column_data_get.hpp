@@ -8,13 +8,24 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
 class ManagedResultSet;
+class Deserializer;
+class Serializer;
 
 //! LogicalColumnDataGet represents a scan operation from a ColumnDataCollection
 class LogicalColumnDataGet : public LogicalOperator {

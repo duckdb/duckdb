@@ -1,6 +1,9 @@
 #include "duckdb/parser/expression/lambda_expression.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"

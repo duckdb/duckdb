@@ -8,9 +8,19 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class Expression;
+class LogicalOperator;
 
 struct ReplacementBinding {
 public:

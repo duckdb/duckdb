@@ -2,10 +2,12 @@
 /* Copyright © 2022 Max Bachmann */
 
 #pragma once
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+
 #include "details/common.hpp"
 #include "details/jaro_impl.hpp"
-
-#include <stdexcept>
 
 namespace duckdb_jaro_winkler {
 

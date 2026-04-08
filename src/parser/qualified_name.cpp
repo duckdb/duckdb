@@ -1,6 +1,14 @@
 #include "duckdb/parser/qualified_name.hpp"
+
+#include <utility>
+
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 

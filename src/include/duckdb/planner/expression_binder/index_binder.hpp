@@ -8,16 +8,29 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 class BoundColumnRefExpression;
+class Binder;
+class ClientContext;
+class LogicalGet;
+class ParsedExpression;
+class UnboundIndex;
+struct AlterTableInfo;
 
 //! The IndexBinder binds indexes and expressions within index statements.
 class IndexBinder : public ExpressionBinder {

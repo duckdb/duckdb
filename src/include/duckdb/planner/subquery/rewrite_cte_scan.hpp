@@ -11,8 +11,12 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class LogicalOperator;
+struct CorrelatedColumns;
 
 //! Controls whether RewriteCTEScan rewrites only CTE_REF nodes or also dependent joins.
 enum class CTEScanRewriteMode {

@@ -1,6 +1,22 @@
 #include "duckdb/parser/query_node/select_node.hpp"
+
+#include <set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/expression_util.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/exception_format_value.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 

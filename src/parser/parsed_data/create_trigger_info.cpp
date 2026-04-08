@@ -1,6 +1,17 @@
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+
+#include <sstream>
+#include <utility>
+
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 

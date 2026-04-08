@@ -1,6 +1,12 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+
+#include <utility>
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

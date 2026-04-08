@@ -1,6 +1,15 @@
 #include "duckdb/planner/operator/logical_explain.hpp"
 
+#include <memory>
+#include <utility>
+
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/types.hpp"
+
 namespace duckdb {
+class ClientContext;
+enum class ExplainFormat : uint8_t;
 
 LogicalExplain::LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, ExplainFormat explain_format)
     : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type),

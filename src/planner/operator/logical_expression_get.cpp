@@ -1,7 +1,5 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 
-#include "duckdb/main/config.hpp"
-
 namespace duckdb {
 
 vector<TableIndex> LogicalExpressionGet::GetTableIndex() const {

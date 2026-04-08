@@ -1,5 +1,10 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 
+#include <utility>
+
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 CreateCopyFunctionInfo::CreateCopyFunctionInfo(CopyFunction function_p)

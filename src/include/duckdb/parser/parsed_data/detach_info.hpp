@@ -8,10 +8,17 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class OnEntryNotFound : uint8_t;
 
 struct DetachInfo : public ParseInfo {
 public:

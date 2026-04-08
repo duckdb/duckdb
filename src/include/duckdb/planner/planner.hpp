@@ -8,14 +8,27 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class ClientContext;
 class PreparedStatementData;
+class Binder;
+class SQLStatement;
+struct BoundParameterData;
 
 //! The planner creates a logical query plan from the parsed SQL statements
 //! using the Binder and LogicalPlanGenerator.

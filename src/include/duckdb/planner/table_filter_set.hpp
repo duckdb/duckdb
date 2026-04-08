@@ -8,13 +8,24 @@
 
 #pragma once
 
+#include <map>
+#include <utility>
+
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class PhysicalOperator;
+class PhysicalTableScan;
+class Serializer;
 
 //! The filters in here are non-composite (only need a single column to be evaluated)
 //! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.

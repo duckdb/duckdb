@@ -1,22 +1,35 @@
 #include "duckdb/planner/statement_preprocessor.hpp"
+
+#include <stdint.h>
+#include <functional>
+#include <iterator>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parser.hpp"
-
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/parsed_data/bound_pragma_info.hpp"
 #include "duckdb/function/function.hpp"
-
 #include "duckdb/main/client_context.hpp"
-
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/common/enums/current_transaction_state.hpp"
+#include "duckdb/common/enums/set_scope.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/pragma_function.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/parser/parsed_data/transaction_info.hpp"
+#include "duckdb/parser/parser_options.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
 
 namespace duckdb {
 

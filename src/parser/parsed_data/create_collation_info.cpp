@@ -1,5 +1,10 @@
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 
+#include <utility>
+
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 CreateCollationInfo::CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p,

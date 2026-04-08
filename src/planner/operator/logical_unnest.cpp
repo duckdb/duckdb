@@ -1,6 +1,10 @@
 #include "duckdb/planner/operator/logical_unnest.hpp"
 
-#include "duckdb/main/config.hpp"
+#include <vector>
+
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

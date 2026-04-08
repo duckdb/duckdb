@@ -1,6 +1,12 @@
 #include "duckdb/planner/expression/bound_expanded_expression.hpp"
 
+#include <utility>
+
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+
 namespace duckdb {
+class BaseExpression;
 
 BoundExpandedExpression::BoundExpandedExpression(vector<unique_ptr<Expression>> expanded_expressions_p)
     : Expression(ExpressionType::BOUND_EXPANDED, ExpressionClass::BOUND_EXPANDED, LogicalType::INTEGER),

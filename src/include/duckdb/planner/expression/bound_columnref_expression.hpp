@@ -8,10 +8,20 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class BaseExpression;
+class Deserializer;
+class Serializer;
 
 //! A BoundColumnRef expression represents a ColumnRef expression that was bound to an actual table and column index. It
 //! is not yet executable, however. The ColumnBindingResolver transforms the BoundColumnRefExpressions into

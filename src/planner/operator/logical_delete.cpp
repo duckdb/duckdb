@@ -1,11 +1,20 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
 
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 LogicalDelete::LogicalDelete(TableCatalogEntry &table, TableIndex table_index)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),

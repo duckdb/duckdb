@@ -1,6 +1,15 @@
-#include "duckdb/common/exception.hpp"
+#include <memory>
+#include <utility>
+
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "nodes/parsenodes.hpp"
 
 namespace duckdb {
 

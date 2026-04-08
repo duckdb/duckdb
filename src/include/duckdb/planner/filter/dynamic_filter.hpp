@@ -9,14 +9,25 @@
 
 #pragma once
 
+#include <atomic>
+#include <string>
+
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+class Deserializer;
+class Serializer;
 
 struct DynamicFilterData {
 	mutex lock;

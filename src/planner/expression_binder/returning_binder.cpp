@@ -1,8 +1,14 @@
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
 
-#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include <string>
+
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 ReturningBinder::ReturningBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }

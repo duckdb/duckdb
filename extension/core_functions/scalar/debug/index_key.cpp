@@ -1,5 +1,9 @@
-#include "core_functions/scalar/debug_functions.hpp"
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
+#include "core_functions/scalar/debug_functions.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -14,8 +18,36 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 namespace {
 

@@ -8,12 +8,21 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class TriggerEventType : uint8_t;
 
 struct CreateTriggerInfo : public CreateInfo {
 	CreateTriggerInfo();

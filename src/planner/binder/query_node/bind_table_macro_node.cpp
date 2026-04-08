@@ -1,18 +1,25 @@
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include <functional>
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/macro_function.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
 

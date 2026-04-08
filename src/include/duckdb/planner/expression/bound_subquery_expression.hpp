@@ -8,12 +8,23 @@
 
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
+class BaseExpression;
+enum class SubqueryType : uint8_t;
 
 class BoundSubqueryExpression : public Expression {
 public:

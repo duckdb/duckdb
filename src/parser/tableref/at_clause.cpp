@@ -1,5 +1,9 @@
 #include "duckdb/parser/tableref/at_clause.hpp"
 
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 AtClause::AtClause(string unit_p, unique_ptr<ParsedExpression> expr_p)

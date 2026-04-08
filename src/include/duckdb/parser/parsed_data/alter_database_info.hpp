@@ -8,9 +8,18 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/parser/parsed_data/alter_info.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class OnEntryNotFound : uint8_t;
 
 enum class AlterDatabaseType : uint8_t { RENAME_DATABASE = 0 };
 

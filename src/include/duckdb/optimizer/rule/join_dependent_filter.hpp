@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
+class LogicalOperator;
 
 //! Join-dependent filter derivation as proposed in https://homepages.cwi.nl/~boncz/snb-challenge/chokepoints-tpctc.pdf
 //! This rule inspects filters like this:

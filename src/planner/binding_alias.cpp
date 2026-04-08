@@ -1,7 +1,13 @@
 #include "duckdb/planner/binding_alias.hpp"
+
+#include <utility>
+
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

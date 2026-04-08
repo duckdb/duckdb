@@ -1,8 +1,11 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

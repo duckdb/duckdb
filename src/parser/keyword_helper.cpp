@@ -1,4 +1,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
+
+#include <stddef.h>
+
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string_util.hpp"
 

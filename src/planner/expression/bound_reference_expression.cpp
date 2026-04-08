@@ -1,8 +1,11 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
+#include <utility>
+
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
 

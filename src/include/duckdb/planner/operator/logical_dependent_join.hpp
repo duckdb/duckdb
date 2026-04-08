@@ -15,11 +15,21 @@
 
 #pragma once
 
+#include <memory>
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/subquery_type.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+enum class ExpressionType : uint8_t;
 
 class LogicalDependentJoin : public LogicalComparisonJoin {
 public:

@@ -1,11 +1,27 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
+
+#include <functional>
+#include <utility>
+
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
     : TableFilter(TableFilterType::EXPRESSION_FILTER), expr(std::move(expr_p)) {

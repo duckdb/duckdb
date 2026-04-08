@@ -1,5 +1,16 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
+
+#include <functional>
+#include <set>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 namespace duckdb {
 

@@ -8,16 +8,38 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <array>
+#include <string>
+
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
 class BufferManager;
 class InterruptState;
+class AggregateFunction;
+class ExecutionContext;
+struct ValidityMask;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -35,6 +57,7 @@ using FrameStats = array<FrameDelta, 2>;
 //! Note that if the inputs is nullptr then the column count is 0,
 //! but the row count will still be valid
 class ColumnDataCollection;
+
 struct WindowPartitionInput {
 	WindowPartitionInput(ExecutionContext &context, const ColumnDataCollection *inputs, const idx_t count,
 	                     const vector<column_t> &column_ids, const vector<bool> &all_valid,

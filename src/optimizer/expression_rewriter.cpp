@@ -1,12 +1,22 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 

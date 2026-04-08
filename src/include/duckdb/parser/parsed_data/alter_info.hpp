@@ -8,11 +8,20 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <utility>
+
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
+enum class OnEntryNotFound : uint8_t;
 
 enum class AlterType : uint8_t {
 	INVALID = 0,

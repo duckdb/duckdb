@@ -8,10 +8,18 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 
 // Invalid is 255 because previously stored databases have SampleMethods according to the current ENUMS and we need to
 // maintain that

@@ -1,8 +1,28 @@
 #include "reader/row_number_column_reader.hpp"
+
+#include <memory>
+
 #include "parquet_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_types.h"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+}  // namespace protocol
+}  // namespace thrift
+}  // namespace duckdb_apache
 
 namespace duckdb {
+class TableFilter;
+class Vector;
+struct ParquetColumnSchema;
+struct SelectionVector;
+struct TableFilterState;
 
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader

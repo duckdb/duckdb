@@ -1,11 +1,25 @@
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 
+#include <utility>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/table_binding.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Binder;
+class ClientContext;
 
 AlterBinder::AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table,
                          vector<LogicalIndex> &bound_columns, LogicalType target_type)

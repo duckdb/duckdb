@@ -1,5 +1,17 @@
+#include <string>
+#include <utility>
+
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
+#include "nodes/primnodes.hpp"
 
 namespace duckdb {
 
