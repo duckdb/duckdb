@@ -600,6 +600,10 @@ public:
 			if (!root_tokens.empty()) {
 				result = PEGTransformerFactory::Transform(root_tokens, options, root_matcher);
 			}
+			if (!result.empty()) {
+				auto &last_statement = result.back();
+				last_statement->stmt_length = query.size() - last_statement->stmt_location;
+			}
 			for (auto &statement : result) {
 				statement->query = query.substr(statement->stmt_location, statement->stmt_length);
 				statement->stmt_location = 0;
