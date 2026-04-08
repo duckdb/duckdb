@@ -175,9 +175,7 @@ public:
 	idx_t GetAllocationSize(idx_t cardinality) const;
 
 	// Getters
-	inline VectorType GetVectorType() const {
-		return vector_type;
-	}
+	VectorType GetVectorType() const;
 	inline const LogicalType &GetType() const {
 		return type;
 	}
@@ -217,9 +215,6 @@ private:
 	Vector(const Vector &other, VectorConstructorAction action);
 
 protected:
-	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
-	//! constant, if it is compressed)
-	mutable VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	LogicalType type;
 	//! The main buffer holding the data of the vector

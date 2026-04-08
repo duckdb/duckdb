@@ -6,6 +6,11 @@ namespace duckdb {
 
 VectorFSSTStringBuffer::VectorFSSTStringBuffer(idx_t capacity) : VectorStringBuffer(capacity) {
 	buffer_type = VectorBufferType::FSST_BUFFER;
+	vector_type = VectorType::FSST_VECTOR;
+}
+
+void VectorFSSTStringBuffer::SetVectorType(VectorType new_vector_type) {
+	throw InternalException("SetVectorType not supported for FSST vector");
 }
 
 VectorFSSTStringBuffer &FSSTVector::GetFSSTBuffer(const Vector &vector) {

@@ -51,10 +51,10 @@ public:
 	void ResetFromCache(Vector &result) {
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
-		result.vector_type = VectorType::FLAT_VECTOR;
 		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
 		result.buffer->GetValidityMask().Reset(capacity);
+		result.buffer->SetVectorType(VectorType::FLAT_VECTOR);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer

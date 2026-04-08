@@ -38,20 +38,20 @@ namespace duckdb {
 enum class VectorConstructorAction { REFERENCE_VECTOR };
 
 Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
+    : type(std::move(type_p)) {
 	if (create_data) {
 		Initialize(initialize_to_zero, capacity);
 	}
 }
 
 Vector::Vector(LogicalType type_p, VectorType vector_type, buffer_ptr<VectorBuffer> buffer_p)
-    : vector_type(vector_type), type(std::move(type_p)), buffer(std::move(buffer_p)) {
+    : type(std::move(type_p)), buffer(std::move(buffer_p)) {
 }
 
 Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(std::move(type_p), true, false, capacity) {
 }
 
-Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : type(std::move(type_p)) {
 	if (!dataptr) {
 		return;
 	}
@@ -89,7 +89,7 @@ Vector::Vector(const Value &value) : type(value.type()) {
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(std::move(other.type)), buffer(std::move(other.buffer)) {
+    : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
 Vector Vector::Ref(const Vector &other) {
@@ -98,7 +98,6 @@ Vector Vector::Ref(const Vector &other) {
 
 void Vector::Reference(const Value &value) {
 	D_ASSERT(GetType().id() == value.type().id());
-	this->vector_type = VectorType::CONSTANT_VECTOR;
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
 		auto struct_buffer = make_buffer<VectorStructBuffer>();
@@ -122,6 +121,7 @@ void Vector::Reference(const Value &value) {
 		buffer = VectorBuffer::CreateConstantVector(value.type());
 		SetValue(0, value);
 	}
+	SetVectorType(VectorType::CONSTANT_VECTOR);
 }
 
 void Vector::Reference(const Vector &other) {
@@ -154,7 +154,7 @@ void Vector::Reinterpret(const Vector &other) {
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
 	ConstReference(other);
-	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
@@ -169,7 +169,6 @@ void Vector::Reinterpret(const Vector &other) {
 }
 
 void Vector::ConstReference(const Vector &other) const {
-	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);
 }
 
@@ -225,19 +224,16 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		auto &parent = old_buffer->Cast<VectorListBuffer>();
 		buffer = make_buffer<VectorListBuffer>(offset_ptr, parent);
 		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-		vector_type = other.vector_type;
 	} else if (internal_type == PhysicalType::VARCHAR) {
 		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		auto string_buffer = make_buffer<VectorStringBuffer>(offset_ptr);
 		buffer = std::move(string_buffer);
 		StringVector::AddHeapReference(*this, other);
 		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-		vector_type = other.vector_type;
 	} else {
 		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
 		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
 		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-		vector_type = other.vector_type;
 	}
 }
 
@@ -288,7 +284,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	Vector child_vector(Vector::Ref(*this));
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
-	vector_type = VectorType::DICTIONARY_VECTOR;
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -308,7 +303,6 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 		throw InternalException("Struct vectors cannot be dictionaries");
 	}
 	D_ASSERT(type == reusable_dict->data.GetType());
-	vector_type = VectorType::DICTIONARY_VECTOR;
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
 }
 
@@ -327,7 +321,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 			auto dict_entry = old_dict.GetEntryPtr();
 			this->buffer = make_buffer<DictionaryBuffer>(cache_entry->second->Cast<DictionaryBuffer>().GetSelVector(),
 			                                             std::move(dict_entry));
-			vector_type = VectorType::DICTIONARY_VECTOR;
 		} else {
 			Slice(sel, count);
 			cache.cache[target_data] = this->buffer;
@@ -1005,7 +998,7 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	case PhysicalType::STRUCT: {
 		idx_t total_size = 0;
-		if (vector_type == VectorType::SHREDDED_VECTOR) {
+		if (GetVectorType() == VectorType::SHREDDED_VECTOR) {
 			total_size += ShreddedVector::GetShreddedVector(*this).GetAllocationSize(cardinality);
 			total_size += ShreddedVector::GetUnshreddedVector(*this).GetAllocationSize(cardinality);
 		} else {
@@ -1235,7 +1228,6 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 }
 
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
-	this->vector_type = VectorType::SEQUENCE_VECTOR;
 	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 }
 
@@ -1247,7 +1239,6 @@ void Vector::Shred(Vector &shredded_data) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->vector_type = VectorType::SHREDDED_VECTOR;
 	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
 }
 
@@ -1619,14 +1610,17 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	}
 }
 
-void Vector::SetVectorType(VectorType vector_type_p) {
-	vector_type = vector_type_p;
-	auto physical_type = GetType().InternalType();
-	if (vector_type == VectorType::CONSTANT_VECTOR && physical_type == PhysicalType::STRUCT) {
-		auto &entries = StructVector::GetEntries(*this);
-		for (auto &entry : entries) {
-			entry.SetVectorType(vector_type);
-		}
+VectorType Vector::GetVectorType() const {
+	return buffer->GetVectorType();
+}
+
+void Vector::SetVectorType(VectorType new_vector_type) {
+	if (new_vector_type != VectorType::FLAT_VECTOR && new_vector_type != VectorType::CONSTANT_VECTOR) {
+		throw InternalException("SetVectorType can only be used with FLAT / CONSTANT vectors");
+	}
+	if (buffer) {
+		// FIXME: should we allow vectors without a buffer?
+		buffer->SetVectorType(new_vector_type);
 	}
 }
 

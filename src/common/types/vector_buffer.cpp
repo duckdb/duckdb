@@ -50,17 +50,14 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
+void VectorBuffer::SetVectorType(VectorType vector_type) {
+	throw InternalException("VectorBuffer does not support SetVectorType");
+}
+
 PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {
 }
 
 PinnedBufferHolder::~PinnedBufferHolder() {
-}
-
-ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
-    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
-}
-
-ShreddedVectorBuffer::~ShreddedVectorBuffer() {
 }
 
 } // namespace duckdb

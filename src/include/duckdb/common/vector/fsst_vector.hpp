@@ -33,6 +33,7 @@ public:
 	idx_t GetCount() const {
 		return total_string_count;
 	}
+	void SetVectorType(VectorType vector_type) override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;

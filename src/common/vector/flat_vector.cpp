@@ -7,7 +7,7 @@
 namespace duckdb {
 
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size)
-    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
 	if (capacity > 0) {
 		allocated_data = allocator.Allocate(capacity * type_size);
 		data_ptr = allocated_data.get();
@@ -19,10 +19,14 @@ StandardVectorBuffer::StandardVectorBuffer(idx_t capacity, idx_t type_size)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size) {
 }
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p)
-    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
 }
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p)
-    : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocated_data(std::move(data_p)) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocated_data(std::move(data_p)) {
+}
+
+void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
+	vector_type = new_vector_type;
 }
 
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {
