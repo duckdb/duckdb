@@ -22,7 +22,8 @@ StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
 }
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()), allocated_data(std::move(data_p)) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()),
+      allocated_data(std::move(data_p)) {
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {

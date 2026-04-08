@@ -28,7 +28,7 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 
 void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
-	for(auto &child : children) {
+	for (auto &child : children) {
 		child.SetVectorType(new_vector_type);
 	}
 }

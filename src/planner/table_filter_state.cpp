@@ -22,8 +22,8 @@ JoinFilterTableFilterState::JoinFilterTableFilterState(const LogicalType &key_lo
 void JoinFilterTableFilterState::PrepareSlicedKeys(Vector &keys_v, SelectionVector &sel,
                                                    const idx_t approved_tuple_count) {
 	if (current_capacity < approved_tuple_count) {
-		hashes_v.Initialize(false, approved_tuple_count);
-		keys_sliced_v.Initialize(false, approved_tuple_count);
+		hashes_v.Initialize(VectorDataInitialization::UNINITIALIZED, approved_tuple_count);
+		keys_sliced_v.Initialize(VectorDataInitialization::UNINITIALIZED, approved_tuple_count);
 		probe_sel.Initialize(approved_tuple_count);
 		current_capacity = approved_tuple_count;
 	}
