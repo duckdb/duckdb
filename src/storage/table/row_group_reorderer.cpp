@@ -233,9 +233,9 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 		switch (order_by) {
 		case OrderByStatistics::MIN:
-			return StringStats::Min(stats);
+			return Value::BLOB_RAW(StringStats::Min(stats));
 		case OrderByStatistics::MAX:
-			return StringStats::Max(stats);
+			return Value::BLOB_RAW(StringStats::Max(stats));
 		default:
 			throw InternalException("Unsupported OrderByStatistics for string");
 		}
