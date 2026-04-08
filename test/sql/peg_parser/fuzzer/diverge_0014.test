@@ -1,6 +1,6 @@
-# name: fuzzer_issues/diverge_0014.test
+# name: test/sql/peg_parser/fuzzer/diverge_0014.test
 # description: PEG should reject (currently accepts): Not implemented Error: RESET LOCAL is not implemented.
-# group: [peg_parser]
+# group: [fuzzer]
 
 require autocomplete
 

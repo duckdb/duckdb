@@ -42,7 +42,11 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->name == "MaterializedViewEntry") {
+		throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
+	}
+	return transformer.TransformEnum<CatalogType>(choice_pr);
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
