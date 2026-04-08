@@ -92,6 +92,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+	static string ExpressionTypeToWindow(ExpressionType expression_type);
 	void SetFunctionName(const string &function_name);
 
 	static ExpressionType WindowToExpressionType(const string &fun_name);

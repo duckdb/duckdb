@@ -82,8 +82,6 @@ jobs:
         id: changed
         uses: tj-actions/changed-files@v47
         with:
-          base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          skip_initial_fetch: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           files_yaml: |
             github:
               - .github/**
@@ -245,6 +243,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -326,6 +325,7 @@ jobs:
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  tidy-check:
     name: Tidy Check
@@ -423,6 +423,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -439,6 +440,7 @@ jobs:
       with:
         artifact_name: linux-release-build
         changed_tests_file: ${{ runner.temp }}/changed_tests.txt
+        save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Test
       shell: bash
