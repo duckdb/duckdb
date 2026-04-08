@@ -103,7 +103,6 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	SelectionVector result_selection_vec = SelectionVector(result_length);
 	ValidityMask entry_validity_mask = ValidityMask(result_length);
 
-
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	auto &result_entry = ListVector::GetEntry(result);
 
