@@ -11,7 +11,7 @@ bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t co
 	auto &source_type = query_result->types[col];
 	auto width = duckdb::DecimalType::GetWidth(source_type);
 	auto scale = duckdb::DecimalType::GetScale(source_type);
-	duckdb::Vector result_vec(duckdb::LogicalType::VARCHAR, false, false);
+	duckdb::Vector result_vec(duckdb::LogicalType::VARCHAR, duckdb::VectorType::FLAT_VECTOR, nullptr);
 	duckdb::string_t result_string;
 	auto source_value = UnsafeFetch<hugeint_t>(source, col, row);
 	switch (source_type.InternalType()) {
