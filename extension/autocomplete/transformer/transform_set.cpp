@@ -10,6 +10,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTrans
 	auto &choice_pr = child_pr.Child<ChoiceParseResult>(0);
 
 	SettingInfo setting_info = transformer.Transform<SettingInfo>(choice_pr.result);
+	if (setting_info.scope == SetScope::LOCAL) {
+		throw NotImplementedException("RESET LOCAL is not implemented.");
+	}
 	return make_uniq<ResetVariableStatement>(setting_info.name, setting_info.scope);
 }
 
@@ -28,7 +31,6 @@ SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transform
 
 	SettingInfo result;
 	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
-	// TODO(Dtenwolde) Introduce TransformSettingScope for this bit
 	if (optional_scope_pr.optional_result) {
 		auto setting_scope = optional_scope_pr.optional_result->Cast<ListParseResult>();
 		auto scope_value = setting_scope.Child<ChoiceParseResult>(0);
@@ -72,7 +74,9 @@ unique_ptr<SetStatement> PEGTransformerFactory::TransformStandardAssignment(PEGT
 
 	auto &setting_or_var_pr = first_sub_rule.Child<ChoiceParseResult>(0);
 	SettingInfo setting_info = transformer.Transform<SettingInfo>(setting_or_var_pr.result);
-
+	if (setting_info.scope == SetScope::LOCAL) {
+		throw NotImplementedException("SET LOCAL is not implemented.");
+	}
 	auto &set_assignment_pr = list_pr.Child<ListParseResult>(1);
 	auto values = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(set_assignment_pr);
 	if (values.size() > 1) {
