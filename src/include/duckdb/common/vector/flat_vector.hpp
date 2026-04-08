@@ -16,8 +16,8 @@ namespace duckdb {
 
 class StandardVectorBuffer : public VectorBuffer {
 public:
-	StandardVectorBuffer(Allocator &allocator, idx_t data_size);
-	explicit StandardVectorBuffer(idx_t data_size);
+	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(data_ptr_t data_ptr_p);
 	explicit StandardVectorBuffer(AllocatedData &&data_p);
 
@@ -25,12 +25,16 @@ public:
 	data_ptr_t GetData() override {
 		return data_ptr;
 	}
+	ValidityMask &GetValidityMask() override {
+		return validity;
+	}
 
 	optional_ptr<Allocator> GetAllocator() const override {
 		return allocated_data.GetAllocator();
 	}
 
 protected:
+	ValidityMask validity;
 	data_ptr_t data_ptr;
 	AllocatedData allocated_data;
 };
@@ -83,20 +87,22 @@ struct FlatVector {
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
 		VerifyFlatVector(vector);
-		return vector.validity;
+		return vector.buffer->GetValidityMask();
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
 		VerifyFlatVector(vector);
-		return vector.validity;
+		return vector.buffer->GetValidityMask();
 	}
 	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
 		VerifyFlatVector(vector);
-		vector.validity.Initialize(new_validity);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Initialize(new_validity);
 	}
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return !vector.validity.RowIsValid(idx);
+		auto &validity = vector.buffer->GetValidityMask();
+		return !validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 

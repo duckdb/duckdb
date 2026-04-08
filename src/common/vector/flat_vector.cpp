@@ -6,15 +6,17 @@
 
 namespace duckdb {
 
-StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t data_size)
+StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size)
     : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
-	if (data_size > 0) {
-		allocated_data = allocator.Allocate(data_size);
+	if (capacity > 0) {
+		allocated_data = allocator.Allocate(capacity * type_size);
 		data_ptr = allocated_data.get();
+		// resize the validity
+		validity.Resize(capacity);
 	}
 }
-StandardVectorBuffer::StandardVectorBuffer(idx_t data_size)
-    : StandardVectorBuffer(Allocator::DefaultAllocator(), data_size) {
+StandardVectorBuffer::StandardVectorBuffer(idx_t capacity, idx_t type_size)
+    : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size) {
 }
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p)
     : VectorBuffer(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
@@ -31,22 +33,24 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("SetData not supported for struct");
 	}
+	// Preserve the validity mask from the old buffer before replacing it.
+	// FIXME: this can maybe be removed in the future - it seems only the Arrow conversion code relies on this behavior
+	auto old_validity = std::move(vector.buffer->GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
 		vector.buffer = make_buffer<VectorListBuffer>(data, current_buffer.GetChild(), current_buffer.GetCapacity(),
 		                                              current_buffer.GetSize());
-		return;
-	}
-	if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
 		vector.buffer = make_buffer<VectorStringBuffer>(data);
-		return;
+	} else {
+		vector.buffer = make_buffer<StandardVectorBuffer>(data);
 	}
-	vector.buffer = make_buffer<StandardVectorBuffer>(data);
+	vector.buffer->GetValidityMask() = std::move(old_validity);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-	vector.validity.Set(idx, !is_null);
+	vector.buffer->GetValidityMask().Set(idx, !is_null);
 	if (!is_null) {
 		return;
 	}

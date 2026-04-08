@@ -11,21 +11,21 @@ void FlatVector::FlatStringWriter::InitializeHeap() {
 	heap = StringVector::GetStringHeap(vector);
 }
 
-VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
+VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0), sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
-    : StandardVectorBuffer(allocator, 0), heap(AllocateHeap(allocator)) {
+    : StandardVectorBuffer(allocator, 0, sizeof(string_t)), heap(AllocateHeap(allocator)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t capacity)
-    : StandardVectorBuffer(allocator, capacity * sizeof(string_t)) {
+    : StandardVectorBuffer(allocator, capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity * sizeof(string_t)) {
+VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 

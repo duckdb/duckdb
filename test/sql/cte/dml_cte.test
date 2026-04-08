@@ -461,7 +461,7 @@ CREATE VIEW v_bad AS WITH del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
 
 # Serialization: verify that views containing SELECT CTEs survive a DB restart
 # (exercises the v8 query_node field serialization path)
-load __TEST_DIR__/dml_cte_storage.db
+load {TEST_DIR}/dml_cte_storage.db
 
 statement ok
 CREATE TABLE persist_t (i INTEGER);

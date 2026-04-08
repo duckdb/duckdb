@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class VectorListBuffer : public VectorBuffer {
+class VectorListBuffer : public StandardVectorBuffer {
 public:
 	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
@@ -41,29 +41,18 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() {
+	idx_t GetSize() const {
 		return size;
 	}
 
-	idx_t GetCapacity() {
+	idx_t GetCapacity() const {
 		return capacity;
 	}
 
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
 
-	data_ptr_t GetData() override {
-		return data_ptr;
-	}
-
-	optional_ptr<Allocator> GetAllocator() const override {
-		return allocated_data.GetAllocator();
-	}
-
 private:
-	// data for list offsets
-	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;

@@ -43,7 +43,7 @@ public:
 			buffer = make_buffer<VectorStringBuffer>(allocator, capacity);
 			break;
 		default:
-			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
+			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity, GetTypeIdSize(internal_type));
 			break;
 		}
 	}
@@ -54,7 +54,7 @@ public:
 		result.vector_type = VectorType::FLAT_VECTOR;
 		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
-		result.validity.Reset(capacity);
+		result.buffer->GetValidityMask().Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer

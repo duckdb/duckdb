@@ -19,6 +19,7 @@ namespace duckdb {
 class BufferHandle;
 class VectorBuffer;
 class Vector;
+struct ValidityMask;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER,   // VectorType::FLAT/CONSTANT - Fixed-Size Type - Holds a single array of data
@@ -69,6 +70,9 @@ public:
 public:
 	virtual data_ptr_t GetData() {
 		return nullptr;
+	}
+	virtual ValidityMask &GetValidityMask() {
+		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
