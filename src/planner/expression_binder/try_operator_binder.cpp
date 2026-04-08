@@ -11,5 +11,4 @@ BindResult TryOperatorBinder::BindAggregate(FunctionExpression &expr, AggregateF
                                             idx_t depth) {
 	throw BinderException("aggregates are not allowed inside the TRY expression");
 }
-
 } // namespace duckdb

@@ -54,43 +54,6 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 	}
 }
 
-static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
-	auto left_bindings = left_side.GetColumnBindings();
-	for (auto &column : correlated_columns) {
-		bool binding_present = false;
-		for (const auto &binding : left_bindings) {
-			if (binding == column.binding) {
-				binding_present = true;
-				break;
-			}
-		}
-		if (binding_present) {
-			continue;
-		}
-		if (left_side.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &proj = left_side.Cast<LogicalProjection>();
-			for (auto i : ProjectionIndex::GetIndexes(proj.expressions.size())) {
-				auto &expr = proj.GetExpression(i);
-				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-				    expr.Cast<BoundColumnRefExpression>().binding == column.binding) {
-					column.binding = ColumnBinding(proj.table_index, i);
-					break;
-				}
-			}
-		} else if (left_side.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-			auto &agg = left_side.Cast<LogicalAggregate>();
-			for (auto i : ProjectionIndex::GetIndexes(agg.groups.size())) {
-				auto &expr = agg.GetGroupExpression(i);
-				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-				    expr.Cast<BoundColumnRefExpression>().binding == column.binding) {
-					column.binding = ColumnBinding(agg.group_index, i);
-					break;
-				}
-			}
-		}
-	}
-}
-
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
@@ -182,7 +145,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
-		RemapCorrelatedBindings(op.correlated_columns, *op.children[0]);
 
 		op.duplicate_eliminated_columns.clear();
 		op.mark_types.clear();
