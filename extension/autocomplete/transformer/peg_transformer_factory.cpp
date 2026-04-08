@@ -27,8 +27,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-                                                          Matcher &root_matcher) {
+vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+                                                                  Matcher &root_matcher) {
+	if (tokens.empty()) {
+		return {};
+	}
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -45,30 +48,128 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			error_token_idx = tokens.size() - 1;
 		}
 		auto &error_token = tokens[error_token_idx];
-		string token_list;
-		for (idx_t i = 0; i < tokens.size(); i++) {
-			if (!token_list.empty()) {
-				token_list += "\n";
+		auto error_text = error_token.text;
+		if (error_text == ";") {
+			vector<char> expected_closers;
+			for (idx_t i = 0; i <= error_token_idx; i++) {
+				auto &token = tokens[i].text;
+				if (token == "(") {
+					expected_closers.push_back(')');
+				} else if (token == "[") {
+					expected_closers.push_back(']');
+				} else if (token == "{") {
+					expected_closers.push_back('}');
+				} else if (!expected_closers.empty() && token.length() == 1 && token[0] == expected_closers.back()) {
+					expected_closers.pop_back();
+				}
 			}
-			if (i < 10) {
-				token_list += " ";
+			if (!expected_closers.empty()) {
+				if (error_token_idx > 0) {
+					auto &previous_token = tokens[error_token_idx - 1];
+					auto prefer_closer = previous_token.type == TokenType::NUMBER_LITERAL ||
+					                     previous_token.type == TokenType::STRING_LITERAL ||
+					                     previous_token.type == TokenType::OPERATOR || previous_token.text == ")" ||
+					                     previous_token.text == "]" || previous_token.text == "}";
+					error_text = prefer_closer ? string(1, expected_closers.back()) : previous_token.text;
+				} else {
+					error_text = string(1, expected_closers.back());
+				}
+			} else if (error_token_idx > 0) {
+				error_text = tokens[error_token_idx - 1].text;
 			}
-			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
+		auto error_message = "syntax error at or near \"" + error_text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
-	match_result->name = "Statement";
+	match_result->name = "Program";
+
+	// Program <- Statement? (';'+ Statement)* ';'*
+	// Program[0] = optional first Statement
+	// Program[1] = optional repeat of groups: (';'+ Statement)
+	// Program[2] = optional repeat of trailing ';'
+	auto &prog = match_result->Cast<ListParseResult>();
+
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings, options);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(*match_result);
-	if (!transformer.pivot_entries.empty()) {
-		result = transformer.CreatePivotStatement(std::move(result));
+
+	auto transform_stmt = [&](optional_ptr<ParseResult> stmt_pr) -> unique_ptr<SQLStatement> {
+		auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
+		if (!transformer.named_parameter_map.empty()) {
+			stmt->named_param_map = transformer.named_parameter_map;
+		}
+		if (!transformer.pivot_entries.empty()) {
+			stmt = transformer.CreatePivotStatement(std::move(stmt));
+		}
+		transformer.Clear();
+		if (stmt_pr->offset.IsValid()) {
+			stmt->stmt_location = stmt_pr->offset.GetIndex();
+		}
+		return stmt;
+	};
+
+	auto unwrap_optional = [](optional_ptr<ParseResult> parse_result) -> optional_ptr<ParseResult> {
+		if (!parse_result) {
+			return nullptr;
+		}
+		if (parse_result->type != ParseResultType::OPTIONAL) {
+			return parse_result;
+		}
+		auto &opt = parse_result->Cast<OptionalParseResult>();
+		if (!opt.HasResult()) {
+			return nullptr;
+		}
+		return opt.optional_result;
+	};
+	auto unwrap_repeat = [&](optional_ptr<ParseResult> parse_result) -> RepeatParseResult * {
+		auto unwrapped = unwrap_optional(parse_result);
+		if (!unwrapped) {
+			return nullptr;
+		}
+		if (unwrapped->type != ParseResultType::REPEAT) {
+			throw InternalException("Expected repeat parse result in Program rule, got %s",
+			                        ParseResultToString(unwrapped->type));
+		}
+		return &unwrapped->Cast<RepeatParseResult>();
+	};
+	auto transform_program_stmt = [&](optional_ptr<ParseResult> stmt_pr,
+	                                  optional_ptr<ParseResult> terminator_pr) -> unique_ptr<SQLStatement> {
+		auto stmt = transform_stmt(stmt_pr);
+		if (stmt_pr->offset.IsValid()) {
+			if (terminator_pr && terminator_pr->offset.IsValid()) {
+				stmt->stmt_length = terminator_pr->offset.GetIndex() - stmt_pr->offset.GetIndex();
+			} else {
+				auto &last_token = tokens.back();
+				stmt->stmt_length = last_token.offset + last_token.length - stmt_pr->offset.GetIndex();
+			}
+		}
+		return stmt;
+	};
+
+	vector<unique_ptr<SQLStatement>> result;
+	auto current_stmt = unwrap_optional(prog.GetChild(0));
+	auto repeat = unwrap_repeat(prog.GetChild(1));
+	if (repeat) {
+		for (auto &child : repeat->children) {
+			auto &child_list = child->Cast<ListParseResult>();
+			auto &separators = child_list.Child<RepeatParseResult>(0);
+			auto next_stmt = child_list.GetChild(1);
+			if (current_stmt) {
+				result.push_back(transform_program_stmt(current_stmt, separators.children[0]));
+			}
+			current_stmt = next_stmt;
+		}
 	}
-	transformer.Clear();
+	if (current_stmt) {
+		auto trailing_repeat = unwrap_repeat(prog.GetChild(2));
+		optional_ptr<ParseResult> trailing_terminator = nullptr;
+		if (trailing_repeat && !trailing_repeat->children.empty()) {
+			trailing_terminator = trailing_repeat->children[0];
+		}
+		result.push_back(transform_program_stmt(current_stmt, trailing_terminator));
+	}
 	return result;
 }
 
