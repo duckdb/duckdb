@@ -1,0 +1,21 @@
+# name: fuzzer_issues/diverge_0007.test
+# description: PEG should reject (currently accepts): Not implemented Error: Unimplemented explain type: entry
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+CALL enable_peg_parser();
+
+statement error
+EXPLAIN ( entry ) RESET SESSION item
+----
+Not implemented Error: Unimplemented explain type: entry
+
+statement ok
+CALL disable_peg_parser();
+
+statement error
+EXPLAIN ( entry ) RESET SESSION item
+----
+Not implemented Error: Unimplemented explain type: entry
