@@ -47,38 +47,25 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 		if (error_token_idx >= tokens.size()) {
 			error_token_idx = tokens.size() - 1;
 		}
-		auto &error_token = tokens[error_token_idx];
-		auto error_text = error_token.text;
-		if (error_text == ";") {
-			vector<char> expected_closers;
-			for (idx_t i = 0; i <= error_token_idx; i++) {
-				auto &token = tokens[i].text;
-				if (token == "(") {
-					expected_closers.push_back(')');
-				} else if (token == "[") {
-					expected_closers.push_back(']');
-				} else if (token == "{") {
-					expected_closers.push_back('}');
-				} else if (!expected_closers.empty() && token.length() == 1 && token[0] == expected_closers.back()) {
-					expected_closers.pop_back();
-				}
-			}
-			if (!expected_closers.empty()) {
-				if (error_token_idx > 0) {
-					auto &previous_token = tokens[error_token_idx - 1];
-					auto prefer_closer = previous_token.type == TokenType::NUMBER_LITERAL ||
-					                     previous_token.type == TokenType::STRING_LITERAL ||
-					                     previous_token.type == TokenType::OPERATOR || previous_token.text == ")" ||
-					                     previous_token.text == "]" || previous_token.text == "}";
-					error_text = prefer_closer ? string(1, expected_closers.back()) : previous_token.text;
-				} else {
-					error_text = string(1, expected_closers.back());
-				}
-			} else if (error_token_idx > 0) {
-				error_text = tokens[error_token_idx - 1].text;
-			}
+		idx_t stmt_start = error_token_idx;
+		while (stmt_start > 0 && tokens[stmt_start - 1].text != ";") {
+			stmt_start--;
 		}
-		auto error_message = "syntax error at or near \"" + error_text + "\"";
+		idx_t stmt_end = error_token_idx;
+		while (stmt_end < tokens.size() && tokens[stmt_end].text != ";") {
+			stmt_end++;
+		}
+		if (stmt_start < stmt_end && (stmt_start > 0 || stmt_end < tokens.size())) {
+			vector<MatcherToken> statement_tokens;
+			statement_tokens.reserve(stmt_end - stmt_start);
+			for (idx_t i = stmt_start; i < stmt_end; i++) {
+				statement_tokens.push_back(tokens[i]);
+			}
+			Transform(statement_tokens, options, root_matcher);
+		}
+
+		auto &error_token = tokens[error_token_idx];
+		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
 	match_result->name = "Program";
