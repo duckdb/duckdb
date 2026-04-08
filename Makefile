@@ -601,6 +601,19 @@ tidy-fix:
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
+.PHONY: iwyu iwyu-fix
+iwyu:
+	@command -v include-what-you-use >/dev/null 2>&1 || { echo "include-what-you-use not found. Install it with: brew install include-what-you-use"; exit 1; }
+	mkdir -p ./build/iwyu && \
+	cd build/iwyu && \
+	CC="clang" CXX="clang++" cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=Debug -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 -DCMAKE_CXX_INCLUDE_WHAT_YOU_USE=include-what-you-use ../.. && \
+	{ cmake --build . 2>&1; echo $$? > iwyu.status; } | tee iwyu.out && \
+	test "$$(cat iwyu.status)" -eq 0 && rm -f iwyu.status && \
+	rg -v '(^|[[:space:]])third_party/' iwyu.out > iwyu.out.tmp && mv iwyu.out.tmp iwyu.out
+
+iwyu-fix:
+	bash scripts/ci/iwyu_fix.sh
+
 test_compile: # test compilation of individual cpp files
 	$(PYTHON) scripts/amalgamation.py --compile
 

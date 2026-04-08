@@ -22,6 +22,7 @@ PULL_REQUEST_JOBS = [
     "windows",
     "no-string-inline",
     "vector-sizes",
+    "include-what-you-use",
     "threadsan",
     "amalgamation-tests",
     "linux-configs",

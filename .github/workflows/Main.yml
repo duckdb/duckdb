@@ -368,6 +368,50 @@ jobs:
       if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
+ include-what-you-use:
+    name: Include what you use
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'include-what-you-use') }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      GEN: ninja
+
+    steps:
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+
+    - name: Install
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang iwyu
+
+    - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Detect
+      run: |
+        status=0
+        make iwyu || status=$?
+        make iwyu-fix || status=$?
+        exit $status
+
+    - name: Upload artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: iwyu-artifacts
+        path: |
+          build/iwyu/iwyu.out
+          build/iwyu/iwyu.patch
+        if-no-files-found: warn
+
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
     uses: ./.github/workflows/Extensions.yml
@@ -1122,6 +1166,7 @@ jobs:
       - linux-debug-tests
       - regression
       - tidy-check
+      - include-what-you-use
       - extensions
       - wasm-eh
       - linux-release
