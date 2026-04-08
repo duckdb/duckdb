@@ -243,11 +243,19 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	auto client_context = wrapper->result->client_properties.GetClientContextOrThrow();
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *client_context, wrapper->result->types);
-	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             wrapper->result->client_properties, extension_type_cast);
+	try {
+		auto client_context = wrapper->result->client_properties.GetClientContextOrThrow();
+		auto extension_type_cast =
+		    duckdb::ArrowTypeExtensionData::GetExtensionTypes(*client_context, wrapper->result->types);
+		ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
+		                             wrapper->result->client_properties, extension_type_cast);
+	} catch (std::exception &ex) {
+		wrapper->result->SetError(duckdb::ErrorData(ex));
+		return DuckDBError;
+	} catch (...) {
+		wrapper->result->SetError(duckdb::ErrorData("Unknown error in duckdb_query_arrow_array"));
+		return DuckDBError;
+	}
 	return DuckDBSuccess;
 }
 

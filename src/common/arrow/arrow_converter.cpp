@@ -444,7 +444,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 			root_holder->owned_column_names.push_back(AddName(names[col_idx]));
 			auto &child = root_holder->children[col_idx];
 			InitializeChild(child, *root_holder, names[col_idx]);
-			SetArrowFormat(*root_holder, child, types[col_idx], options, *context.get());
+			SetArrowFormat(*root_holder, child, types[col_idx], options, *context);
 		}
 
 		// Release ownership to caller

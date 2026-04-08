@@ -50,6 +50,5 @@ struct ClientProperties {
 
 private:
 	weak_ptr<ClientContext> client_context;
-
 };
 } // namespace duckdb
