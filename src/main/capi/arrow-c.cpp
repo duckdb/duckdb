@@ -54,8 +54,9 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options,
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
+	auto client_context = arrow_options_wrapper->properties.GetClientContextOrThrow();
 	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *arrow_options_wrapper->properties.client_context, dchunk->GetTypes());
+	    *client_context, dchunk->GetTypes());
 
 	try {
 		ArrowConverter::ToArrowArray(*dchunk, out_arrow_array, arrow_options_wrapper->properties, extension_type_cast);
@@ -242,8 +243,9 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
+	auto client_context = wrapper->result->client_properties.GetClientContextOrThrow();
 	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *wrapper->result->client_properties.client_context, wrapper->result->types);
+	    *client_context, wrapper->result->types);
 	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
 	                             wrapper->result->client_properties, extension_type_cast);
 	return DuckDBSuccess;
@@ -255,8 +257,9 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+	auto client_context = result_data.result->client_properties.GetClientContextOrThrow();
 	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *result_data.result->client_properties.client_context, result_data.result->types);
+	    *client_context, result_data.result->types);
 
 	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
 	                             result_data.result->client_properties, extension_type_cast);
