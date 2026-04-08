@@ -835,9 +835,21 @@ public:
 
 			// Create the materialized CTE and replace the common subplans with references to it
 			auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
-			auto cte = make_uniq<LogicalMaterializedCTE>(
-			    cte_name, cte_index, types.size(), std::move(primary_subplan.op.get()),
-			    std::move(lowest_common_ancestor), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+			const auto materialized_column_count = types.size();
+			auto materialized_subplan = std::move(primary_subplan.op.get());
+			auto remainder = std::move(lowest_common_ancestor);
+			vector<unique_ptr<Expression>> materialized_select_list;
+			const auto materialized_bindings = materialized_subplan->GetColumnBindings();
+			for (idx_t i = 0; i < materialized_bindings.size(); i++) {
+				materialized_select_list.emplace_back(
+				    make_uniq<BoundColumnRefExpression>(types[i], materialized_bindings[i]));
+			}
+			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
+			                                                            std::move(materialized_select_list));
+			materialized_projection->children.emplace_back(std::move(materialized_subplan));
+			auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, materialized_column_count,
+			                                             std::move(materialized_projection), std::move(remainder),
+			                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				subplan.op.get() = std::move(cte_refs[subplan_idx]);
