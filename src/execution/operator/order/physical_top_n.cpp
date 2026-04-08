@@ -228,10 +228,8 @@ void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
 			continue;
 		}
 		// this entry was added in this chunk
-		// if not inlined - copy over the string to the string heap
-		if (!entry.sort_key.IsInlined()) {
-			entry.sort_key = sort_key_heap.AddBlob(entry.sort_key);
-		}
+		// copy over the string to the string heap
+		entry.sort_key = sort_key_heap.AddBlob(entry.sort_key);
 		// to finalize the addition of this entry we need to move over the payload data
 		matching_sel.set_index(match_count, entry.index - BASE_INDEX);
 		entry.index = heap_data.size() + match_count;
@@ -253,7 +251,7 @@ void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
 		}
 		// replace the previous top entry with the new entry
 		TopNEntry entry;
-		entry.sort_key = sort_key.IsInlined() ? sort_key : sort_key_heap.AddBlob(sort_key);
+		entry.sort_key = sort_key_heap.AddBlob(sort_key);
 		entry.index = base_index + match_count;
 		AddEntryToHeap(entry);
 		matching_sel.set_index(match_count++, r);
@@ -393,7 +391,7 @@ void TopNHeap::Combine(TopNHeap &other) {
 		}
 		// add this entry
 		TopNEntry new_entry;
-		new_entry.sort_key = sort_key.IsInlined() ? sort_key : sort_key_heap.AddBlob(sort_key);
+		new_entry.sort_key = sort_key_heap.AddBlob(sort_key);
 		new_entry.index = heap_data.size() + match_count;
 		AddEntryToHeap(new_entry);
 
@@ -429,10 +427,8 @@ void TopNHeap::Reduce() {
 	SelectionVector new_payload_sel(heap.size());
 	for (idx_t i = 0; i < heap.size(); i++) {
 		auto &entry = heap[i];
-		// the entry is not inlined - move the sort key to the new sort heap
-		if (!entry.sort_key.IsInlined()) {
-			entry.sort_key = new_sort_heap.AddBlob(entry.sort_key);
-		}
+		// move the sort key to the new sort heap
+		entry.sort_key = new_sort_heap.AddBlob(entry.sort_key);
 		// move this heap entry to position X in the payload chunk
 		new_payload_sel.set_index(i, entry.index);
 		entry.index = i;

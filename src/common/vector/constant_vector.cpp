@@ -10,12 +10,36 @@ namespace duckdb {
 
 void ConstantVector::SetNull(Vector &vector) {
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto &type = vector.GetType();
+	auto internal_type = type.InternalType();
+	// ensure the buffer supports validity masks
+	// buffers like SequenceBuffer/DictionaryBuffer do not have validity masks
+	bool needs_new_buffer = !vector.buffer;
+	if (!needs_new_buffer) {
+		auto buffer_type = vector.buffer->GetBufferType();
+		needs_new_buffer =
+		    (buffer_type != VectorBufferType::STANDARD_BUFFER && buffer_type != VectorBufferType::STRUCT_BUFFER &&
+		     buffer_type != VectorBufferType::ARRAY_BUFFER && buffer_type != VectorBufferType::LIST_BUFFER &&
+		     buffer_type != VectorBufferType::STRING_BUFFER);
+	}
+	if (needs_new_buffer) {
+		if (internal_type == PhysicalType::STRUCT) {
+			vector.buffer = make_buffer<VectorStructBuffer>(type, 1);
+		} else if (internal_type == PhysicalType::ARRAY) {
+			vector.buffer = make_buffer<VectorArrayBuffer>(type, 1);
+		} else if (internal_type == PhysicalType::LIST) {
+			vector.buffer = VectorBuffer::CreateConstantVector(type);
+		} else {
+			vector.buffer = VectorBuffer::CreateConstantVector(internal_type);
+		}
+	}
 	SetNull(vector, true);
 }
 
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	vector.validity.Set(0, !is_null);
+	auto &validity = vector.buffer->GetValidityMask();
+	validity.Set(0, !is_null);
 	if (is_null) {
 		auto &type = vector.GetType();
 		auto internal_type = type.InternalType();
@@ -54,7 +78,7 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	return &owned_sel;
 }
 
-void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
+void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t position, idx_t count) {
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
@@ -110,7 +134,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
 
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		vector.validity.Set(0, true);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Set(0, true);
 		break;
 	}
 	case PhysicalType::STRUCT: {
@@ -132,7 +157,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 			ConstantVector::Reference(target_entries[i], source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		vector.validity.Set(0, true);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Set(0, true);
 		break;
 	}
 	default:
@@ -237,7 +263,7 @@ void ConstantVector::Flatten(const Vector &const_vector, Vector &result, idx_t c
 			auto &validity = FlatVector::Validity(result);
 			validity.SetAllInvalid(count);
 			// Also invalidate the new child array
-			new_child.validity.SetAllInvalid(count * array_size);
+			FlatVector::Validity(new_child).SetAllInvalid(count * array_size);
 			// Recurse
 			new_child.Flatten(count * array_size);
 			// TODO: the fast path should exit here, but the part below it is somehow required for correctness

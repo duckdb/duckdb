@@ -31,8 +31,9 @@ ScalarFunction StAswkbFun::GetFunction() {
 }
 
 static void ToWKTFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(),
-	                                           [&](const string_t &geom) { return Geometry::ToString(result, geom); });
+	                                           [&](const string_t &geom) { return Geometry::ToString(heap, geom); });
 }
 
 ScalarFunction StAstextFun::GetFunction() {

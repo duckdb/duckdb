@@ -66,7 +66,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	for (idx_t i = 0; i < args.size(); i++) {
 		// allocate an empty string of the required size
 		idx_t str_length = constant_lengths + result_lengths[i];
-		result_data[i] = StringVector::EmptyString(result, str_length);
+		result_data[i].EmptyString(str_length);
 		// we reuse the result_lengths vector to store the currently appended size
 		result_lengths[i] = 0;
 	}

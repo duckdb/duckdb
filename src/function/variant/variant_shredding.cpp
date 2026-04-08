@@ -67,7 +67,7 @@ static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &resul
 		D_ASSERT(variant.RowIsValid(row) && IsVariantStringType(variant.GetTypeId(row, value_index)));
 
 		auto string_data = VariantUtils::DecodeStringData(variant, row, value_index);
-		result_data[result_row] = StringVector::AddStringOrBlob(result, string_data);
+		result_data[result_row] = string_data;
 	}
 }
 

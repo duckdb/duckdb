@@ -48,7 +48,7 @@ CrossProductExecutor::CrossProductExecutor(ColumnDataCollection &rhs)
 	rhs.InitializeScanChunk(scan_chunk);
 }
 
-void CrossProductExecutor::Reset(DataChunk &input, DataChunk &output) {
+void CrossProductExecutor::Reset(const DataChunk &input, DataChunk &output) {
 	initialized = true;
 	finished = false;
 	scan_input_chunk = false;
@@ -57,7 +57,7 @@ void CrossProductExecutor::Reset(DataChunk &input, DataChunk &output) {
 	scan_chunk.Reset();
 }
 
-bool CrossProductExecutor::NextValue(DataChunk &input, DataChunk &output) {
+bool CrossProductExecutor::NextValue(const DataChunk &input, DataChunk &output) {
 	if (!initialized) {
 		// not initialized yet: initialize the scan
 		Reset(input, output);
@@ -83,7 +83,7 @@ bool CrossProductExecutor::NextValue(DataChunk &input, DataChunk &output) {
 	return true;
 }
 
-OperatorResultType CrossProductExecutor::Execute(DataChunk &input, DataChunk &output) {
+OperatorResultType CrossProductExecutor::Execute(const DataChunk &input, DataChunk &output) {
 	if (rhs.Count() == 0) {
 		// no RHS: empty result
 		return OperatorResultType::FINISHED;

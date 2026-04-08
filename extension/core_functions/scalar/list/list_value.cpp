@@ -18,21 +18,7 @@ namespace duckdb {
 
 namespace {
 
-struct PrimitiveAssign {
-	template <class T>
-	static T Assign(const T &input, Vector &result) {
-		return input;
-	}
-};
-
-struct StringAssign {
-	template <class T>
-	static T Assign(const T &input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, input);
-	}
-};
-
-template <class T, class OP = PrimitiveAssign>
+template <class T>
 void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	const auto column_count = args.ColumnCount();
 	const auto row_count = args.size();
@@ -49,7 +35,7 @@ void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 				continue;
 			}
 			const auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[col]);
-			auto val = OP::template Assign<T>(input_data[input_idx], result);
+			auto val = input_data[input_idx];
 			result_data[result_idx] = val;
 		}
 	}
@@ -71,7 +57,6 @@ void PopulateChildFallback(DataChunk &args, Vector &result) {
 void ListFunction(DataChunk &args, Vector &result);
 bool StructFunction(DataChunk &args, Vector &result);
 
-template <class OP = PrimitiveAssign>
 bool PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -115,7 +100,7 @@ bool PopulateChild(DataChunk &args, Vector &result) {
 		TemplatedPopulateChild<interval_t>(args, result);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedPopulateChild<string_t, StringAssign>(args, result);
+		TemplatedPopulateChild<string_t>(args, result);
 		break;
 	case PhysicalType::LIST:
 		ListFunction(args, result);

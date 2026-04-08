@@ -3,6 +3,30 @@
 
 namespace duckdb {
 
+VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+}
+
+VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
+    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &child_type : child_types) {
+		children.emplace_back(child_type.second, capacity);
+	}
+	validity.Resize(capacity);
+}
+
+VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count)
+    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+	auto &other_vector = StructVector::GetEntries(other);
+	for (auto &child_vector : other_vector) {
+		children.emplace_back(child_vector, sel, count);
+	}
+	validity = other.GetBuffer()->Cast<VectorStructBuffer>().validity;
+}
+
+VectorStructBuffer::~VectorStructBuffer() {
+}
+
 vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
 	         vector.GetType().id() == LogicalTypeId::VARIANT ||

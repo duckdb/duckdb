@@ -196,7 +196,8 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, interval_t>(col, input);
 		break;
 	case LogicalTypeId::VARCHAR:
-		FlatVector::GetData<string_t>(col)[chunk.size()] = StringCast::Operation<T>(input, col);
+		FlatVector::GetData<string_t>(col)[chunk.size()] =
+		    StringCast::Operation<T>(input, StringVector::GetStringHeap(col));
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));
@@ -483,7 +484,7 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 
 	// Create the CTE info.
 	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
+	cte_info->query_node = std::move(cte_select->node);
 	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 
 	// Add the appender data as a CTE to the CTE map of the statement.
