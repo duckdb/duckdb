@@ -89,6 +89,19 @@ index 2ec44ce..9947264 100644
  
  statement error
  FROM read_csv('https://some.org/file.csv');
+diff --git a/test/sql/copy/csv/test_csv_httpfs.test b/test/sql/copy/csv/test_csv_httpfs.test
+index d461416..1d3cb98 100644
+--- a/test/sql/copy/csv/test_csv_httpfs.test
++++ b/test/sql/copy/csv/test_csv_httpfs.test
+@@ -15,7 +15,7 @@ CALL enable_logging('HTTP');
+ foreach httpfs_implementation curl httplib
+ 
+ statement ok
+-SET httpfs_client_implementation='${httpfs_implementation}';
++SET httpfs_client_implementation='{httpfs_implementation}';
+ 
+ query II
+ select * from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet' order by all;
 diff --git a/test/sql/copy/csv/test_csv_httpfs.test_slow b/test/sql/copy/csv/test_csv_httpfs.test_slow
 index 4406665..206e55d 100644
 --- a/test/sql/copy/csv/test_csv_httpfs.test_slow
@@ -102,7 +115,7 @@ index 4406665..206e55d 100644
  ----
  12783090
 diff --git a/test/sql/copy/encryption/different_aes_engines.test b/test/sql/copy/encryption/different_aes_engines.test
-index 229a889..3fc9317 100644
+index 229a889..60bd4ff 100644
 --- a/test/sql/copy/encryption/different_aes_engines.test
 +++ b/test/sql/copy/encryption/different_aes_engines.test
 @@ -7,7 +7,7 @@ statement ok
@@ -110,7 +123,7 @@ index 229a889..3fc9317 100644
  
  statement ok
 -ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
-+ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
  
  statement ok
  CREATE TABLE enc.test (a INTEGER, b INTEGER);
@@ -119,7 +132,7 @@ index 229a889..3fc9317 100644
  
  statement ok
 -ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
-+ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
  
  query II
  FROM enc.test
@@ -128,7 +141,7 @@ index 229a889..3fc9317 100644
  
  statement ok
 -ATTACH '__TEST_DIR__/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
-+ATTACH '{TEST_DIR}/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test2_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
  
  statement ok
  CREATE TABLE enc.test (a INTEGER, b INTEGER);
@@ -137,12 +150,12 @@ index 229a889..3fc9317 100644
  
  statement ok
 -ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
-+ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
  
  query II
  FROM enc.test
 diff --git a/test/sql/copy/parquet/parquet_encryption_httpfs.test b/test/sql/copy/parquet/parquet_encryption_httpfs.test
-index 370d2a9..86bfbb9 100644
+index 370d2a9..52e327d 100644
 --- a/test/sql/copy/parquet/parquet_encryption_httpfs.test
 +++ b/test/sql/copy/parquet/parquet_encryption_httpfs.test
 @@ -24,10 +24,10 @@ PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
@@ -150,11 +163,11 @@ index 370d2a9..86bfbb9 100644
  
  statement ok
 -COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
-+COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted{key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
  
  query I
 -SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
-+SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted{key_len}_openssl.parquet', encryption_config={footer_key: 'key{key_len}'})
  ----
  42
  
@@ -163,7 +176,7 @@ index 370d2a9..86bfbb9 100644
  
  statement ok
 -COPY test FROM '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
-+COPY test FROM '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY test FROM '{TEST_DIR}/encrypted{key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
  
  query I
  SELECT * FROM test
@@ -194,7 +207,7 @@ index 370d2a9..86bfbb9 100644
  ----
  Invalid Input Error
 diff --git a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
-index 42eae8e..77e9642 100644
+index 42eae8e..7eeca7b 100644
 --- a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
 +++ b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
 @@ -25,18 +25,18 @@ foreach key_len 128 192 256
@@ -202,7 +215,7 @@ index 42eae8e..77e9642 100644
  # write files with OpenSSL enabled (is enabled by default)
  statement ok
 -COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
-+COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted{key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
  
  statement ok
  SET force_mbedtls_unsafe = true;
@@ -210,12 +223,12 @@ index 42eae8e..77e9642 100644
  # write files with mbedtls enabled
  statement ok
 -COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
-+COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted{key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
  
  # read OpenSSL encrypted files by using mbedtls
  query I
 -SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
-+SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted{key_len}_openssl.parquet', encryption_config={footer_key: 'key{key_len}'})
  ----
  42
  
@@ -224,7 +237,7 @@ index 42eae8e..77e9642 100644
  # read mbedtls encrypted files with OpenSSL
  query I
 -SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'})
-+SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted{key_len}_mbedtls.parquet', encryption_config={footer_key: 'key{key_len}'})
  ----
  42
  
@@ -249,6 +262,55 @@ index 83ec356..b45157e 100644
  ----
  
  
+diff --git a/test/sql/copy/s3/glob_s3_recursive.test_slow b/test/sql/copy/s3/glob_s3_recursive.test_slow
+index e10c8e1..7cf9fcc 100644
+--- a/test/sql/copy/s3/glob_s3_recursive.test_slow
++++ b/test/sql/copy/s3/glob_s3_recursive.test_slow
+@@ -24,7 +24,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/*s/non-existing-folder/*');
+@@ -49,7 +49,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/*s/parquet/*');
+@@ -74,7 +74,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM (FROM glob('s3://coiled-datasets/timeseries/*s/parquet/*.parquet') LIMIT 100);
+@@ -99,7 +99,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/1990s/parquet/*');
+@@ -124,7 +124,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/1990s/**/*.parquet');
 diff --git a/test/sql/crypto/test_openssl_crypto.test b/test/sql/crypto/test_openssl_crypto.test
 index 9527051..8e7fa21 100644
 --- a/test/sql/crypto/test_openssl_crypto.test
@@ -315,6 +377,19 @@ index 27cb0a6..dfe7a26 100644
  ----
 -analyzed_plan	<REGEX>:.*GET: 2.*
 +analyzed_plan	<REGEX>:.*GET: 1.*
+diff --git a/test/sql/s3/incorrect_s3_region.test_slow b/test/sql/s3/incorrect_s3_region.test_slow
+index 700ee5e..374bb6f 100644
+--- a/test/sql/s3/incorrect_s3_region.test_slow
++++ b/test/sql/s3/incorrect_s3_region.test_slow
+@@ -26,7 +26,7 @@ statement ok
+ FROM parquet_scan('s3://overturemaps-us-west-2/bridgefiles/2025-03-19.0-beta.0/dataset=Esri Community Maps/theme=buildings/type=building/part-00000-947c2149-23db-4abc-a7ee-3a892aac90ff.c000.snappy.parquet') LIMIT 1;
+ 
+ statement ok
+-SET s3_region='${s3_region}'
++SET s3_region='{s3_region}'
+ 
+ endloop
+ 
 diff --git a/test/sql/secrets/create_secret_minio.test b/test/sql/secrets/create_secret_minio.test
 index 58b8a6a..5787236 100644
 --- a/test/sql/secrets/create_secret_minio.test
@@ -742,7 +817,7 @@ index 5daa06d..33f591b 100644
  # Let's restore and now things work again
  statement ok
 diff --git a/test/sql/secrets/create_secret_transactional.test b/test/sql/secrets/create_secret_transactional.test
-index 79a4157..332dcd9 100644
+index 79a4157..0782307 100644
 --- a/test/sql/secrets/create_secret_transactional.test
 +++ b/test/sql/secrets/create_secret_transactional.test
 @@ -7,10 +7,10 @@ PRAGMA enable_verification;
@@ -758,6 +833,22 @@ index 79a4157..332dcd9 100644
  
  statement ok
  PRAGMA threads=1
+@@ -21,13 +21,13 @@ statement ok con1
+ BEGIN TRANSACTION
+ 
+ statement ok con1
+-CREATE ${secret_type} SECRET s1 (TYPE S3)
++CREATE {secret_type} SECRET s1 (TYPE S3)
+ 
+ statement ok con2
+ BEGIN TRANSACTION
+ 
+ statement ok con2
+-CREATE ${secret_type} SECRET s2 (TYPE S3)
++CREATE {secret_type} SECRET s2 (TYPE S3)
+ 
+ query I con1
+ SELECT name FROM duckdb_secrets();
 @@ -101,7 +101,7 @@ CREATE PERSISTENT SECRET perm_s1 (TYPE S3)
  restart
  
@@ -767,6 +858,13 @@ index 79a4157..332dcd9 100644
  
  # After restart, we create 2 connections that each add their own tmp secret; the perm secret is now lazily loaded!
  statement ok con1
+@@ -143,4 +143,4 @@ query I con2
+ SELECT name FROM duckdb_secrets() ORDER BY name;
+ ----
+ tmp_s1
+-tmp_s2
+\ No newline at end of file
++tmp_s2
 diff --git a/test/sql/secrets/persistent_key_value_secret.test b/test/sql/secrets/persistent_key_value_secret.test
 index d8fbc16..bcc3958 100644
 --- a/test/sql/secrets/persistent_key_value_secret.test
