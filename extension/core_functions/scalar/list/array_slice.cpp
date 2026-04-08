@@ -219,7 +219,7 @@ void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vect
 	auto step = step_data ? step_data[0] : 1;
 
 	if (step < 0) {
-		swap(begin, end);
+		std::swap(begin, end);
 		begin = end_is_empty ? 0 : begin;
 		end = begin_is_empty ? OP::ValueLength(str) : end;
 	}
@@ -293,7 +293,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		auto step = step_vector ? UnifiedVectorFormat::GetData<INDEX_TYPE>(step_data)[step_idx] : 1;
 
 		if (step < 0) {
-			swap(begin, end);
+			std::swap(begin, end);
 			begin = end_is_empty ? 0 : begin;
 			end = begin_is_empty ? OP::ValueLength(sliced) : end;
 		}
