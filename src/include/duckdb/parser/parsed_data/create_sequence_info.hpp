@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include <optional>
 
 namespace duckdb {
 
