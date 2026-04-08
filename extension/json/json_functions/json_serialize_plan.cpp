@@ -122,6 +122,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 	}
 	auto &context = state.GetContext();
 
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
 		auto result_obj = yyjson_mut_obj(doc);
@@ -172,7 +173,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				    "Failed to serialize json, perhaps the query contains invalid utf8 characters?");
 			}
 
-			return StringVector::AddString(result, data, len);
+			return heap.AddString(data, len);
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -191,7 +192,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
 			                                      alc, &len_size_t, nullptr);
 			idx_t len = len_size_t;
-			return StringVector::AddString(result, data, len);
+			return heap.AddString(data, len);
 		}
 	});
 }

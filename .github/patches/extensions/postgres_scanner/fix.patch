@@ -38,17 +38,28 @@ index d3dc0b6..471bc4c 100644
  #include "duckdb/planner/filter/constant_filter.hpp"
  
 diff --git a/src/postgres_binary_reader.cpp b/src/postgres_binary_reader.cpp
-index c7fd72e..7260477 100644
+index c7fd72e..339300b 100644
 --- a/src/postgres_binary_reader.cpp
 +++ b/src/postgres_binary_reader.cpp
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,7 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
 +#include "duckdb/common/vector/struct_vector.hpp"
++#include "duckdb/common/vector/string_vector.hpp"
  #include "postgres_binary_reader.hpp"
  #include "postgres_scanner.hpp"
  
-@@ -427,8 +430,8 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -280,7 +284,8 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+ 		const auto str = ReadString(value_len);
+ 
+ 		string_t res_val;
+-		if (!Geometry::FromBinary(string_t(str, value_len), res_val, out_vec, true)) {
++		auto &heap = StringVector::GetStringHeap(out_vec);
++		if (!Geometry::FromBinary(string_t(str, value_len), res_val, heap, true)) {
+ 			throw InvalidInputException("Failed to parse Postgres geometry data");
+ 		}
+ 		FlatVector::GetData<string_t>(out_vec)[output_offset] = res_val;
+@@ -427,8 +432,8 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  		auto &child_entries = StructVector::GetEntries(out_vec);
  		if (postgres_type.info == PostgresTypeAnnotation::GEOM_POINT) {
  			D_ASSERT(value_len == sizeof(double) * 2);
@@ -59,7 +70,7 @@ index c7fd72e..7260477 100644
  			break;
  		}
  		auto entry_count = ReadInteger<uint32_t>();
-@@ -437,7 +440,7 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
+@@ -437,7 +442,7 @@ void PostgresBinaryReader::ReadValue(const LogicalType &type, const PostgresType
  			                        entry_count);
  		}
  		for (idx_t c = 0; c < entry_count; c++) {
@@ -118,17 +129,18 @@ index c2f981a..cabe77f 100644
  
  		if (filter_text.empty()) {
 diff --git a/src/postgres_text_reader.cpp b/src/postgres_text_reader.cpp
-index 9a1bbed..60c99d2 100644
+index 9a1bbed..f6a19a6 100644
 --- a/src/postgres_text_reader.cpp
 +++ b/src/postgres_text_reader.cpp
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,7 @@
 +#include "duckdb/common/vector/list_vector.hpp"
 +#include "duckdb/common/vector/map_vector.hpp"
 +#include "duckdb/common/vector/struct_vector.hpp"
++#include "duckdb/common/vector/string_vector.hpp"
  #include "postgres_text_reader.hpp"
  #include "postgres_scanner.hpp"
  #include "duckdb/common/types/blob.hpp"
-@@ -245,7 +248,7 @@ void PostgresTextReader::ConvertStruct(Vector &source, Vector &target, const Pos
+@@ -245,7 +249,7 @@ void PostgresTextReader::ConvertStruct(Vector &source, Vector &target, const Pos
  		ParsePostgresStruct(struct_parser, strings[i]);
  	}
  	for (idx_t c = 0; c < children.size(); c++) {
@@ -137,6 +149,16 @@ index 9a1bbed..60c99d2 100644
  		              c >= postgres_type.children.size() ? PostgresType() : postgres_type.children[c], count);
  	}
  }
+@@ -343,7 +347,8 @@ static void ConvertGeometry(Vector &source, Vector &target, idx_t count) {
+ 		}
+ 
+ 		// Finally convert from WKB (which will handle big-endian format too)
+-		if (!Geometry::FromBinary(result_blob, result[out_idx], target, true)) {
++		auto &heap = StringVector::GetStringHeap(target);
++		if (!Geometry::FromBinary(result_blob, result[out_idx], heap, true)) {
+ 			throw InvalidInputException("Failed to parse geometry from WKB - invalid format");
+ 		}
+ 	}
 diff --git a/src/storage/postgres_merge_into.cpp b/src/storage/postgres_merge_into.cpp
 index 03188d6..7bcab80 100644
 --- a/src/storage/postgres_merge_into.cpp
