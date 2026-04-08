@@ -27,6 +27,55 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
+static optional_ptr<ParseResult> UnwrapOptional(optional_ptr<ParseResult> parse_result) {
+	if (parse_result && parse_result->type == ParseResultType::OPTIONAL) {
+		auto &opt = parse_result->Cast<OptionalParseResult>();
+		return opt.HasResult() ? opt.optional_result : nullptr;
+	}
+	return parse_result;
+}
+
+static optional_ptr<RepeatParseResult> UnwrapRepeat(optional_ptr<ParseResult> parse_result) {
+	auto unwrapped = UnwrapOptional(parse_result);
+	if (!unwrapped) {
+		return nullptr;
+	}
+	if (unwrapped->type != ParseResultType::REPEAT) {
+		throw InternalException("Expected repeat parse result in Program rule, got %s",
+		                        ParseResultToString(unwrapped->type));
+	}
+	// Safely wrap the reference into an optional_ptr
+	return &unwrapped->Cast<RepeatParseResult>();
+}
+
+static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
+                                                             const vector<MatcherToken> &tokens,
+                                                             optional_ptr<ParseResult> stmt_pr,
+                                                             optional_ptr<ParseResult> terminator_pr) {
+	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
+
+	if (!transformer.named_parameter_map.empty()) {
+		stmt->named_param_map = transformer.named_parameter_map;
+	}
+	if (!transformer.pivot_entries.empty()) {
+		stmt = transformer.CreatePivotStatement(std::move(stmt));
+	}
+	transformer.Clear();
+
+	// Calculate location and length cleanly
+	if (stmt_pr->offset.IsValid()) {
+		stmt->stmt_location = stmt_pr->offset.GetIndex();
+
+		idx_t end_index = (terminator_pr && terminator_pr->offset.IsValid())
+		                      ? terminator_pr->offset.GetIndex()
+		                      : (tokens.back().offset + tokens.back().length);
+
+		stmt->stmt_length = end_index - stmt->stmt_location;
+	}
+
+	return stmt;
+}
+
 vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
                                                                   Matcher &root_matcher) {
 	if (tokens.empty()) {
@@ -82,80 +131,28 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings, options);
 
-	auto transform_stmt = [&](optional_ptr<ParseResult> stmt_pr) -> unique_ptr<SQLStatement> {
-		auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
-		if (!transformer.named_parameter_map.empty()) {
-			stmt->named_param_map = transformer.named_parameter_map;
-		}
-		if (!transformer.pivot_entries.empty()) {
-			stmt = transformer.CreatePivotStatement(std::move(stmt));
-		}
-		transformer.Clear();
-		if (stmt_pr->offset.IsValid()) {
-			stmt->stmt_location = stmt_pr->offset.GetIndex();
-		}
-		return stmt;
-	};
-
-	auto unwrap_optional = [](optional_ptr<ParseResult> parse_result) -> optional_ptr<ParseResult> {
-		if (!parse_result) {
-			return nullptr;
-		}
-		if (parse_result->type != ParseResultType::OPTIONAL) {
-			return parse_result;
-		}
-		auto &opt = parse_result->Cast<OptionalParseResult>();
-		if (!opt.HasResult()) {
-			return nullptr;
-		}
-		return opt.optional_result;
-	};
-	auto unwrap_repeat = [&](optional_ptr<ParseResult> parse_result) -> RepeatParseResult * {
-		auto unwrapped = unwrap_optional(parse_result);
-		if (!unwrapped) {
-			return nullptr;
-		}
-		if (unwrapped->type != ParseResultType::REPEAT) {
-			throw InternalException("Expected repeat parse result in Program rule, got %s",
-			                        ParseResultToString(unwrapped->type));
-		}
-		return &unwrapped->Cast<RepeatParseResult>();
-	};
-	auto transform_program_stmt = [&](optional_ptr<ParseResult> stmt_pr,
-	                                  optional_ptr<ParseResult> terminator_pr) -> unique_ptr<SQLStatement> {
-		auto stmt = transform_stmt(stmt_pr);
-		if (stmt_pr->offset.IsValid()) {
-			if (terminator_pr && terminator_pr->offset.IsValid()) {
-				stmt->stmt_length = terminator_pr->offset.GetIndex() - stmt_pr->offset.GetIndex();
-			} else {
-				auto &last_token = tokens.back();
-				stmt->stmt_length = last_token.offset + last_token.length - stmt_pr->offset.GetIndex();
-			}
-		}
-		return stmt;
-	};
-
 	vector<unique_ptr<SQLStatement>> result;
-	auto current_stmt = unwrap_optional(prog.GetChild(0));
-	auto repeat = unwrap_repeat(prog.GetChild(1));
+	auto current_stmt = UnwrapOptional(prog.GetChild(0));
+	auto repeat = UnwrapRepeat(prog.GetChild(1));
 	if (repeat) {
 		for (auto &child : repeat->children) {
 			auto &child_list = child->Cast<ListParseResult>();
 			auto &separators = child_list.Child<RepeatParseResult>(0);
 			auto next_stmt = child_list.GetChild(1);
 			if (current_stmt) {
-				result.push_back(transform_program_stmt(current_stmt, separators.children[0]));
+				result.push_back(
+				    ExtractAndTransformStatement(transformer, tokens, current_stmt, separators.children[0]));
 			}
 			current_stmt = next_stmt;
 		}
 	}
 	if (current_stmt) {
-		auto trailing_repeat = unwrap_repeat(prog.GetChild(2));
+		auto trailing_repeat = UnwrapRepeat(prog.GetChild(2));
 		optional_ptr<ParseResult> trailing_terminator = nullptr;
 		if (trailing_repeat && !trailing_repeat->children.empty()) {
 			trailing_terminator = trailing_repeat->children[0];
 		}
-		result.push_back(transform_program_stmt(current_stmt, trailing_terminator));
+		result.push_back(ExtractAndTransformStatement(transformer, tokens, current_stmt, trailing_terminator));
 	}
 	return result;
 }
