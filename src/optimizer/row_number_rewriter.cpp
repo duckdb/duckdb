@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/window_rewriter.hpp"
+#include "duckdb/optimizer/row_number_rewriter.hpp"
 
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-bool WindowRewriter::CanOptimize(LogicalOperator &op) {
+bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return false;
 	}
@@ -47,7 +47,7 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 	return true;
 }
 
-unique_ptr<LogicalOperator> WindowRewriter::Optimize(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> RowNumberRewriter::Optimize(unique_ptr<LogicalOperator> op) {
 	ColumnBindingReplacer replacer;
 	LogicalOperator *root = op.get();
 	op = RewritePlan(std::move(op), replacer);
@@ -59,8 +59,8 @@ unique_ptr<LogicalOperator> WindowRewriter::Optimize(unique_ptr<LogicalOperator>
 	return op;
 }
 
-unique_ptr<LogicalOperator> WindowRewriter::RewriteGet(unique_ptr<LogicalOperator> op,
-                                                       ColumnBindingReplacer &replacer) {
+unique_ptr<LogicalOperator> RowNumberRewriter::RewriteGet(unique_ptr<LogicalOperator> op,
+                                                          ColumnBindingReplacer &replacer) {
 	auto &window = op->Cast<LogicalWindow>();
 	auto &child = window.children[0];
 	auto &get = child->Cast<LogicalGet>();
@@ -94,8 +94,8 @@ unique_ptr<LogicalOperator> WindowRewriter::RewriteGet(unique_ptr<LogicalOperato
 	return std::move(window.children[0]);
 }
 
-unique_ptr<LogicalOperator> WindowRewriter::RewritePlan(unique_ptr<LogicalOperator> op,
-                                                        ColumnBindingReplacer &replacer) {
+unique_ptr<LogicalOperator> RowNumberRewriter::RewritePlan(unique_ptr<LogicalOperator> op,
+                                                           ColumnBindingReplacer &replacer) {
 	if (CanOptimize(*op)) {
 		return RewriteGet(std::move(op), replacer);
 	}

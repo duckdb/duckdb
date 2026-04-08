@@ -59,7 +59,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
 		MetricType::OPTIMIZER_UNNEST_REWRITER,
 		MetricType::OPTIMIZER_UNUSED_COLUMNS,
-		MetricType::OPTIMIZER_WINDOW_REWRITER,
+		MetricType::OPTIMIZER_ROW_NUMBER_REWRITER,
 		MetricType::OPTIMIZER_WINDOW_SELF_JOIN,
 		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,

@@ -60,6 +60,18 @@ select row_number() over (), i, j from integers
 3	1	2
 4	1	NULL
 
+# streaming window is still used when there are filters
+query TT
+explain select row_number() over (), i, j from integers where i>1
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTT
+select row_number() over (), i, j from integers where i>1
+----
+1	2	2
+2	2	1
+
 query TT
 explain select rank() over (), i, j from integers
 ----

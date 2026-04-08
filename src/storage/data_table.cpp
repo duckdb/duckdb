@@ -286,9 +286,8 @@ idx_t DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return scan_state.table_state.row_group->GetCount();
 	}
-	// Carry over the row_number_base from main storage so local rows continue the sequence
-	// Write to thread-local scan_state (not shared state) to avoid data races
 	if (state.scan_state.row_number_base.IsValid()) {
+		// start the row number for transaction-local rows from the final row count in the base table
 		scan_state.local_state.row_number_base = state.scan_state.row_number_base.GetIndex();
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
