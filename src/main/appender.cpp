@@ -196,7 +196,8 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, interval_t>(col, input);
 		break;
 	case LogicalTypeId::VARCHAR:
-		FlatVector::GetData<string_t>(col)[chunk.size()] = StringCast::Operation<T>(input, col);
+		FlatVector::GetData<string_t>(col)[chunk.size()] =
+		    StringCast::Operation<T>(input, StringVector::GetStringHeap(col));
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));

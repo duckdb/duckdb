@@ -56,3 +56,5 @@ endif()
 target_link_libraries(unittest duckdb_static test_helpers)
 
 link_extension_libraries(unittest "")
+
+duckdb_codesign_for_debugging(unittest)

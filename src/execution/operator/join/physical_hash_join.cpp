@@ -994,6 +994,10 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 
 	uhugeint_t span;
 	if (PrefixRangeFilter::TryComputeSpan(min, max, span)) {
+		if (span == 0) {
+			// Filter will not be more expressive than min/max, bail
+			return false;
+		}
 		static const auto SPAN_THRESHOLD = Uhugeint::Convert(1048576);
 		span_is_small = span <= SPAN_THRESHOLD;
 	} else {
@@ -1004,7 +1008,8 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 		return false;
 	}
 
-	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
+	const auto &key_type = ht->conditions[0].GetLHS().return_type;
+	return PrefixRangeTableFilter::SupportedType(key_type);
 }
 
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
