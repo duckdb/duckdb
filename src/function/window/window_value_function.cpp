@@ -996,16 +996,14 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	auto &child_idx = executor.child_idx;
 	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], false));
 
-	auto &arg_order_idx = executor.arg_order_idx;
-	for (const auto &order : wexpr.arg_orders) {
-		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
-	}
-
 	//	If the argument order is prefix of the partition ordering,
 	//	then we can just use the partition ordering.
 	auto &arg_orders = wexpr.arg_orders;
-	if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size()) {
-		arg_order_idx.clear();
+	auto &arg_order_idx = executor.arg_order_idx;
+	if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+		for (const auto &order : wexpr.arg_orders) {
+			arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+		}
 	}
 
 	//	We need the sort values for interpolation, so either use the range or the secondary ordering expression
