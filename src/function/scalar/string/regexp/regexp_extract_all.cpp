@@ -59,8 +59,6 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	auto input = CreateStringPiece(string);
 
 	auto &child_vector = ListVector::GetEntry(result);
-	auto list_content = FlatVector::GetData<string_t>(child_vector);
-	auto &child_validity = FlatVector::Validity(child_vector);
 
 	auto current_list_size = ListVector::GetListSize(result);
 	auto current_list_capacity = ListVector::GetListCapacity(result);
@@ -88,8 +86,9 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		if (current_list_size + 1 >= current_list_capacity) {
 			ListVector::Reserve(result, current_list_capacity * 2);
 			current_list_capacity = ListVector::GetListCapacity(result);
-			list_content = FlatVector::GetData<string_t>(child_vector);
 		}
+		auto list_content = FlatVector::GetData<string_t>(child_vector);
+		auto &child_validity = FlatVector::Validity(child_vector);
 
 		// Write the captured groups into the list-child vector
 		auto &match_group = args.group_buffer[group];
