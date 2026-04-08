@@ -317,36 +317,33 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 }
 
 void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &allocator = state.GetAllocator();
-	ArenaAllocator arena(allocator);
+	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result, args.size(),
 	                                                      [&](bignum_t a, bignum_t b) {
 		                                                      const BignumIntermediate lhs(a);
 		                                                      const BignumIntermediate rhs(b);
-		                                                      return BignumIntermediate::Add(result, lhs, rhs);
+		                                                      return BignumIntermediate::Add(heap, lhs, rhs);
 	                                                      });
 }
 
 void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &allocator = state.GetAllocator();
-	ArenaAllocator arena(allocator);
+	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
 		    BignumIntermediate rhs(b);
 		    rhs.NegateInPlace();
-		    auto result_value = BignumIntermediate::Add(result, lhs, rhs);
+		    auto result_value = BignumIntermediate::Add(heap, lhs, rhs);
 		    rhs.NegateInPlace();
 		    return result_value;
 	    });
 }
 
 void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &allocator = state.GetAllocator();
-	ArenaAllocator arena(allocator);
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, args.size(), [&](bignum_t a) {
 		const BignumIntermediate lhs(a);
-		return lhs.Negate(result);
+		return lhs.Negate(heap);
 	});
 }
 

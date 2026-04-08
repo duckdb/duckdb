@@ -120,8 +120,8 @@ protected:
 	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, int32_t data[8], const char *tz_name);
 	idx_t GetLength(date_t date, int32_t data[8], const char *tz_name) const;
 
-	string_t ConvertTimestampValue(const timestamp_t &input, Vector &result) const;
-	string_t ConvertTimestampValue(const timestamp_ns_t &input, Vector &result) const;
+	string_t ConvertTimestampValue(const timestamp_t &input, StringHeap &heap) const;
+	string_t ConvertTimestampValue(const timestamp_ns_t &input, StringHeap &heap) const;
 
 	char *WriteString(char *target, const string_t &str) const;
 	char *Write2(char *target, uint8_t value) const;

@@ -13,7 +13,7 @@ namespace {
 
 struct ExtractVersionUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		char uuid[36]; // Intentionally no initialize.
 		BaseUUID::ToString(input, uuid);
 		// UUIDv4 and UUIDv7 stores version as the 15-th uint8_t.
@@ -23,7 +23,7 @@ struct ExtractVersionUuidOperator {
 
 struct ExtractTimestampUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		// Validate whether the given UUID is v7.
 		const uint8_t version = (static_cast<uint8_t>((input.upper) >> 8) & 0xf0) >> 4;
 		if (version != 7) {
@@ -48,7 +48,7 @@ void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vector &res
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
-	UnaryExecutor::ExecuteString<INPUT, uint32_t, OP>(input, result, count);
+	UnaryExecutor::Execute<INPUT, uint32_t, OP>(input, result, count);
 }
 
 template <typename INPUT, typename OP>
@@ -56,7 +56,7 @@ void ExtractTimestampFunction(DataChunk &args, ExpressionState &state, Vector &r
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
-	UnaryExecutor::ExecuteString<INPUT, timestamp_t, OP>(input, result, count);
+	UnaryExecutor::Execute<INPUT, timestamp_t, OP>(input, result, count);
 }
 
 struct RandomLocalState : public FunctionLocalState {
