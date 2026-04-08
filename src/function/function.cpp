@@ -96,7 +96,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterArrowFunctions();
 
 	RegisterPragmaFunctions();
-	RegisterWindowFunctions();
 
 	RegisterCopyFunctions();
 

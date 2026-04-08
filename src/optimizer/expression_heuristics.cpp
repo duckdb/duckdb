@@ -211,7 +211,7 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 		return ExpressionCost(const_expr.return_type.InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_REF: {
-		auto &col_expr = expr.Cast<BoundColumnRefExpression>();
+		auto &col_expr = expr.Cast<BoundReferenceExpression>();
 		return ExpressionCost(col_expr.return_type.InternalType(), 8);
 	}
 	default: {

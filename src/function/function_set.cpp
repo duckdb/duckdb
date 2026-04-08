@@ -74,6 +74,17 @@ WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move
 	functions.push_back(std::move(fun));
 }
 
+WindowFunction WindowFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+	ErrorData error;
+	FunctionBinder binder(context);
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
+		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                        error.Message());
+	}
+	return GetFunctionByOffset(index.GetIndex());
+}
+
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 

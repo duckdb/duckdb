@@ -82,6 +82,16 @@ ExpressionType WindowExpression::WindowToExpressionType(const string &fun_name) 
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
+string WindowExpression::ExpressionTypeToWindow(ExpressionType expression_type) {
+	auto functions = internal_window_functions;
+	for (idx_t i = 0; functions[i].name != nullptr; i++) {
+		if (expression_type == functions[i].expression_type) {
+			return functions[i].name;
+		}
+	}
+	return "";
+}
+
 void WindowExpression::SetFunctionName(const string &function_name_p) {
 	function_name = function_name_p;
 	type = WindowToExpressionType(function_name);
