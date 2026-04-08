@@ -27,4 +27,12 @@ bool TryOperatorBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) 
 	return stored_binder->DoesColumnAliasExist(colref);
 }
 
+BindResult TryOperatorBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
+                                             bool root_expression) {
+	if (!stored_binder) {
+		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+	}
+	return stored_binder->BindExpression(expr_ptr, depth, root_expression);
+}
+
 } // namespace duckdb

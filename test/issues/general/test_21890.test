@@ -38,3 +38,19 @@ ORDER BY val
 ----
 1
 2
+
+query I
+SELECT val FROM tbl GROUP BY val HAVING (SELECT COUNT(*) FROM tbl tbl2 WHERE TRY(tbl.val) > 0) > 0 ORDER BY val;
+----
+1
+2
+
+statement error
+SELECT val+1 FROM tbl GROUP BY val+1 HAVING (SELECT COUNT(*) FROM tbl tbl2 WHERE TRY(tbl.val) > 0) > 0 ORDER BY val+1;
+----
+must appear in the GROUP BY clause
+
+statement error
+SELECT CAST(val AS BIGINT) FROM tbl GROUP BY CAST(val AS BIGINT) HAVING (SELECT COUNT(*) FROM tbl tbl2 WHERE TRY(tbl.val) > 0) > 0 ORDER BY 1;
+----
+must appear in the GROUP BY clause
