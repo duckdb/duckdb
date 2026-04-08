@@ -10,6 +10,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 	VacuumOptions vacuum_options;
 	vacuum_options.analyze = true;
 	auto result = make_uniq<VacuumStatement>(vacuum_options);
+	if (list_pr.Child<OptionalParseResult>(1).HasResult()) {
+		throw NotImplementedException("ANALYZE VERBOSE is not implemented yet");
+	}
 	auto target_opt = list_pr.Child<OptionalParseResult>(2);
 	if (target_opt.HasResult()) {
 		auto target = transformer.Transform<AnalyzeTarget>(target_opt.optional_result);
