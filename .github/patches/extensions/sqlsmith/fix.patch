@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 72e8f5b..79b1d80 100644
+index 72e8f5b..afd174d 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -18,6 +18,7 @@
@@ -26,16 +26,25 @@ index 72e8f5b..79b1d80 100644
  	}
 
  	return delete_statement;
-@@ -798,6 +799,9 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+@@ -302,7 +303,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
+ 	}
+ 	while (RandomPercentage(20)) {
+ 		auto cte = make_uniq<CommonTableExpressionInfo>();
+-		cte->query = unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect());
++		cte->query_node = std::move(unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect())->node);
+ 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
+ 			cte->aliases.push_back(GenerateIdentifier());
  		}
+@@ -806,6 +807,9 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		max_parameters = min_parameters;
  		break;
  	}
 +	case CatalogType::WINDOW_FUNCTION_ENTRY:
 +		//	FIXME: Use the function, not a random builtin
 +		return GenerateWindowFunction();
- 	case CatalogType::MACRO_ENTRY: {
- 		auto &macro_entry = function.Cast<MacroCatalogEntry>();
- 		name = macro_entry.name;
+ 	default:
+ 		throw InternalException("StatementGenerator::GenerateFunction");
+ 	}
 @@ -957,9 +961,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
  		case ExpressionType::WINDOW_NTILE:
  		case ExpressionType::WINDOW_FIRST_VALUE:
@@ -75,7 +84,7 @@ index 72e8f5b..79b1d80 100644
  }
 
 diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
-index 4602928..3e56aca 100644
+index 4602928..3b46e19 100644
 --- a/src/statement_simplifier.cpp
 +++ b/src/statement_simplifier.cpp
 @@ -8,8 +8,11 @@
@@ -89,6 +98,15 @@ index 4602928..3e56aca 100644
 +#include "duckdb/parser/query_node/delete_query_node.hpp"
  #include "duckdb/parser/statement/select_statement.hpp"
  #endif
+
+@@ -206,7 +209,7 @@ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
+ 	SimplifyMap(cte.map);
+ 	for (auto &cte_child : cte.map) {
+ 		// simplify individual ctes
+-		Simplify(cte_child.second->query->node);
++		Simplify(cte_child.second->query_node);
+ 	}
+ }
 
 @@ -357,8 +360,6 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
  		SimplifyChildExpression(expr, window.filter_expr);
