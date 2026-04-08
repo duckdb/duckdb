@@ -59,8 +59,8 @@ idx_t RowNumberColumnData::ScanCount(ColumnScanState &state, Vector &result, idx
 	return count;
 }
 
-void RowNumberColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                 SelectionVector &sel, idx_t count) {
+void RowNumberColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
+                                 Vector &result, SelectionVector &sel, idx_t count) {
 	auto base = GetRowNumberBase(state);
 	// row_number is a dense sequence - deleted/filtered rows don't get numbers
 	// 1-indexed
@@ -72,8 +72,8 @@ idx_t RowNumberColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &r
 	throw InternalException("Fetch is not supported for row number columns");
 }
 
-void RowNumberColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                                   row_t row_id, Vector &result, idx_t result_idx) {
+void RowNumberColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
+                                   const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
 	throw InternalException("FetchRow is not supported for row number columns");
 }
 
@@ -114,8 +114,8 @@ void RowNumberColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	throw InternalException("VisitBlockIds not supported for row number");
 }
 
-unique_ptr<ColumnCheckpointState> RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group,
-                                                                             PartialBlockManager &partial_block_manager) {
+unique_ptr<ColumnCheckpointState>
+RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
 	throw InternalException("RowNumberColumnData cannot be checkpointed");
 }
 
