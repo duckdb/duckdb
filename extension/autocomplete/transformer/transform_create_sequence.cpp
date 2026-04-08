@@ -29,10 +29,18 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 			sequence_options.insert(std::move(seq_result));
 		}
 	}
-	bool no_min = sequence_options.find("nominvalue") != sequence_options.end();
-	bool no_max = sequence_options.find("nomaxvalue") != sequence_options.end();
+	bool no_min = false;
+	bool no_max = false;
+	if (sequence_options.find("nominvalue") != sequence_options.end()) {
+		no_min = true;
+		sequence_options.erase("nominvalue");
+	}
 	if (no_min && sequence_options.find("minvalue") != sequence_options.end()) {
 		throw ParserException("Minvalue should be passed at most once");
+	}
+	if (sequence_options.find("nomaxvalue") != sequence_options.end()) {
+		no_max = true;
+		sequence_options.erase("nomaxvalue");
 	}
 	if (no_max && sequence_options.find("maxvalue") != sequence_options.end()) {
 		throw ParserException("Maxvalue should be passed at most once");
