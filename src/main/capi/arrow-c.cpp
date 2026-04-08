@@ -55,8 +55,7 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options,
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
 	auto client_context = arrow_options_wrapper->properties.GetClientContextOrThrow();
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *client_context, dchunk->GetTypes());
+	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(*client_context, dchunk->GetTypes());
 
 	try {
 		ArrowConverter::ToArrowArray(*dchunk, out_arrow_array, arrow_options_wrapper->properties, extension_type_cast);
@@ -266,8 +265,8 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
 	auto client_context = result_data.result->client_properties.GetClientContextOrThrow();
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *client_context, result_data.result->types);
+	auto extension_type_cast =
+	    duckdb::ArrowTypeExtensionData::GetExtensionTypes(*client_context, result_data.result->types);
 
 	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
 	                             result_data.result->client_properties, extension_type_cast);

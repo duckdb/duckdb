@@ -6,8 +6,8 @@
 #include "duckdb/main/database.hpp"
 
 using duckdb::ClientProperties;
-using duckdb::ConnectionException;
 using duckdb::Connection;
+using duckdb::ConnectionException;
 using duckdb::DuckDB;
 
 TEST_CASE("ClientProperties: default-constructed has no context", "[api][client_properties]") {
