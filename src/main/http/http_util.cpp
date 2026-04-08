@@ -134,7 +134,7 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 class HTTPLibClient : public HTTPClient {
 public:
 	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) {
-		base_url = proto_host_port;
+		SetBaseUrl(proto_host_port);
 		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
 		Initialize(http_params);
 	}

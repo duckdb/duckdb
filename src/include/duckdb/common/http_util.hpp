@@ -229,6 +229,14 @@ public:
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 
+	void SetBaseUrl(const string &url) {
+		base_url = url;
+	}
+	const string &GetBaseUrl() const {
+		return base_url;
+	}
+
+private:
 	//! The base URL (scheme + host + port) this client was created for
 	string base_url;
 };
