@@ -32,6 +32,10 @@ inputs:
     description: Path to a newline-delimited list of changed tests to include in smoke tests
     required: false
     default: ""
+  save_cache:
+    description: Whether to save vcpkg binary cache
+    required: true
+    default: "true"
 runs:
   using: composite
   steps:
@@ -42,6 +46,15 @@ runs:
         mkdir -p "${cache_path}"
         echo "VCPKG_DEFAULT_BINARY_CACHE=${cache_path}" >> "$GITHUB_ENV"
         echo "VCPKG_BINARY_SOURCES=clear;files,${cache_path},readwrite" >> "$GITHUB_ENV"
+
+    - name: Restore vcpkg binaries
+      id: vcpkg-binary-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg-cache
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('build/extension_configuration/vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11.5
@@ -67,6 +80,13 @@ runs:
       if: ${{ inputs.run_smoke_tests == 'true' }}
       shell: bash
       run: make smoke SMOKE_UNITTEST=build/release/test/unittest T="--changed-tests=${{ inputs.changed_tests_file }}"
+
+    - name: Save vcpkg binaries
+      if: ${{ inputs.save_cache == 'true' && steps.vcpkg-binary-cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg-cache
+        key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
 
     - name: Prepare release artifact
       shell: bash
