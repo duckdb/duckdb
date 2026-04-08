@@ -48,7 +48,7 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 	if (data.usage_count == 0u) {
 		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = data.last_value.value();
+	result = data.last_value.value_or(data.start_value);
 	return result;
 }
 
