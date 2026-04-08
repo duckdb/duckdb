@@ -37,18 +37,13 @@ namespace duckdb {
 
 enum class VectorConstructorAction { REFERENCE_VECTOR };
 
-Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
-	if (create_data) {
-		Initialize(initialize_to_zero, capacity);
-	}
-}
-
 Vector::Vector(LogicalType type_p, VectorType vector_type, buffer_ptr<VectorBuffer> buffer_p)
     : vector_type(vector_type), type(std::move(type_p)), buffer(std::move(buffer_p)) {
 }
 
-Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(std::move(type_p), true, false, capacity) {
+Vector::Vector(LogicalType type_p, idx_t capacity, VectorDataInitialization initialize)
+    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
+	Initialize(initialize, capacity);
 }
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
@@ -342,14 +337,14 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
+void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
 		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
 		buffer = make_buffer<VectorListBuffer>(capacity, type);
-		if (initialize_to_zero) {
+		if (data_initialize == VectorDataInitialization::ZERO_INITIALIZE) {
 			auto data = buffer->GetData();
 			memset(data, 0, capacity * sizeof(list_entry_t));
 		}
@@ -361,7 +356,7 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 			throw InternalException("Trying to create buffer for zero-length type");
 		}
 		buffer = VectorBuffer::CreateStandardVector(type, capacity);
-		if (initialize_to_zero) {
+		if (data_initialize == VectorDataInitialization::ZERO_INITIALIZE) {
 			auto data = buffer->GetData();
 			memset(data, 0, capacity * type_size);
 		}
