@@ -190,16 +190,16 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 		return true;
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
-		result = StringCast::Operation<bool>(unsafe_yyjson_get_bool(val), vector);
+		result = StringCast::Operation<bool>(unsafe_yyjson_get_bool(val), StringVector::GetStringHeap(vector));
 		return true;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-		result = StringCast::Operation<uint64_t>(unsafe_yyjson_get_uint(val), vector);
+		result = StringCast::Operation<uint64_t>(unsafe_yyjson_get_uint(val), StringVector::GetStringHeap(vector));
 		return true;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-		result = StringCast::Operation<int64_t>(unsafe_yyjson_get_sint(val), vector);
+		result = StringCast::Operation<int64_t>(unsafe_yyjson_get_sint(val), StringVector::GetStringHeap(vector));
 		return true;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-		result = StringCast::Operation<double>(unsafe_yyjson_get_real(val), vector);
+		result = StringCast::Operation<double>(unsafe_yyjson_get_real(val), StringVector::GetStringHeap(vector));
 		return true;
 	default:
 		throw InternalException("Unknown yyjson tag in GetValueString");
@@ -519,8 +519,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 
 	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
 		if (projected_indices.find(child_i) == projected_indices.end()) {
-			child_vs[child_i].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(child_vs[child_i], true);
+			ConstantVector::SetNull(child_vs[child_i]);
 		}
 	}
 

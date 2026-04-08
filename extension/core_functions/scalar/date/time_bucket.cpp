@@ -235,8 +235,7 @@ void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	if (bucket_width_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
@@ -275,8 +274,7 @@ void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	if (bucket_width_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
@@ -319,8 +317,7 @@ void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &r
 	    origin_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg) || ConstantVector::IsNull(origin_arg) ||
 		    !Value::IsFinite(*ConstantVector::GetData<T>(origin_arg))) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);

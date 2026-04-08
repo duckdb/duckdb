@@ -21,6 +21,9 @@ public:
 	~VectorStructBuffer() override;
 
 public:
+	ValidityMask &GetValidityMask() override {
+		return validity;
+	}
 	const vector<Vector> &GetChildren() const {
 		return children;
 	}
@@ -29,6 +32,7 @@ public:
 	}
 
 private:
+	ValidityMask validity;
 	//! child vectors used for nested data
 	vector<Vector> children;
 };

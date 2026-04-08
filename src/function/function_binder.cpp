@@ -6,9 +6,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/cast_rules.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -183,6 +181,11 @@ optional_idx FunctionBinder::BindFunction(const string &name, AggregateFunctionS
 }
 
 optional_idx FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
+                                          const vector<LogicalType> &arguments, ErrorData &error) {
+	return BindFunctionFromArguments(name, functions, arguments, error);
+}
+
+optional_idx FunctionBinder::BindFunction(const string &name, WindowFunctionSet &functions,
                                           const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }

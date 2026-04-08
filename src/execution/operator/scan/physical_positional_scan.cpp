@@ -85,8 +85,7 @@ public:
 				source.Reset();
 				for (idx_t i = 0; i < source.ColumnCount(); ++i) {
 					auto &vec = source.data[i];
-					vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-					ConstantVector::SetNull(vec, true);
+					ConstantVector::SetNull(vec);
 				}
 				exhausted = true;
 			}

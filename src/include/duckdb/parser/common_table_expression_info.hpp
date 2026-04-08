@@ -13,25 +13,32 @@
 
 namespace duckdb {
 
+class QueryNode;
 class SelectStatement;
+class Serializer;
+class Deserializer;
 
 struct CommonTableExpressionInfo {
+	CommonTableExpressionInfo() = default;
 	~CommonTableExpressionInfo();
+
+	//! Used by deserialization: prefers query_node; if null, uses query->node.
+	CommonTableExpressionInfo(unique_ptr<SelectStatement> query, unique_ptr<QueryNode> query_node);
 
 	vector<string> aliases;
 	vector<unique_ptr<ParsedExpression>> key_targets;
 	vector<unique_ptr<ParsedExpression>> payload_aggregates;
 
-	unique_ptr<SelectStatement> query;
+	//! The root QueryNode for this CTE (SELECT, INSERT, UPDATE, or DELETE)
+	unique_ptr<QueryNode> query_node;
 	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 
-public:
+	CTEMaterialize GetMaterializedForSerialization(Serializer &serializer) const;
+	unique_ptr<SelectStatement> GetQueryForSerialization(Serializer &serializer) const;
+
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<CommonTableExpressionInfo> Deserialize(Deserializer &deserializer);
 	unique_ptr<CommonTableExpressionInfo> Copy();
-
-private:
-	CTEMaterialize GetMaterializedForSerialization(Serializer &serializer) const;
 };
 
 } // namespace duckdb

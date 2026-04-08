@@ -208,7 +208,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release.\n"
 	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior.\n"
-	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
+	                   "For more information, see https://duckdb.org/docs/current/sql/functions/lambda.html.";
 
 	BindResult lambda_bind_result;
 	ErrorData error;

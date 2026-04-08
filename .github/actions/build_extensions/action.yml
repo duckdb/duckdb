@@ -110,7 +110,9 @@ runs:
 
     - name: Setup vcpkg
       if: ${{ inputs.vcpkg_build == 1 }}
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -232,14 +234,13 @@ runs:
       run: |
         rm -rf build/extension_tmp
         mv build/release/extension build/extension_tmp
-        python scripts/ci/retry.py -- choco install wget -y --no-progress
         cd  ${{ inputs.build_dir }}
         TEST_RUNNER_DIR=./build/release/test/Release
         if [ ! -f ${TEST_RUNNER_DIR}/unittest.exe ]; then
           echo "Invalid unit tests runner dir: ${TEST_RUNNER_DIR}, check 'inputs.unittest_script' argument"
           exit 1
         fi
-        python scripts/ci/retry.py -- wget -P ${TEST_RUNNER_DIR} https://blobs.duckdb.org/ci/msvcp140.dll
+        python scripts/ci/retry.py -- curl -L --output ${TEST_RUNNER_DIR}/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
         ls ${TEST_RUNNER_DIR}
         # test.list is generated on the previous step
         ${{ inputs.unittest_script }} '-f test.list'

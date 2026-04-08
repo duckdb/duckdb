@@ -1,0 +1,70 @@
+# name: test/sql/binder/qualified_alias_method_call.test
+# description: Test qualified alias (alias.name) with method-style function calls
+# group: [binder]
+
+statement ok
+CREATE TABLE test_alias(a INT, b VARCHAR);
+
+statement ok
+INSERT INTO test_alias VALUES (1, 'hello'), (2, 'world'), (3, 'foo');
+
+# HAVING clause: unqualified alias method call works
+query II
+SELECT a, b || '!' AS greeting FROM test_alias GROUP BY a, b HAVING greeting.lower() != 'foo!' ORDER BY a;
+----
+1	hello!
+2	world!
+
+# HAVING clause: qualified alias method call should also work
+query II
+SELECT a, b || '!' AS greeting FROM test_alias GROUP BY a, b HAVING alias.greeting.lower() != 'foo!' ORDER BY a;
+----
+1	hello!
+2	world!
+
+# WHERE clause: unqualified alias method call works
+query II
+SELECT a, (a*10)::VARCHAR AS big FROM test_alias WHERE big.length() > 1 ORDER BY a;
+----
+1	10
+2	20
+3	30
+
+# WHERE clause: qualified alias method call should also work
+query II
+SELECT a, (a*10)::VARCHAR AS big FROM test_alias WHERE alias.big.length() > 1 ORDER BY a;
+----
+1	10
+2	20
+3	30
+
+# QUALIFY clause: unqualified alias method call works
+query III
+SELECT a, b, row_number() OVER (ORDER BY a)::VARCHAR AS rn FROM test_alias QUALIFY rn.length() > 0 ORDER BY a;
+----
+1	hello	1
+2	world	2
+3	foo	3
+
+# QUALIFY clause: qualified alias method call should also work
+query III
+SELECT a, b, row_number() OVER (ORDER BY a)::VARCHAR AS rn FROM test_alias QUALIFY alias.rn.length() > 0 ORDER BY a;
+----
+1	hello	1
+2	world	2
+3	foo	3
+
+# SELECT clause: qualified alias method call works (uses SelectBinder with correct back())
+query III
+SELECT a, b AS x, alias.x.upper() AS y FROM test_alias ORDER BY a;
+----
+1	hello	HELLO
+2	world	WORLD
+3	foo	FOO
+
+# Verify simple qualified alias comparisons still work in HAVING
+query II
+SELECT a, sum(a) AS total FROM test_alias GROUP BY a HAVING alias.total > 1 ORDER BY a;
+----
+2	2
+3	3

@@ -563,7 +563,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 
 	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
 	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
-	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
+	auto result_data = FlatVector::Writer<VALUE_TYPE>(result, count);
 	auto &validity = FlatVector::Validity(result);
 
 	// According to the arrow spec, the 'run_ends' array is always valid
@@ -681,7 +681,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 		break;
 	case PhysicalType::VARCHAR: {
 		// Share the string heap, we don't need to allocate new strings, we just reference the existing ones
-		result.SetAuxiliary(values.GetAuxiliary());
+		StringVector::AddHeapReference(result, values);
 		FlattenRunEnds<RUN_END_TYPE, string_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	}
@@ -706,7 +706,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
@@ -838,9 +838,6 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		}
 	}
 
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
-	}
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -926,14 +923,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			               fixed_size;
 			auto cdata = ArrowBufferData<char>(array, 1);
 			auto blob_len = fixed_size;
-			auto result = FlatVector::GetData<string_t>(vector);
+			auto result = FlatVector::Writer<string_t>(vector, size);
 			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 				if (FlatVector::IsNull(vector, row_idx)) {
 					offset += blob_len;
 					continue;
 				}
 				auto bptr = cdata + offset;
-				result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+				result[row_idx] = string_t(bptr, blob_len);
 				offset += blob_len;
 			}
 		}
@@ -1253,6 +1250,9 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	default:
 		throw NotImplementedException("Unsupported type for arrow conversion: %s", vector.GetType().ToString());
 	}
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 }
 
 template <class T>
@@ -1392,7 +1392,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
                                                             const ArrowType &arrow_type, int64_t nested_offset,
                                                             const ValidityMask *parent_mask, uint64_t parent_offset) {
 	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	D_ASSERT(arrow_type.HasDictionary());
 	const bool has_nulls = CanContainNull(array, parent_mask);

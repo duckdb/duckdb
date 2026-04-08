@@ -5584,48 +5584,29 @@ VariantValueType EnumUtil::FromString<VariantValueType>(const char *value) {
 	return static_cast<VariantValueType>(StringUtil::StringToEnum(GetVariantValueTypeValues(), 4, "VariantValueType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetVectorAuxiliaryDataTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(VectorAuxiliaryDataType::ARROW_AUXILIARY), "ARROW_AUXILIARY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value) {
-	return StringUtil::EnumToString(GetVectorAuxiliaryDataTypeValues(), 1, "VectorAuxiliaryDataType", static_cast<uint32_t>(value));
-}
-
-template<>
-VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value) {
-	return static_cast<VectorAuxiliaryDataType>(StringUtil::StringToEnum(GetVectorAuxiliaryDataTypeValues(), 1, "VectorAuxiliaryDataType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetVectorBufferTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(VectorBufferType::STANDARD_BUFFER), "STANDARD_BUFFER" },
-		{ static_cast<uint32_t>(VectorBufferType::DICTIONARY_BUFFER), "DICTIONARY_BUFFER" },
-		{ static_cast<uint32_t>(VectorBufferType::VECTOR_CHILD_BUFFER), "VECTOR_CHILD_BUFFER" },
 		{ static_cast<uint32_t>(VectorBufferType::STRING_BUFFER), "STRING_BUFFER" },
-		{ static_cast<uint32_t>(VectorBufferType::FSST_BUFFER), "FSST_BUFFER" },
 		{ static_cast<uint32_t>(VectorBufferType::STRUCT_BUFFER), "STRUCT_BUFFER" },
 		{ static_cast<uint32_t>(VectorBufferType::LIST_BUFFER), "LIST_BUFFER" },
-		{ static_cast<uint32_t>(VectorBufferType::MANAGED_BUFFER), "MANAGED_BUFFER" },
-		{ static_cast<uint32_t>(VectorBufferType::OPAQUE_BUFFER), "OPAQUE_BUFFER" },
 		{ static_cast<uint32_t>(VectorBufferType::ARRAY_BUFFER), "ARRAY_BUFFER" },
-		{ static_cast<uint32_t>(VectorBufferType::SHREDDED_BUFFER), "SHREDDED_BUFFER" }
+		{ static_cast<uint32_t>(VectorBufferType::DICTIONARY_BUFFER), "DICTIONARY_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::FSST_BUFFER), "FSST_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::SHREDDED_BUFFER), "SHREDDED_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::SEQUENCE_BUFFER), "SEQUENCE_BUFFER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value) {
-	return StringUtil::EnumToString(GetVectorBufferTypeValues(), 11, "VectorBufferType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVectorBufferTypeValues(), 9, "VectorBufferType", static_cast<uint32_t>(value));
 }
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value) {
-	return static_cast<VectorBufferType>(StringUtil::StringToEnum(GetVectorBufferTypeValues(), 11, "VectorBufferType", value));
+	return static_cast<VectorBufferType>(StringUtil::StringToEnum(GetVectorBufferTypeValues(), 9, "VectorBufferType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVectorTypeValues() {

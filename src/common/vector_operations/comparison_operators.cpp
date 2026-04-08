@@ -156,8 +156,7 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 
 	if ((left_constant && ConstantVector::IsNull(left)) || (right_constant && ConstantVector::IsNull(right))) {
 		// either left or right is constant NULL: result is constant NULL
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 

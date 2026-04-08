@@ -397,7 +397,7 @@ public:
 	}
 
 public:
-	virtual void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) = 0;
+	virtual void ScanPartial(ValidityMask &result, idx_t result_offset, idx_t to_scan) = 0;
 	virtual void Skip(idx_t count) = 0;
 	virtual void Verify() const = 0;
 
@@ -437,7 +437,7 @@ public:
 	RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count, data_ptr_t data_p);
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override;
+	void ScanPartial(ValidityMask &result, idx_t result_offset, idx_t to_scan) override;
 	void Skip(idx_t to_skip) override;
 	void Verify() const override;
 
@@ -486,9 +486,7 @@ public:
 	}
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
-		auto &result_mask = FlatVector::Validity(result);
-
+	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override {
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
 
@@ -599,7 +597,7 @@ public:
 	BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset);
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override;
+	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override;
 	void Skip(idx_t to_skip) override;
 	void Verify() const override;
 
@@ -617,9 +615,9 @@ public:
 	ContainerMetadata GetContainerMetadata(idx_t container_index);
 	data_ptr_t GetStartOfContainerData(idx_t container_index);
 	ContainerScanState &LoadContainer(idx_t container_index, idx_t internal_offset);
-	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset);
+	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, ValidityMask &result, idx_t offset);
 	idx_t GetContainerIndex(idx_t start_index, idx_t &offset);
-	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count);
+	void ScanPartial(idx_t start_idx, ValidityMask &result, idx_t offset, idx_t count);
 	void Skip(ContainerScanState &scan_state, idx_t skip_count);
 
 public:

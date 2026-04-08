@@ -208,7 +208,7 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 
 	//! Initialize the dictionary
 	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	VariantVectorData variant_data(result);
 	SelectionVector keys_selvec;

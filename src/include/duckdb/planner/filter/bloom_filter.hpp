@@ -12,10 +12,11 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
+struct JoinFilterTableFilterState;
 
 class BloomFilter {
 public:
@@ -65,7 +66,7 @@ public:
 		return filters_null_values;
 	}
 
-	LogicalType GetKeyType() const {
+	const LogicalType &GetKeyType() const {
 		return key_type;
 	}
 
@@ -73,15 +74,13 @@ public:
 
 	// Filters by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count, BFTableFilterState &state) const;
+	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
+	             JoinFilterTableFilterState &state) const;
 	bool FilterValue(const Value &value) const;
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 
 private:
-	static void HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-	                         BFTableFilterState &state);
-
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
