@@ -492,13 +492,14 @@ static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &
 	auto &source_vector = args.data[0];
 	const auto count = args.size();
 
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, count, [&](int32_t input) {
 		if (input < 0) {
 			throw NotImplementedException("Negative values not supported");
 		}
 		string s;
 		s.push_back(static_cast<char>(input));
-		return StringVector::AddString(result, s);
+		return heap.AddString(s);
 	});
 }
 
