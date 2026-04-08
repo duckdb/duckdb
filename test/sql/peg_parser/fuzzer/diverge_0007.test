@@ -12,6 +12,11 @@ EXPLAIN ( entry ) RESET SESSION item
 ----
 Not implemented Error: Unimplemented explain type: entry
 
+statement error
+EXPLAIN ( t , s , t ) LOAD XMLCONCAT
+----
+Not implemented Error: Unimplemented explain type: t
+
 statement ok
 CALL disable_peg_parser();
 
