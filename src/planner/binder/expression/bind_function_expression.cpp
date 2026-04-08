@@ -352,7 +352,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// aggregate function
 		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
-		// aggregate function
+		// window function
 		return BindWindow(function, func->Cast<WindowFunctionCatalogEntry>(), depth);
 	default:
 		throw InvalidInputException("Unsupported catalog type when binding function");
