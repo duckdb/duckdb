@@ -25,15 +25,15 @@ namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 class TProtocol;
-}  // namespace protocol
-}  // namespace thrift
-}  // namespace duckdb_apache
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 namespace duckdb_parquet {
 class ColumnChunk;
 class ColumnMetaData;
 class SchemaElement;
 class Statistics;
-}  // namespace duckdb_parquet
+} // namespace duckdb_parquet
 
 namespace duckdb {
 class Allocator;

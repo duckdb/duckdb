@@ -53,8 +53,8 @@
 namespace duckdb_apache {
 namespace thrift {
 class TBase;
-}  // namespace thrift
-}  // namespace duckdb_apache
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb_parquet {
 class EncryptionAlgorithm;
