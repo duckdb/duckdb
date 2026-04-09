@@ -1,0 +1,43 @@
+# name: test/sql/transactions/test_index_concurrent_drop_table.test
+# description: A reader holding a snapshot must still be able to perform an index scan on a table that another connection has committed a DROP TABLE for.
+# group: [transactions]
+
+load __TEST_DIR__/test_commit_drop_corrupts_concurrent_scan.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t1 VALUES (1), (2)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN
+
+# con2 DROPs t1, and marks blocks as reclaimable, but the index should still be accessible for con1.
+statement ok con2
+DROP TABLE t1
+
+# table scan OK
+query I con1
+SELECT COUNT(*) FROM t1
+----
+2
+
+query II con1
+EXPLAIN ANALYZE SELECT id FROM t1 WHERE id = 1
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I con1
+SELECT id FROM t1 WHERE id = 1
+----
+1
+
+statement ok con1
+COMMIT
