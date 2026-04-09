@@ -26,7 +26,6 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -60,6 +59,10 @@
 #include "thrift/TBase.h"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TTransport.h"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -1176,13 +1179,25 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		}
 		return and_result;
 	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		auto &min_value = pq_col_stats.min_value;
-		auto &max_value = pq_col_stats.max_value;
-		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
+		auto &expr = *expr_filter.expr;
+
+		// Handle comparison expressions (from ConstantFilter conversion)
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto &comp = expr.Cast<BoundComparisonExpression>();
+			if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+				auto &constant = comp.right->Cast<BoundConstantExpression>();
+				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
+					auto &min_value = pq_col_stats.min_value;
+					auto &max_value = pq_col_stats.max_value;
+					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+					                                 comp.type, StringValue::Get(constant.value));
+				}
+			}
+		}
+		return filter.Cast<ExpressionFilter>().CheckStatistics(stats);
 	}
 	default:
 		return filter.CheckStatistics(stats);
