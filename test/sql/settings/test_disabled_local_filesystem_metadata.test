@@ -1,0 +1,22 @@
+# name: test/sql/settings/test_disabled_local_filesystem_secrets.test
+# description: Test that persistent secrets fail when LocalFileSystem is disabled
+# group: [settings]
+
+require skip_reload
+
+statement ok
+SET secret_directory='__TEST_DIR__/disabled_fs_secrets';
+
+statement ok
+SET disabled_filesystems='LocalFileSystem';
+
+# metadata queries that touch the local filesystem should also fail
+statement error
+SELECT * FROM duckdb_secrets();
+----
+File system LocalFileSystem has been disabled by configuration
+
+statement error
+SELECT * FROM duckdb_extensions();
+----
+File system LocalFileSystem has been disabled by configuration
