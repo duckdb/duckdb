@@ -52,6 +52,33 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	}
 }
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                       idx_t count) {
+	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+		return nullptr;
+	}
+	// determine the selection vector to use
+	SelectionVector owned_sel;
+	const SelectionVector *active_sel = &sel;
+	if (!sel.IsSet()) {
+		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
+		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
+	}
+	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
+	auto type_size = GetTypeIdSize(type.InternalType());
+	auto result = make_buffer<StandardVectorBuffer>(flat_count, type_size);
+	// copy data using sel
+	auto dst = result->GetData();
+	for (idx_t i = 0; i < count; i++) {
+		auto src_idx = active_sel->get_index(i);
+		memcpy(dst + i * type_size, data_ptr + src_idx * type_size, type_size);
+	}
+	// copy validity using sel
+	auto &result_validity = result->GetValidityMask();
+	result_validity.CopySel(validity, *active_sel, 0, 0, count);
+	return result;
+}
+
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	VerifyFlatVector(vector);
 	if (vector.GetType().InternalType() == PhysicalType::ARRAY) {

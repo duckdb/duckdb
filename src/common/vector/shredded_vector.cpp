@@ -24,6 +24,23 @@ void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	shredded_data->Verify(sel, count);
 }
 
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                       idx_t count) {
+	Vector *source = shredded_data.get();
+	// if a selection vector is provided, slice the shredded data first
+	unique_ptr<Vector> sliced;
+	if (sel.IsSet()) {
+		sliced = make_uniq<Vector>(*shredded_data, sel, count);
+		source = sliced.get();
+	}
+	// unshred the (optionally sliced) vector
+	Vector unshredded_vector(LogicalType::VARIANT(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+	VariantUtils::UnshredVariantData(*source, unshredded_vector, count);
+	// now flatten the unshredded vector
+	unshredded_vector.Flatten(count);
+	return unshredded_vector.GetBuffer();
+}
+
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
 	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];

@@ -54,6 +54,7 @@ public:
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 public:
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;

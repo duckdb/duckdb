@@ -31,6 +31,7 @@ public:
 		return children;
 	}
 	void SetVectorType(VectorType vector_type) override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 public:
 	idx_t GetAllocationSize() const override;

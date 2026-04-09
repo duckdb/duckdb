@@ -21,6 +21,7 @@ public:
 	Vector &GetChild() {
 		return *shredded_data;
 	}
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 public:
 	idx_t GetAllocationSize() const override;

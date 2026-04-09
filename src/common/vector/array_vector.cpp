@@ -1,5 +1,7 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -58,6 +60,50 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	}
 	child->Verify(child_sel, count * array_size);
 	// FIXME: verify validity, arrays have the same validity rules as children
+}
+
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+		// already flat - recursively flatten the child vector
+		child->Flatten(GetChildSize());
+		return nullptr;
+	}
+	// ensure the child is flat before we access it
+	child->Flatten(GetChildSize());
+
+	// determine the selection vector to use
+	SelectionVector owned_sel;
+	const SelectionVector *active_sel = &sel;
+	if (!sel.IsSet()) {
+		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
+		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
+	}
+	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
+	auto result = make_buffer<VectorArrayBuffer>(type, flat_count);
+	auto &new_child = result->GetChild();
+
+	// copy validity using zero selection vector
+	auto &result_validity = result->GetValidityMask();
+	result_validity.CopySel(validity, *active_sel, 0, 0, count);
+
+	// unpack the child vector by broadcasting array elements
+	SelectionVector child_sel(count * array_size);
+	for (idx_t array_idx = 0; array_idx < count; array_idx++) {
+		auto src_array_idx = active_sel->get_index(array_idx);
+		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+			auto position = array_idx * array_size + elem_idx;
+			auto src_position = src_array_idx * array_size + elem_idx;
+			// broadcast the validity
+			if (FlatVector::IsNull(*child, src_position)) {
+				FlatVector::SetNull(new_child, position, true);
+			}
+			child_sel.set_index(position, src_position);
+		}
+	}
+
+	// copy over the data to the new buffer
+	VectorOperations::Copy(*child, new_child, child_sel, count * array_size, 0, 0);
+	return result;
 }
 
 template <class T>

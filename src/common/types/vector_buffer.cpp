@@ -67,6 +67,10 @@ void VectorBuffer::SetVectorType(VectorType vector_type) {
 	throw InternalException("VectorBuffer does not support SetVectorType");
 }
 
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	throw InternalException("Unimplemented type for flatten");
+}
+
 PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {
 }
 

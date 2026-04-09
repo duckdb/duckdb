@@ -140,6 +140,37 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	child->Verify(child_sel, child_count);
 }
 
+buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+		// already flat - recursively flatten the child vector
+		child->Flatten(size);
+		return nullptr;
+	}
+	// determine the selection vector to use
+	SelectionVector owned_sel;
+	const SelectionVector *active_sel = &sel;
+	if (!sel.IsSet()) {
+		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
+		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
+	}
+	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
+	auto result = make_buffer<VectorListBuffer>(flat_count, type);
+	// copy list_entry_t using sel
+	auto src = reinterpret_cast<list_entry_t *>(data_ptr);
+	auto dst = reinterpret_cast<list_entry_t *>(result->GetData());
+	for (idx_t i = 0; i < count; i++) {
+		auto src_idx = active_sel->get_index(i);
+		dst[i] = src[src_idx];
+	}
+	// copy validity using sel
+	auto &result_validity = result->GetValidityMask();
+	result_validity.CopySel(validity, *active_sel, 0, 0, count);
+	// reference the child vector and copy the list size
+	result->GetChild().Reference(*child);
+	result->SetSize(size);
+	return result;
+}
+
 template <class T>
 T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
