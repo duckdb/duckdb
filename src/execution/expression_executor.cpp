@@ -174,7 +174,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			return;
 		}
 
-		Vector intermediate(LogicalType::VARIANT(), true, false, count);
+		Vector intermediate(LogicalType::VARIANT(), count);
 
 		//! First cast to VARIANT
 		if (HasContext()) {
@@ -185,7 +185,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		intermediate.Verify(count);
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
-		Vector result(vector.GetType(), true, false, count);
+		Vector result(vector.GetType(), count);
 		//! Then cast back into the original type
 		if (HasContext()) {
 			VectorOperations::Cast(GetContext(), intermediate, result, count, true);

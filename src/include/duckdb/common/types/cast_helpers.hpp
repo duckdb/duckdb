@@ -162,9 +162,9 @@ struct DecimalToString {
 	}
 
 	template <class SIGNED>
-	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
+	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, StringHeap &heap) {
 		int len = DecimalLength<SIGNED>(value, width, scale);
-		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(len));
+		string_t result = heap.EmptyString(NumericCast<size_t>(len));
 		FormatDecimal<SIGNED>(value, width, scale, result.GetDataWriteable(), UnsafeNumericCast<idx_t>(len));
 		result.Finalize();
 		return result;
@@ -175,7 +175,7 @@ template <>
 int DecimalToString::DecimalLength(hugeint_t value, uint8_t width, uint8_t scale);
 
 template <>
-string_t DecimalToString::Format(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector);
+string_t DecimalToString::Format(hugeint_t value, uint8_t width, uint8_t scale, StringHeap &heap);
 
 template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, idx_t len);
