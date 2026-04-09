@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -65,6 +66,13 @@ BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
 StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::SQLNULL) {
 		return StatisticsType::BASE_STATS;
+	}
+	// Extension types can override the statistics type
+	if (type.HasExtensionInfo()) {
+		auto &ext_info = *type.GetExtensionInfo();
+		if (ext_info.stats_type != ExtensionTypeInfo::STATS_TYPE_DEFAULT) {
+			return static_cast<StatisticsType>(ext_info.stats_type);
+		}
 	}
 	if (type.id() == LogicalTypeId::GEOMETRY) {
 		return StatisticsType::GEOMETRY_STATS;

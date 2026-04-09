@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -178,6 +179,17 @@ child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 }
 
 void GeometryStats::Update(BaseStatistics &stats, const string_t &value) {
+	// Check if the column's extension type provides a custom update function.
+	// This allows extension types (e.g., compact geometry encodings) to produce
+	// correct geometry statistics from their own binary format.
+	auto &type = stats.GetType();
+	if (type.HasExtensionInfo()) {
+		auto ext_info = type.GetExtensionInfo();
+		if (ext_info && ext_info->stats_update) {
+			ext_info->stats_update(stats, value);
+			return;
+		}
+	}
 	auto &data = GetDataUnsafe(stats);
 	data.Update(value);
 }
