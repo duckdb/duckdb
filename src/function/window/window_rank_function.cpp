@@ -159,7 +159,7 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
                                           idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);
@@ -230,7 +230,7 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	auto &order_mask = gpeer.order_mask;
 	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 
 	//	Reset to "previous" row
 	//	Resetting is slow because we have to rescan the mask.
@@ -333,7 +333,7 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
                                                  idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetData<double>(result);
+	auto rdata = FlatVector::GetDataMutable<double>(result);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);
@@ -416,7 +416,7 @@ void WindowCumeDistExecutor::EvaluateInternal(ExecutionContext &context, DataChu
                                               idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetData<double>(result);
+	auto rdata = FlatVector::GetDataMutable<double>(result);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);

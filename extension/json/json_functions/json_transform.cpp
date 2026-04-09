@@ -208,7 +208,7 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 
 template <class T>
 static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t count, JSONTransformOptions &options) {
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	auto &validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -230,7 +230,7 @@ static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 template <class T>
 static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t count, uint8_t width, uint8_t scale,
                              JSONTransformOptions &options) {
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	auto &validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -254,7 +254,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 	if (count > STANDARD_VECTOR_SIZE) {
 		string_vector.Initialize(false, count);
 	}
-	auto data = FlatVector::GetData<string_t>(string_vector);
+	auto data = FlatVector::GetDataMutable<string_t>(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
 	validity.SetAllValid(count);
 
@@ -306,7 +306,7 @@ static bool TransformStringWithFormat(Vector &string_vector, const StrpTimeForma
 	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &source_validity = FlatVector::Validity(string_vector);
 
-	auto target_vals = FlatVector::GetData<T>(result);
+	auto target_vals = FlatVector::GetDataMutable<T>(result);
 	auto &target_validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -353,7 +353,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 }
 
 static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
-	auto data = FlatVector::GetData<string_t>(result);
+	auto data = FlatVector::GetDataMutable<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
@@ -534,7 +534,7 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 	bool success = true;
 
 	// Initialize list vector
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -711,7 +711,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
 
 	auto keys = JSONCommon::AllocateArray<yyjson_val *>(alc, list_size);
@@ -772,7 +772,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 }
 
 static bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
-	auto data = FlatVector::GetData<string_t>(result);
+	auto data = FlatVector::GetDataMutable<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];

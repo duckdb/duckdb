@@ -214,7 +214,7 @@ private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
@@ -255,7 +255,7 @@ private:
 	void PlainSelectTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
 		auto &result_mask = FlatVector::Validity(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {

@@ -191,7 +191,7 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);
 	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+	auto keys_entry_data = FlatVector::GetDataMutable<string_t>(keys_entry);
 
 	bool already_sorted = true;
 

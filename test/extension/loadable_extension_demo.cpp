@@ -673,7 +673,7 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto out = FlatVector::GetData<bool>(result);
+	auto out = FlatVector::GetDataMutable<bool>(result);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);

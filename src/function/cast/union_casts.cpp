@@ -279,7 +279,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 			if (entry.IsValid()) {
 				// map the tag
 				auto target_tag = cast_data.tag_map[entry.value];
-				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
+				FlatVector::GetDataMutable<union_tag_t>(result_tag_vector)[row_idx] =
 				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
 				// Issue: The members of the result is not always flatvectors

@@ -330,8 +330,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	default:
 		if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
 			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
-										"applicable to window and aggregate functions.",
-										function.function_name, CatalogTypeToString(func->type));
+			                            "applicable to window and aggregate functions.",
+			                            function.function_name, CatalogTypeToString(func->type));
 		}
 		break;
 	}
@@ -352,7 +352,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// aggregate function
 		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
-		// aggregate function
+		// window function
 		return BindWindow(function, func->Cast<WindowFunctionCatalogEntry>(), depth);
 	default:
 		throw InvalidInputException("Unsupported catalog type when binding function");
@@ -564,8 +564,7 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
-BindResult ExpressionBinder::BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function,
-                                           idx_t depth) {
+BindResult ExpressionBinder::BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedWindowMessage());
 }
 

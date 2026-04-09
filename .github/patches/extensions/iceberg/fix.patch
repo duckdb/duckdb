@@ -1,9 +1,3 @@
-commit d1416293580a95b6027defb682f1b29265f8d954
-Author: dentiny <dentinyhao@gmail.com>
-Date:   Wed Mar 25 11:56:19 2026 +0000
-
-    Sync DuckDB core
-
 diff --git a/src/deletes/deletion_vector.cpp b/src/deletes/deletion_vector.cpp
 index 4248c353..d3e19c4f 100644
 --- a/src/deletes/deletion_vector.cpp
@@ -54,8 +48,21 @@ index 4248c353..d3e19c4f 100644
  }
  
  idx_t IcebergDeletionVector::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
+diff --git a/src/deletes/positional_delete.cpp b/src/deletes/positional_delete.cpp
+index 089c8c80..14d6d7f9 100644
+--- a/src/deletes/positional_delete.cpp
++++ b/src/deletes/positional_delete.cpp
+@@ -35,7 +35,7 @@ void IcebergMultiFileList::ScanPositionalDeleteFile(const IcebergManifestEntry &
+ 	if (count == 0) {
+ 		return;
+ 	}
+-	reference<string_t> current_file_path = names[0];
++	reference<const string_t> current_file_path = names[0];
+ 	auto initial_key = current_file_path.get().GetString();
+ 	auto deletes = TryGetOrCreate(positional_delete_data, entry, initial_key);
+ 
 diff --git a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
-index 52f39468..4912c730 100644
+index 52f39468..e56f558b 100644
 --- a/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 +++ b/src/iceberg_functions/iceberg_avro_multi_file_reader.cpp
 @@ -1,3 +1,5 @@
@@ -64,7 +71,18 @@ index 52f39468..4912c730 100644
  #include "iceberg_avro_multi_file_reader.hpp"
  #include "iceberg_avro_multi_file_list.hpp"
  #include "duckdb/common/exception.hpp"
-@@ -474,10 +476,10 @@ void IcebergAvroMultiFileReader::FinalizeChunk(ClientContext &context, const Mul
+@@ -445,8 +447,8 @@ void IcebergAvroMultiFileReader::FinalizeChunk(ClientContext &context, const Mul
+ 	auto &sequence_number_column = output_chunk.data[2];
+ 	sequence_number_column.Flatten(count);
+ 	auto &sequence_number_validity = FlatVector::Validity(sequence_number_column);
+-	auto sequence_number_data = FlatVector::GetData<int64_t>(sequence_number_column);
+-	auto status_column_data = FlatVector::GetData<int32_t>(status_column);
++	auto sequence_number_data = FlatVector::GetDataMutable<int64_t>(sequence_number_column);
++	auto status_column_data = FlatVector::GetDataMutable<int32_t>(status_column);
+ 	for (idx_t i = 0; i < count; i++) {
+ 		if (sequence_number_validity.RowIsValid(i)) {
+ 			//! Sequence number is explicitly set
+@@ -474,15 +476,15 @@ void IcebergAvroMultiFileReader::FinalizeChunk(ClientContext &context, const Mul
  	auto &data_file_column = output_chunk.data[4];
  	auto &data_struct_children = StructVector::GetEntries(data_file_column);
  
@@ -77,6 +95,57 @@ index 52f39468..4912c730 100644
  	record_count_column.Flatten(count);
  
  	auto &first_row_id_validity = FlatVector::Validity(first_row_id_column);
+-	auto first_row_id_data = FlatVector::GetData<int64_t>(first_row_id_column);
+-	auto record_count_data = FlatVector::GetData<int64_t>(record_count_column);
++	auto first_row_id_data = FlatVector::GetDataMutable<int64_t>(first_row_id_column);
++	auto record_count_data = FlatVector::GetDataMutable<int64_t>(record_count_column);
+ 	for (idx_t i = 0; i < count; i++) {
+ 		if (first_row_id_validity.RowIsValid(i)) {
+ 			//! First row id is explicitly set
+diff --git a/src/iceberg_functions/iceberg_column_stats.cpp b/src/iceberg_functions/iceberg_column_stats.cpp
+index 859c13ba..52af5ed1 100644
+--- a/src/iceberg_functions/iceberg_column_stats.cpp
++++ b/src/iceberg_functions/iceberg_column_stats.cpp
+@@ -152,7 +152,7 @@ static unique_ptr<FunctionData> IcebergColumnStatsBind(ClientContext &context, T
+ }
+ 
+ static void AddString(Vector &vec, idx_t index, string_t &&str) {
+-	FlatVector::GetData<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
++	FlatVector::GetDataMutable<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
+ }
+ 
+ static void IcebergColumnStatsFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+diff --git a/src/iceberg_functions/iceberg_metadata.cpp b/src/iceberg_functions/iceberg_metadata.cpp
+index 45130ea6..cf5f19cd 100644
+--- a/src/iceberg_functions/iceberg_metadata.cpp
++++ b/src/iceberg_functions/iceberg_metadata.cpp
+@@ -121,7 +121,7 @@ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, Tabl
+ }
+ 
+ static void AddString(Vector &vec, idx_t index, string_t &&str) {
+-	FlatVector::GetData<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
++	FlatVector::GetDataMutable<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
+ }
+ 
+ static void IcebergMetaDataFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+@@ -150,7 +150,7 @@ static void IcebergMetaDataFunction(ClientContext &context, TableFunctionInput &
+ 			//! manifest_path
+ 			AddString(output.data[0], out, string_t(manifest.manifest_path));
+ 			//! manifest_sequence_number
+-			FlatVector::GetData<int64_t>(output.data[1])[out] = manifest.sequence_number;
++			FlatVector::GetDataMutable<int64_t>(output.data[1])[out] = manifest.sequence_number;
+ 			//! manifest_content
+ 			AddString(output.data[2], out, string_t(IcebergManifestFile::ContentTypeToString(manifest.content)));
+ 
+@@ -163,7 +163,7 @@ static void IcebergMetaDataFunction(ClientContext &context, TableFunctionInput &
+ 			//! file_format
+ 			AddString(output.data[6], out, string_t(data_file.file_format));
+ 			//! record_count
+-			FlatVector::GetData<int64_t>(output.data[7])[out] = data_file.record_count;
++			FlatVector::GetDataMutable<int64_t>(output.data[7])[out] = data_file.record_count;
+ 			out++;
+ 		}
+ 		global_state.current_manifest_entry_idx = 0;
 diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
 index e0b57e41..de141b97 100644
 --- a/src/iceberg_functions/iceberg_multi_file_list.cpp
@@ -258,6 +327,97 @@ index cda34b67..6693bcab 100644
  		}
  	}
  
+diff --git a/src/iceberg_functions/iceberg_partition_stats.cpp b/src/iceberg_functions/iceberg_partition_stats.cpp
+index 28d45144..701eedcc 100644
+--- a/src/iceberg_functions/iceberg_partition_stats.cpp
++++ b/src/iceberg_functions/iceberg_partition_stats.cpp
+@@ -153,7 +153,7 @@ static unique_ptr<FunctionData> IcebergPartitionStatsBind(ClientContext &context
+ }
+ 
+ static void AddString(Vector &vec, idx_t index, string_t &&str) {
+-	FlatVector::GetData<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
++	FlatVector::GetDataMutable<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
+ }
+ 
+ static void IcebergPartitionStatsFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+@@ -198,11 +198,11 @@ static void IcebergPartitionStatsFunction(ClientContext &context, TableFunctionI
+ 			//! manifest_path
+ 			AddString(output.data[col++], out, string_t(manifest.manifest_path));
+ 			//! added_snapshot_id
+-			FlatVector::GetData<int64_t>(output.data[col++])[out] = manifest.added_snapshot_id;
++			FlatVector::GetDataMutable<int64_t>(output.data[col++])[out] = manifest.added_snapshot_id;
+ 			//! partition_spec_id
+-			FlatVector::GetData<int32_t>(output.data[col++])[out] = manifest.partition_spec_id;
++			FlatVector::GetDataMutable<int32_t>(output.data[col++])[out] = manifest.partition_spec_id;
+ 			//! partition_field_id
+-			FlatVector::GetData<uint64_t>(output.data[col++])[out] = field.partition_field_id;
++			FlatVector::GetDataMutable<uint64_t>(output.data[col++])[out] = field.partition_field_id;
+ 			//! partition_field_name
+ 			AddString(output.data[col++], out, string_t(field.name));
+ 			//! partition_source_columns
+@@ -221,9 +221,9 @@ static void IcebergPartitionStatsFunction(ClientContext &context, TableFunctionI
+ 			AddString(output.data[col++], out, string_t(stats.upper_bound.ToString()));
+ 
+ 			//! contains_null
+-			FlatVector::GetData<bool>(output.data[col++])[out] = field_summary.contains_null;
++			FlatVector::GetDataMutable<bool>(output.data[col++])[out] = field_summary.contains_null;
+ 			//! contains_nan
+-			FlatVector::GetData<bool>(output.data[col++])[out] = field_summary.contains_nan;
++			FlatVector::GetDataMutable<bool>(output.data[col++])[out] = field_summary.contains_nan;
+ 
+ 			out++;
+ 		}
+diff --git a/src/iceberg_functions/iceberg_snapshots.cpp b/src/iceberg_functions/iceberg_snapshots.cpp
+index eb5cad0f..2cdffef1 100644
+--- a/src/iceberg_functions/iceberg_snapshots.cpp
++++ b/src/iceberg_functions/iceberg_snapshots.cpp
+@@ -89,11 +89,11 @@ static void IcebergSnapshotsFunction(ClientContext &context, TableFunctionInput
+ 		}
+ 
+ 		auto &snapshot = it->second;
+-		FlatVector::GetData<uint64_t>(output.data[0])[i] = snapshot.sequence_number;
+-		FlatVector::GetData<uint64_t>(output.data[1])[i] = snapshot.snapshot_id;
+-		FlatVector::GetData<timestamp_t>(output.data[2])[i] = snapshot.timestamp_ms;
++		FlatVector::GetDataMutable<uint64_t>(output.data[0])[i] = snapshot.sequence_number;
++		FlatVector::GetDataMutable<uint64_t>(output.data[1])[i] = snapshot.snapshot_id;
++		FlatVector::GetDataMutable<timestamp_t>(output.data[2])[i] = snapshot.timestamp_ms;
+ 		string_t manifest_string_t = StringVector::AddString(output.data[3], string_t(snapshot.manifest_list));
+-		FlatVector::GetData<string_t>(output.data[3])[i] = manifest_string_t;
++		FlatVector::GetDataMutable<string_t>(output.data[3])[i] = manifest_string_t;
+ 		i++;
+ 	}
+ 	output.SetCardinality(i);
+diff --git a/src/iceberg_functions/iceberg_table_properties_functions.cpp b/src/iceberg_functions/iceberg_table_properties_functions.cpp
+index cc523d6c..0161f7fa 100644
+--- a/src/iceberg_functions/iceberg_table_properties_functions.cpp
++++ b/src/iceberg_functions/iceberg_table_properties_functions.cpp
+@@ -142,7 +142,7 @@ static unique_ptr<FunctionData> GetIcebergTablePropertiesBind(ClientContext &con
+ }
+ 
+ static void AddString(Vector &vec, idx_t index, string_t &&str) {
+-	FlatVector::GetData<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
++	FlatVector::GetDataMutable<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
+ }
+ 
+ static void SetIcebergTablePropertiesFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+@@ -173,7 +173,7 @@ static void SetIcebergTablePropertiesFunction(ClientContext &context, TableFunct
+ 	transaction_data->TableSetProperties(bind_data.properties);
+ 	global_state.properties_set = true;
+ 	// set success output, failure happens during transaction commit.
+-	FlatVector::GetData<int64_t>(output.data[0])[0] = bind_data.properties.size();
++	FlatVector::GetDataMutable<int64_t>(output.data[0])[0] = bind_data.properties.size();
+ 	output.SetCardinality(1);
+ }
+ 
+@@ -205,7 +205,7 @@ static void RemoveIcebergTablePropertiesFunction(ClientContext &context, TableFu
+ 	transaction_data->TableRemoveProperties(bind_data.remove_properties);
+ 	global_state.properties_removed = true;
+ 	// set success output, failure happens during transaction commit.
+-	FlatVector::GetData<int64_t>(output.data[0])[0] = bind_data.properties.size();
++	FlatVector::GetDataMutable<int64_t>(output.data[0])[0] = bind_data.properties.size();
+ 	output.SetCardinality(1);
+ }
+ 
 diff --git a/src/iceberg_manifest.cpp b/src/iceberg_manifest.cpp
 index 194dce6d..ad793d8f 100644
 --- a/src/iceberg_manifest.cpp
@@ -349,7 +509,7 @@ index b4bb905b..335f7c6b 100644
  	mutable mutex entry_lock;
  	mutable vector<IcebergManifestEntry> manifest_entries;
 diff --git a/src/manifest_list_reader.cpp b/src/manifest_list_reader.cpp
-index fb237399..b756ac18 100644
+index fb237399..53e9743d 100644
 --- a/src/manifest_list_reader.cpp
 +++ b/src/manifest_list_reader.cpp
 @@ -1,3 +1,6 @@
@@ -374,8 +534,23 @@ index fb237399..b756ac18 100644
  
  	optional_ptr<Vector> first_row_id;
  	if (iceberg_version >= 3) {
+@@ -75,10 +78,10 @@ idx_t ManifestListReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergMan
+ 	auto manifest_path_data = FlatVector::GetData<string_t>(manifest_path);
+ 	auto manifest_length_data = FlatVector::GetData<int64_t>(manifest_length);
+ 	auto partition_spec_id_data = FlatVector::GetData<int32_t>(partition_spec_id);
+-	int32_t *content_data = nullptr;
+-	int64_t *sequence_number_data = nullptr;
+-	int64_t *min_sequence_number_data = nullptr;
+-	int64_t *first_row_id_data = nullptr;
++	const int32_t *content_data = nullptr;
++	const int64_t *sequence_number_data = nullptr;
++	const int64_t *min_sequence_number_data = nullptr;
++	const int64_t *first_row_id_data = nullptr;
+ 	if (iceberg_version >= 2) {
+ 		content_data = FlatVector::GetData<int32_t>(*content);
+ 		sequence_number_data = FlatVector::GetData<int64_t>(*sequence_number);
 diff --git a/src/manifest_reader.cpp b/src/manifest_reader.cpp
-index 020f0050..a85207dd 100644
+index 020f0050..b14000ca 100644
 --- a/src/manifest_reader.cpp
 +++ b/src/manifest_reader.cpp
 @@ -1,3 +1,6 @@
@@ -462,6 +637,17 @@ index 020f0050..a85207dd 100644
  	}
  
  	auto status_data = FlatVector::GetData<int32_t>(status);
+@@ -175,8 +178,8 @@ idx_t ManifestReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergManifes
+ 	auto &sort_order_id_validity = FlatVector::Validity(sort_order_id);
+ 	auto sort_order_id_data = FlatVector::GetData<int32_t>(sort_order_id);
+ 
+-	int32_t *content_data = nullptr;
+-	int64_t *first_row_id_data = nullptr;
++	const int32_t *content_data = nullptr;
++	const int64_t *first_row_id_data = nullptr;
+ 	optional_ptr<ValidityMask> first_row_id_validity;
+ 	if (iceberg_version >= 2) {
+ 		content_data = FlatVector::GetData<int32_t>(*content);
 @@ -197,7 +200,7 @@ idx_t ManifestReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergManifes
  		D_ASSERT(partition_children.size() == scan_info.partition_field_id_to_type.size());
  		idx_t child_index = 0;
@@ -513,6 +699,19 @@ index 88f05f25..235e8809 100644
  
  using namespace duckdb_yyjson;
  namespace duckdb {
+diff --git a/src/storage/iceberg_delete.cpp b/src/storage/iceberg_delete.cpp
+index 338f6ec3..e2f31f7c 100644
+--- a/src/storage/iceberg_delete.cpp
++++ b/src/storage/iceberg_delete.cpp
+@@ -187,7 +187,7 @@ void IcebergDelete::WritePositionalDeleteFile(ClientContext &context, IcebergDel
+ 	write_chunk.data[0].Reference(filename_val);
+ 
+ 	idx_t row_count = 0;
+-	auto row_data = FlatVector::GetData<int64_t>(write_chunk.data[1]);
++	auto row_data = FlatVector::GetDataMutable<int64_t>(write_chunk.data[1]);
+ 	for (auto &row_idx : sorted_deletes) {
+ 		row_data[row_count++] = NumericCast<int64_t>(row_idx);
+ 		if (row_count >= STANDARD_VECTOR_SIZE) {
 diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
 index 5fc79bbf..469de632 100644
 --- a/src/storage/iceberg_insert.cpp

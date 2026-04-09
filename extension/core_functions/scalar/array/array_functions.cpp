@@ -103,7 +103,7 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
-	auto res_data = FlatVector::GetData<TYPE>(res_child);
+	auto res_data = FlatVector::GetDataMutable<TYPE>(res_child);
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto lhs_idx = lhs_format.sel->get_index(i);
@@ -164,7 +164,7 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
-	auto res_data = FlatVector::GetData<TYPE>(result);
+	auto res_data = FlatVector::GetDataMutable<TYPE>(result);
 
 	const auto array_size = ArrayType::GetSize(args.data[0].GetType());
 	D_ASSERT(array_size == ArrayType::GetSize(args.data[1].GetType()));

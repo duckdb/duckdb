@@ -33,7 +33,6 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
-#include <cstring> // strlen() on Solaris
 namespace duckdb {
 
 enum class VectorConstructorAction { REFERENCE_VECTOR };
@@ -255,19 +254,17 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		// dictionary on a constant is just a constant
 		return;
 	}
+	auto internal_type = GetType().InternalType();
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		if (internal_type == PhysicalType::STRUCT) {
+			throw InternalException("Struct vectors cannot be dictionary vectors");
+		}
 		// already a dictionary, slice the current dictionary
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
 		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto sliced_dictionary = old_dict.GetSelVector().Slice(sel, count);
 		auto entry = old_dict.GetEntryPtr();
-		if (GetType().InternalType() == PhysicalType::STRUCT) {
-			auto &child_vector = entry->data;
-			auto sliced_buffer = make_buffer<VectorStructBuffer>(child_vector, sel, count);
-			Vector new_child(GetType(), VectorType::FLAT_VECTOR, std::move(sliced_buffer));
-			entry = make_shared_ptr<DictionaryEntry>(std::move(new_child));
-		}
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
 		if (dictionary_size.IsValid()) {
 			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
@@ -281,13 +278,14 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		Flatten(sel, count);
 		return;
 	}
-
-	Vector child_vector(Vector::Ref(*this));
-	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		child_vector.buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
-		child_vector.buffer->GetValidityMask() = buffer->GetValidityMask();
+		// structs should not be sliced themselves - only their children are sliced
+		buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
+		return;
 	}
+
+	// move this vector as a child vector in the dictionary
+	Vector child_vector(Vector::Ref(*this));
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
 	vector_type = VectorType::DICTIONARY_VECTOR;
@@ -306,15 +304,16 @@ void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVect
 }
 
 void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel) {
-	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		throw InternalException("Struct vectors cannot be dictionaries");
+	}
 	D_ASSERT(type == reusable_dict->data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
-
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && GetType().InternalType() != PhysicalType::STRUCT) {
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary vector: need to merge dictionaries
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
@@ -509,50 +508,51 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	switch (physical_type) {
 	case PhysicalType::BOOL:
-		FlatVector::GetData<bool>(*this)[index] = val.GetValueUnsafe<bool>();
+		FlatVector::GetDataMutable<bool>(*this)[index] = val.GetValueUnsafe<bool>();
 		break;
 	case PhysicalType::INT8:
-		FlatVector::GetData<int8_t>(*this)[index] = val.GetValueUnsafe<int8_t>();
+		FlatVector::GetDataMutable<int8_t>(*this)[index] = val.GetValueUnsafe<int8_t>();
 		break;
 	case PhysicalType::INT16:
-		FlatVector::GetData<int16_t>(*this)[index] = val.GetValueUnsafe<int16_t>();
+		FlatVector::GetDataMutable<int16_t>(*this)[index] = val.GetValueUnsafe<int16_t>();
 		break;
 	case PhysicalType::INT32:
-		FlatVector::GetData<int32_t>(*this)[index] = val.GetValueUnsafe<int32_t>();
+		FlatVector::GetDataMutable<int32_t>(*this)[index] = val.GetValueUnsafe<int32_t>();
 		break;
 	case PhysicalType::INT64:
-		FlatVector::GetData<int64_t>(*this)[index] = val.GetValueUnsafe<int64_t>();
+		FlatVector::GetDataMutable<int64_t>(*this)[index] = val.GetValueUnsafe<int64_t>();
 		break;
 	case PhysicalType::INT128:
-		FlatVector::GetData<hugeint_t>(*this)[index] = val.GetValueUnsafe<hugeint_t>();
+		FlatVector::GetDataMutable<hugeint_t>(*this)[index] = val.GetValueUnsafe<hugeint_t>();
 		break;
 	case PhysicalType::UINT8:
-		FlatVector::GetData<uint8_t>(*this)[index] = val.GetValueUnsafe<uint8_t>();
+		FlatVector::GetDataMutable<uint8_t>(*this)[index] = val.GetValueUnsafe<uint8_t>();
 		break;
 	case PhysicalType::UINT16:
-		FlatVector::GetData<uint16_t>(*this)[index] = val.GetValueUnsafe<uint16_t>();
+		FlatVector::GetDataMutable<uint16_t>(*this)[index] = val.GetValueUnsafe<uint16_t>();
 		break;
 	case PhysicalType::UINT32:
-		FlatVector::GetData<uint32_t>(*this)[index] = val.GetValueUnsafe<uint32_t>();
+		FlatVector::GetDataMutable<uint32_t>(*this)[index] = val.GetValueUnsafe<uint32_t>();
 		break;
 	case PhysicalType::UINT64:
-		FlatVector::GetData<uint64_t>(*this)[index] = val.GetValueUnsafe<uint64_t>();
+		FlatVector::GetDataMutable<uint64_t>(*this)[index] = val.GetValueUnsafe<uint64_t>();
 		break;
 	case PhysicalType::UINT128:
-		FlatVector::GetData<uhugeint_t>(*this)[index] = val.GetValueUnsafe<uhugeint_t>();
+		FlatVector::GetDataMutable<uhugeint_t>(*this)[index] = val.GetValueUnsafe<uhugeint_t>();
 		break;
 	case PhysicalType::FLOAT:
-		FlatVector::GetData<float>(*this)[index] = val.GetValueUnsafe<float>();
+		FlatVector::GetDataMutable<float>(*this)[index] = val.GetValueUnsafe<float>();
 		break;
 	case PhysicalType::DOUBLE:
-		FlatVector::GetData<double>(*this)[index] = val.GetValueUnsafe<double>();
+		FlatVector::GetDataMutable<double>(*this)[index] = val.GetValueUnsafe<double>();
 		break;
 	case PhysicalType::INTERVAL:
-		FlatVector::GetData<interval_t>(*this)[index] = val.GetValueUnsafe<interval_t>();
+		FlatVector::GetDataMutable<interval_t>(*this)[index] = val.GetValueUnsafe<interval_t>();
 		break;
 	case PhysicalType::VARCHAR: {
 		if (!val.IsNull()) {
-			FlatVector::GetData<string_t>(*this)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
+			FlatVector::GetDataMutable<string_t>(*this)[index] =
+			    StringVector::AddStringOrBlob(*this, StringValue::Get(val));
 		}
 		break;
 	}
@@ -579,7 +579,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::LIST: {
 		auto offset = ListVector::GetListSize(*this);
 		if (val.IsNull()) {
-			auto &entry = FlatVector::GetData<list_entry_t>(*this)[index];
+			auto &entry = FlatVector::GetDataMutable<list_entry_t>(*this)[index];
 			ListVector::PushBack(*this, Value());
 			entry.length = 1;
 			entry.offset = offset;
@@ -591,7 +591,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 				}
 			}
 			//! now set the pointer
-			auto &entry = FlatVector::GetData<list_entry_t>(*this)[index];
+			auto &entry = FlatVector::GetDataMutable<list_entry_t>(*this)[index];
 			entry.length = val_children.size();
 			entry.offset = offset;
 		}
@@ -1520,7 +1520,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
-		auto blobs = FlatVector::GetData<string_t>(*this);
+		auto blobs = FlatVector::GetDataMutable<string_t>(*this);
 
 		if (geometry_format == GeometryStorageType::WKB) {
 			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
@@ -1544,7 +1544,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
-			auto strings = FlatVector::GetData<string_t>(*this);
+			auto strings = FlatVector::GetDataMutable<string_t>(*this);
 			auto byte_data_length =
 			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(107, "byte_data_length", optional_idx());
 			if (byte_data_length.IsValid()) { // new serialization
@@ -1591,7 +1591,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			ListVector::SetListSize(*this, list_size);
 
 			// Read the entries
-			auto list_entries = FlatVector::GetData<list_entry_t>(*this);
+			auto list_entries = FlatVector::GetDataMutable<list_entry_t>(*this);
 			deserializer.ReadList(105, "entries", [&](Deserializer::List &list, idx_t i) {
 				list.ReadObject([&](Deserializer &obj) {
 					list_entries[i].offset = obj.ReadProperty<uint64_t>(100, "offset");
@@ -1712,7 +1712,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	}
 	if (vector_p.GetVectorType() == VectorType::SHREDDED_VECTOR) {
 		auto &shredded = ShreddedVector::GetShreddedVector(vector_p);
-		auto &unshredded = ShreddedVector::GetShreddedVector(vector_p);
+		auto &unshredded = ShreddedVector::GetUnshreddedVector(vector_p);
 		Verify(shredded, sel_p, count);
 		Verify(unshredded, sel_p, count);
 		return;
@@ -1837,6 +1837,8 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
+		// struct vectors cannot be dictionary vectors
+		D_ASSERT(vector->GetVectorType() != VectorType::DICTIONARY_VECTOR);
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
 
@@ -1983,7 +1985,6 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
 		// Reusable dictionary API does not work for STRUCT
 		vector.Dictionary(inverted_vector, verify_count, original_sel, count);
-		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(reusable_dict->id);
 	} else {
 		vector.Dictionary(reusable_dict, original_sel);
 	}
@@ -2004,7 +2005,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 			break;
 		}
-		auto list_entries = FlatVector::GetData<list_entry_t>(vector);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(vector);
 		idx_t child_count = 0;
 		for (idx_t r = 0; r < count; r++) {
 			if (FlatVector::IsNull(vector, r)) {

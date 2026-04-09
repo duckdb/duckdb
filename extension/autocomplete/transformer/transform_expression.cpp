@@ -296,7 +296,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("Wrong number of arguments provided to DATE function");
 		}
 		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
-	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1) {
+	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1 && !transformer.in_macro_definition) {
 		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments to LIST.");
