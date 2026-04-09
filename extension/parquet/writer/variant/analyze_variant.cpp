@@ -160,9 +160,14 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 			for (auto &field : object_data.fields) {
 				LogicalType child_type;
 				if (!ConstructShreddedType(field.second, child_type)) {
-					return false;
+					// cannot shred on this field - skip
+					continue;
 				}
 				field_types.emplace_back(field.first, child_type);
+			}
+			if (field_types.empty()) {
+				// no field types to shred on - avoid shredding
+				return false;
 			}
 			out = LogicalType::STRUCT(field_types);
 			return true;
