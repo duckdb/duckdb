@@ -11,7 +11,7 @@ require parquet
 # contains INT32 values where ConstructShreddedType succeeds, which
 # previously caused AnalyzeSchemaFinalize to modify the locked schema.
 statement ok
-CREATE TABLE repro AS
+CREATE VIEW repro AS
 SELECT
     CASE WHEN i <= 5000
         THEN (i % 200)::UTINYINT::VARIANT
