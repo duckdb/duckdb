@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <utility>
 #include <vector>

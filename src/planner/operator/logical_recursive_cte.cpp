@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <unordered_set>
 #include <utility>

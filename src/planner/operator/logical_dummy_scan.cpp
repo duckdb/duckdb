@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/common/projection_index.hpp"
 

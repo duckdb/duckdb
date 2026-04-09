@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <unordered_map>
 #include <utility>

@@ -228,7 +228,7 @@ uint32_t StringMaxComparable(const Value &value) {
 	}
 
 	// Pad string prefix with 0xFF to keep correctness if max is truncated at \0 char, e.g., ab\0c -> ab
-	array<char, string_t::PREFIX_BYTES> padded_prefix;
+	std::array<char, string_t::PREFIX_BYTES> padded_prefix;
 	padded_prefix.fill(char(0xFF));
 	for (idx_t i = 0; i < max_string.GetSize(); i++) {
 		padded_prefix[i] = max_string.GetData()[i];

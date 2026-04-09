@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <stdint.h>
 #include <unordered_map>

@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <vector>
 

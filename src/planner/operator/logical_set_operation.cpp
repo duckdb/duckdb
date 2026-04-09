@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <utility>
 

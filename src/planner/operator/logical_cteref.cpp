@@ -1,6 +1,7 @@
 #include "duckdb/planner/operator/logical_cteref.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

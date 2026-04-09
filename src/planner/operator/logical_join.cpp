@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <functional>
 #include <vector>

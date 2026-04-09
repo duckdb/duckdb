@@ -5,6 +5,8 @@
 
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {

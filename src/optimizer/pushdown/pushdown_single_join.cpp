@@ -9,6 +9,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
 struct TableIndex;
