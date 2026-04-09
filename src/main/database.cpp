@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -382,6 +383,18 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 
 FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
+}
+
+LocalFileSystem &DatabaseInstance::GetLocalFileSystem() {
+	auto &vfs = static_cast<VirtualFileSystem &>(*config.file_system);
+	auto &default_fs = vfs.GetDefaultFileSystem();
+	if (default_fs.IsLocalFileSystem()) {
+		return static_cast<LocalFileSystem &>(default_fs);
+	}
+	if (!owned_local_file_system) {
+		owned_local_file_system = make_uniq<LocalFileSystem>();
+	}
+	return *owned_local_file_system;
 }
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
