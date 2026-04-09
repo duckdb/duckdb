@@ -11,6 +11,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
