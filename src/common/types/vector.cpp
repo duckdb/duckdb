@@ -186,48 +186,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		Slice(other, sel, count);
 		return;
 	}
-
-	auto internal_type = GetType().InternalType();
-	// Keep a reference to the old buffer in case this == &other (self-slice).
-	// Without this, replacing 'buffer' (which IS other.buffer when this == &other) before
-	// reading other.buffer->GetValidityMask() would lose the old validity.
-	auto old_buffer = other.buffer;
-	if (internal_type == PhysicalType::STRUCT) {
-		Vector new_vector(GetType());
-		auto &entries = StructVector::GetEntries(new_vector);
-		auto &other_entries = StructVector::GetEntries(other);
-		D_ASSERT(entries.size() == other_entries.size());
-		for (idx_t i = 0; i < entries.size(); i++) {
-			entries[i].Slice(other_entries[i], offset, end);
-		}
-		new_vector.buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-		Reference(new_vector);
-	} else if (internal_type == PhysicalType::ARRAY) {
-		Vector new_vector(GetType());
-		auto &child_vec = ArrayVector::GetEntry(new_vector);
-		auto &other_child_vec = ArrayVector::GetEntry(other);
-		D_ASSERT(ArrayType::GetSize(GetType()) == ArrayType::GetSize(other.GetType()));
-		const auto array_size = ArrayType::GetSize(GetType());
-		// We need to slice the child vector with the multiplied offset and end
-		child_vec.Slice(other_child_vec, offset * array_size, end * array_size);
-		new_vector.buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-		Reference(new_vector);
-	} else if (internal_type == PhysicalType::LIST) {
-		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-		auto &parent = old_buffer->Cast<VectorListBuffer>();
-		buffer = make_buffer<VectorListBuffer>(offset_ptr, parent);
-		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-	} else if (internal_type == PhysicalType::VARCHAR) {
-		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-		auto string_buffer = make_buffer<VectorStringBuffer>(offset_ptr);
-		buffer = std::move(string_buffer);
-		StringVector::AddHeapReference(*this, other);
-		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-	} else {
-		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
-		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
-	}
+	buffer = other.buffer->Slice(GetType(), *other.buffer, offset, end);
 }
 
 void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {

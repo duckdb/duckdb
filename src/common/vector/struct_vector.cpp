@@ -84,6 +84,20 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
+buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
+                                                    idx_t end) {
+	auto &src = source.Cast<const VectorStructBuffer>();
+	auto &child_types = StructType::GetChildTypes(type);
+	auto result = make_buffer<VectorStructBuffer>();
+	auto &result_children = result->GetChildren();
+	for (idx_t i = 0; i < src.children.size(); i++) {
+		result_children.emplace_back(child_types[i].second);
+		result_children[i].Slice(src.children[i], offset, end);
+	}
+	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	return result;
+}
+
 void VectorStructBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) {
 	VectorBuffer::FindResizeInfos(vector, resize_infos, multiplier);
 	for (auto &child : children) {

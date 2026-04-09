@@ -147,6 +147,10 @@ void VectorBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVec
 	format.validity = FlatVector::Validity(vector);
 }
 
+buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end) {
+	throw InternalException("Unimplemented Slice with offset for this buffer type");
+}
+
 void VectorBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		return;

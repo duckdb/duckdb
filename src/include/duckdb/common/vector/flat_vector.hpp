@@ -40,6 +40,7 @@ public:
 	void ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 protected:

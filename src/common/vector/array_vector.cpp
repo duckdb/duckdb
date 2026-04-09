@@ -62,6 +62,16 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
+                                                   idx_t end) {
+	auto &src = source.Cast<const VectorArrayBuffer>();
+	auto result = make_buffer<VectorArrayBuffer>(type);
+	auto &result_child = result->GetChild();
+	result_child.Slice(*src.child, offset * src.array_size, end * src.array_size);
+	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	return result;
+}
+
 void VectorArrayBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) {
 	VectorBuffer::FindResizeInfos(vector, resize_infos, multiplier);
 	auto new_multiplier = array_size * multiplier;
