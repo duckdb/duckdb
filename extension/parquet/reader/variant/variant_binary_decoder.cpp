@@ -147,7 +147,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return VariantValue(Value());
+		return VariantValue::NullValue();
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
 		return VariantValue(Value::BOOLEAN(true));
