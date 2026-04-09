@@ -7,6 +7,7 @@
 #include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 class ClientContext;

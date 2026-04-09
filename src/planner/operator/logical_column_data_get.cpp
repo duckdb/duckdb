@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
