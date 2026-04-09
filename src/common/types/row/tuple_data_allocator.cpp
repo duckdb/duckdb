@@ -146,7 +146,7 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 	}
 
 	// We can do the fast path append!
-	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.row_locations);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
 	for (idx_t i = 0; i < append_count; i++) {
 		row_locations[append_offset + i] = base_row_ptr + i * row_width;
@@ -397,9 +397,9 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
                                                       bool init_heap_sizes,
                                                       unsafe_vector<reference<TupleDataChunkPart>> &parts,
                                                       optional_ptr<SortKeyPayloadState> sort_key_payload_state) {
-	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+	const auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.row_locations);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
+	const auto heap_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.heap_locations);
 
 	for (auto &part_ref : parts) {
 		auto &part = part_ref.get();
@@ -640,7 +640,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
                                           const idx_t base_col_offset) {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+	const auto heap_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.heap_locations);
 
 	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();

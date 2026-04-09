@@ -95,7 +95,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 template <class T>
 void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto res = FlatVector::GetData<T>(result);
+	auto res = FlatVector::GetDataMutable<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);

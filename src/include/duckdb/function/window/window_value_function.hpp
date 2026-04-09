@@ -15,6 +15,8 @@ namespace duckdb {
 // Base class for non-aggregate functions that have a payload
 class WindowValueExecutor : public WindowExecutor {
 public:
+	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments);
 	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
@@ -38,6 +40,8 @@ public:
 
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
+	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments);
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
@@ -79,6 +83,12 @@ protected:
 
 class WindowFillExecutor : public WindowValueExecutor {
 public:
+	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
+	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
+
 	WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
 
 	//! Never ignore nulls (that's the point!)

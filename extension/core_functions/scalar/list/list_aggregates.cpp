@@ -108,14 +108,14 @@ struct StateVector {
 struct FinalizeValueFunctor {
 	template <class T>
 	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<T>(result)[offset] = value;
+		FlatVector::GetDataMutable<T>(result)[offset] = value;
 	}
 };
 
 struct FinalizeStringValueFunctor {
 	template <class T>
 	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
+		FlatVector::GetDataMutable<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
 	}
 };
 
@@ -153,7 +153,7 @@ struct DistinctFunctor {
 		// reserve space in the list vector
 		ListVector::Reserve(result, old_len + new_entries);
 		auto &child_elements = ListVector::GetEntry(result);
-		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
@@ -240,11 +240,11 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// state vector for initialize and finalize
 	StateVector state_vector(count, info.aggr_expr->Copy());
-	auto states = FlatVector::GetData<data_ptr_t>(state_vector.state_vector);
+	auto states = FlatVector::GetDataMutable<data_ptr_t>(state_vector.state_vector);
 
 	// state vector of STANDARD_VECTOR_SIZE holds the pointers to the states
 	Vector state_vector_update = Vector(LogicalType::POINTER);
-	auto states_update = FlatVector::GetData<data_ptr_t>(state_vector_update);
+	auto states_update = FlatVector::GetDataMutable<data_ptr_t>(state_vector_update);
 
 	// selection vector pointing to the data
 	SelectionVector sel_vector(STANDARD_VECTOR_SIZE);

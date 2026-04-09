@@ -229,7 +229,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	}
 
 	const auto &validity = FlatVector::Validity(result);
-	const auto strings = FlatVector::GetData<string_t>(result);
+	const auto strings = FlatVector::GetDataMutable<string_t>(result);
 
 	// recompute pointers
 	const auto start = NumericCast<idx_t>(v_offset + swizzle_segment.offset);

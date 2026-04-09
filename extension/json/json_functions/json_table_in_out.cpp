@@ -155,7 +155,7 @@ template <class T>
 struct JSONTableInOutResultVector {
 	explicit JSONTableInOutResultVector(DataChunk &output, const optional_idx &output_column_index)
 	    : enabled(output_column_index.IsValid()), vector(output.data[enabled ? output_column_index.GetIndex() : 0]),
-	      data(enabled ? FlatVector::GetData<T>(vector) : nullptr), validity(FlatVector::Validity(vector)) {
+	      data(enabled ? FlatVector::GetDataMutable<T>(vector) : nullptr), validity(FlatVector::Validity(vector)) {
 	}
 	const bool enabled;
 	Vector &vector;
@@ -351,7 +351,7 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 	if (gstate.root_column_index.IsValid()) {
 		auto &root_vector = output.data[gstate.root_column_index.GetIndex()];
 		root_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		FlatVector::GetData<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
+		FlatVector::GetDataMutable<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
 	}
 	if (gstate.empty_column_idex.IsValid()) {
 		auto &empty_vector = output.data[gstate.empty_column_idex.GetIndex()];

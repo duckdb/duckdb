@@ -34,14 +34,18 @@ inputs:
     default: ""
   save_cache:
     description: Whether to save vcpkg binary cache
-    required: false
+    required: true
     default: "true"
 runs:
   using: composite
   steps:
-    - name: Set vcpkg binary cache path
+    - name: Configure vcpkg binary cache
       shell: bash
-      run: echo "VCPKG_DEFAULT_BINARY_CACHE=${GITHUB_WORKSPACE}/vcpkg-cache" >> "$GITHUB_ENV"
+      run: |
+        cache_path="${GITHUB_WORKSPACE}/vcpkg-cache"
+        mkdir -p "${cache_path}"
+        echo "VCPKG_DEFAULT_BINARY_CACHE=${cache_path}" >> "$GITHUB_ENV"
+        echo "VCPKG_BINARY_SOURCES=clear;files,${cache_path},readwrite" >> "$GITHUB_ENV"
 
     - name: Restore vcpkg binaries
       id: vcpkg-binary-cache
@@ -67,6 +71,8 @@ runs:
         CORE_EXTENSIONS: ${{ inputs.core_extensions }}
         DISABLE_SANITIZER: ${{ inputs.disable_sanitizer }}
         VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
+        VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
         USE_MERGED_VCPKG_MANIFEST: 1
       run: python3 scripts/ci/retry.py -- make release
 

@@ -192,11 +192,10 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	auto cmp_data = comparator_result.Values<int8_t>(count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
-	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto entry = cmp_data[i];
 		if (!entry.IsValid()) {
-			result_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 		} else {
 			result_data[i] = predicate(entry.value);
 		}
@@ -708,7 +707,7 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<int8_t>(result);
+		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 		auto &validity = FlatVector::Validity(result);
 		auto &sel = *FlatVector::IncrementalSelectionVector();
 		auto physical_type = left.GetType().InternalType();
@@ -764,7 +763,7 @@ static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t c
 		left.ToUnifiedFormat(count, ldata);
 		right.ToUnifiedFormat(count, rdata);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<int8_t>(result);
+		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 		DistinctExecuteGenericLoop<T, OP>(UnifiedVectorFormat::GetData<T>(ldata),
 		                                  UnifiedVectorFormat::GetData<T>(rdata), result_data, ldata.sel, rdata.sel,
 		                                  count, ldata.validity, rdata.validity);
@@ -833,7 +832,7 @@ void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &r
 		return;
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<int8_t>(result);
+	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 	auto &sel = *FlatVector::IncrementalSelectionVector();
 	DistinctComparatorTypeSwitchInternal(left, right, result_data, sel, sel, count);
 }
@@ -847,7 +846,7 @@ void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right,
 	// i.e. within structs we still use NULLS LAST semantics
 	VectorOperations::DistinctComparator(left, right, result, count);
 	result.Flatten(count);
-	auto result_data = FlatVector::GetData<int8_t>(result);
+	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 	auto left_validity = left.Validity(count);
 	auto right_validity = right.Validity(count);
 	if (!left_validity.CanHaveNull() && !right_validity.CanHaveNull()) {

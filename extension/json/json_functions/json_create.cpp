@@ -650,7 +650,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		CreateKeyValuePairs(info.const_struct_names, doc, objs, vals, key_v, value_v, count);
 	}
 	// Write JSON values to string
-	auto objects = FlatVector::GetData<string_t>(result);
+	auto objects = FlatVector::GetDataMutable<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);
 	}
@@ -680,7 +680,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		}
 	}
 	// Write JSON arrays to string
-	auto objects = FlatVector::GetData<string_t>(result);
+	auto objects = FlatVector::GetDataMutable<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(arrs[i], alc);
 	}
@@ -695,7 +695,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 	CreateValues(names, doc, vals, input, count);
 
 	// Write JSON values to string
-	auto objects = FlatVector::GetData<string_t>(result);
+	auto objects = FlatVector::GetDataMutable<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
