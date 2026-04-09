@@ -208,6 +208,9 @@ bool IsTriviallyMappable(const MultiFileColumnDefinition &global_column,
 	if (local_column.type != global_column.type) {
 		return false;
 	}
+	if (global_column.type.id() == LogicalTypeId::MAP) {
+		return true;
+	}
 	if (local_column.children.size() != global_column.children.size()) {
 		// child count difference - cannot map trivially
 		return false;
