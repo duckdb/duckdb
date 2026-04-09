@@ -226,7 +226,7 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		auto &result = ListVector::GetEntry(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		auto v_t = state.v;
 		D_ASSERT(v_t);

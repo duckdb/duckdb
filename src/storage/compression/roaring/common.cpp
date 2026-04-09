@@ -217,7 +217,7 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 // Scan base data
 //===--------------------------------------------------------------------===//
 void ExtractValidityMaskToData(const ValidityMask &validity, Vector &dst, idx_t offset, idx_t scan_count) {
-	auto write_ptr = FlatVector::GetData<uint8_t>(dst) + offset;
+	auto write_ptr = FlatVector::GetDataMutable<uint8_t>(dst) + offset;
 	if (validity.CannotHaveNull()) {
 		memset(write_ptr, 1, scan_count); // 1 is for valid
 	} else if (scan_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0) {
@@ -232,6 +232,7 @@ void ExtractValidityMaskToData(const ValidityMask &validity, Vector &dst, idx_t 
 		memcpy(write_ptr, tmp_data.get(), scan_count);
 	}
 }
+
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();

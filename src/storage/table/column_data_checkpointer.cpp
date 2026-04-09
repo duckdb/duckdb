@@ -65,7 +65,7 @@ static void CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &s
 	chunk.Initialize(Allocator::DefaultAllocator(), types);
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		auto data = FlatVector::GetData<bool>(chunk.data[0]);
-		memset(data, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+		memset((void *)data, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
 }
 

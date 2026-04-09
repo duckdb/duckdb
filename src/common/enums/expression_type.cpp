@@ -57,6 +57,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "AGGREGATE";
 	case ExpressionType::WINDOW_AGGREGATE:
 		return "WINDOW_AGGREGATE";
+	case ExpressionType::WINDOW_FUNCTION:
+		return "WINDOW_FUNCTION";
 	case ExpressionType::WINDOW_RANK:
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:

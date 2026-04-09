@@ -16,7 +16,7 @@ namespace duckdb {
 struct HistogramFunctor {
 	template <class T>
 	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<T>(result)[offset] = value;
+		FlatVector::GetDataMutable<T>(result)[offset] = value;
 	}
 
 	static bool CreateExtraState(idx_t count) {
@@ -63,7 +63,7 @@ struct HistogramStringFunctorBase {
 struct HistogramStringFunctor : HistogramStringFunctorBase {
 	template <class T>
 	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
+		FlatVector::GetDataMutable<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
 	}
 
 	static bool CreateExtraState(idx_t count) {

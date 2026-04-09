@@ -290,7 +290,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	auto &validity_mask = FlatVector::Validity(result);
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &list_entry = list_data[result_idx];
 	// set the list entry offset to the size of the current list
 	list_entry.offset = ListVector::GetListSize(result);

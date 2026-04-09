@@ -1,7 +1,7 @@
 #include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
-#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -106,8 +106,8 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
-WindowFunction RowNumberFunc::GetFunction() {
-	WindowFunction fun("row_number", {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
+WindowFunction RowNumberFun::GetFunction() {
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
 	return fun;
 }
 
@@ -133,7 +133,7 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
                                                idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 
 	if (grstate.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
@@ -182,8 +182,8 @@ public:
 	}
 };
 
-WindowFunction NtileFunc::GetFunction() {
-	WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
+WindowFunction NtileFun::GetFunction() {
+	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
 	return fun;
 }
 
@@ -209,7 +209,7 @@ void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk 
 		partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
 		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
 	}
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {

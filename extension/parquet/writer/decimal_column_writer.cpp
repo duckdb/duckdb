@@ -43,7 +43,7 @@ public:
 		return min <= max;
 	}
 
-	void Update(hugeint_t &val) {
+	void Update(const hugeint_t &val) {
 		if (LessThan::Operation(val, min)) {
 			min = val;
 		}

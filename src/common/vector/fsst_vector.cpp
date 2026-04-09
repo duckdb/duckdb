@@ -69,7 +69,7 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 	auto dst_mask = FlatVector::Validity(dst);
 	auto ldata = FSSTVector::GetCompressedData(src);
 	auto decoder = FSSTVector::GetDecoder(src);
-	auto tdata = FlatVector::GetData<string_t>(dst);
+	auto tdata = FlatVector::GetDataMutable<string_t>(dst);
 	auto &str_allocator = StringVector::GetStringAllocator(dst);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel->get_index(src_offset + i);

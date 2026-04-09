@@ -97,7 +97,7 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 
 		// add the list entry as the first element of "vector"
 		// FIXME: we only need to allocate space for 1 tuple here
-		auto target_data = FlatVector::GetData<list_entry_t>(vector);
+		auto target_data = FlatVector::GetDataMutable<list_entry_t>(vector);
 		target_data[0] = list_entry;
 
 		// create a reference to the child list of the source vector
@@ -174,7 +174,7 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 template <class T>
 static void TemplatedFlattenConstantVector(const Vector &const_vector, Vector &result, idx_t count) {
 	auto constant = *ConstantVector::GetData<T>(const_vector);
-	auto output = FlatVector::GetData<T>(result);
+	auto output = FlatVector::GetDataMutable<T>(result);
 	for (idx_t i = 0; i < count; i++) {
 		output[i] = constant;
 	}

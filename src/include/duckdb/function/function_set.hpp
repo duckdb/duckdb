@@ -91,6 +91,8 @@ public:
 	DUCKDB_API explicit WindowFunctionSet();
 	DUCKDB_API explicit WindowFunctionSet(string name);
 	DUCKDB_API explicit WindowFunctionSet(WindowFunction fun);
+
+	DUCKDB_API WindowFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
