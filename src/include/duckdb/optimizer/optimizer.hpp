@@ -20,12 +20,14 @@ class Binder;
 
 class Optimizer {
 public:
-	Optimizer(Binder &binder, ClientContext &context);
+	Optimizer(Binder &binder, ClientContext &context, optional_ptr<const string> query = nullptr);
 
 	//! Optimize a plan by running specialized optimizers
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<const string> query = nullptr);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 	//! Return a reference to the client context of this optimizer
 	ClientContext &GetContext();
+	//! Return the optional query string
+	optional_ptr<const string> GetQueryString() const;
 	//! Whether the specific optimizer is disabled
 	bool OptimizerDisabled(OptimizerType type);
 	static bool OptimizerDisabled(ClientContext &context, OptimizerType type);
@@ -46,7 +48,7 @@ public:
 	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1, unique_ptr<Expression> c2);
 
 private:
-	optional_ptr<const string> query;
+	const optional_ptr<const string> query;
 	unique_ptr<LogicalOperator> plan;
 
 private:

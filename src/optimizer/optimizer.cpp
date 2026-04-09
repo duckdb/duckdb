@@ -49,7 +49,8 @@
 
 namespace duckdb {
 
-Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
+Optimizer::Optimizer(Binder &binder, ClientContext &context, optional_ptr<const string> query)
+    : context(context), binder(binder), rewriter(context), query(query) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
@@ -84,6 +85,10 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 
 ClientContext &Optimizer::GetContext() {
 	return context;
+}
+
+optional_ptr<const string> Optimizer::GetQueryString() const {
+	return query;
 }
 
 bool Optimizer::OptimizerDisabled(OptimizerType type) {
@@ -345,16 +350,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 }
 
-unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p,
-                                                optional_ptr<const string> query_p) {
+unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
-	this->query = query_p;
 
 	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get(), query};
+			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
 				pre_optimizer_extension.pre_optimize_function(input, plan);
 			}
@@ -365,7 +368,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	for (auto &optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get(), query};
+			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
 			if (optimizer_extension.optimize_function) {
 				optimizer_extension.optimize_function(input, plan);
 			}

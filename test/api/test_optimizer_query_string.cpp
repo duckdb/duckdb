@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "test_helpers.hpp"
 
@@ -11,8 +12,9 @@ static string captured_query;
 static int capture_count;
 
 static void CaptureQueryPreOptimize(OptimizerExtensionInput &input, duckdb::unique_ptr<LogicalOperator> &plan) {
-	if (input.query) {
-		captured_query = *input.query;
+	auto query = input.optimizer.GetQueryString();
+	if (query) {
+		captured_query = *query;
 	} else {
 		captured_query = "";
 	}

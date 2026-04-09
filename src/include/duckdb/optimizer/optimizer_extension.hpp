@@ -27,7 +27,6 @@ struct OptimizerExtensionInput {
 	ClientContext &context;
 	Optimizer &optimizer;
 	optional_ptr<OptimizerExtensionInfo> info;
-	optional_ptr<const string> query;
 };
 
 typedef void (*optimize_function_t)(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan);
