@@ -13,9 +13,9 @@ namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 class TProtocol;
-}  // namespace protocol
-}  // namespace thrift
-}  // namespace duckdb_apache
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
 class TableFilter;

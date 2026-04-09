@@ -31,7 +31,7 @@
 namespace duckdb_parquet {
 class RowGroup;
 class SchemaElement;
-}  // namespace duckdb_parquet
+} // namespace duckdb_parquet
 
 namespace duckdb {
 class MemoryStream;

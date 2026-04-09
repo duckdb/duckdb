@@ -43,7 +43,7 @@
 namespace duckdb {
 class ArenaAllocator;
 class ClientContext;
-}  // namespace duckdb
+} // namespace duckdb
 
 // MODE( <expr1> )
 // Returns the most frequent value for the values within expr1.

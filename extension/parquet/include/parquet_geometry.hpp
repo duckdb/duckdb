@@ -27,7 +27,7 @@
 
 namespace duckdb_parquet {
 class FileMetaData;
-}  // namespace duckdb_parquet
+} // namespace duckdb_parquet
 
 namespace duckdb {
 

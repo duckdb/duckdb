@@ -29,9 +29,9 @@ namespace thrift {
 class TBase;
 namespace protocol {
 class TProtocol;
-}  // namespace protocol
-}  // namespace thrift
-}  // namespace duckdb_apache
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
 class ParquetAdditionalAuthenticatedData;

@@ -29,7 +29,7 @@
 
 namespace duckdb {
 class ClientContext;
-}  // namespace duckdb
+} // namespace duckdb
 
 using duckdb_parquet::ColumnChunk;
 

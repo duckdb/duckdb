@@ -109,7 +109,6 @@ public:
 	}
 };
 
-
 class ParquetMetaDataOperator {
 public:
 	template <ParquetMetadataOperatorType OP_TYPE>
