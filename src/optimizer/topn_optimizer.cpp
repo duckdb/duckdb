@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
@@ -105,9 +104,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
 	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
-	auto base_filter = make_uniq<ConstantFilter>(comparison_type, std::move(minimum_value));
-	auto filter_data = make_shared_ptr<DynamicFilterData>();
-	filter_data->filter = std::move(base_filter);
+	auto filter_data = make_shared_ptr<DynamicFilterData>(
+	    comparison_type, std::move(minimum_value));
 
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
