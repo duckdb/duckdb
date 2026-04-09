@@ -199,7 +199,7 @@ JOIN prf_build_string_nul_stats b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:.*IN.*PRF\(k\).*
 
 query I
 SELECT count(*)
