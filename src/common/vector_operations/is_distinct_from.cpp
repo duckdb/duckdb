@@ -626,8 +626,21 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 	Vector rentry_flattened(Vector::Ref(ListVector::GetEntry(right)));
 	lentry_flattened.Flatten(ListVector::GetListSize(left));
 	rentry_flattened.Flatten(ListVector::GetListSize(right));
-	Vector lchild(lentry_flattened, lcursor, count);
-	Vector rchild(rentry_flattened, rcursor, count);
+
+	// Struct vectors cannot be dictionary vectors, so updating the cursor selection vector
+	// after construction does not update the struct child. We need to re-slice after cursor updates.
+	bool is_struct_child = lentry_flattened.GetType().InternalType() == PhysicalType::STRUCT;
+	// Slice non-struct children, struct children are sliced in ReSliceChildren()
+	Vector lchild(is_struct_child ? Vector(Vector::Ref(lentry_flattened)) : Vector(lentry_flattened, lcursor, count));
+	Vector rchild(is_struct_child ? Vector(Vector::Ref(rentry_flattened)) : Vector(rentry_flattened, rcursor, count));
+	auto ReSliceChildren = [&]() {
+		if (is_struct_child) {
+			lchild.Reference(lentry_flattened);
+			lchild.Slice(lcursor, count);
+			rchild.Reference(rentry_flattened);
+			rchild.Slice(rcursor, count);
+		}
+	};
 
 	// To perform the positional comparison, we use a vectorisation of the following algorithm:
 	// bool CompareLists(T *left, idx_t nleft, T *right, nright) {
@@ -674,6 +687,7 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 		// Set up the cursors for the current position
 		PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
 		PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+		ReSliceChildren();
 
 		// Tie-break the pairs where one of the LISTs is exhausted.
 		idx_t true_count = 0;
@@ -706,6 +720,7 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 			DensifyNestedSelection(true_sel, count, slice_sel);
 			PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
 			PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+			ReSliceChildren();
 		}
 
 		// Find everything that definitely matches
@@ -725,6 +740,7 @@ idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const Selecti
 			DensifyNestedSelection(false_sel, count, slice_sel);
 			PositionListCursor(lcursor, lvdata, pos, slice_sel, count);
 			PositionListCursor(rcursor, rvdata, pos, slice_sel, count);
+			ReSliceChildren();
 		}
 
 		// Find what might match on the next position
@@ -776,8 +792,20 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 	Vector rentry_flattened(Vector::Ref(ArrayVector::GetEntry(right)));
 	lentry_flattened.Flatten(ArrayVector::GetTotalSize(left));
 	rentry_flattened.Flatten(ArrayVector::GetTotalSize(right));
-	Vector lchild(lentry_flattened, lcursor, count);
-	Vector rchild(rentry_flattened, rcursor, count);
+
+	// Struct vectors cannot be dictionary vectors, so updating the cursor selection vector
+	// after construction does not update the struct child. We need to re-slice after cursor updates.
+	bool is_struct_child = lentry_flattened.GetType().InternalType() == PhysicalType::STRUCT;
+	auto lchild = is_struct_child ? Vector::Ref(lentry_flattened) : Vector(lentry_flattened, lcursor, count);
+	auto rchild = is_struct_child ? Vector::Ref(rentry_flattened) : Vector(rentry_flattened, rcursor, count);
+	auto ReSliceChildren = [&]() {
+		if (is_struct_child) {
+			lchild.Reference(lentry_flattened);
+			lchild.Slice(lcursor, count);
+			rchild.Reference(rentry_flattened);
+			rchild.Slice(rcursor, count);
+		}
+	};
 
 	// Get pointers to the list entries
 	UnifiedVectorFormat lvdata;
@@ -808,6 +836,7 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 		// Set up the cursors for the current position
 		PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
 		PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+		ReSliceChildren();
 
 		idx_t true_count = 0;
 		idx_t false_count = 0;
@@ -829,6 +858,7 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 			DensifyNestedSelection(false_sel, count, slice_sel);
 			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
 			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+			ReSliceChildren();
 		}
 
 		// Find what might match on the next position

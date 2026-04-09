@@ -21,7 +21,12 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 	for (auto &child_vector : other_vector) {
 		children.emplace_back(child_vector, sel, count);
 	}
-	validity = other.GetBuffer()->Cast<VectorStructBuffer>().validity;
+	// slice the validity mask of the original struct
+	auto &original_validity = other.GetBuffer()->GetValidityMask();
+	if (count > STANDARD_VECTOR_SIZE) {
+		validity.Resize(count);
+	}
+	validity.CopySel(original_validity, sel, 0, 0, count);
 }
 
 VectorStructBuffer::~VectorStructBuffer() {
@@ -33,8 +38,7 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	         vector.GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vector);
-		return StructVector::GetEntries(child);
+		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
