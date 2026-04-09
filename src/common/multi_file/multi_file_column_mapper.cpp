@@ -43,8 +43,8 @@ struct MultiFileColumnMap {
 	      filter_conversion(local_type == global_type ? FilterConversionType::COPY_DIRECTLY
 	                                                  : FilterConversionType::CAST_FILTER) {
 	}
-	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type_p, const LogicalType &global_type_p,
-	                   FilterConversionType filter_conversion)
+	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type_p,
+	                   const LogicalType &global_type_p, FilterConversionType filter_conversion)
 	    : mapping(std::move(mapping_p)), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(filter_conversion) {
 	}
