@@ -13,6 +13,7 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
 
 namespace duckdb {
 
