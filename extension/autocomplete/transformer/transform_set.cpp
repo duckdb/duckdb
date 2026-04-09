@@ -50,8 +50,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransfo
 }
 
 // ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer,
-                                                                                     optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	// child 0 = 'INTERVAL' keyword, child 1 = StringLiteral, child 2 = Interval?
 	auto &str_pr = list_pr.Child<StringLiteralParseResult>(1);
@@ -62,7 +63,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIntervalWithInt
 // ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
-                                                         optional_ptr<ParseResult> parse_result) {
+                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	// child 0 = 'INTERVAL' keyword, child 1 = Parens(NumberLiteral), child 2 = StringLiteral
 	auto &str_pr = list_pr.Child<StringLiteralParseResult>(2);
@@ -70,7 +71,8 @@ PEGTransformerFactory::TransformZoneIntervalWithPrecision(PEGTransformer &transf
 	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 }
 
-// ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'
+// ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / StringLiteral / Identifier / NumberLiteral /
+// 'DEFAULT' / 'LOCAL'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneValue(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
