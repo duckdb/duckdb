@@ -21,6 +21,17 @@ void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel,
 	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
 }
 
+string SequenceBuffer::ToString(const LogicalType &type, idx_t count) const {
+	string retval;
+	for (idx_t i = 0; i < count; i++) {
+		retval += to_string(start + static_cast<int64_t>(static_cast<uint64_t>(increment) * i));
+		if (i < count - 1) {
+			retval += ", ";
+		}
+	}
+	return retval;
+}
+
 Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	return Value::Numeric(type, start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 }

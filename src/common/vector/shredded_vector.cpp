@@ -24,6 +24,12 @@ void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	shredded_data->Verify(sel, count);
 }
 
+string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {
+	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
+	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
+	return "Shredded: " + shredded.ToString(count) + ", Unshredded: " + unshredded.ToString(count);
+}
+
 Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	// FIXME: this is extremely inefficient
 	Vector copy(LogicalType::VARIANT());

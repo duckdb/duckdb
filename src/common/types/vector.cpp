@@ -513,47 +513,7 @@ string VectorTypeToString(VectorType type) {
 string Vector::ToString(idx_t count) const {
 	string retval =
 	    VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": " + to_string(count) + " = [ ";
-	switch (GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
-	case VectorType::DICTIONARY_VECTOR:
-		for (idx_t i = 0; i < count; i++) {
-			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
-		}
-		break;
-	case VectorType::FSST_VECTOR: {
-		auto compressed_data = FSSTVector::GetCompressedData(*this);
-		for (idx_t i = 0; i < count; i++) {
-			string_t compressed_string = compressed_data[i];
-			auto decoder = FSSTVector::GetDecoder(*this);
-			auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*this);
-			Value val = FSSTPrimitives::DecompressValue(decoder, compressed_string.GetData(),
-			                                            compressed_string.GetSize(), decompress_buffer);
-			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
-		}
-	} break;
-	case VectorType::CONSTANT_VECTOR:
-		retval += GetValue(0).ToString();
-		break;
-	case VectorType::SHREDDED_VECTOR: {
-		auto &shredded_vector = ShreddedVector::GetShreddedVector(*this);
-		auto &unshredded_vector = ShreddedVector::GetUnshreddedVector(*this);
-		retval += "Shredded: " + shredded_vector.ToString(count);
-		retval += ", Unshredded: " + unshredded_vector.ToString(count);
-		break;
-	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(*this, start, increment);
-		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(start + static_cast<int64_t>(static_cast<uint64_t>(increment) * i)) +
-			          (i == count - 1 ? "" : ", ");
-		}
-		break;
-	}
-	default:
-		retval += "UNKNOWN VECTOR TYPE";
-		break;
-	}
+	retval += buffer->ToString(GetType(), count);
 	retval += "]";
 	return retval;
 }
@@ -575,20 +535,7 @@ idx_t Vector::GetAllocationSize() const {
 
 string Vector::ToString() const {
 	string retval = VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": (UNKNOWN COUNT) [ ";
-	switch (GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
-	case VectorType::DICTIONARY_VECTOR:
-		break;
-	case VectorType::CONSTANT_VECTOR:
-		retval += GetValue(0).ToString();
-		break;
-	case VectorType::SEQUENCE_VECTOR: {
-		break;
-	}
-	default:
-		retval += "UNKNOWN VECTOR TYPE";
-		break;
-	}
+	retval += buffer->ToString(GetType());
 	retval += "]";
 	return retval;
 }

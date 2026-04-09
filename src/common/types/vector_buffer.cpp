@@ -67,6 +67,27 @@ void VectorBuffer::SetVectorType(VectorType vector_type) {
 	throw InternalException("VectorBuffer does not support SetVectorType");
 }
 
+string VectorBuffer::ToString(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return GetValue(type, 0).ToString();
+	}
+	string retval;
+	for (idx_t i = 0; i < count; i++) {
+		retval += GetValue(type, i).ToString();
+		if (i < count - 1) {
+			retval += ", ";
+		}
+	}
+	return retval;
+}
+
+string VectorBuffer::ToString(const LogicalType &type) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return GetValue(type, 0).ToString();
+	}
+	return "";
+}
+
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	throw InternalException("SetValue not supported for this buffer type");
 }

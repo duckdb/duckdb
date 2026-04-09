@@ -129,6 +129,9 @@ public:
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
 	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
+	//! Produce a string representation of buffer contents (debug only)
+	virtual string ToString(const LogicalType &type, idx_t count) const;
+	virtual string ToString(const LogicalType &type) const;
 
 protected:
 	VectorType vector_type;
