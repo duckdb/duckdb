@@ -105,13 +105,13 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 //===--------------------------------------------------------------------===//
 // WindowPeerExecutor
 //===--------------------------------------------------------------------===//
-WindowPeerExecutor::WindowPeerExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowExecutor(wexpr, shared) {
+void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
+	const auto &wexpr = executor.wexpr;
+	auto &arg_order_idx = executor.arg_order_idx;
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
-
 unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                                const ValidityMask &partition_mask,
                                                                const ValidityMask &order_mask) const {
@@ -126,28 +126,24 @@ public:
 	WindowRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
 	    : WindowPeerLocalState(context, gpstate) {
 	}
-
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-			required.insert(PEER_BEGIN);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-			required.insert(PEER_BEGIN);
-		}
-	}
 };
 
-WindowFunction RankFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK);
-	fun.SetBoundsCallback(WindowRankLocalState::GetBounds);
-	return fun;
+void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+		required.insert(PEER_BEGIN);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+		required.insert(PEER_BEGIN);
+	}
 }
 
-WindowRankExecutor::WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowPeerExecutor(wexpr, shared) {
+WindowFunction RankFun::GetFunction() {
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK, nullptr,
+	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing);
+	return fun;
 }
 
 unique_ptr<LocalSinkState> WindowRankExecutor::GetLocalState(ExecutionContext &context,
@@ -199,22 +195,18 @@ public:
 	WindowDenseRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
 	    : WindowPeerLocalState(context, gpstate) {
 	}
-
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		required.insert(PARTITION_BEGIN);
-		required.insert(PEER_BEGIN);
-	}
 };
 
-WindowFunction DenseRankFun::GetFunction() {
-	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE);
-	fun.can_order_by = false;
-	fun.SetBoundsCallback(WindowDenseRankLocalState::GetBounds);
-	return fun;
+void WindowDenseRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	required.insert(PARTITION_BEGIN);
+	required.insert(PEER_BEGIN);
 }
 
-WindowDenseRankExecutor::WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowPeerExecutor(wexpr, shared) {
+WindowFunction DenseRankFun::GetFunction() {
+	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE, nullptr,
+	                   WindowDenseRankExecutor::GetBounds);
+	fun.can_order_by = false;
+	return fun;
 }
 
 unique_ptr<LocalSinkState> WindowDenseRankExecutor::GetLocalState(ExecutionContext &context,
@@ -294,29 +286,24 @@ public:
 	WindowPercentRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
 	    : WindowPeerLocalState(context, gpstate) {
 	}
-
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-			required.insert(PARTITION_END);
-			required.insert(PEER_BEGIN);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-			required.insert(PEER_BEGIN);
-		}
-	}
 };
 
-WindowFunction PercentRankFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK);
-	fun.SetBoundsCallback(WindowPercentRankLocalState::GetBounds);
-	return fun;
+void WindowPercentRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+		required.insert(PARTITION_END);
+		required.insert(PEER_BEGIN);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+		required.insert(PEER_BEGIN);
+	}
 }
-
-WindowPercentRankExecutor::WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowPeerExecutor(wexpr, shared) {
+WindowFunction PercentRankFun::GetFunction() {
+	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK, nullptr,
+	                   WindowPercentRankExecutor::GetBounds, WindowPercentRankExecutor::GetSharing);
+	return fun;
 }
 
 unique_ptr<LocalSinkState> WindowPercentRankExecutor::GetLocalState(ExecutionContext &context,
@@ -376,29 +363,24 @@ public:
 	WindowCumeDistLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
 	    : WindowPeerLocalState(context, gpstate) {
 	}
-
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-			required.insert(PARTITION_END);
-			required.insert(PEER_END);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-			required.insert(PEER_END);
-		}
-	}
 };
 
-WindowFunction CumeDistFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST);
-	fun.SetBoundsCallback(WindowCumeDistLocalState::GetBounds);
-	return fun;
+void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+		required.insert(PARTITION_END);
+		required.insert(PEER_END);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+		required.insert(PEER_END);
+	}
 }
-
-WindowCumeDistExecutor::WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowPeerExecutor(wexpr, shared) {
+WindowFunction CumeDistFun::GetFunction() {
+	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr,
+	                   WindowCumeDistExecutor::GetBounds, WindowCumeDistExecutor::GetSharing);
+	return fun;
 }
 
 unique_ptr<LocalSinkState> WindowCumeDistExecutor::GetLocalState(ExecutionContext &context,

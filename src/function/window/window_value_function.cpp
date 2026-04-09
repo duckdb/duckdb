@@ -167,10 +167,6 @@ void WindowValueExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpre
 	}
 }
 
-WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowExecutor(wexpr, shared) {
-}
-
 unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                                 const ValidityMask &partition_mask,
                                                                 const ValidityMask &order_mask) const {
@@ -353,10 +349,6 @@ WindowFunctionSet LagFun::GetFunctions() {
 	return GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LAG);
 }
 
-WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, shared) {
-}
-
 unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                                   const ValidityMask &partition_mask,
                                                                   const ValidityMask &order_mask) const {
@@ -534,10 +526,6 @@ WindowFunction FirstValueFun::GetFunction() {
 	return fun;
 }
 
-WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, shared) {
-}
-
 void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
                                                 idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
@@ -592,10 +580,6 @@ WindowFunction LastValueFun::GetFunction() {
 	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds,
 	                   WindowFirstValueExecutor::GetSharing);
 	return fun;
-}
-
-WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, shared) {
 }
 
 void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
@@ -658,10 +642,6 @@ WindowFunction NthValueFun::GetFunction() {
 	                   ExpressionType::WINDOW_NTH_VALUE, WindowFirstValueExecutor::Bind,
 	                   WindowValueLocalState::GetBounds, WindowFirstValueExecutor::GetSharing);
 	return fun;
-}
-
-WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, shared) {
 }
 
 void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
@@ -1019,11 +999,6 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 		D_ASSERT(arg_order_idx.size() == 1);
 		executor.aux_idx.emplace_back(shared.RegisterCollection(wexpr.arg_orders[0].expression, false));
 	}
-}
-
-WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client,
-                                       WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, shared) {
 }
 
 static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, idx_t row_idx, column_t col_idx = 0) {

@@ -44,7 +44,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 		if (wexpr.window->HasSharingCallback()) {
 			wexpr.window->GetSharingCallback()(*this, shared);
 		} else {
-			//	If no one overrides, assume the arguments are only needed at evaluate time (e.g., Ntile)
+			//	If no one overrides, assume the arguments are only needed at evaluate time
 			for (auto &child : wexpr.children) {
 				child_idx.emplace_back(shared.RegisterEvaluate(child));
 			}

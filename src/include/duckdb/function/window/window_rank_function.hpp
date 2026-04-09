@@ -14,7 +14,10 @@ namespace duckdb {
 
 class WindowPeerExecutor : public WindowExecutor {
 public:
-	WindowPeerExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	WindowPeerExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared) : WindowExecutor(wexpr, shared) {
+	}
 
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &context, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
@@ -23,7 +26,11 @@ public:
 
 class WindowRankExecutor : public WindowPeerExecutor {
 public:
-	WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
@@ -34,7 +41,11 @@ protected:
 
 class WindowDenseRankExecutor : public WindowPeerExecutor {
 public:
-	WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
@@ -45,7 +56,11 @@ protected:
 
 class WindowPercentRankExecutor : public WindowPeerExecutor {
 public:
-	WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
@@ -56,7 +71,11 @@ protected:
 
 class WindowCumeDistExecutor : public WindowPeerExecutor {
 public:
-	WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 

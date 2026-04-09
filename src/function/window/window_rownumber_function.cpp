@@ -53,16 +53,6 @@ public:
 		}
 	}
 
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-		}
-	}
-
 	//! Accumulate the secondary sort values
 	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
 	          OperatorSinkInput &sink) override;
@@ -99,13 +89,30 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
 WindowFunction RowNumberFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
-	fun.SetBoundsCallback(WindowRowNumberLocalState::GetBounds);
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr,
+	                   WindowRowNumberExecutor::GetBounds, WindowRowNumberExecutor::GetSharing);
 	return fun;
 }
 
-WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowExecutor(wexpr, shared) {
+void WindowRowNumberExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+	}
+}
+
+void WindowRowNumberExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
+	const auto &wexpr = executor.wexpr;
+
+	auto &child_idx = executor.child_idx;
+	for (auto &child : wexpr.children) {
+		child_idx.emplace_back(shared.RegisterEvaluate(child));
+	}
+
+	auto &arg_order_idx = executor.arg_order_idx;
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
@@ -158,27 +165,23 @@ public:
 	WindowNtileLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
 	    : WindowRowNumberLocalState(context, grstate) {
 	}
-
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-			required.insert(PARTITION_END);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-		}
-	}
 };
 
 WindowFunction NtileFun::GetFunction() {
-	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
-	fun.SetBoundsCallback(WindowNtileLocalState::GetBounds);
+	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
+	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing);
 	return fun;
 }
 
-WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowRowNumberExecutor(wexpr, shared) {
+void WindowNtileExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+		required.insert(PARTITION_END);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+	}
 }
 
 unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocalState(ExecutionContext &context,

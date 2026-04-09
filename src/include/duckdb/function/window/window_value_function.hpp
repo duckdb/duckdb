@@ -19,7 +19,8 @@ public:
 	                                     vector<unique_ptr<Expression>> &arguments);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
-	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared) : WindowExecutor(wexpr, shared) {
+	}
 
 	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
 
@@ -33,7 +34,10 @@ class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
 	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments);
-	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+
+	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
@@ -47,7 +51,9 @@ protected:
 
 class WindowFirstValueExecutor : public WindowValueExecutor {
 public:
-	WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
@@ -56,7 +62,9 @@ protected:
 
 class WindowLastValueExecutor : public WindowValueExecutor {
 public:
-	WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
@@ -65,7 +73,9 @@ protected:
 
 class WindowNthValueExecutor : public WindowValueExecutor {
 public:
-	WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
@@ -76,13 +86,13 @@ class WindowFillExecutor : public WindowValueExecutor {
 public:
 	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments);
-
 	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
 	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
-
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
-	WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
+	WindowFillExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 	//! Never ignore nulls (that's the point!)
 	bool IgnoreNulls() const override {
