@@ -25,6 +25,8 @@ fi
 # arch -x86_64
 codeql database analyze build/codeql/db-cpp \
   scripts/codeql/indirect-throw-in-destructor.ql \
+  --verbose \
+  --threads=0 \
   --format=sarifv2.1.0 \
   --output="$SARIF_OUTPUT_FILE"
 
