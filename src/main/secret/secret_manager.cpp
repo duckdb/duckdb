@@ -656,7 +656,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 		return nullptr;
 	}
 
-	LocalFileSystem fs;
+	auto &fs = catalog.GetDatabase().GetLocalFileSystem();
 
 	string base_secret_path = secret_manager.PersistentSecretPath();
 	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");

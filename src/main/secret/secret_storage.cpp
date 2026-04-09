@@ -137,7 +137,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	persistent = true;
 
 	// Check existence of persistent secret dir
-	LocalFileSystem fs;
+	auto &fs = db.GetLocalFileSystem();
 	if (fs.DirectoryExists(secret_path)) {
 		fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
 			string full_path = fs.JoinPath(secret_path, fname);
@@ -186,7 +186,7 @@ static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const Base
 }
 
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
-	LocalFileSystem fs;
+	auto &fs = db.GetLocalFileSystem();
 
 	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
 	// construction
@@ -230,7 +230,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 }
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
-	LocalFileSystem fs;
+	auto &fs = db.GetLocalFileSystem();
 	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
 	persistent_secrets.erase(secret);
 	try {
