@@ -176,7 +176,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransf
 	return result;
 }
 
-string PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
@@ -191,7 +192,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTrans
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto collation_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	if (collation_list.size() > 1) {
-		throw NotImplementedException("Can only drop one object at a time");
+	    throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto collation = transformer.Transform<string>(collation_list[0]);
 	info->catalog = INVALID_CATALOG;

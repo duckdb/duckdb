@@ -1,6 +1,6 @@
-# name: fuzzer_issues/diverge_0009.test
+# name: test/sql/peg_parser/fuzzer/diverge_0009.test
 # description: PEG should accept (currently rejects): Parser Error: Enum transform failed: could not find mapping for 'SeqMinOrMax'
-# group: [peg_parser]
+# group: [fuzzer]
 
 require autocomplete
 

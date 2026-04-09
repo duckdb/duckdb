@@ -1,6 +1,6 @@
-# name: fuzzer_issues/diverge_0060.test
+# name: test/sql/peg_parser/fuzzer/diverge_0060.test
 # description: PEG should accept (currently rejects): Parser Error: ORDER BY in a recursive query is not allowed
-# group: [peg_parser]
+# group: [fuzzer]
 
 require autocomplete
 

@@ -1,3 +1,6 @@
+# name: test/sql/peg_parser/fuzzer/internal_0208.test
+# group: [fuzzer]
+
 require autocomplete
 
 statement ok

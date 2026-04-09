@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/fuzzer/diverge_0014.test
+# name: test/sql/peg_parser/fuzzer/internal_0001.test
 # description: PEG parser throws internal exception here for create secret
 # group: [fuzzer]
 

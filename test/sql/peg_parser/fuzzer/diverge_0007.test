@@ -1,6 +1,6 @@
-# name: fuzzer_issues/diverge_0007.test
+# name: test/sql/peg_parser/fuzzer/diverge_0007.test
 # description: PEG should reject (currently accepts): Not implemented Error: Unimplemented explain type: entry
-# group: [peg_parser]
+# group: [fuzzer]
 
 require autocomplete
 
