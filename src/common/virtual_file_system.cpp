@@ -112,6 +112,10 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
 VirtualFileSystem::~VirtualFileSystem() {
 }
 
+FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
+	return *file_system_registry->default_fs->file_system;
+}
+
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
