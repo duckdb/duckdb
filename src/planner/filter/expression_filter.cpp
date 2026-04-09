@@ -241,52 +241,9 @@ unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter
 	return make_uniq<ExpressionFilter>(std::move(expr));
 }
 
-static void ReplaceStructExtractAt(unique_ptr<Expression> &expr, const string &column_name) {
-	// Recursively process children first
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&column_name](unique_ptr<Expression> &child) { ReplaceStructExtractAt(child, column_name); });
-
-	// Check if this is a struct_extract/struct_extract_at function call
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &func_expr = expr->Cast<BoundFunctionExpression>();
-		if ((func_expr.function.name == "struct_extract_at" || func_expr.function.name == "struct_extract") &&
-		    !func_expr.children.empty()) {
-			auto &child_type = func_expr.children[0]->return_type;
-			if (child_type.id() == LogicalTypeId::STRUCT) {
-				string field_name;
-				if (func_expr.function.name == "struct_extract_at") {
-					auto &bind_data = func_expr.bind_info->Cast<StructExtractBindData>();
-					field_name = StructType::GetChildName(child_type, bind_data.index);
-				} else if (func_expr.children.size() > 1 &&
-				           func_expr.children[1]->type == ExpressionType::VALUE_CONSTANT) {
-					auto &field_value = func_expr.children[1]->Cast<BoundConstantExpression>().value;
-					if (field_value.type().id() == LogicalTypeId::VARCHAR) {
-						field_name = field_value.GetValue<string>();
-					}
-				}
-				if (field_name.empty()) {
-					return;
-				}
-				// Build the dot-notation name from the child
-				string base_name;
-				if (func_expr.children[0]->type == ExpressionType::BOUND_REF) {
-					base_name = column_name;
-				} else {
-					base_name = func_expr.children[0]->GetName();
-				}
-				auto alias = base_name + "." + field_name;
-				auto replacement = make_uniq<BoundReferenceExpression>(alias, func_expr.return_type, 0ULL);
-				expr = std::move(replacement);
-			}
-		}
-	}
-}
-
 string ExpressionFilter::ExpressionToFriendlyString(const Expression &expression, const string &column_name) {
 	// Default: use standard expression ToString with column name substitution
 	auto expr_copy = expression.Copy();
-	// Convert struct_extract_at to dot notation BEFORE replacing BoundRefs (needs type info)
-	ReplaceStructExtractAt(expr_copy, column_name);
 	auto name_expr = make_uniq<BoundReferenceExpression>(column_name, LogicalType::INVALID, 0ULL);
 	ReplaceExpressionRecursive(expr_copy, *name_expr, ExpressionType::BOUND_REF);
 	return expr_copy->ToString();
