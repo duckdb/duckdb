@@ -589,8 +589,9 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFieldInfo &info) {
-	// follow the path
-	auto &col = GetColumn(info.column_path[0]);
+	// follow the path - the parent column must exist regardless of IF NOT EXISTS (which only applies to the new field)
+	auto col_idx = GetColumnIndex(info.column_path[0], false);
+	auto &col = GetColumn(col_idx);
 	auto res = AddFieldToStruct(col.Type(), info.column_path, info.new_field);
 	if (res.error.HasError()) {
 		if (!info.if_field_not_exists) {
