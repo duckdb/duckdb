@@ -244,7 +244,6 @@ function(duckdb_codesign_for_debugging target)
     endif()
     add_custom_command(TARGET ${target} POST_BUILD
       COMMAND codesign -s - -f --entitlements "${ENTITLEMENTS_FILE}" "$<TARGET_FILE:${target}>"
-      COMMENT "Codesigning ${target} for macOS debugging"
       VERBATIM
     )
   endif()
