@@ -42,21 +42,17 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 
 	if (total_matches == 0 && return_pos) {
 		// if there are no members that match the target type, we cannot return a position
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<RETURN_TYPE>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
+	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
 	const auto member_count = members.size();
 	for (idx_t row = 0; row < count; row++) {
 		const auto &member_row_idx = vector_format.sel->get_index(row);
 
 		if (!vector_format.validity.RowIsValid(member_row_idx)) {
-			result_validity.SetInvalid(row);
+			result_data.SetInvalid(row);
 			continue;
 		}
 
@@ -68,7 +64,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
 			if (!target_valid || return_pos) {
-				result_validity.SetInvalid(row);
+				result_data.SetInvalid(row);
 			} else {
 				result_data[row] = false;
 			}
@@ -102,7 +98,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 
 		if (!found) {
 			if (return_pos) {
-				result_validity.SetInvalid(row);
+				result_data.SetInvalid(row);
 			} else {
 				result_data[row] = false;
 			}
@@ -179,8 +175,7 @@ static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 

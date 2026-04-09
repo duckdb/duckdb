@@ -72,8 +72,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result, args.size());
@@ -85,8 +84,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
@@ -98,8 +96,7 @@ static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state,
 	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
@@ -159,8 +156,7 @@ struct StrpTimeFunction {
 		auto format_entries = args.data[1].Validity(args.size());
 
 		if (!format_entries.IsValid(0)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) {
@@ -180,8 +176,7 @@ struct StrpTimeFunction {
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
 		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 

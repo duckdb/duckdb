@@ -191,9 +191,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	idx_t count = args.size();
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
 	// Create a DataChunk referencing only the key columns (skip path and index_name).
 	DataChunk key_chunk;
 	key_chunk.InitializeEmpty(bind_data.key_types);
@@ -207,12 +204,13 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	art.GenerateKeys<>(allocator, key_chunk, keys);
 
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		if (key.Empty()) {
-			result_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 		} else {
-			result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
+			result_data[i] = string_t(const_char_ptr_cast(key.data), key.len);
 		}
 	}
 	if (count == 1) {

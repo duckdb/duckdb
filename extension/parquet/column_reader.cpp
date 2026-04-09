@@ -154,12 +154,27 @@ idx_t ColumnReader::FileOffset() const {
 	}
 	auto min_offset = NumericLimits<idx_t>::Maximum();
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
-		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.dictionary_page_offset);
+		if (chunk->meta_data.dictionary_page_offset < 0) {
+			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                            "dictionary page offset (%lld)",
+			                            reader.GetFileName(), chunk->meta_data.dictionary_page_offset);
+		}
+		min_offset = MinValue<idx_t>(min_offset, NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset));
 	}
 	if (chunk->meta_data.__isset.index_page_offset) {
-		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.index_page_offset);
+		if (chunk->meta_data.index_page_offset < 0) {
+			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                            "index page offset (%lld)",
+			                            reader.GetFileName(), chunk->meta_data.index_page_offset);
+		}
+		min_offset = MinValue<idx_t>(min_offset, NumericCast<idx_t>(chunk->meta_data.index_page_offset));
 	}
-	min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.data_page_offset);
+	if (chunk->meta_data.data_page_offset < 0) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+		                            "data page offset (%lld)",
+		                            reader.GetFileName(), chunk->meta_data.data_page_offset);
+	}
+	min_offset = MinValue<idx_t>(min_offset, NumericCast<idx_t>(chunk->meta_data.data_page_offset));
 
 	return min_offset;
 }
@@ -199,11 +214,16 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 		                            Reader().GetFileName());
 	}
 
+	if (chunk->meta_data.data_page_offset < 0) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+		                            "data page offset (%lld)",
+		                            Reader().GetFileName(), chunk->meta_data.data_page_offset);
+	}
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
-	chunk_read_offset = chunk->meta_data.data_page_offset;
+	chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.data_page_offset);
 	if (chunk->meta_data.__isset.dictionary_page_offset && chunk->meta_data.dictionary_page_offset >= 4) {
 		// this assumes the data pages follow the dict pages directly.
-		chunk_read_offset = chunk->meta_data.dictionary_page_offset;
+		chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset);
 	}
 	group_rows_available = chunk->meta_data.num_values;
 }

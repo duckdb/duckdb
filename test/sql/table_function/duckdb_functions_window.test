@@ -12,16 +12,16 @@ order by all;
 ----
 cume_dist	[]	[]	window
 dense_rank	[]	[]	window
-fill	[col0]	[T]	window
-first_value	[col0]	[T]	window
-lag	[col0]	[T]	window
-lag	[col0, col1]	[T, BIGINT]	window
-lag	[col0, col1, col2]	[T, BIGINT, T]	window
-last_value	[col0]	[T]	window
-lead	[col0]	[T]	window
-lead	[col0, col1]	[T, BIGINT]	window
-lead	[col0, col1, col2]	[T, BIGINT, T]	window
-nth_value	[col0, col1]	[T, BIGINT]	window
+fill	[col0]	[ANY]	window
+first_value	[col0]	[ANY]	window
+lag	[col0]	[ANY]	window
+lag	[col0, col1]	[ANY, BIGINT]	window
+lag	[col0, col1, col2]	[ANY, BIGINT, ANY]	window
+last_value	[col0]	[ANY]	window
+lead	[col0]	[ANY]	window
+lead	[col0, col1]	[ANY, BIGINT]	window
+lead	[col0, col1, col2]	[ANY, BIGINT, ANY]	window
+nth_value	[col0, col1]	[ANY, BIGINT]	window
 ntile	[col0]	[BIGINT]	window
 percent_rank	[]	[]	window
 rank	[]	[]	window

@@ -28,11 +28,34 @@ inputs:
     description: Whether to run smoke tests
     required: false
     default: "true"
+  changed_tests_file:
+    description: Path to a newline-delimited list of changed tests to include in smoke tests
+    required: false
+    default: ""
+  save_cache:
+    description: Whether to save vcpkg binary cache
+    required: false
+    default: "true"
 runs:
   using: composite
   steps:
+    - name: Set vcpkg binary cache path
+      shell: bash
+      run: echo "VCPKG_DEFAULT_BINARY_CACHE=${GITHUB_WORKSPACE}/vcpkg-cache" >> "$GITHUB_ENV"
+
+    - name: Restore vcpkg binaries
+      id: vcpkg-binary-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg-cache
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('build/extension_configuration/vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-
+
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -50,14 +73,21 @@ runs:
     - name: Smoke tests
       if: ${{ inputs.run_smoke_tests == 'true' }}
       shell: bash
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest T="--changed-tests=${{ inputs.changed_tests_file }}"
+
+    - name: Save vcpkg binaries
+      if: ${{ inputs.save_cache == 'true' && steps.vcpkg-binary-cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg-cache
+        key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
 
     - name: Prepare release artifact
       shell: bash
       run: make release-artifact
 
     - name: Upload release build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact_name }}
         path: ${{ inputs.artifact_tarball }}

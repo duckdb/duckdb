@@ -39,20 +39,34 @@ namespace duckdb {
 enum class VectorConstructorAction { REFERENCE_VECTOR };
 
 Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), validity(capacity) {
+    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
 	if (create_data) {
 		Initialize(initialize_to_zero, capacity);
 	}
+}
+
+Vector::Vector(LogicalType type_p, VectorType vector_type, buffer_ptr<VectorBuffer> buffer_p)
+    : vector_type(vector_type), type(std::move(type_p)), buffer(std::move(buffer_p)) {
 }
 
 Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(std::move(type_p), true, false, capacity) {
 }
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)) {
-	if (dataptr && !type.IsValid()) {
+	if (!dataptr) {
+		return;
+	}
+	if (!type.IsValid()) {
 		throw InternalException("Cannot create a vector of type INVALID!");
 	}
-	buffer = make_uniq<VectorBuffer>(dataptr);
+	if (type.IsNested()) {
+		throw InternalException("Cannot create a nested vector from a single data pointer");
+	}
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		buffer = make_buffer<VectorStringBuffer>(dataptr);
+	} else {
+		buffer = make_buffer<StandardVectorBuffer>(dataptr);
+	}
 }
 
 Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
@@ -76,8 +90,7 @@ Vector::Vector(const Value &value) : type(value.type()) {
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(std::move(other.type)), validity(std::move(other.validity)),
-      buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
+    : vector_type(other.vector_type), type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
 Vector Vector::Ref(const Vector &other) {
@@ -87,30 +100,27 @@ Vector Vector::Ref(const Vector &other) {
 void Vector::Reference(const Value &value) {
 	D_ASSERT(GetType().id() == value.type().id());
 	this->vector_type = VectorType::CONSTANT_VECTOR;
-	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_uniq<VectorStructBuffer>();
+		auto struct_buffer = make_buffer<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
 			                                          : StructValue::GetChildren(value)[i]);
 		}
-		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
+		buffer = std::move(struct_buffer);
 		if (value.IsNull()) {
 			SetValue(0, value);
 		}
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_uniq<VectorListBuffer>(value.type());
-		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
+		buffer = VectorBuffer::CreateConstantVector(value.type());
 		SetValue(0, value);
 	} else if (internal_type == PhysicalType::ARRAY) {
-		auto array_buffer = make_uniq<VectorArrayBuffer>(value.type());
-		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
+		buffer = make_buffer<VectorArrayBuffer>(value.type());
 		SetValue(0, value);
 	} else {
-		auxiliary.reset();
+		buffer = VectorBuffer::CreateConstantVector(value.type());
 		SetValue(0, value);
 	}
 }
@@ -148,15 +158,20 @@ void Vector::Reinterpret(const Vector &other) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
-		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
+		auto &old_dict = buffer->Cast<DictionaryBuffer>();
+		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
+		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), std::move(new_entry));
+		auto dict_size = old_dict.GetDictionarySize();
+		if (dict_size.IsValid()) {
+			buffer->Cast<DictionaryBuffer>().SetDictionarySize(dict_size.GetIndex());
+		}
+		buffer->Cast<DictionaryBuffer>().SetDictionaryId(old_dict.GetDictionaryId());
 	}
 }
 
 void Vector::ConstReference(const Vector &other) const {
 	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);
-	AssignSharedPointer(auxiliary, other.auxiliary);
-	validity = other.validity;
 }
 
 void Vector::ResetFromCache(const VectorCache &cache) {
@@ -165,7 +180,7 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 
 void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	D_ASSERT(end >= offset);
-	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR || offset == 0) {
 		Reference(other);
 		return;
 	}
@@ -182,6 +197,10 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	}
 
 	auto internal_type = GetType().InternalType();
+	// Keep a reference to the old buffer in case this == &other (self-slice).
+	// Without this, replacing 'buffer' (which IS other.buffer when this == &other) before
+	// reading other.buffer->GetValidityMask() would lose the old validity.
+	auto old_buffer = other.buffer;
 	if (internal_type == PhysicalType::STRUCT) {
 		Vector new_vector(GetType());
 		auto &entries = StructVector::GetEntries(new_vector);
@@ -190,7 +209,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		for (idx_t i = 0; i < entries.size(); i++) {
 			entries[i].Slice(other_entries[i], offset, end);
 		}
-		new_vector.validity.Slice(other.validity, offset, end - offset);
+		new_vector.buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
 		Reference(new_vector);
 	} else if (internal_type == PhysicalType::ARRAY) {
 		Vector new_vector(GetType());
@@ -200,15 +219,26 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		const auto array_size = ArrayType::GetSize(GetType());
 		// We need to slice the child vector with the multiplied offset and end
 		child_vec.Slice(other_child_vec, offset * array_size, end * array_size);
-		new_vector.validity.Slice(other.validity, offset, end - offset);
+		new_vector.buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
 		Reference(new_vector);
+	} else if (internal_type == PhysicalType::LIST) {
+		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
+		auto &parent = old_buffer->Cast<VectorListBuffer>();
+		buffer = make_buffer<VectorListBuffer>(offset_ptr, parent);
+		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
+		vector_type = other.vector_type;
+	} else if (internal_type == PhysicalType::VARCHAR) {
+		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
+		auto string_buffer = make_buffer<VectorStringBuffer>(offset_ptr);
+		buffer = std::move(string_buffer);
+		StringVector::AddHeapReference(*this, other);
+		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
+		vector_type = other.vector_type;
 	} else {
-		Reference(other);
-		if (offset > 0) {
-			auto offset_ptr = buffer->GetData() + GetTypeIdSize(internal_type) * offset;
-			buffer = make_buffer<VectorBuffer>(offset_ptr);
-			validity.Slice(other.validity, offset, end - offset);
-		}
+		auto offset_ptr = old_buffer->GetData() + GetTypeIdSize(internal_type) * offset;
+		buffer = make_buffer<StandardVectorBuffer>(offset_ptr);
+		buffer->GetValidityMask().Slice(old_buffer->GetValidityMask(), offset, end - offset);
+		vector_type = other.vector_type;
 	}
 }
 
@@ -227,18 +257,18 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	}
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
-		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
 		auto dictionary_id = DictionaryVector::DictionaryId(*this);
-		auto sliced_dictionary = current_sel.Slice(sel, count);
-		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
+		auto sliced_dictionary = old_dict.GetSelVector().Slice(sel, count);
+		auto entry = old_dict.GetEntryPtr();
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
-			auto &child_vector = DictionaryVector::Child(*this);
-
-			Vector new_child(Vector::Ref(child_vector));
-			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
-			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
+			auto &child_vector = entry->data;
+			auto sliced_buffer = make_buffer<VectorStructBuffer>(child_vector, sel, count);
+			Vector new_child(GetType(), VectorType::FLAT_VECTOR, std::move(sliced_buffer));
+			entry = make_shared_ptr<DictionaryEntry>(std::move(new_child));
 		}
+		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
 		if (dictionary_size.IsValid()) {
 			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
 			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
@@ -255,13 +285,12 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	Vector child_vector(Vector::Ref(*this));
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		child_vector.auxiliary = make_buffer<VectorStructBuffer>(*this, sel, count);
+		child_vector.buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
+		child_vector.buffer->GetValidityMask() = buffer->GetValidityMask();
 	}
-	auto child_ref = make_buffer<VectorChildBuffer>(std::move(child_vector));
-	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
+	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
 	vector_type = VectorType::DICTIONARY_VECTOR;
-	buffer = std::move(dict_buffer);
-	auxiliary = std::move(child_ref);
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -276,18 +305,12 @@ void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVect
 	Dictionary(dictionary_size, sel, count);
 }
 
-void Vector::Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel) {
+void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel) {
 	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
 	D_ASSERT(type == reusable_dict->data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
-	validity.Reset();
 
-	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
-	dict_buffer->SetDictionarySize(reusable_dict->size.GetIndex());
-	dict_buffer->SetDictionaryId(reusable_dict->id);
-	buffer = std::move(dict_buffer);
-
-	auxiliary = std::move(reusable_dict);
+	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -298,10 +321,13 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
 		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto target_data = current_sel.data();
-		auto entry = cache.cache.find(target_data);
-		if (entry != cache.cache.end()) {
-			// cached entry exists: use that
-			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
+		auto cache_entry = cache.cache.find(target_data);
+		if (cache_entry != cache.cache.end()) {
+			// cached entry exists: use the cached selection vector with our dictionary entry
+			auto &old_dict = this->buffer->Cast<DictionaryBuffer>();
+			auto dict_entry = old_dict.GetEntryPtr();
+			this->buffer = make_buffer<DictionaryBuffer>(cache_entry->second->Cast<DictionaryBuffer>().GetSelVector(),
+			                                             std::move(dict_entry));
 			vector_type = VectorType::DICTIONARY_VECTOR;
 		} else {
 			Slice(sel, count);
@@ -318,31 +344,28 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 }
 
 void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
-	auxiliary.reset();
-	validity.Reset();
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_uniq<VectorStructBuffer>(type, capacity);
-		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
+		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
-		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
+		buffer = make_buffer<VectorListBuffer>(capacity, type);
+		if (initialize_to_zero) {
+			auto data = buffer->GetData();
+			memset(data, 0, capacity * sizeof(list_entry_t));
+		}
 	} else if (internal_type == PhysicalType::ARRAY) {
-		auto array_buffer = make_uniq<VectorArrayBuffer>(type, capacity);
-		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
-	}
-	auto type_size = GetTypeIdSize(internal_type);
-	if (type_size > 0) {
+		buffer = make_buffer<VectorArrayBuffer>(type, capacity);
+	} else {
+		auto type_size = GetTypeIdSize(internal_type);
+		if (type_size == 0) {
+			throw InternalException("Trying to create buffer for zero-length type");
+		}
 		buffer = VectorBuffer::CreateStandardVector(type, capacity);
 		if (initialize_to_zero) {
 			auto data = buffer->GetData();
 			memset(data, 0, capacity * type_size);
 		}
-	}
-
-	if (capacity > validity.Capacity()) {
-		validity.Resize(capacity);
 	}
 }
 
@@ -352,26 +375,26 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	ResizeInfo resize_info(*this, buffer_ptr, multiplier);
 	resize_infos.emplace_back(resize_info);
 
-	if (!auxiliary) {
+	if (!buffer) {
 		return;
 	}
 
-	switch (GetAuxiliary()->GetBufferType()) {
+	switch (buffer->GetBufferType()) {
+	case VectorBufferType::ARRAY_BUFFER: {
+		// We need to multiply the multiplier by the array size because
+		// the child vectors of ARRAY types are always child_count * array_size.
+		auto &vector_array_buffer = buffer->Cast<VectorArrayBuffer>();
+		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
+		auto &child = vector_array_buffer.GetChild();
+		child.FindResizeInfos(resize_infos, new_multiplier);
+		break;
+	}
 	case VectorBufferType::STRUCT_BUFFER: {
-		auto &vector_struct_buffer = auxiliary->Cast<VectorStructBuffer>();
+		auto &vector_struct_buffer = buffer->Cast<VectorStructBuffer>();
 		auto &children = vector_struct_buffer.GetChildren();
 		for (auto &child : children) {
 			child.FindResizeInfos(resize_infos, multiplier);
 		}
-		break;
-	}
-	case VectorBufferType::ARRAY_BUFFER: {
-		// We need to multiply the multiplier by the array size because
-		// the child vectors of ARRAY types are always child_count * array_size.
-		auto &vector_array_buffer = auxiliary->Cast<VectorArrayBuffer>();
-		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
-		auto &child = vector_array_buffer.GetChild();
-		child.FindResizeInfos(resize_infos, new_multiplier);
 		break;
 	}
 	default:
@@ -379,10 +402,34 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	}
 }
 
+void Vector::AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data) {
+	buffer->AddAuxiliaryData(std::move(data));
+}
+
+void Vector::AddHeapReference(const Vector &other) {
+	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		AddHeapReference(DictionaryVector::Child(other));
+		return;
+	}
+	auto &auxiliary_data = other.buffer->GetAuxiliaryData();
+	if (!auxiliary_data) {
+		return;
+	}
+	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
+}
+
 void Vector::Resize(idx_t current_size, idx_t new_size) {
 	// The vector does not contain any data.
 	if (!buffer) {
-		buffer = make_buffer<VectorBuffer>(0);
+		auto internal_type = GetType().InternalType();
+		if (internal_type == PhysicalType::LIST) {
+			throw InternalException("Resize for empty list not supported");
+		}
+		if (internal_type == PhysicalType::VARCHAR) {
+			buffer = make_buffer<VectorStringBuffer>(idx_t(0));
+		} else {
+			buffer = make_buffer<StandardVectorBuffer>(0, GetTypeIdSize(internal_type));
+		}
 	}
 
 	// Obtain the resize information for each (nested) vector.
@@ -392,7 +439,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	for (auto &resize_info_entry : resize_infos) {
 		// Resize the validity mask.
 		auto new_validity_size = new_size * resize_info_entry.multiplier;
-		resize_info_entry.vec.validity.Resize(new_validity_size);
+		resize_info_entry.vec.buffer->GetValidityMask().Resize(new_validity_size);
 
 		// For nested data types, we only need to resize the validity mask.
 		if (!resize_info_entry.data) {
@@ -409,13 +456,27 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 			                          StringUtil::BytesToHumanReadableString(target_size),
 			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
 		}
-
 		// Copy the data buffer to a resized buffer.
 		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
-		auto new_data = stored_allocator ? stored_allocator->Allocate(target_size)
-		                                 : Allocator::DefaultAllocator().Allocate(target_size);
+		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
+		auto new_data = allocator.Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
-		resize_info_entry.buffer->SetData(std::move(new_data));
+		// Save the resized validity mask before replacing the buffer.
+		auto resized_validity = std::move(resize_info_entry.vec.buffer->GetValidityMask());
+		buffer_ptr<VectorBuffer> new_buffer;
+		if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::LIST) {
+			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorListBuffer>();
+			new_buffer = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
+		} else if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::VARCHAR) {
+			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorStringBuffer>();
+			new_buffer = make_buffer<VectorStringBuffer>(std::move(new_data), old_buffer);
+		} else {
+			new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
+		}
+		// Restore the resized validity mask into the new buffer.
+		new_buffer->GetValidityMask() = std::move(resized_validity);
+		resize_info_entry.buffer = new_buffer.get();
+		resize_info_entry.vec.buffer = std::move(new_buffer);
 	}
 }
 
@@ -439,7 +500,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	D_ASSERT(val.IsNull() || (val.type().InternalType() == GetType().InternalType()));
 
-	validity.Set(index, !val.IsNull());
+	buffer->GetValidityMask().Set(index, !val.IsNull());
 	auto physical_type = GetType().InternalType();
 	if (val.IsNull() && !IsStructOrArrayRecursive(GetType())) {
 		// for structs and arrays we still need to set the child-entries to NULL
@@ -616,7 +677,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 	}
 	auto &vector = current_vector_ref.get();
-	auto &validity = vector.validity;
+	auto &validity = vector.buffer->GetValidityMask();
 	auto &type = vector.GetType();
 	if (!validity.RowIsValid(index)) {
 		return Value(vector.GetType());
@@ -926,7 +987,12 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 		auto physical_size = GetTypeIdSize(type.InternalType());
 		auto total_size = physical_size * cardinality;
 
-		auto child_cardinality = ListVector::GetListCapacity(*this);
+		idx_t child_cardinality = 0;
+		if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			child_cardinality = ListVector::GetListCapacity(DictionaryVector::Child(*this));
+		} else {
+			child_cardinality = ListVector::GetListCapacity(*this);
+		}
 		auto &child_entry = ListVector::GetEntry(*this);
 		total_size += (child_entry.GetAllocationSize(child_cardinality));
 		return total_size;
@@ -1111,11 +1177,14 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 			// dictionary with non-flat child: create a new reference to the child and flatten it
 			Vector child_vector(Vector::Ref(child));
 			child_vector.Flatten(sel, count);
-			auto new_aux = make_buffer<VectorChildBuffer>(std::move(child_vector));
+			auto new_entry = make_buffer<DictionaryEntry>(std::move(child_vector));
+			auto &dict_entry = *new_entry;
+			auto &old_dict_buffer = this->buffer->Cast<DictionaryBuffer>();
+			auto new_dict_buffer = make_buffer<DictionaryBuffer>(old_dict_buffer.GetSelVector(), std::move(new_entry));
+			this->buffer = std::move(new_dict_buffer);
 
-			format.data = FlatVector::GetData(new_aux->data);
-			format.validity = FlatVector::Validity(new_aux->data);
-			this->auxiliary = std::move(new_aux);
+			format.data = FlatVector::GetData(dict_entry.data);
+			format.validity = FlatVector::Validity(dict_entry.data);
 		}
 		break;
 	}
@@ -1168,13 +1237,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
-	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 3);
-	auto data = reinterpret_cast<int64_t *>(buffer->GetData());
-	data[0] = start;
-	data[1] = increment;
-	data[2] = int64_t(count);
-	validity.Reset();
-	auxiliary.reset();
+	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 }
 
 void Vector::Shred(Vector &shredded_data) {
@@ -1186,8 +1249,7 @@ void Vector::Shred(Vector &shredded_data) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
 	this->vector_type = VectorType::SHREDDED_VECTOR;
-	this->auxiliary = make_buffer<ShreddedVectorBuffer>(shredded_data);
-	validity.Reset();
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
 }
 
 // FIXME: This should ideally be const
@@ -1238,9 +1300,9 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			return Vector::Serialize(serializer, 1, false); // just serialize one value
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 			serializer.WriteProperty(90, "vector_type", VectorType::SEQUENCE_VECTOR);
-			auto data = reinterpret_cast<int64_t *>(buffer->GetData());
-			serializer.WriteProperty(91, "seq_start", data[0]);
-			serializer.WriteProperty(92, "seq_increment", data[1]);
+			auto &sequence = buffer->Cast<SequenceBuffer>();
+			serializer.WriteProperty(91, "seq_start", sequence.start);
+			serializer.WriteProperty(92, "seq_increment", sequence.increment);
 			return; // for sequence vectors we do not serialize anything else
 		} else {
 			// TODO: other compressed vector types (SHREDDED, FSST)
@@ -1400,9 +1462,9 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	}
 }
 
-class StringDeserializeBuffer : public VectorBuffer {
+class StringDeserializeHolder : public AuxiliaryDataHolder {
 public:
-	explicit StringDeserializeBuffer(idx_t size) : VectorBuffer(VectorBufferType::OPAQUE_BUFFER) {
+	explicit StringDeserializeHolder(idx_t size) {
 		data = unique_ptr<data_t[]>(new data_t[size]);
 	}
 	unique_ptr<data_t[]> data;
@@ -1490,12 +1552,12 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
 				deserializer.ReadProperty(108, "length_data", length_data.get(), length_data_length);
 
-				auto byte_data_buffer = make_buffer<StringDeserializeBuffer>(byte_data_length.GetIndex());
+				auto byte_data_buffer = make_uniq<StringDeserializeHolder>(byte_data_length.GetIndex());
 				// directly read into a string buffer we can glue to the vector
 				deserializer.ReadProperty(109, "byte_data", byte_data_buffer->data.get(), byte_data_length.GetIndex());
 				auto lengths_read_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				auto byte_read_ptr = reinterpret_cast<const char *>(byte_data_buffer->data.get());
-				StringVector::AddBuffer(*this, byte_data_buffer);
+				StringVector::AddAuxiliaryData(*this, std::move(byte_data_buffer));
 
 				for (idx_t i = 0; i < count; ++i) {
 					if (!validity.RowIsValid(i)) {
@@ -1561,10 +1623,6 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 void Vector::SetVectorType(VectorType vector_type_p) {
 	vector_type = vector_type_p;
 	auto physical_type = GetType().InternalType();
-	auto flat_or_const = GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR;
-	if (TypeIsConstantSize(physical_type) && flat_or_const) {
-		auxiliary.reset();
-	}
 	if (vector_type == VectorType::CONSTANT_VECTOR && physical_type == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {
@@ -1591,9 +1649,10 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 		}
 		case VectorType::FLAT_VECTOR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
+			auto &flat_validity = FlatVector::Validity(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
-				if (validity.RowIsValid(oidx)) {
+				if (flat_validity.RowIsValid(oidx)) {
 					strings[oidx].Verify();
 				}
 			}
@@ -1673,10 +1732,6 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		sel = &owned_sel;
 		vector = &child;
 		vtype = vector->GetVectorType();
-	}
-	if (TypeIsConstantSize(type.InternalType()) &&
-	    (vtype == VectorType::CONSTANT_VECTOR || vtype == VectorType::FLAT_VECTOR)) {
-		D_ASSERT(!vector->auxiliary);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		// verify that the string is correct unicode
