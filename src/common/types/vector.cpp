@@ -1605,6 +1605,9 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 }
 
 VectorType Vector::GetVectorType() const {
+	if (!buffer) {
+		return VectorType::FLAT_VECTOR;
+	}
 	return buffer->GetVectorType();
 }
 
