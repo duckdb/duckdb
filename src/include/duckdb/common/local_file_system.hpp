@@ -88,6 +88,10 @@ public:
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	bool OnDiskFile(FileHandle &handle) override;
 
+	bool IsLocalFileSystem() const override {
+		return true;
+	}
+
 	std::string GetName() const override {
 		return "LocalFileSystem";
 	}
