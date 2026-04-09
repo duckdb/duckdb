@@ -578,11 +578,6 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
-	if (!sequence_info.last_value.has_value()) {
-		// reset with checkpoint read, as usage_count should be fresh for every session
-		sequence_info.usage_count = 0;
-	}
-
 	catalog.CreateSequence(transaction, sequence_info);
 }
 

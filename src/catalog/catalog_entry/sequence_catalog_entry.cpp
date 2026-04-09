@@ -45,10 +45,10 @@ SequenceData SequenceCatalogEntry::GetData() const {
 int64_t SequenceCatalogEntry::CurrentValue() {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
-	if (data.usage_count == 0u) {
+	if (!data.last_value) {
 		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = data.last_value.value_or(data.start_value);
+	result = data.last_value.value();
 	return result;
 }
 
@@ -86,10 +86,6 @@ void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter
 		data.usage_count = v_usage_count;
 		data.counter = v_counter;
 		data.last_value = last_value;
-	}
-	if (!last_value) {
-		// reset after replay, as usage_count should be fresh for every session
-		data.usage_count = 0;
 	}
 }
 

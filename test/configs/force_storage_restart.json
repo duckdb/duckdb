@@ -40,6 +40,13 @@
       "paths": [
         "test/sql/copy/parquet/parquet_glob_cache.test"
       ]
+    },
+    {
+      "reason": "On version < v2.0.0, calling currval() before nextval() after a WAL replay is expected to error",
+      "paths": [
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_not_supported.test"
+      ]
     }
   ]
 }
