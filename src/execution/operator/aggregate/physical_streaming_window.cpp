@@ -480,15 +480,15 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	SelectionVector sel(&s);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
-	arg_cursor.Slice(sel, 1);
 	// This doesn't work for STRUCTs because the SV
 	// is not copied to the children when you slice
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
 		auto &col_vec = arg_cursor.data[col_idx];
-		DictionaryVector::Child(col_vec).Reference(arg_chunk.data[col_idx]);
 		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 			structs.emplace_back(col_idx);
+		} else {
+			arg_cursor.data[col_idx].Slice(arg_chunk.data[col_idx], sel, 1);
 		}
 	}
 

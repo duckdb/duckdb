@@ -8,9 +8,10 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
-#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
 
 namespace duckdb {
 
@@ -142,6 +143,13 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 //===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
+unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	function.return_type = arguments[0]->return_type;
+
+	return nullptr;
+}
+
 WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
 	for (const auto &order : wexpr.arg_orders) {
@@ -295,26 +303,53 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 //===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
-WindowFunctionSet LeadFun::GetFunctions() {
-	WindowFunctionSet funcs("lead");
+unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
+                                                     vector<unique_ptr<Expression>> &arguments) {
+	WindowValueExecutor::Bind(context, function, arguments);
 
+	if (arguments.size() > 2) {
+		function.arguments[2] = function.return_type;
+	}
+
+	return nullptr;
+}
+
+WindowFunctionSet LeadFun::GetFunctions() {
+	WindowFunctionSet funcs;
+
+	auto bind = WindowLeadLagExecutor::Bind;
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LEAD));
+	                                 ExpressionType::WINDOW_LEAD, bind));
 	funcs.AddFunction(
-	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_LEAD));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD));
+	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD, bind));
 
 	return funcs;
 }
 
-WindowFunctionSet LagFun::GetFunctions() {
-	WindowFunctionSet funcs("lag");
+WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
+	auto bind = WindowLeadLagExecutor::Bind;
+	switch (nargs) {
+	case 1:
+		return WindowFunction(Name, {type}, type, ExpressionType::WINDOW_LEAD, bind);
+	case 2:
+		return WindowFunction(Name, {type, LogicalType::BIGINT}, type, ExpressionType::WINDOW_LEAD, bind);
+	case 3:
+		return WindowFunction(Name, {type, LogicalType::BIGINT, type}, type, ExpressionType::WINDOW_LEAD, bind);
+	default:
+		throw InternalException("Invalid number of arguments requested for LEAD: %lld", nargs);
+	}
+}
 
+WindowFunctionSet LagFun::GetFunctions() {
+	WindowFunctionSet funcs;
+
+	auto bind = WindowLeadLagExecutor::Bind;
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 ExpressionType::WINDOW_LEAD));
-	funcs.AddFunction(
-	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY, ExpressionType::WINDOW_LEAD));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LEAD));
+	                                 ExpressionType::WINDOW_LAG, bind));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY,
+	                                 ExpressionType::WINDOW_LAG, bind));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAG, bind));
 
 	return funcs;
 }
@@ -491,7 +526,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 }
 
 WindowFunction FirstValueFun::GetFunction() {
-	WindowFunction fun("first_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE);
+	WindowFunction fun({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
+	                   WindowFirstValueExecutor::Bind);
 	return fun;
 }
 
@@ -549,7 +585,8 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 }
 
 WindowFunction LastValueFun::GetFunction() {
-	WindowFunction fun("last_value", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE);
+	WindowFunction fun({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
+	                   WindowFirstValueExecutor::Bind);
 	return fun;
 }
 
@@ -613,8 +650,8 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 }
 
 WindowFunction NthValueFun::GetFunction() {
-	WindowFunction fun("nth_value", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ExpressionType::WINDOW_NTH_VALUE);
+	WindowFunction fun({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_NTH_VALUE,
+	                   WindowFirstValueExecutor::Bind);
 	return fun;
 }
 
@@ -905,8 +942,50 @@ static fill_value_t GetFillValueFunction(const LogicalType &type) {
 	}
 }
 
+static bool IsFillType(const LogicalType &type) {
+	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
+}
+
+unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, WindowFunction &function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
+	WindowValueExecutor::Bind(context, function, arguments);
+
+	//	Check FILL arguments support subtraction
+	if (!IsFillType(arguments[0]->return_type)) {
+		throw BinderException("FILL argument must support subtraction");
+	}
+
+	return nullptr;
+}
+
+void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
+                                  vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
+                                  vector<OrderByNode> &arg_orders) {
+	WindowValueExecutor::Bind(context, function, arguments);
+	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
+		throw BinderException("FILL functions must have only one ORDER BY expression");
+	}
+
+	LogicalType order_type;
+	if (arg_orders.empty()) {
+		D_ASSERT(!orders.empty());
+		auto &order_expr = orders[0].expression;
+		auto &bound = BoundExpression::GetExpression(*order_expr);
+		order_type = bound->return_type;
+	} else {
+		auto &order_expr = arg_orders[0].expression;
+		auto &bound = BoundExpression::GetExpression(*order_expr);
+		order_type = bound->return_type;
+	}
+	if (!IsFillType(order_type)) {
+		throw BinderException("FILL ordering must support subtraction");
+	}
+}
+
 WindowFunction FillFun::GetFunction() {
-	WindowFunction fun("fill", {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL);
+	WindowFunction fun({LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL, WindowFillExecutor::Bind);
+	fun.SetValidateCallback(WindowFillExecutor::Validate);
+
 	return fun;
 }
 

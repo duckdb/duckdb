@@ -90,8 +90,8 @@ static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParam
 		result->from_varchar_local = cast_data.from_varchar_cast.init_local_state(from_varchar_params);
 	}
 	if (cast_data.to_varchar_cast.init_local_state) {
-		CastLocalStateParameters from_varchar_params(parameters, cast_data.to_varchar_cast.cast_data);
-		result->from_varchar_local = cast_data.to_varchar_cast.init_local_state(from_varchar_params);
+		CastLocalStateParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data);
+		result->to_varchar_local = cast_data.to_varchar_cast.init_local_state(to_varchar_params);
 	}
 	return std::move(result);
 }
