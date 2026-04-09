@@ -889,13 +889,13 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 
 void RowGroup::SetCount(idx_t count) {
 	this->count = count;
-	if (!row_id_is_loaded) {
-		lock_guard<mutex> guard(row_group_lock);
-		if (!row_id_is_loaded) {
-			return;
-		}
+	lock_guard<mutex> guard(row_group_lock);
+	if (row_id_is_loaded) {
+		row_id_column_data->count = count;
 	}
-	row_id_column_data->count = count;
+	if (row_number_is_loaded) {
+		row_number_column_data->count = count;
+	}
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
@@ -1523,6 +1523,9 @@ void RowGroup::Verify() {
 	lock_guard<mutex> guard(row_group_lock);
 	if (row_id_is_loaded) {
 		D_ASSERT(row_id_column_data->count == count);
+	}
+	if (row_number_is_loaded) {
+		D_ASSERT(row_number_column_data->count == count);
 	}
 #endif
 }
