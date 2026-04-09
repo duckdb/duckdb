@@ -16,13 +16,14 @@
 namespace duckdb {
 
 static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		string env_name = input.GetString();
 		auto env_value = getenv(env_name.c_str());
 		if (!env_value) {
-			return StringVector::AddString(result, string());
+			return heap.AddString(string());
 		}
-		return StringVector::AddString(result, env_value);
+		return heap.AddString(env_value);
 	});
 }
 

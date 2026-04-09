@@ -104,15 +104,15 @@ public:
 //! ----------------------------------- (u)Integral Cast ----------------------------------- //
 struct IntCastToBignum {
 	template <class SRC>
-	static inline bignum_t Operation(SRC input, Vector &result) {
-		return IntToBignum(result, input);
+	static inline bignum_t Operation(SRC input, StringHeap &heap) {
+		return IntToBignum(heap, input);
 	}
 };
 
 //! ----------------------------------- (u)HugeInt Cast ----------------------------------- //
 struct HugeintCastToBignum {
 	template <class SRC>
-	static inline bignum_t Operation(SRC input, Vector &result) {
+	static inline bignum_t Operation(SRC input, StringHeap &heap) {
 		throw InternalException("Unsupported type for cast to BIGNUM");
 	}
 };
@@ -138,8 +138,8 @@ DUCKDB_API bool TryCastToBignum::Operation(string_t input_value, bignum_t &resul
 
 struct BignumCastToVarchar {
 	template <class SRC>
-	DUCKDB_API static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, Bignum::BignumToVarchar(input));
+	DUCKDB_API static inline string_t Operation(SRC input, StringHeap &heap) {
+		return heap.AddBlob(Bignum::BignumToVarchar(input));
 	}
 };
 

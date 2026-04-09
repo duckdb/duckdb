@@ -9,8 +9,8 @@ namespace {
 
 struct SHA256Operator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto hash = StringVector::EmptyString(result, duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_TEXT);
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
+		auto hash = heap.EmptyString(duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_TEXT);
 
 		duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 		state.AddString(input.GetString());

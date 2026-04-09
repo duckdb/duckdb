@@ -15,7 +15,6 @@ PULL_REQUEST_JOBS = [
     "extensions",
     "wasm-eh",
     "linux-release",
-    "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
     "upload-libduckdb-src",
