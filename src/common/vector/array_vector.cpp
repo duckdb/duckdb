@@ -62,6 +62,22 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
+Value VectorArrayBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		index = 0;
+	}
+	if (!validity.RowIsValid(index)) {
+		return Value(type);
+	}
+	auto stride = ArrayType::GetSize(type);
+	auto offset = index * stride;
+	duckdb::vector<Value> children;
+	for (idx_t i = offset; i < offset + stride; i++) {
+		children.push_back(child->GetValue(i));
+	}
+	return Value::ARRAY(ArrayType::GetChildType(type), std::move(children));
+}
+
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector

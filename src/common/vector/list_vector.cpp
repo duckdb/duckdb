@@ -140,6 +140,24 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	child->Verify(child_sel, child_count);
 }
 
+Value VectorListBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		index = 0;
+	}
+	if (!validity.RowIsValid(index)) {
+		return Value(type);
+	}
+	auto offlen = reinterpret_cast<const list_entry_t *>(data_ptr)[index];
+	duckdb::vector<Value> children;
+	for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+		children.push_back(child->GetValue(i));
+	}
+	if (type.id() == LogicalTypeId::MAP) {
+		return Value::MAP(ListType::GetChildType(type), std::move(children));
+	}
+	return Value::LIST(ListType::GetChildType(type), std::move(children));
+}
+
 buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector

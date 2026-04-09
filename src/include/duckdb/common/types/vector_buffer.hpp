@@ -125,6 +125,8 @@ public:
 public:
 	virtual idx_t GetAllocationSize() const;
 	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	//! Get the value at the given index directly from the buffer's data
+	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 
 protected:
 	VectorType vector_type;

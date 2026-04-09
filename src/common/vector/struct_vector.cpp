@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,48 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 		// 		D_ASSERT(!child_validity.IsValid(index));
 		// 	}
 		// }
+	}
+}
+
+Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		index = 0;
+	}
+	if (!validity.RowIsValid(index)) {
+		return Value(type);
+	}
+	switch (type.id()) {
+	case LogicalTypeId::UNION: {
+		// tag is the first child
+		auto &tag_vector = children[0];
+		auto tag_val = tag_vector.GetValue(index);
+		if (tag_val.IsNull()) {
+			return Value(type);
+		}
+		auto tag = tag_val.GetValue<union_tag_t>();
+		// member is at tag + 1 (tag is child 0)
+		auto value = children[tag + 1].GetValue(index);
+		auto members = UnionType::CopyMemberTypes(type);
+		return Value::UNION(members, tag, std::move(value));
+	}
+	case LogicalTypeId::VARIANT: {
+		duckdb::vector<Value> child_values;
+		child_values.emplace_back(children[0].GetValue(index));
+		child_values.emplace_back(children[1].GetValue(index));
+		child_values.emplace_back(children[2].GetValue(index));
+		child_values.emplace_back(children[3].GetValue(index));
+		return Value::VARIANT(child_values);
+	}
+	default: {
+		duckdb::vector<Value> child_values;
+		for (idx_t i = 0; i < children.size(); i++) {
+			child_values.push_back(children[i].GetValue(index));
+		}
+		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			return Value::AGGREGATE_STATE(type, std::move(child_values));
+		}
+		return Value::STRUCT(type, std::move(child_values));
+	}
 	}
 }
 

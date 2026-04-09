@@ -24,6 +24,31 @@ void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	shredded_data->Verify(sel, count);
 }
 
+Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	// FIXME: this is extremely inefficient
+	Vector copy(LogicalType::VARIANT());
+	SelectionVector sel(1);
+	sel.set_index(0, index);
+	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
+	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
+
+	Vector sliced_shredded(shredded, sel, 1);
+	Vector sliced_unshredded(unshredded, sel, 1);
+	sliced_shredded.Flatten(1);
+	sliced_unshredded.Flatten(1);
+
+	child_list_t<LogicalType> shredded_subtypes;
+	shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
+	shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+	Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
+	StructVector::GetEntries(new_shredded)[0].Reference(sliced_unshredded);
+	StructVector::GetEntries(new_shredded)[1].Reference(sliced_shredded);
+
+	copy.Shred(new_shredded);
+	copy.Flatten(1);
+	return copy.GetValue(0);
+}
+
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
                                                        idx_t count) {
 	Vector *source = shredded_data.get();

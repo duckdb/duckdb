@@ -47,6 +47,11 @@ void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	}
 }
 
+Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	auto resolved_index = sel_vector.get_index(index);
+	return entry->data.GetValue(resolved_index);
+}
+
 buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	// determine the effective selection vector
 	const SelectionVector *effective_sel = &sel_vector;

@@ -3,6 +3,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,131 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 		}
 	} else {
 		D_ASSERT(count <= validity.Capacity());
+	}
+}
+
+Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		index = 0;
+	}
+	if (!validity.RowIsValid(index)) {
+		return Value(type);
+	}
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return Value::BOOLEAN(reinterpret_cast<const bool *>(data_ptr)[index]);
+	case LogicalTypeId::TINYINT:
+		return Value::TINYINT(reinterpret_cast<const int8_t *>(data_ptr)[index]);
+	case LogicalTypeId::SMALLINT:
+		return Value::SMALLINT(reinterpret_cast<const int16_t *>(data_ptr)[index]);
+	case LogicalTypeId::INTEGER:
+		return Value::INTEGER(reinterpret_cast<const int32_t *>(data_ptr)[index]);
+	case LogicalTypeId::DATE:
+		return Value::DATE(reinterpret_cast<const date_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIME:
+		return Value::TIME(reinterpret_cast<const dtime_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(reinterpret_cast<const dtime_ns_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(reinterpret_cast<const dtime_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::BIGINT:
+		return Value::BIGINT(reinterpret_cast<const int64_t *>(data_ptr)[index]);
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT(reinterpret_cast<const uint8_t *>(data_ptr)[index]);
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT(reinterpret_cast<const uint16_t *>(data_ptr)[index]);
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER(reinterpret_cast<const uint32_t *>(data_ptr)[index]);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(reinterpret_cast<const uint64_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(reinterpret_cast<const timestamp_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(reinterpret_cast<const timestamp_ns_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(reinterpret_cast<const timestamp_ms_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(reinterpret_cast<const timestamp_sec_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(reinterpret_cast<const timestamp_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(reinterpret_cast<const uhugeint_t *>(data_ptr)[index]);
+	case LogicalTypeId::UUID:
+		return Value::UUID(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(reinterpret_cast<const int16_t *>(data_ptr)[index], width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(reinterpret_cast<const int32_t *>(data_ptr)[index], width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(reinterpret_cast<const int64_t *>(data_ptr)[index], width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(reinterpret_cast<const hugeint_t *>(data_ptr)[index], width, scale);
+		default:
+			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
+			                        TypeIdToString(type.InternalType()));
+		}
+	}
+	case LogicalTypeId::ENUM: {
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return Value::ENUM(reinterpret_cast<const uint8_t *>(data_ptr)[index], type);
+		case PhysicalType::UINT16:
+			return Value::ENUM(reinterpret_cast<const uint16_t *>(data_ptr)[index], type);
+		case PhysicalType::UINT32:
+			return Value::ENUM(reinterpret_cast<const uint32_t *>(data_ptr)[index], type);
+		default:
+			throw InternalException("ENUM can only have unsigned integers as physical types");
+		}
+	}
+	case LogicalTypeId::POINTER:
+		return Value::POINTER(reinterpret_cast<const uintptr_t *>(data_ptr)[index]);
+	case LogicalTypeId::FLOAT:
+		return Value::FLOAT(reinterpret_cast<const float *>(data_ptr)[index]);
+	case LogicalTypeId::DOUBLE:
+		return Value::DOUBLE(reinterpret_cast<const double *>(data_ptr)[index]);
+	case LogicalTypeId::INTERVAL:
+		return Value::INTERVAL(reinterpret_cast<const interval_t *>(data_ptr)[index]);
+	case LogicalTypeId::VARCHAR: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		return Value(str.GetString());
+	}
+	case LogicalTypeId::BLOB: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::BIGNUM: {
+		auto str = reinterpret_cast<const bignum_t *>(data_ptr)[index];
+		return Value::BIGNUM(const_data_ptr_cast(str.data.GetData()), str.data.GetSize());
+	}
+	case LogicalTypeId::GEOMETRY: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		if (GeoType::HasCRS(type)) {
+			return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize(), GeoType::GetCRS(type));
+		}
+		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		return Value::LEGACY_AGGREGATE_STATE(type, const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::BIT: {
+		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
+		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::SQLNULL:
+		return Value();
+	case LogicalTypeId::TYPE: {
+		auto blob = reinterpret_cast<const string_t *>(data_ptr)[index];
+		return Value::TYPE(blob);
+	}
+	default:
+		throw InternalException("Unimplemented type for StandardVectorBuffer::GetValue");
 	}
 }
 

@@ -67,6 +67,10 @@ void VectorBuffer::SetVectorType(VectorType vector_type) {
 	throw InternalException("VectorBuffer does not support SetVectorType");
 }
 
+Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	throw InternalException("Unimplemented GetValue for this buffer type");
+}
+
 buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	throw InternalException("Unimplemented type for flatten");
 }

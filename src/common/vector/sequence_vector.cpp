@@ -21,6 +21,10 @@ void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel,
 	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
 }
 
+Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	return Value::Numeric(type, start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
+}
+
 buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
                                                  idx_t flat_count) {
 	auto seq_count = NumericCast<idx_t>(count);

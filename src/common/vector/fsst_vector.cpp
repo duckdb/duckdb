@@ -19,6 +19,25 @@ void VectorFSSTStringBuffer::Verify(const LogicalType &type, const SelectionVect
 	D_ASSERT(vector_type == VectorType::FSST_VECTOR);
 }
 
+Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	if (!validity.RowIsValid(index)) {
+		return Value(type);
+	}
+	auto str_compressed = reinterpret_cast<const string_t *>(data_ptr)[index];
+	auto decoder = const_cast<VectorFSSTStringBuffer *>(this)->GetDecoder();
+	auto &decompress_buffer = const_cast<VectorFSSTStringBuffer *>(this)->GetDecompressBuffer();
+	auto string_val = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
+	                                                  decompress_buffer);
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return Value(std::move(string_val));
+	case LogicalTypeId::BLOB:
+		return Value::BLOB_RAW(string_val);
+	default:
+		throw InternalException("Unsupported type for FSST vector GetValue");
+	}
+}
+
 buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
                                                          idx_t count) {
 	// even though count may only be a part of the vector, we need to flatten the whole thing due to the way
