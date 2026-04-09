@@ -29,20 +29,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	}
 
 	auto indirection_repeat = indirection_opt.optional_result->Cast<RepeatParseResult>();
+	bool prev_indirection_was_cast = false;
 	for (auto child : indirection_repeat.children) {
 		auto indirection_expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
 		if (indirection_expr->GetExpressionClass() == ExpressionClass::CAST) {
 			auto cast_expr = unique_ptr_cast<ParsedExpression, CastExpression>(std::move(indirection_expr));
 			cast_expr->child = std::move(expr);
 			expr = std::move(cast_expr);
+			prev_indirection_was_cast = true;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+			if (prev_indirection_was_cast) {
+				throw ParserException(
+				    "Subscript/slice cannot be applied directly after a cast operator (e.g. x::TYPE[1:3] is not "
+				    "allowed). Wrap the cast in parentheses: (x::TYPE)[1:3]");
+			}
 			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(indirection_expr));
 			operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
 			expr = std::move(operator_expr);
+			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
 			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
 			expr = std::move(function_expr);
+			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			vector<unique_ptr<ParsedExpression>> struct_children;
 			struct_children.push_back(std::move(expr));
@@ -50,6 +59,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			auto struct_expr =
 			    make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(struct_children));
 			expr = std::move(struct_expr);
+			prev_indirection_was_cast = false;
 		} else {
 			throw NotImplementedException("Unhandled case for Base Expression with indirection");
 		}

@@ -113,6 +113,99 @@ TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
 	}
 }
 
+static void SetupUnionTable(Connection &con, idx_t num_rows, bool with_nulls = false) {
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT, s VARCHAR))"));
+	// Insert alternating int and string union members via separate statements
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(i := i::INT) FROM range(" +
+	                          to_string(num_rows) + ") tbl(i) WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(s := 'val' || i::VARCHAR) FROM range(" +
+	                          to_string(num_rows) + ") tbl(i) WHERE i % 2 = 1"));
+	if (with_nulls) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT NULL::UNION(i INT, s VARCHAR) FROM range(" +
+		                          to_string(num_rows / 5) + ") tbl(i)"));
+	}
+}
+
+TEST_CASE("Test Arrow UNION type roundtrip", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+
+	// Small union with mixed tags
+	SetupUnionTable(con, 10);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Union with NULLs
+	SetupUnionTable(con, 10, true);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Single-member union
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(i := i::INT) FROM range(10) tbl(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// All-NULL union column
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT, s VARCHAR))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT NULL::UNION(i INT, s VARCHAR) FROM range(10) tbl(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Single-tag-only: all rows use the same member, other member completely empty
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT, s VARCHAR))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(i := i::INT) FROM range(10000) tbl(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Union alongside other columns
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(id INT, u UNION(i INT, s VARCHAR), label VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT i, union_value(i := i::INT), 'row' || i::VARCHAR "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT i, union_value(s := 'val' || i::VARCHAR), 'row' || "
+	                          "i::VARCHAR FROM range(10000) tbl(i) WHERE i % 2 = 1"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Nested struct as union member
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(a INT, b STRUCT(x INT, y VARCHAR)))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(a := i::INT) FROM range(10000) tbl(i) "
+	                          "WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(b := ROW(i, 'v' || i::VARCHAR)) "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 1"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Union inside a struct
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(s STRUCT(tag INT, u UNION(i INT, v VARCHAR)))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT ROW(i, union_value(i := i::INT)) "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT ROW(i, union_value(v := i::VARCHAR)) "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 1"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Large batch - exercises chunk_offset across multiple scan passes (> STANDARD_VECTOR_SIZE)
+	SetupUnionTable(con, 10000);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Large batch with NULLs
+	SetupUnionTable(con, 10000, true);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Three-member union, large batch
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl3(u UNION(a INT, b FLOAT, c VARCHAR))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl3 SELECT union_value(a := i::INT) FROM range(10000) tbl(i) "
+	                          "WHERE i % 3 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl3 SELECT union_value(b := (i * 1.5)::FLOAT) FROM range(10000) "
+	                          "tbl(i) WHERE i % 3 = 1"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl3 SELECT union_value(c := 'str' || i::VARCHAR) FROM "
+	                          "range(10000) tbl(i) WHERE i % 3 = 2"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", true));
+}
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
