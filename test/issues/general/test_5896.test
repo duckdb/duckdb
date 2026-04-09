@@ -11,19 +11,19 @@ PRAGMA enable_verification
 statement error
 select sqrt(distinct range) from range(5);
 ----
-Invalid Input Error: Function "sqrt" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+Invalid Input Error: Function "sqrt" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to window and aggregate functions.
 
 # filter modifier
 statement error
 select sqrt(range) filter (where (range > 3)) from range(5);
 ----
-Invalid Input Error: Function "sqrt" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+Invalid Input Error: Function "sqrt" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to window and aggregate functions.
 
 # ordered aggregate (error is taken care of somewhere else)
 statement error
 select sqrt(range order by range) from range(5);
 ----
-Invalid Input Error: Function "sqrt" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+Invalid Input Error: Function "sqrt" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to window and aggregate functions.
 
 # let's test with a macro
 statement ok
@@ -32,12 +32,12 @@ create macro my_sqrt(x) as sqrt(x)
 statement error
 select my_sqrt(distinct range) from range(5);
 ----
-Invalid Input Error: Function "my_sqrt" is a Macro Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+Invalid Input Error: Function "my_sqrt" is a Macro Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to window and aggregate functions.
 
 statement error
 select list_value(distinct([42]));
 ----
-Invalid Input Error: Function "list_value" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+Invalid Input Error: Function "list_value" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to window and aggregate functions.
 
 statement error
 SELECT unnest(distinct([42, 42]));
