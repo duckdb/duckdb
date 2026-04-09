@@ -37,6 +37,13 @@ jobs:
         env:
           DISABLE_SANITIZER: 1
 
+      - name: Upload cpp-db artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: cpp-db
+          if-no-files-found: error
+          path: build/codeql/db-cpp
+
       - name: Run queries
         run: bash scripts/codeql/run.sh
 
