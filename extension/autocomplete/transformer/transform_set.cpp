@@ -1,4 +1,6 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/default_expression.hpp"
 
 namespace duckdb {
 
@@ -47,11 +49,55 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransfo
 	return transformer.Transform<unique_ptr<SetStatement>>(child_pr.Child<ChoiceParseResult>(0).result);
 }
 
-// SetTimeZone <- 'TIME' 'ZONE' Expression
+// ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer,
+                                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// child 0 = 'INTERVAL' keyword, child 1 = StringLiteral, child 2 = Interval?
+	auto &str_pr = list_pr.Child<StringLiteralParseResult>(1);
+	auto expr = make_uniq<ConstantExpression>(Value(str_pr.result));
+	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+}
+
+// ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// child 0 = 'INTERVAL' keyword, child 1 = Parens(NumberLiteral), child 2 = StringLiteral
+	auto &str_pr = list_pr.Child<StringLiteralParseResult>(2);
+	auto expr = make_uniq<ConstantExpression>(Value(str_pr.result));
+	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+}
+
+// ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneValue(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+
+	const auto &name = choice_pr.name;
+	if (name == "ZoneIntervalWithPrecision" || name == "ZoneIntervalWithInterval" || name == "NumberLiteral") {
+		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.result);
+	}
+	if (name == "StringLiteral") {
+		return make_uniq<ConstantExpression>(Value(choice_pr.result->Cast<StringLiteralParseResult>().result));
+	}
+	if (name == "Identifier") {
+		return make_uniq<ConstantExpression>(Value(choice_pr.result->Cast<IdentifierParseResult>().identifier));
+	}
+	// DEFAULT or LOCAL
+	return make_uniq<DefaultExpression>();
+}
+
+// SetTimeZone <- 'TIME' 'ZONE' ZoneValue
 unique_ptr<SetStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransformer &transformer,
                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	if (expr->GetExpressionClass() == ExpressionClass::DEFAULT) {
+		return make_uniq<ResetVariableStatement>("timezone", SetScope::AUTOMATIC);
+	}
 	return make_uniq<SetVariableStatement>("timezone", std::move(expr), SetScope::AUTOMATIC);
 }
 

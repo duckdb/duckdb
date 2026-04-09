@@ -1446,6 +1446,12 @@ private:
 	static unique_ptr<SetStatement> TransformSetTimeZone(PEGTransformer &transformer,
 	                                                     optional_ptr<ParseResult> parse_result);
 	static SettingInfo TransformSetVariable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneValue(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIntervalWithInterval(PEGTransformer &transformer,
+	                                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
+	                                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,

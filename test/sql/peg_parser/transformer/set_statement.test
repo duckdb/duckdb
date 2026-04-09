@@ -30,3 +30,26 @@ RESET threads;
 
 statement ok
 SET TimeZone='UTC';
+
+# SET TIME ZONE variants
+statement ok
+SET TIME ZONE 'UTC';
+
+statement ok
+SET TIME ZONE UTC;
+
+statement ok
+SET TIME ZONE DEFAULT;
+
+statement ok
+SET TIME ZONE LOCAL;
+
+statement error
+SET TIME ZONE INTERVAL '01:30' HOUR TO MINUTE;
+----
+Not implemented Error: Unknown TimeZone
+
+statement error
+SET TIME ZONE INTERVAL '01:30';
+----
+Not implemented Error: Unknown TimeZone
