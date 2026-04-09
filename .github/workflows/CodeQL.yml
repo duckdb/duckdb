@@ -13,6 +13,8 @@ jobs:
     if: github.repository == 'duckdb/duckdb'
     runs-on: namespace-profile-linux-x64
 
+    timeout-minutes: 60
+
     steps:
       - name: Checkout
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
