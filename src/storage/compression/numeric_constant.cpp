@@ -149,9 +149,6 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		}
 		break;
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
-		filters_nulls = true;
-		break;
 	case TableFilterType::IS_NULL:
 		filters_valid_values = true;
 		break;
