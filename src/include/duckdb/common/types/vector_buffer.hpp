@@ -102,6 +102,10 @@ public:
 		return vector_type;
 	}
 	virtual void SetVectorType(VectorType vector_type);
+	//! Set only this buffer's vector type without propagating to children (for struct/array buffers)
+	void SetVectorTypeOnly(VectorType new_vector_type) {
+		vector_type = new_vector_type;
+	}
 
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;
