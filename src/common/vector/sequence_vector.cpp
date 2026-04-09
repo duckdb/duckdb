@@ -7,6 +7,12 @@ SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, int64_t cou
       increment(increment_p), count(count_p) {
 }
 
+idx_t SequenceBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += sizeof(int64_t) * 3;
+	return size;
+}
+
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {
 	D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
 	auto &data = vector.buffer->Cast<SequenceBuffer>();

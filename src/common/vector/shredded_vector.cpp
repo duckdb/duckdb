@@ -12,6 +12,12 @@ ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {
 }
 
+idx_t ShreddedVectorBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += shredded_data->GetAllocationSize();
+	return size;
+}
+
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
 	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];

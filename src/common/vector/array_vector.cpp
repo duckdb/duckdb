@@ -34,6 +34,13 @@ void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
+idx_t VectorArrayBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += validity.GetAllocationSize();
+	size += child->GetAllocationSize();
+	return size;
+}
+
 template <class T>
 T &ArrayVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);

@@ -17,6 +17,8 @@ struct StringHeapHolder : AuxiliaryDataHolder {
 	explicit StringHeapHolder(Allocator &allocator) : heap(allocator) {
 	}
 
+	idx_t GetAllocationSize() const override;
+
 	StringHeap heap;
 };
 

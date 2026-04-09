@@ -36,6 +36,10 @@ enum class VectorBufferType : uint8_t {
 
 struct AuxiliaryDataHolder {
 	virtual ~AuxiliaryDataHolder() = default;
+
+	virtual idx_t GetAllocationSize() const {
+		return 0;
+	}
 };
 
 struct AuxiliaryDataSet {
@@ -111,6 +115,9 @@ public:
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;
 	}
+
+public:
+	virtual idx_t GetAllocationSize() const;
 
 protected:
 	VectorType vector_type;

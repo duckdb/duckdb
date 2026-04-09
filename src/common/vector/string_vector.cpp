@@ -58,6 +58,10 @@ StringHeap &VectorStringBuffer::AllocateHeap() {
 	return AllocateHeap(Allocator::DefaultAllocator());
 }
 
+idx_t StringHeapHolder::GetAllocationSize() const {
+	return heap.AllocationSize();
+}
+
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }

@@ -50,6 +50,16 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
+idx_t VectorBuffer::GetAllocationSize() const {
+	idx_t size = 0;
+	if (auxiliary_data) {
+		for (auto &aux_data : auxiliary_data->data) {
+			size += aux_data->GetAllocationSize();
+		}
+	}
+	return size;
+}
+
 void VectorBuffer::SetVectorType(VectorType vector_type) {
 	throw InternalException("VectorBuffer does not support SetVectorType");
 }

@@ -22,6 +22,9 @@ public:
 		return *shredded_data;
 	}
 
+public:
+	idx_t GetAllocationSize() const override;
+
 private:
 	unique_ptr<Vector> shredded_data;
 };

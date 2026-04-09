@@ -32,6 +32,9 @@ public:
 	}
 	void SetVectorType(VectorType vector_type) override;
 
+public:
+	idx_t GetAllocationSize() const override;
+
 private:
 	ValidityMask validity;
 	//! child vectors used for nested data

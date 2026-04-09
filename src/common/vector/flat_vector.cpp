@@ -30,6 +30,13 @@ void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
+idx_t StandardVectorBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += allocated_data.GetSize();
+	size += validity.GetAllocationSize();
+	return size;
+}
+
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	VerifyFlatVector(vector);
 	if (vector.GetType().InternalType() == PhysicalType::ARRAY) {

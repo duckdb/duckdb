@@ -34,6 +34,9 @@ public:
 		return allocated_data.GetAllocator();
 	}
 
+public:
+	idx_t GetAllocationSize() const override;
+
 protected:
 	ValidityMask validity;
 	data_ptr_t data_ptr;

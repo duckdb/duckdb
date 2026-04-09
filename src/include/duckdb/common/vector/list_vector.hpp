@@ -52,6 +52,9 @@ public:
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
 
+public:
+	idx_t GetAllocationSize() const override;
+
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;

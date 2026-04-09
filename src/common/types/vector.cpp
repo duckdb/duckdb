@@ -961,51 +961,15 @@ void Vector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
 
-// TODO: add the size of validity masks to this
-idx_t Vector::GetAllocationSize(idx_t cardinality) const {
-	if (!type.IsNested()) {
-		auto physical_size = GetTypeIdSize(type.InternalType());
-		return cardinality * physical_size;
-	}
-	auto internal_type = type.InternalType();
-	switch (internal_type) {
-	case PhysicalType::LIST: {
-		auto physical_size = GetTypeIdSize(type.InternalType());
-		auto total_size = physical_size * cardinality;
+idx_t Vector::GetAllocationSize(idx_t) const {
+	return GetAllocationSize();
+}
 
-		idx_t child_cardinality = 0;
-		if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			child_cardinality = ListVector::GetListCapacity(DictionaryVector::Child(*this));
-		} else {
-			child_cardinality = ListVector::GetListCapacity(*this);
-		}
-		auto &child_entry = ListVector::GetEntry(*this);
-		total_size += (child_entry.GetAllocationSize(child_cardinality));
-		return total_size;
+idx_t Vector::GetAllocationSize() const {
+	if (!buffer) {
+		return 0;
 	}
-	case PhysicalType::ARRAY: {
-		auto child_cardinality = ArrayVector::GetTotalSize(*this);
-
-		auto &child_entry = ArrayVector::GetEntry(*this);
-		auto total_size = (child_entry.GetAllocationSize(child_cardinality));
-		return total_size;
-	}
-	case PhysicalType::STRUCT: {
-		idx_t total_size = 0;
-		if (GetVectorType() == VectorType::SHREDDED_VECTOR) {
-			total_size += ShreddedVector::GetShreddedVector(*this).GetAllocationSize(cardinality);
-			total_size += ShreddedVector::GetUnshreddedVector(*this).GetAllocationSize(cardinality);
-		} else {
-			auto &children = StructVector::GetEntries(*this);
-			for (auto &child : children) {
-				total_size += child.GetAllocationSize(cardinality);
-			}
-		}
-		return total_size;
-	}
-	default:
-		throw NotImplementedException("Vector::GetAllocationSize not implemented for type: %s", type.ToString());
-	}
+	return buffer->GetAllocationSize();
 }
 
 string Vector::ToString() const {

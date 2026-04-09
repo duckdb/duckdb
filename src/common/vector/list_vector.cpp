@@ -85,6 +85,12 @@ void VectorListBuffer::SetSize(idx_t new_size) {
 VectorListBuffer::~VectorListBuffer() {
 }
 
+idx_t VectorListBuffer::GetAllocationSize() const {
+	idx_t size = StandardVectorBuffer::GetAllocationSize();
+	size += GetChild().GetAllocationSize();
+	return size;
+}
+
 template <class T>
 T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);

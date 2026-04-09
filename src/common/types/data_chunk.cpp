@@ -76,9 +76,8 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 
 idx_t DataChunk::GetAllocationSize() const {
 	idx_t total_size = 0;
-	auto cardinality = size();
 	for (auto &vec : data) {
-		total_size += vec.GetAllocationSize(cardinality);
+		total_size += vec.GetAllocationSize();
 	}
 	return total_size;
 }

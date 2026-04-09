@@ -23,6 +23,12 @@ DictionaryBuffer::DictionaryBuffer(idx_t count)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 }
 
+idx_t DictionaryBuffer::GetAllocationSize() const {
+	auto size = VectorBuffer::GetAllocationSize();
+	size += sel_vector.GetAllocationSize();
+	return size + GetEntry().data.GetAllocationSize();
+}
+
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
 	entry->size = size;

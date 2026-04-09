@@ -39,6 +39,15 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
+idx_t VectorStructBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += validity.GetAllocationSize();
+	for (auto &child : children) {
+		size += child.GetAllocationSize();
+	}
+	return size;
+}
+
 vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
 	         vector.GetType().id() == LogicalTypeId::VARIANT ||

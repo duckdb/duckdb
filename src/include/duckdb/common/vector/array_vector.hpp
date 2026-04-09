@@ -27,6 +27,9 @@ public:
 	idx_t GetChildSize();
 	void SetVectorType(VectorType vector_type) override;
 
+public:
+	idx_t GetAllocationSize() const override;
+
 private:
 	ValidityMask validity;
 	unique_ptr<Vector> child;

@@ -73,6 +73,9 @@ public:
 		entry = std::move(entry_p);
 	}
 
+public:
+	idx_t GetAllocationSize() const override;
+
 private:
 	SelectionVector sel_vector;
 	buffer_ptr<DictionaryEntry> entry;

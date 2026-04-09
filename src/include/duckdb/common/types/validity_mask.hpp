@@ -322,6 +322,13 @@ public:
 		return false;
 	}
 
+	idx_t GetAllocationSize() const {
+		if (!validity_mask) {
+			return 0;
+		}
+		return EntryCount(capacity) * sizeof(V);
+	}
+
 public:
 	inline void Initialize(validity_t *validity, idx_t new_capacity) {
 		validity_data.reset();

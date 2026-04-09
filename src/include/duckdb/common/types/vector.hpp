@@ -168,7 +168,9 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
-	idx_t GetAllocationSize(idx_t cardinality) const;
+	[[deprecated("Use GetAllocationSize() without cardinality parameter instead")]] idx_t
+	GetAllocationSize(idx_t cardinality) const;
+	idx_t GetAllocationSize() const;
 
 	// Getters
 	VectorType GetVectorType() const;

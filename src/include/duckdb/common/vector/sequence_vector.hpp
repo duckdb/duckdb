@@ -20,6 +20,9 @@ public:
 	int64_t increment;
 	//! FIXME: should not be necessary once vector has count
 	int64_t count;
+
+public:
+	idx_t GetAllocationSize() const override;
 };
 
 struct SequenceVector {
