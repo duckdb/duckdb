@@ -1,6 +1,10 @@
+#include <stdint.h>
+
 #include "core_functions/scalar/string_functions.hpp"
-#include "utf8proc.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 

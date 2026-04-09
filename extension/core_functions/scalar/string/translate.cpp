@@ -1,17 +1,24 @@
-#include "core_functions/scalar/string_functions.hpp"
-
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "utf8proc.hpp"
-#include "utf8proc_wrapper.hpp"
-
-#include <string.h>
-#include <ctype.h>
+#include <stdint.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
+
+#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "utf8proc_wrapper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 static string_t TranslateScalarFunction(const string_t &haystack, const string_t &needle, const string_t &thread,
                                         vector<char> &result) {

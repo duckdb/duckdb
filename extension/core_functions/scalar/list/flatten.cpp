@@ -1,11 +1,24 @@
+#include <string>
+
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class ClientContext;
+struct ExpressionState;
 
 namespace {
 

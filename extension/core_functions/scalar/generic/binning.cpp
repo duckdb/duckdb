@@ -1,3 +1,9 @@
+#include <stdint.h>
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -7,8 +13,29 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Serializer;
 
 namespace {
 

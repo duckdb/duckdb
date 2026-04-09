@@ -1,14 +1,40 @@
+#include <stdint.h>
+#include <map>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "core_functions/aggregate/histogram_helpers.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/string_map_set.hpp"
-#include "core_functions/aggregate/histogram_helpers.hpp"
 #include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ArenaAllocator;
+class ClientContext;
+struct HistogramFunctor;
+struct HistogramGenericFunctor;
+struct HistogramStringFunctor;
+struct string_t;
 
 namespace {
 template <class MAP_TYPE>

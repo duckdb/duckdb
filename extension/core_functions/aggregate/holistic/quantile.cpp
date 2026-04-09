@@ -1,3 +1,10 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
@@ -8,12 +15,41 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
+#include "core_functions/aggregate/quantile_helpers.hpp"
+#include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
+class ClientContext;
+class Vector;
+struct date_t;
+struct timestamp_t;
 
 template <class INPUT_TYPE>
 struct IndirectLess {

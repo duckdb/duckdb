@@ -1,11 +1,21 @@
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "core_functions/scalar/string_functions.hpp"
-
+#include <stddef.h>
 #include <bitset>
-#include <ctype.h>
+#include <limits>
+#include <memory>
+
+#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 namespace {
 constexpr size_t MAX_SIZE = std::numeric_limits<unsigned char>::max() + 1;

@@ -1,11 +1,19 @@
+#include <stdint.h>
+
 #include "core_functions/scalar/debug_functions.hpp"
-
 #include "duckdb/common/vector_operations/generic_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 struct NullResultType {
 	using STRUCT_STATE = PrimitiveTypeState;

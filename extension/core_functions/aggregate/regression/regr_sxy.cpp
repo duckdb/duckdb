@@ -1,12 +1,20 @@
 // REGR_SXY(y, x)
 // Returns REGR_COUNT(expr1, expr2) * COVAR_POP(expr1, expr2) for non-null pairs.
 
+#include <stdint.h>
+#include <utility>
+
 #include "core_functions/aggregate/regression/regr_count.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic/covar.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
+struct AggregateBinaryInput;
+struct AggregateFinalizeData;
+struct AggregateInputData;
 
 namespace {
 

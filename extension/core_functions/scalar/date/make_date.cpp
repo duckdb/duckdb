@@ -1,3 +1,9 @@
+#include <stdint.h>
+#include <cmath>
+#include <string>
+#include <vector>
+
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -6,10 +12,20 @@
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/variadic_executor.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-
-#include <cmath>
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 namespace {
 

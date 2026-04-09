@@ -1,11 +1,29 @@
+#include <stddef.h>
+#include <string>
+
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 namespace {
 

@@ -1,8 +1,18 @@
+#include <stdint.h>
+#include <string>
+#include <vector>
+
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/to_interval.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 

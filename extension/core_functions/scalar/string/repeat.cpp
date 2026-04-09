@@ -1,10 +1,29 @@
+#include <stdint.h>
+#include <string.h>
+#include <initializer_list>
+#include <string>
+#include <vector>
+
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto &str_vector = args.data[0];

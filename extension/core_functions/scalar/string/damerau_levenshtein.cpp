@@ -1,8 +1,19 @@
+#include <stdint.h>
+#include <map>
+
 #include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+struct ExpressionState;
 
 // Using Lowrance-Wagner (LW) algorithm: https://doi.org/10.1145%2F321879.321880
 // Can't calculate as trivial modification to levenshtein algorithm

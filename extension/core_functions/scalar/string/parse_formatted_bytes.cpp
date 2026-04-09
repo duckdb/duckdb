@@ -1,8 +1,19 @@
-#include "duckdb/function/scalar_function.hpp"
+#include <string>
 
+#include "duckdb/function/scalar_function.hpp"
 #include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 namespace duckdb {
+struct ExpressionState;
+
 static void ParseFormattedBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &arg0 = args.data[0];
 	UnaryExecutor::Execute<string_t, idx_t>(arg0, result, args.size(), [&](string_t str) {
