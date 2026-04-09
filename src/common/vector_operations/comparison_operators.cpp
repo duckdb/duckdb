@@ -292,6 +292,9 @@ static int8_t DistinctNullComparator(bool left_null, bool right_null) {
 static void StructComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
                              const SelectionVector &rhs_sel, idx_t sel_count,
                              optional_ptr<ValidityMask> result_validity = nullptr) {
+	if (sel_count == 0) {
+		return;
+	}
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
@@ -405,6 +408,9 @@ template <class ACCESSOR>
 static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
                                   const SelectionVector &rhs_sel, idx_t sel_count, ACCESSOR accessor,
                                   optional_ptr<ValidityMask> result_validity = nullptr) {
+	if (sel_count == 0) {
+		return;
+	}
 	// recursively flatten child vectors so they can be indexed directly via selection vectors
 	accessor.FlattenChild(left);
 	accessor.FlattenChild(right);
@@ -840,6 +846,7 @@ void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right,
 	// note that even for NULLS FIRST, ONLY the top-level is NULLS FIRST,
 	// i.e. within structs we still use NULLS LAST semantics
 	VectorOperations::DistinctComparator(left, right, result, count);
+	result.Flatten(count);
 	auto result_data = FlatVector::GetData<int8_t>(result);
 	auto left_validity = left.Validity(count);
 	auto right_validity = right.Validity(count);
