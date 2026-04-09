@@ -1352,8 +1352,9 @@ LimitPercentResult PEGTransformerFactory::TransformLimitValue(PEGTransformer &tr
 
 LimitPercentResult PEGTransformerFactory::TransformLimitAll(PEGTransformer &transformer,
                                                             optional_ptr<ParseResult> parse_result) {
+	// LIMIT ALL is represented as a NULL constant, matching PostgreSQL behavior (makeNullAConst)
 	LimitPercentResult result;
-	result.expression = make_uniq<StarExpression>();
+	result.expression = make_uniq<ConstantExpression>(Value());
 	result.is_percent = false;
 	return result;
 }
