@@ -21,7 +21,8 @@ void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel,
 	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
 }
 
-buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t flat_count) {
+buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                 idx_t flat_count) {
 	auto seq_count = NumericCast<idx_t>(count);
 	Vector result(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, seq_count));
 	VectorOperations::GenerateSequence(result, seq_count, start, increment);

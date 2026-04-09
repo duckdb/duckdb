@@ -87,27 +87,28 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, co
 	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten children
 		for (auto &child : children) {
-			child.Flatten(count);
+			child.Flatten(sel, count);
 		}
 		return nullptr;
 	}
 	// determine the selection vector to use
 	SelectionVector owned_sel;
-	const SelectionVector *active_sel = &sel;
+	const_reference<SelectionVector> active_sel_ref(sel);
 	if (!sel.IsSet()) {
 		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
-		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
+		active_sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
 	}
+	auto &active_sel = active_sel_ref.get();
 	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
 	// create a new flat struct buffer
 	auto result = make_buffer<VectorStructBuffer>(type, flat_count);
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
-	result_validity.CopySel(validity, *active_sel, 0, 0, count);
+	result_validity.CopySel(validity, active_sel, 0, 0, count);
 	// flatten each child using the same sel
 	auto &result_children = result->GetChildren();
 	for (idx_t i = 0; i < children.size(); i++) {
-		auto child_result = children[i].GetBuffer()->Flatten(children[i].GetType(), *active_sel, count);
+		auto child_result = children[i].GetBuffer()->Flatten(children[i].GetType(), active_sel, count);
 		if (child_result) {
 			Vector tmp(children[i].GetType(), VectorType::FLAT_VECTOR, std::move(child_result));
 			result_children[i].CopyBuffer(tmp);

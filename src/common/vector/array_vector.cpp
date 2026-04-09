@@ -59,7 +59,7 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 		}
 	}
 	child->Verify(child_sel, count * array_size);
-	// FIXME: verify validity, arrays have the same validity rules as children
+	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {

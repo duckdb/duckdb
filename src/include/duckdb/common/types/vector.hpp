@@ -120,6 +120,7 @@ public:
 	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
 	//! As such, it can be used on constant vectors.
 	DUCKDB_API void Flatten(idx_t count) const;
+	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 	//! Creates a UnifiedVectorFormat of a vector
 	//! The UnifiedVectorFormat allows efficient reading of vectors regardless of their vector type
 	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
@@ -148,6 +149,10 @@ public:
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);
+
+	inline void CopyBuffer(Vector &other) {
+		buffer = other.buffer;
+	}
 
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);

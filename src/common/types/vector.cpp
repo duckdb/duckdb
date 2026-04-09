@@ -998,12 +998,15 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	auto new_buffer = buffer->Flatten(GetType(), *FlatVector::IncrementalSelectionVector(), count);
+	Flatten(*FlatVector::IncrementalSelectionVector(), count);
+}
+
+void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
+	auto new_buffer = buffer->Flatten(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
 }
-
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
