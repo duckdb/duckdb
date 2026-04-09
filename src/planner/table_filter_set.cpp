@@ -437,6 +437,10 @@ map<ProjectionIndex, unique_ptr<TableFilter>>
 TableFilterSet::GetTableFiltersForSerialization(Serializer &serializer) const {
 	map<ProjectionIndex, unique_ptr<TableFilter>> result;
 	for (auto &entry : filters) {
+		if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
+			result.emplace(entry.first, entry.second->Copy());
+			continue;
+		}
 		auto &expr_filter =
 		    ExpressionFilter::GetExpressionFilter(*entry.second, "TableFilterSet::GetTableFiltersForSerialization");
 		auto serialized_filter = SerializeExpressionToLegacyFilter(*expr_filter.expr);
