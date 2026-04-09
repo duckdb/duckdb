@@ -2,6 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -411,7 +412,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
                                                            optional_ptr<ClientContext> context) {
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
-		auto &fs = db.GetLocalFileSystem();
+		LocalDatabaseFileSystem local_db_fs(db);
+		FileSystem &fs = local_db_fs;
 		if (fs.FileExists(local_extension_path + ".info")) {
 			try {
 				install_info =
@@ -488,7 +490,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	}
 
 	QueryContext query_context(context);
-	auto &fs = db.GetLocalFileSystem();
+	LocalDatabaseFileSystem local_db_fs(db);
+	FileSystem &fs = local_db_fs;
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
 	                    decompressed_body.size(), info, db.config);
 
@@ -589,14 +592,14 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
-		auto &local_fs = db.GetLocalFileSystem();
-		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
+		LocalDatabaseFileSystem local_db_fs(db);
+		return DirectInstallExtension(db, local_db_fs, extension, temp_path, extension, local_extension_path, options,
 		                              context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
 	if (options.repository && !IsHTTP(options.repository->path)) {
-		auto &local_fs = db.GetLocalFileSystem();
+		LocalDatabaseFileSystem local_db_fs(db);
 		return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options,
 		                             context);
 	}
