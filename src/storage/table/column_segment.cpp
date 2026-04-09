@@ -5,9 +5,14 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -500,7 +505,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 				idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count - offset);
 				idx_t chunk_end = offset + chunk_count;
 				DataChunk chunk;
-				chunk.data.emplace_back(vector, offset, chunk_end);
+					chunk.data.emplace_back(vector, offset, chunk_end);
 				chunk.SetCardinality(chunk_count);
 
 				// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
@@ -524,7 +529,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 				auto current_result_data = result_sel.data() + result_offset;
 				SelectionVector current_result_sel(current_result_data);
 				idx_t new_matches =
-				    state.executor.SelectExpression(chunk, current_result_sel, current_sel, current_count);
+				    state.executor->SelectExpression(chunk, current_result_sel, current_sel, current_count);
 				// increment all matches by the offset
 				for (idx_t i = 0; i < new_matches; i++) {
 					current_result_data[i] += offset;
@@ -536,9 +541,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		} else {
 			// standard case: we can handle everything at once - run the expression once
 			DataChunk chunk;
-			chunk.data.emplace_back(Vector::Ref(vector));
+				chunk.data.emplace_back(Vector::Ref(vector));
 			chunk.SetCardinality(scan_count);
-			approved_tuple_count = state.executor.SelectExpression(chunk, result_sel, sel, approved_tuple_count);
+			approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, sel, approved_tuple_count);
 		}
 		sel.Initialize(result_sel);
 		return approved_tuple_count;
