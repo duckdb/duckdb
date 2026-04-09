@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/row_id_column_data.hpp
+// duckdb/storage/table/row_number_column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-class RowIdColumnData : public ColumnData {
+class RowNumberColumnData : public ColumnData {
 public:
-	RowIdColumnData(BlockManager &block_manager, DataTableInfo &info);
+	RowNumberColumnData(BlockManager &block_manager, DataTableInfo &info);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
@@ -26,8 +26,6 @@ public:
 	void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
-	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) override;
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	            SelectionVector &sel, idx_t count) override;
 
@@ -62,7 +60,7 @@ public:
 
 	bool IsPersistent() override;
 
-	idx_t GetRowStart(ColumnScanState &state);
+	idx_t GetRowNumberBase(ColumnScanState &state);
 };
 
 } // namespace duckdb

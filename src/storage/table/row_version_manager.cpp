@@ -12,20 +12,23 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
                 MemoryTag::BASE_TABLE) {
 }
 
-idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
+idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
 	lock_guard<mutex> l(version_lock);
-	idx_t deleted_count = 0;
+	idx_t total_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
-		if (i >= vector_info.size() || !vector_info[i]) {
-			continue;
-		}
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
-		if (max_count == 0) {
+		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (segment_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(max_count);
+		if (i >= vector_info.size() || !vector_info[i]) {
+			// no version info - this means all rows are visible
+			total_count += segment_count;
+			continue;
+		}
+		idx_t row_count = vector_info[i]->GetRowCount(options, segment_count);
+		total_count += row_count;
 	}
-	return deleted_count;
+	return total_count;
 }
 
 optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {

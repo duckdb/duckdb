@@ -42,8 +42,11 @@ DUCKDB_API bool IsInvalidCatalog(const string &str);
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 //! Special value used to signify an empty column (used for e.g. COUNT(*))
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_EMPTY;
+//! Special value used to signify the ROW_NUMBER of a table
+DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_NUMBER;
 DUCKDB_API extern const column_t VIRTUAL_COLUMN_START;
 DUCKDB_API bool IsRowIdColumnId(column_t column_id);
+DUCKDB_API bool IsRowNumberColumnId(column_t column_id);
 DUCKDB_API bool IsVirtualColumn(column_t column_id);
 
 //! The maximum row identifier used in tables

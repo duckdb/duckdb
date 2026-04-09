@@ -9,8 +9,12 @@ RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &inf
 	stats->statistics.SetHasNoNullFast();
 }
 
+idx_t RowIdColumnData::GetRowStart(ColumnScanState &state) {
+	return state.parent->row_group->GetRowStart();
+}
+
 FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	auto row_start = state.parent->row_group->GetRowStart();
+	auto row_start = GetRowStart(state);
 	return RowGroup::CheckRowIdFilter(filter, row_start, row_start + count);
 }
 
@@ -45,7 +49,7 @@ void RowIdColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_
 }
 
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto row_start = state.parent->row_group->GetRowStart();
+	auto row_start = GetRowStart(state);
 	if (result_offset != 0) {
 		throw InternalException("RowIdColumnData result_offset must be 0");
 	}
@@ -57,7 +61,7 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t &count, const TableFilter &filter,
                              TableFilterState &filter_state) {
-	auto row_start = state.parent->row_group->GetRowStart();
+	auto row_start = GetRowStart(state);
 	auto current_row = row_start + state.offset_in_column;
 	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
@@ -94,7 +98,7 @@ void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, Co
                              SelectionVector &sel, idx_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<row_t>(result);
-	auto row_start = state.parent->row_group->GetRowStart();
+	auto row_start = GetRowStart(state);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
 	}
