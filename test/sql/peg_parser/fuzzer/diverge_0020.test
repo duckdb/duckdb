@@ -1,0 +1,21 @@
+# name: fuzzer_issues/diverge_0020.test
+# description: PEG should reject (currently accepts): Parser Error: syntax error at or near "DEALLOCATE"
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+CALL enable_peg_parser();
+
+statement error
+PREPARE y AS DEALLOCATE PREPARE result
+----
+Parser Error: DROP_STATEMENT is not a preparable statement
+
+statement ok
+CALL disable_peg_parser();
+
+statement error
+PREPARE y AS DEALLOCATE PREPARE result
+----
+Parser Error: syntax error at or near "DEALLOCATE"

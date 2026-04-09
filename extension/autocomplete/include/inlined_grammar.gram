@@ -51,6 +51,7 @@ ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
+TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 SecretName <- ColId
@@ -1144,7 +1145,7 @@ DropEntries <-
 	DropSecret /
 	DropTrigger
 
-DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
+DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
@@ -1601,7 +1602,7 @@ CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
 CommentValue <- 'NULL' / StringLiteral
-CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
 
