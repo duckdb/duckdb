@@ -32,6 +32,8 @@ jobs:
 
       - name: Build database
         run: bash scripts/codeql/build.sh
+        env:
+          DISABLE_SANITIZER: 1
 
       - name: Run queries
         run: bash scripts/codeql/run.sh
