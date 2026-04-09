@@ -177,7 +177,7 @@ select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
 ----
 TIMESTAMP	2023-02-08 02:12:28.789
 
-# test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns (e.g. now())
+# test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns
 statement ok
 create table timestamptz_test as select '1996-03-27 07:42:33+00'::TIMESTAMPTZ t
 
