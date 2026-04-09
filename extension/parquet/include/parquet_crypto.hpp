@@ -27,6 +27,7 @@
 namespace duckdb_apache {
 namespace thrift {
 class TBase;
+
 namespace protocol {
 class TProtocol;
 } // namespace protocol

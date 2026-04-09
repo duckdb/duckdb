@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 #include <vector>
+#include <memory>
 
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/type_visitor.hpp"

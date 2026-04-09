@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 
 #include <functional>
-#include <memory>
 #include <unordered_map>
 #include <utility>
 

@@ -1,6 +1,5 @@
 #include <stdint.h>
 #include <limits>
-#include <memory>
 
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"

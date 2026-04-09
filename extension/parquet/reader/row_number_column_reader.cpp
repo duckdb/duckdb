@@ -1,7 +1,5 @@
 #include "reader/row_number_column_reader.hpp"
 
-#include <memory>
-
 #include "parquet_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"

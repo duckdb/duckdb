@@ -1,5 +1,3 @@
-#include <memory>
-
 #include "core_functions/scalar/blob_functions.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/typedefs.hpp"

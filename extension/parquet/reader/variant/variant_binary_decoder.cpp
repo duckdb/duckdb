@@ -1,8 +1,8 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 
-#include <math.h>
 #include <string.h>
 #include <utility>
+#include <cmath>
 
 #include "utf8proc_wrapper.hpp"
 #include "reader/uuid_column_reader.hpp"

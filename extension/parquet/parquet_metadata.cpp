@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <sstream>
 
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -57,6 +58,7 @@ namespace duckdb {
 class ClientContext;
 class ExecutionContext;
 enum class GeometryType : uint8_t;
+enum class VertexType : uint8_t;
 
 struct ParquetMetadataFilePaths {
 	MultiFileListScanData scan_data;

@@ -1,7 +1,7 @@
 #include "reader/decimal_column_reader.hpp"
 
-#include <math.h>
 #include <memory>
+#include <cmath>
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"

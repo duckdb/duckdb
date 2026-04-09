@@ -1,6 +1,5 @@
 #include "reader/expression_column_reader.hpp"
 
-#include <memory>
 #include <utility>
 
 #include "parquet_reader.hpp"

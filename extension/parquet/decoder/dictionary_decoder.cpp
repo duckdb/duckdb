@@ -1,7 +1,6 @@
 #include "decoder/dictionary_decoder.hpp"
 
 #include <algorithm>
-#include <memory>
 #include <stdexcept>
 #include <utility>
 

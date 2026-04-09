@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <memory>
 
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

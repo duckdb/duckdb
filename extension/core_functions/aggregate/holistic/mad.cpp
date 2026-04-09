@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <algorithm>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "core_functions/aggregate/holistic_functions.hpp"

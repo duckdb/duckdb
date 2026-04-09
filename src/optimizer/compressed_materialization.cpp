@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <memory>
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"

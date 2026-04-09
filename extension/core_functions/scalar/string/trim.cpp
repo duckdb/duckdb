@@ -1,5 +1,4 @@
 #include <string.h>
-#include <memory>
 #include <unordered_set>
 
 #include "core_functions/scalar/string_functions.hpp"

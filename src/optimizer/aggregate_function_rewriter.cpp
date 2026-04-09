@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <memory>
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"

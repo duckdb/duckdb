@@ -1,6 +1,5 @@
 #include "column_reader.hpp"
 
-#include <stddef.h>
 #include <algorithm>
 #include <memory>
 #include <sstream>

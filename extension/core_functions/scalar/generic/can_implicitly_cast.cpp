@@ -1,5 +1,3 @@
-#include <memory>
-
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"

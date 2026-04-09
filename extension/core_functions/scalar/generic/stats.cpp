@@ -1,4 +1,3 @@
-#include <memory>
 #include <utility>
 
 #include "core_functions/scalar/generic_functions.hpp"
