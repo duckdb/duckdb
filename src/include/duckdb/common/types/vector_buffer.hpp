@@ -19,6 +19,7 @@ namespace duckdb {
 
 class BufferHandle;
 struct LogicalType;
+struct ResizeInfo;
 struct UnifiedVectorFormat;
 class VectorBuffer;
 class Vector;
@@ -137,6 +138,10 @@ public:
 	virtual void Slice(Vector &vector, const SelectionVector &sel, idx_t count);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const;
+	//! Collect resize information for this buffer and children
+	virtual void FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier);
+	//! Resize the buffer's data allocation
+	virtual void Resize(Vector &vector, idx_t current_size, idx_t new_size);
 
 protected:
 	VectorType vector_type;

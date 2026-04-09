@@ -62,6 +62,12 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
+void VectorArrayBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) {
+	VectorBuffer::FindResizeInfos(vector, resize_infos, multiplier);
+	auto new_multiplier = array_size * multiplier;
+	child->FindResizeInfos(resize_infos, new_multiplier);
+}
+
 void VectorArrayBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);

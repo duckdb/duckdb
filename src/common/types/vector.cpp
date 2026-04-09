@@ -318,36 +318,10 @@ void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity
 }
 
 void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
-	const auto type_size = GetTypeIdSize(type.InternalType());
-	auto buffer_ptr = type_size ? buffer.get() : nullptr;
-	ResizeInfo resize_info(*this, buffer_ptr, multiplier);
-	resize_infos.emplace_back(resize_info);
-
 	if (!buffer) {
 		return;
 	}
-
-	switch (buffer->GetBufferType()) {
-	case VectorBufferType::ARRAY_BUFFER: {
-		// We need to multiply the multiplier by the array size because
-		// the child vectors of ARRAY types are always child_count * array_size.
-		auto &vector_array_buffer = buffer->Cast<VectorArrayBuffer>();
-		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
-		auto &child = vector_array_buffer.GetChild();
-		child.FindResizeInfos(resize_infos, new_multiplier);
-		break;
-	}
-	case VectorBufferType::STRUCT_BUFFER: {
-		auto &vector_struct_buffer = buffer->Cast<VectorStructBuffer>();
-		auto &children = vector_struct_buffer.GetChildren();
-		for (auto &child : children) {
-			child.FindResizeInfos(resize_infos, multiplier);
-		}
-		break;
-	}
-	default:
-		break;
-	}
+	buffer->FindResizeInfos(*this, resize_infos, multiplier);
 }
 
 void Vector::AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data) {
@@ -379,53 +353,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 			buffer = make_buffer<StandardVectorBuffer>(0, GetTypeIdSize(internal_type));
 		}
 	}
-
-	// Obtain the resize information for each (nested) vector.
-	vector<ResizeInfo> resize_infos;
-	FindResizeInfos(resize_infos, 1);
-
-	for (auto &resize_info_entry : resize_infos) {
-		// Resize the validity mask.
-		auto new_validity_size = new_size * resize_info_entry.multiplier;
-		resize_info_entry.vec.buffer->GetValidityMask().Resize(new_validity_size);
-
-		// For nested data types, we only need to resize the validity mask.
-		if (!resize_info_entry.data) {
-			continue;
-		}
-
-		auto type_size = GetTypeIdSize(resize_info_entry.vec.GetType().InternalType());
-		auto old_size = current_size * type_size * resize_info_entry.multiplier * sizeof(data_t);
-		auto target_size = new_size * type_size * resize_info_entry.multiplier * sizeof(data_t);
-
-		// We have an upper limit of 128GB for a single vector.
-		if (target_size > DConstants::MAX_VECTOR_SIZE) {
-			throw OutOfRangeException("Cannot resize vector to %s: maximum allowed vector size is %s",
-			                          StringUtil::BytesToHumanReadableString(target_size),
-			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
-		}
-		// Copy the data buffer to a resized buffer.
-		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
-		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
-		auto new_data = allocator.Allocate(target_size);
-		memcpy(new_data.get(), resize_info_entry.data, old_size);
-		// Save the resized validity mask before replacing the buffer.
-		auto resized_validity = std::move(resize_info_entry.vec.buffer->GetValidityMask());
-		buffer_ptr<VectorBuffer> new_buffer;
-		if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::LIST) {
-			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorListBuffer>();
-			new_buffer = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
-		} else if (resize_info_entry.vec.GetType().InternalType() == PhysicalType::VARCHAR) {
-			auto &old_buffer = resize_info_entry.vec.buffer->Cast<VectorStringBuffer>();
-			new_buffer = make_buffer<VectorStringBuffer>(std::move(new_data), old_buffer);
-		} else {
-			new_buffer = make_buffer<StandardVectorBuffer>(std::move(new_data));
-		}
-		// Restore the resized validity mask into the new buffer.
-		new_buffer->GetValidityMask() = std::move(resized_validity);
-		resize_info_entry.buffer = new_buffer.get();
-		resize_info_entry.vec.buffer = std::move(new_buffer);
-	}
+	buffer->Resize(*this, current_size, new_size);
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {

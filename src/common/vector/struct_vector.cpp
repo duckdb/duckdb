@@ -84,6 +84,13 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
+void VectorStructBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) {
+	VectorBuffer::FindResizeInfos(vector, resize_infos, multiplier);
+	for (auto &child : children) {
+		child.FindResizeInfos(resize_infos, multiplier);
+	}
+}
+
 void VectorStructBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
