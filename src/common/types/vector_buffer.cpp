@@ -67,6 +67,10 @@ void VectorBuffer::SetVectorType(VectorType vector_type) {
 	throw InternalException("VectorBuffer does not support SetVectorType");
 }
 
+void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	throw InternalException("SetValue not supported for this buffer type");
+}
+
 Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	throw InternalException("Unimplemented GetValue for this buffer type");
 }

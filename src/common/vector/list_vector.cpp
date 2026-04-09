@@ -140,6 +140,29 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	child->Verify(child_sel, child_count);
 }
 
+void VectorListBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (!val.IsNull() && val.type() != type) {
+		SetValue(type, index, val.DefaultCastAs(type));
+		return;
+	}
+	validity.Set(index, !val.IsNull());
+	auto offset = size;
+	if (val.IsNull()) {
+		PushBack(Value());
+		auto &entry = reinterpret_cast<list_entry_t *>(data_ptr)[index];
+		entry.length = 1;
+		entry.offset = offset;
+	} else {
+		auto &val_children = ListValue::GetChildren(val);
+		for (idx_t i = 0; i < val_children.size(); i++) {
+			PushBack(val_children[i]);
+		}
+		auto &entry = reinterpret_cast<list_entry_t *>(data_ptr)[index];
+		entry.length = val_children.size();
+		entry.offset = offset;
+	}
+}
+
 Value VectorListBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;

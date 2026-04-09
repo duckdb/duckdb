@@ -62,6 +62,24 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
+void VectorArrayBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (!val.IsNull() && val.type() != type) {
+		SetValue(type, index, val.DefaultCastAs(type));
+		return;
+	}
+	validity.Set(index, !val.IsNull());
+	if (val.IsNull()) {
+		for (idx_t i = 0; i < array_size; i++) {
+			child->SetValue(index * array_size + i, Value());
+		}
+	} else {
+		auto &val_children = ArrayValue::GetChildren(val);
+		for (idx_t i = 0; i < array_size; i++) {
+			child->SetValue(index * array_size + i, val_children[i]);
+		}
+	}
+}
+
 Value VectorArrayBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;

@@ -53,6 +53,63 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	}
 }
 
+void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (!val.IsNull() && val.type() != type) {
+		SetValue(type, index, val.DefaultCastAs(type));
+		return;
+	}
+	validity.Set(index, !val.IsNull());
+	if (val.IsNull()) {
+		return;
+	}
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+		reinterpret_cast<bool *>(data_ptr)[index] = val.GetValueUnsafe<bool>();
+		break;
+	case PhysicalType::INT8:
+		reinterpret_cast<int8_t *>(data_ptr)[index] = val.GetValueUnsafe<int8_t>();
+		break;
+	case PhysicalType::INT16:
+		reinterpret_cast<int16_t *>(data_ptr)[index] = val.GetValueUnsafe<int16_t>();
+		break;
+	case PhysicalType::INT32:
+		reinterpret_cast<int32_t *>(data_ptr)[index] = val.GetValueUnsafe<int32_t>();
+		break;
+	case PhysicalType::INT64:
+		reinterpret_cast<int64_t *>(data_ptr)[index] = val.GetValueUnsafe<int64_t>();
+		break;
+	case PhysicalType::INT128:
+		reinterpret_cast<hugeint_t *>(data_ptr)[index] = val.GetValueUnsafe<hugeint_t>();
+		break;
+	case PhysicalType::UINT8:
+		reinterpret_cast<uint8_t *>(data_ptr)[index] = val.GetValueUnsafe<uint8_t>();
+		break;
+	case PhysicalType::UINT16:
+		reinterpret_cast<uint16_t *>(data_ptr)[index] = val.GetValueUnsafe<uint16_t>();
+		break;
+	case PhysicalType::UINT32:
+		reinterpret_cast<uint32_t *>(data_ptr)[index] = val.GetValueUnsafe<uint32_t>();
+		break;
+	case PhysicalType::UINT64:
+		reinterpret_cast<uint64_t *>(data_ptr)[index] = val.GetValueUnsafe<uint64_t>();
+		break;
+	case PhysicalType::UINT128:
+		reinterpret_cast<uhugeint_t *>(data_ptr)[index] = val.GetValueUnsafe<uhugeint_t>();
+		break;
+	case PhysicalType::FLOAT:
+		reinterpret_cast<float *>(data_ptr)[index] = val.GetValueUnsafe<float>();
+		break;
+	case PhysicalType::DOUBLE:
+		reinterpret_cast<double *>(data_ptr)[index] = val.GetValueUnsafe<double>();
+		break;
+	case PhysicalType::INTERVAL:
+		reinterpret_cast<interval_t *>(data_ptr)[index] = val.GetValueUnsafe<interval_t>();
+		break;
+	default:
+		throw InternalException("Unimplemented type for StandardVectorBuffer::SetValue");
+	}
+}
+
 Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;

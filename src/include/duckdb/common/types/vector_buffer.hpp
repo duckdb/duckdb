@@ -127,6 +127,8 @@ public:
 	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 	//! Get the value at the given index directly from the buffer's data
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
+	//! Set the value at the given index (flat/constant vectors only)
+	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
 
 protected:
 	VectorType vector_type;

@@ -51,6 +51,8 @@ public:
 		heap = nullptr;
 	}
 
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}

@@ -64,6 +64,17 @@ idx_t StringHeapHolder::GetAllocationSize() const {
 	return heap.AllocationSize();
 }
 
+void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (!val.IsNull() && val.type() != type) {
+		SetValue(type, index, val.DefaultCastAs(type));
+		return;
+	}
+	validity.Set(index, !val.IsNull());
+	if (!val.IsNull()) {
+		reinterpret_cast<string_t *>(data_ptr)[index] = GetHeap().AddBlob(StringValue::Get(val));
+	}
+}
+
 void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	StandardVectorBuffer::Verify(type, sel, count);
 	if (vector_type == VectorType::CONSTANT_VECTOR) {

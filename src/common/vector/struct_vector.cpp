@@ -84,6 +84,25 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
+void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (!val.IsNull() && val.type() != type) {
+		SetValue(type, index, val.DefaultCastAs(type));
+		return;
+	}
+	validity.Set(index, !val.IsNull());
+	if (val.IsNull()) {
+		for (auto &child : children) {
+			child.SetValue(index, Value());
+		}
+	} else {
+		auto &val_children = StructValue::GetChildren(val);
+		D_ASSERT(children.size() == val_children.size());
+		for (idx_t i = 0; i < children.size(); i++) {
+			children[i].SetValue(index, val_children[i]);
+		}
+	}
+}
+
 Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
