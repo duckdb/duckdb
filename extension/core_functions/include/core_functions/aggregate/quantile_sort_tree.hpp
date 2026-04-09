@@ -386,7 +386,7 @@ struct QuantileSortTree {
 		index_tree->Build();
 
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
-		auto ldata = FlatVector::GetData<list_entry_t>(list);
+		auto ldata = FlatVector::GetDataMutable<list_entry_t>(list);
 		auto &lentry = ldata[lidx];
 		lentry.offset = ListVector::GetListSize(list);
 		lentry.length = bind_data.quantiles.size();
@@ -394,7 +394,7 @@ struct QuantileSortTree {
 		ListVector::Reserve(list, lentry.offset + lentry.length);
 		ListVector::SetListSize(list, lentry.offset + lentry.length);
 		auto &result = ListVector::GetEntry(list);
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		using ID = QuantileIndirect<INPUT_TYPE>;
 		ID indirect(data);

@@ -463,7 +463,7 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_pt
 
 void WindowBoundariesState::PartitionBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
                                            const ValidityMask &partition_mask) {
-	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_begin_data = FlatVector::Writer<idx_t>(bounds.data[PARTITION_BEGIN]);
 
 	//	OVER()
 	if (partition_count + order_count == 0) {
@@ -494,7 +494,7 @@ void WindowBoundariesState::PartitionBegin(DataChunk &bounds, idx_t row_idx, con
 
 void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
                                          const ValidityMask &partition_mask) {
-	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
+	auto partition_end_data = FlatVector::Writer<idx_t>(bounds.data[PARTITION_END]);
 
 	//	OVER()
 	if (partition_count + order_count == 0) {
@@ -504,7 +504,7 @@ void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const
 		return;
 	}
 
-	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_begin_data = FlatVector::Writer<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 		// determine partition and peer group boundaries to ultimately figure out window size
 		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
@@ -527,7 +527,7 @@ void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const
 
 void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
                                       const ValidityMask &partition_mask, const ValidityMask &order_mask) {
-	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_begin_data = FlatVector::Writer<idx_t>(bounds.data[PEER_BEGIN]);
 
 	//	OVER()
 	if (partition_count + order_count == 0) {
@@ -570,7 +570,7 @@ void WindowBoundariesState::PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_
 
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
-	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
+	auto peer_end_data = FlatVector::Writer<idx_t>(bounds.data[PEER_END]);
 	auto prev_end = peer_begin_data[0];
 	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 		const auto peer_start = peer_begin_data[chunk_idx];
@@ -588,7 +588,7 @@ void WindowBoundariesState::ValidBegin(DataChunk &bounds, idx_t row_idx, const i
                                        optional_ptr<WindowCursor> range) {
 	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
-	auto valid_begin_data = FlatVector::GetData<idx_t>(bounds.data[VALID_BEGIN]);
+	auto valid_begin_data = FlatVector::Writer<idx_t>(bounds.data[VALID_BEGIN]);
 
 	//	OVER()
 	D_ASSERT(partition_count + order_count != 0);
@@ -621,7 +621,7 @@ void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx
                                      optional_ptr<WindowCursor> range) {
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
-	auto valid_end_data = FlatVector::GetData<idx_t>(bounds.data[VALID_END]);
+	auto valid_end_data = FlatVector::Writer<idx_t>(bounds.data[VALID_END]);
 
 	//	OVER()
 	D_ASSERT(partition_count + order_count != 0);
@@ -654,10 +654,10 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
                                        optional_ptr<WindowCursor> range) {
 	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
-	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_begin_data = FlatVector::GetDataMutable<idx_t>(bounds.data[PEER_BEGIN]);
 	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
-	auto frame_begin_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_BEGIN]);
+	auto frame_begin_data = FlatVector::GetDataMutable<idx_t>(bounds.data[FRAME_BEGIN]);
 
 	idx_t window_start = NumericLimits<idx_t>::Maximum();
 
@@ -810,10 +810,10 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
                                      optional_ptr<WindowCursor> range) {
 	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
-	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
+	auto peer_end_data = FlatVector::GetDataMutable<idx_t>(bounds.data[PEER_END]);
 	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
-	auto frame_end_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_END]);
+	auto frame_end_data = FlatVector::GetDataMutable<idx_t>(bounds.data[FRAME_END]);
 
 	idx_t window_end = NumericLimits<idx_t>::Maximum();
 

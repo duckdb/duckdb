@@ -133,7 +133,7 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
                                                idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 
 	if (grstate.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
@@ -209,7 +209,7 @@ void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk 
 		partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
 		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
 	}
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {

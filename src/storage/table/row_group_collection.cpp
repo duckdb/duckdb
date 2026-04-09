@@ -1059,7 +1059,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
                                       const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	idx_t pos = 0;
 	auto row_groups = GetRowGroups();
 	do {

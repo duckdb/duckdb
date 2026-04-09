@@ -847,7 +847,7 @@ template <typename T>
 static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope) {
 	const auto y0 = cursor.GetCell<T>(0, lo);
 	const auto y1 = cursor.GetCell<T>(0, hi);
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	if (slope < 0 || slope > 1) {
 		if (TryExtrapolateOperator::Operation(y0, slope, y1, data[i])) {
 			FlatVector::SetNull(result, i, false);

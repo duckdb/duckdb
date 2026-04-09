@@ -163,7 +163,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 
 	// copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	memcpy(FlatVector::GetData(result) + result_offset * sizeof(T), source_data, scan_count * sizeof(T));
+	memcpy(FlatVector::GetDataMutable(result) + result_offset * sizeof(T), source_data, scan_count * sizeof(T));
 }
 
 template <class T>
@@ -190,7 +190,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 	// first fetch the data from the base table
 	auto data_ptr = handle.Ptr() + segment.GetBlockOffset() + NumericCast<idx_t>(row_id) * sizeof(T);
 
-	memcpy(FlatVector::GetData(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
+	memcpy(FlatVector::GetDataMutable(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
 }
 
 //===--------------------------------------------------------------------===//

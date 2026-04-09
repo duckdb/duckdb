@@ -100,10 +100,10 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	}
 
 	ListVector::Reserve(result, result_length);
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	SelectionVector result_selection_vec = SelectionVector(result_length);
 	ValidityMask entry_validity_mask = ValidityMask(result_length);
-	ValidityMask &result_validity_mask = FlatVector::Validity(result);
+
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	auto &result_entry = ListVector::GetEntry(result);
 
 	idx_t offset = 0;
@@ -116,7 +116,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 			selection_len = selection_lists_data[selection_list_idx].length;
 			selection_offset = selection_lists_data[selection_list_idx].offset;
 		} else {
-			result_validity_mask.SetInvalid(j);
+			result_data.SetInvalid(j);
 			continue;
 		}
 		// Get length and offset of input list for current output row
@@ -127,7 +127,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 			input_length = input_lists_data[input_list_idx].length;
 			input_offset = input_lists_data[input_list_idx].offset;
 		} else {
-			result_validity_mask.SetInvalid(j);
+			result_data.SetInvalid(j);
 			continue;
 		}
 		result_data[j].offset = offset;

@@ -42,7 +42,7 @@ struct SplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] =
+		FlatVector::GetDataMutable<string_t>(result_child)[list_entry] =
 		    StringVector::AddString(result_child, split_data, split_size);
 	}
 };
@@ -269,7 +269,7 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 	ListVector::SetListSize(result, 0);
 
 	// set up the list entries
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &child_entry = ListVector::GetEntry(result);
 	auto &result_mask = FlatVector::Validity(result);
 	idx_t total_splits = 0;

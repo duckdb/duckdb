@@ -982,7 +982,7 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start) {
 	D_ASSERT(updates.ColumnCount() == 1);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 
 	auto primary_column_idx = column_path[0];
 	D_ASSERT(primary_column_idx < columns.size());

@@ -708,7 +708,7 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 
 	// Grab pointers to sort keys
 	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
-	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
+	const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
 	for (idx_t i = 0; i < count; i++) {
 		sort_keys[i] = &merged_partition_keys[i];
 	}
@@ -767,12 +767,12 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
 
 	TupleDataChunkState key_data_input;
-	const auto key_locations = FlatVector::GetData<data_ptr_t>(key_data_input.row_locations);
-	const auto key_heap_locations = FlatVector::GetData<data_ptr_t>(key_data_input.heap_locations);
-	const auto key_heap_sizes = FlatVector::GetData<idx_t>(key_data_input.heap_sizes);
+	const auto key_locations = FlatVector::GetDataMutable<data_ptr_t>(key_data_input.row_locations);
+	const auto key_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(key_data_input.heap_locations);
+	const auto key_heap_sizes = FlatVector::GetDataMutable<idx_t>(key_data_input.heap_sizes);
 
 	TupleDataChunkState payload_data_input;
-	const auto payload_locations = FlatVector::GetData<data_ptr_t>(payload_data_input.row_locations);
+	const auto payload_locations = FlatVector::GetDataMutable<data_ptr_t>(payload_data_input.row_locations);
 
 	auto sorted_run = gstate.merger.sorted_runs[0]->CreateRunForMaterialization();
 

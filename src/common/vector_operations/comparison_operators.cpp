@@ -175,7 +175,7 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	}
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
+	auto result_data = FlatVector::GetDataMutable<bool>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
 	UnifiedVectorFormat leftv, rightv;

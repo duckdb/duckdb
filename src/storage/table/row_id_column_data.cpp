@@ -78,7 +78,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	// Generate row ids
 	// Create sequence for row ids
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<row_t>(result);
+	auto result_data = FlatVector::Writer<row_t>(result);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel.get_index(sel_idx)] = UnsafeNumericCast<int64_t>(current_row + sel.get_index(sel_idx));
 	}
@@ -97,7 +97,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<row_t>(result);
+	auto result_data = FlatVector::Writer<row_t>(result, count);
 	auto row_start = GetRowStart(state);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
@@ -112,7 +112,7 @@ idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                                row_t row_id, Vector &result, idx_t result_idx) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto data = FlatVector::GetData<row_t>(result);
+	auto data = FlatVector::GetDataMutable<row_t>(result);
 	auto row_start = state.row_group->GetRowStart();
 	data[result_idx] = UnsafeNumericCast<row_t>(row_start) + row_id;
 }

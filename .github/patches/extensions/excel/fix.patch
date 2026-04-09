@@ -1,3 +1,16 @@
+diff --git a/src/excel/include/xlsx/parsers/worksheet_parser.hpp b/src/excel/include/xlsx/parsers/worksheet_parser.hpp
+index 0b13361..eb631d2 100644
+--- a/src/excel/include/xlsx/parsers/worksheet_parser.hpp
++++ b/src/excel/include/xlsx/parsers/worksheet_parser.hpp
+@@ -509,7 +509,7 @@ inline void SheetParser::OnCell(const XLSXCellPos &pos, XLSXCellType type, vecto
+ 	auto &vec = chunk.data[pos.col - range.beg.col];
+ 
+ 	// Push the cell data to our chunk
+-	const auto ptr = FlatVector::GetData<string_t>(vec);
++	auto ptr = FlatVector::GetDataMutable<string_t>(vec);
+ 
+ 	if (type == XLSXCellType::SHARED_STRING) {
+ 		// Push a null to the buffer so that the string is null-terminated
 diff --git a/src/excel/xlsx/copy_xlsx.cpp b/src/excel/xlsx/copy_xlsx.cpp
 index 63b052c..de7bccf 100644
 --- a/src/excel/xlsx/copy_xlsx.cpp
