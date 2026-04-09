@@ -7,7 +7,7 @@ export CODEQL_HOME="$HOME/dev/codeql"
 
 # Clean previous codeql build.
 rm -rf build/codeql
-mkdir build/codeql
+mkdir -p build/codeql
 
 # CMAKE_LLVM_PATH=/opt/homebrew/opt/llvm"
 # arch -x86_64

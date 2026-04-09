@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - namespace-profile-linux-x64
+
+config-variables: null

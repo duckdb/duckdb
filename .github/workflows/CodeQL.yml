@@ -1,0 +1,47 @@
+name: CodeQL
+on:
+  workflow_dispatch:
+  pull_request: # TODO: remove this before merging
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL
+    if: github.repository == 'duckdb/duckdb'
+    runs-on: namespace-profile-linux-x64
+
+    steps:
+      - name: Checkout
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: namespace
+          fetch_depth: 0
+
+      - name: Install CodeQL
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/ci/retry.py -- wget -O /tmp/codeql-linux64.zip https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
+          rm -rf "${HOME:?}/dev"
+          mkdir -p "$HOME/dev"
+          unzip -q /tmp/codeql-linux64.zip -d "$HOME/dev"
+          echo "$HOME/dev/codeql" >> "$GITHUB_PATH"
+
+      - name: Build database
+        run: bash scripts/codeql/build.sh
+
+      - name: Run queries
+        run: bash scripts/codeql/run.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: codeql-results
+          if-no-files-found: warn
+          path: |
+            scripts/codeql/out/results.sarif
+            scripts/codeql/out/results.json
