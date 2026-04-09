@@ -23,8 +23,7 @@ public:
 	Optimizer(Binder &binder, ClientContext &context);
 
 	//! Optimize a plan by running specialized optimizers
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan,
-	                                     optional_ptr<const string> query = nullptr);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<const string> query = nullptr);
 	//! Return a reference to the client context of this optimizer
 	ClientContext &GetContext();
 	//! Whether the specific optimizer is disabled
