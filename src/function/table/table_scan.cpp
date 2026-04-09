@@ -633,8 +633,9 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 
 	// Attempt matching the top-level filter to the index expression.
 	if (expressions.empty()) {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExtractFilterExpressions");
-		auto filter_expr = expr_filter.ToExpression(*bound_ref);
+		auto filter_expr = filter.filter_type == TableFilterType::EXPRESSION_FILTER
+		                       ? filter.Cast<ExpressionFilter>().ToExpression(*bound_ref)
+		                       : filter.ToExpression(*bound_ref);
 		expressions.push_back(std::move(filter_expr));
 	}
 
