@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -58,6 +59,23 @@ public:
 	FileSystem &GetFileSystem() const override {
 		auto &config = DBConfig::GetConfig(db);
 		return *config.file_system;
+	}
+	optional_ptr<FileOpener> GetOpener() const override {
+		return &database_opener;
+	}
+
+private:
+	DatabaseInstance &db;
+	mutable DatabaseFileOpener database_opener;
+};
+
+class LocalDatabaseFileSystem : public OpenerFileSystem {
+public:
+	explicit LocalDatabaseFileSystem(DatabaseInstance &db_p) : db(db_p), database_opener(db_p) {
+	}
+
+	FileSystem &GetFileSystem() const override {
+		return db.GetLocalFileSystem();
 	}
 	optional_ptr<FileOpener> GetOpener() const override {
 		return &database_opener;
