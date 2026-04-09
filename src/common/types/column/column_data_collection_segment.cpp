@@ -195,7 +195,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	result.Resize(0, vector_count);
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
-	auto target_data = FlatVector::GetData(result);
+	auto target_data = FlatVector::GetDataMutable(result);
 	auto &target_validity = FlatVector::Validity(result);
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {

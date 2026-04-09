@@ -4,8 +4,7 @@
 namespace duckdb {
 
 FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
-    : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)),
-      count(count) {
+    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)), count(count) {
 }
 
 void FlatVector::FlatStringWriter::InitializeHeap() {

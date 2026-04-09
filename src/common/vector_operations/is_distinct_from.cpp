@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
@@ -7,11 +8,11 @@ void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result,
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
 	VectorOperations::DistinctComparator(left, right, comparator_result, count);
-	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
+	auto cmp_data = comparator_result.Values<int8_t>(count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
+	auto result_data = FlatVector::Writer<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = cmp_data[i] != 0;
+		result_data[i] = cmp_data[i].value != 0;
 	}
 }
 
@@ -19,11 +20,11 @@ void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &resu
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
 	VectorOperations::DistinctComparator(left, right, comparator_result, count);
-	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
+	auto cmp_data = comparator_result.Values<int8_t>(count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<bool>(result);
+	auto result_data = FlatVector::Writer<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = cmp_data[i] == 0;
+		result_data[i] = cmp_data[i].value == 0;
 	}
 }
 
@@ -33,13 +34,13 @@ static idx_t DistinctComparatorSelect(Vector &left, Vector &right, optional_ptr<
                                       COMPARATOR_FN comparator_fn, PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
 	comparator_fn(left, right, comparator_result, count);
-	auto cmp_data = FlatVector::GetData<int8_t>(comparator_result);
+	auto cmp_data = comparator_result.Values<int8_t>(count);
 
 	idx_t true_count = 0;
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto result_idx = sel ? sel->get_index(i) : i;
-		if (predicate(cmp_data[i])) {
+		if (predicate(cmp_data[i].value)) {
 			if (true_sel) {
 				true_sel->set_index(true_count, result_idx);
 			}

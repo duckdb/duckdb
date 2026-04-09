@@ -16,6 +16,9 @@ on:
       runner_linux_small:
         default: ubuntu-latest
         type: string
+      save_cache:
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       base_hash:
@@ -37,6 +40,9 @@ on:
         description: 'Optional small runner label override'
         default: ubuntu-latest
         type: string
+      save_cache:
+        default: false
+        type: boolean
   repository_dispatch:
 
 concurrency:
@@ -70,6 +76,7 @@ jobs:
         uses: ./.github/actions/linux_release_build
         with:
           artifact_name: linux-release-build
+          save_cache: ${{ inputs.save_cache }}
 
       - name: Select base ref
         run: |
@@ -100,6 +107,7 @@ jobs:
         with:
           artifact_name: linux-base-build
           run_smoke_tests: false
+          save_cache: ${{ inputs.save_cache }}
 
   regression-bench:
     name: Bench ${{ matrix.name }}

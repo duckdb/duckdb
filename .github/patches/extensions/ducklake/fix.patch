@@ -1205,6 +1205,32 @@ index 851c128d..4040a5c2 100644
  	auto catalog_type = entry->type;
  	table_entry_map.insert(make_pair(id, reference<CatalogEntry>(*entry)));
  	schema.AddEntry(catalog_type, std::move(entry));
+diff --git a/src/storage/ducklake_delete.cpp b/src/storage/ducklake_delete.cpp
+index 4a154ae9..c65f13b2 100644
+--- a/src/storage/ducklake_delete.cpp
++++ b/src/storage/ducklake_delete.cpp
+@@ -92,10 +92,10 @@ static DuckLakeDeleteFile WriteDeleteFileInternal(ClientContext &context, InputT
+ 
+ 	optional_idx begin_snapshot;
+ 	idx_t row_count = 0;
+-	auto pos_data = FlatVector::GetData<int64_t>(write_chunk.data[1]);
++	auto pos_data = FlatVector::GetDataMutable<int64_t>(write_chunk.data[1]);
+ 	int64_t *snapshot_data = nullptr;
+ 	if (with_snapshots) {
+-		snapshot_data = FlatVector::GetData<int64_t>(write_chunk.data[2]);
++		snapshot_data = FlatVector::GetDataMutable<int64_t>(write_chunk.data[2]);
+ 	}
+ 
+ 	for (auto &entry : input.positions) {
+@@ -220,7 +220,7 @@ public:
+ 		}
+ 		ColumnDataAppendState append_state;
+ 		deleted_row_collection->InitializeAppend(append_state);
+-		auto data = FlatVector::GetData<uint64_t>(file_row_id_chunk.data[0]);
++		auto data = FlatVector::GetDataMutable<uint64_t>(file_row_id_chunk.data[0]);
+ 		idx_t chunk_size = 0;
+ 		for (idx_t r = 0; r < local_entry.size(); ++r) {
+ 			data[chunk_size++] = local_entry[r];
 diff --git a/src/storage/ducklake_delete_filter.cpp b/src/storage/ducklake_delete_filter.cpp
 index 35b0518f..770ac8da 100644
 --- a/src/storage/ducklake_delete_filter.cpp
@@ -1239,9 +1265,26 @@ index 4fd2ecfb..d88cec05 100644
  			}
  			break;
 diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
-index 405a5acf..f45dfc18 100644
+index 405a5acf..98d0d503 100644
 --- a/src/storage/ducklake_inlined_data_reader.cpp
 +++ b/src/storage/ducklake_inlined_data_reader.cpp
+@@ -226,14 +226,14 @@ AsyncResult DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableF
+ 			case InlinedVirtualColumn::COLUMN_ROW_ID: {
+ 				// Generate ordinal data for row IDs
+ 				Vector ordinal_vector(LogicalType::BIGINT);
+-				auto ordinal_data = FlatVector::GetData<int64_t>(ordinal_vector);
++				auto ordinal_data = FlatVector::GetDataMutable<int64_t>(ordinal_vector);
+ 				for (idx_t r = 0; r < scan_chunk.size(); r++) {
+ 					ordinal_data[r] = NumericCast<int64_t>(file_row_number + r);
+ 				}
+ 				if (TryEvaluateExpression(context, c, ordinal_vector, LogicalType::BIGINT, chunk.data[c])) {
+ 					continue;
+ 				}
+-				auto row_id_data = FlatVector::GetData<int64_t>(chunk.data[c]);
++				auto row_id_data = FlatVector::GetDataMutable<int64_t>(chunk.data[c]);
+ 				for (idx_t r = 0; r < scan_chunk.size(); r++) {
+ 					row_id_data[r] = NumericCast<int64_t>(file_row_number + r);
+ 				}
 @@ -258,17 +258,17 @@ AsyncResult DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableF
  			approved_tuple_count = deletion_filter->Filter(file_row_number, approved_tuple_count, sel);
  		}
@@ -1664,7 +1707,7 @@ index e3ddf53b..96e99928 100644
  		const auto &column_type = read_info.column_types[column_index.index];
  
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 2d6317f9..c55547a3 100644
+index 2d6317f9..a32fe7f3 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
 @@ -28,6 +28,7 @@
@@ -1693,6 +1736,15 @@ index 2d6317f9..c55547a3 100644
  
  		// Add _ducklake_internal_snapshot_id <= snapshot_filter_max
  		if (file_entry.snapshot_filter_max.IsValid()) {
+@@ -602,7 +603,7 @@ void DuckLakeMultiFileReader::GatherDeletionScanSnapshots(BaseFileReader &reader
+ 
+ 	idx_t count = chunk.size();
+ 	snapshot_vector.Flatten(count);
+-	auto snapshot_data = FlatVector::GetData<int64_t>(snapshot_vector);
++	auto snapshot_data = FlatVector::GetDataMutable<int64_t>(snapshot_vector);
+ 
+ 	UnifiedVectorFormat row_id_data;
+ 	rowid_vector.ToUnifiedFormat(count, row_id_data);
 diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
 index 020cc3be..7a7c0517 100644
 --- a/src/storage/ducklake_schema_entry.cpp

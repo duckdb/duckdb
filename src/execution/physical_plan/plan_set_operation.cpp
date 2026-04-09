@@ -9,14 +9,16 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
 
 static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
                                                                         const vector<LogicalType> &types) {
 	vector<unique_ptr<Expression>> res;
-	auto expr =
-	    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+	auto rn = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
+	auto expr = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn), nullptr);
 	expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
 	expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {

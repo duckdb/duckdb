@@ -323,7 +323,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
-			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
 				if (duckdb::FlatVector::IsNull(str_vec, r)) {
 					continue;

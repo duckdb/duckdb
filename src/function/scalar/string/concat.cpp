@@ -142,7 +142,7 @@ struct ListConcatInputData {
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {

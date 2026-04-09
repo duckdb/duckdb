@@ -494,50 +494,51 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	switch (physical_type) {
 	case PhysicalType::BOOL:
-		FlatVector::GetData<bool>(*this)[index] = val.GetValueUnsafe<bool>();
+		FlatVector::GetDataMutable<bool>(*this)[index] = val.GetValueUnsafe<bool>();
 		break;
 	case PhysicalType::INT8:
-		FlatVector::GetData<int8_t>(*this)[index] = val.GetValueUnsafe<int8_t>();
+		FlatVector::GetDataMutable<int8_t>(*this)[index] = val.GetValueUnsafe<int8_t>();
 		break;
 	case PhysicalType::INT16:
-		FlatVector::GetData<int16_t>(*this)[index] = val.GetValueUnsafe<int16_t>();
+		FlatVector::GetDataMutable<int16_t>(*this)[index] = val.GetValueUnsafe<int16_t>();
 		break;
 	case PhysicalType::INT32:
-		FlatVector::GetData<int32_t>(*this)[index] = val.GetValueUnsafe<int32_t>();
+		FlatVector::GetDataMutable<int32_t>(*this)[index] = val.GetValueUnsafe<int32_t>();
 		break;
 	case PhysicalType::INT64:
-		FlatVector::GetData<int64_t>(*this)[index] = val.GetValueUnsafe<int64_t>();
+		FlatVector::GetDataMutable<int64_t>(*this)[index] = val.GetValueUnsafe<int64_t>();
 		break;
 	case PhysicalType::INT128:
-		FlatVector::GetData<hugeint_t>(*this)[index] = val.GetValueUnsafe<hugeint_t>();
+		FlatVector::GetDataMutable<hugeint_t>(*this)[index] = val.GetValueUnsafe<hugeint_t>();
 		break;
 	case PhysicalType::UINT8:
-		FlatVector::GetData<uint8_t>(*this)[index] = val.GetValueUnsafe<uint8_t>();
+		FlatVector::GetDataMutable<uint8_t>(*this)[index] = val.GetValueUnsafe<uint8_t>();
 		break;
 	case PhysicalType::UINT16:
-		FlatVector::GetData<uint16_t>(*this)[index] = val.GetValueUnsafe<uint16_t>();
+		FlatVector::GetDataMutable<uint16_t>(*this)[index] = val.GetValueUnsafe<uint16_t>();
 		break;
 	case PhysicalType::UINT32:
-		FlatVector::GetData<uint32_t>(*this)[index] = val.GetValueUnsafe<uint32_t>();
+		FlatVector::GetDataMutable<uint32_t>(*this)[index] = val.GetValueUnsafe<uint32_t>();
 		break;
 	case PhysicalType::UINT64:
-		FlatVector::GetData<uint64_t>(*this)[index] = val.GetValueUnsafe<uint64_t>();
+		FlatVector::GetDataMutable<uint64_t>(*this)[index] = val.GetValueUnsafe<uint64_t>();
 		break;
 	case PhysicalType::UINT128:
-		FlatVector::GetData<uhugeint_t>(*this)[index] = val.GetValueUnsafe<uhugeint_t>();
+		FlatVector::GetDataMutable<uhugeint_t>(*this)[index] = val.GetValueUnsafe<uhugeint_t>();
 		break;
 	case PhysicalType::FLOAT:
-		FlatVector::GetData<float>(*this)[index] = val.GetValueUnsafe<float>();
+		FlatVector::GetDataMutable<float>(*this)[index] = val.GetValueUnsafe<float>();
 		break;
 	case PhysicalType::DOUBLE:
-		FlatVector::GetData<double>(*this)[index] = val.GetValueUnsafe<double>();
+		FlatVector::GetDataMutable<double>(*this)[index] = val.GetValueUnsafe<double>();
 		break;
 	case PhysicalType::INTERVAL:
-		FlatVector::GetData<interval_t>(*this)[index] = val.GetValueUnsafe<interval_t>();
+		FlatVector::GetDataMutable<interval_t>(*this)[index] = val.GetValueUnsafe<interval_t>();
 		break;
 	case PhysicalType::VARCHAR: {
 		if (!val.IsNull()) {
-			FlatVector::GetData<string_t>(*this)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
+			FlatVector::GetDataMutable<string_t>(*this)[index] =
+			    StringVector::AddStringOrBlob(*this, StringValue::Get(val));
 		}
 		break;
 	}
@@ -564,7 +565,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::LIST: {
 		auto offset = ListVector::GetListSize(*this);
 		if (val.IsNull()) {
-			auto &entry = FlatVector::GetData<list_entry_t>(*this)[index];
+			auto &entry = FlatVector::GetDataMutable<list_entry_t>(*this)[index];
 			ListVector::PushBack(*this, Value());
 			entry.length = 1;
 			entry.offset = offset;
@@ -576,7 +577,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 				}
 			}
 			//! now set the pointer
-			auto &entry = FlatVector::GetData<list_entry_t>(*this)[index];
+			auto &entry = FlatVector::GetDataMutable<list_entry_t>(*this)[index];
 			entry.length = val_children.size();
 			entry.offset = offset;
 		}
@@ -1503,7 +1504,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
-		auto blobs = FlatVector::GetData<string_t>(*this);
+		auto blobs = FlatVector::GetDataMutable<string_t>(*this);
 
 		if (geometry_format == GeometryStorageType::WKB) {
 			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
@@ -1527,7 +1528,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
-			auto strings = FlatVector::GetData<string_t>(*this);
+			auto strings = FlatVector::GetDataMutable<string_t>(*this);
 			auto byte_data_length =
 			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(107, "byte_data_length", optional_idx());
 			if (byte_data_length.IsValid()) { // new serialization
@@ -1574,7 +1575,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			ListVector::SetListSize(*this, list_size);
 
 			// Read the entries
-			auto list_entries = FlatVector::GetData<list_entry_t>(*this);
+			auto list_entries = FlatVector::GetDataMutable<list_entry_t>(*this);
 			deserializer.ReadList(105, "entries", [&](Deserializer::List &list, idx_t i) {
 				list.ReadObject([&](Deserializer &obj) {
 					list_entries[i].offset = obj.ReadProperty<uint64_t>(100, "offset");
@@ -1991,7 +1992,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 			break;
 		}
-		auto list_entries = FlatVector::GetData<list_entry_t>(vector);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(vector);
 		idx_t child_count = 0;
 		for (idx_t r = 0; r < count; r++) {
 			if (FlatVector::IsNull(vector, r)) {

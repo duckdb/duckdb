@@ -23,6 +23,9 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 	}
 	// slice the validity mask of the original struct
 	auto &original_validity = other.GetBuffer()->GetValidityMask();
+	if (count > STANDARD_VECTOR_SIZE) {
+		validity.Resize(count);
+	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
 }
 

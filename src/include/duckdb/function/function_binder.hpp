@@ -11,6 +11,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/error_data.hpp"
 
@@ -74,6 +75,11 @@ public:
 	                                           const vector<unique_ptr<Expression>> &groups,
 	                                           optional_ptr<vector<GroupingSet>> grouping_sets);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
+
+	DUCKDB_API unique_ptr<BoundWindowExpression>
+	BindWindowFunction(WindowFunction bound_function, vector<unique_ptr<Expression>> children,
+	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders,
+	                   AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
