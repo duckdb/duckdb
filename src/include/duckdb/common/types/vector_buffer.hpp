@@ -132,6 +132,8 @@ public:
 	//! Produce a string representation of buffer contents (debug only)
 	virtual string ToString(const LogicalType &type, idx_t count) const;
 	virtual string ToString(const LogicalType &type) const;
+	//! Slice the vector with a selection vector
+	virtual void Slice(Vector &vector, const SelectionVector &sel, idx_t count);
 
 protected:
 	VectorType vector_type;

@@ -88,6 +88,16 @@ string VectorBuffer::ToString(const LogicalType &type) const {
 	return "";
 }
 
+void VectorBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return;
+	}
+	// default: wrap the vector in a dictionary
+	Vector child_vector(Vector::Ref(vector));
+	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+	vector.buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
+}
+
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	throw InternalException("SetValue not supported for this buffer type");
 }

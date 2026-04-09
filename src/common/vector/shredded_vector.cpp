@@ -24,6 +24,10 @@ void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	shredded_data->Verify(sel, count);
 }
 
+void ShreddedVectorBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+	vector.Flatten(count);
+}
+
 string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {
 	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
 	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];

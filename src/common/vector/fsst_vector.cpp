@@ -19,6 +19,10 @@ void VectorFSSTStringBuffer::Verify(const LogicalType &type, const SelectionVect
 	D_ASSERT(vector_type == VectorType::FSST_VECTOR);
 }
 
+void VectorFSSTStringBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+	vector.Flatten(count);
+}
+
 Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	if (!validity.RowIsValid(index)) {
 		return Value(type);

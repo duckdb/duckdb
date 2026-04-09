@@ -84,6 +84,14 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
+void VectorStructBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return;
+	}
+	// structs are sliced by creating a new struct buffer with sliced children
+	vector.buffer = make_buffer<VectorStructBuffer>(vector, sel, count);
+}
+
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));

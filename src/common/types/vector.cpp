@@ -237,46 +237,9 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (!sel.IsSet() || count == 0) {
-		return; // Nothing to do here
-	}
-	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// dictionary on a constant is just a constant
 		return;
 	}
-	auto internal_type = GetType().InternalType();
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		if (internal_type == PhysicalType::STRUCT) {
-			throw InternalException("Struct vectors cannot be dictionary vectors");
-		}
-		// already a dictionary, slice the current dictionary
-		auto &old_dict = buffer->Cast<DictionaryBuffer>();
-		auto dictionary_size = DictionaryVector::DictionarySize(*this);
-		auto dictionary_id = DictionaryVector::DictionaryId(*this);
-		auto sliced_dictionary = old_dict.GetSelVector().Slice(sel, count);
-		auto entry = old_dict.GetEntryPtr();
-		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
-		if (dictionary_size.IsValid()) {
-			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
-			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
-			dict_buffer.SetDictionaryId(std::move(dictionary_id));
-		}
-		return;
-	}
-
-	if (GetVectorType() == VectorType::FSST_VECTOR || GetVectorType() == VectorType::SHREDDED_VECTOR) {
-		Flatten(sel, count);
-		return;
-	}
-	if (internal_type == PhysicalType::STRUCT) {
-		// structs should not be sliced themselves - only their children are sliced
-		buffer = make_buffer<VectorStructBuffer>(*this, sel, count);
-		return;
-	}
-
-	// move this vector as a child vector in the dictionary
-	Vector child_vector(Vector::Ref(*this));
-	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
-	buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
+	buffer->Slice(*this, sel, count);
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {

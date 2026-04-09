@@ -47,6 +47,27 @@ void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	}
 }
 
+void DictionaryBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+	auto dictionary_size_val = dictionary_size;
+	auto dictionary_id_val = dictionary_id;
+	if (entry) {
+		if (!entry->id.empty()) {
+			dictionary_id_val = entry->id;
+		}
+		if (entry->size.IsValid()) {
+			dictionary_size_val = entry->size;
+		}
+	}
+	auto sliced_dictionary = sel_vector.Slice(sel, count);
+	auto entry_ptr = GetEntryPtr();
+	vector.buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry_ptr));
+	if (dictionary_size_val.IsValid()) {
+		auto &dict_buffer = vector.buffer->Cast<DictionaryBuffer>();
+		dict_buffer.SetDictionarySize(dictionary_size_val.GetIndex());
+		dict_buffer.SetDictionaryId(std::move(dictionary_id_val));
+	}
+}
+
 Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	auto resolved_index = sel_vector.get_index(index);
 	return entry->data.GetValue(resolved_index);

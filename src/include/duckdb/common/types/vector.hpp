@@ -46,6 +46,9 @@ class Vector {
 	friend struct ShreddedVector;
 
 	friend class DataChunk;
+	friend class VectorBuffer;
+	friend class DictionaryBuffer;
+	friend class VectorStructBuffer;
 	friend class VectorCacheEntry;
 
 public:
