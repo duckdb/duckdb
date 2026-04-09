@@ -45,7 +45,8 @@ class SimpleFunction;
 class TableFunctionSet;
 class Value;
 class WindowFunctionSet;
-template <class T> class FunctionSet;
+template <class T>
+class FunctionSet;
 
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
