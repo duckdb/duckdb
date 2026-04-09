@@ -446,7 +446,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*logical_planner.binder, *this);
-		logical_plan = optimizer.Optimize(std::move(logical_plan));
+		logical_plan = optimizer.Optimize(std::move(logical_plan), &query);
 		D_ASSERT(logical_plan);
 		profiler.EndPhase();
 
@@ -758,7 +758,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 		if (config.enable_optimizer) {
 			Optimizer optimizer(*planner.binder, *this);
-			plan = optimizer.Optimize(std::move(plan));
+			plan = optimizer.Optimize(std::move(plan), &query);
 		}
 
 		ColumnBindingResolver resolver;

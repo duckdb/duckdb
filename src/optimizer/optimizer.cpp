@@ -345,14 +345,16 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 }
 
-unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p,
+                                                optional_ptr<const string> query_p) {
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
+	this->query = query_p;
 
 	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
+			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get(), query};
 			if (pre_optimizer_extension.pre_optimize_function) {
 				pre_optimizer_extension.pre_optimize_function(input, plan);
 			}
@@ -363,7 +365,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	for (auto &optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
+			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get(), query};
 			if (optimizer_extension.optimize_function) {
 				optimizer_extension.optimize_function(input, plan);
 			}
