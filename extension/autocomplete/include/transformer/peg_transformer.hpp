@@ -739,6 +739,8 @@ private:
 	                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
+	static string TransformCollationName(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer,

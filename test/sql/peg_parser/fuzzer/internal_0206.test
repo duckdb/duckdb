@@ -1,0 +1,21 @@
+# name: fuzzer_issues/internal_0205.test
+# description: PEG hits INTERNAL Error (should be clean error): INTERNAL Error: Failed to cast parse result of type IDENTIFIER to type LIST for rule CollationName
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+CALL enable_peg_parser();
+
+statement error
+DROP COLLATION a
+----
+Not implemented Error: Cannot drop collation yet
+
+statement ok
+CALL disable_peg_parser();
+
+statement error
+DROP COLLATION a
+----
+Not implemented Error: Cannot drop this type yet
