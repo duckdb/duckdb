@@ -15,7 +15,7 @@ static void InitializeExecutor(ClientContext &context, const Expression &express
 	state.executor->AddExpression(expression);
 }
 
-ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
+ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
 	InitializeExecutor(context, expression, *this);
 }
 
