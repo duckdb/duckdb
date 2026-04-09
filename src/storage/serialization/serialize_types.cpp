@@ -146,7 +146,7 @@ unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deser
 	auto result = duckdb::unique_ptr<ExtensionTypeInfo>(new ExtensionTypeInfo());
 	deserializer.ReadPropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", result->modifiers);
 	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties, unordered_map<string, Value>());
-	result->default_compression = deserializer.ReadPropertyWithExplicitDefault<CompressionType>(102, "default_compression", CompressionType::COMPRESSION_AUTO);
+	deserializer.ReadPropertyWithExplicitDefault<CompressionType>(102, "default_compression", result->default_compression, CompressionType::COMPRESSION_AUTO);
 	return result;
 }
 
