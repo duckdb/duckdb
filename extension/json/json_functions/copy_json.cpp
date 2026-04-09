@@ -10,6 +10,7 @@
 #include "json_scan.hpp"
 #include "json_transform.hpp"
 #include "json_multi_file_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 
@@ -95,7 +96,10 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 			strftime_children.emplace_back(std::move(column));
 			strftime_children.emplace_back(make_uniq<ConstantExpression>(date_format));
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
-		} else if (!timestamp_format.empty() && type == LogicalTypeId::TIMESTAMP) {
+		} else if (!timestamp_format.empty() && (type == LogicalTypeId::TIMESTAMP || type == LogicalTypeId::TIMESTAMP_TZ)) {
+			if (type == LogicalTypeId::TIMESTAMP_TZ) {
+				column = make_uniq<CastExpression>(LogicalType::TIMESTAMP, std::move(column));
+			}
 			strftime_children.emplace_back(std::move(column));
 			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_format));
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
