@@ -3,15 +3,17 @@
 
 require parquet
 
+foreach type utinyint usmallint uinteger ubigint uhugeint hugeint
+
 # Shred unsigned types when writing to Parquet
 statement ok
 COPY (
-	SELECT {'field1': i::UBIGINT}::VARIANT AS obj
+	SELECT {'field1': i::{type}}::VARIANT AS obj
 	FROM range(5) t(i)
-) TO '{TEST_DIR}/unsigned_variant.parquet';
+) TO '{TEST_DIR}/{type}_variant.parquet';
 
 query I
-SELECT p.obj.field1 FROM '{TEST_DIR}/unsigned_variant.parquet' p;
+SELECT p.obj.field1 FROM '{TEST_DIR}/{type}_variant.parquet' p;
 ----
 0
 1
@@ -20,6 +22,8 @@ SELECT p.obj.field1 FROM '{TEST_DIR}/unsigned_variant.parquet' p;
 4
 
 query I
-SELECT COUNT(*) > 0 FROM parquet_schema('{TEST_DIR}/unsigned_variant.parquet') WHERE name='typed_value';
+SELECT COUNT(*) > 0 FROM parquet_schema('{TEST_DIR}/{type}_variant.parquet') WHERE name='typed_value';
 ----
 1
+
+endloop
