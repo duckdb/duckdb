@@ -119,7 +119,7 @@ public:
 	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
 	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 
-	//! Drop the ART.
+	//! Marks the ART's on-disk blocks as reclaimable. The in-memory state is not destroyed.
 	void CommitDrop(IndexLock &index_lock) override;
 	//! Reset all ART storage.
 	void ResetStorage(IndexLock &index_lock) override;

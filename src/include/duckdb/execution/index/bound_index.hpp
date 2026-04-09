@@ -121,10 +121,12 @@ public:
 	//! Verifies the constraint for a chunk of data.
 	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
-	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+	//! Marks the index's on-disk blocks as reclaimable. The in-memory state is not destroyed;
+	//! it is freed later when the deleted catalog entry is GC'd.
+	//! The lock obtained from InitializeLock must be held.
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
 
-	//! Deletes all data from the index
+	//! Marks the index's on-disk blocks as reclaimable. The in-memory state is not destroyed.
 	void CommitDrop() override;
 
 	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
