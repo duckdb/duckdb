@@ -1,4 +1,4 @@
-# name: test/sql/settings/test_disabled_local_filesystem_secrets.test
+# name: test/sql/settings/test_disabled_local_filesystem_metadata.test
 # description: Test that persistent secrets fail when LocalFileSystem is disabled
 # group: [settings]
 
