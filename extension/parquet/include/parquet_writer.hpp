@@ -8,6 +8,13 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <utility>
+
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
@@ -18,7 +25,6 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
-
 #include "parquet_statistics.hpp"
 #include "column_writer.hpp"
 #include "parquet_field_id.hpp"
@@ -28,18 +34,42 @@
 #include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/planner/expression.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
 class FileSystem;
 class FileOpener;
 class ParquetEncryptionConfig;
 class ParquetStatsAccumulator;
-
 class Serializer;
 class Deserializer;
-
 class ColumnWriterStatistics;
 struct CopyFunctionFileStatistics;
+class ClientContext;
+class EncryptionUtil;
+class GeoParquetFileMetadata;
+class ParquetWriter;
+class PhysicalOperator;
+enum class GeoParquetVersion : uint8_t;
 
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;

@@ -1,21 +1,34 @@
 
 #include "parquet_geometry.hpp"
 
+#include <stdlib.h>
+#include <string.h>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "column_reader.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/scalar/geometry_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "reader/expression_column_reader.hpp"
-#include "parquet_reader.hpp"
 #include "yyjson.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "re2/re2.h"
 #include "reader/string_column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/setting_info.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
 

@@ -1,8 +1,24 @@
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/common/vector/list_vector.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+struct ParquetColumnSchema;
 
 struct ListReaderData {
 	ListReaderData(list_entry_t *result_ptr, ValidityMask &result_mask)
