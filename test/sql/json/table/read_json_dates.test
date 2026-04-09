@@ -176,3 +176,27 @@ query II
 select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
 ----
 TIMESTAMP	2023-02-08 02:12:28.789
+
+# test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns (e.g. now())
+statement ok
+create table timestamptz_test as select '1996-03-27 07:42:33+00'::TIMESTAMPTZ t
+
+statement ok
+copy (select t from timestamptz_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d')
+
+query I
+select t from '{TEMP_DIR}/my_file.json'
+----
+1996-03-27
+
+statement ok
+copy (
+    select
+        '2026-01-01T12:00:00Z'::TIMESTAMP as ts,
+        '2026-01-01T12:00:00Z'::TIMESTAMPTZ as tstz
+) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%a')
+
+query II
+select ts, tstz from read_json('{TEMP_DIR}/my_file.json')
+----
+Thu	Thu
