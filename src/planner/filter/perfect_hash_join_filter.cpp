@@ -29,12 +29,12 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 	}
 
 	Vector range_vec(type, DEFAULT_STANDARD_VECTOR_SIZE);
-	auto range_data = FlatVector::Writer<T>(range_vec, range);
+	auto range_data = FlatVector::GetDataMutable<T>(range_vec);
 	T val = min;
-	for (idx_t i = 0; i < range; ++i) {
-		range_data[i] = val;
-		val = val + 1;
+	for (; val < max; val += 1) {
+		*range_data++ = val;
 	}
+	*range_data = val;
 
 	const auto total_count = NumericCast<idx_t>(range_typed) + 1;
 	idx_t approved_tuple_count = 0;
