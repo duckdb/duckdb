@@ -354,5 +354,8 @@ extension_external
 .pyodide-xbuildenv
 .venv-pyodide
 
+# codeql
+scripts/codeql/out
+
 test/sql/pragma/output.json
 tools/pythonpkg/duckdb_build/
