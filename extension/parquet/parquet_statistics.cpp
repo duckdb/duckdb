@@ -14,9 +14,14 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "column_reader.hpp"
@@ -626,12 +631,29 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
+static bool HasFilterConstants(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comp = expr.Cast<BoundComparisonExpression>();
+		if (comp.type == ExpressionType::COMPARE_EQUAL && comp.right->type == ExpressionType::VALUE_CONSTANT) {
+			auto &constant = comp.right->Cast<BoundConstantExpression>();
+			return !constant.value.IsNull();
+		}
+		return false;
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	bool child_has_constant = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (!child_has_constant) {
+			child_has_constant = HasFilterConstants(child);
+		}
+	});
+	return child_has_constant;
+}
+
 static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
-		return (constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL && !constant_filter.constant.IsNull());
-	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
 		bool child_has_constant = false;
@@ -647,6 +669,10 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 			child_has_constant |= HasFilterConstants(*child_filter);
 		}
 		return child_has_constant;
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
+		return HasFilterConstants(*expr_filter.expr);
 	}
 	default:
 		return false;
@@ -693,15 +719,40 @@ static uint64_t ValueXXH64(const Value &constant) {
 	}
 }
 
+static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comp = expr.Cast<BoundComparisonExpression>();
+		if (comp.type != ExpressionType::COMPARE_EQUAL || comp.right->type != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = comp.right->Cast<BoundConstantExpression>();
+		D_ASSERT(!constant.value.IsNull());
+		auto hash = ValueXXH64(constant.value);
+		return hash > 0 && !bloom_filter.FilterCheck(hash);
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	switch (expr.type) {
+	case ExpressionType::CONJUNCTION_AND: {
+		bool any_children_true = false;
+		ExpressionIterator::EnumerateChildren(
+		    expr, [&](const Expression &child) { any_children_true |= ApplyBloomFilter(child, bloom_filter); });
+		return any_children_true;
+	}
+	case ExpressionType::CONJUNCTION_OR: {
+		bool all_children_true = true;
+		ExpressionIterator::EnumerateChildren(
+		    expr, [&](const Expression &child) { all_children_true &= ApplyBloomFilter(child, bloom_filter); });
+		return all_children_true;
+	}
+	default:
+		return false;
+	}
+}
+
 static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
 	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
-		auto is_compare_equal = constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL;
-		D_ASSERT(!constant_filter.constant.IsNull());
-		auto hash = ValueXXH64(constant_filter.constant);
-		return hash > 0 && !bloom_filter.FilterCheck(hash) && is_compare_equal;
-	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
 		bool any_children_true = false;
@@ -717,6 +768,10 @@ static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilte
 			all_children_true &= ApplyBloomFilter(*child_filter, bloom_filter);
 		}
 		return all_children_true;
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
+		return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
 	}
 	default:
 		return false;
