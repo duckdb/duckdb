@@ -60,6 +60,9 @@ idx_t VectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
+void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+}
+
 void VectorBuffer::SetVectorType(VectorType vector_type) {
 	throw InternalException("VectorBuffer does not support SetVectorType");
 }

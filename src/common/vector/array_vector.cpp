@@ -22,11 +22,11 @@ Vector &VectorArrayBuffer::GetChild() {
 	return *child;
 }
 
-idx_t VectorArrayBuffer::GetArraySize() {
+idx_t VectorArrayBuffer::GetArraySize() const {
 	return array_size;
 }
 
-idx_t VectorArrayBuffer::GetChildSize() {
+idx_t VectorArrayBuffer::GetChildSize() const {
 	return size * array_size;
 }
 
@@ -39,6 +39,25 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 	size += validity.GetAllocationSize();
 	size += child->GetAllocationSize();
 	return size;
+}
+
+void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (count == 0) {
+		return;
+	}
+	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		count = 1;
+	}
+	SelectionVector child_sel(count * array_size);
+	for (idx_t i = 0; i < count; i++) {
+		auto offset = vector_type == VectorType::CONSTANT_VECTOR ? 0 : sel.get_index(i);
+		for (idx_t r = 0; r < array_size; r++) {
+			child_sel.set_index(i * array_size + r, offset * array_size + r);
+		}
+	}
+	child->Verify(child_sel, count * array_size);
+	// FIXME: verify validity, arrays have the same validity rules as children
 }
 
 template <class T>

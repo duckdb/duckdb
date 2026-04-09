@@ -37,6 +37,21 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
+void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return;
+	}
+	// verify all entries in the sel fit within the validity
+	if (sel.IsSet()) {
+		for (idx_t i = 0; i < count; i++) {
+			D_ASSERT(sel.get_index(i) < validity.Capacity());
+		}
+	} else {
+		D_ASSERT(count <= validity.Capacity());
+	}
+}
+
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {
 	VerifyFlatVector(vector);
 	if (vector.GetType().InternalType() == PhysicalType::ARRAY) {

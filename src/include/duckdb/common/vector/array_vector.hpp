@@ -23,12 +23,13 @@ public:
 		return validity;
 	}
 	Vector &GetChild();
-	idx_t GetArraySize();
-	idx_t GetChildSize();
+	idx_t GetArraySize() const;
+	idx_t GetChildSize() const;
 	void SetVectorType(VectorType vector_type) override;
 
 public:
 	idx_t GetAllocationSize() const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	ValidityMask validity;

@@ -24,6 +24,7 @@ public:
 
 public:
 	idx_t GetAllocationSize() const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	unique_ptr<Vector> shredded_data;

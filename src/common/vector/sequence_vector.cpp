@@ -13,6 +13,13 @@ idx_t SequenceBuffer::GetAllocationSize() const {
 	return size;
 }
 
+void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (count == 0) {
+		return;
+	}
+	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
+}
+
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {
 	D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
 	auto &data = vector.buffer->Cast<SequenceBuffer>();

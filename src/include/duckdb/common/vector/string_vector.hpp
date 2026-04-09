@@ -55,6 +55,9 @@ public:
 		return GetHeap().GetAllocator();
 	}
 
+public:
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
 private:
 	StringHeap &AllocateHeap(Allocator &allocator);
 	StringHeap &AllocateHeap();

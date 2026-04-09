@@ -54,6 +54,7 @@ public:
 
 public:
 	idx_t GetAllocationSize() const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	//! child vectors used for nested data

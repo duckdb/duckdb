@@ -18,6 +18,12 @@ idx_t ShreddedVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
+void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(vector_type == VectorType::SHREDDED_VECTOR);
+	shredded_data->Verify(sel, count);
+}
+
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
 	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];

@@ -139,23 +139,13 @@ public:
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API void Verify(idx_t count);
-	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
-	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
-	DUCKDB_API static void VerifyUnion(Vector &map, const SelectionVector &sel, idx_t count);
-	DUCKDB_API static void VerifyVariant(Vector &map, const SelectionVector &sel, idx_t count);
-	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
-	DUCKDB_API void UTFVerify(idx_t count);
-	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Verify(idx_t count) const;
+	DUCKDB_API void Verify(const SelectionVector &sel, idx_t count) const;
 
 	//! Returns the [index] element of the Vector as a Value.
 	DUCKDB_API Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value.
 	DUCKDB_API void SetValue(idx_t index, const Value &val);
-
-	inline void CopyBuffer(Vector &other) {
-		buffer = other.buffer;
-	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);

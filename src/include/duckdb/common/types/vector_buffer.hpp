@@ -118,6 +118,7 @@ public:
 
 public:
 	virtual idx_t GetAllocationSize() const;
+	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 
 protected:
 	VectorType vector_type;

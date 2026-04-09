@@ -91,6 +91,55 @@ idx_t VectorListBuffer::GetAllocationSize() const {
 	return size;
 }
 
+void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (count == 0) {
+		return;
+	}
+	D_ASSERT(type.InternalType() == PhysicalType::LIST);
+	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
+	if (type.id() == LogicalTypeId::MAP) {
+		// FIXME: verify map
+		// auto &child = ListType::GetChildType(vector_p.GetType());
+		// D_ASSERT(StructType::GetChildCount(child) == 2);
+		// D_ASSERT(StructType::GetChildName(child, 0) == "key");
+		// D_ASSERT(StructType::GetChildName(child, 1) == "value");
+		//
+		// auto valid_check = MapVector::CheckMapValidity(vector_p, count, sel_p);
+		// D_ASSERT(valid_check == MapInvalidReason::VALID);
+	}
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		count = 1;
+	}
+	// FIXME: this we never asserted but probably should be...
+	// D_ASSERT(size <= capacity);
+	idx_t total_size = 0;
+	auto child_size = GetSize();
+	auto list_data = reinterpret_cast<list_entry_t *>(data_ptr);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto &le = list_data[idx];
+		if (validity.RowIsValid(idx)) {
+			D_ASSERT(le.offset + le.length <= child_size);
+			total_size += le.length;
+		}
+	}
+	SelectionVector child_sel(total_size);
+	idx_t child_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto &le = list_data[idx];
+		if (validity.RowIsValid(idx)) {
+			D_ASSERT(le.offset + le.length <= child_size);
+			for (idx_t k = 0; k < le.length; k++) {
+				child_sel.set_index(child_count++, le.offset + k);
+			}
+		}
+	}
+	child->Verify(child_sel, child_count);
+}
+
 template <class T>
 T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);

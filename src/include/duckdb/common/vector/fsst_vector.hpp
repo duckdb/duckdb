@@ -35,6 +35,9 @@ public:
 	}
 	void SetVectorType(VectorType vector_type) override;
 
+public:
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;

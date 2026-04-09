@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/union_vector.hpp"
 
 namespace duckdb {
 
@@ -46,6 +47,40 @@ idx_t VectorStructBuffer::GetAllocationSize() const {
 		size += child.GetAllocationSize();
 	}
 	return size;
+}
+
+void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (count == 0) {
+		return;
+	}
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
+	if (type.id() == LogicalTypeId::UNION) {
+		// FIXME: re-add union vector verification
+		// auto valid_check = UnionVector::CheckUnionValidity(vector_p, count, sel_p);
+		// if (valid_check != UnionInvalidReason::VALID) {
+		// 	throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
+		// }
+	}
+	if (type.id() == LogicalTypeId::VARIANT) {
+		// FIXME: re-add variant vector verification
+		// if (!VariantUtils::Verify(vector_p, sel_p, count)) {
+		// 	throw InternalException("Variant not valid");
+		// }
+	}
+	for (auto &child : children) {
+		child.Verify(sel, count);
+
+		// FIXME: re-add this... (don't use .Validity)
+		// // for any NULL entry in the struct, the child should be NULL as well
+		// auto child_validity = child.Validity(count);
+		// for (idx_t i = 0; i < count; i++) {
+		// 	auto index = sel.get_index(i);
+		// 	if (!validity.RowIsValid(index)) {
+		// 		D_ASSERT(!child_validity.IsValid(index));
+		// 	}
+		// }
+	}
 }
 
 vector<Vector> &StructVector::GetEntries(Vector &vector) {

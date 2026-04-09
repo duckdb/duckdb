@@ -1,5 +1,7 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bit.hpp"
 
 namespace duckdb {
 
@@ -60,6 +62,40 @@ StringHeap &VectorStringBuffer::AllocateHeap() {
 
 idx_t StringHeapHolder::GetAllocationSize() const {
 	return heap.AllocationSize();
+}
+
+void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	StandardVectorBuffer::Verify(type, sel, count);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		count = 1;
+	}
+	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
+	auto data = reinterpret_cast<const string_t *>(data_ptr);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : sel.get_index(i);
+		if (!validity.RowIsValid(idx)) {
+			// NULL
+			continue;
+		}
+		auto &str = data[idx];
+		switch (type.id()) {
+		case LogicalTypeId::BIT: {
+			auto buf = str.GetData();
+			D_ASSERT(idx_t(*buf) < 8);
+			Bit::Verify(str);
+			break;
+		}
+		case LogicalTypeId::BIGNUM:
+			Bignum::Verify(static_cast<bignum_t>(str));
+			break;
+		case LogicalTypeId::VARCHAR:
+			// verify that the string is correct unicode
+			str.Verify();
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
