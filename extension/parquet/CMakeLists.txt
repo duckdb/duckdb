@@ -81,10 +81,12 @@ if(NOT CLANG_TIDY)
 endif()
 
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
+target_link_libraries(parquet_extension duckdb_fastpforlib)
 set(PARAMETERS "-warnings")
 
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
-target_link_libraries(parquet_loadable_extension duckdb_mbedtls duckdb_zstd)
+target_link_libraries(parquet_loadable_extension duckdb_fastpforlib
+                      duckdb_mbedtls duckdb_zstd)
 
 install(
   TARGETS parquet_extension
