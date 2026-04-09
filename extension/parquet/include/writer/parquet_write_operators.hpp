@@ -10,7 +10,21 @@
 
 #include "writer/parquet_write_stats.hpp"
 #include "parquet_timestamp.hpp"
+
+#ifdef __restrict
+#pragma push_macro("__restrict")
+#define DUCKDB_PARQUET_RESTRICT_WAS_DEFINED 1
+#endif
 #include "zstd/common/xxhash.hpp"
+#ifdef DUCKDB_PARQUET_RESTRICT_WAS_DEFINED
+#pragma pop_macro("__restrict")
+#undef DUCKDB_PARQUET_RESTRICT_WAS_DEFINED
+#else
+#ifdef __restrict
+#undef __restrict
+#endif
+#endif
+
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
