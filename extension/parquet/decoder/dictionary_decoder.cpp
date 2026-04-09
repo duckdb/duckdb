@@ -179,7 +179,6 @@ bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, Tabl
 		}
 		return true;
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NOT_NULL:
 		return true;
 	case TableFilterType::EXPRESSION_FILTER: {
