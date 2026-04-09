@@ -22,7 +22,7 @@ namespace duckdb {
 class WindowValueGlobalState : public WindowExecutorGlobalState {
 public:
 	using WindowCollectionPtr = unique_ptr<WindowCollection>;
-	WindowValueGlobalState(ClientContext &client, const WindowValueExecutor &executor, const idx_t payload_count,
+	WindowValueGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
 	      ignore_nulls(&all_valid), value_idx(executor.child_idx[0]) {
@@ -68,11 +68,6 @@ public:
 				sort_nulls.Initialize();
 			}
 		}
-	}
-
-	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		required.insert(FRAME_BEGIN);
-		required.insert(FRAME_END);
 	}
 
 	//! Accumulate the secondary sort values
@@ -147,6 +142,11 @@ unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, Windo
 	return nullptr;
 }
 
+void WindowValueExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	required.insert(FRAME_BEGIN);
+	required.insert(FRAME_END);
+}
+
 void WindowValueExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	//	The children have to be handled separately because only the first one is global
 	const auto &wexpr = executor.wexpr;
@@ -167,10 +167,11 @@ void WindowValueExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpre
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                                const ValidityMask &partition_mask,
-                                                                const ValidityMask &order_mask) const {
-	return make_uniq<WindowValueGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
+                                                           const idx_t payload_count,
+                                                           const ValidityMask &partition_mask,
+                                                           const ValidityMask &order_mask) {
+	return make_uniq<WindowValueGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
 void WindowValueExecutor::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const {
@@ -206,7 +207,7 @@ unique_ptr<LocalSinkState> WindowValueExecutor::GetLocalState(ExecutionContext &
 
 class WindowLeadLagGlobalState : public WindowValueGlobalState {
 public:
-	WindowLeadLagGlobalState(ClientContext &client, const WindowValueExecutor &executor, const idx_t payload_count,
+	WindowLeadLagGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                         const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowValueGlobalState(client, executor, payload_count, partition_mask, order_mask) {
 		if (value_tree) {
@@ -313,12 +314,13 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	auto bind = WindowLeadLagExecutor::Bind;
 	auto bounds = WindowLeadLagLocalState::GetBounds;
 	auto sharing = WindowLeadLagExecutor::GetSharing;
+	auto global = WindowLeadLagExecutor::GetGlobal;
 
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 type, bind, bounds, sharing));
-	funcs.AddFunction(
-	    WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds, sharing));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing));
+	                                 type, bind, bounds, sharing, global));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds,
+	                                 sharing, global));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global));
 
 	return funcs;
 }
@@ -349,10 +351,11 @@ WindowFunctionSet LagFun::GetFunctions() {
 	return GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LAG);
 }
 
-unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                                  const ValidityMask &partition_mask,
-                                                                  const ValidityMask &order_mask) const {
-	return make_uniq<WindowLeadLagGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
+                                                             const idx_t payload_count,
+                                                             const ValidityMask &partition_mask,
+                                                             const ValidityMask &order_mask) {
+	return make_uniq<WindowLeadLagGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocalState(ExecutionContext &context,
@@ -521,8 +524,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
-	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds,
-	                   WindowFirstValueExecutor::GetSharing);
+	                   WindowFirstValueExecutor::Bind, WindowFirstValueExecutor::GetBounds,
+	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal);
 	return fun;
 }
 
@@ -577,8 +580,8 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 
 WindowFunction LastValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
-	                   WindowFirstValueExecutor::Bind, WindowValueLocalState::GetBounds,
-	                   WindowFirstValueExecutor::GetSharing);
+	                   WindowLastValueExecutor::Bind, WindowLastValueExecutor::GetBounds,
+	                   WindowLastValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal);
 	return fun;
 }
 
@@ -639,8 +642,9 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 
 WindowFunction NthValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ExpressionType::WINDOW_NTH_VALUE, WindowFirstValueExecutor::Bind,
-	                   WindowValueLocalState::GetBounds, WindowFirstValueExecutor::GetSharing);
+	                   ExpressionType::WINDOW_NTH_VALUE, WindowNthValueExecutor::Bind,
+	                   WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
+	                   WindowNthValueExecutor::GetGlobal);
 	return fun;
 }
 
@@ -1014,7 +1018,7 @@ static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, id
 
 class WindowFillGlobalState : public WindowLeadLagGlobalState {
 public:
-	WindowFillGlobalState(ClientContext &client, const WindowFillExecutor &executor, const idx_t payload_count,
+	WindowFillGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowLeadLagGlobalState(client, executor, payload_count, partition_mask, order_mask),
 	      order_idx(executor.aux_idx.empty() ? DConstants::INVALID_INDEX : executor.aux_idx[0]) {
@@ -1063,16 +1067,17 @@ void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr col
 
 WindowFunction FillFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
-	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing);
+	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
+	                   WindowFillExecutor::GetGlobal);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
 
 	return fun;
 }
 
-unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                               const ValidityMask &partition_mask,
-                                                               const ValidityMask &order_mask) const {
-	return make_uniq<WindowFillGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
+                                                          const idx_t payload_count, const ValidityMask &partition_mask,
+                                                          const ValidityMask &order_mask) {
+	return make_uniq<WindowFillGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowFillExecutor::GetLocalState(ExecutionContext &context,

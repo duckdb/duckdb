@@ -13,9 +13,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowRowNumberGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowRowNumberGlobalState(ClientContext &client, const WindowRowNumberExecutor &executor,
-	                           const idx_t payload_count, const ValidityMask &partition_mask,
-	                           const ValidityMask &order_mask)
+	WindowRowNumberGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
+	                           const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask) {
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
@@ -90,7 +89,8 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 WindowFunction RowNumberFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr,
-	                   WindowRowNumberExecutor::GetBounds, WindowRowNumberExecutor::GetSharing);
+	                   WindowRowNumberExecutor::GetBounds, WindowRowNumberExecutor::GetSharing,
+	                   WindowRowNumberExecutor::GetGlobal);
 	return fun;
 }
 
@@ -118,10 +118,11 @@ void WindowRowNumberExecutor::GetSharing(WindowExecutor &executor, WindowSharedE
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                                    const ValidityMask &partition_mask,
-                                                                    const ValidityMask &order_mask) const {
-	return make_uniq<WindowRowNumberGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
+                                                               const idx_t payload_count,
+                                                               const ValidityMask &partition_mask,
+                                                               const ValidityMask &order_mask) {
+	return make_uniq<WindowRowNumberGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocalState(ExecutionContext &context,
@@ -169,7 +170,7 @@ public:
 
 WindowFunction NtileFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
-	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing);
+	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal);
 	return fun;
 }
 

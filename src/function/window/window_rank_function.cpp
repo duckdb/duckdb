@@ -13,7 +13,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowPeerGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowPeerGlobalState(ClientContext &client, const WindowPeerExecutor &executor, const idx_t payload_count,
+	WindowPeerGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask) {
 		if (!executor.arg_order_idx.empty()) {
@@ -112,10 +112,10 @@ void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
-unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                               const ValidityMask &partition_mask,
-                                                               const ValidityMask &order_mask) const {
-	return make_uniq<WindowPeerGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
+                                                          const idx_t payload_count, const ValidityMask &partition_mask,
+                                                          const ValidityMask &order_mask) {
+	return make_uniq<WindowPeerGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
 //===--------------------------------------------------------------------===//
@@ -142,7 +142,7 @@ void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowE
 
 WindowFunction RankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK, nullptr,
-	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing);
+	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing, WindowRankExecutor::GetGlobal);
 	return fun;
 }
 
@@ -204,7 +204,7 @@ void WindowDenseRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWi
 
 WindowFunction DenseRankFun::GetFunction() {
 	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE, nullptr,
-	                   WindowDenseRankExecutor::GetBounds);
+	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowCumeDistExecutor::GetGlobal);
 	fun.can_order_by = false;
 	return fun;
 }
@@ -302,7 +302,8 @@ void WindowPercentRankExecutor::GetBounds(WindowBoundsSet &required, const Bound
 }
 WindowFunction PercentRankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK, nullptr,
-	                   WindowPercentRankExecutor::GetBounds, WindowPercentRankExecutor::GetSharing);
+	                   WindowPercentRankExecutor::GetBounds, WindowPercentRankExecutor::GetSharing,
+	                   WindowPercentRankExecutor::GetGlobal);
 	return fun;
 }
 
@@ -379,7 +380,8 @@ void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWin
 }
 WindowFunction CumeDistFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr,
-	                   WindowCumeDistExecutor::GetBounds, WindowCumeDistExecutor::GetSharing);
+	                   WindowCumeDistExecutor::GetBounds, WindowCumeDistExecutor::GetSharing,
+	                   WindowCumeDistExecutor::GetGlobal);
 	return fun;
 }
 

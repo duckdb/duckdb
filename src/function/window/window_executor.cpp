@@ -96,6 +96,9 @@ void WindowExecutorLocalState::Finalize(ExecutionContext &context, CollectionPtr
 unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                            const ValidityMask &partition_mask,
                                                            const ValidityMask &order_mask) const {
+	if (wexpr.window && wexpr.window->HasGlobalCallback()) {
+		return wexpr.window->GetGlobalCallback()(client, *this, payload_count, partition_mask, order_mask);
+	}
 	return make_uniq<WindowExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 

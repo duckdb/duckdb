@@ -17,6 +17,7 @@ class WindowValueExecutor : public WindowExecutor {
 public:
 	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
 	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared) : WindowExecutor(wexpr, shared) {
@@ -24,9 +25,9 @@ public:
 
 	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 };
 
@@ -39,9 +40,9 @@ public:
 	    : WindowValueExecutor(wexpr, shared) {
 	}
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
 protected:
@@ -99,9 +100,9 @@ public:
 		return false;
 	}
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
 protected:

@@ -21,9 +21,9 @@ public:
 	    : WindowExecutor(wexpr, shared) {
 	}
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
 protected:
