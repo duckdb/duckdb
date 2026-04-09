@@ -195,13 +195,6 @@ static unique_ptr<TableFilter> TrySerializeOperatorToLegacyFilter(const BoundOpe
 	}
 }
 
-static unique_ptr<TableFilter> SerializeOptionalChild(const optional_ptr<const Expression> child_expr) {
-	if (!child_expr) {
-		return nullptr;
-	}
-	return SerializeExpressionToLegacyFilter(*child_expr);
-}
-
 static unique_ptr<TableFilter> SerializeConjunctionToLegacyFilter(const BoundConjunctionExpression &conjunction) {
 	unique_ptr<ConjunctionFilter> result;
 	if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
