@@ -850,7 +850,7 @@ void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right,
 		bool left_null = !left_validity.IsValid(i);
 		bool right_null = !right_validity.IsValid(i);
 		if ((left_null || right_null) && !(left_null && right_null)) {
-			result_data[i] = -result_data[i];
+			result_data[i] = UnsafeNumericCast<int8_t>(-result_data[i]);
 		}
 	}
 }
