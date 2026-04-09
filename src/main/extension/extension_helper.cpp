@@ -405,8 +405,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 	auto &dbconfig = DBConfig::GetConfig(db);
 	try {
-		LocalDatabaseFileSystem local_db_fs(db);
-		FileSystem &fs = local_db_fs;
+		auto fs = db.GetLocalFileSystem();
 #ifndef DUCKDB_WASM
 		if (Settings::Get<AutoinstallKnownExtensionsSetting>(db)) {
 			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);

@@ -280,6 +280,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	create_api_v1 = CreateAPIv1Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
+	owned_unsafe_local_fs = make_uniq<LocalFileSystem>();
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
@@ -385,16 +386,13 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
 }
 
-LocalFileSystem &DatabaseInstance::GetLocalFileSystem() {
+LocalDatabaseFileSystem DatabaseInstance::GetLocalFileSystem() {
 	auto &vfs = static_cast<VirtualFileSystem &>(*config.file_system);
 	auto &default_fs = vfs.GetDefaultFileSystem();
 	if (default_fs.IsLocalFileSystem()) {
-		return static_cast<LocalFileSystem &>(default_fs);
+		return LocalDatabaseFileSystem(*this, default_fs);
 	}
-	if (!owned_local_file_system) {
-		owned_local_file_system = make_uniq<LocalFileSystem>();
-	}
-	return *owned_local_file_system;
+	return LocalDatabaseFileSystem(*this, *owned_unsafe_local_fs);
 }
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {

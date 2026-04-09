@@ -18,6 +18,7 @@
 
 namespace duckdb {
 class LocalFileSystem;
+class LocalDatabaseFileSystem;
 
 class BufferManager;
 class DatabaseManager;
@@ -53,7 +54,7 @@ public:
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
-	DUCKDB_API LocalFileSystem &GetLocalFileSystem();
+	DUCKDB_API LocalDatabaseFileSystem GetLocalFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
 	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -96,7 +97,7 @@ private:
 	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
-	unique_ptr<LocalFileSystem> owned_local_file_system;
+	unique_ptr<LocalFileSystem> owned_unsafe_local_fs;
 	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
