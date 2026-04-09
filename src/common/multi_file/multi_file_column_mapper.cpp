@@ -38,20 +38,20 @@ public:
 enum class FilterConversionType { COPY_DIRECTLY, CAST_FILTER, CANNOT_CONVERT };
 
 struct MultiFileColumnMap {
-	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type)
-	    : mapping(index), local_type(local_type), global_type(global_type),
+	MultiFileColumnMap(idx_t index, const LogicalType &local_type_p, const LogicalType &global_type_p)
+	    : mapping(index), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(local_type == global_type ? FilterConversionType::COPY_DIRECTLY
 	                                                  : FilterConversionType::CAST_FILTER) {
 	}
-	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type, const LogicalType &global_type,
+	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type_p, const LogicalType &global_type_p,
 	                   FilterConversionType filter_conversion)
-	    : mapping(std::move(mapping_p)), local_type(local_type), global_type(global_type),
+	    : mapping(std::move(mapping_p)), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(filter_conversion) {
 	}
 
 	MultiFileIndexMapping mapping;
-	const LogicalType &local_type;
-	const LogicalType &global_type;
+	const LogicalType local_type;
+	const LogicalType global_type;
 	FilterConversionType filter_conversion;
 };
 
