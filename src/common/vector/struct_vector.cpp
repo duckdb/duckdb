@@ -84,6 +84,16 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
+void VectorStructBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+	} else {
+		format.sel = FlatVector::IncrementalSelectionVector();
+	}
+	format.data = nullptr;
+	format.validity = validity;
+}
+
 void VectorStructBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		return;

@@ -53,6 +53,16 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	}
 }
 
+void StandardVectorBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+	} else {
+		format.sel = FlatVector::IncrementalSelectionVector();
+	}
+	format.data = data_ptr;
+	format.validity = validity;
+}
+
 void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));

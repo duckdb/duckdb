@@ -521,48 +521,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
-	switch (GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR: {
-		auto &sel = DictionaryVector::SelVector(*this);
-		format.owned_sel.Initialize(sel);
-		format.sel = &format.owned_sel;
-
-		auto &child = DictionaryVector::Child(*this);
-		if (child.GetVectorType() == VectorType::FLAT_VECTOR) {
-			format.data = FlatVector::GetData(child);
-			format.validity = FlatVector::Validity(child);
-		} else {
-			// dictionary with non-flat child: create a new reference to the child and flatten it
-			Vector child_vector(Vector::Ref(child));
-			child_vector.Flatten(sel, count);
-			auto new_entry = make_buffer<DictionaryEntry>(std::move(child_vector));
-			auto &dict_entry = *new_entry;
-			auto &old_dict_buffer = this->buffer->Cast<DictionaryBuffer>();
-			auto new_dict_buffer = make_buffer<DictionaryBuffer>(old_dict_buffer.GetSelVector(), std::move(new_entry));
-			this->buffer = std::move(new_dict_buffer);
-
-			format.data = FlatVector::GetData(dict_entry.data);
-			format.validity = FlatVector::Validity(dict_entry.data);
-		}
-		break;
-	}
-	case VectorType::CONSTANT_VECTOR:
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
-		format.data = ConstantVector::GetData(*this);
-		format.validity = ConstantVector::Validity(*this);
-		break;
-	case VectorType::SHREDDED_VECTOR:
-		// unshred and call ToUnifiedFormat recursively
-		ShreddedVector::Unshred(*this, count);
-		ToUnifiedFormat(count, format);
-		break;
-	default:
-		Flatten(count);
-		format.sel = FlatVector::IncrementalSelectionVector();
-		format.data = FlatVector::GetData(*this);
-		format.validity = FlatVector::Validity(*this);
-		break;
-	}
+	buffer->ToUnifiedFormat(*this, count, format);
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {

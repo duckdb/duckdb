@@ -19,6 +19,7 @@ namespace duckdb {
 
 class BufferHandle;
 struct LogicalType;
+struct UnifiedVectorFormat;
 class VectorBuffer;
 class Vector;
 struct ValidityMask;
@@ -134,6 +135,8 @@ public:
 	virtual string ToString(const LogicalType &type) const;
 	//! Slice the vector with a selection vector
 	virtual void Slice(Vector &vector, const SelectionVector &sel, idx_t count);
+	//! Create a UnifiedVectorFormat from the buffer's data
+	virtual void ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const;
 
 protected:
 	VectorType vector_type;

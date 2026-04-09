@@ -47,6 +47,28 @@ void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	}
 }
 
+void DictionaryBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+	format.owned_sel.Initialize(sel_vector);
+	format.sel = &format.owned_sel;
+
+	auto &child = entry->data;
+	if (child.GetVectorType() == VectorType::FLAT_VECTOR) {
+		format.data = FlatVector::GetData(child);
+		format.validity = FlatVector::Validity(child);
+	} else {
+		// dictionary with non-flat child: create a new reference to the child and flatten it
+		Vector child_vector(Vector::Ref(child));
+		child_vector.Flatten(count);
+		auto new_entry = make_buffer<DictionaryEntry>(std::move(child_vector));
+		auto &dict_entry = *new_entry;
+		auto new_dict_buffer = make_buffer<DictionaryBuffer>(sel_vector, std::move(new_entry));
+		vector.buffer = std::move(new_dict_buffer);
+
+		format.data = FlatVector::GetData(dict_entry.data);
+		format.validity = FlatVector::Validity(dict_entry.data);
+	}
+}
+
 void DictionaryBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto dictionary_size_val = dictionary_size;
 	auto dictionary_id_val = dictionary_id;

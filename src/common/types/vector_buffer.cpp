@@ -88,6 +88,14 @@ string VectorBuffer::ToString(const LogicalType &type) const {
 	return "";
 }
 
+void VectorBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+	// default: flatten (handles FSST, SEQUENCE, etc.), then use incremental sel
+	vector.Flatten(count);
+	format.sel = FlatVector::IncrementalSelectionVector();
+	format.data = FlatVector::GetData(vector);
+	format.validity = FlatVector::Validity(vector);
+}
+
 void VectorBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		return;

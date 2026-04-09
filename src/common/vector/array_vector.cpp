@@ -62,6 +62,16 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
+void VectorArrayBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+	} else {
+		format.sel = FlatVector::IncrementalSelectionVector();
+	}
+	format.data = nullptr;
+	format.validity = validity;
+}
+
 void VectorArrayBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
