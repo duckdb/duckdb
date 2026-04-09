@@ -1,0 +1,76 @@
+# name: test/sql/transactions/test_index_drop_table_rollback_concurrent.test
+# description: A DROP TABLE rolled back due to a write-write conflict, with another open transaction forcing the REVERT_MAIN_INDEX path.
+# group: [transactions]
+
+load __TEST_DIR__/test_revert_commit_index_corruption_drop_table_concurrent.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t1 SELECT i FROM range(10) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i FROM range(10) tbl(i)
+
+statement ok con3
+BEGIN
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DELETE FROM t1 WHERE id < 5
+
+statement ok con1
+DROP TABLE t1
+
+statement ok con1
+DELETE FROM t2 WHERE id < 5
+
+statement ok con2
+DROP TABLE t2
+
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+statement ok con3
+COMMIT
+
+query I
+SELECT COUNT(*) FROM t1
+----
+10
+
+query I
+SELECT * from t1 LIMIT 1
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT id FROM t1 WHERE id = 5
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT id FROM t1 WHERE id = 5
+----
+5
+
+statement error
+INSERT INTO t1 VALUES (1)
+----
+Duplicate key
+
+statement error
+INSERT INTO t1 VALUES (5)
+----
+Duplicate key
