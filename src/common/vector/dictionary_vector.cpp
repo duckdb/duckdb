@@ -23,6 +23,26 @@ DictionaryBuffer::DictionaryBuffer(idx_t count)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 }
 
+buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	// determine the effective selection vector
+	const SelectionVector *effective_sel = &sel_vector;
+	SelectionVector composed;
+	if (sel.IsSet()) {
+		// compose the provided selection vector with the dictionary selection vector
+		composed.Initialize(count);
+		for (idx_t i = 0; i < count; i++) {
+			composed.set_index(i, sel_vector.get_index(sel.get_index(i)));
+		}
+		effective_sel = &composed;
+	}
+	// ensure the child is flat before applying the selection
+	auto dict_size = dictionary_size.IsValid() ? dictionary_size.GetIndex()
+	                                           : (entry->size.IsValid() ? entry->size.GetIndex() : count);
+	entry->data.Flatten(dict_size);
+	// copy the now-flat child's data using the effective selection
+	return entry->data.GetBuffer()->Flatten(type, *effective_sel, count);
+}
+
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
 	entry->size = size;

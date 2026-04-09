@@ -72,6 +72,7 @@ public:
 	void SetEntry(buffer_ptr<DictionaryEntry> entry_p) {
 		entry = std::move(entry_p);
 	}
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	SelectionVector sel_vector;

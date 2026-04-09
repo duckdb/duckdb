@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class BufferHandle;
+struct LogicalType;
 class VectorBuffer;
 class Vector;
 struct ValidityMask;
@@ -91,6 +92,11 @@ public:
 	virtual optional_ptr<Allocator> GetAllocator() const {
 		return nullptr;
 	}
+
+	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
+	//! The selection vector maps output indices to source indices in this buffer
+	//! Returns a new buffer, or nullptr if already flat with an unset selection vector
+	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count);
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);

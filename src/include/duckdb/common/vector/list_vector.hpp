@@ -51,6 +51,7 @@ public:
 
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	//! child vectors used for nested data

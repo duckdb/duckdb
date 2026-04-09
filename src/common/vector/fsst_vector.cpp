@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/fsst_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/fsst.hpp"
 
 namespace duckdb {
@@ -11,6 +12,21 @@ VectorFSSTStringBuffer::VectorFSSTStringBuffer(idx_t capacity) : VectorStringBuf
 
 void VectorFSSTStringBuffer::SetVectorType(VectorType new_vector_type) {
 	throw InternalException("SetVectorType not supported for FSST vector");
+}
+
+buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                         idx_t count) {
+	// even though count may only be a part of the vector, we need to flatten the whole thing due to the way
+	// ToUnifiedFormat uses flatten
+	idx_t total_count = GetCount();
+	// create a non-owning buffer_ptr to construct a temporary source vector
+	buffer_ptr<VectorBuffer> non_owning_ref(this, [](VectorBuffer *) {});
+	Vector source(type, VectorType::FSST_VECTOR, std::move(non_owning_ref));
+	// create vector to decompress into
+	Vector result(type, total_count);
+	// now copy the data of this vector to the other vector, decompressing the strings in the process
+	VectorOperations::Copy(source, result, total_count, 0, 0);
+	return result.GetBuffer();
 }
 
 VectorFSSTStringBuffer &FSSTVector::GetFSSTBuffer(const Vector &vector) {

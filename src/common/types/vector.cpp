@@ -1034,118 +1034,12 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	switch (GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
-		// already a flat vector
-		switch (GetType().InternalType()) {
-		case PhysicalType::STRUCT: {
-			auto &entries = StructVector::GetEntries(*this);
-			for (auto &entry : entries) {
-				entry.Flatten(count);
-			}
-			break;
-		}
-		case PhysicalType::LIST: {
-			auto &entry = ListVector::GetEntry(*this);
-			entry.Flatten(ListVector::GetListSize(*this));
-			break;
-		}
-		case PhysicalType::ARRAY: {
-			auto &entry = ArrayVector::GetEntry(*this);
-			entry.Flatten(ArrayVector::GetTotalSize(*this));
-			break;
-		}
-		default:
-			break;
-		}
-		break;
-	case VectorType::SHREDDED_VECTOR: {
-		// unshred the vector
-		ShreddedVector::Unshred(*this, count);
-		Flatten(count);
-		break;
-	}
-	case VectorType::FSST_VECTOR: {
-		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way
-		// ToUnifiedFormat uses flatten
-		idx_t total_count = FSSTVector::GetCount(*this);
-		// create vector to decompress into
-		Vector other(GetType(), total_count);
-		// now copy the data of this vector to the other vector, decompressing the strings in the process
-		VectorOperations::Copy(*this, other, total_count, 0, 0);
-		// create a reference to the data in the other vector
-		ConstReference(other);
-		break;
-	}
-	case VectorType::DICTIONARY_VECTOR: {
-		// create a new flat vector of this type
-		Vector other(GetType(), count);
-		// now copy the data of this vector to the other vector, removing the selection vector in the process
-		VectorOperations::Copy(*this, other, count, 0, 0);
-		// create a reference to the data in the other vector
-		ConstReference(other);
-		break;
-	}
-	case VectorType::CONSTANT_VECTOR: {
-		Vector flattened_vector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
-		ConstantVector::Flatten(*this, flattened_vector, count);
-		ConstReference(flattened_vector);
-		break;
-	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment, sequence_count;
-		SequenceVector::GetSequence(*this, start, increment, sequence_count);
-		auto seq_count = NumericCast<idx_t>(sequence_count);
-
-		Vector flattened_vector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, seq_count));
-		VectorOperations::GenerateSequence(flattened_vector, seq_count, start, increment);
-		ConstReference(flattened_vector);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented type for flatten");
+	auto new_buffer = buffer->Flatten(GetType(), *FlatVector::IncrementalSelectionVector(), count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
 	}
 }
 
-void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
-	switch (GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
-		// already a flat vector
-		break;
-	case VectorType::FSST_VECTOR: {
-		// create a new flat vector of this type
-		Vector other(GetType(), count);
-		// copy the data of this vector to the other vector, removing compression and selection vector in the process
-		VectorOperations::Copy(*this, other, sel, count, 0, 0);
-		// create a reference to the data in the other vector
-		ConstReference(other);
-		break;
-	}
-	case VectorType::CONSTANT_VECTOR: {
-		Vector flattened_vector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
-		ConstantVector::Flatten(*this, flattened_vector, count);
-		ConstReference(flattened_vector);
-		break;
-	}
-	case VectorType::SHREDDED_VECTOR: {
-		// unshred the shredded vector
-		ShreddedVector::Unshred(*this, sel, count);
-		Flatten(sel, count);
-		break;
-	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(*this, start, increment);
-
-		Vector flattened_vector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
-		VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
-		ConstReference(flattened_vector);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented type for flatten with selection vector");
-	}
-}
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();

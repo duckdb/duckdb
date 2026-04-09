@@ -26,6 +26,7 @@ public:
 	idx_t GetArraySize();
 	idx_t GetChildSize();
 	void SetVectorType(VectorType vector_type) override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	ValidityMask validity;

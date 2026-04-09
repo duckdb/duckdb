@@ -34,6 +34,7 @@ public:
 		return total_string_count;
 	}
 	void SetVectorType(VectorType vector_type) override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;

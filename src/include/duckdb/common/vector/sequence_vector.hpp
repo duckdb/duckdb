@@ -20,6 +20,8 @@ public:
 	int64_t increment;
 	//! FIXME: should not be necessary once vector has count
 	int64_t count;
+
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 };
 
 struct SequenceVector {
