@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
@@ -27,6 +28,9 @@ public:
 struct ExtensionTypeInfo {
 	vector<LogicalTypeModifier> modifiers;
 	unordered_map<string, Value> properties;
+
+	//! Default compression method for columns of this type. COMPRESSION_AUTO means no preference.
+	CompressionType default_compression = CompressionType::COMPRESSION_AUTO;
 
 public:
 	void Serialize(Serializer &serializer) const;

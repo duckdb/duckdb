@@ -139,12 +139,14 @@ shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserialize
 void ExtensionTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", modifiers);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties, unordered_map<string, Value>());
+	serializer.WritePropertyWithDefault<CompressionType>(102, "default_compression", default_compression, CompressionType::COMPRESSION_AUTO);
 }
 
 unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExtensionTypeInfo>(new ExtensionTypeInfo());
 	deserializer.ReadPropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", result->modifiers);
 	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties, unordered_map<string, Value>());
+	result->default_compression = deserializer.ReadPropertyWithExplicitDefault<CompressionType>(102, "default_compression", CompressionType::COMPRESSION_AUTO);
 	return result;
 }
 

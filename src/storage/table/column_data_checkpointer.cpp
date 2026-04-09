@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
+#include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -172,6 +173,16 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 			forced_methods[i] = ForceCompression(storage_manager, functions, compression_type);
 		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
+			// Check if the column's type has a default compression preference
+			auto &col_data = checkpoint_states[i].get().original_column;
+			if (col_data.type.HasExtensionInfo()) {
+				auto &ext_info = *col_data.type.GetExtensionInfo();
+				if (ext_info.default_compression != CompressionType::COMPRESSION_AUTO) {
+					forced_methods[i] = ForceCompression(storage_manager, functions, ext_info.default_compression);
+				}
+			}
+		}
+		if (forced_methods[i] == CompressionType::COMPRESSION_AUTO) {
 			auto force_compression = Settings::Get<ForceCompressionSetting>(config);
 			if (force_compression != CompressionType::COMPRESSION_AUTO) {
 				forced_methods[i] = ForceCompression(storage_manager, functions, force_compression);
