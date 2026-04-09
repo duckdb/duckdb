@@ -671,7 +671,8 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 		return child_has_constant;
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
 		return HasFilterConstants(*expr_filter.expr);
 	}
 	default:

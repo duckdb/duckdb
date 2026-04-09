@@ -625,7 +625,8 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 				break;
 			}
 		} else {
-			auto expr_filter = make_uniq<ExpressionFilter>(CreateComparisonExpression(*column_ref, comparison_type, const_val->value));
+			auto expr_filter =
+			    make_uniq<ExpressionFilter>(CreateComparisonExpression(*column_ref, comparison_type, const_val->value));
 			conj_filter->child_filters.push_back(std::move(expr_filter));
 		}
 	}
@@ -826,7 +827,8 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
 		auto opt_filter = make_uniq<OptionalFilter>();
-		auto expr_filter = make_uniq<ExpressionFilter>(CreateComparisonExpression(*cast_expr.child, filter_type, std::move(filter_val)));
+		auto expr_filter = make_uniq<ExpressionFilter>(
+		    CreateComparisonExpression(*cast_expr.child, filter_type, std::move(filter_val)));
 		opt_filter->child_filter = std::move(expr_filter);
 		table_filters.PushFilter(proj_index, std::move(opt_filter));
 	};

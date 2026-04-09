@@ -16,11 +16,13 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
 }
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) const {
-	throw InternalException("ConstantFilter::CheckStatistics should not be called: ConstantFilters should be converted to ExpressionFilters before statistics checking");
+	throw InternalException("ConstantFilter::CheckStatistics should not be called: ConstantFilters should be converted "
+	                        "to ExpressionFilters before statistics checking");
 }
 
 string ConstantFilter::ToString(const string &column_name) const {
-	throw InternalException("ConstantFilter::ToString should not be called: ConstantFilters should be converted to ExpressionFilters before rendering");
+	throw InternalException("ConstantFilter::ToString should not be called: ConstantFilters should be converted to "
+	                        "ExpressionFilters before rendering");
 }
 
 unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) const {
@@ -30,11 +32,13 @@ unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) co
 }
 
 bool ConstantFilter::Equals(const TableFilter &other_p) const {
-	throw InternalException("ConstantFilter::Equals should not be called: ConstantFilters should be converted to ExpressionFilters before equality checking");
+	throw InternalException("ConstantFilter::Equals should not be called: ConstantFilters should be converted to "
+	                        "ExpressionFilters before equality checking");
 }
 
 unique_ptr<TableFilter> ConstantFilter::Copy() const {
-	throw InternalException("ConstantFilter::Copy should not be called: ConstantFilters should be converted to ExpressionFilters before copying");
+	throw InternalException("ConstantFilter::Copy should not be called: ConstantFilters should be converted to "
+	                        "ExpressionFilters before copying");
 }
 
 } // namespace duckdb

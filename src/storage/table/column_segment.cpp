@@ -505,7 +505,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 				idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count - offset);
 				idx_t chunk_end = offset + chunk_count;
 				DataChunk chunk;
-					chunk.data.emplace_back(vector, offset, chunk_end);
+				chunk.data.emplace_back(vector, offset, chunk_end);
 				chunk.SetCardinality(chunk_count);
 
 				// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
@@ -541,7 +541,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		} else {
 			// standard case: we can handle everything at once - run the expression once
 			DataChunk chunk;
-				chunk.data.emplace_back(Vector::Ref(vector));
+			chunk.data.emplace_back(Vector::Ref(vector));
 			chunk.SetCardinality(scan_count);
 			approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, sel, approved_tuple_count);
 		}

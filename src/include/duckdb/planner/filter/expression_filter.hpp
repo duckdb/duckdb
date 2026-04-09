@@ -56,7 +56,6 @@ public:
 private:
 	//! Recursively convert expression to friendly string, handling internal functions
 	static string ExpressionToFriendlyString(const Expression &expression, const string &column_name);
-
 };
 
 } // namespace duckdb
