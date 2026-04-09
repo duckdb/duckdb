@@ -25,6 +25,7 @@ public:
 	Vector &GetChild();
 	idx_t GetArraySize();
 	idx_t GetChildSize();
+	void SetVectorType(VectorType vector_type) override;
 
 private:
 	ValidityMask validity;

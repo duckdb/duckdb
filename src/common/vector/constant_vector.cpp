@@ -9,7 +9,6 @@
 namespace duckdb {
 
 void ConstantVector::SetNull(Vector &vector) {
-	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 	auto &type = vector.GetType();
 	auto internal_type = type.InternalType();
 	// ensure the buffer supports validity masks
@@ -33,6 +32,7 @@ void ConstantVector::SetNull(Vector &vector) {
 			vector.buffer = VectorBuffer::CreateConstantVector(internal_type);
 		}
 	}
+	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 	SetNull(vector, true);
 }
 

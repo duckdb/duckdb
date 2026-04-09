@@ -3,11 +3,11 @@
 
 namespace duckdb {
 
-VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER) {
 }
 
 VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
-    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
 		children.emplace_back(child_type.second, capacity);
@@ -16,7 +16,7 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 }
 
 VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count)
-    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER) {
 	auto &other_vector = StructVector::GetEntries(other);
 	for (auto &child_vector : other_vector) {
 		children.emplace_back(child_vector, sel, count);
@@ -27,6 +27,13 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 		validity.Resize(count);
 	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
+}
+
+void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
+	vector_type = new_vector_type;
+	for (auto &child : children) {
+		child.SetVectorType(new_vector_type);
+	}
 }
 
 VectorStructBuffer::~VectorStructBuffer() {

@@ -28,6 +28,7 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	void SetVectorType(VectorType vector_type) override;
 
 	optional_ptr<Allocator> GetAllocator() const override {
 		return allocated_data.GetAllocator();

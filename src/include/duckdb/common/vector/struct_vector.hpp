@@ -30,6 +30,7 @@ public:
 	vector<Vector> &GetChildren() {
 		return children;
 	}
+	void SetVectorType(VectorType vector_type) override;
 
 private:
 	ValidityMask validity;
