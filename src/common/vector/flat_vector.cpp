@@ -6,7 +6,6 @@
 #include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
-
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
 	if (capacity > 0) {
@@ -61,6 +60,17 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return result;
 }
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                             idx_t count) {
+	Vector child_vector(type, shared_from_this());
+	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+	return make_buffer<DictionaryBuffer>(sel, std::move(entry));
+}
+
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data) const {
+	return make_buffer<StandardVectorBuffer>(std::move(new_data));
+}
+
 buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size,
                                                       idx_t new_size) const {
 	auto type_size = GetTypeIdSize(type.InternalType());
@@ -80,22 +90,47 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, i
 	memcpy(new_data.get(), data_ptr, old_byte_count);
 
 	// create the new buffer
-	buffer_ptr<VectorBuffer> result;
-	if (type.InternalType() == PhysicalType::LIST) {
-		auto &old_buffer = Cast<VectorListBuffer>();
-		result = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
-	} else if (type.InternalType() == PhysicalType::VARCHAR) {
-		auto &old_buffer = Cast<VectorStringBuffer>();
-		result = make_buffer<VectorStringBuffer>(std::move(new_data), old_buffer);
-	} else {
-		result = make_buffer<StandardVectorBuffer>(std::move(new_data));
-	}
+	auto result = CreateBuffer(std::move(new_data));
 	// copy over the validity mask
 	auto &new_validity = result->GetValidityMask();
 	new_validity.Resize(new_size);
 	if (current_size > 0) {
 		new_validity.CopyRange(validity, current_size);
 	}
+	return result;
+}
+
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
+                                                       idx_t count) const {
+	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+		// already a flat vector - bail
+		return nullptr;
+	}
+	SelectionVector owned_sel;
+	const_reference<SelectionVector> sel_ref(input_sel);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// for constant vectors we just use the selection vector [0, 0, 0, 0, 0, 0, ...]
+		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
+	}
+	auto &sel = sel_ref.get();
+
+	auto type_size = GetTypeIdSize(type.InternalType());
+
+	// allocate the new buffer
+	auto target_byte_count = count * type_size;
+	auto stored_allocator = GetAllocator();
+	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
+	auto new_data = allocator.Allocate(target_byte_count);
+	// copy data using sel
+	auto dst = new_data.get();
+	for (idx_t i = 0; i < count; i++) {
+		auto src_idx = sel.get_index(i);
+		memcpy(dst + i * type_size, data_ptr + src_idx * type_size, type_size);
+	}
+	auto result = CreateBuffer(std::move(new_data));
+	// copy validity using sel
+	auto &result_validity = result->GetValidityMask();
+	result_validity.CopySel(validity, sel, 0, 0, count);
 	return result;
 }
 
@@ -289,33 +324,6 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	default:
 		throw InternalException("Unimplemented type for StandardVectorBuffer::GetValue");
 	}
-}
-
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                       idx_t count) {
-	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
-		return nullptr;
-	}
-	// determine the selection vector to use
-	SelectionVector owned_sel;
-	const SelectionVector *active_sel = &sel;
-	if (!sel.IsSet()) {
-		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
-		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
-	auto type_size = GetTypeIdSize(type.InternalType());
-	auto result = make_buffer<StandardVectorBuffer>(flat_count, type_size);
-	// copy data using sel
-	auto dst = result->GetData();
-	for (idx_t i = 0; i < count; i++) {
-		auto src_idx = active_sel->get_index(i);
-		memcpy(dst + i * type_size, data_ptr + src_idx * type_size, type_size);
-	}
-	// copy validity using sel
-	auto &result_validity = result->GetValidityMask();
-	result_validity.CopySel(validity, *active_sel, 0, 0, count);
-	return result;
 }
 
 void FlatVector::SetData(Vector &vector, data_ptr_t data) {

@@ -121,29 +121,17 @@ void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data) const {
+	return make_buffer<VectorStringBuffer>(std::move(new_data), *this);
+}
+
+buffer_ptr<VectorBuffer> VectorStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                     idx_t count) const {
+	auto result = StandardVectorBuffer::Flatten(type, sel, count);
+	if (!result) {
+		// already flat - bail
 		return nullptr;
 	}
-	// determine the selection vector to use
-	SelectionVector owned_sel;
-	const SelectionVector *active_sel = &sel;
-	if (!sel.IsSet()) {
-		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
-		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
-	auto result = make_buffer<VectorStringBuffer>(flat_count);
-	// copy string data using sel
-	auto src = reinterpret_cast<string_t *>(data_ptr);
-	auto dst = reinterpret_cast<string_t *>(result->GetData());
-	for (idx_t i = 0; i < count; i++) {
-		auto src_idx = active_sel->get_index(i);
-		dst[i] = src[src_idx];
-	}
-	// copy validity using sel
-	auto &result_validity = result->GetValidityMask();
-	result_validity.CopySel(validity, *active_sel, 0, 0, count);
 	// add heap reference from source to result
 	if (auxiliary_data) {
 		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));

@@ -71,26 +71,20 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			source = &child;
 			break;
 		}
-		case VectorType::SEQUENCE_VECTOR: {
-			int64_t start, increment;
-			Vector seq(source->GetType());
-			SequenceVector::GetSequence(*source, start, increment);
-			VectorOperations::GenerateSequence(seq, source_count, *sel, start, increment);
-			VectorOperations::Copy(seq, target, *sel, source_count, source_offset, target_offset);
-			return;
-		}
 		case VectorType::CONSTANT_VECTOR:
 			sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
 			finished = true;
 			break;
-		case VectorType::SHREDDED_VECTOR: {
-			Vector shredded_vector(LogicalType::VARIANT());
-			shredded_vector.Reference(*source);
-			shredded_vector.Flatten(source_count);
-			Copy(shredded_vector, target, *sel, source_count, source_offset, target_offset, copy_count);
+		case VectorType::SEQUENCE_VECTOR:
+		case VectorType::SHREDDED_VECTOR:
+		case VectorType::FSST_VECTOR: {
+			// for exotic types we flatten followed by copying
+			Vector flattened_vector(source->GetType());
+			flattened_vector.Reference(*source);
+			flattened_vector.Flatten(source_count);
+			Copy(flattened_vector, target, *sel, source_count, source_offset, target_offset, copy_count);
 			return;
 		}
-		case VectorType::FSST_VECTOR:
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
@@ -124,12 +118,6 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	}
 
 	D_ASSERT(sel);
-
-	// For FSST Vectors we decompress instead of copying.
-	if (source->GetVectorType() == VectorType::FSST_VECTOR) {
-		FSSTVector::DecompressVector(*source, target, source_offset, target_offset, copy_count, sel);
-		return;
-	}
 
 	// now copy over the data
 	switch (source->GetType().InternalType()) {

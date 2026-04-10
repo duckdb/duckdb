@@ -39,18 +39,27 @@ Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) con
 }
 
 buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                         idx_t count) {
-	// even though count may only be a part of the vector, we need to flatten the whole thing due to the way
-	// ToUnifiedFormat uses flatten
-	idx_t total_count = GetCount();
-	// create a non-owning buffer_ptr to construct a temporary source vector
-	buffer_ptr<VectorBuffer> non_owning_ref(this, [](VectorBuffer *) {});
-	Vector source(type, std::move(non_owning_ref));
-	// create vector to decompress into
-	Vector result(type, total_count);
-	// now copy the data of this vector to the other vector, decompressing the strings in the process
-	VectorOperations::Copy(source, result, total_count, 0, 0);
-	return result.GetBuffer();
+                                                         idx_t count) const {
+	auto result = make_buffer<VectorStringBuffer>(count);
+
+	auto fsst_data = reinterpret_cast<const string_t *>(data_ptr);
+	auto result_data = reinterpret_cast<string_t *>(result->GetData());
+	auto &str_allocator = result->GetStringAllocator();
+	auto decoder = GetDecoder();
+	auto &dst_mask = result->GetValidityMask();
+	for (idx_t i = 0; i < count; i++) {
+		auto source_idx = sel.get_index(i);
+		auto target_idx = i;
+		auto &compressed_string = fsst_data[source_idx];
+		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
+			result_data[target_idx] = FSSTPrimitives::DecompressValue(
+			    decoder, str_allocator, compressed_string.GetData(), compressed_string.GetSize());
+		} else {
+			dst_mask.SetInvalid(target_idx);
+			result_data[target_idx] = string_t(nullptr, 0);
+		}
+	}
+	return result;
 }
 
 VectorFSSTStringBuffer &FSSTVector::GetFSSTBuffer(const Vector &vector) {
@@ -105,28 +114,6 @@ void FSSTVector::SetCount(Vector &vector, idx_t count) {
 idx_t FSSTVector::GetCount(const Vector &vector) {
 	auto &fsst_string_buffer = GetFSSTBuffer(vector);
 	return fsst_string_buffer.GetCount();
-}
-
-void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,
-                                  const SelectionVector *sel) {
-	D_ASSERT(src.GetVectorType() == VectorType::FSST_VECTOR);
-	D_ASSERT(dst.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto dst_mask = FlatVector::Validity(dst);
-	auto ldata = FSSTVector::GetCompressedData(src);
-	auto decoder = FSSTVector::GetDecoder(src);
-	auto tdata = FlatVector::GetDataMutable<string_t>(dst);
-	auto &str_allocator = StringVector::GetStringAllocator(dst);
-	for (idx_t i = 0; i < copy_count; i++) {
-		auto source_idx = sel->get_index(src_offset + i);
-		auto target_idx = dst_offset + i;
-		string_t compressed_string = ldata[source_idx];
-		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
-			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, str_allocator, compressed_string.GetData(),
-			                                                    compressed_string.GetSize());
-		} else {
-			tdata[target_idx] = string_t(nullptr, 0);
-		}
-	}
 }
 
 } // namespace duckdb

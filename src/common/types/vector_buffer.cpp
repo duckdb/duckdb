@@ -96,6 +96,10 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	throw InternalException("Unimplemented type for flatten");
+}
+
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant vectors do not need to get sliced
@@ -112,7 +116,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 	return SliceInternal(type, sel, count);
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
+                                                      const SelectionVector &sel, idx_t count) {
 	return Slice(type, sel, count);
 }
 
@@ -142,10 +147,6 @@ void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &v
 
 Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	throw InternalException("Unimplemented GetValue for this buffer type");
-}
-
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	throw InternalException("Unimplemented type for flatten");
 }
 
 PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {

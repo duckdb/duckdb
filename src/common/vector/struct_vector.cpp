@@ -189,38 +189,35 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx
 	return result;
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
-		// already flat - recursively flatten children
+buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
+                                                     idx_t count) const {
+	if (!input_sel.IsSet() && GetVectorType() == VectorType::FLAT_VECTOR) {
 		for (auto &child : children) {
-			child.Flatten(sel, count);
+			child.Flatten(input_sel, count);
 		}
 		return nullptr;
 	}
 	// determine the selection vector to use
 	SelectionVector owned_sel;
-	const_reference<SelectionVector> active_sel_ref(sel);
-	if (!sel.IsSet()) {
-		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
-		active_sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
+	const_reference<SelectionVector> sel_ref(input_sel);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// for constant vectors we just use the selection vector [0, 0, 0, 0, 0, 0, ...]
+		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
 	}
-	auto &active_sel = active_sel_ref.get();
-	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
+	auto &sel = sel_ref.get();
+
 	// create a new flat struct buffer
-	auto result = make_buffer<VectorStructBuffer>(type, flat_count);
+	auto result = make_buffer<VectorStructBuffer>();
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
-	result_validity.CopySel(validity, active_sel, 0, 0, count);
+	result_validity.Resize(count);
+	result_validity.CopySel(validity, sel, 0, 0, count);
+
 	// flatten each child using the same sel
 	auto &result_children = result->GetChildren();
 	for (idx_t i = 0; i < children.size(); i++) {
-		auto child_result = children[i].GetBuffer()->Flatten(children[i].GetType(), active_sel, count);
-		if (child_result) {
-			Vector tmp(children[i].GetType(), std::move(child_result));
-			result_children[i].CopyBuffer(tmp);
-		} else {
-			result_children[i].CopyBuffer(children[i]);
-		}
+		result_children.emplace_back(Vector::Ref(children[i]));
+		result_children[i].Flatten(sel, count);
 	}
 	return result;
 }

@@ -37,11 +37,10 @@ Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
 }
 
 buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                 idx_t flat_count) {
-	auto seq_count = NumericCast<idx_t>(count);
-	Vector result(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, seq_count));
-	VectorOperations::GenerateSequence(result, seq_count, start, increment);
-	return result.GetBuffer();
+                                                 idx_t count) const {
+	Vector flattened_vector(type, count);
+	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
+	return flattened_vector.GetBuffer();
 }
 
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {

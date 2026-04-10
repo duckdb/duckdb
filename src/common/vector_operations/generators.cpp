@@ -63,7 +63,7 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
 	auto value = static_cast<uint64_t>(start);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		result_data[idx] = static_cast<T>(value + static_cast<uint64_t>(increment) * idx);
+		result_data[i] = static_cast<T>(value + static_cast<uint64_t>(increment) * idx);
 	}
 }
 

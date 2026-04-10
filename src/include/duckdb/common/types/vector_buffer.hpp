@@ -69,7 +69,7 @@ private:
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
-class VectorBuffer {
+class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
 public:
 	explicit VectorBuffer(VectorType vector_type, VectorBufferType type) : vector_type(vector_type), buffer_type(type) {
 	}
@@ -101,11 +101,6 @@ public:
 		return nullptr;
 	}
 
-	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
-	//! The selection vector maps output indices to source indices in this buffer
-	//! Returns a new buffer, or nullptr if already flat with an unset selection vector
-	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count);
-
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
@@ -126,6 +121,11 @@ public:
 	}
 
 public:
+	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
+	//! The selection vector maps output indices to source indices in this buffer
+	//! Returns a new buffer, or nullptr if already flat with an unset selection vector
+	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	//! Returns the total amount of bytes allocated by the vector buffer
 	virtual idx_t GetAllocationSize() const;
 	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 	//! Get the value at the given index directly from the buffer's data
@@ -140,7 +140,8 @@ public:
 	//! Slice the buffer with an offset range, returning a new buffer
 	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, idx_t offset, idx_t end);
 	//! Slice the buffer with a selection vector, returning a new buffer
-	virtual buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel, idx_t count);
+	virtual buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type,
+	                                                const SelectionVector &sel, idx_t count);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Resize the buffer's data allocation

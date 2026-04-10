@@ -62,7 +62,8 @@ void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	format.validity = FlatVector::Validity(entry->data);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
+                                                          const SelectionVector &sel, idx_t count) {
 	// dictionary vector: need to merge dictionaries
 	// check if we have a cached entry
 	auto target_data = sel_vector.data();
@@ -109,24 +110,24 @@ Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	return entry->data.GetValue(resolved_index);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	// determine the effective selection vector
-	const SelectionVector *effective_sel = &sel_vector;
+buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
+                                                   idx_t count) const {
+	// get the selection vector to push into the child
+	// if input_sel is set, we slice the dictionary by input_sel, otherwise we pass in the dict directly
+	const_reference<SelectionVector> sel_ref(sel_vector);
 	SelectionVector composed;
-	if (sel.IsSet()) {
-		// compose the provided selection vector with the dictionary selection vector
+	if (input_sel.IsSet()) {
+		// slice the dictionary using the provided selection vector
 		composed.Initialize(count);
 		for (idx_t i = 0; i < count; i++) {
-			composed.set_index(i, sel_vector.get_index(sel.get_index(i)));
+			composed.set_index(i, sel_vector.get_index(input_sel.get_index(i)));
 		}
-		effective_sel = &composed;
+		sel_ref = composed;
 	}
-	// ensure the child is flat before applying the selection
-	auto dict_size = dictionary_size.IsValid() ? dictionary_size.GetIndex()
-	                                           : (entry->size.IsValid() ? entry->size.GetIndex() : count);
-	entry->data.Flatten(dict_size);
-	// copy the now-flat child's data using the effective selection
-	return entry->data.GetBuffer()->Flatten(type, *effective_sel, count);
+	auto &sel = sel_ref.get();
+
+	// flatten the child using the selection vector
+	return entry->data.buffer->Flatten(type, sel, count);
 }
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
