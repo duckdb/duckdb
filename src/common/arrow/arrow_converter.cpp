@@ -418,7 +418,8 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	D_ASSERT(options.client_context);
-	auto get_schema_func = [&types, &out_schema, &names, &options]() {
+	// We need to run this in a transaction. The arrow schema callback might use the catalog to do lookups.
+	options.client_context->RunFunctionInTransaction([&types, &out_schema, &names, &options]() {
 		const idx_t column_count = types.size();
 		// Allocate as unique_ptr first to clean-up properly on error
 		auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
@@ -450,14 +451,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		// Release ownership to caller
 		out_schema->private_data = root_holder.release();
 		out_schema->release = ReleaseDuckDBArrowSchema;
-	};
-	auto &context = *options.client_context;
-	if (context.transaction.HasActiveTransaction()) {
-		get_schema_func();
-	} else {
-		// We need to run this in a transaction. The arrow schema callback might use the catalog to do lookups.
-		options.client_context->RunFunctionInTransaction(get_schema_func);
-	}
+	});
 }
 
 } // namespace duckdb
