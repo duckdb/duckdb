@@ -36,7 +36,9 @@ statement ok
 INSERT INTO t1(c0) VALUES ('2119350449');
 
 statement ok
+INSERT INTO t1(c0) VALUES ( 
 INSERT INTO t1(c0) VALUES ( X'48656C6C6F');
+);
 
 statement ok
 INSERT INTO t1(c0) VALUES (E'\\xabcd');
