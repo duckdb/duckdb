@@ -83,16 +83,20 @@ PRIMARY 	28
 statement ok
 CREATE SCHEMA abcdefgh;
 
+statement ok
+CREATE TABLE abcdefgh.tbl_in_schema(i INTEGER);
+
 # suggest a schema name
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE abcd') LIMIT 1;
 ----
 abcdefgh.	13
 
+# after typing "schema.", suggest tables in that schema
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE abcdefgh.') LIMIT 1;
 ----
-.	21
+tbl_in_schema	22
 
 # we suggest the original schema
 query II
@@ -121,7 +125,7 @@ attached_in_memory.	13
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE attached_in_memory.a') LIMIT 1;
 ----
-abcdefgh.	32
+main.	32
 
 statement error
 FROM sql_auto_complete(NULL);
