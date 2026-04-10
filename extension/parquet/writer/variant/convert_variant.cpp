@@ -10,6 +10,11 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -992,6 +997,137 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	                         BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return transform;
+}
+
+//===--------------------------------------------------------------------===//
+// Arrow C Data Interface export for VARIANT (arrow.parquet.variant)
+//===--------------------------------------------------------------------===//
+// Registers an Arrow extension type that emits a VARIANT column as the
+// canonical Apache Parquet Variant extension:
+// struct<metadata: binary not null, value: binary not null> with
+// ARROW:extension:name = "arrow.parquet.variant".
+//
+// Non-shredded variant only; shredded output (typed_value) is a follow-up.
+// Arrow export bypasses the VARCHAR cast path entirely, so the unrelated
+// CAST(variant AS VARCHAR) "{}" bug for string-valued variants does not
+// affect Arrow consumers.
+
+static void ReleaseArrowVariantChildSchema(ArrowSchema *schema) {
+	if (!schema || !schema->release) {
+		return;
+	}
+	schema->release = nullptr;
+}
+
+namespace {
+
+struct ArrowParquetVariant {
+	// Import: fall back to reading the raw struct shape. Full VARIANT import (canonical
+	// bytes → DuckDB VARIANT) is a separate feature. Returning the plain struct type
+	// means consumers get a STRUCT(metadata BLOB, value BLOB) column on import — the
+	// same shape they'd have gotten if this extension weren't registered at all. This
+	// preserves the pre-patch import behavior and lets DuckDB Arrow round-trips at
+	// least not crash on VARIANT-tagged schemas.
+	static unique_ptr<ArrowType> GetType(ClientContext &context, const ArrowSchema &schema,
+	                                     const ArrowSchemaMetadata &) {
+		auto format = string(schema.format);
+		return ArrowType::GetTypeFromFormat(context, const_cast<ArrowSchema &>(schema), format);
+	}
+
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &,
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
+		schema.format = "+s";
+		schema.n_children = 2;
+
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(2);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().resize(2);
+		root_holder.nested_children_ptr.back()[0] = &root_holder.nested_children.back()[0];
+		root_holder.nested_children_ptr.back()[1] = &root_holder.nested_children.back()[1];
+		schema.children = &root_holder.nested_children_ptr.back()[0];
+
+		// The metadata/value children are BLOBs. Match the format that the BLOB appender
+		// will actually emit for this connection (string-view "vz" on Arrow 1.4+, large
+		// binary "Z" on arrow_large_buffer_size, otherwise "z"). The child format must
+		// agree with the produced buffers — see `BLOB` handling in
+		// `arrow_converter.cpp:SetArrowFormat` and `ArrowVarcharToStringViewData` /
+		// `ArrowVarcharData` selection in `arrow_appender.cpp:InitializeFunctionPointers`.
+		const auto options = context.GetClientProperties();
+		const char *child_format;
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			child_format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child_format = "Z";
+		} else {
+			child_format = "z";
+		}
+
+		const char *child_names[2] = {"metadata", "value"};
+		for (idx_t i = 0; i < 2; i++) {
+			auto &child = *schema.children[i];
+			child.private_data = nullptr;
+			child.release = ReleaseArrowVariantChildSchema;
+			// Children are non-nullable: the Parquet Variant spec requires both metadata and
+			// value to be present. Nullness is expressed via the parent struct's validity.
+			child.flags = 0;
+			const auto name_len = strlen(child_names[i]);
+			auto name_ptr = make_unsafe_uniq_array<char>(name_len + 1);
+			memcpy(name_ptr.get(), child_names[i], name_len + 1);
+			root_holder.owned_type_names.emplace_back(std::move(name_ptr));
+			child.name = root_holder.owned_type_names.back().get();
+			child.format = child_format;
+			child.n_children = 0;
+			child.children = nullptr;
+			child.metadata = nullptr;
+			child.dictionary = nullptr;
+		}
+
+		const ArrowSchemaMetadata schema_metadata =
+		    ArrowSchemaMetadata::ArrowCanonicalType(extension.GetInfo().GetExtensionName());
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+	}
+
+	static void DuckToArrow(ClientContext &, Vector &source, Vector &result, idx_t count) {
+		RecursiveUnifiedVectorFormat recursive_format;
+		Vector::RecursiveToUnifiedFormat(source, count, recursive_format);
+		UnifiedVariantVectorData variant(recursive_format);
+
+		auto &result_vectors = StructVector::GetEntries(result);
+		auto &metadata = result_vectors[0];
+		CreateMetadata(variant, metadata, count);
+
+		ParquetVariantShredding shredding;
+		shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
+
+		// Propagate NULL rows from the source VARIANT to the parent struct's validity
+		// mask. Child bytes are still written (see CreateMetadata/CreateValues) because
+		// the Arrow spec requires valid child buffers regardless of parent validity.
+		auto &result_validity = FlatVector::Validity(result);
+		for (idx_t i = 0; i < count; i++) {
+			if (!variant.RowIsValid(i)) {
+				result_validity.SetInvalid(i);
+			}
+		}
+	}
+};
+
+} // namespace
+
+void VariantColumnWriter::RegisterArrowExtension(DBConfig &config) {
+	child_list_t<LogicalType> variant_struct_children;
+	variant_struct_children.emplace_back("metadata", LogicalType::BLOB);
+	variant_struct_children.emplace_back("value", LogicalType::BLOB);
+	// arrow_to_duckdb = nullptr: no VARIANT import yet. When nullptr, the Arrow import
+	// path in `ColumnArrowToDuckDB` falls through to the standard struct reader, which
+	// preserves pre-patch behavior (imports as STRUCT(metadata, value)) instead of
+	// throwing.
+	config.RegisterArrowExtension(
+	    {"arrow.parquet.variant", ArrowParquetVariant::PopulateSchema, ArrowParquetVariant::GetType,
+	     make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARIANT(),
+	                                             LogicalType::STRUCT(std::move(variant_struct_children)),
+	                                             /*arrow_to_duckdb=*/nullptr, ArrowParquetVariant::DuckToArrow)});
 }
 
 } // namespace duckdb

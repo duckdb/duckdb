@@ -1,6 +1,7 @@
 #include "capi_tester.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
 
 using namespace duckdb;
 
@@ -290,6 +291,103 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		duckdb_destroy_arrow(&arrow_result);
 		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("test query arrow - variant") {
+		// Exercises Arrow C Data Interface export of the VARIANT type via the
+		// arrow.parquet.variant extension registered by the parquet extension.
+		// Explicitly load parquet — the Arrow extension is only registered in
+		// parquet's LoadInternal, so builds without parquet (statically or
+		// autoloaded) cannot export VARIANT via Arrow.
+		auto load_result = tester.Query("LOAD parquet;");
+		if (load_result->HasError()) {
+			return;
+		}
+
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE variants(id INTEGER, v VARIANT);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO variants VALUES "
+		                             "(0, (1)::INTEGER::VARIANT), "
+		                             "(1, ('hello')::VARCHAR::VARIANT), "
+		                             "(2, NULL), "
+		                             "(3, (true)::BOOLEAN::VARIANT);"));
+
+		auto state = duckdb_query_arrow(tester.connection, "SELECT v FROM variants ORDER BY id", &arrow_result);
+		REQUIRE(state == DuckDBSuccess);
+		REQUIRE(duckdb_arrow_row_count(arrow_result) == 4);
+		REQUIRE(duckdb_arrow_column_count(arrow_result) == 1);
+
+		ArrowSchema arrow_schema;
+		arrow_schema.Init();
+		auto arrow_schema_ptr = &arrow_schema;
+		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
+		REQUIRE(state == DuckDBSuccess);
+
+		// Top-level schema is the query result struct with one child (v).
+		REQUIRE(arrow_schema.n_children == 1);
+		auto &variant_field = *arrow_schema.children[0];
+		REQUIRE(string(variant_field.format) == "+s");
+		REQUIRE(variant_field.n_children == 2);
+
+		// Extension metadata on the variant column.
+		REQUIRE(variant_field.metadata != nullptr);
+		ArrowSchemaMetadata parsed_metadata(variant_field.metadata);
+		REQUIRE(parsed_metadata.HasExtension());
+		REQUIRE(parsed_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME) == "arrow.parquet.variant");
+
+		// metadata child (index 0).
+		auto &metadata_child = *variant_field.children[0];
+		REQUIRE(string(metadata_child.name) == "metadata");
+		REQUIRE(string(metadata_child.format) == "z");
+
+		// value child (index 1).
+		auto &value_child = *variant_field.children[1];
+		REQUIRE(string(value_child.name) == "value");
+		REQUIRE(string(value_child.format) == "z");
+
+		if (arrow_schema.release) {
+			arrow_schema.release(arrow_schema_ptr);
+		}
+
+		ArrowArray arrow_array;
+		arrow_array.Init();
+		auto arrow_array_ptr = &arrow_array;
+		state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
+		REQUIRE(state == DuckDBSuccess);
+		REQUIRE(arrow_array.length == 4);
+		REQUIRE(arrow_array.n_children == 1);
+
+		auto &variant_array = *arrow_array.children[0];
+		REQUIRE(variant_array.length == 4);
+		REQUIRE(variant_array.n_children == 2);
+		REQUIRE(variant_array.null_count == 1); // one NULL row out of four
+
+		// Validity buffer must mark row 2 (the NULL) invalid.
+		auto validity_bytes = reinterpret_cast<const uint8_t *>(variant_array.buffers[0]);
+		REQUIRE(validity_bytes != nullptr);
+		auto bit_set = [&](idx_t i) {
+			return (validity_bytes[i / 8] >> (i % 8)) & 1;
+		};
+		REQUIRE(bit_set(0) == 1);
+		REQUIRE(bit_set(1) == 1);
+		REQUIRE(bit_set(2) == 0);
+		REQUIRE(bit_set(3) == 1);
+
+		// Both children must have binary buffers populated.
+		auto &metadata_array = *variant_array.children[0];
+		auto &value_array = *variant_array.children[1];
+		REQUIRE(metadata_array.length == 4);
+		REQUIRE(value_array.length == 4);
+		auto metadata_offsets = reinterpret_cast<const int32_t *>(metadata_array.buffers[1]);
+		auto value_offsets = reinterpret_cast<const int32_t *>(value_array.buffers[1]);
+		REQUIRE(metadata_offsets != nullptr);
+		REQUIRE(value_offsets != nullptr);
+		// Non-null row 0 produces bytes.
+		REQUIRE(metadata_offsets[1] > metadata_offsets[0]);
+		REQUIRE(value_offsets[1] > value_offsets[0]);
+
+		arrow_array.release(arrow_array_ptr);
+		duckdb_destroy_arrow(&arrow_result);
+		REQUIRE_NO_FAIL(tester.Query("DROP TABLE variants;"));
 	}
 
 	// FIXME: needs test for scanning a fixed size list

@@ -94,7 +94,12 @@ ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, unique_ptr<Arr
 	result->buffers[0] = append_data.GetValidityBuffer().data();
 
 	if (append_data.finalize) {
-		append_data.finalize(append_data, type, result.get());
+		// For extension types with an internal type that differs structurally from the
+		// DuckDB type (e.g. VARIANT → STRUCT(metadata BLOB, value BLOB)), the append data
+		// was initialized against the internal type — match that here so the finalizer
+		// sees the same structure it wrote into.
+		LogicalType finalize_type = append_data.extension_data ? append_data.extension_data->GetInternalType() : type;
+		append_data.finalize(append_data, finalize_type, result.get());
 	}
 
 	append_data.array = std::move(result);
