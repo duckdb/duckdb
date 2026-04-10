@@ -106,7 +106,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.input_chunk.Reset();
 		// set up the input data to the table in-out function
 		for (idx_t col_idx = 0; col_idx < state.input_chunk.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(state.input_chunk.data[col_idx], input.data[col_idx], state.row_index, input.size());
+			ConstantVector::Reference(state.input_chunk.data[col_idx], input.data[col_idx], state.row_index,
+			                          input.size());
 		}
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
