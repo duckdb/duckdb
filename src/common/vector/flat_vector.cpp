@@ -63,6 +63,44 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Slice(const LogicalType &type, co
 	return result;
 }
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size,
+                                                      idx_t new_size) const {
+	auto type_size = GetTypeIdSize(type.InternalType());
+	auto old_size = current_size * type_size;
+	auto target_size = new_size * type_size;
+
+	// We have an upper limit of 128GB for a single vector.
+	if (target_size > DConstants::MAX_VECTOR_SIZE) {
+		throw OutOfRangeException("Cannot resize vector to %s: maximum allowed vector size is %s",
+		                          StringUtil::BytesToHumanReadableString(target_size),
+		                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+	}
+	// Copy the data buffer to a resized buffer.
+	auto stored_allocator = GetAllocator();
+	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
+	auto new_data = allocator.Allocate(target_size);
+	memcpy(new_data.get(), data_ptr, old_size);
+
+	// create the new buffer
+	buffer_ptr<VectorBuffer> result;
+	if (type.InternalType() == PhysicalType::LIST) {
+		auto &old_buffer = Cast<VectorListBuffer>();
+		result = make_buffer<VectorListBuffer>(std::move(new_data), old_buffer);
+	} else if (type.InternalType() == PhysicalType::VARCHAR) {
+		auto &old_buffer = Cast<VectorStringBuffer>();
+		result = make_buffer<VectorStringBuffer>(std::move(new_data), old_buffer);
+	} else {
+		result = make_buffer<StandardVectorBuffer>(std::move(new_data));
+	}
+	// copy over the validity mask
+	auto &new_validity = result->GetValidityMask();
+	new_validity.Resize(new_size);
+	if (current_size > 0) {
+		new_validity.Copy(validity, current_size);
+	}
+	return result;
+}
+
 void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);

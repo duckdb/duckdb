@@ -279,13 +279,6 @@ void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity
 	}
 }
 
-void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
-	if (!buffer) {
-		return;
-	}
-	buffer->FindResizeInfos(*this, resize_infos, multiplier);
-}
-
 void Vector::AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data) {
 	buffer->AddAuxiliaryData(std::move(data));
 }
@@ -303,19 +296,16 @@ void Vector::AddHeapReference(const Vector &other) {
 }
 
 void Vector::Resize(idx_t current_size, idx_t new_size) {
-	// The vector does not contain any data.
 	if (!buffer) {
-		auto internal_type = GetType().InternalType();
-		if (internal_type == PhysicalType::LIST) {
-			throw InternalException("Resize for empty list not supported");
+		// The vector does not contain any data - initialize
+		if (current_size != 0) {
+			throw InternalException("Vector::Resize - buffer does not contain any data but current_size is not 0");
 		}
-		if (internal_type == PhysicalType::VARCHAR) {
-			buffer = make_buffer<VectorStringBuffer>(idx_t(0));
-		} else {
-			buffer = make_buffer<StandardVectorBuffer>(0, GetTypeIdSize(internal_type));
-		}
+		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
+	} else {
+		// resize the buffer
+		buffer = buffer->Resize(GetType(), current_size, new_size);
 	}
-	buffer->Resize(*this, current_size, new_size);
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {

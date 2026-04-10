@@ -72,10 +72,18 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Slice(const LogicalType &type, const
 	return result;
 }
 
-void VectorArrayBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) {
-	VectorBuffer::FindResizeInfos(vector, resize_infos, multiplier);
-	auto new_multiplier = array_size * multiplier;
-	child->FindResizeInfos(resize_infos, new_multiplier);
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const {
+	// resize the child node
+	auto resized_child = make_uniq<Vector>(Vector::Ref(*child));
+	resized_child->Resize(current_size * array_size, new_size * array_size);
+
+	// create a new vector array buffer
+	auto result = make_buffer<VectorArrayBuffer>(std::move(resized_child), array_size, new_size);
+	// copy over the validity
+	if (current_size > 0) {
+		result->GetValidityMask().Copy(validity, current_size);
+	}
+	return result;
 }
 
 void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {

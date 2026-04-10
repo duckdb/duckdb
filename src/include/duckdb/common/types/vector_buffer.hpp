@@ -89,7 +89,7 @@ public:
 		}
 		auxiliary_data->data.push_back(std::move(aux_data_p));
 	}
-	buffer_ptr<AuxiliaryDataSet> &GetAuxiliaryData() {
+	const buffer_ptr<AuxiliaryDataSet> &GetAuxiliaryData() const {
 		return auxiliary_data;
 	}
 	virtual void ClearAuxiliaryData() {
@@ -141,10 +141,8 @@ public:
 	                                       idx_t end);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
-	//! Collect resize information for this buffer and children
-	virtual void FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier);
 	//! Resize the buffer's data allocation
-	virtual void Resize(Vector &vector, idx_t current_size, idx_t new_size);
+	virtual buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const;
 
 protected:
 	VectorType vector_type;

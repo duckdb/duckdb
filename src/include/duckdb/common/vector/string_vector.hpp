@@ -30,7 +30,7 @@ public:
 	explicit VectorStringBuffer(idx_t capacity);
 	explicit VectorStringBuffer(data_ptr_t data_ptr_p);
 	explicit VectorStringBuffer(AllocatedData &&data_p);
-	VectorStringBuffer(AllocatedData &&data_p, VectorStringBuffer &other);
+	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
 
 public:
 	StringHeap &GetHeap() {
@@ -58,10 +58,10 @@ public:
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 public:
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	StringHeap &AllocateHeap(Allocator &allocator);

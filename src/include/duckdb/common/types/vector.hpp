@@ -159,8 +159,6 @@ public:
 
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
-	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.
-	DUCKDB_API void FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);

@@ -98,13 +98,6 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const LogicalType &type, cons
 	return result;
 }
 
-void VectorStructBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) {
-	VectorBuffer::FindResizeInfos(vector, resize_infos, multiplier);
-	for (auto &child : children) {
-		child.FindResizeInfos(resize_infos, multiplier);
-	}
-}
-
 void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
@@ -181,6 +174,23 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 		return Value::STRUCT(type, std::move(child_values));
 	}
 	}
+}
+
+buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const {
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	// create a new vector struct buffer
+	auto result = make_buffer<VectorStructBuffer>();
+	// copy over the validity
+	result->validity.Resize(new_size);
+	if (current_size > 0) {
+		result->validity.Copy(validity, current_size);
+	}
+	// resize the struct children
+	for (auto &child : children) {
+		result->children.emplace_back(Vector::Ref(child));
+		result->children.back().Resize(current_size, new_size);
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) {

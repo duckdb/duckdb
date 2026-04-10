@@ -40,7 +40,7 @@ VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, VectorStringBuffer &other)
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
     : StandardVectorBuffer(std::move(data_p)) {
 	auto auxiliary_data = other.GetAuxiliaryData();
 	if (auxiliary_data) {

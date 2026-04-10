@@ -51,7 +51,6 @@ public:
 
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 public:
 	idx_t GetAllocationSize() const override;
@@ -60,6 +59,7 @@ public:
 	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
 	                               idx_t end) override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
