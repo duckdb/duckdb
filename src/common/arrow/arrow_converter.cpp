@@ -417,42 +417,37 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
                                    const vector<string> &names, ClientProperties &options) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
-	D_ASSERT(options.client_context);
-	// We need to run this in a transaction. The arrow schema callback might use the catalog to do lookups.
-	options.client_context->RunFunctionInTransaction([&types, &out_schema, &names, &options]() {
-		const idx_t column_count = types.size();
-		// Allocate as unique_ptr first to clean-up properly on error
-		auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
+	const idx_t column_count = types.size();
+	// Allocate as unique_ptr first to clean-up properly on error
+	auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
 
-		// Allocate the children
-		root_holder->children.resize(column_count);
-		root_holder->children_ptrs.resize(column_count, nullptr);
-		for (size_t i = 0; i < column_count; ++i) {
-			root_holder->children_ptrs[i] = &root_holder->children[i];
-		}
-		out_schema->children = root_holder->children_ptrs.data();
-		out_schema->n_children = NumericCast<int64_t>(column_count);
+	// Allocate the children
+	root_holder->children.resize(column_count);
+	root_holder->children_ptrs.resize(column_count, nullptr);
+	for (size_t i = 0; i < column_count; ++i) {
+		root_holder->children_ptrs[i] = &root_holder->children[i];
+	}
+	out_schema->children = root_holder->children_ptrs.data();
+	out_schema->n_children = NumericCast<int64_t>(column_count);
 
-		// Store the schema
-		out_schema->format = "+s"; // struct apparently
-		out_schema->flags = 0;
-		out_schema->metadata = nullptr;
-		out_schema->name = "duckdb_query_result";
-		out_schema->dictionary = nullptr;
+	// Store the schema
+	out_schema->format = "+s"; // struct apparently
+	out_schema->flags = 0;
+	out_schema->metadata = nullptr;
+	out_schema->name = "duckdb_query_result";
+	out_schema->dictionary = nullptr;
 
-		// Configure all child schemas
-		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-			root_holder->owned_column_names.push_back(AddName(names[col_idx]));
-			auto &child = root_holder->children[col_idx];
-			InitializeChild(child, *root_holder, names[col_idx]);
-			SetArrowFormat(*root_holder, child, types[col_idx], options, *options.client_context);
-		}
+	// Configure all child schemas
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		root_holder->owned_column_names.push_back(AddName(names[col_idx]));
+		auto &child = root_holder->children[col_idx];
+		InitializeChild(child, *root_holder, names[col_idx]);
+		SetArrowFormat(*root_holder, child, types[col_idx], options, *options.client_context);
+	}
 
-		// Release ownership to caller
-		out_schema->private_data = root_holder.release();
-		out_schema->release = ReleaseDuckDBArrowSchema;
-	});
-
+	// Release ownership to caller
+	out_schema->private_data = root_holder.release();
+	out_schema->release = ReleaseDuckDBArrowSchema;
 }
 
 } // namespace duckdb
