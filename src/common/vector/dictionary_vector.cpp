@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/sel_cache.hpp"
 
 namespace duckdb {
 
@@ -58,6 +59,29 @@ void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	}
 	format.data = FlatVector::GetData(entry->data);
 	format.validity = FlatVector::Validity(entry->data);
+}
+
+buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	// dictionary vector: need to merge dictionaries
+	// check if we have a cached entry
+	auto target_data = sel_vector.data();
+	auto cache_entry = cache.cache.find(target_data);
+	buffer_ptr<VectorBuffer> result;
+	if (cache_entry != cache.cache.end()) {
+		// cached entry exists: use the cached selection vector with our dictionary entry
+		auto &cached_dict = cache_entry->second->Cast<DictionaryBuffer>();
+		result = make_buffer<DictionaryBuffer>(cached_dict.GetSelVector(), entry);
+	} else {
+		// no cached entry - perform the slice and store the result
+		result = Slice(type, sel, count);
+		cache.cache[target_data] = result;
+	}
+	if (dictionary_size.IsValid()) {
+		auto &dict_buffer = result->Cast<DictionaryBuffer>();
+		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+		dict_buffer.SetDictionaryId(std::move(dictionary_id));
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,

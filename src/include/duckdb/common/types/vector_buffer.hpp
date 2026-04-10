@@ -24,6 +24,7 @@ struct UnifiedVectorFormat;
 class VectorBuffer;
 class Vector;
 struct ValidityMask;
+struct SelCache;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER,   // VectorType::FLAT/CONSTANT - Fixed-Size Type - Holds a single array of data
@@ -138,6 +139,8 @@ public:
 	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
 	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, idx_t offset, idx_t end);
+	//! Slice the buffer with a selection vector, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Resize the buffer's data allocation

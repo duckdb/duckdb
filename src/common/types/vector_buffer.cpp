@@ -112,6 +112,10 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 	return SliceInternal(type, sel, count);
 }
 
+buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	return Slice(type, sel, count);
+}
+
 buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	// we can slice the data directly only for standard vectors
 	// for non-flat vectors slice using a selection vector instead

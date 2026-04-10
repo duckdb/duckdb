@@ -191,6 +191,16 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	}
 }
 
+void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
+	if (!sel.IsSet() || count == 0) {
+		return;
+	}
+	auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
+	}
+}
+
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
 	Slice(sel, count);
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -198,7 +208,7 @@ void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t
 	}
 }
 
-void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
 }
@@ -209,35 +219,6 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 	}
 	D_ASSERT(type == reusable_dict->data.GetType());
 	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
-}
-
-void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// dictionary vector: need to merge dictionaries
-		// check if we have a cached entry
-		auto &current_sel = DictionaryVector::SelVector(*this);
-		auto dictionary_size = DictionaryVector::DictionarySize(*this);
-		auto dictionary_id = DictionaryVector::DictionaryId(*this);
-		auto target_data = current_sel.data();
-		auto cache_entry = cache.cache.find(target_data);
-		if (cache_entry != cache.cache.end()) {
-			// cached entry exists: use the cached selection vector with our dictionary entry
-			auto &old_dict = this->buffer->Cast<DictionaryBuffer>();
-			auto dict_entry = old_dict.GetEntryPtr();
-			this->buffer = make_buffer<DictionaryBuffer>(cache_entry->second->Cast<DictionaryBuffer>().GetSelVector(),
-			                                             std::move(dict_entry));
-		} else {
-			Slice(sel, count);
-			cache.cache[target_data] = this->buffer;
-		}
-		if (dictionary_size.IsValid()) {
-			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
-			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
-			dict_buffer.SetDictionaryId(std::move(dictionary_id));
-		}
-	} else {
-		Slice(sel, count);
-	}
 }
 
 void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
