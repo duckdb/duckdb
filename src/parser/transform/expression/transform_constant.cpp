@@ -1,6 +1,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -14,7 +15,37 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	case duckdb_libpgquery::T_PGInteger:
 		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
 		return make_uniq<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
-	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
+	case duckdb_libpgquery::T_PGBitString: {
+		// SQL hex string literal X'...' - convert to BLOB
+		// PostgreSQL parser returns the string as "xDEADBEEF" format
+		string hex_str(val.val.str);
+
+		// Skip the 'x' or 'X' prefix if present
+		idx_t start_pos = 0;
+		if (!hex_str.empty() && (hex_str[0] == 'x' || hex_str[0] == 'X')) {
+			start_pos = 1;
+		}
+
+		// Validate and convert hex string to binary
+		idx_t hex_len = hex_str.size() - start_pos;
+		if (hex_len % 2 != 0) {
+			throw ParserException("Invalid hexadecimal string literal: odd number of hex digits");
+		}
+
+		idx_t blob_size = hex_len / 2;
+		auto blob_data = make_unsafe_uniq_array_uninitialized<data_t>(blob_size);
+
+		for (idx_t i = 0; i < blob_size; i++) {
+			int high = Blob::HEX_MAP[static_cast<unsigned char>(hex_str[start_pos + i * 2])];
+			int low = Blob::HEX_MAP[static_cast<unsigned char>(hex_str[start_pos + i * 2 + 1])];
+			if (high < 0 || low < 0) {
+				throw ParserException("Invalid hexadecimal string literal: invalid hex character");
+			}
+			blob_data[i] = static_cast<data_t>((high << 4) | low);
+		}
+
+		return make_uniq<ConstantExpression>(Value::BLOB(const_data_ptr_cast(blob_data.get()), blob_size));
+	}
 	case duckdb_libpgquery::T_PGString:
 		return make_uniq<ConstantExpression>(Value(string(val.val.str)));
 	case duckdb_libpgquery::T_PGFloat: {
