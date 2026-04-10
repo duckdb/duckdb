@@ -10,7 +10,6 @@ using duckdb::ArrowResultWrapper;
 using duckdb::CClientArrowOptionsWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
-using duckdb::ErrorData;
 using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;
@@ -181,11 +180,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	try {
 		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
 		                              wrapper->result->client_properties);
-	} catch (std::exception &ex) {
-		wrapper->result->SetError(ErrorData(ex));
-		return DuckDBError;
 	} catch (...) {
-		wrapper->result->SetError(ErrorData("Unknown error in duckdb_query_arrow_schema"));
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
