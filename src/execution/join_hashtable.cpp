@@ -944,7 +944,11 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &resu
 		break;
 	case JoinType::OUTER:
 	case JoinType::LEFT:
-		NextLeftJoin(keys, probe_data, result);
+		if (ht.join_type == JoinType::LEFT && !ht.chains_longer_than_one) {
+			NextUniqueLeftJoin(keys, probe_data, result);
+		} else {
+			NextLeftJoin(keys, probe_data, result);
+		}
 		break;
 	case JoinType::SINGLE:
 		NextSingleJoin(keys, probe_data, result);
@@ -1538,6 +1542,53 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 
 		this->count = 0;
 	}
+}
+
+void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
+	// Unique left join: RHS has unique keys, so at most one match per LHS row.
+	// Single pass - no state machine needed. Modeled after NextSingleJoin.
+	D_ASSERT(!ht.chains_longer_than_one);
+	idx_t result_count = 0;
+	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
+
+	while (this->count > 0) {
+		idx_t match_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, &chain_no_match_sel_vector);
+		idx_t no_match_count = this->count - match_count;
+
+		// mark each of the matches as found
+		for (idx_t i = 0; i < match_count; i++) {
+			auto index = chain_match_sel_vector.get_index(i);
+			found_match[index] = true;
+			result_sel.set_index(result_count++, index);
+		}
+		// continue searching for the ones where we did not find a match yet
+		AdvancePointers(chain_no_match_sel_vector, no_match_count);
+	}
+
+	// reference the columns of the left side from the result (zero-copy)
+	D_ASSERT(ht.lhs_output_in_probe.size() > 0);
+	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+		result.data[i].Reference(probe_data.data[probe_col_idx]);
+	}
+
+	// now fetch the data from the RHS
+	for (idx_t i = 0; i < ht.output_columns.size(); i++) {
+		auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
+		// set NULL entries for every entry that was not found
+		for (idx_t j = 0; j < probe_data.size(); j++) {
+			if (!found_match[j]) {
+				FlatVector::SetNull(vector, j, true);
+			}
+		}
+		const auto output_col_idx = ht.output_columns[i];
+		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
+		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+	}
+	result.SetCardinality(probe_data.size());
+
+	// single pass - done
+	finished = true;
 }
 
 void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const {

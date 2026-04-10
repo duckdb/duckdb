@@ -1,0 +1,248 @@
+# name: test/sql/join/left_outer/unique_left_join.test
+# description: Test LEFT JOIN optimization when RHS has unique key
+# group: [left_outer]
+
+statement ok
+PRAGMA enable_verification
+
+# --- Setup ---
+statement ok
+CREATE TABLE dim(id INTEGER PRIMARY KEY, label TEXT)
+
+statement ok
+INSERT INTO dim VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')
+
+statement ok
+CREATE TABLE fact(fk INTEGER, value INTEGER)
+
+statement ok
+INSERT INTO fact VALUES (1, 10), (2, 20), (3, 30), (1, 40), (2, 50)
+
+# --- Test 1: 100% match ---
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f LEFT JOIN dim d ON f.fk = d.id
+----
+1	10	a
+1	40	a
+2	20	b
+2	50	b
+3	30	c
+
+# --- Test 2: Partial match (NULL case) ---
+statement ok
+INSERT INTO fact VALUES (99, 999)
+
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f LEFT JOIN dim d ON f.fk = d.id
+WHERE f.fk IN (1, 99)
+----
+1	10	a
+1	40	a
+99	999	NULL
+
+# --- Test 3: 0% match (empty RHS) ---
+statement ok
+CREATE TABLE empty_dim(id INTEGER PRIMARY KEY, label TEXT)
+
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f LEFT JOIN empty_dim d ON f.fk = d.id
+----
+1	10	NULL
+1	40	NULL
+2	20	NULL
+2	50	NULL
+3	30	NULL
+99	999	NULL
+
+# --- Test 4: UNIQUE constraint (not just PK) ---
+statement ok
+CREATE TABLE dim_unique(id INTEGER UNIQUE, label TEXT)
+
+statement ok
+INSERT INTO dim_unique VALUES (1, 'x'), (2, 'y')
+
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f LEFT JOIN dim_unique d ON f.fk = d.id
+WHERE f.fk <= 2
+----
+1	10	x
+1	40	x
+2	20	y
+2	50	y
+
+# --- Test 5: Multi-column key ---
+statement ok
+CREATE TABLE dim_multi(a INTEGER, b INTEGER, label TEXT, PRIMARY KEY(a, b))
+
+statement ok
+INSERT INTO dim_multi VALUES (1, 1, 'aa'), (2, 2, 'bb')
+
+statement ok
+CREATE TABLE fact_multi(fa INTEGER, fb INTEGER, value INTEGER)
+
+statement ok
+INSERT INTO fact_multi VALUES (1, 1, 10), (2, 2, 20), (3, 3, 30)
+
+query IIIT rowsort
+SELECT f.fa, f.fb, f.value, d.label
+FROM fact_multi f LEFT JOIN dim_multi d ON f.fa = d.a AND f.fb = d.b
+----
+1	1	10	aa
+2	2	20	bb
+3	3	30	NULL
+
+# --- Test 6: Large dataset correctness ---
+statement ok
+CREATE TABLE big_dim AS SELECT range::INTEGER AS id, 'val_' || range AS label FROM range(1, 10001)
+
+statement ok
+ALTER TABLE big_dim ADD PRIMARY KEY (id)
+
+statement ok
+CREATE TABLE big_fact AS SELECT (range % 15000)::INTEGER AS fk FROM range(1, 50001)
+
+# Count should equal big_fact row count (LEFT JOIN preserves LHS cardinality)
+query I
+SELECT COUNT(*) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+50000
+
+# Matched count: keys 1..10000 in dim, fact has keys 0..14999 (range%15000)
+# keys 1..10000 match (10000 keys), each appears ceil(50000/15000)~3-4 times
+query I
+SELECT COUNT(d.label) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+35000
+
+# --- Test 7: Aggregation correctness ---
+query I
+SELECT SUM(f.fk) FROM fact f LEFT JOIN dim d ON f.fk = d.id
+----
+108
+
+# --- Test 8: Multiple output columns from RHS ---
+statement ok
+CREATE TABLE dim_wide(id INTEGER PRIMARY KEY, a TEXT, b TEXT, c INTEGER)
+
+statement ok
+INSERT INTO dim_wide VALUES (1, 'x', 'y', 100), (2, 'p', 'q', 200)
+
+query IITTT rowsort
+SELECT f.fk, f.value, d.a, d.b, d.c
+FROM fact f LEFT JOIN dim_wide d ON f.fk = d.id
+WHERE f.fk <= 3
+----
+1	10	x	y	100
+1	40	x	y	100
+2	20	p	q	200
+2	50	p	q	200
+3	30	NULL	NULL	NULL
+
+# --- Test 9: NULL join keys on LHS (should get NULL-padded RHS) ---
+statement ok
+INSERT INTO fact VALUES (NULL, 777)
+
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f LEFT JOIN dim d ON f.fk = d.id
+WHERE f.value = 777
+----
+NULL	777	NULL
+
+# --- Test 10: FULL OUTER JOIN should NOT use unique optimization ---
+# (NextUniqueLeftJoin doesn't mark build-side matches, so FULL OUTER would be wrong)
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f FULL OUTER JOIN dim d ON f.fk = d.id
+WHERE d.id > 3 OR f.fk IS NULL
+----
+NULL	777	NULL
+NULL	NULL	d
+NULL	NULL	e
+
+# --- Test 11: Parallel execution correctness (multiple threads) ---
+statement ok
+PRAGMA threads=4
+
+query I
+SELECT COUNT(*) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+50000
+
+query I
+SELECT COUNT(d.label) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+35000
+
+statement ok
+PRAGMA threads=1
+
+# --- Test 17: External hash join (spill to disk) correctness ---
+statement ok
+PRAGMA debug_force_external=true
+
+# Basic correctness under external join: row count must be preserved
+query I
+SELECT COUNT(*) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+50000
+
+# Match count must be identical to non-external result
+query I
+SELECT COUNT(d.label) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+35000
+
+# Verify NULLs are correct: unmatched count = total - matched
+query I
+SELECT COUNT(*) - COUNT(d.label) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+15000
+
+# Aggregation correctness under external join
+query I
+SELECT SUM(f.fk) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+349980000
+
+# Small table external join with known exact results
+query IIT rowsort
+SELECT f.fk, f.value, d.label
+FROM fact f LEFT JOIN dim d ON f.fk = d.id
+WHERE f.fk IN (1, 99) OR f.fk IS NULL
+----
+1	10	a
+1	40	a
+99	999	NULL
+NULL	777	NULL
+
+statement ok
+PRAGMA debug_force_external=false
+
+# --- Test 18: External join with multiple threads ---
+statement ok
+PRAGMA debug_force_external=true
+
+statement ok
+PRAGMA threads=4
+
+query I
+SELECT COUNT(*) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+50000
+
+query I
+SELECT COUNT(d.label) FROM big_fact f LEFT JOIN big_dim d ON f.fk = d.id
+----
+35000
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+PRAGMA debug_force_external=false
+
