@@ -348,44 +348,60 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 			arrow_schema.release(arrow_schema_ptr);
 		}
 
-		ArrowArray arrow_array;
-		arrow_array.Init();
-		auto arrow_array_ptr = &arrow_array;
-		state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
-		REQUIRE(state == DuckDBSuccess);
-		REQUIRE(arrow_array.length == 4);
-		REQUIRE(arrow_array.n_children == 1);
+		// Loop through chunks since small STANDARD_VECTOR_SIZE builds split 4 rows
+		// across multiple Arrow arrays. Accumulate totals across all chunks.
+		idx_t total_rows = 0;
+		idx_t total_nulls = 0;
+		idx_t non_null_with_metadata_bytes = 0;
+		idx_t non_null_with_value_bytes = 0;
+		while (true) {
+			ArrowArray arrow_array;
+			arrow_array.Init();
+			auto arrow_array_ptr = &arrow_array;
+			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
+			REQUIRE(state == DuckDBSuccess);
+			if (arrow_array.length == 0) {
+				break;
+			}
+			REQUIRE(arrow_array.n_children == 1);
 
-		auto &variant_array = *arrow_array.children[0];
-		REQUIRE(variant_array.length == 4);
-		REQUIRE(variant_array.n_children == 2);
-		REQUIRE(variant_array.null_count == 1); // one NULL row out of four
+			auto &variant_array = *arrow_array.children[0];
+			REQUIRE(variant_array.length == arrow_array.length);
+			REQUIRE(variant_array.n_children == 2);
 
-		// Validity buffer must mark row 2 (the NULL) invalid.
-		auto validity_bytes = reinterpret_cast<const uint8_t *>(variant_array.buffers[0]);
-		REQUIRE(validity_bytes != nullptr);
-		auto bit_set = [&](idx_t i) {
-			return (validity_bytes[i / 8] >> (i % 8)) & 1;
-		};
-		REQUIRE(bit_set(0) == 1);
-		REQUIRE(bit_set(1) == 1);
-		REQUIRE(bit_set(2) == 0);
-		REQUIRE(bit_set(3) == 1);
+			auto &metadata_array = *variant_array.children[0];
+			auto &value_array = *variant_array.children[1];
+			REQUIRE(metadata_array.length == variant_array.length);
+			REQUIRE(value_array.length == variant_array.length);
+			auto metadata_offsets = reinterpret_cast<const int32_t *>(metadata_array.buffers[1]);
+			auto value_offsets = reinterpret_cast<const int32_t *>(value_array.buffers[1]);
+			REQUIRE(metadata_offsets != nullptr);
+			REQUIRE(value_offsets != nullptr);
 
-		// Both children must have binary buffers populated.
-		auto &metadata_array = *variant_array.children[0];
-		auto &value_array = *variant_array.children[1];
-		REQUIRE(metadata_array.length == 4);
-		REQUIRE(value_array.length == 4);
-		auto metadata_offsets = reinterpret_cast<const int32_t *>(metadata_array.buffers[1]);
-		auto value_offsets = reinterpret_cast<const int32_t *>(value_array.buffers[1]);
-		REQUIRE(metadata_offsets != nullptr);
-		REQUIRE(value_offsets != nullptr);
-		// Non-null row 0 produces bytes.
-		REQUIRE(metadata_offsets[1] > metadata_offsets[0]);
-		REQUIRE(value_offsets[1] > value_offsets[0]);
+			auto validity_bytes = reinterpret_cast<const uint8_t *>(variant_array.buffers[0]);
+			for (idx_t i = 0; i < static_cast<idx_t>(variant_array.length); i++) {
+				// validity buffer may be null if all rows in this chunk are valid.
+				const bool is_valid = validity_bytes == nullptr || ((validity_bytes[i / 8] >> (i % 8)) & 1);
+				if (is_valid) {
+					if (metadata_offsets[i + 1] > metadata_offsets[i]) {
+						non_null_with_metadata_bytes++;
+					}
+					if (value_offsets[i + 1] > value_offsets[i]) {
+						non_null_with_value_bytes++;
+					}
+				}
+			}
 
-		arrow_array.release(arrow_array_ptr);
+			total_rows += static_cast<idx_t>(variant_array.length);
+			total_nulls += static_cast<idx_t>(variant_array.null_count);
+			arrow_array.release(arrow_array_ptr);
+		}
+
+		REQUIRE(total_rows == 4);
+		REQUIRE(total_nulls == 1); // exactly one NULL variant across all chunks
+		REQUIRE(non_null_with_metadata_bytes == 3);
+		REQUIRE(non_null_with_value_bytes == 3);
+
 		duckdb_destroy_arrow(&arrow_result);
 		REQUIRE_NO_FAIL(tester.Query("DROP TABLE variants;"));
 	}
