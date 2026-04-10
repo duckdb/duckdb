@@ -33,10 +33,11 @@ public:
 	buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-	                               idx_t end) override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 
 private:
 	ValidityMask validity;

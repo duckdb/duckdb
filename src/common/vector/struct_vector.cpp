@@ -84,18 +84,21 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                   idx_t end) {
-	auto &src = source.Cast<const VectorStructBuffer>();
+buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto &child_types = StructType::GetChildTypes(type);
 	auto result = make_buffer<VectorStructBuffer>();
 	auto &result_children = result->GetChildren();
-	for (idx_t i = 0; i < src.children.size(); i++) {
+	for (idx_t i = 0; i < children.size(); i++) {
 		result_children.emplace_back(child_types[i].second);
-		result_children[i].Slice(src.children[i], offset, end);
+		result_children[i].Slice(children[i], offset, end);
 	}
-	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	result->GetValidityMask().Slice(validity, offset, end - offset);
 	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                           idx_t count) {
+	return make_buffer<VectorStructBuffer>(*this, sel, count);
 }
 
 void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
@@ -106,13 +109,6 @@ void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &forma
 	}
 	format.data = nullptr;
 	format.validity = validity;
-}
-
-buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return nullptr;
-	}
-	return make_buffer<VectorStructBuffer>(*this, sel, count);
 }
 
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

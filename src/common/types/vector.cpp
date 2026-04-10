@@ -170,23 +170,10 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 }
 
 void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
-	D_ASSERT(end >= offset);
-	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR || offset == 0) {
-		Reference(other);
-		return;
+	buffer = other.buffer->Slice(GetType(), offset, end);
+	if (!buffer) {
+		buffer = other.buffer;
 	}
-	if (other.GetVectorType() != VectorType::FLAT_VECTOR) {
-		// we can slice the data directly only for flat vectors
-		// for non-flat vectors slice using a selection vector instead
-		idx_t count = end - offset;
-		SelectionVector sel(count);
-		for (idx_t i = 0; i < count; i++) {
-			sel.set_index(i, offset + i);
-		}
-		Slice(other, sel, count);
-		return;
-	}
-	buffer = other.buffer->Slice(GetType(), *other.buffer, offset, end);
 }
 
 void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {

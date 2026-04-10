@@ -60,7 +60,8 @@ void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	format.validity = FlatVector::Validity(entry->data);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                         idx_t count) {
 	// dictionary vector slice: slice the dictionary instead of stacking dictionaries
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");

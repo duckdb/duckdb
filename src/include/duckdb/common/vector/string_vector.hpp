@@ -51,10 +51,6 @@ public:
 		heap = nullptr;
 	}
 
-	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-	                               idx_t end) override;
-	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
-
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}
@@ -62,6 +58,10 @@ public:
 public:
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 
 private:
 	StringHeap &AllocateHeap(Allocator &allocator);

@@ -140,13 +140,11 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	child->Verify(child_sel, child_count);
 }
 
-buffer_ptr<VectorBuffer> VectorListBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                 idx_t end) {
-	auto &src = source.Cast<const VectorListBuffer>();
+buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
-	auto offset_ptr = src.data_ptr + type_size * offset;
-	auto result = make_buffer<VectorListBuffer>(offset_ptr, src);
-	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	auto offset_ptr = data_ptr + type_size * offset;
+	auto result = make_buffer<VectorListBuffer>(offset_ptr, *this);
+	result->GetValidityMask().Slice(validity, offset, end - offset);
 	return result;
 }
 

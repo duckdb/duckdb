@@ -96,9 +96,12 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                             idx_t end) {
-	throw InternalException("Unimplemented Slice with offset for this buffer type");
+buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant vectors do not need to get sliced
+		return nullptr;
+	}
+	return SliceInternal(type, offset, end);
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
@@ -106,6 +109,21 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 		// constant vectors do not need to get sliced
 		return nullptr;
 	}
+	return SliceInternal(type, sel, count);
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// we can slice the data directly only for standard vectors
+	// for non-flat vectors slice using a selection vector instead
+	idx_t count = end - offset;
+	SelectionVector sel(count);
+	for (idx_t i = 0; i < count; i++) {
+		sel.set_index(i, offset + i);
+	}
+	return Slice(type, sel, count);
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	// default slice: flatten and then wrap in a dictionary
 	auto new_buffer = Flatten(type, sel, count);
 

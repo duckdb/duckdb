@@ -135,14 +135,19 @@ public:
 	virtual string ToString(const LogicalType &type, idx_t count) const;
 	virtual string ToString(const LogicalType &type) const;
 	//! Slice the buffer with a selection vector, returning a new buffer
-	virtual buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const SelectionVector &sel, idx_t count);
+	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
-	virtual buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-	                                       idx_t end);
+	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, idx_t offset, idx_t end);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Resize the buffer's data allocation
 	virtual buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const;
+
+protected:
+	//! Slice the buffer with a selection vector, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
+	//! Slice the buffer with an offset range, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end);
 
 protected:
 	VectorType vector_type;

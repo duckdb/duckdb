@@ -53,13 +53,11 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                     idx_t end) {
-	auto &src = source.Cast<const StandardVectorBuffer>();
+buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
-	auto offset_ptr = src.data_ptr + type_size * offset;
+	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<StandardVectorBuffer>(offset_ptr);
-	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	result->GetValidityMask().Slice(validity, offset, end - offset);
 	return result;
 }
 

@@ -76,10 +76,12 @@ public:
 
 public:
 	idx_t GetAllocationSize() const override;
-	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	SelectionVector sel_vector;

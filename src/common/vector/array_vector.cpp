@@ -62,13 +62,11 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                  idx_t end) {
-	auto &src = source.Cast<const VectorArrayBuffer>();
+buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto result = make_buffer<VectorArrayBuffer>(type);
 	auto &result_child = result->GetChild();
-	result_child.Slice(*src.child, offset * src.array_size, end * src.array_size);
-	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	result_child.Slice(*child, offset * array_size, end * array_size);
+	result->GetValidityMask().Slice(validity, offset, end - offset);
 	return result;
 }
 

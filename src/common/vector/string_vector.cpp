@@ -64,16 +64,14 @@ idx_t StringHeapHolder::GetAllocationSize() const {
 	return heap.AllocationSize();
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                   idx_t end) {
-	auto &src = source.Cast<const VectorStringBuffer>();
+buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
-	auto offset_ptr = src.data_ptr + type_size * offset;
+	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<VectorStringBuffer>(offset_ptr);
-	result->GetValidityMask().Slice(src.validity, offset, end - offset);
+	result->GetValidityMask().Slice(validity, offset, end - offset);
 	// keep the heap alive
-	if (src.auxiliary_data) {
-		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(src.auxiliary_data));
+	if (auxiliary_data) {
+		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 	}
 	return result;
 }
