@@ -133,12 +133,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, id
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	// default slice: flatten and then wrap in a dictionary
-	auto new_buffer = Flatten(type, sel, count);
-
-	Vector child_vector(type, new_buffer);
-	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
-	return make_buffer<DictionaryBuffer>(sel, std::move(entry));
+	// default slice: flatten with a selection vector and then wrap in a dictionary
+	return Flatten(type, sel, count);
 }
 
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

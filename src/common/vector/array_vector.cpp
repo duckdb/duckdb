@@ -62,47 +62,46 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	// FIXME: verify validity, arrays have the same validity rules as structs
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
                                                     idx_t count) const {
-	if (!sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector
 		child->Flatten(GetChildSize());
 		return nullptr;
 	}
-	throw InternalException("FIXME: flatten array buffer");
-
-	// determine the selection vector to use
+	// figure out which selection vector to use
 	SelectionVector owned_sel;
-	const SelectionVector *active_sel = &sel;
-	if (!sel.IsSet()) {
-		D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR);
-		active_sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
+	const_reference<SelectionVector> sel_ref(input_sel);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant - all zero's
+		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
 	}
-	auto flat_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
-	auto result = make_buffer<VectorArrayBuffer>(type, flat_count);
-	auto &new_child = result->GetChild();
+	auto &sel = sel_ref.get();
 
-	// copy validity using zero selection vector
+	// now construct the result
+	auto result = make_buffer<VectorArrayBuffer>(nullptr, array_size, count);
+
+	// first copy over the validity
 	auto &result_validity = result->GetValidityMask();
-	result_validity.CopySel(validity, *active_sel, 0, 0, count);
+	result_validity.CopySel(validity, sel, 0, 0, count);
 
-	// unpack the child vector by broadcasting array elements
-	SelectionVector child_sel(count * array_size);
+	// now flatten the child vector
+	auto target_child_size = count * array_size;
+	auto child_result = make_uniq<Vector>(Vector::Ref(*child));
+
+	SelectionVector child_sel(target_child_size);
 	for (idx_t array_idx = 0; array_idx < count; array_idx++) {
-		auto src_array_idx = active_sel->get_index(array_idx);
+		auto src_array_idx = sel.get_index(array_idx);
 		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
 			auto position = array_idx * array_size + elem_idx;
 			auto src_position = src_array_idx * array_size + elem_idx;
-			// broadcast the validity
-			if (FlatVector::IsNull(*child, src_position)) {
-				FlatVector::SetNull(new_child, position, true);
-			}
 			child_sel.set_index(position, src_position);
 		}
 	}
+	// flatten the child using the child selection vector
+	child_result->Flatten(child_sel, target_child_size);
 
-	// copy over the data to the new buffer
-	VectorOperations::Copy(*child, new_child, child_sel, count * array_size, 0, 0);
+	result->child = std::move(child_result);
 	return result;
 }
 
