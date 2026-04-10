@@ -18,16 +18,19 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	case duckdb_libpgquery::T_PGBitString: {
 		// SQL hex string literal X'...' - convert to BLOB
 		// PostgreSQL parser returns the string as "xDEADBEEF" format
-		string hex_str(val.val.str);
+		const char* hex_str = val.val.str;
+		if (!hex_str) {
+			throw ParserException("Invalid hexadecimal string literal: null string");
+		}
 
 		// Skip the 'x' or 'X' prefix if present
 		idx_t start_pos = 0;
-		if (!hex_str.empty() && (hex_str[0] == 'x' || hex_str[0] == 'X')) {
+		if (hex_str[0] == 'x' || hex_str[0] == 'X') {
 			start_pos = 1;
 		}
 
 		// Validate and convert hex string to binary
-		idx_t hex_len = hex_str.size() - start_pos;
+		idx_t hex_len = strlen(hex_str + start_pos);
 		if (hex_len % 2 != 0) {
 			throw ParserException("Invalid hexadecimal string literal: odd number of hex digits");
 		}
@@ -37,7 +40,7 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 
 		for (idx_t i = 0; i < blob_size; i++) {
 			int high = Blob::HEX_MAP[static_cast<unsigned char>(hex_str[start_pos + i * 2])];
-			int low = Blob::HEX_MAP[static_cast<unsigned char>(hex_str[start_pos + i * 2 + 1])];
+			int low  = Blob::HEX_MAP[static_cast<unsigned char>(hex_str[start_pos + i * 2 + 1])];
 			if (high < 0 || low < 0) {
 				throw ParserException("Invalid hexadecimal string literal: invalid hex character");
 			}
