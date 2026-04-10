@@ -64,7 +64,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Slice(const LogicalType &type, co
 	return result;
 }
 
-void StandardVectorBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
 	} else {

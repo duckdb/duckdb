@@ -139,7 +139,7 @@ public:
 	//! Slice the buffer with an offset range, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end);
 	//! Create a UnifiedVectorFormat from the buffer's data
-	virtual void ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const;
+	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Collect resize information for this buffer and children
 	virtual void FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier);
 	//! Resize the buffer's data allocation

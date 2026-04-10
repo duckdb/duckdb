@@ -78,7 +78,7 @@ void VectorArrayBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeInf
 	child->FindResizeInfos(resize_infos, new_multiplier);
 }
 
-void VectorArrayBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
 	} else {

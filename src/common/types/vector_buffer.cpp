@@ -139,12 +139,8 @@ void VectorBuffer::Resize(Vector &vector, idx_t current_size, idx_t new_size) {
 	}
 }
 
-void VectorBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
-	// default: flatten (handles FSST, SEQUENCE, etc.), then use incremental sel
-	vector.Flatten(count);
-	format.sel = FlatVector::IncrementalSelectionVector();
-	format.data = FlatVector::GetData(vector);
-	format.validity = FlatVector::Validity(vector);
+void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end) {

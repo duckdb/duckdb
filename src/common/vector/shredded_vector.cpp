@@ -24,10 +24,6 @@ void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	shredded_data->Verify(sel, count);
 }
 
-void ShreddedVectorBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
-	ShreddedVector::Unshred(vector, count);
-	vector.ToUnifiedFormat(count, format);
-}
 
 void ShreddedVectorBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
 	vector.Flatten(count);

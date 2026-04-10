@@ -150,7 +150,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::Slice(const LogicalType &type, const 
 	return result;
 }
 
-void VectorListBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
 	} else {

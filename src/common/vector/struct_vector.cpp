@@ -105,7 +105,7 @@ void VectorStructBuffer::FindResizeInfos(Vector &vector, duckdb::vector<ResizeIn
 	}
 }
 
-void VectorStructBuffer::ToUnifiedFormat(const Vector &vector, idx_t count, UnifiedVectorFormat &format) const {
+void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
 	} else {
