@@ -64,7 +64,6 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	 *	 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	 *	 2. `UPDATE t SET col = <expression>;`
 	 *	 3. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
-
 	 *
 	 * This workaround exists because, when statements like this were executed:
 	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
