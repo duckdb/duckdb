@@ -1,13 +1,28 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
+template <typename T>
+class RestoreValue {
+public:
+	explicit RestoreValue(T &ref) : ref(ref), val(ref) {
+	}
+	~RestoreValue() {
+		ref = val;
+	}
+
+private:
+	T &ref;
+	const T val;
+};
+
 unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &def) {
+	RestoreValue<bool> save_in_macro(in_macro_definition);
+	in_macro_definition = true;
 	unique_ptr<MacroFunction> macro_func;
 	if (def.function) {
 		auto expression = TransformExpression(def.function);

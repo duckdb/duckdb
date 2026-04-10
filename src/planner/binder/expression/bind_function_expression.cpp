@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -322,11 +323,17 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	auto func = BindAndQualifyFunction(function, true);
 
-	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
-	    (function.distinct || function.filter || !function.order_bys->orders.empty())) {
-		throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
-		                            "applicable to aggregate functions.",
-		                            function.function_name, CatalogTypeToString(func->type));
+	switch (func->type) {
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
+		break;
+	default:
+		if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
+			                            "applicable to window and aggregate functions.",
+			                            function.function_name, CatalogTypeToString(func->type));
+		}
+		break;
 	}
 
 	switch (func->type) {
@@ -341,9 +348,14 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, func->Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
-	default:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		// aggregate function
 		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
+		// window function
+		return BindWindow(function, func->Cast<WindowFunctionCatalogEntry>(), depth);
+	default:
+		throw InvalidInputException("Unsupported catalog type when binding function");
 	}
 }
 
@@ -552,6 +564,10 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
+BindResult ExpressionBinder::BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth) {
+	return BindUnsupportedExpression(expr, depth, UnsupportedWindowMessage());
+}
+
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
 }
@@ -561,6 +577,10 @@ void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding
 
 string ExpressionBinder::UnsupportedAggregateMessage() {
 	return "Aggregate functions are not supported here";
+}
+
+string ExpressionBinder::UnsupportedWindowMessage() {
+	return "Window functions are not supported here";
 }
 
 string ExpressionBinder::UnsupportedUnnestMessage() {

@@ -101,7 +101,6 @@ vector<unsigned char> &FSSTVector::GetDecompressBuffer(const Vector &vector) {
 void FSSTVector::Create(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder, const idx_t string_block_limit,
                         idx_t capacity) {
 	vector.buffer = make_buffer<VectorFSSTStringBuffer>(capacity);
-	vector.SetVectorType(VectorType::FSST_VECTOR);
 	auto &fsst_string_buffer = vector.buffer->Cast<VectorFSSTStringBuffer>();
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder, string_block_limit);
 }

@@ -19,6 +19,7 @@
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -295,6 +296,16 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
+			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
+				state.row_number_base = scan_state.row_number_base.GetIndex();
+			}
+			if (state.row_number_base.IsValid()) {
+				// if we are scanning the row_number virtual column - shift the base based on the number of visible rows
+				// (i.e. non-deleted rows) for the current transaction
+				scan_state.row_number_base = state.row_number_base.GetIndex();
+				auto &tx = DuckTransaction::Get(context, GetAttached());
+				state.row_number_base = state.row_number_base.GetIndex() + current_row_group.GetVisibleRowCount(tx);
+			}
 		}
 		D_ASSERT(collection);
 		D_ASSERT(row_group);

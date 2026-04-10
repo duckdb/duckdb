@@ -417,6 +417,17 @@ WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr,
       partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)) {
+	if (wexpr.window) {
+		const auto &wfunc = *wexpr.window;
+		if (wfunc.HasBoundsCallback()) {
+			wfunc.GetBoundsCallback()(required, wexpr);
+			AddImpliedBounds(required, wexpr);
+		}
+	} else {
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+		AddImpliedBounds(required, wexpr);
+	}
 }
 
 void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range,
