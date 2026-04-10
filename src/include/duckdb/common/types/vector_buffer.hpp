@@ -134,8 +134,8 @@ public:
 	//! Produce a string representation of buffer contents (debug only)
 	virtual string ToString(const LogicalType &type, idx_t count) const;
 	virtual string ToString(const LogicalType &type) const;
-	//! Slice the vector with a selection vector
-	virtual void Slice(Vector &vector, const SelectionVector &sel, idx_t count);
+	//! Slice the buffer with a selection vector, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end);
 	//! Create a UnifiedVectorFormat from the buffer's data

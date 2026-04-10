@@ -198,7 +198,25 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (!sel.IsSet() || count == 0) {
 		return;
 	}
-	buffer->Slice(*this, sel, count);
+	auto new_buffer = buffer->Slice(sel, count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
+	} else if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// constant: nothing to do
+		return;
+	} else {
+		// FSST/SEQUENCE/SHREDDED returned nullptr: flatten first, then wrap in dictionary
+		Flatten(count);
+		new_buffer = buffer->Slice(sel, count);
+		if (new_buffer) {
+			buffer = std::move(new_buffer);
+		} else {
+			// flat data buffer: wrap in a dictionary
+			Vector child_vector(Vector::Ref(*this));
+			auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+			buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
+		}
+	}
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {

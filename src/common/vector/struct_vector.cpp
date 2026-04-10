@@ -115,12 +115,21 @@ void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &forma
 	format.validity = validity;
 }
 
-void VectorStructBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return;
+		return nullptr;
 	}
-	// structs are sliced by creating a new struct buffer with sliced children
-	vector.buffer = make_buffer<VectorStructBuffer>(vector, sel, count);
+	// create a new struct buffer with sliced children and validity
+	auto result = make_buffer<VectorStructBuffer>();
+	auto &result_children = result->GetChildren();
+	for (auto &child : children) {
+		result_children.emplace_back(child, sel, count);
+	}
+	if (count > STANDARD_VECTOR_SIZE) {
+		result->GetValidityMask().Resize(count);
+	}
+	result->GetValidityMask().CopySel(validity, sel, 0, 0, count);
+	return result;
 }
 
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

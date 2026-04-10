@@ -60,7 +60,7 @@ void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	format.validity = FlatVector::Validity(entry->data);
 }
 
-void DictionaryBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> DictionaryBuffer::Slice(const SelectionVector &sel, idx_t count) {
 	auto dictionary_size_val = dictionary_size;
 	auto dictionary_id_val = dictionary_id;
 	if (entry) {
@@ -73,12 +73,12 @@ void DictionaryBuffer::Slice(Vector &vector, const SelectionVector &sel, idx_t c
 	}
 	auto sliced_dictionary = sel_vector.Slice(sel, count);
 	auto entry_ptr = GetEntryPtr();
-	vector.buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry_ptr));
+	auto result = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry_ptr));
 	if (dictionary_size_val.IsValid()) {
-		auto &dict_buffer = vector.buffer->Cast<DictionaryBuffer>();
-		dict_buffer.SetDictionarySize(dictionary_size_val.GetIndex());
-		dict_buffer.SetDictionaryId(std::move(dictionary_id_val));
+		result->SetDictionarySize(dictionary_size_val.GetIndex());
+		result->SetDictionaryId(std::move(dictionary_id_val));
 	}
+	return result;
 }
 
 Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {

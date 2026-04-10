@@ -36,7 +36,7 @@ public:
 public:
 	idx_t GetAllocationSize() const override;
 	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end) override;
-	void Slice(Vector &vector, const SelectionVector &sel, idx_t count) override;
+	buffer_ptr<VectorBuffer> Slice(const SelectionVector &sel, idx_t count) override;
 	void FindResizeInfos(Vector &vector, duckdb::vector<ResizeInfo> &resize_infos, idx_t multiplier) override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
