@@ -19,6 +19,7 @@
 namespace duckdb {
 
 class BoundWindowExpression;
+class WindowExecutorGlobalState;
 
 struct WindowInputExpression {
 	WindowInputExpression(DataChunk &chunk, column_t col_idx)
@@ -68,43 +69,45 @@ private:
 	const column_t col_idx;
 };
 
-struct WindowBoundariesState {
+class WindowBoundariesState {
+public:
+	using CollectionPtr = optional_ptr<WindowCollection>;
+
 	static bool HasPrecedingRange(const BoundWindowExpression &wexpr);
 	static bool HasFollowingRange(const BoundWindowExpression &wexpr);
 	static void AddImpliedBounds(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr);
 	static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n);
 	static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx_t &n);
-
-	WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size);
-
-	// Generate the partition start indices
-	void PartitionBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-	                    const ValidityMask &partition_mask);
-	void PartitionEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-	                  const ValidityMask &partition_mask);
-	void PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-	               const ValidityMask &partition_mask, const ValidityMask &order_mask);
-	void PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, const ValidityMask &partition_mask,
-	             const ValidityMask &order_mask);
-	void ValidBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-	                const ValidityMask &partition_mask, const ValidityMask &order_mask,
-	                optional_ptr<WindowCursor> range);
-	void ValidEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump, const ValidityMask &partition_mask,
-	              const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
-	void FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, WindowInputExpression &boundary_begin,
-	                const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
-	void FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, WindowInputExpression &boundary_end,
-	              const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
-
 	static void ClampFrame(const idx_t count, idx_t *values, const idx_t *begin, const idx_t *end) {
 		for (idx_t i = 0; i < count; ++i) {
 			values[i] = MinValue(MaxValue(values[i], begin[i]), end[i]);
 		}
 	}
 
-	void Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range, const idx_t count,
-	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
-	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
+	WindowBoundariesState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
+
+	void Finalize(CollectionPtr collection);
+	void UpdateBounds(idx_t row_idx, DataChunk &eval_chunk);
+
+	//! The requested bounds.
+	DataChunk bounds;
+	//! The state used for reading the range collection
+	unique_ptr<WindowCursor> range;
+
+private:
+	// Generate the partition start indices
+	void PartitionBegin(idx_t row_idx, const idx_t count, bool is_jump);
+	void PartitionEnd(idx_t row_idx, const idx_t count, bool is_jump);
+	void PeerBegin(idx_t row_idx, const idx_t count, bool is_jump);
+	void PeerEnd(idx_t row_idx, const idx_t count);
+	void ValidBegin(idx_t row_idx, const idx_t count, bool is_jump);
+	void ValidEnd(idx_t row_idx, const idx_t count, bool is_jump);
+	void FrameBegin(idx_t row_idx, const idx_t count, WindowInputExpression &boundary_begin);
+	void FrameEnd(idx_t row_idx, const idx_t count, WindowInputExpression &boundary_end);
+
+	// Frame management
+	const ValidityMask &partition_mask;
+	const ValidityMask &order_mask;
 
 	// Cached lookups
 	WindowBoundsSet required;
@@ -112,11 +115,14 @@ struct WindowBoundariesState {
 	const idx_t input_size;
 	const WindowBoundary start_boundary;
 	const WindowBoundary end_boundary;
+	const idx_t boundary_start_idx;
+	const idx_t boundary_end_idx;
 	const size_t partition_count;
 	const size_t order_count;
 	const OrderType range_sense;
 	const bool has_preceding_range;
 	const bool has_following_range;
+	const idx_t range_idx;
 
 	// Carried between chunks
 	idx_t next_pos = 0;
