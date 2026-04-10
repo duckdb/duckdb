@@ -52,10 +52,6 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 	}
 }
 
-bool WindowExecutor::IgnoreNulls() const {
-	return wexpr.ignore_nulls;
-}
-
 void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
                               OperatorSinkInput &sink) const {
 	auto &gbstate = sink.global_state.Cast<WindowExecutorGlobalState>();

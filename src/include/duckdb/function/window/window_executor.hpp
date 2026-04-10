@@ -74,8 +74,6 @@ public:
 	virtual ~WindowExecutor() {
 	}
 
-	virtual bool IgnoreNulls() const;
-
 	virtual unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
 	                                                   const ValidityMask &partition_mask,
 	                                                   const ValidityMask &order_mask) const;
