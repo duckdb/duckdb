@@ -191,7 +191,6 @@ public:
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 
 	bool in_window_definition = false;
-	bool in_macro_definition = false;
 
 	ParserOptions options;
 };
