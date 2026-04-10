@@ -137,7 +137,8 @@ public:
 	//! Slice the buffer with a selection vector, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
-	virtual buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end);
+	virtual buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
+	                                       idx_t end);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Collect resize information for this buffer and children

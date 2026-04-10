@@ -85,7 +85,7 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                    idx_t end) {
+                                                   idx_t end) {
 	auto &src = source.Cast<const VectorStructBuffer>();
 	auto &child_types = StructType::GetChildTypes(type);
 	auto result = make_buffer<VectorStructBuffer>();

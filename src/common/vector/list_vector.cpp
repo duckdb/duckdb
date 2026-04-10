@@ -141,7 +141,7 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                  idx_t end) {
+                                                 idx_t end) {
 	auto &src = source.Cast<const VectorListBuffer>();
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto offset_ptr = src.data_ptr + type_size * offset;

@@ -143,7 +143,8 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset, idx_t end) {
+buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
+                                             idx_t end) {
 	throw InternalException("Unimplemented Slice with offset for this buffer type");
 }
 

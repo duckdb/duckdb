@@ -65,7 +65,7 @@ idx_t StringHeapHolder::GetAllocationSize() const {
 }
 
 buffer_ptr<VectorBuffer> VectorStringBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                    idx_t end) {
+                                                   idx_t end) {
 	auto &src = source.Cast<const VectorStringBuffer>();
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto offset_ptr = src.data_ptr + type_size * offset;

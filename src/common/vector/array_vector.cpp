@@ -63,7 +63,7 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Slice(const LogicalType &type, const VectorBuffer &source, idx_t offset,
-                                                   idx_t end) {
+                                                  idx_t end) {
 	auto &src = source.Cast<const VectorArrayBuffer>();
 	auto result = make_buffer<VectorArrayBuffer>(type);
 	auto &result_child = result->GetChild();
