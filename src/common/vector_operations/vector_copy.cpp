@@ -40,8 +40,6 @@ static const ValidityMask &ExtractValidityMask(const Vector &v) {
 	switch (v.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return FlatVector::Validity(v);
-	case VectorType::FSST_VECTOR:
-		return FSSTVector::Validity(v);
 	default:
 		throw InternalException("Unsupported vector type in vector copy");
 	}
@@ -75,22 +73,17 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
 			finished = true;
 			break;
-		case VectorType::SEQUENCE_VECTOR:
-		case VectorType::SHREDDED_VECTOR:
-		case VectorType::FSST_VECTOR: {
-			// for exotic types we flatten followed by copying
-			Vector flattened_vector(source->GetType());
-			flattened_vector.Reference(*source);
-			flattened_vector.Flatten(source_count);
-			Copy(flattened_vector, target, *FlatVector::IncrementalSelectionVector(), source_count, 0, target_offset,
-			     copy_count);
-			return;
-		}
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
-		default:
-			throw NotImplementedException("FIXME unimplemented vector type for VectorOperations::Copy");
+		default: {
+			// for exotic types we flatten followed by copying
+			Vector flattened_vector(Vector::Ref(*source));
+			flattened_vector.Flatten(*sel, source_offset + source_count);
+			Copy(flattened_vector, target, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
+			     target_offset, copy_count);
+			return;
+		}
 		}
 	}
 
