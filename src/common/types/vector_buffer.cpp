@@ -148,12 +148,17 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Vect
 	throw InternalException("Unimplemented Slice with offset for this buffer type");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Slice(const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant vectors do not need to get sliced
 		return nullptr;
 	}
-	// default: return nullptr to indicate the caller should wrap in a dictionary
-	return nullptr;
+	// default slice: flatten and then wrap in a dictionary
+	auto new_buffer = Flatten(type, sel, count);
+
+	Vector child_vector(type, new_buffer);
+	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
+	return make_buffer<DictionaryBuffer>(sel, std::move(entry));
 }
 
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

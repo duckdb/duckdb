@@ -19,11 +19,6 @@ void VectorFSSTStringBuffer::Verify(const LogicalType &type, const SelectionVect
 	D_ASSERT(vector_type == VectorType::FSST_VECTOR);
 }
 
-buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Slice(const SelectionVector &sel, idx_t count) {
-	// return nullptr to indicate the caller should flatten first
-	return nullptr;
-}
-
 Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	if (!validity.RowIsValid(index)) {
 		return Value(type);
@@ -50,7 +45,7 @@ buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type
 	idx_t total_count = GetCount();
 	// create a non-owning buffer_ptr to construct a temporary source vector
 	buffer_ptr<VectorBuffer> non_owning_ref(this, [](VectorBuffer *) {});
-	Vector source(type, VectorType::FSST_VECTOR, std::move(non_owning_ref));
+	Vector source(type, std::move(non_owning_ref));
 	// create vector to decompress into
 	Vector result(type, total_count);
 	// now copy the data of this vector to the other vector, decompressing the strings in the process

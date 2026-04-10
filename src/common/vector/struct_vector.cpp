@@ -17,14 +17,14 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 	validity.Resize(capacity);
 }
 
-VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count)
+VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER) {
-	auto &other_vector = StructVector::GetEntries(other);
+	auto &other_vector = other.children;
 	for (auto &child_vector : other_vector) {
 		children.emplace_back(child_vector, sel, count);
 	}
 	// slice the validity mask of the original struct
-	auto &original_validity = other.GetBuffer()->GetValidityMask();
+	auto &original_validity = other.GetValidityMask();
 	if (count > STANDARD_VECTOR_SIZE) {
 		validity.Resize(count);
 	}
@@ -115,21 +115,11 @@ void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &forma
 	format.validity = validity;
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const SelectionVector &sel, idx_t count) {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		return nullptr;
 	}
-	// create a new struct buffer with sliced children and validity
-	auto result = make_buffer<VectorStructBuffer>();
-	auto &result_children = result->GetChildren();
-	for (auto &child : children) {
-		result_children.emplace_back(child, sel, count);
-	}
-	if (count > STANDARD_VECTOR_SIZE) {
-		result->GetValidityMask().Resize(count);
-	}
-	result->GetValidityMask().CopySel(validity, sel, 0, 0, count);
-	return result;
+	return make_buffer<VectorStructBuffer>(*this, sel, count);
 }
 
 void VectorStructBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
@@ -220,7 +210,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, co
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto child_result = children[i].GetBuffer()->Flatten(children[i].GetType(), active_sel, count);
 		if (child_result) {
-			Vector tmp(children[i].GetType(), VectorType::FLAT_VECTOR, std::move(child_result));
+			Vector tmp(children[i].GetType(), std::move(child_result));
 			result_children[i].CopyBuffer(tmp);
 		} else {
 			result_children[i].CopyBuffer(children[i]);

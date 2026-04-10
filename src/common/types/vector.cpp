@@ -37,7 +37,7 @@ namespace duckdb {
 
 enum class VectorConstructorAction { REFERENCE_VECTOR };
 
-Vector::Vector(LogicalType type_p, VectorType vector_type, buffer_ptr<VectorBuffer> buffer_p)
+Vector::Vector(LogicalType type_p, buffer_ptr<VectorBuffer> buffer_p)
     : type(std::move(type_p)), buffer(std::move(buffer_p)) {
 }
 
@@ -198,24 +198,9 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (!sel.IsSet() || count == 0) {
 		return;
 	}
-	auto new_buffer = buffer->Slice(sel, count);
+	auto new_buffer = buffer->Slice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
-	} else if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// constant: nothing to do
-		return;
-	} else {
-		// FSST/SEQUENCE/SHREDDED returned nullptr: flatten first, then wrap in dictionary
-		Flatten(count);
-		new_buffer = buffer->Slice(sel, count);
-		if (new_buffer) {
-			buffer = std::move(new_buffer);
-		} else {
-			// flat data buffer: wrap in a dictionary
-			Vector child_vector(Vector::Ref(*this));
-			auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
-			buffer = make_buffer<DictionaryBuffer>(sel, std::move(entry));
-		}
 	}
 }
 

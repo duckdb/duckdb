@@ -511,7 +511,7 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::Copy() const {
-	Vector values_insert_order_copy(LogicalType::VARCHAR, VectorType::FLAT_VECTOR, nullptr);
+	Vector values_insert_order_copy(LogicalType::VARCHAR, nullptr);
 	values_insert_order_copy.Reference(values_insert_order);
 	return make_shared_ptr<EnumTypeInfo>(values_insert_order_copy, dict_size);
 }

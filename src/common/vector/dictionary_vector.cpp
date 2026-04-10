@@ -60,25 +60,22 @@ void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	format.validity = FlatVector::Validity(entry->data);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Slice(const SelectionVector &sel, idx_t count) {
-	auto dictionary_size_val = dictionary_size;
-	auto dictionary_id_val = dictionary_id;
-	if (entry) {
-		if (!entry->id.empty()) {
-			dictionary_id_val = entry->id;
-		}
-		if (entry->size.IsValid()) {
-			dictionary_size_val = entry->size;
-		}
+buffer_ptr<VectorBuffer> DictionaryBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	// dictionary vector slice: slice the dictionary instead of stacking dictionaries
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
-	auto sliced_dictionary = sel_vector.Slice(sel, count);
-	auto entry_ptr = GetEntryPtr();
-	auto result = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry_ptr));
-	if (dictionary_size_val.IsValid()) {
-		result->SetDictionarySize(dictionary_size_val.GetIndex());
-		result->SetDictionaryId(std::move(dictionary_id_val));
+	auto dictionary_size = GetDictionarySize();
+	auto dictionary_id = GetDictionaryId();
+	auto sliced_dictionary = GetSelVector().Slice(sel, count);
+	auto entry = GetEntryPtr();
+	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), std::move(entry));
+	if (dictionary_size.IsValid()) {
+		auto &dict_buffer = new_buffer->Cast<DictionaryBuffer>();
+		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+		dict_buffer.SetDictionaryId(std::move(dictionary_id));
 	}
-	return result;
+	return new_buffer;
 }
 
 Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {

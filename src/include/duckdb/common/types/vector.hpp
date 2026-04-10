@@ -66,7 +66,7 @@ public:
 	//! Create a non-owning vector that references the specified data
 	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr);
 	//! Create a vector with an explicitly created vector buffer
-	DUCKDB_API Vector(LogicalType type, VectorType vector_type, buffer_ptr<VectorBuffer> buffer);
+	DUCKDB_API Vector(LogicalType type, buffer_ptr<VectorBuffer> buffer);
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 

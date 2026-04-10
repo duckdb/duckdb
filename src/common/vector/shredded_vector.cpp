@@ -24,11 +24,6 @@ void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 	shredded_data->Verify(sel, count);
 }
 
-buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Slice(const SelectionVector &sel, idx_t count) {
-	// return nullptr to indicate the caller should flatten first
-	return nullptr;
-}
-
 string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {
 	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
 	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
