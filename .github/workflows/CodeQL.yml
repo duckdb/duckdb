@@ -1,7 +1,6 @@
 name: CodeQL
 on:
   workflow_dispatch:
-  pull_request: # TODO: remove this before merging
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}

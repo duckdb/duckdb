@@ -31,7 +31,7 @@ query predicate edges(Function pred, Function succ) {
 }
 
 predicate isRollbackTransaction(Function f) {
-  regexpMatch("(^|::)DuckTransactionManager::RollbackTransaction$", f.getQualifiedName())
+  f.getQualifiedName() = "duckdb::DuckTransactionManager::RollbackTransaction"
 }
 
 predicate ignoredByRollbackPath(Destructor d, Function f) {
