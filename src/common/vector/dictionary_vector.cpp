@@ -35,6 +35,7 @@ void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		return;
 	}
 	D_ASSERT(vector_type == VectorType::DICTIONARY_VECTOR);
+	D_ASSERT(type == GetEntry().data.GetType());
 	if (!sel.IsSet()) {
 		// sel is not set - directly pass in the dictionary
 		GetEntry().data.Verify(sel_vector, count);

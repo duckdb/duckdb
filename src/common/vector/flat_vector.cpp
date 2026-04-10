@@ -64,20 +64,20 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size,
                                                       idx_t new_size) const {
 	auto type_size = GetTypeIdSize(type.InternalType());
-	auto old_size = current_size * type_size;
-	auto target_size = new_size * type_size;
+	auto old_byte_count = current_size * type_size;
+	auto target_byte_count = new_size * type_size;
 
 	// We have an upper limit of 128GB for a single vector.
-	if (target_size > DConstants::MAX_VECTOR_SIZE) {
+	if (target_byte_count > DConstants::MAX_VECTOR_SIZE) {
 		throw OutOfRangeException("Cannot resize vector to %s: maximum allowed vector size is %s",
-		                          StringUtil::BytesToHumanReadableString(target_size),
+		                          StringUtil::BytesToHumanReadableString(target_byte_count),
 		                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
 	}
 	// Copy the data buffer to a resized buffer.
 	auto stored_allocator = GetAllocator();
 	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
-	auto new_data = allocator.Allocate(target_size);
-	memcpy(new_data.get(), data_ptr, old_size);
+	auto new_data = allocator.Allocate(target_byte_count);
+	memcpy(new_data.get(), data_ptr, old_byte_count);
 
 	// create the new buffer
 	buffer_ptr<VectorBuffer> result;
@@ -94,7 +94,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, i
 	auto &new_validity = result->GetValidityMask();
 	new_validity.Resize(new_size);
 	if (current_size > 0) {
-		new_validity.Copy(validity, current_size);
+		new_validity.CopyRange(validity, current_size);
 	}
 	return result;
 }

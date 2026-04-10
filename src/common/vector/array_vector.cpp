@@ -79,7 +79,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_
 	auto result = make_buffer<VectorArrayBuffer>(std::move(resized_child), array_size, new_size);
 	// copy over the validity
 	if (current_size > 0) {
-		result->GetValidityMask().Copy(validity, current_size);
+		result->validity.CopyRange(validity, current_size);
 	}
 	return result;
 }

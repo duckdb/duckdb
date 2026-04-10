@@ -179,7 +179,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx
 	// copy over the validity
 	result->validity.Resize(new_size);
 	if (current_size > 0) {
-		result->validity.Copy(validity, current_size);
+		result->validity.CopyRange(validity, current_size);
 	}
 	// resize the struct children
 	for (auto &child : children) {
