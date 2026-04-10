@@ -82,7 +82,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			Vector flattened_vector(source->GetType());
 			flattened_vector.Reference(*source);
 			flattened_vector.Flatten(source_count);
-			Copy(flattened_vector, target, *sel, source_count, source_offset, target_offset, copy_count);
+			Copy(flattened_vector, target, *FlatVector::IncrementalSelectionVector(), source_count, 0, target_offset,
+			     copy_count);
 			return;
 		}
 		case VectorType::FLAT_VECTOR:

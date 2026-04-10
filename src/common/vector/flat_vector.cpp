@@ -117,7 +117,8 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 	auto type_size = GetTypeIdSize(type.InternalType());
 
 	// allocate the new buffer
-	auto target_byte_count = count * type_size;
+	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
+	auto target_byte_count = allocated_count * type_size;
 	auto stored_allocator = GetAllocator();
 	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 	auto new_data = allocator.Allocate(target_byte_count);
@@ -130,6 +131,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 	auto result = CreateBuffer(std::move(new_data));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
+	result_validity.Resize(allocated_count);
 	result_validity.CopySel(validity, sel, 0, 0, count);
 	return result;
 }
