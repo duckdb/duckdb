@@ -200,3 +200,11 @@ query II
 select ts, tstz from read_json('{TEMP_DIR}/my_file.json')
 ----
 Thu	Thu
+
+statement ok
+copy (select '2026-01-01 12:00:00+05:00'::TIMESTAMPTZ as ts) to '{TEMP_DIR}/my_file.json' (timestampformat '%Y-%m-%d %z', format json);
+
+query I
+select ts from '{TEMP_DIR}/my_file.json';
+----
+2026-01-01 +00

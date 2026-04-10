@@ -98,9 +98,6 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		} else if (!timestamp_format.empty() &&
 		           (type == LogicalTypeId::TIMESTAMP || type == LogicalTypeId::TIMESTAMP_TZ)) {
-			if (type == LogicalTypeId::TIMESTAMP_TZ) {
-				column = make_uniq<CastExpression>(LogicalType::TIMESTAMP, std::move(column));
-			}
 			strftime_children.emplace_back(std::move(column));
 			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_format));
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
