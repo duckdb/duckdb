@@ -1,0 +1,115 @@
+# name: test/sql/types/blob/test_hex_string_literal.test
+# description: Test SQL hex string literal X'...' syntax
+# group: [blob]
+
+# Basic hex string literal should return BLOB type
+query T
+SELECT typeof(X'DEADBEEF');
+----
+BLOB
+
+# Hex string literal should have correct length (4 bytes, not 9)
+query I
+SELECT octet_length(X'DEADBEEF');
+----
+4
+
+# Hex string literal content should be correct binary data
+query T
+SELECT X'DEADBEEF';
+----
+\xDE\xAD\xBE\xEF
+
+# Empty hex string literal
+query T
+SELECT X'';
+----
+(empty)
+
+query T
+SELECT typeof(X'');
+----
+BLOB
+
+query I
+SELECT octet_length(X'');
+----
+0
+
+# Case insensitivity - lowercase and uppercase should produce same result
+query T
+SELECT X'ff';
+----
+\xFF
+
+query T
+SELECT X'FF';
+----
+\xFF
+
+query I
+SELECT X'ff' = X'FF';
+----
+1
+
+# Single byte
+query T
+SELECT X'00';
+----
+\x00
+
+query T
+SELECT X'FF';
+----
+\xFF
+
+# Multiple bytes
+query T
+SELECT X'0123456789ABCDEF';
+----
+\x01#Eg\x89\xAB\xCD\xEF
+
+# Insert hex string literal into BLOB column
+statement ok
+CREATE TABLE hex_test (b BLOB);
+
+statement ok
+INSERT INTO hex_test VALUES (X'DEADBEEF');
+
+query T
+SELECT * FROM hex_test;
+----
+\xDE\xAD\xBE\xEF
+
+query I
+SELECT octet_length(b) FROM hex_test;
+----
+4
+
+# Error: odd number of hex digits
+statement error
+SELECT X'F';
+----
+Invalid hexadecimal string literal: odd number of hex digits
+
+statement error
+SELECT X'ABC';
+----
+Invalid hexadecimal string literal: odd number of hex digits
+
+# Error: invalid hex character
+statement error
+SELECT X'GG';
+----
+Invalid hexadecimal string literal: invalid hex character
+
+statement error
+SELECT X'ZZ';
+----
+Invalid hexadecimal string literal: invalid hex character
+
+# Comparison with BLOB cast from string
+query I
+SELECT X'DEADBEEF' = '\xDE\xAD\xBE\xEF'::BLOB;
+----
+1
