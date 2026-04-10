@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+struct DBConfig;
+
 using variant_type_map = array<idx_t, static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE)>;
 
 struct ObjectAnalyzeData;
@@ -104,6 +106,10 @@ public:
 public:
 	static ScalarFunction GetTransformFunction();
 	static LogicalType TransformTypedValueRecursive(const LogicalType &type);
+	//! Registers the arrow.parquet.variant Arrow extension type on the given config.
+	//! Emits VARIANT columns over the Arrow C Data Interface as
+	//! struct<metadata: binary, value: binary> (non-shredded).
+	static void RegisterArrowExtension(DBConfig &config);
 
 private:
 	//! Whether the schema of the variant has been analyzed already

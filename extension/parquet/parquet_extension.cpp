@@ -886,6 +886,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	// variant_to_parquet_variant
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
+	// arrow.parquet.variant — Arrow C Data Interface export for VARIANT columns.
+	// Registered here (not in core) because the canonical-variant byte serializer
+	// lives in this extension. Clients without parquet loaded will continue to get
+	// NotImplementedException on Arrow export of VARIANT columns — same as today.
+	VariantColumnWriter::RegisterArrowExtension(DBConfig::GetConfig(db_instance));
+
 	CopyFunction function("parquet");
 	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;

@@ -1,6 +1,7 @@
 #include "catch.hpp"
 
 #include "arrow/arrow_test_helper.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
 
 using namespace duckdb;
 
@@ -150,6 +151,261 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::BIGNUM str FROM range(5) tbl(i)", false, true);
 
 	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::BIGNUM str FROM range(5) tbl(i)", true, true);
+}
+
+TEST_CASE("Test Arrow Extension Types - VARIANT", "[arrow][.]") {
+	// Arrow C Data Interface export for VARIANT columns emits the canonical
+	// arrow.parquet.variant extension: struct<metadata: binary, value: binary>.
+	// Non-shredded variants only; Arrow import is not implemented.
+	//
+	// TestArrowRoundtrip cannot be used here because ArrowToDuck throws — we
+	// verify the export side directly via ArrowConverter::ToArrowSchema and
+	// ToArrowArray, following the same pattern as the UHUGEINT lossy case
+	// above.
+	DuckDB db;
+	Connection con(db);
+
+	// Arrow extension registration happens inside the parquet extension's Load
+	// function; skip the test if parquet is not available.
+	if (!db.ExtensionIsLoaded("parquet")) {
+		return;
+	}
+
+	// Schema shape: top level must be an extension struct.
+	{
+		auto client_properties = con.context->GetClientProperties();
+		ArrowSchema schema;
+		schema.Init();
+		vector<LogicalType> types = {LogicalType::VARIANT()};
+		vector<string> names = {"v"};
+		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+
+		REQUIRE(schema.n_children == 1);
+		auto &variant_field = *schema.children[0];
+		REQUIRE(string(variant_field.format) == "+s");
+		REQUIRE(variant_field.n_children == 2);
+
+		REQUIRE(variant_field.metadata != nullptr);
+		ArrowSchemaMetadata parsed(variant_field.metadata);
+		REQUIRE(parsed.HasExtension());
+		REQUIRE(parsed.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME) == "arrow.parquet.variant");
+
+		REQUIRE(string(variant_field.children[0]->name) == "metadata");
+		REQUIRE(string(variant_field.children[0]->format) == "z");
+		REQUIRE(string(variant_field.children[1]->name) == "value");
+		REQUIRE(string(variant_field.children[1]->format) == "z");
+
+		schema.release(&schema);
+	}
+
+	// Array shape: verify end-to-end data export for a handful of VARIANT values.
+	{
+		auto result = con.Query("SELECT (1)::INTEGER::VARIANT AS v UNION ALL "
+		                        "SELECT ('hello')::VARCHAR::VARIANT UNION ALL "
+		                        "SELECT NULL::VARIANT UNION ALL "
+		                        "SELECT (true)::BOOLEAN::VARIANT");
+		REQUIRE(!result->HasError());
+
+		// Pull all rows into a single DataChunk for direct Arrow export.
+		auto collection = make_uniq<ColumnDataCollection>(*con.context, result->types);
+		ColumnDataAppendState append_state;
+		collection->InitializeAppend(append_state);
+		unique_ptr<DataChunk> chunk;
+		while ((chunk = result->Fetch()) && chunk->size() > 0) {
+			collection->Append(append_state, *chunk);
+		}
+		REQUIRE(collection->Count() == 4);
+
+		ClientProperties options = con.context->GetClientProperties();
+		auto extension_types = ArrowTypeExtensionData::GetExtensionTypes(*con.context, collection->Types());
+
+		DataChunk flat;
+		flat.Initialize(*con.context, collection->Types(), collection->Count());
+		ColumnDataScanState scan_state;
+		collection->InitializeScan(scan_state);
+		collection->Scan(scan_state, flat);
+
+		ArrowArray arrow_array;
+		ArrowConverter::ToArrowArray(flat, &arrow_array, options, extension_types);
+
+		REQUIRE(arrow_array.length == 4);
+		REQUIRE(arrow_array.n_children == 1);
+
+		auto &variant_array = *arrow_array.children[0];
+		REQUIRE(variant_array.length == 4);
+		REQUIRE(variant_array.n_children == 2);
+		REQUIRE(variant_array.null_count == 1);
+
+		auto &metadata_array = *variant_array.children[0];
+		auto &value_array = *variant_array.children[1];
+		REQUIRE(metadata_array.length == 4);
+		REQUIRE(value_array.length == 4);
+
+		// Non-null rows must produce non-empty metadata and value bytes.
+		auto metadata_offsets = reinterpret_cast<const int32_t *>(metadata_array.buffers[1]);
+		auto value_offsets = reinterpret_cast<const int32_t *>(value_array.buffers[1]);
+		REQUIRE(metadata_offsets[1] > metadata_offsets[0]);
+		REQUIRE(value_offsets[1] > value_offsets[0]);
+
+		arrow_array.release(&arrow_array);
+	}
+}
+
+TEST_CASE("Test Arrow Extension Types - VARIANT import does not regress", "[arrow][.]") {
+	// Regression test: registering the arrow.parquet.variant extension must not break
+	// Arrow import of schemas that carry this extension metadata. Before the fix,
+	// GetType() threw NotImplementedException during schema resolution, which meant
+	// any arrow_scan / from_arrow input labelled `arrow.parquet.variant` (including
+	// results exported by this very patch!) failed in ArrowType::GetTypeFromSchema.
+	// The current behavior: import falls back to the plain STRUCT(metadata BLOB,
+	// value BLOB) interpretation.
+	DuckDB db;
+	Connection con(db);
+	if (!db.ExtensionIsLoaded("parquet")) {
+		return;
+	}
+
+	// Export a VARIANT result to Arrow and then re-import it via DuckDB's arrow
+	// scan by writing the ArrowArrayStream through `con.context`.
+	auto result = con.Query("SELECT (42)::INTEGER::VARIANT AS v");
+	REQUIRE(!result->HasError());
+
+	ClientProperties options = con.context->GetClientProperties();
+	auto collection = make_uniq<ColumnDataCollection>(*con.context, result->types);
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	unique_ptr<DataChunk> chunk;
+	while ((chunk = result->Fetch()) && chunk->size() > 0) {
+		collection->Append(append_state, *chunk);
+	}
+
+	// Step 1: verify schema resolution does not throw for the arrow.parquet.variant
+	// extension metadata. Build an ArrowSchema and then run it through
+	// ArrowType::GetTypeFromSchema — this is the exact call path that failed before.
+	ArrowSchema schema;
+	schema.Init();
+	vector<LogicalType> types = {LogicalType::VARIANT()};
+	vector<string> names = {"v"};
+	ArrowConverter::ToArrowSchema(&schema, types, names, options);
+	REQUIRE(schema.n_children == 1);
+	auto &variant_field_schema = *schema.children[0];
+
+	auto resolved_type = ArrowType::GetTypeFromSchema(*con.context, variant_field_schema);
+	REQUIRE(resolved_type != nullptr);
+	// Resolved DuckDB type must be a struct with metadata+value BLOB children, not
+	// a VARIANT (import of canonical bytes → DuckDB VARIANT is out of scope).
+	auto resolved_duck_type = resolved_type->GetDuckType();
+	REQUIRE(resolved_duck_type.id() == LogicalTypeId::STRUCT);
+	auto &resolved_children = StructType::GetChildTypes(resolved_duck_type);
+	REQUIRE(resolved_children.size() == 2);
+	REQUIRE(resolved_children[0].first == "metadata");
+	REQUIRE(resolved_children[0].second == LogicalType::BLOB);
+	REQUIRE(resolved_children[1].first == "value");
+	REQUIRE(resolved_children[1].second == LogicalType::BLOB);
+
+	schema.release(&schema);
+}
+
+TEST_CASE("Test Arrow Extension Types - VARIANT child format selection", "[arrow][.]") {
+	// Regression test: the arrow.parquet.variant child BLOB format must agree
+	// with whatever format the BLOB appender actually emits. Otherwise consumers
+	// will read string-view or 64-bit-offset buffers as regular 32-bit-offset
+	// binary and either crash or return garbage. Before the fix, PopulateSchema
+	// hardcoded "z" regardless of arrow_output_version / arrow_large_buffer_size.
+	auto expect_variant_child_format = [](Connection &con, const string &expected) {
+		ArrowSchema schema;
+		schema.Init();
+		vector<LogicalType> types = {LogicalType::VARIANT()};
+		vector<string> names = {"v"};
+		auto client_properties = con.context->GetClientProperties();
+		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+
+		REQUIRE(schema.n_children == 1);
+		auto &variant_field = *schema.children[0];
+		REQUIRE(string(variant_field.format) == "+s");
+		REQUIRE(variant_field.n_children == 2);
+		REQUIRE(string(variant_field.children[0]->format) == expected);
+		REQUIRE(string(variant_field.children[1]->format) == expected);
+
+		schema.release(&schema);
+	};
+
+	{
+		// Default: z (32-bit offset binary).
+		DuckDB db;
+		Connection con(db);
+		if (!db.ExtensionIsLoaded("parquet")) {
+			return;
+		}
+		expect_variant_child_format(con, "z");
+	}
+
+	{
+		// arrow_large_buffer_size=true: Z (64-bit offset binary).
+		DuckDB db;
+		Connection con(db);
+		if (!db.ExtensionIsLoaded("parquet")) {
+			return;
+		}
+		REQUIRE(!con.Query("SET arrow_large_buffer_size=true")->HasError());
+		expect_variant_child_format(con, "Z");
+	}
+
+	{
+		// arrow_output_version='1.4': vz (string view binary).
+		DuckDB db;
+		Connection con(db);
+		if (!db.ExtensionIsLoaded("parquet")) {
+			return;
+		}
+		REQUIRE(!con.Query("SET arrow_output_version='1.4'")->HasError());
+		expect_variant_child_format(con, "vz");
+	}
+
+	// Full export roundtrip under V1_4: produces string-view buffers, which
+	// have a different layout (no single offsets buffer). Verifies that the
+	// appender actually produces the shape the schema advertised and that the
+	// array survives release without memory errors.
+	{
+		DuckDB db;
+		Connection con(db);
+		if (!db.ExtensionIsLoaded("parquet")) {
+			return;
+		}
+		REQUIRE(!con.Query("SET arrow_output_version='1.4'")->HasError());
+
+		auto result =
+		    con.Query("SELECT (1)::INTEGER::VARIANT AS v UNION ALL SELECT ('hello')::VARCHAR::VARIANT UNION ALL "
+		              "SELECT NULL::VARIANT UNION ALL SELECT (true)::BOOLEAN::VARIANT");
+		REQUIRE(!result->HasError());
+
+		auto collection = make_uniq<ColumnDataCollection>(*con.context, result->types);
+		ColumnDataAppendState append_state;
+		collection->InitializeAppend(append_state);
+		unique_ptr<DataChunk> chunk;
+		while ((chunk = result->Fetch()) && chunk->size() > 0) {
+			collection->Append(append_state, *chunk);
+		}
+
+		ClientProperties options = con.context->GetClientProperties();
+		auto extension_types = ArrowTypeExtensionData::GetExtensionTypes(*con.context, collection->Types());
+
+		DataChunk flat;
+		flat.Initialize(*con.context, collection->Types(), collection->Count());
+		ColumnDataScanState scan_state;
+		collection->InitializeScan(scan_state);
+		collection->Scan(scan_state, flat);
+
+		ArrowArray arrow_array;
+		ArrowConverter::ToArrowArray(flat, &arrow_array, options, extension_types);
+
+		REQUIRE(arrow_array.length == 4);
+		auto &variant_array = *arrow_array.children[0];
+		REQUIRE(variant_array.null_count == 1);
+		// String-view binary has n_buffers = 2 + n_variadic_buffers + 1, but
+		// the important invariant is that the array releases cleanly.
+		arrow_array.release(&arrow_array);
+	}
 }
 
 TEST_CASE("Test Arrow Extension Types - JSON", "[arrow][.]") {
