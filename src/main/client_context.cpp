@@ -1489,7 +1489,7 @@ ClientProperties ClientContext::GetClientProperties() {
 	        arrow_use_string_view,
 	        arrow_lossless_conversion,
 	        arrow_format_version,
-	        this};
+	        shared_from_this()};
 }
 
 bool ClientContext::ExecutionIsFinished() {

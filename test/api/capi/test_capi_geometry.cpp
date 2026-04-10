@@ -95,3 +95,64 @@ TEST_CASE("Test C API GEOMETRY arrow schema export with CRS", "[capi][arrow]") {
 	}
 	duckdb_destroy_arrow(&arrow_result);
 }
+
+TEST_CASE("Test C API arrow schema export after connection close", "[capi][arrow]") {
+	// After the connection is closed, consuming a previously-issued arrow
+	// result must fail cleanly with a ConnectionException-style error rather
+	// than crashing on a dangling ClientContext pointer.
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t1 (data GEOMETRY('OGC:CRS84'))"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO t1 VALUES ('POINT(42 1337)')"));
+
+	duckdb_arrow arrow_result = nullptr;
+	auto state = duckdb_query_arrow(tester.connection, "SELECT data FROM t1", &arrow_result);
+	REQUIRE(state == DuckDBSuccess);
+
+	// Close the connection while still holding on to the arrow result handle.
+	duckdb_disconnect(&tester.connection);
+
+	ArrowSchema arrow_schema;
+	arrow_schema.Init();
+	auto arrow_schema_ptr = &arrow_schema;
+	state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
+
+	REQUIRE(state == DuckDBError);
+	auto err_cstr = duckdb_query_arrow_error(arrow_result);
+	REQUIRE(err_cstr != nullptr);
+	std::string err = err_cstr;
+	INFO("duckdb_query_arrow_schema error: " << err);
+	REQUIRE(err.find("connection has been closed") != std::string::npos);
+
+	duckdb_destroy_arrow(&arrow_result);
+}
+
+TEST_CASE("Test C API arrow array fetch after connection close", "[capi][arrow]") {
+	// Same regression as the schema-export case but for the per-batch
+	// ArrowArray fetch path: duckdb_query_arrow_array also resolves extension
+	// types via the client context and must error gracefully on a closed
+	// connection instead of reading freed memory.
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t1 (data GEOMETRY('OGC:CRS84'))"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO t1 VALUES ('POINT(42 1337)')"));
+
+	duckdb_arrow arrow_result = nullptr;
+	auto state = duckdb_query_arrow(tester.connection, "SELECT data FROM t1", &arrow_result);
+	REQUIRE(state == DuckDBSuccess);
+
+	duckdb_disconnect(&tester.connection);
+
+	ArrowArray arrow_array;
+	auto arrow_array_ptr = &arrow_array;
+	state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
+
+	REQUIRE(state == DuckDBError);
+	auto err_cstr = duckdb_query_arrow_error(arrow_result);
+	REQUIRE(err_cstr != nullptr);
+	std::string err = err_cstr;
+	INFO("duckdb_query_arrow_array error: " << err);
+	REQUIRE(err.find("connection has been closed") != std::string::npos);
+
+	duckdb_destroy_arrow(&arrow_result);
+}

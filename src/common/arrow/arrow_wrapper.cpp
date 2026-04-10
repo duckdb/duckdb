@@ -171,6 +171,9 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
     : result(std::move(result_p)), scan_state(make_uniq<QueryResultChunkScanState>(*result)) {
+	// This should not fail on construction since we expect to always have a client context here. In the
+	// callbacks the same check is done again, so this check is here just to be sure.
+	const auto client_context = result->client_properties.GetClientContextOrThrow();
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
@@ -184,8 +187,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 
-	extension_types =
-	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->types);
+	extension_types = ArrowTypeExtensionData::GetExtensionTypes(*client_context, result->types);
 }
 
 } // namespace duckdb
