@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -49,17 +50,35 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	}
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		count = 1;
+		if (!validity.RowIsValid(0)) {
+			// NULL constant array - verify child is also NULL constant
+			if (child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				D_ASSERT(ConstantVector::IsNull(*child));
+			}
+			return;
+		}
+		child->Verify(array_size);
+		return;
 	}
-	SelectionVector child_sel(count * array_size);
+	// flat vector case - only verify children for valid (non-NULL) entries
+	idx_t selected_child_count = 0;
 	for (idx_t i = 0; i < count; i++) {
-		auto offset = vector_type == VectorType::CONSTANT_VECTOR ? 0 : sel.get_index(i);
-		for (idx_t r = 0; r < array_size; r++) {
-			child_sel.set_index(i * array_size + r, offset * array_size + r);
+		auto oidx = sel.get_index(i);
+		if (validity.RowIsValid(oidx)) {
+			selected_child_count += array_size;
 		}
 	}
-	child->Verify(child_sel, count * array_size);
-	// FIXME: verify validity, arrays have the same validity rules as structs
+	SelectionVector child_sel(selected_child_count);
+	idx_t child_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto oidx = sel.get_index(i);
+		if (validity.RowIsValid(oidx)) {
+			for (idx_t r = 0; r < array_size; r++) {
+				child_sel.set_index(child_count++, oidx * array_size + r);
+			}
+		}
+	}
+	child->Verify(child_sel, child_count);
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
