@@ -263,6 +263,24 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
 }
 
+void DatabaseManager::DropDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
+	optional_ptr<StorageExtension> ext;
+	if (auto db = GetDatabase(context, name)) {
+		ext = db->GetStorageExtension();
+	}
+	if (ext && ext->drop_database) {
+		// Drop from the extension's catalog first.
+		// Do NOT call DetachDatabase here -- the AttachedDatabase must stay alive
+		// until all connections using it are done (deferred detach).
+		// New connections won't find this database because the extension's catalog
+		// no longer has it. The AttachedDatabase will be cleaned up when the last
+		// reference is released (via MetaTransaction::Finalize).
+		ext->drop_database(*this, context, name, if_not_found);
+	} else {
+		throw BinderException("Database \"%s\" does not support DROP DATABASE", name);
+	}
+}
+
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	auto &db_info = info.Cast<AlterDatabaseInfo>();
 

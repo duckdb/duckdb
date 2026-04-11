@@ -7,6 +7,8 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
@@ -365,10 +367,30 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// fetch the function from the catalog
 
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.function_name, error_context);
-	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	auto func_catalog_ptr = GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
+
+	if (!func_catalog_ptr) {
+		EntryLookupInfo scalar_function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, fexpr.function_name, error_context);
+		func_catalog_ptr = GetCatalogEntry(catalog, schema, scalar_function_lookup, OnEntryNotFound::RETURN_NULL);
+		if (func_catalog_ptr) {
+			auto select = make_uniq<SelectNode>();
+			select->select_list.push_back(ref.function->Copy());
+			select->from_table = make_uniq<EmptyTableRef>();
+			auto subquery = make_uniq<SelectStatement>();
+			subquery->node = std::move(select);
+			SubqueryRef subquery_ref(std::move(subquery), ref.alias.empty() ? fexpr.function_name : ref.alias);
+			subquery_ref.query_location = ref.query_location;
+			return Bind(subquery_ref);
+		}
+		func_catalog_ptr = GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	}
+	auto &func_catalog = *func_catalog_ptr;
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
+		if (macro_func.is_procedure && !allow_procedure_call) {
+			throw BinderException("%s() is a procedure\nHINT: To call a procedure, use CALL.", fexpr.function_name);
+		}
 		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 

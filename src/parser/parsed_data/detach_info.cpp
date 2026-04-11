@@ -10,6 +10,7 @@ unique_ptr<DetachInfo> DetachInfo::Copy() const {
 	auto result = make_uniq<DetachInfo>();
 	result->name = name;
 	result->if_not_found = if_not_found;
+	result->is_drop = is_drop;
 	return result;
 }
 

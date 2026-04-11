@@ -159,12 +159,6 @@ struct HexFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct ToHexFun {
-	using ALIAS = HexFun;
-
-	static constexpr const char *Name = "to_hex";
-};
-
 struct InstrFun {
 	static constexpr const char *Name = "instr";
 	static constexpr const char *Parameters = "string,search_string";

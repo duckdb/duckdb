@@ -335,6 +335,12 @@ struct RegexpMatchesFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct RegexpLikeFun {
+	using ALIAS = RegexpMatchesFun;
+
+	static constexpr const char *Name = "regexp_like";
+};
+
 struct RegexpReplaceFun {
 	static constexpr const char *Name = "regexp_replace";
 	static constexpr const char *Parameters = "string,regex,replacement,options";

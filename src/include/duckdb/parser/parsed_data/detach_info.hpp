@@ -24,6 +24,8 @@ public:
 	string name;
 	//! Whether to throw an exception if alias is not found
 	OnEntryNotFound if_not_found;
+	//! Whether this is a DROP DATABASE (vs plain DETACH)
+	bool is_drop = false;
 
 public:
 	unique_ptr<DetachInfo> Copy() const;

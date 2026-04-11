@@ -467,6 +467,14 @@ void Executor::WorkOnTasks() {
 
 void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 	task_reschedule.notify_one();
+	if (on_task_rescheduled) {
+		on_task_rescheduled();
+	}
+}
+
+void Executor::SetTaskRescheduledCallback(std::function<void()> callback) {
+	lock_guard<mutex> l(executor_lock);
+	on_task_rescheduled = std::move(callback);
 }
 
 void Executor::WaitForTask() {

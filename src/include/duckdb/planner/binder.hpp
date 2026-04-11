@@ -356,6 +356,8 @@ private:
 	bool is_outside_flattened = true;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
+	//! Whether procedure calls are allowed (set by CALL statement binding)
+	bool allow_procedure_call = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's

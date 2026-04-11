@@ -4,7 +4,9 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 
 namespace duckdb {
@@ -43,8 +45,20 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 		}
 	}
 	if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
-		// describing a single relation
-		// wrap the relation in a "SELECT * FROM [table_name]" query
+		if (!stmt.relation->schemaname) {
+			// PG "SHOW varname" -> SELECT current_setting('varname') AS "varname"
+			// Return directly, bypassing ShowRef
+			string var_name = stmt.relation->relname;
+			auto result = make_uniq<SelectNode>();
+			vector<unique_ptr<ParsedExpression>> args;
+			args.push_back(make_uniq<ConstantExpression>(Value(var_name)));
+			auto func_expr = make_uniq<FunctionExpression>("current_setting", std::move(args));
+			func_expr->alias = var_name;
+			result->select_list.push_back(std::move(func_expr));
+			result->from_table = make_uniq<EmptyTableRef>();
+			return std::move(result);
+		}
+		// describing a qualified relation (schema.table)
 		auto show_select_node = make_uniq<SelectNode>();
 		show_select_node->select_list.push_back(make_uniq<StarExpression>());
 		auto tableref = TransformRangeVar(*stmt.relation);

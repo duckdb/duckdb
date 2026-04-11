@@ -159,6 +159,12 @@ struct BoolAndFun {
 	static AggregateFunction GetFunction();
 };
 
+struct EveryFun {
+	using ALIAS = BoolAndFun;
+
+	static constexpr const char *Name = "every";
+};
+
 struct BoolOrFun {
 	static constexpr const char *Name = "bool_or";
 	static constexpr const char *Parameters = "arg";

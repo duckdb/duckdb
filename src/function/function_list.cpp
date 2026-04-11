@@ -176,6 +176,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpExtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpExtractAllFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpLikeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpMatchesFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpReplaceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),

@@ -3822,6 +3822,17 @@ substr_list:
 									makeTypeCast($2,
 												 SystemTypeName("int4"), 0, -1));
 				}
+			| a_expr SIMILAR a_expr ESCAPE a_expr
+				{
+					/*
+					 * substring(text SIMILAR pattern ESCAPE escape)
+					 * PG SQL/XML regex substring form.
+					 * Convert to regexp_extract(text, pattern).
+					 */
+					PGFuncCall *n = makeFuncCall(SystemFuncName("regexp_extract"),
+												list_make2($1, $3), @2);
+					$$ = list_make1(n);
+				}
 			| expr_list
 				{
 					$$ = $1;

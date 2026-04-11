@@ -11,7 +11,7 @@ BoundStatement Binder::Bind(ColumnDataRef &ref) {
 	BoundStatement result;
 	result.names = std::move(ref.expected_names);
 	for (idx_t i = result.names.size(); i < types.size(); i++) {
-		result.names.push_back("col" + to_string(i + 1));
+		result.names.push_back("column" + to_string(i + 1));
 	}
 	result.types = types;
 	auto bind_index = GenerateTableIndex();

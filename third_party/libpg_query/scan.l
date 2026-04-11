@@ -322,6 +322,7 @@ xcstop			\*+\/
 xcinside		[^*/]+
 
 digit			[0-9]
+hexdigit		[0-9a-fA-F]
 ident_start		[A-Za-z\200-\377_]
 ident_cont		[A-Za-z\200-\377_0-9\$]
 
@@ -377,6 +378,7 @@ operator		{op_chars}+
  * backup when the {real} rule fails to match completely.
  */
 
+hexinteger		0[xX]{hexdigit}("_"?{hexdigit})*
 integer			{digit}("_"?{digit})*
 decimal			({integer}\.{integer}?)|({integer}?\.{integer})
 decimalfail		{integer}+\.\.
@@ -1008,6 +1010,14 @@ other			.
 					return PARAM;
 				}
 
+{hexinteger}	{
+					SET_YYLLOC();
+					/* Convert hex to decimal string for process_integer_literal */
+					unsigned long long val = strtoull(yytext, NULL, 16);
+					char buf[32];
+					snprintf(buf, sizeof(buf), "%llu", val);
+					return process_integer_literal(buf, yylval);
+				}
 {integer}		{
 					SET_YYLLOC();
 					return process_integer_literal(yytext, yylval);

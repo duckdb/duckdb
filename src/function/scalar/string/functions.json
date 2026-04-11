@@ -287,7 +287,8 @@
         "description": "Returns `true` if `string` contains the `regex`, `false` otherwise. A set of optional regex `options` can be set.",
         "example": "regexp_matches('anabanana', '(an)*')",
         "categories": ["regex"],
-        "type": "scalar_function_set"
+        "type": "scalar_function_set",
+        "aliases": ["regexp_like"]
     },
     {
         "name": "regexp_replace",

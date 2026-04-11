@@ -169,6 +169,8 @@
 %left		JOIN CROSS LEFT FULL RIGHT INNER_P NATURAL POSITIONAL PIVOT UNPIVOT ANTI SEMI ASOF
 /* kluge to keep from causing shift/reduce conflicts */
 %right		PRESERVE STRIP_P IGNORE_P RESPECT_P
+/* resolve shift/reduce: after macro_definition_list, shift LANGUAGE over reduce */
+%nonassoc	CREATE_FUNC_BODY  LANGUAGE
 
 %%
 

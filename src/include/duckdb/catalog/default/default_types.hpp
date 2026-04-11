@@ -10,9 +10,16 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/catalog/default/default_generator.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
+
+struct DefaultType {
+	const char *name;
+	LogicalType type;
+	bind_logical_type_function_t bind_function;
+};
 
 class DefaultTypeGenerator : public DefaultGenerator {
 public:
@@ -21,7 +28,7 @@ public:
 	SchemaCatalogEntry &schema;
 
 public:
-	DUCKDB_API static LogicalTypeId GetDefaultType(const string &name);
+	DUCKDB_API static LogicalType GetDefaultType(const string &name);
 	DUCKDB_API static LogicalType TryDefaultBind(const string &name, const vector<pair<string, Value>> &params);
 
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;

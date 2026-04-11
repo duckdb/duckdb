@@ -132,7 +132,7 @@
             }
         ],
         "type": "scalar_function_set",
-        "aliases": ["to_hex"]
+        "aliases": []
     },
     {
         "name": "instr",

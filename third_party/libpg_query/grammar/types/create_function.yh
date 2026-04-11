@@ -2,4 +2,6 @@
 %type <node> macro_definition table_macro_definition table_macro_definition_parens
 %type <list> macro_definition_list table_macro_list table_macro_list_internal
 %type <list> MacroParameterList
-%type <node> MacroParameter
+%type <node> MacroParameter PgFuncArg
+%type <boolean> macro_alias
+%type <list> pg_function_decorators pg_function_decorator_list pg_function_decorator

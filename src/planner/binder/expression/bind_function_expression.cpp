@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
@@ -270,6 +271,14 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 		if (table_func) {
 			if (!allow_throw) {
 				return func;
+			}
+			// Check if this is a procedure
+			if (table_func->type == CatalogType::TABLE_MACRO_ENTRY) {
+				auto &macro = table_func->Cast<MacroCatalogEntry>();
+				if (macro.is_procedure) {
+					throw BinderException(function, "%s() is a procedure\nHINT: To call a procedure, use CALL.",
+					                      function.function_name);
+				}
 			}
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "

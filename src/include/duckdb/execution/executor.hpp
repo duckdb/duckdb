@@ -19,6 +19,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 
 #include <condition_variable>
+#include <functional>
 
 namespace duckdb {
 class ClientContext;
@@ -58,6 +59,10 @@ public:
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
 	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
+
+	//! Set an external callback that is invoked when a blocked task is rescheduled.
+	//! Used by SereneDB to resume PG wire protocol processing without busy-looping.
+	void SetTaskRescheduledCallback(std::function<void()> callback);
 
 	void Reset();
 
@@ -189,6 +194,9 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+
+	//! External callback for task rescheduling notification
+	std::function<void()> on_task_rescheduled;
 
 	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
 	atomic<idx_t> blocked_thread_time;

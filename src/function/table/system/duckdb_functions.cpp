@@ -153,7 +153,7 @@ struct ScalarFunctionExtractor {
 	static vector<Value> GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).arguments.size(); i++) {
-			results.emplace_back("col" + to_string(i));
+			results.emplace_back("column" + to_string(i + 1));
 		}
 		return results;
 	}
@@ -207,7 +207,7 @@ struct WindowFunctionExtractor {
 	static vector<Value> GetParameters(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).arguments.size(); i++) {
-			results.emplace_back("col" + to_string(i));
+			results.emplace_back("column" + to_string(i + 1));
 		}
 		return results;
 	}
@@ -259,7 +259,7 @@ struct AggregateFunctionExtractor {
 	static vector<Value> GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).arguments.size(); i++) {
-			results.emplace_back("col" + to_string(i));
+			results.emplace_back("column" + to_string(i + 1));
 		}
 		return results;
 	}
@@ -442,7 +442,7 @@ struct TableFunctionExtractor {
 		vector<Value> results;
 		auto fun = entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.arguments.size(); i++) {
-			results.emplace_back("col" + to_string(i));
+			results.emplace_back("column" + to_string(i + 1));
 		}
 		for (auto &param : fun.named_parameters) {
 			results.emplace_back(param.first);
@@ -504,7 +504,7 @@ struct PragmaFunctionExtractor {
 		auto fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.arguments.size(); i++) {
-			results.emplace_back("col" + to_string(i));
+			results.emplace_back("column" + to_string(i + 1));
 		}
 		for (auto &param : fun.named_parameters) {
 			results.emplace_back(param.first);
@@ -565,7 +565,7 @@ static Value GetParameterNames(CatalogEntry &entry, idx_t function_idx, Function
 			if (param_idx < function_description.parameter_names.size()) {
 				parameter_names.emplace_back(function_description.parameter_names[param_idx]);
 			} else {
-				parameter_names.emplace_back("col" + to_string(param_idx));
+				parameter_names.emplace_back("column" + to_string(param_idx + 1));
 			}
 		}
 	} else {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
@@ -28,10 +29,14 @@ typedef unique_ptr<Catalog> (*attach_function_t)(optional_ptr<StorageExtensionIn
 typedef unique_ptr<TransactionManager> (*create_transaction_manager_t)(optional_ptr<StorageExtensionInfo> storage_info,
                                                                        AttachedDatabase &db, Catalog &catalog);
 
+typedef void (*drop_database_function_t)(DatabaseManager &db_manager, ClientContext &context, const string &name,
+                                         OnEntryNotFound if_not_found);
+
 class StorageExtension {
 public:
 	attach_function_t attach;
 	create_transaction_manager_t create_transaction_manager;
+	drop_database_function_t drop_database = nullptr;
 
 	//! Additional info passed to the various storage functions
 	shared_ptr<StorageExtensionInfo> storage_info;

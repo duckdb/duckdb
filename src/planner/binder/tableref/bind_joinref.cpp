@@ -185,14 +185,18 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	case JoinRefType::NATURAL: {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
-		case_insensitive_set_t lhs_columns;
+		// Use a vector to preserve left-table column order (PG convention)
+		case_insensitive_set_t lhs_columns_seen;
+		vector<string> lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
 			for (auto &column_name : binding->GetColumnNames()) {
-				lhs_columns.insert(column_name);
+				if (lhs_columns_seen.insert(column_name).second) {
+					lhs_columns.push_back(column_name);
+				}
 			}
 		}
-		// now bind the rhs
+		// now bind the rhs -- iterate in left-table column order
 		for (auto &column_name : lhs_columns) {
 			auto right_using_binding = right_binder.bind_context.GetUsingBinding(column_name);
 
@@ -206,35 +210,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			}
 			extra_using_columns.push_back(column_name);
 		}
-		if (extra_using_columns.empty()) {
-			// no matching bindings found in natural join: throw an exception
-			string error_msg = "No columns found to join on in NATURAL JOIN.\n";
-			error_msg += "Use CROSS JOIN if you intended for this to be a cross-product.";
-			// gather all left/right candidates
-			string left_candidates, right_candidates;
-			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
-			for (auto &binding_ref : lhs_binding_list) {
-				auto &binding = *binding_ref;
-				for (auto &column_name : binding.GetColumnNames()) {
-					if (!left_candidates.empty()) {
-						left_candidates += ", ";
-					}
-					left_candidates += binding.GetAlias() + "." + column_name;
-				}
-			}
-			for (auto &binding_ref : rhs_binding_list) {
-				auto &binding = *binding_ref;
-				for (auto &column_name : binding.GetColumnNames()) {
-					if (!right_candidates.empty()) {
-						right_candidates += ", ";
-					}
-					right_candidates += binding.GetAlias() + "." + column_name;
-				}
-			}
-			error_msg += "\n   Left candidates: " + left_candidates;
-			error_msg += "\n   Right candidates: " + right_candidates;
-			throw BinderException(ref, error_msg);
-		}
+		// no matching columns: PG treats NATURAL JOIN as cross join
 		break;
 	}
 	case JoinRefType::REGULAR:
@@ -332,7 +308,11 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			ref.condition = std::move(condition);
 		}
 	}
-	if (ref.condition) {
+	if (!ref.condition) {
+		// NATURAL JOIN with no common columns -> cross join (condition = true)
+		ref.condition = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+	}
+	{
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
 	}

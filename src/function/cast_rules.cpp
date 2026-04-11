@@ -381,7 +381,27 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		if (to.id() == LogicalTypeId::VARCHAR && to.GetAlias().empty()) {
 			return 1;
 		}
-		return 20;
+		// Prefer numeric types over date/time types for string literals,
+		// matching PostgreSQL's type category preference (numeric is "preferred").
+		// This makes 'SELECT '1' + 2' resolve to +(INTEGER, INTEGER) not +(DATE, INTEGER).
+		switch (to.id()) {
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::UHUGEINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::DECIMAL:
+			return 19;
+		default:
+			return 20;
+		}
 	}
 	if (from.id() == LogicalTypeId::INTEGER_LITERAL) {
 		// the integer literal has an underlying type - this type always matches

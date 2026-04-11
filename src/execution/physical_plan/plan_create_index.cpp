@@ -104,10 +104,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 		return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
 	}
 
-	if (!op.table.IsDuckTable()) {
-		throw BinderException("Indexes can only be created on DuckDB tables.");
-	}
-
 	// Ensure that all expressions contain valid scalar functions.
 	// E.g., get_current_timestamp(), random(), and sequence values cannot be index keys.
 	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {

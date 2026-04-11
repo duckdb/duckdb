@@ -17,6 +17,7 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 	explicit CreateMacroInfo(CatalogType type);
 
 	vector<unique_ptr<MacroFunction>> macros;
+	bool is_procedure = false;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

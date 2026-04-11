@@ -1768,6 +1768,9 @@ typedef struct PGFunctionDefinition {
 	PGList *params;
 	PGNode *function;
 	PGNode *query;
+	PGList *returns_table_columns;   /* RETURNS TABLE(...) list of PGColumnDef */
+	PGNode *returns_type;            /* RETURNS typename */
+	bool has_language;               /* LANGUAGE SQL was specified (PG-style body) */
 } PGFunctionDefinition;
 
 typedef struct PGCreateFunctionStmt {
@@ -1775,6 +1778,8 @@ typedef struct PGCreateFunctionStmt {
 	PGRangeVar *name;
 	PGList *functions;
 	PGOnCreateConflict onconflict;
+	bool is_procedure;
+	bool has_language;   /* LANGUAGE SQL was specified -- body is SQL, not expression */
 } PGCreateFunctionStmt;
 
 /* ----------------------
@@ -2062,6 +2067,23 @@ typedef struct PGCallStmt {
 } PGCallStmt;
 
 /* ----------------------
+ *		CREATE TEXT SEARCH DICTIONARY (DefineStmt)
+ *
+ * Mapped from PostgreSQL's DefineStmt for TEXT SEARCH DICTIONARY.
+ * ----------------------
+ */
+typedef struct PGDefineStmt {
+	PGNodeTag type;
+	PGObjectType kind;        /* PG_OBJECT_TSDICTIONARY, etc. */
+	bool oldstyle;
+	PGList *defnames;         /* qualified name (list of String) */
+	PGList *args;             /* optional type args */
+	PGList *definition;       /* list of DefElem (the WITH clause options) */
+	bool if_not_exists;
+	bool replace;
+} PGDefineStmt;
+
+/* ----------------------
  *		EXPORT/IMPORT Statements
  * ----------------------
  */
@@ -2219,6 +2241,7 @@ typedef struct PGDetachStmt
 	PGNodeTag		type;
 	char *db_name;         /* list of names of attached databases */
 	bool missing_ok;
+	bool is_drop;          /* DROP DATABASE vs DETACH */
 } PGDetachStmt;
 
 /* ----------------------
@@ -2324,6 +2347,7 @@ typedef struct PGFunctionParameter {
 	char *name;                   /* name of parameter */
 	PGTypeName *typeName;         /* type of parameter (optional) */
 	PGExpr *defaultValue;		  /* default value of parameter (optional) */
+	bool ambiguous;               /* true when bare Typename: could be name (DuckDB) or type (PG) */
 } PGFunctionParameter;
 
 }
