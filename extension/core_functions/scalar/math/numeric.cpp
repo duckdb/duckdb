@@ -1406,11 +1406,18 @@ struct ASinOperator {
 		return (double)std::asin(input);
 	}
 };
+
+struct IEEEASinOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::asin(input);
+	}
+};
 } // namespace
 
 ScalarFunction AsinFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<ASinOperator>, IEEEASinOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1462,11 +1469,18 @@ struct ACos {
 		return (double)std::acos(input);
 	}
 };
+
+struct IEEEACos {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::acos(input);
+	}
+};
 } // namespace
 
 ScalarFunction AcosFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<ACos>, IEEEACos>);
 	function.SetFallible();
 	return function;
 }
@@ -1575,11 +1589,18 @@ struct AtanhOperator {
 		return (double)std::atanh(input);
 	}
 };
+
+struct IEEEAtanhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::atanh(input);
+	}
+};
 } // namespace
 
 ScalarFunction AtanhFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<AtanhOperator, IEEEAtanhOperator>);
 	function.SetFallible();
 	return function;
 }

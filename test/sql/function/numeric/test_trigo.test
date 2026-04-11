@@ -447,6 +447,9 @@ NULL
 24
 785
 
+statement ok
+SET ieee_floating_point_ops = false;
+
 statement error
 select asin(-2);
 ----
@@ -474,6 +477,14 @@ query II
 select atanh(1), atanh(-1);
 ----
 inf	-inf
+
+statement ok
+SET ieee_floating_point_ops = true;
+
+query IIIII
+select asin(2), acos(2), atanh(2), atanh(1), atanh(-1);
+----
+nan	nan	nan	inf	-inf
 
 query III
 select atanh(-0.5), atanh(0), atanh(0.5);

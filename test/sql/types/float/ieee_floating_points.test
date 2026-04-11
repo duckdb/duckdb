@@ -68,6 +68,18 @@ statement error
 SELECT ln(-1::{type});
 ----
 
+statement error
+SELECT asin(2::{type});
+----
+
+statement error
+SELECT acos(2::{type});
+----
+
+statement error
+SELECT atanh(2::{type});
+----
+
 statement ok
 SET ieee_floating_point_ops = true;
 
@@ -80,5 +92,10 @@ query IIII
 SELECT ln(0::{type}), log10(0::{type}), log2(0::{type}), log(1::{type}, 64::{type});
 ----
 -inf	-inf	-inf	inf
+
+query IIIII
+SELECT asin(2::{type}), acos(2::{type}), atanh(2::{type}), atanh(1::{type}), atanh(-1::{type});
+----
+nan	nan	nan	inf	-inf
 
 endloop
