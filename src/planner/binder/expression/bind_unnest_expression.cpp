@@ -88,49 +88,109 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		                            "applicable to \"UNNEST\"");
 	}
 
-	idx_t max_depth = 1;
+	// All unnamed args are list args (come first), named args are keyword params
+	idx_t num_list_args = 0;
+	while (num_list_args < function.children.size() && function.children[num_list_args]->GetAlias().empty()) {
+		num_list_args++;
+	}
+	if (num_list_args == 0) {
+		return BindResult(BinderException(function, "UNNEST() requires at least one argument"));
+	}
+
+	// Parse keyword arguments (recursive, max_depth, keep_parent_names)
+	bool recursive = false;
+	optional_idx max_depth_opt;
 	bool keep_parent_names = false;
-	if (function.children.size() != 1) {
-		bool supported_argument = false;
-		for (idx_t i = 1; i < function.children.size(); i++) {
-			if (function.children[i]->HasParameter()) {
-				throw ParameterNotAllowedException("Parameter not allowed in unnest parameter");
-			}
-			if (!function.children[i]->IsScalar()) {
-				break;
-			}
-			auto alias = StringUtil::Lower(function.children[i]->GetAlias());
-			BindChild(function.children[i], depth, error);
-			if (error.HasError()) {
-				return BindResult(std::move(error));
-			}
-			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
-			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
-			if (alias == "recursive") {
-				auto recursive = value.GetValue<bool>();
-				if (recursive) {
-					max_depth = NumericLimits<idx_t>::Maximum();
-				}
-			} else if (alias == "max_depth") {
-				max_depth = value.GetValue<uint32_t>();
-				if (max_depth == 0) {
-					throw BinderException("UNNEST cannot have a max depth of 0");
-				}
-			} else if (alias == "keep_parent_names") {
-				keep_parent_names = value.GetValue<bool>();
-			} else if (!alias.empty()) {
-				throw BinderException("Unsupported parameter \"%s\" for unnest", alias);
-			} else {
-				break;
-			}
-			supported_argument = true;
+	for (idx_t i = num_list_args; i < function.children.size(); i++) {
+		if (function.children[i]->HasParameter()) {
+			throw ParameterNotAllowedException("Parameter not allowed in unnest parameter");
 		}
-		if (!supported_argument) {
-			return BindResult(BinderException(
-			    function, "UNNEST - unsupported extra argument, unnest only supports "
-			              "recursive := [true/false], max_depth := # or keep_parent_names := [true/false]"));
+		auto alias = StringUtil::Lower(function.children[i]->GetAlias());
+		BindChild(function.children[i], depth, error);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
+		}
+		auto &const_child = BoundExpression::GetExpression(*function.children[i]);
+		auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
+		if (alias == "recursive") {
+			recursive = value.GetValue<bool>();
+		} else if (alias == "max_depth") {
+			max_depth_opt = value.GetValue<uint32_t>();
+			if (max_depth_opt.GetIndex() == 0) {
+				throw BinderException("UNNEST cannot have a max depth of 0");
+			}
+		} else if (alias == "keep_parent_names") {
+			keep_parent_names = value.GetValue<bool>();
+		} else {
+			throw BinderException("Unsupported parameter \"%s\" for unnest", alias);
 		}
 	}
+	idx_t max_depth = max_depth_opt.IsValid() ? max_depth_opt.GetIndex()
+	                  : recursive             ? NumericLimits<idx_t>::Maximum()
+	                                          : 1;
+
+	// Multi-arg unnest: unnest(arr1, arr2, ...) -> multiple columns (PG-compatible)
+	if (num_list_args > 1) {
+		if (max_depth != 1) {
+			return BindResult(BinderException(function, "recursive unnest is not supported with multiple arguments"));
+		}
+		vector<unique_ptr<Expression>> result_exprs;
+		for (idx_t i = 0; i < num_list_args; i++) {
+			unnest_level++;
+			BindChild(function.children[i], depth, error);
+			if (error.HasError()) {
+				auto corr_result = BindCorrelatedColumns(function.children[i], error);
+				if (corr_result.HasError()) {
+					return BindResult(corr_result.error);
+				}
+				auto &bound_expr = BoundExpression::GetExpression(*function.children[i]);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
+			}
+			auto &bound_child = BoundExpression::GetExpression(*function.children[i]);
+			bound_child = BoundCastExpression::AddArrayCastToList(context, std::move(bound_child));
+			auto &child_type = bound_child->return_type;
+			unnest_level--;
+
+			LogicalType return_type;
+			switch (child_type.id()) {
+			case LogicalTypeId::UNKNOWN:
+				throw ParameterNotResolvedException();
+			case LogicalTypeId::LIST:
+				return_type = ListType::GetChildType(child_type);
+				break;
+			case LogicalTypeId::SQLNULL:
+				return_type = child_type;
+				break;
+			default:
+				return BindResult(BinderException(
+				    function, "UNNEST() can only be applied to lists, arrays and NULL, not %s", child_type.ToString()));
+			}
+
+			auto unnest_result = make_uniq<BoundUnnestExpression>(return_type);
+			unnest_result->child = std::move(bound_child);
+
+			auto entry = node.unnests.find(unnest_level);
+			TableIndex unnest_table_index;
+			ProjectionIndex unnest_column_index;
+			if (entry == node.unnests.end()) {
+				BoundUnnestNode unnest_node;
+				unnest_node.index = binder.GenerateTableIndex();
+				unnest_table_index = unnest_node.index;
+				unnest_column_index = ColumnBinding::PushExpression(unnest_node.expressions, std::move(unnest_result));
+				node.unnests.insert(make_pair(unnest_level, std::move(unnest_node)));
+			} else {
+				unnest_table_index = entry->second.index;
+				unnest_column_index =
+				    ColumnBinding::PushExpression(entry->second.expressions, std::move(unnest_result));
+			}
+			auto col_name = "unnest" + to_string(i + 1);
+			result_exprs.push_back(make_uniq<BoundColumnRefExpression>(
+			    std::move(col_name), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth));
+		}
+		return BindResult(make_uniq<BoundExpandedExpression>(std::move(result_exprs)));
+	}
+
+	// Single-arg unnest: supports recursive, struct unnest, etc.
 	unnest_level++;
 	BindChild(function.children[0], depth, error);
 	if (error.HasError()) {
