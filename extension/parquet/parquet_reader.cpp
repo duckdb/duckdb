@@ -324,6 +324,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
 			if (s_ele.precision > DecimalType::MaxWidth()) {
 				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
+				// DECIMAL(39,0) on a 16-byte FIXED_LEN_BYTE_ARRAY maps exactly to HUGEINT
+				if (s_ele.precision <= 39 && s_ele.scale == 0 && s_ele.__isset.type_length && s_ele.type_length == 16) {
+					return LogicalType::HUGEINT;
+				}
 				return LogicalType::DOUBLE;
 			}
 			switch (s_ele.type) {
@@ -799,6 +803,110 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 	return result;
 }
 
+static bool ApplyDuckDBTypeOverrides(ParquetColumnSchema &schema,
+                                     const unordered_map<idx_t, LogicalType> &type_overrides,
+                                     const FileMetaData &file_meta_data) {
+	bool any_changed = false;
+	if (schema.children.empty() && schema.schema_index.IsValid()) {
+		// Leaf node — check if it should be overridden
+		auto it = type_overrides.find(schema.schema_index.GetIndex());
+		if (it != type_overrides.end()) {
+			// Only override if the leaf is unannotated FLBA(16) that defaulted to BLOB
+			auto schema_idx = schema.schema_index.GetIndex();
+			if (schema_idx < file_meta_data.schema.size()) {
+				auto &s_ele = file_meta_data.schema[schema_idx];
+				if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.type_length && s_ele.type_length == 16 &&
+				    schema.type.id() == LogicalTypeId::BLOB) {
+					schema.type = it->second;
+					any_changed = true;
+				}
+			}
+		}
+	}
+	for (auto &child : schema.children) {
+		any_changed |= ApplyDuckDBTypeOverrides(child, type_overrides, file_meta_data);
+	}
+	// Rebuild composite parent types if any children changed
+	if (any_changed && !schema.children.empty()) {
+		auto type_id = schema.type.id();
+		if (type_id == LogicalTypeId::STRUCT) {
+			child_list_t<LogicalType> new_children;
+			for (auto &child : schema.children) {
+				new_children.push_back({child.name, child.type});
+			}
+			schema.type = LogicalType::STRUCT(std::move(new_children));
+		} else if (type_id == LogicalTypeId::LIST && schema.children.size() == 1) {
+			schema.type = LogicalType::LIST(schema.children[0].type);
+		} else if (type_id == LogicalTypeId::MAP && schema.children.size() == 1 &&
+		           schema.children[0].children.size() == 2) {
+			auto &key_child = schema.children[0].children[0];
+			auto &val_child = schema.children[0].children[1];
+			schema.type = LogicalType::MAP(key_child.type, val_child.type);
+		}
+	}
+	return any_changed;
+}
+
+static void ApplyDuckDBTypeMetadata(const FileMetaData &file_meta_data, ParquetColumnSchema &root_schema) {
+	if (!file_meta_data.__isset.key_value_metadata) {
+		return;
+	}
+	for (auto &kv : file_meta_data.key_value_metadata) {
+		if (kv.key != "duckdb:column_types") {
+			continue;
+		}
+		// Parse the JSON value: {"schema_idx": "HUGEINT", ...}
+		// Simple parser for this specific format — non-fatal on any error
+		unordered_map<idx_t, LogicalType> type_overrides;
+		auto &json = kv.value;
+		idx_t pos = 0;
+		while (pos < json.size()) {
+			// Find next quoted key
+			auto key_start = json.find('"', pos);
+			if (key_start == string::npos) {
+				break;
+			}
+			auto key_end = json.find('"', key_start + 1);
+			if (key_end == string::npos) {
+				break;
+			}
+			auto key_str = json.substr(key_start + 1, key_end - key_start - 1);
+
+			// Find next quoted value
+			auto val_start = json.find('"', key_end + 1);
+			if (val_start == string::npos) {
+				break;
+			}
+			auto val_end = json.find('"', val_start + 1);
+			if (val_end == string::npos) {
+				break;
+			}
+			auto val_str = json.substr(val_start + 1, val_end - val_start - 1);
+			pos = val_end + 1;
+
+			// Parse schema index
+			idx_t schema_idx;
+			try {
+				schema_idx = std::stoull(key_str);
+			} catch (...) {
+				continue; // Silently skip malformed entries
+			}
+
+			if (val_str == "HUGEINT") {
+				type_overrides[schema_idx] = LogicalType::HUGEINT;
+			} else if (val_str == "UHUGEINT") {
+				type_overrides[schema_idx] = LogicalType::UHUGEINT;
+			}
+			// Silently ignore unknown type names
+		}
+
+		if (!type_overrides.empty()) {
+			ApplyDuckDBTypeOverrides(root_schema, type_overrides, file_meta_data);
+		}
+		break;
+	}
+}
+
 void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 
@@ -814,6 +922,10 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 		                            GetFileName());
 	}
 	root_schema = ParseSchema(context);
+
+	// Post-process: restore HUGEINT/UHUGEINT types from DuckDB-specific metadata
+	ApplyDuckDBTypeMetadata(*file_meta_data, *root_schema);
+
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
 		columns.push_back(ParseColumnDefinition(*file_meta_data, element));

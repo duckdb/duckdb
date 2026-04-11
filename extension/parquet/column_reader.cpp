@@ -20,6 +20,7 @@
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
+#include "reader/hugeint_column_reader.hpp"
 #include "reader/uuid_column_reader.hpp"
 
 #include "zstd.h"
@@ -958,6 +959,13 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 		default:
 			throw InternalException("TIME_TZ requires type info");
 		}
+	case LogicalTypeId::HUGEINT:
+		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
+			return ParquetDecimalUtils::CreateReader(reader, schema); // backward compat: DECIMAL(39,0) files
+		}
+		return make_uniq<HugeintColumnReader>(reader, schema);
+	case LogicalTypeId::UHUGEINT:
+		return make_uniq<UhugeintColumnReader>(reader, schema);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringColumnReader>(reader, schema);

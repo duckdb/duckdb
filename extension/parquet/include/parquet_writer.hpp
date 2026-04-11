@@ -206,6 +206,7 @@ public:
 	                      optional_ptr<ColumnWriterStatistics> writer_stats);
 	void InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data);
 	void InitializeSchemaElements();
+	void EmitDuckDBTypeMetadata(duckdb_parquet::FileMetaData &file_meta_data);
 
 private:
 	void GatherWrittenStatistics();

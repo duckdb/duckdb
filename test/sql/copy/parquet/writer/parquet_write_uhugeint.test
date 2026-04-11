@@ -27,5 +27,38 @@ NULL
 query I
 SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
 ----
-DOUBLE
+UHUGEINT
+
+# test large values that previously lost precision when stored as DOUBLE
+statement ok
+CREATE TABLE uhugeints_large(h UHUGEINT)
+
+statement ok
+INSERT INTO uhugeints_large VALUES ('999999999999999999999999999999'::UHUGEINT), ('99999999999999999999999999999999999999'::UHUGEINT)
+
+statement ok
+COPY uhugeints_large TO '{TEST_DIR}/uhugeints_large.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '{TEST_DIR}/uhugeints_large.parquet'
+----
+999999999999999999999999999999
+99999999999999999999999999999999999999
+
+# full UHUGEINT range including values > 2^127-1
+statement ok
+CREATE TABLE uhugeints_full_range(h UHUGEINT)
+
+statement ok
+INSERT INTO uhugeints_full_range VALUES ('170141183460469231731687303715884105727'::UHUGEINT), ('170141183460469231731687303715884105728'::UHUGEINT), ('340282366920938463463374607431768211455'::UHUGEINT)
+
+statement ok
+COPY uhugeints_full_range TO '{TEST_DIR}/uhugeints_full_range.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '{TEST_DIR}/uhugeints_full_range.parquet'
+----
+170141183460469231731687303715884105727
+170141183460469231731687303715884105728
+340282366920938463463374607431768211455
 

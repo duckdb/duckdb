@@ -7,7 +7,7 @@ require parquet
 # do tests with IMPLICIT parquet_version, (default is v1)
 #
 
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
+foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE VARCHAR
 
 statement ok
 copy (select (r1.range * 10)::{type} r from range(10) r1, range(1000) r2) to '{TEST_DIR}/dict-{type}.parquet' (row_group_size 2048);
@@ -38,7 +38,7 @@ endloop
 # same tests with EXPLICIT parquet_version v1
 #
 
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
+foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE VARCHAR
 
 statement ok
 copy (select (r1.range * 10)::{type} r from range(10) r1, range(1000) r2) to '{TEST_DIR}/dict-{type}-v1.parquet' (row_group_size 2048, parquet_version v1);
@@ -69,7 +69,7 @@ endloop
 # same tests with EXPLICIT parquet_version v2
 #
 
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
+foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE VARCHAR
 
 statement ok
 copy (select (r1.range * 10)::{type} r from range(10) r1, range(1000) r2) to '{TEST_DIR}/dict-{type}-v2.parquet' (row_group_size 2048, parquet_version v2);
