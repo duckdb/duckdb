@@ -9,6 +9,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/parser/srf_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -269,21 +270,19 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 		auto table_func =
 		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
-			if (!allow_throw) {
-				return func;
-			}
 			// Check if this is a procedure
 			if (table_func->type == CatalogType::TABLE_MACRO_ENTRY) {
 				auto &macro = table_func->Cast<MacroCatalogEntry>();
+				if (!allow_throw) {
+					return func;
+				}
 				if (macro.is_procedure) {
 					throw BinderException(function, "%s() is a procedure\nHINT: To call a procedure, use CALL.",
 					                      function.function_name);
 				}
 			}
-			throw BinderException(function,
-			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
-			                      "function has to be called in a FROM clause (similar to a table).",
-			                      function.function_name);
+			// PG compat: return table function — caller wraps as subquery
+			return table_func;
 		}
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
@@ -363,6 +362,16 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		// window function
 		return BindWindow(function, func->Cast<WindowFunctionCatalogEntry>(), depth);
+	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::TABLE_FUNCTION_ENTRY: {
+		// PG compat: table functions in SELECT -> unnest their results as rows
+		// Routes through SelectBinder::BindUnnest, sharing BoundUnnestNode with other SRFs.
+		auto unnest_func = make_uniq<FunctionExpression>("unnest", vector<unique_ptr<ParsedExpression>>{});
+		unnest_func->children.push_back(WrapTableFuncAsList(function.Copy()));
+		unnest_func->alias = function.alias.empty() ? function.function_name : function.alias;
+		expr_ptr = std::move(unnest_func);
+		return BindExpression(expr_ptr, depth, false);
+	}
 	default:
 		throw InvalidInputException("Unsupported catalog type when binding function");
 	}
