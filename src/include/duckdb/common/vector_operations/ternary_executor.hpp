@@ -78,7 +78,7 @@ public:
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				auto adata = ConstantVector::GetData<A_TYPE>(a);
 				auto bdata = ConstantVector::GetData<B_TYPE>(b);
@@ -98,7 +98,7 @@ public:
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
 			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
-			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetData<RESULT_TYPE>(result), count,
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetDataMutable<RESULT_TYPE>(result), count,
 			    *adata.sel, *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity,
 			    FlatVector::Validity(result), fun);
 		}

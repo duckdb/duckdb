@@ -7,12 +7,18 @@ on:
       build_current_release:
         default: false
         type: boolean
+      run_slow_tests:
+        default: false
+        type: boolean
       runner_linux_x64:
         default: ubuntu-latest
         type: string
       runner_linux_small:
         default: ubuntu-latest
         type: string
+      save_cache:
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       base_hash:
@@ -22,6 +28,10 @@ on:
         description: 'Build and upload linux-release-build in this workflow'
         default: true
         type: boolean
+      run_slow_tests:
+        description: 'Run slow tests when applicable'
+        default: false
+        type: boolean
       runner_linux_x64:
         description: 'Optional x64 runner label override'
         default: ubuntu-latest
@@ -30,6 +40,9 @@ on:
         description: 'Optional small runner label override'
         default: ubuntu-latest
         type: string
+      save_cache:
+        default: false
+        type: boolean
   repository_dispatch:
 
 concurrency:
@@ -44,7 +57,6 @@ env:
 jobs:
   linux-base:
     name: Linux Base
-    if: ${{ github.repository != 'duckdb/duckdb' || github.ref_name != 'main' }}
     runs-on: ${{ inputs.runner_linux_x64 }}
     env:
       GEN: ninja
@@ -64,6 +76,7 @@ jobs:
         uses: ./.github/actions/linux_release_build
         with:
           artifact_name: linux-release-build
+          save_cache: ${{ inputs.save_cache }}
 
       - name: Select base ref
         run: |
@@ -93,6 +106,8 @@ jobs:
         uses: ./.github/actions/linux_release_build
         with:
           artifact_name: linux-base-build
+          run_smoke_tests: false
+          save_cache: ${{ inputs.save_cache }}
 
   regression-bench:
     name: Bench ${{ matrix.name }}

@@ -563,7 +563,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 	// auto &validity = FlatVector::Validity(value);
 	uint32_t *untyped_data = nullptr;
 	if (untyped_values) {
-		untyped_data = FlatVector::GetData<uint32_t>(*untyped_values);
+		untyped_data = FlatVector::GetDataMutable<uint32_t>(*untyped_values);
 	}
 
 	for (uint32_t i = 0; i < static_cast<uint32_t>(count); i++) {
@@ -706,7 +706,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 	ListVector::SetListSize(values, 0);
 
 	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);
 

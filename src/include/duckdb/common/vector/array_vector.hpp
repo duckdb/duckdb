@@ -19,11 +19,16 @@ public:
 	~VectorArrayBuffer() override;
 
 public:
+	ValidityMask &GetValidityMask() override {
+		return validity;
+	}
 	Vector &GetChild();
 	idx_t GetArraySize();
 	idx_t GetChildSize();
+	void SetVectorType(VectorType vector_type) override;
 
 private:
+	ValidityMask validity;
 	unique_ptr<Vector> child;
 	// The size of each array in this buffer
 	idx_t array_size = 0;

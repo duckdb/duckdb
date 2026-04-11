@@ -21,6 +21,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/BundleStaticLibs.yml'
@@ -122,8 +123,6 @@ jobs:
           python scripts/ci/retry.py -- choco install \
             ccache \
             make \
-            ninja \
-            zip \
             --no-progress
           python scripts/ci/retry.py -- choco install \
             mingw --version 14.2.0 \
@@ -170,7 +169,12 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          zip -r -j static-libs-windows-mingw.zip src/include/duckdb.h build/release/libs/
+          tmp_zip_dir="$(mktemp -d)"
+          archive_path="$(pwd)/static-libs-windows-mingw.zip"
+          cp src/include/duckdb.h "${tmp_zip_dir}/"
+          find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
+          (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
+          rm -rf "${tmp_zip_dir}"
           ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
 
       - uses: actions/upload-artifact@v7

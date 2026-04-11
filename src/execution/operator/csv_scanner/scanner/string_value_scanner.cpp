@@ -105,7 +105,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	for (auto &col : parse_chunk.data) {
-		vector_ptr.push_back(FlatVector::GetData(col));
+		vector_ptr.push_back(FlatVector::GetDataMutable(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
 	}
 
@@ -1476,7 +1476,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 			}
 			value = string_t(over_buffer_string.c_str() + result.quoted_position, UnsafeNumericCast<uint32_t>(length));
 			if (result.escaped) {
-				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+				if (result.cur_col_id >= result.number_of_columns &&
+				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+					result.used_unstrictness = true;
+				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
 					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
@@ -1506,30 +1509,35 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
-					// We cant have escapes on non varchar columns
-					result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
-					                             result.last_position);
-					if (!result.state_machine.options.IgnoreErrors()) {
-						// We have to write the cast error message.
-						std::ostringstream error;
-						// Casting Error Message
-						error << "Could not convert string \""
-						      << std::string(over_buffer_string.c_str(), over_buffer_string.size()) << "\" to \'"
-						      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
-						auto error_string = error.str();
-						FullLinePosition::SanitizeError(error_string);
-						result.current_errors.ModifyErrorMessageOfLastError(error_string);
+				if (result.cur_col_id >= result.number_of_columns &&
+				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
+					result.used_unstrictness = true;
+				} else {
+					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+						// We cant have escapes on non varchar columns
+						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
+						                             result.last_position);
+						if (!result.state_machine.options.IgnoreErrors()) {
+							// We have to write the cast error message.
+							std::ostringstream error;
+							// Casting Error Message
+							error << "Could not convert string \""
+							      << std::string(over_buffer_string.c_str(), over_buffer_string.size()) << "\" to \'"
+							      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
+							auto error_string = error.str();
+							FullLinePosition::SanitizeError(error_string);
+							result.current_errors.ModifyErrorMessageOfLastError(error_string);
+						}
+						return;
 					}
-					return;
-				}
-				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
-					value =
-					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
+					if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+						value = RemoveEscape(
+						    over_buffer_string.c_str(), over_buffer_string.size(),
+						    state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+						    result.parse_chunk.data[result.chunk_col_id]);
+					}
 				}
 			}
 		}

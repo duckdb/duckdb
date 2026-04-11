@@ -19,10 +19,23 @@
 
 namespace duckdb {
 
+struct JoinFilterTableFilterState;
+
 class PrefixRangeFilter {
 public:
 	struct BuildState {
 		virtual ~BuildState() = default;
+		template <class TARGET>
+
+		TARGET &Cast() {
+			DynamicCastCheck<TARGET>(this);
+			return reinterpret_cast<TARGET &>(*this);
+		}
+		template <class TARGET>
+		const TARGET &Cast() const {
+			DynamicCastCheck<TARGET>(this);
+			return reinterpret_cast<const TARGET &>(*this);
+		}
 	};
 
 	virtual ~PrefixRangeFilter() = default;
@@ -31,7 +44,6 @@ public:
 	virtual void InsertKeys(Vector &keys, idx_t count, BuildState &state) const = 0;
 	virtual void MergeBuildState(BuildState &state) = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
-	virtual bool LookupOneValue(const Value &key) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
@@ -54,13 +66,14 @@ public:
 	explicit PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
 	                                const LogicalType &key_type_p);
 
-	LogicalType GetKeyType() const {
+	const LogicalType &GetKeyType() const {
 		return key_type;
 	}
 
 	string ToString(const string &column_name) const override;
 
-	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const;
+	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
+	             JoinFilterTableFilterState &state) const;
 	bool FilterValue(const Value &value) const;
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;

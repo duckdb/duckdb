@@ -61,6 +61,8 @@ public:
 	                    Vector &scan_vector) const override;
 
 	bool IsPersistent() override;
+
+	idx_t GetRowStart(ColumnScanState &state);
 };
 
 } // namespace duckdb

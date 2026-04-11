@@ -115,11 +115,12 @@ public:
 
 		static bool ComputeOffset(ClientContext &context, BoundWindowExpression &wexpr, int64_t &offset) {
 			offset = 1;
-			if (wexpr.offset_expr) {
-				if (wexpr.offset_expr->HasParameter() || !wexpr.offset_expr->IsFoldable()) {
+			if (wexpr.children.size() > 1) {
+				auto &offset_expr = wexpr.children[1];
+				if (offset_expr->HasParameter() || !offset_expr->IsFoldable()) {
 					return false;
 				}
-				auto offset_value = ExpressionExecutor::EvaluateScalar(context, *wexpr.offset_expr);
+				auto offset_value = ExpressionExecutor::EvaluateScalar(context, *offset_expr);
 				if (offset_value.IsNull()) {
 					return false;
 				}
@@ -138,15 +139,16 @@ public:
 		}
 
 		static bool ComputeDefault(ClientContext &context, BoundWindowExpression &wexpr, Value &result) {
-			if (!wexpr.default_expr) {
+			if (wexpr.children.size() < 3) {
 				result = Value(wexpr.return_type);
 				return true;
 			}
 
-			if (wexpr.default_expr && (wexpr.default_expr->HasParameter() || !wexpr.default_expr->IsFoldable())) {
+			auto &default_expr = wexpr.children[2];
+			if (default_expr && (default_expr->HasParameter() || !default_expr->IsFoldable())) {
 				return false;
 			}
-			auto dflt_value = ExpressionExecutor::EvaluateScalar(context, *wexpr.default_expr);
+			auto dflt_value = ExpressionExecutor::EvaluateScalar(context, *default_expr);
 			return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
 		}
 
@@ -158,7 +160,7 @@ public:
 			buffered = idx_t(std::abs(offset));
 			prev.Reference(dflt);
 			prev.Flatten(buffered);
-			temp.Initialize(false, buffered);
+			temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 		}
 
 		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
@@ -426,7 +428,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// Check for COUNT(*)
 	if (wexpr.children.empty()) {
 		D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
-		auto data = FlatVector::GetData<int64_t>(result);
+		auto data = FlatVector::GetDataMutable<int64_t>(result);
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));
@@ -478,15 +480,15 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	SelectionVector sel(&s);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
-	arg_cursor.Slice(sel, 1);
 	// This doesn't work for STRUCTs because the SV
 	// is not copied to the children when you slice
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
 		auto &col_vec = arg_cursor.data[col_idx];
-		DictionaryVector::Child(col_vec).Reference(arg_chunk.data[col_idx]);
 		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 			structs.emplace_back(col_idx);
+		} else {
+			arg_cursor.data[col_idx].Slice(arg_chunk.data[col_idx], sel, 1);
 		}
 	}
 
@@ -607,7 +609,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
 			int64_t start_row = gstate.row_number;
-			auto rdata = FlatVector::GetData<int64_t>(output.data[col_idx]);
+			auto rdata = FlatVector::GetDataMutable<int64_t>(output.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
 				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 			}

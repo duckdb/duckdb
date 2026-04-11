@@ -19,7 +19,7 @@ struct TemplatedListReader {
 	static DATA Initialize(optional_ptr<Vector> result_out) {
 		D_ASSERT(ListVector::GetListSize(*result_out) == 0);
 
-		auto result_ptr = FlatVector::GetData<list_entry_t>(*result_out);
+		auto result_ptr = FlatVector::GetDataMutable<list_entry_t>(*result_out);
 		auto &result_mask = FlatVector::Validity(*result_out);
 		return ListReaderData(result_ptr, result_mask);
 	}

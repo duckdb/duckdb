@@ -1,0 +1,30 @@
+# name: test/sql/attach/attach_issue_21491.test
+# description: Issue #21491 - ATTACH expression support (PEG parser)
+# group: [attach]
+
+require autocomplete
+
+statement error
+ATTACH unknown_scalar('test.db') AS db;
+----
+<REGEX>:(.*Parser Error: syntax error at or near.*|.*Catalog Error: Scalar Function with name.*)
+
+statement ok
+ATTACH ':memory:' AS memdb
+
+statement ok
+DETACH memdb
+
+statement ok
+call enable_peg_parser();
+
+statement error
+ATTACH unknown_scalar('test.db') AS db;
+----
+Scalar Function with name unknown_scalar does not exist!
+
+statement ok
+ATTACH lower(':MEMORY:') AS memdb
+
+statement ok
+DETACH memdb

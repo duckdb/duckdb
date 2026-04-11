@@ -92,7 +92,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	return BindResult(std::move(group_ref));
 }
 
-BindResult HavingBinder::BindWindow(WindowExpression &expr, idx_t depth) {
+BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t depth) {
 	throw BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!");
 }
 

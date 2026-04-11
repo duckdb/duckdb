@@ -5,27 +5,45 @@
 
 namespace duckdb {
 
-buffer_ptr<VectorChildBuffer> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
-	auto res = make_buffer<VectorChildBuffer>(Vector(type, size));
-	res->size = size;
-	res->id = UUID::ToString(UUID::GenerateRandomUUID());
-	return res;
+DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p)
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel),
+      entry(std::move(entry_p)) {
+}
+DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p)
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)),
+      entry(std::move(entry_p)) {
+}
+DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel)
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
+}
+DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data)
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
+}
+DictionaryBuffer::DictionaryBuffer(idx_t count)
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
+}
+
+buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
+	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
+	entry->size = size;
+	entry->id = UUID::ToString(UUID::GenerateRandomUUID());
+	return entry;
 }
 
 const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 
-	auto &child = input.auxiliary->Cast<VectorChildBuffer>();
-	lock_guard<mutex> guard(child.cached_hashes_lock);
+	auto &entry = input.buffer->Cast<DictionaryBuffer>().GetEntry();
+	lock_guard<mutex> guard(entry.cached_hashes_lock);
 
-	if (!child.cached_hashes) {
+	if (!entry.cached_hashes) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
-		D_ASSERT(!child.size.IsValid() || child.size.GetIndex() == dictionary_size);
-		child.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
-		VectorOperations::Hash(child.data, *child.cached_hashes, dictionary_size);
+		D_ASSERT(!entry.size.IsValid() || entry.size.GetIndex() == dictionary_size);
+		entry.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
+		VectorOperations::Hash(entry.data, *entry.cached_hashes, dictionary_size);
 	}
-	return *child.cached_hashes;
+	return *entry.cached_hashes;
 }
 
 } // namespace duckdb

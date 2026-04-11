@@ -68,7 +68,7 @@ void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputD
 	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 	auto states = states_vector.Values<ListAggState *>(count);
-	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
+	auto combined_ptr = FlatVector::GetDataMutable<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].value;
 		if (state.linked_list.total_capacity == 0) {
@@ -97,7 +97,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	auto &mask = FlatVector::Validity(result);
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count + offset);
 	size_t total_len = ListVector::GetListSize(result);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
@@ -144,7 +144,7 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 	}
 
 	auto states = states_vector.Values<ListAggState *>(count);
-	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
+	auto combined_ptr = FlatVector::GetDataMutable<ListAggState *>(combined);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	auto result_type = ListType::GetChildType(list_bind_data.stype);

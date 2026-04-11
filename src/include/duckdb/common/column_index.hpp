@@ -140,6 +140,7 @@ public:
 	const LogicalType &GetType() const;
 	void AddChildIndex(ColumnIndex new_index);
 	bool IsRowIdColumn() const;
+	bool IsRowNumberColumn() const;
 	bool IsEmptyColumn() const;
 	bool IsVirtualColumn() const;
 	void VerifySinglePath() const;

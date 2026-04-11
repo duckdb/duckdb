@@ -40,6 +40,9 @@ StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) co
 	if (column_id.IsRowIdColumn()) {
 		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID);
 	}
+	if (column_id.IsRowNumberColumn()) {
+		return StorageIndex(COLUMN_IDENTIFIER_ROW_NUMBER);
+	}
 
 	// The index of the base ColumnIndex is equal to the physical column index in the table
 	// for any child indices because the indices are already the physical indices.

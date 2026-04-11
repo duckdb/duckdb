@@ -454,7 +454,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 				if (rc == -1) {
 					extended_error += ". Also, failed closing file";
 				}
-				extended_error += ". See also https://duckdb.org/docs/stable/connect/concurrency";
+				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
 				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
 			}

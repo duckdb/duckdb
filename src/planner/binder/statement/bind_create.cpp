@@ -20,6 +20,7 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -193,6 +194,19 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (base.binding_mode == CreateViewBindingMode::SKIP_BINDING) {
 		return;
+	}
+	// DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a view,
+	// because the DML would execute every time the view is queried.
+	for (auto &kv : base.query->node->cte_map.map) {
+		auto &cte = *kv.second;
+		if (!cte.query_node) {
+			continue;
+		}
+		auto t = cte.query_node->type;
+		if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+		    t == QueryNodeType::DELETE_QUERY_NODE) {
+			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
+		}
 	}
 	optional_ptr<LogicalDependencyList> dependencies;
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
@@ -445,6 +459,59 @@ void Binder::BindLogicalType(LogicalType &type) {
 	});
 }
 
+SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
+	TableDescription table_description(create_trigger_info.base_table->catalog_name,
+	                                   create_trigger_info.base_table->schema_name,
+	                                   create_trigger_info.base_table->table_name);
+	auto table_ref = make_uniq<BaseTableRef>(table_description);
+	auto bound_table = Bind(*table_ref);
+	auto &get = bound_table.plan->Cast<LogicalGet>();
+	auto table_ptr = get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("CREATE TRIGGER requires a base table");
+	}
+	auto &table = *table_ptr;
+
+	// Trigger inherits catalog/schema from the base table
+	create_trigger_info.catalog = table.catalog.GetName();
+	create_trigger_info.schema = table.schema.name;
+
+	auto &schema = BindCreateSchema(create_trigger_info);
+
+	// Block trigger creation on databases with an older storage version
+	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog);
+	auto &attached = catalog.GetAttached();
+	if (attached.HasStorageManager()) {
+		auto &storage_manager = attached.GetStorageManager();
+		const auto since = SerializationCompatibility::FromString("v2.0.0").serialization_version;
+		if (!create_trigger_info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
+		    storage_manager.GetStorageVersion() < since) {
+			string msg = "CREATE TRIGGER is only supported for storage versions v2.0.0 and higher.\n";
+			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
+			throw BinderException(msg);
+		}
+	}
+
+	// Validate UPDATE OF columns exist
+	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
+		for (const auto &col_name : create_trigger_info.columns) {
+			if (!table.ColumnExists(col_name)) {
+				throw BinderException("Column \"%s\" does not exist in table \"%s\"", col_name, table.name);
+			}
+		}
+	}
+
+	// Bind a copy of the trigger body to validate it (keep original unbound for serialization)
+	auto body_copy = create_trigger_info.trigger_action->Copy();
+	Bind(*body_copy);
+
+	// Add table dependency
+	create_trigger_info.dependencies.AddDependency(table);
+
+	return schema;
+}
+
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
@@ -660,8 +727,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}
-	case CatalogType::TRIGGER_ENTRY:
-		throw NotImplementedException("CREATE TRIGGER is not yet supported");
+	case CatalogType::TRIGGER_ENTRY: {
+		auto &create_trigger_info = stmt.info->Cast<CreateTriggerInfo>();
+		auto &schema = BindCreateTriggerInfo(create_trigger_info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TRIGGER, std::move(stmt.info), &schema);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized type!");
 	}

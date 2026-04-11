@@ -11,8 +11,7 @@ namespace duckdb {
 static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// Early-out, if the return value is a constant NULL.
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -49,8 +48,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	ListVector::SetListSize(result, child_vector_size.value);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_entries = FlatVector::Writer<list_entry_t>(result);
 	auto &result_child_vector = ListVector::GetEntry(result);
 
 	// Get the default values, if provided.
@@ -68,7 +66,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		// Set to NULL, if the list is NULL.
 		if (!lists_data.validity.RowIsValid(list_idx)) {
-			result_validity.SetInvalid(row_idx);
+			result_entries.SetInvalid(row_idx);
 			continue;
 		}
 

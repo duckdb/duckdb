@@ -4,23 +4,19 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 
 PerfectHashJoinFilter::PerfectHashJoinFilter(optional_ptr<const PerfectHashJoinExecutor> perfect_join_executor_p,
-                                             const string &key_column_name_p)
-    : TableFilter(TYPE), perfect_join_executor(perfect_join_executor_p), key_column_name(key_column_name_p) {
+                                             const string &key_column_name_p, const LogicalType &key_type_p)
+    : TableFilter(TYPE), perfect_join_executor(perfect_join_executor_p), key_column_name(key_column_name_p),
+      key_type(key_type_p) {
 }
 
 template <class T>
-static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecutor &perfect_join_executor,
-                                                      const BaseStatistics &stats) {
-	if (!NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	const auto min = NumericStats::GetMin<T>(stats);
-	const auto max = NumericStats::GetMax<T>(stats);
+static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecutor &perfect_join_executor, T min,
+                                                      T max, const LogicalType &type) {
 	if (min > max) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
 	}
@@ -32,8 +28,8 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
 	}
 
-	Vector range_vec(stats.GetType(), DEFAULT_STANDARD_VECTOR_SIZE);
-	auto range_data = FlatVector::GetData<T>(range_vec);
+	Vector range_vec(type, DEFAULT_STANDARD_VECTOR_SIZE);
+	auto range_data = FlatVector::GetDataMutable<T>(range_vec);
 	T val = min;
 	for (; val < max; val += 1) {
 		*range_data++ = val;
@@ -56,30 +52,49 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 }
 
 FilterPropagateResult PerfectHashJoinFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!perfect_join_executor) {
+	if (!perfect_join_executor || !TypeIsInteger(key_type.InternalType()) || !NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	switch (stats.GetType().InternalType()) {
+
+	auto min_val = NumericStats::Min(stats);
+	auto max_val = NumericStats::Max(stats);
+
+	// The filter was built with key_type (condition_type), but stats are in storage_type
+	if (stats.GetType() != key_type && (!min_val.DefaultTryCastAs(key_type) || !max_val.DefaultTryCastAs(key_type))) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	switch (key_type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedCheckStatistics<uint8_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<uint8_t>(*perfect_join_executor, min_val.GetValueUnsafe<uint8_t>(),
+		                                         max_val.GetValueUnsafe<uint8_t>(), key_type);
 	case PhysicalType::UINT16:
-		return TemplatedCheckStatistics<uint16_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<uint16_t>(*perfect_join_executor, min_val.GetValueUnsafe<uint16_t>(),
+		                                          max_val.GetValueUnsafe<uint16_t>(), key_type);
 	case PhysicalType::UINT32:
-		return TemplatedCheckStatistics<uint32_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<uint32_t>(*perfect_join_executor, min_val.GetValueUnsafe<uint32_t>(),
+		                                          max_val.GetValueUnsafe<uint32_t>(), key_type);
 	case PhysicalType::UINT64:
-		return TemplatedCheckStatistics<uint64_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<uint64_t>(*perfect_join_executor, min_val.GetValueUnsafe<uint64_t>(),
+		                                          max_val.GetValueUnsafe<uint64_t>(), key_type);
 	case PhysicalType::UINT128:
-		return TemplatedCheckStatistics<uhugeint_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<uhugeint_t>(*perfect_join_executor, min_val.GetValueUnsafe<uhugeint_t>(),
+		                                            max_val.GetValueUnsafe<uhugeint_t>(), key_type);
 	case PhysicalType::INT8:
-		return TemplatedCheckStatistics<int8_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<int8_t>(*perfect_join_executor, min_val.GetValueUnsafe<int8_t>(),
+		                                        max_val.GetValueUnsafe<int8_t>(), key_type);
 	case PhysicalType::INT16:
-		return TemplatedCheckStatistics<int16_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<int16_t>(*perfect_join_executor, min_val.GetValueUnsafe<int16_t>(),
+		                                         max_val.GetValueUnsafe<int16_t>(), key_type);
 	case PhysicalType::INT32:
-		return TemplatedCheckStatistics<int32_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<int32_t>(*perfect_join_executor, min_val.GetValueUnsafe<int32_t>(),
+		                                         max_val.GetValueUnsafe<int32_t>(), key_type);
 	case PhysicalType::INT64:
-		return TemplatedCheckStatistics<int64_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<int64_t>(*perfect_join_executor, min_val.GetValueUnsafe<int64_t>(),
+		                                         max_val.GetValueUnsafe<int64_t>(), key_type);
 	case PhysicalType::INT128:
-		return TemplatedCheckStatistics<hugeint_t>(*perfect_join_executor, stats);
+		return TemplatedCheckStatistics<hugeint_t>(*perfect_join_executor, min_val.GetValueUnsafe<hugeint_t>(),
+		                                           max_val.GetValueUnsafe<hugeint_t>(), key_type);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -89,19 +104,19 @@ string PerfectHashJoinFilter::ToString(const string &column_name) const {
 	return column_name + " IN PHJ(" + key_column_name + ")";
 }
 
-idx_t PerfectHashJoinFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const {
+idx_t PerfectHashJoinFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
+                                    JoinFilterTableFilterState &state) const {
 	if (!perfect_join_executor) {
 		return approved_tuple_count;
 	}
 
-	const idx_t approved_before = approved_tuple_count;
-	approved_tuple_count = 0;
+	state.PrepareSlicedKeys(keys, sel, approved_tuple_count);
 
 	// Perform the probe
-	Vector keys_sliced(keys, sel, approved_before);
-	SelectionVector probe_sel(approved_before);
-	perfect_join_executor->FillSelectionVectorSwitchProbe(keys_sliced, approved_before, probe_sel, approved_tuple_count,
-	                                                      nullptr);
+	const idx_t approved_before = approved_tuple_count;
+	approved_tuple_count = 0;
+	perfect_join_executor->FillSelectionVectorSwitchProbe(state.keys_sliced_v, approved_before, state.probe_sel,
+	                                                      approved_tuple_count, nullptr);
 
 	if (approved_tuple_count == approved_before) {
 		return approved_tuple_count; // Nothing was filtered
@@ -109,22 +124,29 @@ idx_t PerfectHashJoinFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &a
 
 	if (sel.IsSet()) {
 		for (idx_t idx = 0; idx < approved_tuple_count; idx++) {
-			const idx_t sliced_sel_idx = probe_sel.get_index_unsafe(idx);
+			const idx_t sliced_sel_idx = state.probe_sel.get_index_unsafe(idx);
 			const idx_t original_sel_idx = sel.get_index_unsafe(sliced_sel_idx);
 			sel.set_index(idx, original_sel_idx);
 		}
 	} else {
-		sel.Initialize(probe_sel);
+		sel.Initialize(state.probe_sel);
 	}
 
 	return approved_tuple_count;
 }
 
 bool PerfectHashJoinFilter::FilterValue(const Value &value) const {
-	Vector keys(value);
+	auto cast_value = value;
+	if (!cast_value.DefaultTryCastAs(GetKeyType())) {
+		return true;
+	}
+
+	Vector keys(cast_value);
 	SelectionVector sel;
-	idx_t approved_tuple_count = 1;
-	Filter(keys, sel, approved_tuple_count);
+	const idx_t approved_before = 1;
+	idx_t approved_tuple_count = 0;
+	perfect_join_executor->FillSelectionVectorSwitchProbe(keys, approved_before, sel, approved_tuple_count, nullptr);
+
 	return approved_tuple_count == 1;
 }
 
@@ -136,7 +158,7 @@ bool PerfectHashJoinFilter::Equals(const TableFilter &other_p) const {
 	return perfect_join_executor.get() == other.perfect_join_executor.get() && key_column_name == other.key_column_name;
 }
 unique_ptr<TableFilter> PerfectHashJoinFilter::Copy() const {
-	return make_uniq<PerfectHashJoinFilter>(perfect_join_executor, key_column_name);
+	return make_uniq<PerfectHashJoinFilter>(perfect_join_executor, key_column_name, key_type);
 }
 
 unique_ptr<Expression> PerfectHashJoinFilter::ToExpression(const Expression &column) const {
@@ -147,11 +169,13 @@ unique_ptr<Expression> PerfectHashJoinFilter::ToExpression(const Expression &col
 void PerfectHashJoinFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WriteProperty<string>(200, "key_column_name", key_column_name);
+	serializer.WriteProperty<LogicalType>(201, "key_type", key_type);
 }
 
 unique_ptr<TableFilter> PerfectHashJoinFilter::Deserialize(Deserializer &deserializer) {
 	auto key_column_name = deserializer.ReadProperty<string>(200, "key_column_name");
-	return make_uniq<PerfectHashJoinFilter>(nullptr, key_column_name);
+	auto key_type = deserializer.ReadProperty<LogicalType>(201, "key_type");
+	return make_uniq<PerfectHashJoinFilter>(nullptr, key_column_name, key_type);
 }
 
 } // namespace duckdb

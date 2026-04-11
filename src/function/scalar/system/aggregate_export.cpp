@@ -122,7 +122,7 @@ struct AggregateStateLayout {
 	// Works only on a legacy state format where the entire state is stored as a blob
 	void Store(Vector &result, idx_t row, data_ptr_t src) const {
 		D_ASSERT(!is_struct);
-		auto result_ptr = FlatVector::GetData<string_t>(result);
+		auto result_ptr = FlatVector::GetDataMutable<string_t>(result);
 		result_ptr[row] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(src), state_size);
 	}
 
@@ -162,7 +162,7 @@ struct StoreFieldOp {
 	template <class T>
 	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources, idx_t field_offset) {
 		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
+		auto child_data = FlatVector::Writer<T>(child, count);
 
 		for (idx_t row = 0; row < count; row++) {
 			auto src = sources[row] + field_offset;
@@ -170,24 +170,6 @@ struct StoreFieldOp {
 		}
 	}
 };
-
-// Specialization for string_t to handle big strings correctly
-// For big strings (>12 bytes), string_t contains a pointer to the actual data.
-// We need to copy the actual string data to the result vector's string heap,
-// not just copy the pointer (which would point to aggregate allocator memory).
-template <>
-void StoreFieldOp::Operation<string_t>(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources,
-                                       idx_t field_offset) {
-	auto &child = StructVector::GetEntries(struct_vec)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
-
-	for (idx_t row = 0; row < count; row++) {
-		auto src = sources[row] + field_offset;
-		string_t source_str = *reinterpret_cast<string_t *>(src);
-		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
-	}
-}
 
 struct CopyFromInputFieldOp {
 	template <class T>
@@ -197,7 +179,7 @@ struct CopyFromInputFieldOp {
 		auto input_child_data = FlatVector::GetData<T>(input_child);
 
 		auto &result_child = StructVector::GetEntries(result_vec)[field_idx];
-		auto result_child_data = FlatVector::GetData<T>(result_child);
+		auto result_child_data = FlatVector::GetDataMutable<T>(result_child);
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
@@ -229,7 +211,7 @@ struct StoreFieldForSelectedRowsOp {
 	static void Operation(const AggregateStateLayout &layout, Vector &result, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
 		auto &child = StructVector::GetEntries(result)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
+		auto child_data = FlatVector::Writer<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
@@ -238,24 +220,6 @@ struct StoreFieldForSelectedRowsOp {
 		}
 	}
 };
-
-// Specialization for string_t to handle big strings correctly
-// Same fix as StoreFieldOp - copy actual string data, not just pointers
-template <>
-void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout &layout, Vector &result,
-                                                      idx_t field_idx, const SelectionVector &sel, idx_t count,
-                                                      data_ptr_t base_ptr, idx_t field_offset) {
-	auto &child = StructVector::GetEntries(result)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
-
-	for (idx_t i = 0; i < count; i++) {
-		idx_t row = sel.get_index(i);
-		auto src = base_ptr + i * layout.aligned_state_size + field_offset;
-		string_t source_str = *reinterpret_cast<string_t *>(src);
-		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
-	}
-}
 
 idx_t GetRecursivePhysicalSize(const LogicalType &type) {
 	if (type.id() != LogicalTypeId::STRUCT) {
@@ -313,7 +277,7 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 
 			// we need to write to the buffers with the current offset the child is pointing to in the state
 			Vector child_addresses(LogicalType::POINTER);
-			auto child_ptrs = FlatVector::GetData<data_ptr_t>(child_addresses);
+			auto child_ptrs = FlatVector::GetDataMutable<data_ptr_t>(child_addresses);
 			for (idx_t row = 0; row < count; row++) {
 				child_ptrs[row] = addresses_ptrs[row] + offset_in_state;
 			}
@@ -364,7 +328,7 @@ static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const
 
 	// AggregateStateFinalize: packed buffer -> result values
 	Vector addresses_vec(LogicalType::POINTER);
-	auto addresses_finalize = FlatVector::GetData<data_ptr_t>(addresses_vec);
+	auto addresses_finalize = FlatVector::GetDataMutable<data_ptr_t>(addresses_vec);
 	for (idx_t i = 0; i < valid_count; i++) {
 		addresses_finalize[i] = temp_state_buf.get() + i * layout.aligned_state_size;
 	}
@@ -437,7 +401,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
 
-	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
+	auto state_vec_ptr = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses);
 
 	input.data[0].Flatten(input.size());
 
@@ -594,8 +558,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 	// Handle both-valid rows - batched load, combine, store
 	if (both_valid_count > 0) {
-		auto state0_ptrs = FlatVector::GetData<data_ptr_t>(local_state.addresses0);
-		auto state1_ptrs = FlatVector::GetData<data_ptr_t>(local_state.addresses1);
+		auto state0_ptrs = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses0);
+		auto state1_ptrs = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses1);
 
 		// Pack state buffer pointers in selection order (not row order)
 		for (idx_t i = 0; i < both_valid_count; i++) {
@@ -751,7 +715,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	auto addresses_ptrs = FlatVector::GetDataMutable<data_ptr_t>(state);
 
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 
@@ -765,10 +729,10 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		return;
 	}
 
-	auto blob_ptr = FlatVector::GetData<string_t>(result);
+	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
+		blob_ptr[row_idx] = string_t(const_char_ptr_cast(data_ptr), state_size);
 	}
 }
 
@@ -828,12 +792,12 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	// source_vec holds pointers to the binary states buffer (temp_state_buf) deserialized from the input states
 	Vector source_vec(LogicalType::POINTER);
-	auto source_ptrs = FlatVector::GetData<data_ptr_t>(source_vec);
+	auto source_ptrs = FlatVector::GetDataMutable<data_ptr_t>(source_vec);
 
 	// target_vec will hold pointers to the binary state buffer where the combined states should be stored, built by the
 	// underlying aggregate function's combine callback
 	Vector target_vec(LogicalType::POINTER);
-	auto target_ptrs = FlatVector::GetData<data_ptr_t>(target_vec);
+	auto target_ptrs = FlatVector::GetDataMutable<data_ptr_t>(target_vec);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto temp_ptr = temp_state_buf.get() + i * aligned_size;
@@ -855,7 +819,7 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 	auto state_size = bind_data.state_size;
-	auto addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	auto addresses_ptrs = FlatVector::GetDataMutable<data_ptr_t>(state);
 
 	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
 

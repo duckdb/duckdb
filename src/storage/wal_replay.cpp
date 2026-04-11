@@ -19,6 +19,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -247,6 +248,9 @@ protected:
 
 	void ReplayCreateIndex();
 	void ReplayDropIndex();
+
+	void ReplayCreateTrigger();
+	void ReplayDropTrigger();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -644,6 +648,12 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TYPE:
 		ReplayDropType();
 		break;
+	case WALType::CREATE_TRIGGER:
+		ReplayCreateTrigger();
+		break;
+	case WALType::DROP_TRIGGER:
+		ReplayDropTrigger();
+		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -912,6 +922,40 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 }
 
 //===--------------------------------------------------------------------===//
+// Replay Trigger
+//===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ReplayCreateTrigger() {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "trigger");
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	if (DeserializeOnly()) {
+		return;
+	}
+	auto &trigger_info = info->Cast<CreateTriggerInfo>();
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog, trigger_info.schema,
+	                                                   trigger_info.base_table->table_name);
+	auto &duck_table = table.Cast<DuckTableEntry>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	duck_table.CreateTrigger(transaction, trigger_info);
+}
+
+void WriteAheadLogDeserializer::ReplayDropTrigger() {
+	DropInfo info;
+	info.type = CatalogType::TRIGGER_ENTRY;
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
+	auto table_name = deserializer.ReadPropertyWithDefault<string>(103, "table");
+	if (DeserializeOnly()) {
+		return;
+	}
+	if (!table_name.empty()) {
+		auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+		auto &duck_table = table.Cast<DuckTableEntry>();
+		auto transaction = catalog.GetCatalogTransaction(context);
+		duck_table.DropTrigger(transaction, info.name, info.cascade);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Replay Sequence
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSequence() {
@@ -1117,7 +1161,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			column_ids.emplace_back(col.StorageOid());
 		}
 		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
-		auto row_ids = FlatVector::GetData<row_t>(row_id_vector);
+		auto row_ids = FlatVector::GetDataMutable<row_t>(row_id_vector);
 		auto current_row_id = storage.GetTotalRows();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
 			for (idx_t r = 0; r < chunk.size(); r++) {

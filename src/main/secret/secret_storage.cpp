@@ -88,11 +88,14 @@ vector<SecretEntry> CatalogSetSecretStorage::AllSecrets(optional_ptr<CatalogTran
 void CatalogSetSecretStorage::DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
                                                optional_ptr<CatalogTransaction> transaction) {
 	auto entry = secrets->GetEntry(GetTransactionOrDefault(transaction), name);
-	if (!entry && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-		string persist_string = persistent ? "persistent" : "temporary";
-		string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
-		throw InvalidInputException("Failed to remove non-existent %s secret '%s'%s", persist_string, name,
-		                            storage_string);
+	if (!entry) {
+		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			string persist_string = persistent ? "persistent" : "temporary";
+			string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
+			throw InvalidInputException("Failed to remove non-existent %s secret '%s'%s", persist_string, name,
+			                            storage_string);
+		}
+		return;
 	}
 
 	secrets->DropEntry(GetTransactionOrDefault(transaction), name, true, true);

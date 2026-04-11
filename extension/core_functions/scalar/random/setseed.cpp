@@ -45,8 +45,7 @@ void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		random_engine.SetSeed(norm_seed);
 	}
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result);
 }
 
 unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,

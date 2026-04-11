@@ -1,4 +1,4 @@
-CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
 

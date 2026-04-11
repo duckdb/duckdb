@@ -100,7 +100,7 @@ struct ComputePartitionIndicesFunctor {
 			const auto &source_sel = *format.sel;
 
 			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
-			const auto target = FlatVector::GetData<hash_t>(partition_indices);
+			const auto target = FlatVector::GetDataMutable<hash_t>(partition_indices);
 
 			if (source_sel.IsSet()) {
 				for (idx_t i = 0; i < append_count; i++) {

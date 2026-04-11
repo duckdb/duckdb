@@ -36,7 +36,7 @@ template <class T>
 void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &nstats = segment.stats.statistics;
 
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	auto constant_value = NumericStats::GetMin<T>(nstats);
 	for (idx_t i = 0; i < count; i++) {
 		data[start_idx + i] = constant_value;
@@ -62,8 +62,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 	if (stats.CanHaveNull()) {
 		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
 		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
@@ -75,7 +74,7 @@ template <class T>
 void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &nstats = segment.stats.statistics;
 
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	data[0] = NumericStats::GetMin<T>(nstats);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 }

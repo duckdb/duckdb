@@ -10,18 +10,15 @@ namespace duckdb {
 static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &map = args.data[0];
 	auto entries = map.Values<list_entry_t>(args.size());
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<uint64_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
 
+	auto result_data = FlatVector::Writer<uint64_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
 		auto entry = entries[row];
+		if (!entry.IsValid()) {
+			result_data.SetInvalid(row);
+			continue;
+		}
 		result_data[row] = entries.GetValueUnsafe(row).length;
-		result_validity.Set(row, entry.IsValid());
-	}
-
-	if (args.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
