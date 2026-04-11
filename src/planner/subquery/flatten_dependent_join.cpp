@@ -370,6 +370,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
+		bool recursive_cte_ref = false;
+		bool has_cte_ref_metadata = false;
 		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 			auto &op = plan->Cast<LogicalCTERef>();
 
@@ -377,6 +379,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			if (rec_cte != binder.recursive_ctes.end()) {
 				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
+				has_cte_ref_metadata = true;
+				recursive_cte_ref = rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
 
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
 				if (op.correlated_columns == 0) {
@@ -407,13 +411,23 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			auto left_binding =
 			    ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
-			// add the correlated columns to the join conditions
+			idx_t right_offset = 0;
+			if (has_cte_ref_metadata && !recursive_cte_ref) {
+				D_ASSERT(correlated_columns.size() >= cteref.correlated_columns);
+				right_offset = correlated_columns.size() - cteref.correlated_columns;
+			}
+			// CTE refs append their carried correlation payload to the end of their own output.
+			// For non-recursive/materialized CTEs the matching delim payload is also a suffix; for recursive CTEs
+			// the recursive rewrite prepends the carried columns and we must keep the original prefix alignment.
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
+				auto &col = correlated_columns[right_offset + i];
 				JoinCondition cond;
-				cond.left = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-				cond.right = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+				cond.left = make_uniq<BoundColumnRefExpression>(col.type,
+				                                                ColumnBinding(left_binding.table_index,
+				                                                              left_binding.column_index + i));
+				cond.right = make_uniq<BoundColumnRefExpression>(col.type,
+				                                                 ColumnBinding(base_binding.table_index,
+				                                                               base_binding.column_index + right_offset + i));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(std::move(cond));
 			}
