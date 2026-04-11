@@ -1,5 +1,7 @@
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 
@@ -56,31 +58,25 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
-	if (type.id() == LogicalTypeId::UNION) {
-		// FIXME: re-add union vector verification
-		// auto valid_check = UnionVector::CheckUnionValidity(vector_p, count, sel_p);
-		// if (valid_check != UnionInvalidReason::VALID) {
-		// 	throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
-		// }
-	}
-	if (type.id() == LogicalTypeId::VARIANT) {
-		// FIXME: re-add variant vector verification
-		// if (!VariantUtils::Verify(vector_p, sel_p, count)) {
-		// 	throw InternalException("Variant not valid");
-		// }
-	}
-	for (auto &child : children) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(child_types.size() == children.size());
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		auto &child = children[child_idx];
+		D_ASSERT(child.GetType() == child_types[child_idx].second);
 		child.Verify(sel, count);
-
-		// FIXME: re-add this... (don't use .Validity)
-		// // for any NULL entry in the struct, the child should be NULL as well
-		// auto child_validity = child.Validity(count);
-		// for (idx_t i = 0; i < count; i++) {
-		// 	auto index = sel.get_index(i);
-		// 	if (!validity.RowIsValid(index)) {
-		// 		D_ASSERT(!child_validity.IsValid(index));
-		// 	}
-		// }
+		if (vector_type == VectorType::CONSTANT_VECTOR) {
+			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			if (!validity.RowIsValid(0)) {
+				D_ASSERT(ConstantVector::IsNull(child));
+			}
+		}
+		if (vector_type != VectorType::FLAT_VECTOR) {
+			continue;
+		}
+		// FIXME: re-add struct NULL propagation check
+		// for any NULL entry in the struct, the child should be NULL as well
+		// this check is currently disabled because projection pushdown and other optimizations
+		// may produce structs where parent NULLs are not propagated to all children
 	}
 }
 

@@ -110,7 +110,7 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		count = 1;
 	}
-	// FIXME: this we never asserted but probably should be...
+	// NOTE: size > capacity can occur in valid intermediate states (e.g. after SetListSize before Reserve)
 	// D_ASSERT(size <= capacity);
 	idx_t total_size = 0;
 	auto child_size = GetSize();
