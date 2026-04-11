@@ -53,6 +53,8 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - uses: docker/setup-qemu-action@v4
+
     - name: Build
       shell: bash
       run: |
