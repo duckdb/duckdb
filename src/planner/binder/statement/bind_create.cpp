@@ -529,6 +529,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	auto return_type = StatementReturnType::NOTHING;
 	auto output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto &properties = GetStatementProperties();
+
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.return_type = StatementReturnType::NOTHING;
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();

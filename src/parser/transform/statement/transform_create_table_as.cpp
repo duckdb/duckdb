@@ -12,9 +12,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}
-	if (stmt.is_select_into) {
-		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
-	}
 	if (stmt.query->type != duckdb_libpgquery::T_PGSelectStmt) {
 		throw ParserException("CREATE TABLE AS requires a SELECT clause");
 	}

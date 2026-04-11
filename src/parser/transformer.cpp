@@ -144,8 +144,23 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		}
 		return result;
 	}
-	case duckdb_libpgquery::T_PGSelectStmt:
-		return TransformSelectStmt(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
+	case duckdb_libpgquery::T_PGSelectStmt: {
+		auto &select = PGCast<duckdb_libpgquery::PGSelectStmt>(stmt);
+		if (select.intoClause) {
+			// SELECT ... INTO table is equivalent to CREATE TABLE AS SELECT.
+			// Rewrite as PGCreateTableAsStmt and route through CTAS path.
+			duckdb_libpgquery::PGCreateTableAsStmt ctas;
+			ctas.type = duckdb_libpgquery::T_PGCreateTableAsStmt;
+			ctas.query = reinterpret_cast<duckdb_libpgquery::PGNode *>(&select);
+			ctas.into = select.intoClause;
+			ctas.relkind = duckdb_libpgquery::PG_OBJECT_TABLE;
+			ctas.is_select_into = true;
+			ctas.onconflict = duckdb_libpgquery::PG_ERROR_ON_CONFLICT;
+			select.intoClause = nullptr;
+			return TransformCreateTableAs(ctas);
+		}
+		return TransformSelectStmt(select);
+	}
 	case duckdb_libpgquery::T_PGCreateStmt:
 		return TransformCreateTable(PGCast<duckdb_libpgquery::PGCreateStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateSchemaStmt:
