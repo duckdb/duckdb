@@ -80,6 +80,26 @@ statement error
 SELECT atanh(2::{type});
 ----
 
+statement error
+SELECT sin('inf'::{type});
+----
+
+statement error
+SELECT cos('inf'::{type});
+----
+
+statement error
+SELECT tan('inf'::{type});
+----
+
+statement error
+SELECT cot('inf'::{type});
+----
+
+statement error
+SELECT cot(0::{type});
+----
+
 statement ok
 SET ieee_floating_point_ops = true;
 
@@ -97,5 +117,15 @@ query IIIII
 SELECT asin(2::{type}), acos(2::{type}), atanh(2::{type}), atanh(1::{type}), atanh(-1::{type});
 ----
 nan	nan	nan	inf	-inf
+
+query IIII
+SELECT sin('inf'::{type}), cos('inf'::{type}), tan('inf'::{type}), cot('inf'::{type});
+----
+nan	nan	nan	nan
+
+query II
+SELECT cot(0::{type}), cot(-0::{type});
+----
+inf	-inf
 
 endloop
