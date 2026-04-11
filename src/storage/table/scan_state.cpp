@@ -109,18 +109,6 @@ void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 	always_true_filters++;
 }
 
-void ScanFilterInfo::SetSkipPrecomputedRowGroups() {
-	skip_precomputed_row_groups = true;
-}
-
-bool ScanFilterInfo::ShouldSkipRowGroup() const {
-	return skip_precomputed_row_groups && AllFiltersAlwaysTrue();
-}
-
-bool ScanFilterInfo::AllFiltersAlwaysTrue() const {
-	return filter_list.empty() || always_true_filters == filter_list.size();
-}
-
 optional_ptr<AdaptiveFilter> ScanFilterInfo::GetAdaptiveFilter() {
 	return adaptive_filter.get();
 }
@@ -249,9 +237,6 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 				}
 				bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
 				if (scan_row_group) {
-					if (GetFilterInfo().ShouldSkipRowGroup()) {
-						continue;
-					}
 					// scan this row group
 					break;
 				}

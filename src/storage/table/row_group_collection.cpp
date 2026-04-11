@@ -249,6 +249,9 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.collection = this;
 	state.row_groups = GetRowGroups();
 	state.current_row_group = state.GetRootSegment(*state.row_groups);
+	while (state.current_row_group && !state.ShouldScanPartition(*state.current_row_group)) {
+		state.current_row_group = state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get();
+	}
 	state.vector_index = 0;
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
 	state.batch_index = 0;
@@ -285,6 +288,10 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				state.vector_index++;
 				if (state.vector_index * STANDARD_VECTOR_SIZE >= current_row_group.count) {
 					state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
+					while (state.current_row_group && !state.ShouldScanPartition(*state.current_row_group)) {
+						state.current_row_group =
+						    state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get();
+					}
 					state.vector_index = 0;
 				}
 			} else {
@@ -292,6 +299,9 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				vector_index = 0;
 				max_row = row_start + current_row_group.count;
 				state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
+				while (state.current_row_group && !state.ShouldScanPartition(*state.current_row_group)) {
+					state.current_row_group = state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get();
+				}
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
@@ -304,11 +314,6 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		    InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index, max_row);
 		if (!need_to_scan) {
 			// skip this row group
-			continue;
-		}
-		// skip row groups where all filters are always true when optimizer already pre-computed their aggregates
-		if (scan_state.GetFilterInfo().ShouldSkipRowGroup()) {
-			scan_state.row_group = nullptr;
 			continue;
 		}
 		return true;

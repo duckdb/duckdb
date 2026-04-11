@@ -10,6 +10,7 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
@@ -30,8 +31,8 @@ struct TableScanBindData : public TableFunctionData {
 	bool is_create_index;
 	//! In what order to scan the row groups
 	unique_ptr<RowGroupOrderOptions> order_options;
-	//! Whether to skip for precomputed row groups
-	bool skip_precomputed_row_groups = false;
+	//! Subset of partition indices to scan, if null, scan all
+	unique_ptr<unordered_set<idx_t>> partitions_to_scan;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
@@ -44,7 +45,8 @@ public:
 		bind_data->is_create_index = is_create_index;
 		bind_data->column_ids = column_ids;
 		bind_data->order_options = order_options ? make_uniq<RowGroupOrderOptions>(*order_options) : nullptr;
-		bind_data->skip_precomputed_row_groups = skip_precomputed_row_groups;
+		bind_data->partitions_to_scan =
+		    partitions_to_scan ? make_uniq<unordered_set<idx_t>>(*partitions_to_scan) : nullptr;
 		return std::move(bind_data);
 	}
 };

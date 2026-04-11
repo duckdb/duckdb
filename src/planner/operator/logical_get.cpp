@@ -270,11 +270,12 @@ void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
 	function.set_scan_order(std::move(options), bind_data.get());
 }
 
-void LogicalGet::SetScanSkipPrecomputed() {
-	if (!function.set_scan_skip_precomputed) {
-		throw InternalException("LogicalGet::SetScanSkipPrecomputed called but function is not defined");
+void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
+	if (!function.set_partitions_to_scan) {
+		throw InternalException("LogicalGet::SetPartitionsToScan called but function is not defined");
 	}
-	function.set_scan_skip_precomputed(bind_data.get());
+	scan_partition_indices = partition_indices;
+	function.set_partitions_to_scan(std::move(partition_indices), bind_data.get());
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {
@@ -300,6 +301,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
 	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
 	                                                                      row_group_order_options);
+	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -332,6 +334,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
 	auto row_group_order_options =
 	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
+	auto scan_partition_indices =
+	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -390,6 +394,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	result->bind_data = std::move(bind_data);
 	if (row_group_order_options) {
 		result->SetScanOrder(std::move(row_group_order_options));
+	}
+	if (!scan_partition_indices.empty()) {
+		result->SetPartitionsToScan(std::move(scan_partition_indices));
 	}
 	return std::move(result);
 }

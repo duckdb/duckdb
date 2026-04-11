@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
@@ -208,10 +209,6 @@ public:
 	//! Labels the filters for this specific column as always true
 	//! We do not need to execute them anymore until CheckAllFilters is called
 	void SetFilterAlwaysTrue(idx_t filter_idx);
-	//! Enable skipping row groups whose aggregates were pre-computed by the optimizer
-	void SetSkipPrecomputedRowGroups();
-	//! Whether this row group should be skipped because the optimizer pre-computed its aggregates
-	bool ShouldSkipRowGroup() const;
 
 private:
 	//! The table filters (if any)
@@ -226,12 +223,6 @@ private:
 	unsafe_vector<bool> base_column_has_filter;
 	//! The amount of filters that are always true currently
 	idx_t always_true_filters = 0;
-	//! Whether to skip row groups whose aggregates were pre-computed by the optimizer
-	bool skip_precomputed_row_groups = false;
-
-private:
-	//! Whether all filters are always true for the current row group
-	bool AllFiltersAlwaysTrue() const;
 };
 
 class CollectionScanState {
@@ -349,6 +340,13 @@ struct ParallelCollectionScanState {
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Subset of partition indices to scan, if null, scan all
+	optional_ptr<const unordered_set<idx_t>> partitions_to_scan;
+
+	//! Whether this row group should be scanned
+	bool ShouldScanPartition(SegmentNode<RowGroup> &row_group) const {
+		return !partitions_to_scan || partitions_to_scan->count(row_group.GetIndex()) > 0;
+	}
 };
 
 struct ParallelTableScanState {

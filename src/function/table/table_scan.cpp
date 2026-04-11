@@ -287,9 +287,6 @@ public:
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
-		if (bind_data.skip_precomputed_row_groups) {
-			l_state->scan_state.filters.SetSkipPrecomputedRowGroups();
-		}
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
@@ -388,6 +385,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	if (bind_data.order_options) {
 		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+	}
+	if (bind_data.partitions_to_scan) {
+		g_state->state.scan_state.partitions_to_scan = bind_data.partitions_to_scan.get();
 	}
 
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
@@ -672,8 +672,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
-	// Skip index scan if the optimizer has pre-computed aggregates for some row groups
-	if (bind_data.skip_precomputed_row_groups) {
+	// Only scan specific partitions
+	if (bind_data.partitions_to_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
@@ -820,8 +820,6 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
 	serializer.WritePropertyWithDefault(105, "result_ids", unsafe_vector<row_t>());
-	serializer.WritePropertyWithDefault(106, "skip_precomputed_row_groups", bind_data.skip_precomputed_row_groups,
-	                                    false);
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -837,7 +835,6 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
 	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
 	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
-	deserializer.ReadPropertyWithDefault<bool>(106, "skip_precomputed_row_groups", result->skip_precomputed_row_groups);
 	return std::move(result);
 }
 
@@ -874,9 +871,9 @@ void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<F
 	bind_data.order_options = std::move(order_options);
 }
 
-void SetSkipPrecomputedRowGroups(optional_ptr<FunctionData> bind_data_p) {
+void SetPartitionsToScan(vector<idx_t> partition_indices, optional_ptr<FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	bind_data.skip_precomputed_row_groups = true;
+	bind_data.partitions_to_scan = make_uniq<unordered_set<idx_t>>(partition_indices.begin(), partition_indices.end());
 }
 
 TableFunction TableScanFunction::GetFunction() {
@@ -904,7 +901,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	scan_function.set_scan_order = SetScanOrder;
-	scan_function.set_scan_skip_precomputed = SetSkipPrecomputedRowGroups;
+	scan_function.set_partitions_to_scan = SetPartitionsToScan;
 	scan_function.supports_pushdown_extract = TableSupportsPushdownExtract;
 	return scan_function;
 }

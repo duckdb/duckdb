@@ -198,6 +198,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
 	bool need_to_scan = false;
+	vector<idx_t> scan_partition_indices;
 	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
 	if (get.table_filters.HasFilters()) {
 		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
@@ -212,7 +213,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			filter_storage_index_map.emplace(storage_index, filter);
 		}
 		vector<PartitionStatistics> precomputed_partition_stats;
-		for (auto &stats : partition_stats) {
+		for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
+			auto &stats = partition_stats[partition_idx];
 			if (!stats.partition_row_group) {
 				return;
 			}
@@ -246,6 +248,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				break;
 			default:
 				need_to_scan = true;
+				scan_partition_indices.push_back(partition_idx);
 				break;
 			}
 		}
@@ -300,8 +303,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (need_to_scan) {
 		// Partial precomputation: some partitions need scanning
 		// Insert a LogicalProjection above the aggregate that combines pre-computed constants with scan results
-		if (!get.function.set_scan_skip_precomputed) {
-			// scan does not support skipping - bail
+		if (!get.function.set_partitions_to_scan) {
+			// scan does not support partition filtering - bail out
 			return;
 		}
 
@@ -337,8 +340,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 		}
 
-		// Set the scan to skip row groups whose aggregates were pre-computed
-		get.SetScanSkipPrecomputed();
+		// Tell the scan to only scan partitions whose aggregates were NOT pre-computed
+		get.SetPartitionsToScan(std::move(scan_partition_indices));
 
 		// Create LogicalProjection above the aggregate
 		auto projection = make_uniq<LogicalProjection>(proj_index, std::move(proj_expressions));
