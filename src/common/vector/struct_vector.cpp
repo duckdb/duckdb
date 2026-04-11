@@ -168,21 +168,15 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	// create a new vector struct buffer
-	auto result = make_buffer<VectorStructBuffer>();
-	// copy over the validity
-	result->validity.Resize(new_size);
-	if (current_size > 0) {
-		result->validity.CopyRange(validity, current_size);
-	}
+	// resize over the validity
+	validity.Resize(new_size);
 	// resize the struct children
 	for (auto &child : children) {
-		result->children.emplace_back(Vector::Ref(child));
-		result->children.back().Resize(current_size, new_size);
+		child.Resize(current_size, new_size);
 	}
-	return result;
+	return nullptr;
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,

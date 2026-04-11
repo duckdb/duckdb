@@ -71,8 +71,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_
 	return make_buffer<StandardVectorBuffer>(std::move(new_data));
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size,
-                                                      idx_t new_size) const {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto old_byte_count = current_size * type_size;
 	auto target_byte_count = new_size * type_size;

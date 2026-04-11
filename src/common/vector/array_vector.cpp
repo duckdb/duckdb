@@ -132,18 +132,12 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 	return result;
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) const {
-	// resize the child node
-	auto resized_child = make_uniq<Vector>(Vector::Ref(*child));
-	resized_child->Resize(current_size * array_size, new_size * array_size);
-
-	// create a new vector array buffer
-	auto result = make_buffer<VectorArrayBuffer>(std::move(resized_child), array_size, new_size);
-	// copy over the validity
-	if (current_size > 0) {
-		result->validity.CopyRange(validity, current_size);
-	}
-	return result;
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
+	// resize the validity
+	validity.Resize(new_size);
+	// resize the child
+	child->Resize(current_size * array_size, new_size * array_size);
+	return nullptr;
 }
 
 void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
