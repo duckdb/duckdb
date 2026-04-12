@@ -24,7 +24,7 @@ public:
 	void *GetDecoder() const {
 		return duckdb_fsst_decoder.get();
 	}
-	vector<unsigned char> &GetDecompressBuffer() {
+	vector<unsigned char> &GetDecompressBuffer() const {
 		return decompress_buffer;
 	}
 	void SetCount(idx_t count) {
@@ -43,7 +43,7 @@ public:
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
-	vector<unsigned char> decompress_buffer;
+	mutable vector<unsigned char> decompress_buffer;
 };
 
 struct FSSTVector {

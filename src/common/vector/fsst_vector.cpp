@@ -24,8 +24,8 @@ Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) con
 		return Value(type);
 	}
 	auto str_compressed = reinterpret_cast<const string_t *>(data_ptr)[index];
-	auto decoder = const_cast<VectorFSSTStringBuffer *>(this)->GetDecoder();
-	auto &decompress_buffer = const_cast<VectorFSSTStringBuffer *>(this)->GetDecompressBuffer();
+	auto decoder = GetDecoder();
+	auto &decompress_buffer = GetDecompressBuffer();
 	auto string_val =
 	    FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(), decompress_buffer);
 	switch (type.id()) {
