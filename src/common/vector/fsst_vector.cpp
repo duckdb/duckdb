@@ -50,12 +50,17 @@ buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = sel.get_index(i);
 		auto target_idx = i;
+		if (!validity.RowIsValid(source_idx)) {
+			// NULL value
+			dst_mask.SetInvalid(target_idx);
+			continue;
+		}
 		auto &compressed_string = fsst_data[source_idx];
-		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
+		if (compressed_string.GetSize() > 0) {
 			result_data[target_idx] = FSSTPrimitives::DecompressValue(
 			    decoder, str_allocator, compressed_string.GetData(), compressed_string.GetSize());
 		} else {
-			dst_mask.SetInvalid(target_idx);
+			// empty string
 			result_data[target_idx] = string_t(nullptr, 0);
 		}
 	}
