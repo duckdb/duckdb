@@ -99,6 +99,42 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, i
 	return result;
 }
 
+template <idx_t TYPE_SIZE>
+void FixedFlattenCopy(data_ptr_t target, const_data_ptr_t source, const SelectionVector &sel, idx_t count) {
+	for (idx_t i = 0; i < count; i++) {
+		auto src_idx = sel.get_index(i);
+		memcpy(target + i * TYPE_SIZE, source + src_idx * TYPE_SIZE, TYPE_SIZE);
+	}
+}
+
+void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const SelectionVector &sel, idx_t count,
+                         idx_t type_size) {
+	switch (type_size) {
+	case 1:
+		FixedFlattenCopy<1>(target, source, sel, count);
+		break;
+	case 2:
+		FixedFlattenCopy<2>(target, source, sel, count);
+		break;
+	case 4:
+		FixedFlattenCopy<4>(target, source, sel, count);
+		break;
+	case 8:
+		FixedFlattenCopy<8>(target, source, sel, count);
+		break;
+	case 16:
+		FixedFlattenCopy<16>(target, source, sel, count);
+		break;
+	default:
+		// fallback: use non-fixed-width copy
+		for (idx_t i = 0; i < count; i++) {
+			auto src_idx = sel.get_index(i);
+			memcpy(target + i * type_size, source + src_idx * type_size, type_size);
+		}
+		break;
+	}
+}
+
 buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
                                                        idx_t count) const {
 	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
@@ -122,11 +158,8 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 	auto new_data = allocator.Allocate(target_byte_count);
 	// copy data using sel
-	auto dst = new_data.get();
-	for (idx_t i = 0; i < count; i++) {
-		auto src_idx = sel.get_index(i);
-		memcpy(dst + i * type_size, data_ptr + src_idx * type_size, type_size);
-	}
+	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
+
 	auto result = CreateBuffer(std::move(new_data));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
