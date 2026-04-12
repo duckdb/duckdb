@@ -11,6 +11,8 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
@@ -119,6 +121,36 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		auto &get = op.Cast<LogicalGet>();
 		if (get.table_filters.HasFilters()) {
 			pipe_info.has_filter = true;
+		}
+		// Populate distinct_groups from PRIMARY KEY / UNIQUE constraints.
+		// If the table has a PK or UNIQUE constraint whose columns are all
+		// present in the scan, record those columns as a distinct group so
+		// TryEliminateJoin's Check 2 can use them.
+		auto table = get.GetTable();
+		if (table) {
+			auto &constraints = table->GetConstraints();
+			auto &columns = table->GetColumns();
+			for (auto &constraint : constraints) {
+				if (constraint->type != ConstraintType::UNIQUE) {
+					continue;
+				}
+				auto &unique = constraint->Cast<UniqueConstraint>();
+				auto logical_indexes = unique.GetLogicalIndexes(columns);
+				column_binding_set_t constraint_group;
+				bool all_in_scan = true;
+				for (auto &logical_idx : logical_indexes) {
+					auto proj_idx = get.TryGetProjectionIndex(logical_idx.index);
+					if (!proj_idx.IsValid()) {
+						all_in_scan = false;
+						break;
+					}
+					constraint_group.insert(ColumnBinding(get.table_index, proj_idx));
+				}
+				if (all_in_scan && !constraint_group.empty()) {
+					pipe_info.distinct_groups[get.table_index] = std::move(constraint_group);
+					break;
+				}
+			}
 		}
 		break;
 	}
@@ -257,7 +289,7 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 	if (pipe_info.distinct_groups.empty()) {
 		return std::move(pipe_info.root);
 	}
-	// 1. TODO: guarantee by primary/foreign key
+	// 1. guarantee by primary key / unique constraint (populated from LOGICAL_GET constraints above)
 
 	if (!is_output_unique) {
 		is_output_unique = true;

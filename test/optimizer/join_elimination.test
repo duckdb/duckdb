@@ -244,3 +244,97 @@ query II
 explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# ----------------------------------------------------------------------------
+# PRIMARY KEY / UNIQUE constraint-based join elimination.
+# When the inner side of a LEFT JOIN has a PK or UNIQUE constraint covering
+# the join's equality columns, the inner side produces at most one row per
+# key. If no inner columns appear in the output, the join is a no-op.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk_dim (id INTEGER PRIMARY KEY, name VARCHAR, value INTEGER);
+
+statement ok
+INSERT INTO pk_dim VALUES (1, 'one', 10), (2, 'two', 20), (3, 'three', 30), (4, 'four', 40);
+
+# Single-column PK, no inner columns in output → join eliminated.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Correctness check: result matches with and without join elimination.
+query II rowsort
+SELECT b.* FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# Inner column referenced in output → join NOT eliminated.
+query II
+EXPLAIN SELECT b.idb, pk_dim.name FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Composite PRIMARY KEY — all columns covered → eliminated.
+statement ok
+CREATE TABLE composite_pk (x INTEGER, y INTEGER, value INTEGER, PRIMARY KEY(x, y));
+
+statement ok
+INSERT INTO composite_pk VALUES (1, 1, 10), (1, 2, 20), (2, 1, 30), (3, 3, 40);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN composite_pk ON composite_pk.x = b.idb AND composite_pk.y = b.valueb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Correctness.
+query II rowsort
+SELECT b.* FROM b LEFT JOIN composite_pk ON composite_pk.x = b.idb AND composite_pk.y = b.valueb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# Composite PK — only partial coverage → NOT eliminated.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN composite_pk ON composite_pk.x = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# UNIQUE constraint (not PK) → eliminated.
+statement ok
+CREATE TABLE unique_dim (id INTEGER, code INTEGER UNIQUE, value INTEGER);
+
+statement ok
+INSERT INTO unique_dim VALUES (1, 1, 10), (2, 2, 20), (3, 3, 30);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN unique_dim ON unique_dim.code = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Subquery wrapping the PK table — projection remapping should still work.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN (SELECT id FROM pk_dim) sub ON sub.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# RIGHT JOIN with PK on the inner side (which is children[0] for RIGHT),
+# no inner columns in output → eliminated.
+query II
+EXPLAIN SELECT b.* FROM pk_dim RIGHT JOIN b ON pk_dim.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
