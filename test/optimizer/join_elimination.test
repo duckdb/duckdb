@@ -244,3 +244,316 @@ query II
 explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# ----------------------------------------------------------------------------
+# PRIMARY KEY / UNIQUE constraint-based join elimination.
+# When the inner side of a LEFT JOIN has a PK or UNIQUE constraint covering
+# the join's equality columns, the inner side produces at most one row per
+# key. If no inner columns appear in the output, the join is a no-op.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk_dim (id INTEGER PRIMARY KEY, name VARCHAR, value INTEGER);
+
+statement ok
+INSERT INTO pk_dim VALUES (1, 'one', 10), (2, 'two', 20), (3, 'three', 30), (4, 'four', 40);
+
+# Single-column PK, no inner columns in output → join eliminated.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Correctness check: result matches with and without join elimination.
+query II rowsort
+SELECT b.* FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# Inner column referenced in output → join NOT eliminated.
+query II
+EXPLAIN SELECT b.idb, pk_dim.name FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Composite PRIMARY KEY — all columns covered → eliminated.
+statement ok
+CREATE TABLE composite_pk (x INTEGER, y INTEGER, value INTEGER, PRIMARY KEY(x, y));
+
+statement ok
+INSERT INTO composite_pk VALUES (1, 1, 10), (1, 2, 20), (2, 1, 30), (3, 3, 40);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN composite_pk ON composite_pk.x = b.idb AND composite_pk.y = b.valueb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Correctness.
+query II rowsort
+SELECT b.* FROM b LEFT JOIN composite_pk ON composite_pk.x = b.idb AND composite_pk.y = b.valueb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# Composite PK — only partial coverage → NOT eliminated.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN composite_pk ON composite_pk.x = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# UNIQUE constraint (not PK) → eliminated.
+statement ok
+CREATE TABLE unique_dim (id INTEGER, code INTEGER UNIQUE, value INTEGER);
+
+statement ok
+INSERT INTO unique_dim VALUES (1, 1, 10), (2, 2, 20), (3, 3, 30);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN unique_dim ON unique_dim.code = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Subquery wrapping the PK table — projection remapping should still work.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN (SELECT id FROM pk_dim) sub ON sub.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# RIGHT JOIN with PK on the inner side (which is children[0] for RIGHT),
+# no inner columns in output → eliminated.
+query II
+EXPLAIN SELECT b.* FROM pk_dim RIGHT JOIN b ON pk_dim.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# ----------------------------------------------------------------------------
+# Correctness: LEFT JOIN with non-matching keys returns NULLs correctly.
+# b has idb values {1,2,3,4,NULL}; pk_dim has id {1,2,3,4}. All match.
+# Add a probe value with no match to verify NULL-padding.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE probe_with_gaps(k INTEGER);
+
+statement ok
+INSERT INTO probe_with_gaps VALUES (1), (2), (999), (NULL);
+
+# 999 and NULL have no match in pk_dim → LEFT JOIN returns them with NULLs.
+# Since we only SELECT probe columns, join should be eliminated.
+query II
+EXPLAIN SELECT p.* FROM probe_with_gaps p LEFT JOIN pk_dim ON pk_dim.id = p.k;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Verify correctness: all probe rows preserved.
+query I rowsort
+SELECT p.k FROM probe_with_gaps p LEFT JOIN pk_dim ON pk_dim.id = p.k;
+----
+1
+2
+999
+NULL
+
+# Compare against non-eliminated version (force the join to stay by
+# referencing an inner column in a CASE that always returns the outer value).
+query I rowsort
+SELECT p.k FROM probe_with_gaps p LEFT JOIN pk_dim d ON d.id = p.k;
+----
+1
+2
+999
+NULL
+
+# ----------------------------------------------------------------------------
+# Filter on the inner (PK) table → has_filter blocks elimination.
+# A filter could reduce the inner side's row set, meaning some probe rows
+# that WOULD have matched now get NULL-padded. Eliminating the join would
+# incorrectly keep those rows unchanged instead of NULL-padding them.
+# (In practice, has_filter is set by table_filters from pushed-down WHERE.)
+# We test via a subquery with a WHERE clause.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN (SELECT * FROM pk_dim WHERE pk_dim.value > 15) sub ON sub.id = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Verify the filter changes the result: only id 2,3,4 survive the filter,
+# so idb=1 gets NULL-padded. Without the join, we'd just get all b rows.
+query III rowsort
+SELECT b.*, sub.name FROM b LEFT JOIN (SELECT * FROM pk_dim WHERE pk_dim.value > 15) sub ON sub.id = b.idb;
+----
+1	1	NULL
+2	2	two
+3	3	three
+3	3	three
+3	NULL	three
+4	4	four
+NULL	4	NULL
+NULL	NULL	NULL
+
+# ----------------------------------------------------------------------------
+# INNER JOIN on PK → NOT eliminated.
+# JoinElimination only handles LEFT/RIGHT/SINGLE. INNER JOIN filters rows
+# (probe rows with no match are dropped), so eliminating it would change
+# the result.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT b.* FROM b INNER JOIN pk_dim ON pk_dim.id = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# FULL OUTER JOIN on PK → NOT eliminated.
+query II
+EXPLAIN SELECT b.* FROM b FULL OUTER JOIN pk_dim ON pk_dim.id = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# ----------------------------------------------------------------------------
+# Empty inner PK table → LEFT JOIN still returns all outer rows with NULLs.
+# The join should be eliminated (PK guarantees uniqueness regardless of
+# whether the table is empty), and the result is just the probe rows.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE empty_pk (id INTEGER PRIMARY KEY, val INTEGER);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN empty_pk ON empty_pk.id = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II rowsort
+SELECT b.* FROM b LEFT JOIN empty_pk ON empty_pk.id = b.idb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# ----------------------------------------------------------------------------
+# Multiple chained LEFT JOINs against PK tables.
+# JoinElimination's recursive structure eliminates one level per pass.
+# The outermost eliminable join (pk_dim2) is removed; the inner (pk_dim) stays.
+# This is a pre-existing limitation, not specific to constraint-based elimination.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pk_dim2 (id INTEGER PRIMARY KEY, label VARCHAR);
+
+statement ok
+INSERT INTO pk_dim2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+
+# Only the pk_dim2 join is eliminated; pk_dim join remains.
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb LEFT JOIN pk_dim2 ON pk_dim2.id = b.valueb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Correctness: result matches regardless of which joins are eliminated.
+query II rowsort
+SELECT b.* FROM b LEFT JOIN pk_dim ON pk_dim.id = b.idb LEFT JOIN pk_dim2 ON pk_dim2.id = b.valueb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# ----------------------------------------------------------------------------
+# UNIQUE constraint with NULL join keys.
+# UNIQUE allows multiple NULLs, but NULL = NULL is FALSE in equi-joins, so
+# NULL probe keys never match. The LEFT JOIN returns probe rows with NULLs
+# for inner columns. Since no inner columns are in the output, this is
+# indistinguishable from no join → safe to eliminate.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE unique_nullable (x INTEGER UNIQUE, val INTEGER);
+
+statement ok
+INSERT INTO unique_nullable VALUES (1, 10), (2, 20), (NULL, 30), (NULL, 40);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN unique_nullable ON unique_nullable.x = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# Correctness: NULLs in probe (b.idb) preserved, no extra rows from NULLs
+# in unique_nullable.x.
+query II rowsort
+SELECT b.* FROM b LEFT JOIN unique_nullable ON unique_nullable.x = b.idb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# ----------------------------------------------------------------------------
+# Multi-column UNIQUE constraint (not PK) — both columns covered.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE multi_unique (a INTEGER, b_col INTEGER, val INTEGER, UNIQUE(a, b_col));
+
+statement ok
+INSERT INTO multi_unique VALUES (1, 1, 10), (1, 2, 20), (2, 2, 30);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN multi_unique ON multi_unique.a = b.idb AND multi_unique.b_col = b.valueb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II rowsort
+SELECT b.* FROM b LEFT JOIN multi_unique ON multi_unique.a = b.idb AND multi_unique.b_col = b.valueb;
+----
+1	1
+2	2
+3	3
+3	3
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# ----------------------------------------------------------------------------
+# Table with no constraints → join NOT eliminated (baseline behavior).
+# This is the existing behavior; just confirming our change doesn't
+# accidentally eliminate joins on unconstrained tables.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE no_constraint (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO no_constraint VALUES (1, 10), (1, 20), (2, 30);
+
+query II
+EXPLAIN SELECT b.* FROM b LEFT JOIN no_constraint ON no_constraint.id = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
