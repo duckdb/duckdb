@@ -20,6 +20,35 @@
 
 namespace duckdb {
 
+//! Validates that column references in MERGE action expressions and conditions are valid
+//! for the given match context. In NOT MATCHED BY TARGET, target columns don't exist.
+//! In NOT MATCHED BY SOURCE, source columns don't exist.
+static void ValidateMergeActionColumnReferences(const Expression &expr, MergeActionCondition condition,
+                                                const unordered_set<TableIndex> &source_table_indexes,
+                                                const unordered_set<TableIndex> &target_table_indexes,
+                                                const string &clause_name) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    expr, [&](const BoundColumnRefExpression &colref) {
+		    auto table_idx = colref.binding.table_index;
+
+		    if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
+			    // In NOT MATCHED BY TARGET context, target columns don't exist (no matching target row)
+			    if (target_table_indexes.count(table_idx)) {
+				    throw BinderException("Column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET %s - "
+				                          "no target row exists in this context",
+				                          colref.alias.empty() ? colref.ToString() : colref.alias, clause_name);
+			    }
+		    } else if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) {
+			    // In NOT MATCHED BY SOURCE context, source columns don't exist (no matching source row)
+			    if (source_table_indexes.count(table_idx)) {
+				    throw BinderException("Column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE %s - "
+				                          "no source row exists in this context",
+				                          colref.alias.empty() ? colref.ToString() : colref.alias, clause_name);
+			    }
+		    }
+	    });
+}
+
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
                                                               const vector<string> &names) {
 	vector<unique_ptr<ParsedExpression>> result;
@@ -38,7 +67,10 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
                                                          vector<unique_ptr<Expression>> &expressions,
                                                          unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
                                                          const vector<BindingAlias> &source_aliases,
-                                                         const vector<string> &source_names) {
+                                                         const vector<string> &source_names,
+                                                         MergeActionCondition condition,
+                                                         const unordered_set<TableIndex> &source_table_indexes,
+                                                         const unordered_set<TableIndex> &target_table_indexes) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
@@ -47,13 +79,26 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			WhereBinder where_binder(*this, context);
 			auto cond = where_binder.Bind(action.condition);
 			PlanSubqueries(cond, root);
+			// Validate column references in the condition before wrapping
+			ValidateMergeActionColumnReferences(*cond, condition, source_table_indexes, target_table_indexes,
+			                                    "condition");
 			auto cond_type = cond->return_type;
 			auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
 			result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
 		} else {
+			// Record the current size of expressions to validate only the new ones added by ProjectionBinder
+			auto expr_start_idx = expressions.size();
 			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
 			proj_binder.target_type = LogicalType::BOOLEAN;
 			auto cond = proj_binder.Bind(action.condition);
+			// Validate column references in the condition
+			// ProjectionBinder moves bound column expressions into 'expressions', so we need to check those
+			for (idx_t i = expr_start_idx; i < expressions.size(); i++) {
+				if (expressions[i]) {
+					ValidateMergeActionColumnReferences(*expressions[i], condition, source_table_indexes,
+					                                    target_table_indexes, "condition");
+				}
+			}
 			result->condition = std::move(cond);
 		}
 	}
@@ -78,7 +123,19 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			}
 			action.update_info->expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
+		// Record the current size of expressions to validate only the new ones added by BindUpdateSet
+		auto expr_start_idx = expressions.size();
 		BindUpdateSet(proj_index, root, *action.update_info, table, result->columns, result->expressions, expressions);
+
+		// Validate column references in UPDATE SET expressions
+		// The actual bound expressions are in 'expressions' (projection_expressions), not result->expressions
+		// which only contains BoundColumnRefExpression pointing to the projection
+		for (idx_t i = expr_start_idx; i < expressions.size(); i++) {
+			if (expressions[i]) {
+				ValidateMergeActionColumnReferences(*expressions[i], condition, source_table_indexes,
+				                                    target_table_indexes, "UPDATE SET clause");
+			}
+		}
 
 		// bind any additional columns that need to be bound for update constraints
 		// FIXME: this is pretty hacky
@@ -136,6 +193,9 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			auto insert_expr = insert_binder.Bind(action.expressions[i]);
 
 			PlanSubqueries(insert_expr, root);
+			// Validate column references in INSERT VALUES expression
+			ValidateMergeActionColumnReferences(*insert_expr, condition, source_table_indexes, target_table_indexes,
+			                                    "INSERT VALUES clause");
 			insert_expressions.push_back(std::move(insert_expr));
 		}
 
@@ -153,6 +213,9 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "Error Message");
 			proj_binder.target_type = LogicalType::VARCHAR;
 			auto error_msg = proj_binder.Bind(expr);
+			// Validate column references in error message expression
+			ValidateMergeActionColumnReferences(*error_msg, condition, source_table_indexes, target_table_indexes,
+			                                    "RAISE ERROR clause");
 			result->expressions.push_back(std::move(error_msg));
 		}
 		break;
@@ -324,12 +387,24 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
+	// Collect table indexes for source and target to validate column references
+	// Source table indexes come from the source side of the join
+	unordered_set<TableIndex> source_table_indexes;
+	source->ResolveOperatorTypes();
+	for (auto &binding : source->GetColumnBindings()) {
+		source_table_indexes.insert(binding.table_index);
+	}
+	// Target table index comes from the LogicalGet
+	unordered_set<TableIndex> target_table_indexes;
+	target_table_indexes.insert(get.table_index);
+
 	for (auto &entry : stmt.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
 			CheckMergeAction(entry.first, action->action_type);
 			bound_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index, projection_expressions, root,
-			                                        *action, source_aliases, source_names));
+			                                        *action, source_aliases, source_names, entry.first,
+			                                        source_table_indexes, target_table_indexes));
 		}
 		merge_into->actions.emplace(entry.first, std::move(bound_actions));
 	}
