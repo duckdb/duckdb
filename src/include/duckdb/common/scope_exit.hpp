@@ -30,10 +30,9 @@ public:
 	}
 	explicit ScopeGuard(Func &&func) : func_(std::forward<Func>(func)) {
 	}
+	// Disable copy and move.
 	ScopeGuard(const ScopeGuard &) = delete;
 	ScopeGuard &operator=(const ScopeGuard &) = delete;
-	ScopeGuard(ScopeGuard &&) = default;
-	ScopeGuard &operator=(ScopeGuard &&) = default;
 
 	~ScopeGuard() noexcept {
 		func_();
