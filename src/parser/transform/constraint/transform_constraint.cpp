@@ -101,7 +101,8 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 }
 
 unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGConstraint &constraint,
-                                                        ColumnDefinition &column, idx_t index) {
+                                                        ColumnDefinition &column, idx_t index,
+                                                        const string &table_name) {
 	switch (constraint.contype) {
 	case duckdb_libpgquery::PG_CONSTR_NOTNULL:
 		return make_uniq<NotNullConstraint>(LogicalIndex(index));
@@ -124,6 +125,14 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED:
 		throw InvalidInputException("Can not create a STORED generated column!");
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
+		if (column.HasDefaultValue()) {
+			throw ParserException("multiple default values specified for column \"%s\" of table \"%s\"",
+			                      column.GetName(), table_name);
+		}
+		if (column.Generated()) {
+			throw ParserException("both default and generation expression specified for column \"%s\" of table \"%s\"",
+			                      column.GetName(), table_name);
+		}
 		column.SetDefaultValue(TransformExpression(constraint.raw_expr));
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_COMPRESSION: {

@@ -127,7 +127,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			if (pg_col_def->constraints) {
 				for (auto cell = pg_col_def->constraints->head; cell != nullptr; cell = cell->next) {
 					auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell->data.ptr_value);
-					auto constraint = TransformConstraint(*pg_constraint, col_def, info->columns.LogicalColumnCount());
+					auto constraint = TransformConstraint(*pg_constraint, col_def, info->columns.LogicalColumnCount(), info->table);
 					if (constraint) {
 						info->constraints.push_back(std::move(constraint));
 					}
