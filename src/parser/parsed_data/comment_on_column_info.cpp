@@ -36,7 +36,16 @@ string SetColumnCommentInfo::ToString() const {
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
 	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name);
-	auto entry = retriever.GetEntry(catalog, schema, lookup_info, if_not_found);
+	auto entry = retriever.GetEntry(catalog, schema, lookup_info, OnEntryNotFound::RETURN_NULL);
+
+	if (entry) {
+		catalog_entry_type = entry->type;
+		return entry;
+	}
+
+	// If not found as a table/view, try as a type entry (for STRUCT field comments)
+	EntryLookupInfo type_lookup_info(CatalogType::TYPE_ENTRY, name);
+	entry = retriever.GetEntry(catalog, schema, type_lookup_info, if_not_found);
 
 	if (entry) {
 		catalog_entry_type = entry->type;

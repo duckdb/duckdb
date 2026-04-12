@@ -253,6 +253,73 @@ SELECT 1::test_type as val;
 statement ok
 DROP TYPE test_type
 
+### Comment on STRUCT type field
+statement ok
+CREATE TYPE test_struct_type AS STRUCT(id INTEGER, some_text TEXT);
+
+# Initially no field comments
+query I
+select field_comments from duckdb_types() where type_name='test_struct_type';
+----
+NULL
+
+# Set comment on struct field
+statement ok
+COMMENT ON COLUMN test_struct_type.id IS 'this is an id'
+
+query I
+select field_comments from duckdb_types() where type_name='test_struct_type';
+----
+{id=this is an id}
+
+# Set comment on another field
+statement ok
+COMMENT ON COLUMN test_struct_type.some_text IS 'this is some text'
+
+query I
+select field_comments['id'] from duckdb_types() where type_name='test_struct_type';
+----
+this is an id
+
+query I
+select field_comments['some_text'] from duckdb_types() where type_name='test_struct_type';
+----
+this is some text
+
+restart
+
+# Verify persistence after restart
+query I
+select field_comments['id'] from duckdb_types() where type_name='test_struct_type';
+----
+this is an id
+
+query I
+select field_comments['some_text'] from duckdb_types() where type_name='test_struct_type';
+----
+this is some text
+
+# Error: non-existent field
+statement error
+COMMENT ON COLUMN test_struct_type.nonexistent IS 'fail'
+----
+does not have a field with name "nonexistent"
+
+# Error: non-STRUCT type cannot have field comments
+statement ok
+CREATE TYPE test_simple_type AS int32;
+
+statement error
+COMMENT ON COLUMN test_simple_type.something IS 'fail'
+----
+not a STRUCT type
+
+statement ok
+DROP TYPE test_simple_type
+
+statement ok
+DROP TYPE test_struct_type
+
 ### Comment on table column
 
 query I

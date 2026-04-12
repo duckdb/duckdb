@@ -220,12 +220,14 @@ void CreateTypeInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WriteProperty<LogicalType>(201, "logical_type", type);
+	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(202, "field_comments_map", field_comments_map, unordered_map<string, Value>());
 }
 
 unique_ptr<CreateInfo> CreateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTypeInfo>(new CreateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadProperty<LogicalType>(201, "logical_type", result->type);
+	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(202, "field_comments_map", result->field_comments_map, unordered_map<string, Value>());
 	return std::move(result);
 }
 

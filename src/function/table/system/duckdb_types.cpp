@@ -64,6 +64,9 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("labels");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
+	names.emplace_back("field_comments");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
@@ -195,6 +198,24 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 			}
 
 			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, labels));
+		} else {
+			output.SetValue(col++, count, Value());
+		}
+		// field_comments, MAP(VARCHAR, VARCHAR) - for STRUCT types with field comments
+		if (type.id() == LogicalTypeId::STRUCT && type.AuxInfo()) {
+			auto &child_types = StructType::GetChildTypes(type);
+			InsertionOrderPreservingMap<string> field_comment_map;
+			for (auto &child : child_types) {
+				auto comment_val = type_entry.GetFieldComment(child.first);
+				if (!comment_val.IsNull()) {
+					field_comment_map[child.first] = comment_val.ToString();
+				}
+			}
+			if (field_comment_map.empty()) {
+				output.SetValue(col++, count, Value());
+			} else {
+				output.SetValue(col++, count, Value::MAP(field_comment_map));
+			}
 		} else {
 			output.SetValue(col++, count, Value());
 		}

@@ -3,7 +3,9 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include <algorithm>
 #include <sstream>
 
@@ -13,7 +15,7 @@ constexpr const char *TypeCatalogEntry::Name;
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type),
-      bind_function(info.bind_function) {
+      bind_function(info.bind_function), field_comments(info.field_comments_map) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->extension_name = info.extension_name;
@@ -40,7 +42,48 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->comment = comment;
 	result->tags = tags;
 	result->bind_function = bind_function;
+	result->field_comments_map = field_comments;
 	return std::move(result);
+}
+
+unique_ptr<CatalogEntry> TypeCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
+	D_ASSERT(!internal);
+
+	if (info.type == AlterType::SET_COLUMN_COMMENT) {
+		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
+		auto copied_type = Copy(context);
+
+		// Verify that the type is a STRUCT and the field exists
+		if (user_type.id() != LogicalTypeId::STRUCT) {
+			throw CatalogException("Type \"%s\" is not a STRUCT type, cannot comment on its fields", name);
+		}
+		auto &child_types = StructType::GetChildTypes(user_type);
+		bool found = false;
+		for (auto &child : child_types) {
+			if (StringUtil::CIEquals(child.first, comment_on_column_info.column_name)) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			throw CatalogException("Type \"%s\" does not have a field with name \"%s\"", name,
+			                       comment_on_column_info.column_name);
+		}
+
+		auto &copied_type_entry = copied_type->Cast<TypeCatalogEntry>();
+		copied_type_entry.field_comments[comment_on_column_info.column_name] = comment_on_column_info.comment_value;
+		return copied_type;
+	}
+
+	throw CatalogException("Unsupported alter type for type entry");
+}
+
+Value TypeCatalogEntry::GetFieldComment(const string &field_name) {
+	auto entry = field_comments.find(field_name);
+	if (entry != field_comments.end()) {
+		return entry->second;
+	}
+	return Value();
 }
 
 string TypeCatalogEntry::ToSQL() const {

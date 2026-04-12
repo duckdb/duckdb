@@ -32,7 +32,15 @@ public:
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+
+	//! Get the comment for a field in a STRUCT type
+	Value GetFieldComment(const string &field_name);
 
 	string ToSQL() const override;
+
+private:
+	//! Comments on fields of the type (for STRUCT types)
+	unordered_map<string, Value> field_comments;
 };
 } // namespace duckdb
