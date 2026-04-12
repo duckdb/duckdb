@@ -50,6 +50,21 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
+idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	idx_t size = 0;
+	// uncompressed size of individual data entries
+	size += GetTypeIdSize(type.InternalType()) * count;
+	// size of validity mask
+	size += GetValidityMask().GetAllocationSize();
+	// size stored in aux buffers
+	if (auxiliary_data) {
+		for (auto &aux_data : auxiliary_data->data) {
+			size += aux_data->GetAllocationSize();
+		}
+	}
+	return size;
+}
+
 idx_t VectorBuffer::GetAllocationSize() const {
 	idx_t size = 0;
 	if (auxiliary_data) {

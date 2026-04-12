@@ -8,6 +8,10 @@ SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, int64_t cou
       increment(increment_p), count(count_p) {
 }
 
+idx_t SequenceBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	return GetTypeIdSize(type.InternalType()) * count;
+}
+
 idx_t SequenceBuffer::GetAllocationSize() const {
 	idx_t size = VectorBuffer::GetAllocationSize();
 	size += sizeof(int64_t) * 3;

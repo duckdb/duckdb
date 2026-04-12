@@ -31,11 +31,10 @@ CREATE TYPE Result AS UNION (
     Err BIGINT
 );
 
-# FIXME: shouldn't RESULT_SET_SIZE actually look at the final result, and not the intermediate allocation sizes?
 query I
 SELECT 
     CASE 
-        WHEN result_set_size = 65536 THEN TRUE::Result
+        WHEN result_set_size = 144 THEN TRUE::Result
         ELSE result_set_size::Result
     END AS result
 FROM metrics_output;

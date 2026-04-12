@@ -77,6 +77,9 @@ public:
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
 
+	//! Returns the uncompressed size of the data elements stored in this data chunk
+	idx_t GetDataSize() const;
+	//! Returns the size of the allocated data by this data chunk
 	idx_t GetAllocationSize() const;
 
 	//! Returns true if all vectors in the DataChunk are constant

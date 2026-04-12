@@ -24,6 +24,9 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	const ValidityMask &GetValidityMask() const override {
+		return validity;
+	}
 	const vector<Vector> &GetChildren() const {
 		return children;
 	}
@@ -33,6 +36,7 @@ public:
 	void SetVectorType(VectorType vector_type) override;
 
 public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;

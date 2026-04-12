@@ -24,6 +24,11 @@ DictionaryBuffer::DictionaryBuffer(idx_t count)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 }
 
+idx_t DictionaryBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	// just forward to child node
+	return GetEntry().data.GetDataSize(count);
+}
+
 idx_t DictionaryBuffer::GetAllocationSize() const {
 	auto size = VectorBuffer::GetAllocationSize();
 	size += sel_vector.GetAllocationSize();

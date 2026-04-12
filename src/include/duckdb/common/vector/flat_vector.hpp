@@ -28,6 +28,9 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	const ValidityMask &GetValidityMask() const override {
+		return validity;
+	}
 	void SetVectorType(VectorType vector_type) override;
 
 	optional_ptr<Allocator> GetAllocator() const override {

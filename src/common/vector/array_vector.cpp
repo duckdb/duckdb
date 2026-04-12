@@ -37,6 +37,13 @@ void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
+idx_t VectorArrayBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += validity.GetAllocationSize();
+	size += child->GetDataSize(count * array_size);
+	return size;
+}
+
 idx_t VectorArrayBuffer::GetAllocationSize() const {
 	idx_t size = VectorBuffer::GetAllocationSize();
 	size += validity.GetAllocationSize();

@@ -12,6 +12,10 @@ ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {
 }
 
+idx_t ShreddedVectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	return shredded_data->GetDataSize(count);
+}
+
 idx_t ShreddedVectorBuffer::GetAllocationSize() const {
 	idx_t size = VectorBuffer::GetAllocationSize();
 	size += shredded_data->GetAllocationSize();

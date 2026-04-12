@@ -22,12 +22,16 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	const ValidityMask &GetValidityMask() const override {
+		return validity;
+	}
 	Vector &GetChild();
 	idx_t GetArraySize() const;
 	idx_t GetChildSize() const;
 	void SetVectorType(VectorType vector_type) override;
 
 public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;

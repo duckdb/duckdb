@@ -163,8 +163,12 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
-	[[deprecated("Use GetAllocationSize() without cardinality parameter instead")]] idx_t
+	//! Returns the uncompressed size of the data stored within this vector
+	idx_t GetDataSize(idx_t cardinality) const;
+	[[deprecated("This method is an alias for GetDataSize(cardinality) for legacy reasons - use either that or "
+	             "GetAllocationSize() instead")]] idx_t
 	GetAllocationSize(idx_t cardinality) const;
+	//! Returns the data allocated by the vector buffers
 	idx_t GetAllocationSize() const;
 
 	// Getters
@@ -192,6 +196,10 @@ public:
 	VectorValidValueIterator<T> ValidValues(idx_t count) const;
 
 	VectorValidityIterator Validity(idx_t count) const;
+
+protected:
+	VectorBuffer &Buffer();
+	const VectorBuffer &Buffer() const;
 
 private:
 	//! Returns the [index] element of the Vector as a Value.

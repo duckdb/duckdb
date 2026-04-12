@@ -85,6 +85,12 @@ void VectorListBuffer::SetSize(idx_t new_size) {
 VectorListBuffer::~VectorListBuffer() {
 }
 
+idx_t VectorListBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	idx_t size = StandardVectorBuffer::GetDataSize(type, count);
+	size += child->GetDataSize(this->size);
+	return size;
+}
+
 idx_t VectorListBuffer::GetAllocationSize() const {
 	idx_t size = StandardVectorBuffer::GetAllocationSize();
 	size += GetChild().GetAllocationSize();

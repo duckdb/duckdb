@@ -43,6 +43,14 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
+idx_t VectorStructBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	idx_t size = validity.GetAllocationSize();
+	for (auto &child : children) {
+		size += child.GetDataSize(count);
+	}
+	return size;
+}
+
 idx_t VectorStructBuffer::GetAllocationSize() const {
 	idx_t size = VectorBuffer::GetAllocationSize();
 	size += validity.GetAllocationSize();

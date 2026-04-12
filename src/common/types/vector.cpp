@@ -304,6 +304,14 @@ Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
 }
 
+VectorBuffer &Vector::Buffer() {
+	return *buffer;
+}
+
+const VectorBuffer &Vector::Buffer() const {
+	return *buffer;
+}
+
 // LCOV_EXCL_START
 string VectorTypeToString(VectorType type) {
 	switch (type) {
@@ -327,7 +335,7 @@ string VectorTypeToString(VectorType type) {
 string Vector::ToString(idx_t count) const {
 	string retval =
 	    VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": " + to_string(count) + " = [ ";
-	retval += buffer->ToString(GetType(), count);
+	retval += Buffer().ToString(GetType(), count);
 	retval += "]";
 	return retval;
 }
@@ -336,20 +344,24 @@ void Vector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
 
-idx_t Vector::GetAllocationSize(idx_t) const {
-	return GetAllocationSize();
+idx_t Vector::GetDataSize(idx_t cardinality) const {
+	return Buffer().GetDataSize(type, cardinality);
+}
+
+idx_t Vector::GetAllocationSize(idx_t cardinality) const {
+	return GetDataSize(cardinality);
 }
 
 idx_t Vector::GetAllocationSize() const {
 	if (!buffer) {
 		return 0;
 	}
-	return buffer->GetAllocationSize();
+	return Buffer().GetAllocationSize();
 }
 
 string Vector::ToString() const {
 	string retval = VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": (UNKNOWN COUNT) [ ";
-	retval += buffer->ToString(GetType());
+	retval += Buffer().ToString(GetType());
 	retval += "]";
 	return retval;
 }
@@ -364,7 +376,7 @@ void Vector::Flatten(idx_t count) const {
 }
 
 void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
-	auto new_buffer = buffer->Flatten(GetType(), sel, count);
+	auto new_buffer = Buffer().Flatten(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -378,7 +390,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 		// FSST/SEQUENCE/SHREDDED: flatten first so the buffer can provide unified format
 		Flatten(count);
 	}
-	buffer->ToUnifiedFormat(count, format);
+	Buffer().ToUnifiedFormat(count, format);
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
@@ -796,7 +808,7 @@ VectorType Vector::GetVectorType() const {
 	if (!buffer) {
 		return VectorType::FLAT_VECTOR;
 	}
-	return buffer->GetVectorType();
+	return Buffer().GetVectorType();
 }
 
 void Vector::SetVectorType(VectorType new_vector_type) {
@@ -805,7 +817,7 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 	if (buffer) {
 		// FIXME: should we allow vectors without a buffer?
-		buffer->SetVectorType(new_vector_type);
+		Buffer().SetVectorType(new_vector_type);
 	}
 }
 
@@ -818,7 +830,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) const {
 	if (!buffer) {
 		return;
 	}
-	buffer->Verify(GetType(), sel, count);
+	Buffer().Verify(GetType(), sel, count);
 	// type-specific verification that requires access to the full Vector
 	// these functions may call ToUnifiedFormat which mutates the vector, hence the const_cast
 	auto &self = const_cast<Vector &>(*this);

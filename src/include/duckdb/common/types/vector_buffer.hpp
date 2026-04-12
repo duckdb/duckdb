@@ -83,6 +83,9 @@ public:
 	virtual ValidityMask &GetValidityMask() {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
+	virtual const ValidityMask &GetValidityMask() const {
+		throw InternalException("VectorBuffer does not have a ValidityMask");
+	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {
@@ -125,6 +128,8 @@ public:
 	//! The selection vector maps output indices to source indices in this buffer
 	//! Returns a new buffer, or nullptr if already flat with an unset selection vector
 	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	//! Returns the total (uncompressed) data size
+	virtual idx_t GetDataSize(const LogicalType &type, idx_t count) const;
 	//! Returns the total amount of bytes allocated by the vector buffer
 	virtual idx_t GetAllocationSize() const;
 	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;

@@ -22,6 +22,7 @@ public:
 	int64_t count;
 
 public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	string ToString(const LogicalType &type, idx_t count) const override;
 	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
