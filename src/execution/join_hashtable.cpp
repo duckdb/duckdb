@@ -806,7 +806,6 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	D_ASSERT(hash_map.get());
 
 	Vector hashes(LogicalType::HASH);
-	auto hash_data = FlatVector::GetDataMutable<hash_t>(hashes);
 
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
 	                                chunk_idx_to, false);
@@ -815,6 +814,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	InsertState insert_state(*this);
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
+		auto hash_data = FlatVector::GetDataMutable<hash_t>(hashes);
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
 		}
