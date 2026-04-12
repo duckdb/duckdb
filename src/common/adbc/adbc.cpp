@@ -1210,6 +1210,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	// Prefer explicit three-part names; two-part names can be ambiguous.
 	const char *effective_catalog = catalog;
 	const char *effective_schema = schema;
+	std::string resolved_catalog;
 	if (temporary) {
 		// Temporary tables live in the special "temp" catalog.
 		// "CREATE TEMP TABLE" automatically places tables in temp.main.
@@ -1220,6 +1221,26 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		// Default schema for attached catalogs (DEFAULT_SCHEMA).
 		// Use catalog.main.table to avoid catalog/schema name ambiguity.
 		effective_schema = "main";
+	} else if (!catalog) {
+		// DuckDB's name resolution prioritizes the "temp" catalog, so without an explicit
+		// catalog a same-named temp table would shadow the persistent target. Resolve the
+		// current catalog explicitly to avoid that. Fallback "memory" may not match the
+		// actual catalog for file-based databases.
+		duckdb_result cat_result = {};
+		if (duckdb_query(connection, "SELECT current_catalog()", &cat_result) == DuckDBSuccess) {
+			char *val = duckdb_value_varchar(&cat_result, 0, 0);
+			if (val) {
+				resolved_catalog = val;
+				duckdb_free(val);
+			}
+			effective_catalog = !resolved_catalog.empty() ? resolved_catalog.c_str() : "memory";
+		} else {
+			effective_catalog = "memory";
+		}
+		duckdb_destroy_result(&cat_result);
+		if (!schema) {
+			effective_schema = "main";
+		}
 	}
 
 	duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
