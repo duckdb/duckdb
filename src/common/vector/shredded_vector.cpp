@@ -4,6 +4,14 @@
 
 namespace duckdb {
 
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
+    : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER),
+      shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
+}
+
+ShreddedVectorBuffer::~ShreddedVectorBuffer() {
+}
+
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
 	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];

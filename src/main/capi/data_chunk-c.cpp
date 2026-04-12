@@ -117,7 +117,7 @@ void *duckdb_vector_get_data(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return duckdb::FlatVector::GetData(*v);
+	return duckdb::FlatVector::GetDataMutable(*v);
 }
 
 uint64_t *duckdb_vector_get_validity(duckdb_vector vector) {
@@ -182,7 +182,7 @@ void duckdb_unsafe_vector_assign_string_element_len(duckdb_vector vector, idx_t 
 		return;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
+	auto data = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(*v);
 	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
 }
 

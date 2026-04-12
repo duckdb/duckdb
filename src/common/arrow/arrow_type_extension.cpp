@@ -352,7 +352,7 @@ struct ArrowBignum {
 struct ArrowBool8 {
 	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
 		auto source_ptr = FlatVector::GetData<int8_t>(source);
-		auto result_ptr = FlatVector::GetData<bool>(result);
+		auto result_ptr = FlatVector::GetDataMutable<bool>(result);
 		for (idx_t i = 0; i < count; i++) {
 			result_ptr[i] = source_ptr[i];
 		}
@@ -360,7 +360,7 @@ struct ArrowBool8 {
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
 		auto entries = source.Values<bool>(count);
 		auto &result_validity = FlatVector::Validity(result);
-		auto result_ptr = FlatVector::GetData<int8_t>(result);
+		auto result_ptr = FlatVector::GetDataMutable<int8_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			if (entry.IsValid()) {

@@ -185,7 +185,7 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto count = args.size();
-	auto result_data = FlatVector::GetData<bool>(result);
+	auto result_data = FlatVector::GetDataMutable<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = false;
 	}

@@ -77,7 +77,7 @@ public:
 					}
 
 					auto &child_entry = ListVector::GetEntry(result);
-					auto child_vals = FlatVector::GetData<T>(child_entry);
+					auto child_vals = FlatVector::GetDataMutable<T>(child_entry);
 					auto &child_validity = FlatVector::Validity(child_entry);
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
@@ -134,11 +134,11 @@ public:
 		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 		ListVector::Reserve(result, list_size);
-		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 		auto &list_validity = FlatVector::Validity(result);
 
 		auto &child = ListVector::GetEntry(result);
-		auto child_data = FlatVector::GetData<T>(child);
+		auto child_data = FlatVector::GetDataMutable<T>(child);
 		auto &child_validity = FlatVector::Validity(child);
 
 		idx_t offset = 0;

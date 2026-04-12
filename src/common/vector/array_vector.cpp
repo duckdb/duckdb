@@ -4,8 +4,8 @@
 namespace duckdb {
 
 VectorArrayBuffer::VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)), array_size(array_size),
-      size(initial_capacity) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)),
+      array_size(array_size), size(initial_capacity) {
 	D_ASSERT(array_size != 0);
 	validity.Resize(initial_capacity);
 }
@@ -28,6 +28,10 @@ idx_t VectorArrayBuffer::GetArraySize() {
 
 idx_t VectorArrayBuffer::GetChildSize() {
 	return size * array_size;
+}
+
+void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
+	vector_type = new_vector_type;
 }
 
 template <class T>

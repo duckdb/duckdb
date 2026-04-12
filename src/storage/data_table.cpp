@@ -1441,7 +1441,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector 
 	auto storage = local_storage.GetStorage(*this);
 
 	row_identifiers.Flatten(count);
-	auto ids = FlatVector::GetData<row_t>(row_identifiers);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_identifiers);
 
 	idx_t pos = 0;
 	idx_t delete_count = 0;
@@ -1632,7 +1632,8 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(transaction, *this, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
+		row_groups->Update(transaction, *this, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
+		                   updates_slice);
 	}
 }
 

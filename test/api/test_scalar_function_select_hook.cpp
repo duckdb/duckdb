@@ -19,7 +19,7 @@ static void IsEvenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	UnifiedVectorFormat data;
 	args.data[0].ToUnifiedFormat(args.size(), data);
 	auto input_data = UnifiedVectorFormat::GetData<int32_t>(data);
-	auto result_data = FlatVector::GetData<bool>(result);
+	auto result_data = FlatVector::GetDataMutable<bool>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
 	if (data.validity.CanHaveNull()) {

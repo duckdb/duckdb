@@ -232,24 +232,23 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto values_list_size = ListVector::GetListSize(raw_values);
 
 	//! Create a new Variant that references the existing data of the input Variant
-	result.Initialize(false, count);
+	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	VariantVector::GetKeys(result).Reference(VariantVector::GetKeys(variant_vec));
 	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant_vec));
 	VariantVector::GetData(result).Reference(VariantVector::GetData(variant_vec));
 
 	//! Copy the existing 'values' list entry data
 	auto &result_values = VariantVector::GetValues(result);
-	result_values.Initialize(false, count);
+	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_values_data = FlatVector::GetData<list_entry_t>(result_values);
-	auto &result_values_validity = FlatVector::Validity(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_values_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 			continue;
 		}
-		result_values_data[i] = values_data[values.sel->get_index(i)];
+		result_data[i] = values_data[values.sel->get_index(i)];
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;

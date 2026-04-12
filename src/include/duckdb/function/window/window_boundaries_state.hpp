@@ -14,31 +14,11 @@
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
 
 class BoundWindowExpression;
-
-//	Column indexes of the bounds chunk
-enum WindowBounds : uint8_t {
-	PARTITION_BEGIN,
-	PARTITION_END,
-	PEER_BEGIN,
-	PEER_END,
-	VALID_BEGIN,
-	VALID_END,
-	FRAME_BEGIN,
-	FRAME_END
-};
-
-// C++ 11 won't do this automatically...
-struct WindowBoundsHash {
-	inline uint64_t operator()(const WindowBounds &value) const {
-		return value;
-	}
-};
-
-using WindowBoundsSet = unordered_set<WindowBounds, WindowBoundsHash>;
 
 struct WindowInputExpression {
 	WindowInputExpression(DataChunk &chunk, column_t col_idx)

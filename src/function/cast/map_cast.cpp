@@ -37,7 +37,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	key_str.Flatten(ListVector::GetListSize(source));
 	val_str.Flatten(ListVector::GetListSize(source));
 
-	auto list_data = ListVector::GetData(varchar_map);
+	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
 	auto &key_validity = FlatVector::Validity(key_str);

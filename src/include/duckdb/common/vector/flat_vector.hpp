@@ -28,6 +28,7 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	void SetVectorType(VectorType vector_type) override;
 
 	optional_ptr<Allocator> GetAllocator() const override {
 		return allocated_data.GetAllocator();
@@ -50,10 +51,13 @@ struct FlatVector {
 #endif
 	}
 
-	static inline data_ptr_t GetData(Vector &vector) {
+	static inline const_data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
 	static inline const_data_ptr_t GetData(const Vector &vector) {
+		return ConstantVector::GetData(vector);
+	}
+	static inline data_ptr_t GetDataMutable(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
 	template <class T>
@@ -61,7 +65,11 @@ struct FlatVector {
 		return ConstantVector::GetData<T>(vector);
 	}
 	template <class T>
-	static inline T *GetData(Vector &vector) {
+	static inline const T *GetData(Vector &vector) {
+		return ConstantVector::GetData<T>(vector);
+	}
+	template <class T>
+	static inline T *GetDataMutable(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
 	}
 	template <class T>
@@ -103,7 +111,7 @@ public:
 	template <class T>
 	struct FlatVectorWriter {
 		FlatVectorWriter(Vector &vector, idx_t count)
-		    : data(FlatVector::GetData<T>(vector)), validity(FlatVector::Validity(vector)), count(count) {
+		    : data(GetDataMutable<T>(vector)), validity(Validity(vector)), count(count) {
 		}
 
 		void SetInvalid(idx_t idx) {
