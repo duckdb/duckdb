@@ -42,6 +42,10 @@ Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
 
 buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
                                                  idx_t count) const {
+	if (!sel.IsSet()) {
+		// FIXME: work-around for Flatten being called multiple times on the same vector with different counts...
+		count = MaxValue<idx_t>(this->count, count);
+	}
 	Vector flattened_vector(type, count);
 	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
 	return flattened_vector.GetBuffer();
