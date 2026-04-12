@@ -487,6 +487,10 @@ option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabl
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
 
+if(DISABLE_EXTENSION_LOAD)
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
