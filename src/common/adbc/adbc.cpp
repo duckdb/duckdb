@@ -1631,7 +1631,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	SCOPED_EXIT {
+	SCOPE_EXIT {
 		if (stream_wrapper) {
 			duckdb_destroy_result(&stream_wrapper->result);
 			free(stream_wrapper);
