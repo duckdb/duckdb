@@ -22,6 +22,7 @@ static void ReleaseError(struct AdbcError *error);
 #include <string.h>
 
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/common/scope_exit.hpp"
 
 #include "duckdb/parser/keyword_helper.hpp"
 
@@ -1630,6 +1631,12 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	SCOPED_EXIT {
+		if (stream_wrapper) {
+			duckdb_destroy_result(&stream_wrapper->result);
+			free(stream_wrapper);
+		}
+	};
 	stream_wrapper->last_error = nullptr;
 	stream_wrapper->status_code = ADBC_STATUS_OK;
 	stream_wrapper->materialized = nullptr;
@@ -1651,9 +1658,9 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			if (res) {
 				SetError(error, duckdb_error_data_message(res));
 				duckdb_destroy_error_data(&res);
+				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 		} catch (...) {
-			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
 		}
 
@@ -1673,24 +1680,20 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			}
 			if (!out_chunk.chunk) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
-				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk.chunk);
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
-				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			if (chunk->size() != 1) {
 				// TODO: add support for binding multiple rows
 				SetError(error, "Binding multiple rows at once is not supported yet");
-				free(stream_wrapper);
 				return ADBC_STATUS_NOT_IMPLEMENTED;
 			}
 			if (chunk->ColumnCount() > prepared_statement_params) {
 				SetError(error, "Input data has more column than prepared statement has parameters");
-				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			duckdb_clear_bindings(wrapper->statement);
@@ -1700,7 +1703,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				auto res = duckdb_bind_value(wrapper->statement, 1 + col_idx, duck_val);
 				if (res != DuckDBSuccess) {
 					SetError(error, duckdb_prepare_error(wrapper->statement));
-					free(stream_wrapper);
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
@@ -1711,8 +1713,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				auto err = duckdb_result_error(&stream_wrapper->result);
 				SetError(error, err);
 				bool interrupted = IsInterruptError(err);
-				duckdb_destroy_result(&stream_wrapper->result);
-				free(stream_wrapper);
 				return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			// Recreate wrappers for next iteration
@@ -1725,8 +1725,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			auto err = duckdb_result_error(&stream_wrapper->result);
 			SetError(error, err);
 			bool interrupted = IsInterruptError(err);
-			duckdb_destroy_result(&stream_wrapper->result);
-			free(stream_wrapper);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
@@ -1757,11 +1755,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		if (wrapper->conn_wrapper) {
 			wrapper->conn_wrapper->active_streams.push_back(stream_wrapper);
 		}
-	} else {
-		// Caller didn't request a stream; clean up resources
-		duckdb_destroy_result(&stream_wrapper->result);
-		free(stream_wrapper);
+		// Ownership transferred; disarm the scope guard
+		stream_wrapper = nullptr;
 	}
+	// When out is null the guard fires and cleans up stream_wrapper + result
 
 	return ADBC_STATUS_OK;
 }
