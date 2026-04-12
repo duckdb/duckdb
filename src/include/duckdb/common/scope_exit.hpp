@@ -11,13 +11,9 @@
 #include <functional>
 #include <utility>
 
-// Need to have two macro invocation to allow [x] and [y] to be replaced.
-#define __DUCKDB_CONCAT(x, y) x##y
-
-#define DUCKDB_CONCAT(x, y) __DUCKDB_CONCAT(x, y)
-
-// Macros which gets unique variable name.
-#define DUCKDB_UNIQUE_VARIABLE(base) DUCKDB_CONCAT(base, __LINE__)
+#define DUCKDB_SCOPE_CONCAT_INNER(x, y) x##y
+#define DUCKDB_SCOPE_CONCAT(x, y)       DUCKDB_SCOPE_CONCAT_INNER(x, y)
+#define DUCKDB_SCOPE_UNIQUE_VAR(base)   DUCKDB_SCOPE_CONCAT(base, __LINE__)
 
 namespace duckdb {
 
@@ -28,7 +24,7 @@ private:
 public:
 	ScopeGuard() : func([]() {}) {
 	}
-	explicit ScopeGuard(Func &&func_p) : func(std::forward<Func>(func_p)) {
+	explicit ScopeGuard(Func &&func_p) : func(std::move(func_p)) {
 	}
 	// Disable copy and move.
 	ScopeGuard(const ScopeGuard &) = delete;
@@ -79,4 +75,4 @@ inline auto operator+(ScopeGuardOnExit /*unused*/, ScopeGuardFunc fn) {
 //     SCOPE_EXIT { fclose(fp); };
 //     // Do something.
 //   }  // fp will be closed at exit.
-#define SCOPE_EXIT auto DUCKDB_UNIQUE_VARIABLE(SCOPE_EXIT_TEMP_EXIT) = duckdb::internal::ScopeGuardOnExit {} + [&]()
+#define SCOPE_EXIT auto DUCKDB_SCOPE_UNIQUE_VAR(SCOPE_EXIT_TEMP_EXIT) = duckdb::internal::ScopeGuardOnExit {} + [&]()
