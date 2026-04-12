@@ -26,23 +26,23 @@ private:
 	using Func = std::function<void(void)>;
 
 public:
-	ScopeGuard() : func_([]() {}) {
+	ScopeGuard() : func([]() {}) {
 	}
-	explicit ScopeGuard(Func &&func) : func_(std::forward<Func>(func)) {
+	explicit ScopeGuard(Func &&func_p) : func(std::forward<Func>(func_p)) {
 	}
 	// Disable copy and move.
 	ScopeGuard(const ScopeGuard &) = delete;
 	ScopeGuard &operator=(const ScopeGuard &) = delete;
 
 	~ScopeGuard() noexcept {
-		func_();
+		func();
 	}
 
 	// Register a new function to be invoked at destruction.
 	// Execution will be performed at the reversed order they're registered.
 	ScopeGuard &operator+=(Func &&another_func) {
-		Func cur_func = std::move(func_);
-		func_ = [cur_func = std::move(cur_func), another_func = std::move(another_func)]() {
+		Func cur_func = std::move(func);
+		func = [cur_func = std::move(cur_func), another_func = std::move(another_func)]() {
 			// Executed in the reverse order functions are registered.
 			another_func();
 			cur_func();
@@ -51,7 +51,7 @@ public:
 	}
 
 private:
-	Func func_;
+	Func func;
 };
 
 namespace internal {
