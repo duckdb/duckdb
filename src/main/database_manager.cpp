@@ -265,19 +265,19 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 
 void DatabaseManager::DropDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
 	optional_ptr<StorageExtension> ext;
+	bool found_db = false;
 	if (auto db = GetDatabase(context, name)) {
+		found_db = true;
 		ext = db->GetStorageExtension();
 	}
 	if (ext && ext->drop_database) {
-		// Drop from the extension's catalog first.
-		// Do NOT call DetachDatabase here -- the AttachedDatabase must stay alive
-		// until all connections using it are done (deferred detach).
-		// New connections won't find this database because the extension's catalog
-		// no longer has it. The AttachedDatabase will be cleaned up when the last
-		// reference is released (via MetaTransaction::Finalize).
-		ext->drop_database(*this, context, name, if_not_found);
-	} else {
+		// Drop from the extension's catalog first, then detach to free the name.
+		ext->drop_database(context, name, if_not_found);
+		DetachInternal(name);
+	} else if (found_db) {
 		throw BinderException("Database \"%s\" does not support DROP DATABASE", name);
+	} else if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw BinderException("database \"%s\" does not exist", name);
 	}
 }
 
