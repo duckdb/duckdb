@@ -27,26 +27,25 @@ static void ValidateMergeActionColumnReferences(const Expression &expr, MergeAct
                                                 const unordered_set<TableIndex> &source_table_indexes,
                                                 const unordered_set<TableIndex> &target_table_indexes,
                                                 const string &clause_name) {
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    expr, [&](const BoundColumnRefExpression &colref) {
-		    auto table_idx = colref.binding.table_index;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		auto table_idx = colref.binding.table_index;
 
-		    if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
-			    // In NOT MATCHED BY TARGET context, target columns don't exist (no matching target row)
-			    if (target_table_indexes.count(table_idx)) {
-				    throw BinderException("Column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET %s - "
-				                          "no target row exists in this context",
-				                          colref.alias.empty() ? colref.ToString() : colref.alias, clause_name);
-			    }
-		    } else if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) {
-			    // In NOT MATCHED BY SOURCE context, source columns don't exist (no matching source row)
-			    if (source_table_indexes.count(table_idx)) {
-				    throw BinderException("Column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE %s - "
-				                          "no source row exists in this context",
-				                          colref.alias.empty() ? colref.ToString() : colref.alias, clause_name);
-			    }
-		    }
-	    });
+		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
+			// In NOT MATCHED BY TARGET context, target columns don't exist (no matching target row)
+			if (target_table_indexes.count(table_idx)) {
+				throw BinderException("Column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET %s - "
+				                      "no target row exists in this context",
+				                      colref.alias.empty() ? colref.ToString() : colref.alias, clause_name);
+			}
+		} else if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) {
+			// In NOT MATCHED BY SOURCE context, source columns don't exist (no matching source row)
+			if (source_table_indexes.count(table_idx)) {
+				throw BinderException("Column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE %s - "
+				                      "no source row exists in this context",
+				                      colref.alias.empty() ? colref.ToString() : colref.alias, clause_name);
+			}
+		}
+	});
 }
 
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
@@ -62,15 +61,11 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 	return result;
 }
 
-unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-                                                         LogicalGet &get, TableIndex proj_index,
-                                                         vector<unique_ptr<Expression>> &expressions,
-                                                         unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-                                                         const vector<BindingAlias> &source_aliases,
-                                                         const vector<string> &source_names,
-                                                         MergeActionCondition condition,
-                                                         const unordered_set<TableIndex> &source_table_indexes,
-                                                         const unordered_set<TableIndex> &target_table_indexes) {
+unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(
+    LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
+    vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
+    const vector<BindingAlias> &source_aliases, const vector<string> &source_names, MergeActionCondition condition,
+    const unordered_set<TableIndex> &source_table_indexes, const unordered_set<TableIndex> &target_table_indexes) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
