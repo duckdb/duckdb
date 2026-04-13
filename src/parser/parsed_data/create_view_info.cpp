@@ -39,7 +39,9 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
+	result->names = names;
 	result->column_comments_map = column_comments_map;
+	result->binding_mode = binding_mode;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	return std::move(result);
 }
