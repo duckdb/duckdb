@@ -156,8 +156,10 @@ duckdb_function_info ToCScalarFunctionInfo(duckdb::CScalarFunctionInternalFuncti
 // Scalar Function Callbacks
 //===--------------------------------------------------------------------===//
 
-unique_ptr<FunctionData> CScalarFunctionBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto &info = bound_function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 

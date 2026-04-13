@@ -243,8 +243,10 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
 	return nullptr;
 }
 
-unique_ptr<FunctionData> BindBitstringAgg(ClientContext &context, AggregateFunction &function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindBitstringAgg(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() == 3) {
 		if (!arguments[1]->IsFoldable() || !arguments[2]->IsFoldable()) {
 			throw BinderException("bitstring_agg requires a constant min and max argument");

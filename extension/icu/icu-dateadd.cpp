@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-static duckdb::unique_ptr<FunctionData> ICUBindIntervalMonths(ClientContext &context, ScalarFunction &bound_function,
-                                                              vector<duckdb::unique_ptr<Expression>> &arguments) {
-	auto result = ICUDateFunc::Bind(context, bound_function, arguments);
+static duckdb::unique_ptr<FunctionData> ICUBindIntervalMonths(BindScalarFunctionInput &input) {
+	auto result = ICUDateFunc::Bind(input);
+
 	auto &info = result->Cast<ICUDateFunc::BindData>();
 	TZCalendar calendar(*info.calendar, info.cal_setting);
 	if (!calendar.SupportsIntervals()) {

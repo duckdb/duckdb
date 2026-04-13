@@ -146,7 +146,7 @@ unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStat
 
 ScalarFunction ListFlattenFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::LIST(LogicalType::TEMPLATE("T")))},
-	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListFlattenFunction, nullptr, nullptr,
+	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListFlattenFunction, nullptr,
 	                      ListFlattenStats);
 }
 

@@ -568,8 +568,10 @@ function_statistics_t DateTruncStats(DatePartSpecifier type) {
 	}
 }
 
-unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &bound_function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> DateTruncBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (!arguments[0]->IsFoldable()) {
 		return nullptr;
 	}

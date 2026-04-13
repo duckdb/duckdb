@@ -261,7 +261,7 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
-	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr, nullptr,
+	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr,
 	                      StringDecompressLocalState::Init);
 	result.SetSerializeCallback(CMStringDecompressSerialize);
 	result.SetDeserializeCallback(CMStringDecompressDeserialize);
