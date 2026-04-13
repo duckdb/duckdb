@@ -309,17 +309,17 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 
 		for (auto entry : input.Values<string_t>(count)) {
 			if (!entry.IsValid()) {
-				FlatVector::SetNull(result, entry.index, true);
+				FlatVector::SetNull(result, entry.GetIndex(), true);
 				continue;
 			}
-			auto str = CreateStringPiece(entry.value);
+			auto str = CreateStringPiece(entry.GetValue());
 			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
 			                                            UnsafeNumericCast<int>(groups.size()));
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
 				auto cdata = FlatVector::GetDataMutable<string_t>(child_entry);
 				auto &extracted = ws[col];
-				cdata[entry.index] =
+				cdata[entry.GetIndex()] =
 				    string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 			}
 		}

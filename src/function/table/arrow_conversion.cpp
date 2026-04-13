@@ -544,7 +544,7 @@ static idx_t FindRunIndex(const VectorValueIterator<RUN_END_TYPE> &run_ends, idx
 	while (begin < end) {
 		idx_t middle = (begin + end) / 2;
 		// begin < end implies middle < end
-		if (offset >= static_cast<idx_t>(run_ends[middle].value)) {
+		if (offset >= static_cast<idx_t>(run_ends[middle].GetValue())) {
 			// keep searching in [middle + 1, end)
 			begin = middle + 1;
 		} else {
@@ -579,8 +579,8 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 		for (; run < compressed_size; ++run) {
 			auto run_end_entry = run_ends_data[run];
 			auto value_entry = values_data[run];
-			auto &value = value_entry.value;
-			auto run_end = static_cast<idx_t>(run_end_entry.value);
+			auto &value = value_entry.GetValue();
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValue());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
@@ -603,15 +603,15 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 		for (; run < compressed_size; ++run) {
 			auto run_end_entry = run_ends_data[run];
 			auto value_entry = values_data[run];
-			auto run_end = static_cast<idx_t>(run_end_entry.value);
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValue());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
 			// Cap the amount to scan so we don't go over size
 			to_scan = MinValue<idx_t>(to_scan, (count - index));
 
-			if (value_entry.is_valid) {
-				auto &value = value_entry.value;
+			if (value_entry.IsValid()) {
+				auto &value = value_entry.GetValue();
 				for (idx_t i = 0; i < to_scan; i++) {
 					result_data[index + i] = value;
 					validity.SetValid(index + i);

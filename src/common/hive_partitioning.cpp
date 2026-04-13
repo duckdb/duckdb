@@ -247,7 +247,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 		auto &key = keys[i];
 		auto entry = entries[i];
 		if (entry.IsValid()) {
-			key.values[col_idx] = GetHiveKeyValue(entry.value, type);
+			key.values[col_idx] = GetHiveKeyValue(entry.GetValue(), type);
 		} else {
 			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}
