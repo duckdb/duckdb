@@ -19,7 +19,7 @@ public:
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
-			auto child_vector = make_uniq<Vector>(child_type, false, false);
+			auto child_vector = make_uniq<Vector>(child_type, VectorType::FLAT_VECTOR, nullptr);
 			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector), capacity);
 			break;
 		}
@@ -27,7 +27,7 @@ public:
 			auto &child_type = ArrayType::GetChildType(type);
 			auto array_size = ArrayType::GetSize(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, array_size * capacity));
-			auto child_vector = make_uniq<Vector>(child_type, true, false, array_size * capacity);
+			auto child_vector = make_uniq<Vector>(child_type, array_size * capacity);
 			buffer = make_shared_ptr<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
@@ -43,7 +43,7 @@ public:
 			buffer = make_buffer<VectorStringBuffer>(allocator, capacity);
 			break;
 		default:
-			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity * GetTypeIdSize(internal_type));
+			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity, GetTypeIdSize(internal_type));
 			break;
 		}
 	}
@@ -51,10 +51,13 @@ public:
 	void ResetFromCache(Vector &result) {
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
-		result.vector_type = VectorType::FLAT_VECTOR;
 		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
-		result.validity.Reset(capacity);
+		result.buffer->GetValidityMask().Reset(capacity);
+		// use SetVectorTypeOnly to avoid propagating to children
+		// for nested types (struct/array/list) children may have stale incompatible buffers
+		// from a previous execution - they will be reset individually below
+		result.buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer

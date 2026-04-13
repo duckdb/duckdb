@@ -49,7 +49,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
 	auto components = PathComponents();
 
-	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
+	string link = "https://duckdb.org/docs/current/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
 		link += "?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
@@ -226,7 +226,7 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
 		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
-			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
+			                  "https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions");
 		}
 	}
 
@@ -469,11 +469,21 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		return install_info;
 	}
 
-	auto decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
+	string decompressed_body;
+	void *extension_data;
+	idx_t extension_size;
+
+	if (GZipFileSystem::CheckIsZip(response->body.data(), response->body.size())) {
+		decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
+		extension_data = (void *)decompressed_body.data();
+		extension_size = decompressed_body.size();
+	} else {
+		extension_data = (void *)response->body.data();
+		extension_size = response->body.size();
+	}
 
 	ExtensionInstallInfo info;
-	CheckExtensionMetadataOnInstall(db, (void *)decompressed_body.data(), decompressed_body.size(), info,
-	                                extension_name);
+	CheckExtensionMetadataOnInstall(db, extension_data, extension_size, info, extension_name);
 	if (response->HasHeader("ETag")) {
 		info.etag = response->GetHeaderValue("ETag");
 	}
@@ -489,8 +499,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	QueryContext query_context(context);
 	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
-	                    decompressed_body.size(), info, db.config);
+	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info,
+	                    db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }

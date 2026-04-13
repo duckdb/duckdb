@@ -3,21 +3,29 @@
 
 namespace duckdb {
 
-VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
+FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
+    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)), count(count) {
+}
+
+void FlatVector::FlatStringWriter::InitializeHeap() {
+	heap = StringVector::GetStringHeap(vector);
+}
+
+VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0), sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
-    : StandardVectorBuffer(allocator, 0), heap(AllocateHeap(allocator)) {
+    : StandardVectorBuffer(allocator, 0, sizeof(string_t)), heap(AllocateHeap(allocator)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t capacity)
-    : StandardVectorBuffer(allocator, capacity * sizeof(string_t)) {
+    : StandardVectorBuffer(allocator, capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity * sizeof(string_t)) {
+VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
@@ -86,33 +94,26 @@ ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {
 	return GetStringBuffer(vector).GetStringAllocator();
 }
 
+StringHeap &StringVector::GetStringHeap(Vector &vector) {
+	auto &string_buffer = GetStringBuffer(vector);
+	return string_buffer.GetHeap();
+}
+
 string_t StringVector::AddString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::BIT);
-	if (data.IsInlined()) {
-		// string will be inlined: no need to store in string heap
-		return data;
-	}
-	auto &string_buffer = GetStringBuffer(vector);
-	return string_buffer.AddString(data);
+	auto &string_heap = GetStringHeap(vector);
+	return string_heap.AddString(data);
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (data.IsInlined()) {
-		// string will be inlined: no need to store in string heap
-		return data;
-	}
-	auto &string_buffer = GetStringBuffer(vector);
-	return string_buffer.AddBlob(data);
+	return GetStringHeap(vector).AddBlob(data);
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (len <= string_t::INLINE_LENGTH) {
-		return string_t(UnsafeNumericCast<uint32_t>(len));
-	}
-	auto &string_buffer = GetStringBuffer(vector);
-	return string_buffer.EmptyString(len);
+	auto &string_heap = GetStringHeap(vector);
+	return string_heap.EmptyString(len);
 }
 
 void StringVector::AddAuxiliaryData(Vector &vector, unique_ptr<AuxiliaryDataHolder> data) {

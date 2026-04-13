@@ -28,7 +28,7 @@ template <class T>
 void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
                    idx_t target_offset, idx_t copy_count) {
 	auto ldata = FlatVector::GetData<T>(source);
-	auto tdata = FlatVector::GetData<T>(target);
+	auto tdata = FlatVector::GetDataMutable<T>(target);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel.get_index(source_offset + i);
 		tdata[target_offset + i] = ldata[source_idx];
@@ -175,17 +175,12 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		break;
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(*source);
-		auto tdata = FlatVector::GetData<string_t>(target);
-		auto &buffer = StringVector::GetStringBuffer(target);
+		auto tdata = FlatVector::Writer<string_t>(target, target_offset + copy_count);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (tmask.RowIsValid(target_idx)) {
-				if (ldata[source_idx].IsInlined()) {
-					tdata[target_idx] = ldata[source_idx];
-				} else {
-					tdata[target_idx] = buffer.AddBlob(ldata[source_idx]);
-				}
+				tdata[target_idx] = ldata[source_idx];
 			}
 		}
 		break;
@@ -225,7 +220,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 
 		auto &source_child = ListVector::GetEntry(*source);
 		auto sdata = FlatVector::GetData<list_entry_t>(*source);
-		auto tdata = FlatVector::GetData<list_entry_t>(target);
+		auto tdata = FlatVector::GetDataMutable<list_entry_t>(target);
 
 		if (target_vector_type == VectorType::CONSTANT_VECTOR) {
 			// If we are only writing one value, then the copied values (if any) are contiguous

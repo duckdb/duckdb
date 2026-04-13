@@ -44,3 +44,80 @@ select my_case(range) OVER ()
 from range(2);
 ----
 Window function macros must be functions
+
+statement error
+CREATE MACRO my_lag(x) AS LAG(x);
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_lead(x) AS LEAD(x);
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_rn() AS ROW_NUMBER();
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_rank() AS RANK();
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_dense_rank() AS DENSE_RANK();
+----
+Binder Error: Window functions are not supported here
+
+statement ok
+CREATE MACRO my_sum(x) AS SUM(x);
+
+# Via macro: FILTER lost, wrong result
+query I
+SELECT my_sum(i) FILTER (WHERE i > 3) OVER () FROM range(10) t(i) LIMIT 1;
+----
+39
+
+statement ok
+CREATE MACRO my_count(x) AS COUNT(x);
+
+# Via macro: DISTINCT lost, wrong result
+query I
+SELECT my_count(DISTINCT i % 3) OVER () FROM range(10) t(i) LIMIT 1;
+----
+3
+
+statement ok
+CREATE MACRO sum_positive(x) AS SUM(x) FILTER (WHERE x > 0);
+
+# Expected: FILTER WHERE (i-5) > 0 AND (i-5) < 3 → SUM(1, 2) = 3
+query I
+SELECT sum_positive(i-5) FILTER (WHERE (i-5) < 3) OVER () FROM range(10) t(i) LIMIT 1;
+----
+3
+
+# Secondary ordering
+query I
+SELECT LIST(i ORDER BY i DESC) OVER (PARTITION BY i % 2) FROM range(6) t(i) ORDER BY i;
+----
+[4, 2, 0]
+[5, 3, 1]
+[4, 2, 0]
+[5, 3, 1]
+[4, 2, 0]
+[5, 3, 1]
+
+statement ok
+CREATE MACRO my_list(x) AS LIST(x ORDER BY x DESC);
+
+# Fails as window function:
+query I
+SELECT my_list(i) OVER (PARTITION BY i % 2) FROM range(6) t(i) ORDER BY i;
+----
+[4, 2, 0]
+[5, 3, 1]
+[4, 2, 0]
+[5, 3, 1]
+[4, 2, 0]
+[5, 3, 1]

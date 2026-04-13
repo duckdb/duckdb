@@ -61,7 +61,7 @@ class CrossProductExecutor {
 public:
 	explicit CrossProductExecutor(ColumnDataCollection &rhs);
 
-	OperatorResultType Execute(DataChunk &input, DataChunk &output);
+	OperatorResultType Execute(const DataChunk &input, DataChunk &output);
 
 	// returns if the left side is scanned as a constant vector
 	bool ScanLHS() {
@@ -78,8 +78,8 @@ public:
 	}
 
 private:
-	void Reset(DataChunk &input, DataChunk &output);
-	bool NextValue(DataChunk &input, DataChunk &output);
+	void Reset(const DataChunk &input, DataChunk &output);
+	bool NextValue(const DataChunk &input, DataChunk &output);
 
 private:
 	ColumnDataCollection &rhs;

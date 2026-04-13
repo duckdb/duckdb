@@ -55,9 +55,7 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 	auto cte_info = make_uniq<CommonTableExpressionInfo>();
 	cte_info->aliases = info->aliases;
 
-	auto cte_select = make_uniq<SelectStatement>();
-	cte_select->node = std::move(inner_node);
-	cte_info->query = std::move(cte_select);
+	cte_info->query_node = std::move(inner_node);
 
 	outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
 

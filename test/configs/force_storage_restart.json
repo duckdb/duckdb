@@ -31,6 +31,7 @@
       "reason": "Logging setting doesn't survive restarts",
       "paths": [
         "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
+        "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/physical_operator_logging.test_slow",
         "test/logging/warnings_as_errors.test"
       ]

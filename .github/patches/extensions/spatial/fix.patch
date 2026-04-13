@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index 239d546..c16df2d 100644
+index 239d546..9de9355 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -1,3 +1,5 @@
@@ -8,7 +8,16 @@ index 239d546..c16df2d 100644
  #include "spatial/index/rtree/rtree_index.hpp"
  
  #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-@@ -167,11 +169,11 @@ static void ConvertToEntries(Vector &box_vec, Vector &rowid_vec, idx_t count, CA
+@@ -134,7 +136,7 @@ unique_ptr<IndexScanState> RTreeIndex::InitializeScan(const RTreeBounds &query)
+ 
+ idx_t RTreeIndex::Scan(IndexScanState &state, Vector &result) const {
+ 	auto &sstate = state.Cast<RTreeIndexScanState>();
+-	const auto row_ids = FlatVector::GetData<row_t>(result);
++	const auto row_ids = FlatVector::GetDataMutable<row_t>(result);
+ 
+ 	idx_t output_idx = 0;
+ 	sstate.scanner.Scan(*tree, [&](const RTreeEntry &entry, const idx_t &) {
+@@ -167,13 +169,13 @@ static void ConvertToEntries(Vector &box_vec, Vector &rowid_vec, idx_t count, CA
  	const auto &box_validity = FlatVector::Validity(box_vec);
  	const auto &row_validity = FlatVector::Validity(rowid_vec);
  
@@ -18,13 +27,16 @@ index 239d546..c16df2d 100644
 -	const auto box_xmax_data = FlatVector::GetData<float>(*box_entries[2]);
 -	const auto box_ymax_data = FlatVector::GetData<float>(*box_entries[3]);
 +	auto &box_entries = StructVector::GetEntries(box_vec);
-+	const auto box_xmin_data = FlatVector::GetData<float>(box_entries[0]);
-+	const auto box_ymin_data = FlatVector::GetData<float>(box_entries[1]);
-+	const auto box_xmax_data = FlatVector::GetData<float>(box_entries[2]);
-+	const auto box_ymax_data = FlatVector::GetData<float>(box_entries[3]);
++	const auto box_xmin_data = FlatVector::GetDataMutable<float>(box_entries[0]);
++	const auto box_ymin_data = FlatVector::GetDataMutable<float>(box_entries[1]);
++	const auto box_xmax_data = FlatVector::GetDataMutable<float>(box_entries[2]);
++	const auto box_ymax_data = FlatVector::GetDataMutable<float>(box_entries[3]);
  
- 	const auto row_data = FlatVector::GetData<row_t>(rowid_vec);
+-	const auto row_data = FlatVector::GetData<row_t>(rowid_vec);
++	const auto row_data = FlatVector::GetDataMutable<row_t>(rowid_vec);
  
+ 	for (idx_t i = 0; i < count; i++) {
+ 		if (!box_validity.RowIsValid(i) || !row_validity.RowIsValid(i)) {
 diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
 index 263d413..63d35f1 100644
 --- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
@@ -39,7 +51,7 @@ index 263d413..63d35f1 100644
  	// Visit the operator's expressions
  	LogicalOperatorVisitor::EnumerateExpressions(*this,
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
-index bc4134a..b4d5601 100644
+index bc4134a..c8f22cc 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
 +++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 @@ -1,3 +1,5 @@
@@ -53,16 +65,17 @@ index bc4134a..b4d5601 100644
  	chunk.Flatten();
  
 -	const auto &bbox_vecs = StructVector::GetEntries(chunk.data[0]);
-+	auto &bbox_vecs = StructVector::GetEntries(chunk.data[0]);
- 	const auto &rowid_data = FlatVector::GetData<row_t>(chunk.data[1]);
+-	const auto &rowid_data = FlatVector::GetData<row_t>(chunk.data[1]);
 -	const auto min_x_data = FlatVector::GetData<float>(*bbox_vecs[0]);
 -	const auto min_y_data = FlatVector::GetData<float>(*bbox_vecs[1]);
 -	const auto max_x_data = FlatVector::GetData<float>(*bbox_vecs[2]);
 -	const auto max_y_data = FlatVector::GetData<float>(*bbox_vecs[3]);
-+	const auto min_x_data = FlatVector::GetData<float>(bbox_vecs[0]);
-+	const auto min_y_data = FlatVector::GetData<float>(bbox_vecs[1]);
-+	const auto max_x_data = FlatVector::GetData<float>(bbox_vecs[2]);
-+	const auto max_y_data = FlatVector::GetData<float>(bbox_vecs[3]);
++	auto &bbox_vecs = StructVector::GetEntries(chunk.data[0]);
++	const auto &rowid_data = FlatVector::GetDataMutable<row_t>(chunk.data[1]);
++	const auto min_x_data = FlatVector::GetDataMutable<float>(bbox_vecs[0]);
++	const auto min_y_data = FlatVector::GetDataMutable<float>(bbox_vecs[1]);
++	const auto max_x_data = FlatVector::GetDataMutable<float>(bbox_vecs[2]);
++	const auto max_y_data = FlatVector::GetDataMutable<float>(bbox_vecs[3]);
  
  	// Vectorized conversion from columnar to row-wise
  	RTreeEntry entries[STANDARD_VECTOR_SIZE];
@@ -191,7 +204,7 @@ index 520d2b1..d27c65f 100644
  		new_filter->children.push_back(std::move(get_ptr));
  		new_filter->ResolveOperatorTypes();
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
-index a0e5397..69a1578 100644
+index a0e5397..7300678 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
 +++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 @@ -1,3 +1,5 @@
@@ -200,25 +213,29 @@ index a0e5397..69a1578 100644
  #include "spatial/spatial_types.hpp"
  #include "spatial/index/rtree/rtree_index.hpp"
  #include "spatial/index/rtree/rtree_module.hpp"
-@@ -203,11 +205,11 @@ static void RTreeIndexDumpExecute(ClientContext &context, TableFunctionInput &da
+@@ -202,13 +204,13 @@ static void RTreeIndexDumpExecute(ClientContext &context, TableFunctionInput &da
+ 
  	idx_t output_idx = 0;
  
- 	const auto level_data = FlatVector::GetData<int32_t>(output.data[0]);
+-	const auto level_data = FlatVector::GetData<int32_t>(output.data[0]);
 -	const auto &bounds_vectors = StructVector::GetEntries(output.data[1]);
 -	const auto xmin_data = FlatVector::GetData<float>(*bounds_vectors[0]);
 -	const auto ymin_data = FlatVector::GetData<float>(*bounds_vectors[1]);
 -	const auto xmax_data = FlatVector::GetData<float>(*bounds_vectors[2]);
 -	const auto ymax_data = FlatVector::GetData<float>(*bounds_vectors[3]);
+-	const auto rowid_data = FlatVector::GetData<row_t>(output.data[2]);
++	const auto level_data = FlatVector::GetDataMutable<int32_t>(output.data[0]);
 +	auto &bounds_vectors = StructVector::GetEntries(output.data[1]);
-+	const auto xmin_data = FlatVector::GetData<float>(bounds_vectors[0]);
-+	const auto ymin_data = FlatVector::GetData<float>(bounds_vectors[1]);
-+	const auto xmax_data = FlatVector::GetData<float>(bounds_vectors[2]);
-+	const auto ymax_data = FlatVector::GetData<float>(bounds_vectors[3]);
- 	const auto rowid_data = FlatVector::GetData<row_t>(output.data[2]);
++	const auto xmin_data = FlatVector::GetDataMutable<float>(bounds_vectors[0]);
++	const auto ymin_data = FlatVector::GetDataMutable<float>(bounds_vectors[1]);
++	const auto xmax_data = FlatVector::GetDataMutable<float>(bounds_vectors[2]);
++	const auto ymax_data = FlatVector::GetDataMutable<float>(bounds_vectors[3]);
++	const auto rowid_data = FlatVector::GetDataMutable<row_t>(output.data[2]);
  
  	const auto &tree = *state.index.tree;
+ 
 diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
-index d111f0b..fd5e3bb 100644
+index d111f0b..4b0a544 100644
 --- a/src/spatial/modules/geos/geos_module.cpp
 +++ b/src/spatial/modules/geos/geos_module.cpp
 @@ -8,6 +8,7 @@
@@ -246,6 +263,15 @@ index d111f0b..fd5e3bb 100644
  
  		const auto geom_data = UnifiedVectorFormat::GetData<string_t>(geom_format);
  		const auto minx_data = UnifiedVectorFormat::GetData<double>(minx_format);
+@@ -316,7 +317,7 @@ struct ST_AsMVTGeom {
+ 		const auto maxx_data = UnifiedVectorFormat::GetData<double>(maxx_format);
+ 		const auto maxy_data = UnifiedVectorFormat::GetData<double>(maxy_format);
+ 
+-		const auto res_data = FlatVector::GetData<string_t>(result);
++		const auto res_data = FlatVector::GetDataMutable<string_t>(result);
+ 
+ 		for (idx_t out_idx = 0; out_idx < args.size(); out_idx++) {
+ 			const auto geom_idx = geom_format.sel->get_index(out_idx);
 @@ -1653,8 +1654,8 @@ struct ST_MaximumInscribedCircle {
  		auto &lstate = LocalState::ResetAndGet(state);
  
@@ -268,7 +294,21 @@ index d111f0b..fd5e3bb 100644
  
  		using STRING_TYPE = PrimitiveType<string_t>;
  		using DOUBLE_TYPE = PrimitiveType<double>;
-@@ -2610,7 +2611,7 @@ struct ST_Union_Agg {
+@@ -2581,7 +2582,7 @@ struct ST_Union_Agg {
+ 		state_vec.ToUnifiedFormat(count, state_format);
+ 
+ 		const auto state_ptr = UnifiedVectorFormat::GetData<State *>(state_format);
+-		const auto combined_ptr = FlatVector::GetData<State *>(combined);
++		const auto combined_ptr = FlatVector::GetDataMutable<State *>(combined);
+ 
+ 		for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+ 			const auto state_idx = state_format.sel->get_index(raw_idx);
+@@ -2606,11 +2607,11 @@ struct ST_Union_Agg {
+ 		state_vec.ToUnifiedFormat(count, state_format);
+ 
+ 		const auto state_ptr = UnifiedVectorFormat::GetData<State *>(state_format);
+-		const auto combined_ptr = FlatVector::GetData<State *>(combined);
++		const auto combined_ptr = FlatVector::GetDataMutable<State *>(combined);
  
  		for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
  			const auto state_idx = state_format.sel->get_index(raw_idx);
@@ -277,7 +317,30 @@ index d111f0b..fd5e3bb 100644
  
  			// We can't steal the list, we need to clone and append all elements
  			auto &combined_state = *combined_ptr[raw_idx];
-@@ -2788,7 +2789,7 @@ struct GEOSCoverageAggFunction {
+@@ -2646,7 +2647,7 @@ struct ST_Union_Agg {
+ 				const auto result_union = GEOSUnaryUnion_r(state.context, collection);
+ 
+ 				// Serialize the result
+-				const auto result_ptr = FlatVector::GetData<string_t>(result);
++				const auto result_ptr = FlatVector::GetDataMutable<string_t>(result);
+ 				result_ptr[out_idx] = Serialize(state.context, result, result_union);
+ 
+ 				// Destroy the unioned geometry
+@@ -2752,7 +2753,7 @@ struct GEOSCoverageAggFunction {
+ 		state_vec.ToUnifiedFormat(count, state_format);
+ 
+ 		const auto state_ptr = UnifiedVectorFormat::GetData<State *>(state_format);
+-		const auto combined_ptr = FlatVector::GetData<State *>(combined);
++		const auto combined_ptr = FlatVector::GetDataMutable<State *>(combined);
+ 
+ 		for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+ 			const auto state_idx = state_format.sel->get_index(raw_idx);
+@@ -2784,11 +2785,11 @@ struct GEOSCoverageAggFunction {
+ 		state_vec.ToUnifiedFormat(count, state_format);
+ 
+ 		const auto state_ptr = UnifiedVectorFormat::GetData<State *>(state_format);
+-		const auto combined_ptr = FlatVector::GetData<State *>(combined);
++		const auto combined_ptr = FlatVector::GetDataMutable<State *>(combined);
  
  		for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
  			const auto state_idx = state_format.sel->get_index(raw_idx);
@@ -286,8 +349,35 @@ index d111f0b..fd5e3bb 100644
  
  			// We can't steal the list, we need to clone and append all elements
  			auto &combined_state = *combined_ptr[raw_idx];
+@@ -2942,7 +2943,7 @@ struct ST_CoverageSimplify_Agg : GEOSCoverageAggFunction {
+ 		    GEOSCoverageSimplifyVW_r(state.context, collection, state.tolerance, !state.simplify_boundary);
+ 
+ 		// Serialize the result
+-		const auto result_ptr = FlatVector::GetData<string_t>(result);
++		const auto result_ptr = FlatVector::GetDataMutable<string_t>(result);
+ 		result_ptr[out_idx] = Serialize(state.context, result, simplified);
+ 		GEOSGeom_destroy_r(state.context, simplified);
+ 	}
+@@ -3016,7 +3017,7 @@ struct ST_CoverageUnion_Agg : GEOSCoverageAggFunction {
+ 		const auto coverage = GEOSCoverageUnion_r(state.context, collection);
+ 
+ 		// Serialize the result
+-		const auto result_ptr = FlatVector::GetData<string_t>(result);
++		const auto result_ptr = FlatVector::GetDataMutable<string_t>(result);
+ 		result_ptr[out_idx] = Serialize(state.context, result, coverage);
+ 		GEOSGeom_destroy_r(state.context, coverage);
+ 	}
+@@ -3107,7 +3108,7 @@ struct ST_CoverageInvalidEdges_Agg : GEOSCoverageAggFunction {
+ 			return;
+ 		}
+ 		// Serialize the result
+-		const auto result_ptr = FlatVector::GetData<string_t>(result);
++		const auto result_ptr = FlatVector::GetDataMutable<string_t>(result);
+ 		result_ptr[out_idx] = Serialize(state.context, result, edges);
+ 		GEOSGeom_destroy_r(state.context, edges);
+ 	}
 diff --git a/src/spatial/modules/main/spatial_functions_cast.cpp b/src/spatial/modules/main/spatial_functions_cast.cpp
-index 72722cc..c64825a 100644
+index 72722cc..8796650 100644
 --- a/src/spatial/modules/main/spatial_functions_cast.cpp
 +++ b/src/spatial/modules/main/spatial_functions_cast.cpp
 @@ -245,15 +245,15 @@ struct PointCasts {
@@ -320,9 +410,9 @@ index 72722cc..c64825a 100644
 -		const auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		const auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
 -		const auto z_data = HAS_Z ? FlatVector::GetData<double>(*coord_vec_children[2]) : nullptr;
-+		const auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		const auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
-+		const auto z_data = HAS_Z ? FlatVector::GetData<double>(coord_vec_children[2]) : nullptr;
++		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto z_data = HAS_Z ? FlatVector::GetData<double>(coord_vec_children[2]) : nullptr;
  
  		const auto coord_size = HAS_Z ? 3 : 2;
  
@@ -332,12 +422,12 @@ index 72722cc..c64825a 100644
  
 -			const auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -			const auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+			const auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+			const auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++			auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++			auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  			if (HAS_Z) {
 -				const auto z_data = FlatVector::GetData<double>(*coord_vec_children[2]);
-+				const auto z_data = FlatVector::GetData<double>(coord_vec_children[2]);
++				auto z_data = FlatVector::GetDataMutable<double>(coord_vec_children[2]);
  				for (idx_t i = 0; i < line_size; i++) {
  					const auto vertex = line.get_vertex_xyzm(i);
  					x_data[entry.offset + i] = vertex.x;
@@ -347,8 +437,8 @@ index 72722cc..c64825a 100644
  		auto &coord_src_children = StructVector::GetEntries(coord_src);
 -		const auto x_src = FlatVector::GetData<double>(*coord_src_children[0]);
 -		const auto y_src = FlatVector::GetData<double>(*coord_src_children[1]);
-+		const auto x_src = FlatVector::GetData<double>(coord_src_children[0]);
-+		const auto y_src = FlatVector::GetData<double>(coord_src_children[1]);
++		auto x_src = FlatVector::GetDataMutable<double>(coord_src_children[0]);
++		auto y_src = FlatVector::GetDataMutable<double>(coord_src_children[1]);
  
  		idx_t total_coords = 0;
  
@@ -358,8 +448,8 @@ index 72722cc..c64825a 100644
  
 -			const auto x_dst = FlatVector::GetData<double>(*coord_dst_children[0]);
 -			const auto y_dst = FlatVector::GetData<double>(*coord_dst_children[1]);
-+			const auto x_dst = FlatVector::GetData<double>(coord_dst_children[0]);
-+			const auto y_dst = FlatVector::GetData<double>(coord_dst_children[1]);
++			auto x_dst = FlatVector::GetDataMutable<double>(coord_dst_children[0]);
++			auto y_dst = FlatVector::GetDataMutable<double>(coord_dst_children[1]);
  
  			for (idx_t i = 0; i < line.length; i++) {
  				x_dst[entry.offset + i] = x_src[line.offset + i];
@@ -372,9 +462,9 @@ index 72722cc..c64825a 100644
 -		const auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
 -		const auto z_data = HAS_Z ? FlatVector::GetData<double>(*coord_vec_children[2]) : nullptr;
 +		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
-+		const auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		const auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
-+		const auto z_data = HAS_Z ? FlatVector::GetData<double>(coord_vec_children[2]) : nullptr;
++		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto z_data = HAS_Z ? FlatVector::GetData<double>(coord_vec_children[2]) : nullptr;
  
  		const auto coord_size = HAS_Z ? 3 : 2;
  
@@ -384,14 +474,14 @@ index 72722cc..c64825a 100644
  					auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -					const auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -					const auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+					const auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+					const auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++					auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++					auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  					ring_entries[total_rings + ring_idx] = ring_entry;
  
  					if (HAS_Z) {
 -						const auto z_data = FlatVector::GetData<double>(*coord_vec_children[2]);
-+						const auto z_data = FlatVector::GetData<double>(coord_vec_children[2]);
++						auto z_data = FlatVector::GetDataMutable<double>(coord_vec_children[2]);
  						for (idx_t j = 0; j < ring_size; j++) {
  							const auto vertext = head->get_vertex_xyzm(j);
  							x_data[ring_entry.offset + j] = vertext.x;
@@ -403,8 +493,8 @@ index 72722cc..c64825a 100644
 -		const auto x_src = FlatVector::GetData<double>(*coord_src_children[0]);
 -		const auto y_src = FlatVector::GetData<double>(*coord_src_children[1]);
 +		auto &coord_src_children = StructVector::GetEntries(coord_src);
-+		const auto x_src = FlatVector::GetData<double>(coord_src_children[0]);
-+		const auto y_src = FlatVector::GetData<double>(coord_src_children[1]);
++		auto x_src = FlatVector::GetData<double>(coord_src_children[0]);
++		auto y_src = FlatVector::GetData<double>(coord_src_children[1]);
  
  		idx_t total_rings = 0;
  		idx_t total_coords = 0;
@@ -414,8 +504,8 @@ index 72722cc..c64825a 100644
  				auto &coord_dst_children = StructVector::GetEntries(coord_dst);
 -				const auto x_dst = FlatVector::GetData<double>(*coord_dst_children[0]);
 -				const auto y_dst = FlatVector::GetData<double>(*coord_dst_children[1]);
-+				const auto x_dst = FlatVector::GetData<double>(coord_dst_children[0]);
-+				const auto y_dst = FlatVector::GetData<double>(coord_dst_children[1]);
++				auto x_dst = FlatVector::GetDataMutable<double>(coord_dst_children[0]);
++				auto y_dst = FlatVector::GetDataMutable<double>(coord_dst_children[1]);
  
  				ring_entries_dst[total_rings + i] = ring_entry_dst;
  
@@ -425,8 +515,8 @@ index 72722cc..c64825a 100644
  	auto &children = StructVector::GetEntries(inner);
 -	auto x_data = FlatVector::GetData<double>(*children[0]);
 -	auto y_data = FlatVector::GetData<double>(*children[1]);
-+	auto x_data = FlatVector::GetData<double>(children[0]);
-+	auto y_data = FlatVector::GetData<double>(children[1]);
++	auto x_data = FlatVector::GetDataMutable<double>(children[0]);
++	auto y_data = FlatVector::GetDataMutable<double>(children[1]);
  
  	UnaryExecutor::Execute<list_entry_t, string_t>(source, result, count, [&](list_entry_t &line) {
  		auto offset = line.offset;
@@ -437,9 +527,9 @@ index 72722cc..c64825a 100644
 -	auto x_data = FlatVector::GetData<double>(*children[0]);
 -	auto y_data = FlatVector::GetData<double>(*children[1]);
 -	auto z_data = FlatVector::GetData<double>(*children[2]);
-+	auto x_data = FlatVector::GetData<double>(children[0]);
-+	auto y_data = FlatVector::GetData<double>(children[1]);
-+	auto z_data = FlatVector::GetData<double>(children[2]);
++	auto x_data = FlatVector::GetDataMutable<double>(children[0]);
++	auto y_data = FlatVector::GetDataMutable<double>(children[1]);
++	auto z_data = FlatVector::GetDataMutable<double>(children[2]);
  
  	UnaryExecutor::Execute<list_entry_t, string_t>(source, result, count, [&](list_entry_t &line) {
  		auto offset = line.offset;
@@ -449,8 +539,8 @@ index 72722cc..c64825a 100644
  	auto &point_children = StructVector::GetEntries(point_vector);
 -	auto x_data = FlatVector::GetData<double>(*point_children[0]);
 -	auto y_data = FlatVector::GetData<double>(*point_children[1]);
-+	auto x_data = FlatVector::GetData<double>(point_children[0]);
-+	auto y_data = FlatVector::GetData<double>(point_children[1]);
++	auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
++	auto y_data = FlatVector::GetDataMutable<double>(point_children[1]);
  
  	UnaryExecutor::Execute<list_entry_t, string_t>(poly_vector, result, count, [&](list_entry_t polygon_entry) {
  		auto offset = polygon_entry.offset;
@@ -461,24 +551,33 @@ index 72722cc..c64825a 100644
 -	auto x_data = FlatVector::GetData<double>(*point_children[0]);
 -	auto y_data = FlatVector::GetData<double>(*point_children[1]);
 -	auto z_data = FlatVector::GetData<double>(*point_children[2]);
-+	auto x_data = FlatVector::GetData<double>(point_children[0]);
-+	auto y_data = FlatVector::GetData<double>(point_children[1]);
-+	auto z_data = FlatVector::GetData<double>(point_children[2]);
++	auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
++	auto y_data = FlatVector::GetDataMutable<double>(point_children[1]);
++	auto z_data = FlatVector::GetDataMutable<double>(point_children[2]);
  
  	UnaryExecutor::Execute<list_entry_t, string_t>(poly_vector, result, count, [&](list_entry_t polygon_entry) {
  		auto offset = polygon_entry.offset;
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 31cd743..c98b7f7 100644
+index 31cd743..5310f80 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -179,7 +179,7 @@ struct ST_Affine {
+ 			sgl::ops::affine_transform(alloc, geom, matrix);
+ 
+ 			// Serialize the result
+-			FlatVector::GetData<string_t>(result)[out_idx] = lstate.Serialize(result, geom);
++			FlatVector::GetDataMutable<string_t>(result)[out_idx] = lstate.Serialize(result, geom);
+ 		}
+ 
+ 		if (row_count == 1) {
 @@ -442,8 +442,8 @@ struct ST_Area {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &coord_vec = ListVector::GetEntry(ring_vec);
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  		UnaryExecutor::Execute<list_entry_t, double>(input, result, count, [&](list_entry_t polygon) {
  			auto polygon_offset = polygon.offset;
@@ -506,14 +605,14 @@ index 31cd743..c98b7f7 100644
  		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
 -		auto line_x_data = FlatVector::GetData<double>(*line_vertex_vec_children[0]);
 -		auto line_y_vec = FlatVector::GetData<double>(*line_vertex_vec_children[1]);
-+		auto line_x_data = FlatVector::GetData<double>(line_vertex_vec_children[0]);
-+		auto line_y_vec = FlatVector::GetData<double>(line_vertex_vec_children[1]);
++		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
++		auto line_y_vec = FlatVector::GetDataMutable<double>(line_vertex_vec_children[1]);
  
  		auto &point_vertex_children = StructVector::GetEntries(result);
 -		auto point_x_data = FlatVector::GetData<double>(*point_vertex_children[0]);
 -		auto point_y_data = FlatVector::GetData<double>(*point_vertex_children[1]);
-+		auto point_x_data = FlatVector::GetData<double>(point_vertex_children[0]);
-+		auto point_y_data = FlatVector::GetData<double>(point_vertex_children[1]);
++		auto point_x_data = FlatVector::GetDataMutable<double>(point_vertex_children[0]);
++		auto point_y_data = FlatVector::GetDataMutable<double>(point_vertex_children[1]);
  		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  
  			auto in_row_idx = format.sel->get_index(out_row_idx);
@@ -532,14 +631,14 @@ index 31cd743..c98b7f7 100644
  		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
 -		auto x_data = FlatVector::GetData<double>(*vertex_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*vertex_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(vertex_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(vertex_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(vertex_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(vertex_vec_children[1]);
  
  		auto &centroid_children = StructVector::GetEntries(result);
 -		auto centroid_x_data = FlatVector::GetData<double>(*centroid_children[0]);
 -		auto centroid_y_data = FlatVector::GetData<double>(*centroid_children[1]);
-+		auto centroid_x_data = FlatVector::GetData<double>(centroid_children[0]);
-+		auto centroid_y_data = FlatVector::GetData<double>(centroid_children[1]);
++		auto centroid_x_data = FlatVector::GetDataMutable<double>(centroid_children[0]);
++		auto centroid_y_data = FlatVector::GetDataMutable<double>(centroid_children[1]);
  
  		for (idx_t in_row_idx = 0; in_row_idx < count; in_row_idx++) {
  			if (format.validity.RowIsValid(in_row_idx)) {
@@ -557,16 +656,16 @@ index 31cd743..c98b7f7 100644
 -		auto miny_data = FlatVector::GetData<T>(*box_children[1]);
 -		auto maxx_data = FlatVector::GetData<T>(*box_children[2]);
 -		auto maxy_data = FlatVector::GetData<T>(*box_children[3]);
-+		auto minx_data = FlatVector::GetData<T>(box_children[0]);
-+		auto miny_data = FlatVector::GetData<T>(box_children[1]);
-+		auto maxx_data = FlatVector::GetData<T>(box_children[2]);
-+		auto maxy_data = FlatVector::GetData<T>(box_children[3]);
++		auto minx_data = FlatVector::GetDataMutable<T>(box_children[0]);
++		auto miny_data = FlatVector::GetDataMutable<T>(box_children[1]);
++		auto maxx_data = FlatVector::GetDataMutable<T>(box_children[2]);
++		auto maxy_data = FlatVector::GetDataMutable<T>(box_children[3]);
  
  		auto &centroid_children = StructVector::GetEntries(result);
 -		auto centroid_x_data = FlatVector::GetData<double>(*centroid_children[0]);
 -		auto centroid_y_data = FlatVector::GetData<double>(*centroid_children[1]);
-+		auto centroid_x_data = FlatVector::GetData<double>(centroid_children[0]);
-+		auto centroid_y_data = FlatVector::GetData<double>(centroid_children[1]);
++		auto centroid_x_data = FlatVector::GetDataMutable<double>(centroid_children[0]);
++		auto centroid_y_data = FlatVector::GetDataMutable<double>(centroid_children[1]);
  
  		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  			auto in_row_idx = format.sel->get_index(out_row_idx);
@@ -576,23 +675,26 @@ index 31cd743..c98b7f7 100644
  		auto &p_children = StructVector::GetEntries(in_point);
 -		auto p_x_data = FlatVector::GetData<double>(*p_children[0]);
 -		auto p_y_data = FlatVector::GetData<double>(*p_children[1]);
-+		auto p_x_data = FlatVector::GetData<double>(p_children[0]);
-+		auto p_y_data = FlatVector::GetData<double>(p_children[1]);
++		auto p_x_data = FlatVector::GetDataMutable<double>(p_children[0]);
++		auto p_y_data = FlatVector::GetDataMutable<double>(p_children[1]);
  
  		// Setup polygon vectors
  		auto polygon_entries = ListVector::GetData(in_polygon);
-@@ -2021,8 +2021,8 @@ struct ST_Contains {
+@@ -2021,10 +2021,10 @@ struct ST_Contains {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &coord_vec = ListVector::GetEntry(ring_vec);
  		auto &coord_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_children[1]);
  
- 		auto result_data = FlatVector::GetData<bool>(result);
+-		auto result_data = FlatVector::GetData<bool>(result);
++		auto result_data = FlatVector::GetDataMutable<bool>(result);
  		for (idx_t polygon_idx = 0; polygon_idx < count; polygon_idx++) {
-@@ -2274,10 +2274,10 @@ struct ST_Azimuth {
+ 			auto polygon = polygon_entries[polygon_idx];
+ 			auto polygon_offset = polygon.offset;
+@@ -2274,14 +2274,14 @@ struct ST_Azimuth {
  		auto &left_entries = StructVector::GetEntries(left);
  		auto &right_entries = StructVector::GetEntries(right);
  
@@ -600,14 +702,19 @@ index 31cd743..c98b7f7 100644
 -		auto left_y = FlatVector::GetData<double>(*left_entries[1]);
 -		auto right_x = FlatVector::GetData<double>(*right_entries[0]);
 -		auto right_y = FlatVector::GetData<double>(*right_entries[1]);
-+		auto left_x = FlatVector::GetData<double>(left_entries[0]);
-+		auto left_y = FlatVector::GetData<double>(left_entries[1]);
-+		auto right_x = FlatVector::GetData<double>(right_entries[0]);
-+		auto right_y = FlatVector::GetData<double>(right_entries[1]);
++		auto left_x = FlatVector::GetDataMutable<double>(left_entries[0]);
++		auto left_y = FlatVector::GetDataMutable<double>(left_entries[1]);
++		auto right_x = FlatVector::GetDataMutable<double>(right_entries[0]);
++		auto right_y = FlatVector::GetDataMutable<double>(right_entries[1]);
  
  		auto &result_mask = FlatVector::Validity(result);
  
-@@ -2408,10 +2408,10 @@ struct ST_Distance {
+-		auto out_data = FlatVector::GetData<double>(result);
++		auto out_data = FlatVector::GetDataMutable<double>(result);
+ 		for (idx_t i = 0; i < count; i++) {
+ 			// If the points are the same, return NULL
+ 			if (left_x[i] == right_x[i] && left_y[i] == right_y[i]) {
+@@ -2408,12 +2408,12 @@ struct ST_Distance {
  		auto &left_entries = StructVector::GetEntries(left);
  		auto &right_entries = StructVector::GetEntries(right);
  
@@ -615,41 +722,48 @@ index 31cd743..c98b7f7 100644
 -		auto left_y = FlatVector::GetData<double>(*left_entries[1]);
 -		auto right_x = FlatVector::GetData<double>(*right_entries[0]);
 -		auto right_y = FlatVector::GetData<double>(*right_entries[1]);
-+		auto left_x = FlatVector::GetData<double>(left_entries[0]);
-+		auto left_y = FlatVector::GetData<double>(left_entries[1]);
-+		auto right_x = FlatVector::GetData<double>(right_entries[0]);
-+		auto right_y = FlatVector::GetData<double>(right_entries[1]);
++		auto left_x = FlatVector::GetDataMutable<double>(left_entries[0]);
++		auto left_y = FlatVector::GetDataMutable<double>(left_entries[1]);
++		auto right_x = FlatVector::GetDataMutable<double>(right_entries[0]);
++		auto right_y = FlatVector::GetDataMutable<double>(right_entries[1]);
  
- 		auto out_data = FlatVector::GetData<double>(result);
+-		auto out_data = FlatVector::GetData<double>(result);
++		auto out_data = FlatVector::GetDataMutable<double>(result);
  		for (idx_t i = 0; i < count; i++) {
+ 			out_data[i] = std::sqrt(std::pow(left_x[i] - right_x[i], 2) + std::pow(left_y[i] - right_y[i], 2));
+ 		}
 @@ -2433,8 +2433,8 @@ struct ST_Distance {
  		auto &p_children = StructVector::GetEntries(in_point);
  		auto &p_x = p_children[0];
  		auto &p_y = p_children[1];
 -		auto p_x_data = FlatVector::GetData<double>(*p_x);
 -		auto p_y_data = FlatVector::GetData<double>(*p_y);
-+		auto p_x_data = FlatVector::GetData<double>(p_x);
-+		auto p_y_data = FlatVector::GetData<double>(p_y);
++		auto p_x_data = FlatVector::GetDataMutable<double>(p_x);
++		auto p_y_data = FlatVector::GetDataMutable<double>(p_y);
  
  		// Set up the line vectors
  		in_line.Flatten(count);
-@@ -2443,8 +2443,8 @@ struct ST_Distance {
+@@ -2443,11 +2443,11 @@ struct ST_Distance {
  		auto &children = StructVector::GetEntries(inner);
  		auto &x = children[0];
  		auto &y = children[1];
 -		auto x_data = FlatVector::GetData<double>(*x);
 -		auto y_data = FlatVector::GetData<double>(*y);
-+		auto x_data = FlatVector::GetData<double>(x);
-+		auto y_data = FlatVector::GetData<double>(y);
++		auto x_data = FlatVector::GetDataMutable<double>(x);
++		auto y_data = FlatVector::GetDataMutable<double>(y);
  		auto lines = ListVector::GetData(in_line);
  
- 		auto result_data = FlatVector::GetData<double>(result);
+-		auto result_data = FlatVector::GetData<double>(result);
++		auto result_data = FlatVector::GetDataMutable<double>(result);
+ 		for (idx_t i = 0; i < count; i++) {
+ 			auto offset = lines[i].offset;
+ 			auto length = lines[i].length;
 @@ -2904,11 +2904,11 @@ struct ST_Dump {
  			auto &result_path_vec = result_list_children[1];
  
  			// The child geometries must share the same properties as the parent geometry
 -			auto geom_data = FlatVector::GetData<string_t>(*result_geom_vec);
-+			auto geom_data = FlatVector::GetData<string_t>(result_geom_vec);
++			auto geom_data = FlatVector::GetDataMutable<string_t>(result_geom_vec);
  			for (idx_t i = 0; i < geom_length; i++) {
  				// Write the geometry
  				auto item_blob = std::get<0>(items[i]);
@@ -658,7 +772,7 @@ index 31cd743..c98b7f7 100644
  
  				// Now write the paths
  				auto &path = std::get<1>(items[i]);
-@@ -2917,15 +2917,15 @@ struct ST_Dump {
+@@ -2917,16 +2917,16 @@ struct ST_Dump {
  
  				total_path_count += path_length;
  
@@ -674,10 +788,12 @@ index 31cd743..c98b7f7 100644
  				path_entries[geom_offset + i].length = path_length;
  
 -				auto &path_data_vec = ListVector::GetEntry(*result_path_vec);
+-				auto path_data = FlatVector::GetData<int32_t>(path_data_vec);
 +				auto &path_data_vec = ListVector::GetEntry(result_path_vec);
- 				auto path_data = FlatVector::GetData<int32_t>(path_data_vec);
++				auto path_data = FlatVector::GetDataMutable<int32_t>(path_data_vec);
  
  				for (idx_t j = 0; j < path_length; j++) {
+ 					path_data[path_offset + j] = path[j];
 @@ -3079,11 +3079,11 @@ struct ST_Extent {
  	static void Execute(DataChunk &args, ExpressionState &state, Vector &result) {
  		auto &lstate = LocalState::ResetAndGet(state);
@@ -688,10 +804,10 @@ index 31cd743..c98b7f7 100644
 -		const auto max_x_data = FlatVector::GetData<double>(*bbox_vec[2]);
 -		const auto max_y_data = FlatVector::GetData<double>(*bbox_vec[3]);
 +		auto &bbox_vec = StructVector::GetEntries(result);
-+		const auto min_x_data = FlatVector::GetData<double>(bbox_vec[0]);
-+		const auto min_y_data = FlatVector::GetData<double>(bbox_vec[1]);
-+		const auto max_x_data = FlatVector::GetData<double>(bbox_vec[2]);
-+		const auto max_y_data = FlatVector::GetData<double>(bbox_vec[3]);
++		const auto min_x_data = FlatVector::GetDataMutable<double>(bbox_vec[0]);
++		const auto min_y_data = FlatVector::GetDataMutable<double>(bbox_vec[1]);
++		const auto max_x_data = FlatVector::GetDataMutable<double>(bbox_vec[2]);
++		const auto max_y_data = FlatVector::GetDataMutable<double>(bbox_vec[3]);
  
  		UnifiedVectorFormat input_vdata;
  		args.data[0].ToUnifiedFormat(args.size(), input_vdata);
@@ -705,14 +821,22 @@ index 31cd743..c98b7f7 100644
 -		const auto max_x_data = FlatVector::GetData<float>(*struct_vec[2]);
 -		const auto max_y_data = FlatVector::GetData<float>(*struct_vec[3]);
 +		auto &struct_vec = StructVector::GetEntries(result);
-+		const auto min_x_data = FlatVector::GetData<float>(struct_vec[0]);
-+		const auto min_y_data = FlatVector::GetData<float>(struct_vec[1]);
-+		const auto max_x_data = FlatVector::GetData<float>(struct_vec[2]);
-+		const auto max_y_data = FlatVector::GetData<float>(struct_vec[3]);
++		const auto min_x_data = FlatVector::GetDataMutable<float>(struct_vec[0]);
++		const auto min_y_data = FlatVector::GetDataMutable<float>(struct_vec[1]);
++		const auto max_x_data = FlatVector::GetDataMutable<float>(struct_vec[2]);
++		const auto max_y_data = FlatVector::GetDataMutable<float>(struct_vec[3]);
  
  		UnifiedVectorFormat input_vdata;
  		input.ToUnifiedFormat(count, input_vdata);
-@@ -3258,12 +3258,12 @@ struct Op_IntersectApprox {
+@@ -3251,19 +3251,19 @@ struct Op_IntersectApprox {
+         auto &box = args.data[0];
+         auto &geom = args.data[1];
+ 
+-        auto result_data = FlatVector::GetData<bool>(result);
++        auto result_data = FlatVector::GetDataMutable<bool>(result);
+ 
+         // Convert box to unified format
+         UnifiedVectorFormat box_vdata;
          box.ToUnifiedFormat(count, box_vdata);
  
          // Get the struct entries and convert them to unified format
@@ -736,8 +860,8 @@ index 31cd743..c98b7f7 100644
  		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
 -		auto poly_x_data = FlatVector::GetData<double>(*vertex_vec_children[0]);
 -		auto poly_y_data = FlatVector::GetData<double>(*vertex_vec_children[1]);
-+		auto poly_x_data = FlatVector::GetData<double>(vertex_vec_children[0]);
-+		auto poly_y_data = FlatVector::GetData<double>(vertex_vec_children[1]);
++		auto poly_x_data = FlatVector::GetDataMutable<double>(vertex_vec_children[0]);
++		auto poly_y_data = FlatVector::GetDataMutable<double>(vertex_vec_children[1]);
  
  		auto count = args.size();
  		UnifiedVectorFormat poly_format;
@@ -747,8 +871,8 @@ index 31cd743..c98b7f7 100644
  		auto &line_coord_vec = StructVector::GetEntries(ListVector::GetEntry(line_vec));
 -		auto line_data_x = FlatVector::GetData<double>(*line_coord_vec[0]);
 -		auto line_data_y = FlatVector::GetData<double>(*line_coord_vec[1]);
-+		auto line_data_x = FlatVector::GetData<double>(line_coord_vec[0]);
-+		auto line_data_y = FlatVector::GetData<double>(line_coord_vec[1]);
++		auto line_data_x = FlatVector::GetDataMutable<double>(line_coord_vec[0]);
++		auto line_data_y = FlatVector::GetDataMutable<double>(line_coord_vec[1]);
  
  		// Now we can fill the result vector
  		idx_t line_data_offset = 0;
@@ -766,14 +890,14 @@ index 31cd743..c98b7f7 100644
  		auto &coords_in = StructVector::GetEntries(input);
 -		auto x_data_in = FlatVector::GetData<double>(*coords_in[0]);
 -		auto y_data_in = FlatVector::GetData<double>(*coords_in[1]);
-+		auto x_data_in = FlatVector::GetData<double>(coords_in[0]);
-+		auto y_data_in = FlatVector::GetData<double>(coords_in[1]);
++		auto x_data_in = FlatVector::GetDataMutable<double>(coords_in[0]);
++		auto y_data_in = FlatVector::GetDataMutable<double>(coords_in[1]);
  
  		auto &coords_out = StructVector::GetEntries(result);
 -		auto x_data_out = FlatVector::GetData<double>(*coords_out[0]);
 -		auto y_data_out = FlatVector::GetData<double>(*coords_out[1]);
-+		auto x_data_out = FlatVector::GetData<double>(coords_out[0]);
-+		auto y_data_out = FlatVector::GetData<double>(coords_out[1]);
++		auto x_data_out = FlatVector::GetDataMutable<double>(coords_out[0]);
++		auto y_data_out = FlatVector::GetDataMutable<double>(coords_out[1]);
  
  		memcpy(x_data_out, y_data_in, count * sizeof(double));
  		memcpy(y_data_out, x_data_in, count * sizeof(double));
@@ -793,8 +917,8 @@ index 31cd743..c98b7f7 100644
  		auto &coords_in = StructVector::GetEntries(coord_vec_in);
 -		auto x_data_in = FlatVector::GetData<double>(*coords_in[0]);
 -		auto y_data_in = FlatVector::GetData<double>(*coords_in[1]);
-+		auto x_data_in = FlatVector::GetData<double>(coords_in[0]);
-+		auto y_data_in = FlatVector::GetData<double>(coords_in[1]);
++		auto x_data_in = FlatVector::GetDataMutable<double>(coords_in[0]);
++		auto y_data_in = FlatVector::GetDataMutable<double>(coords_in[1]);
  
  		auto coord_count = ListVector::GetListSize(input);
  		ListVector::Reserve(result, coord_count);
@@ -807,8 +931,8 @@ index 31cd743..c98b7f7 100644
  		auto &coords_out = StructVector::GetEntries(coord_vec_out);
 -		auto x_data_out = FlatVector::GetData<double>(*coords_out[0]);
 -		auto y_data_out = FlatVector::GetData<double>(*coords_out[1]);
-+		auto x_data_out = FlatVector::GetData<double>(coords_out[0]);
-+		auto y_data_out = FlatVector::GetData<double>(coords_out[1]);
++		auto x_data_out = FlatVector::GetDataMutable<double>(coords_out[0]);
++		auto y_data_out = FlatVector::GetDataMutable<double>(coords_out[1]);
  
  		memcpy(x_data_out, y_data_in, coord_count * sizeof(double));
  		memcpy(y_data_out, x_data_in, coord_count * sizeof(double));
@@ -832,8 +956,8 @@ index 31cd743..c98b7f7 100644
  		auto &coords_in = StructVector::GetEntries(coord_vec_in);
 -		auto x_data_in = FlatVector::GetData<double>(*coords_in[0]);
 -		auto y_data_in = FlatVector::GetData<double>(*coords_in[1]);
-+		auto x_data_in = FlatVector::GetData<double>(coords_in[0]);
-+		auto y_data_in = FlatVector::GetData<double>(coords_in[1]);
++		auto x_data_in = FlatVector::GetDataMutable<double>(coords_in[0]);
++		auto y_data_in = FlatVector::GetDataMutable<double>(coords_in[1]);
  
  		auto coord_count = ListVector::GetListSize(ring_vec_in);
  
@@ -853,8 +977,8 @@ index 31cd743..c98b7f7 100644
  		auto &coords_out = StructVector::GetEntries(coord_vec_out);
 -		auto x_data_out = FlatVector::GetData<double>(*coords_out[0]);
 -		auto y_data_out = FlatVector::GetData<double>(*coords_out[1]);
-+		auto x_data_out = FlatVector::GetData<double>(coords_out[0]);
-+		auto y_data_out = FlatVector::GetData<double>(coords_out[1]);
++		auto x_data_out = FlatVector::GetDataMutable<double>(coords_out[0]);
++		auto y_data_out = FlatVector::GetDataMutable<double>(coords_out[1]);
  
  		memcpy(x_data_out, y_data_in, coord_count * sizeof(double));
  		memcpy(y_data_out, x_data_in, coord_count * sizeof(double));
@@ -874,20 +998,20 @@ index 31cd743..c98b7f7 100644
 -		auto min_y_in = FlatVector::GetData<double>(*children_in[1]);
 -		auto max_x_in = FlatVector::GetData<double>(*children_in[2]);
 -		auto max_y_in = FlatVector::GetData<double>(*children_in[3]);
-+		auto min_x_in = FlatVector::GetData<double>(children_in[0]);
-+		auto min_y_in = FlatVector::GetData<double>(children_in[1]);
-+		auto max_x_in = FlatVector::GetData<double>(children_in[2]);
-+		auto max_y_in = FlatVector::GetData<double>(children_in[3]);
++		auto min_x_in = FlatVector::GetDataMutable<double>(children_in[0]);
++		auto min_y_in = FlatVector::GetDataMutable<double>(children_in[1]);
++		auto max_x_in = FlatVector::GetDataMutable<double>(children_in[2]);
++		auto max_y_in = FlatVector::GetDataMutable<double>(children_in[3]);
  
  		auto &children_out = StructVector::GetEntries(result);
 -		auto min_x_out = FlatVector::GetData<double>(*children_out[0]);
 -		auto min_y_out = FlatVector::GetData<double>(*children_out[1]);
 -		auto max_x_out = FlatVector::GetData<double>(*children_out[2]);
 -		auto max_y_out = FlatVector::GetData<double>(*children_out[3]);
-+		auto min_x_out = FlatVector::GetData<double>(children_out[0]);
-+		auto min_y_out = FlatVector::GetData<double>(children_out[1]);
-+		auto max_x_out = FlatVector::GetData<double>(children_out[2]);
-+		auto max_y_out = FlatVector::GetData<double>(children_out[3]);
++		auto min_x_out = FlatVector::GetDataMutable<double>(children_out[0]);
++		auto min_y_out = FlatVector::GetDataMutable<double>(children_out[1]);
++		auto max_x_out = FlatVector::GetDataMutable<double>(children_out[2]);
++		auto max_y_out = FlatVector::GetDataMutable<double>(children_out[3]);
  
  		memcpy(min_x_out, min_y_in, count * sizeof(double));
  		memcpy(min_y_out, min_x_in, count * sizeof(double));
@@ -900,7 +1024,7 @@ index 31cd743..c98b7f7 100644
  		auto count = args.size();
  
  		UnaryExecutor::Execute<string_t, string_t>(input, result, count, [&](const string_t &blob) {
-@@ -4752,9 +4752,9 @@ struct ST_GeomFromWKB {
+@@ -4752,16 +4752,16 @@ struct ST_GeomFromWKB {
  
  		input.Flatten(count);
  
@@ -908,52 +1032,96 @@ index 31cd743..c98b7f7 100644
 -		const auto x_data = FlatVector::GetData<double>(*point_children[0]);
 -		const auto y_data = FlatVector::GetData<double>(*point_children[1]);
 +		auto &point_children = StructVector::GetEntries(result);
-+		const auto x_data = FlatVector::GetData<double>(point_children[0]);
-+		const auto y_data = FlatVector::GetData<double>(point_children[1]);
++		const auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
++		const auto y_data = FlatVector::GetDataMutable<double>(point_children[1]);
  
  		sgl::wkb_reader reader(alloc);
  		reader.set_allow_mixed_zm(true);
+ 		reader.set_nan_as_empty(true);
+ 
+ 		for (idx_t i = 0; i < count; i++) {
+-			const auto &wkb = FlatVector::GetData<string_t>(input)[i];
++			const auto &wkb = FlatVector::GetDataMutable<string_t>(input)[i];
+ 
+ 			const auto wkb_ptr = wkb.GetDataUnsafe();
+ 			const auto wkb_len = wkb.GetSize();
+@@ -4801,7 +4801,7 @@ struct ST_GeomFromWKB {
+ 
+ 		auto &inner = ListVector::GetEntry(result);
+ 		const auto lines = ListVector::GetData(result);
+-		const auto wkb_data = FlatVector::GetData<string_t>(wkb_blobs);
++		const auto wkb_data = FlatVector::GetDataMutable<string_t>(wkb_blobs);
+ 
+ 		idx_t total_size = 0;
+ 
 @@ -4836,8 +4836,8 @@ struct ST_GeomFromWKB {
  			auto &children = StructVector::GetEntries(inner);
  			auto &x_child = children[0];
  			auto &y_child = children[1];
 -			auto x_data = FlatVector::GetData<double>(*x_child);
 -			auto y_data = FlatVector::GetData<double>(*y_child);
-+			auto x_data = FlatVector::GetData<double>(x_child);
-+			auto y_data = FlatVector::GetData<double>(y_child);
++			auto x_data = FlatVector::GetDataMutable<double>(x_child);
++			auto y_data = FlatVector::GetDataMutable<double>(y_child);
  
  			for (idx_t j = 0; j < line_size; j++) {
  				const auto vertex = geom.get_vertex_xy(j);
+@@ -4868,7 +4868,7 @@ struct ST_GeomFromWKB {
+ 		// Set up input data
+ 		auto &wkb_blobs = args.data[0];
+ 		wkb_blobs.Flatten(count);
+-		auto wkb_data = FlatVector::GetData<string_t>(wkb_blobs);
++		auto wkb_data = FlatVector::GetDataMutable<string_t>(wkb_blobs);
+ 
+ 		// Set up output data
+ 		auto &ring_vec = ListVector::GetEntry(result);
 @@ -4920,8 +4920,8 @@ struct ST_GeomFromWKB {
  					auto &children = StructVector::GetEntries(inner);
  					auto &x_child = children[0];
  					auto &y_child = children[1];
 -					auto x_data = FlatVector::GetData<double>(*x_child);
 -					auto y_data = FlatVector::GetData<double>(*y_child);
-+					auto x_data = FlatVector::GetData<double>(x_child);
-+					auto y_data = FlatVector::GetData<double>(y_child);
++					auto x_data = FlatVector::GetDataMutable<double>(x_child);
++					auto y_data = FlatVector::GetDataMutable<double>(y_child);
  
  					for (idx_t k = 0; k < point_count; k++) {
  						const auto vertex = ring->get_vertex_xy(k);
+@@ -5587,7 +5587,7 @@ struct ST_LocateBetween {
+ 		const auto upper_data = UnifiedVectorFormat::GetData<double>(upper_format);
+ 		const auto offset_data = UnifiedVectorFormat::GetData<double>(offset_format);
+ 
+-		const auto result_data = FlatVector::GetData<string_t>(result);
++		const auto result_data = FlatVector::GetDataMutable<string_t>(result);
+ 
+ 		for (idx_t out_idx = 0; out_idx < row_count; out_idx++) {
+ 			const auto geom_idx = geom_format.sel->get_index(out_idx);
 @@ -6198,8 +6198,8 @@ struct ST_InteriorRingN {
  		auto ring_entries = ListVector::GetData(ring_vec);
  		auto &vertex_vec = ListVector::GetEntry(ring_vec);
  		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
 -		auto poly_x_data = FlatVector::GetData<double>(*vertex_vec_children[0]);
 -		auto poly_y_data = FlatVector::GetData<double>(*vertex_vec_children[1]);
-+		auto poly_x_data = FlatVector::GetData<double>(vertex_vec_children[0]);
-+		auto poly_y_data = FlatVector::GetData<double>(vertex_vec_children[1]);
++		auto poly_x_data = FlatVector::GetDataMutable<double>(vertex_vec_children[0]);
++		auto poly_y_data = FlatVector::GetDataMutable<double>(vertex_vec_children[1]);
  
  		auto count = args.size();
  		UnifiedVectorFormat poly_format;
+@@ -6211,7 +6211,7 @@ struct ST_InteriorRingN {
+ 		// To inspect n per-row, extract unified format for n (it might be constant)
+ 		UnifiedVectorFormat n_format;
+ 		n_vec.ToUnifiedFormat(count, n_format);
+-		auto n_data = FlatVector::GetData<int64_t>(n_vec);
++		auto n_data = FlatVector::GetDataMutable<int64_t>(n_vec);
+ 
+ 		for (idx_t i = 0; i < count; i++) {
+ 			auto row_idx = poly_format.sel->get_index(i);
 @@ -6255,8 +6255,8 @@ struct ST_InteriorRingN {
  
  		auto line_entries = ListVector::GetData(line_vec);
  		auto &line_coord_vec = StructVector::GetEntries(ListVector::GetEntry(line_vec));
 -		auto line_data_x = FlatVector::GetData<double>(*line_coord_vec[0]);
 -		auto line_data_y = FlatVector::GetData<double>(*line_coord_vec[1]);
-+		auto line_data_x = FlatVector::GetData<double>(line_coord_vec[0]);
-+		auto line_data_y = FlatVector::GetData<double>(line_coord_vec[1]);
++		auto line_data_x = FlatVector::GetDataMutable<double>(line_coord_vec[0]);
++		auto line_data_y = FlatVector::GetDataMutable<double>(line_coord_vec[1]);
  
  		// Fill results
  		idx_t line_data_offset = 0;
@@ -963,8 +1131,8 @@ index 31cd743..c98b7f7 100644
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  		UnaryExecutor::Execute<list_entry_t, double>(line_vec, result, count, [&](const list_entry_t &line) {
  			auto offset = line.offset;
@@ -978,10 +1146,10 @@ index 31cd743..c98b7f7 100644
 -		const auto max_x_data = FlatVector::GetData<double>(*bbox_vec[2]);
 -		const auto max_y_data = FlatVector::GetData<double>(*bbox_vec[3]);
 +		auto &bbox_vec = StructVector::GetEntries(result);
-+		const auto min_x_data = FlatVector::GetData<double>(bbox_vec[0]);
-+		const auto min_y_data = FlatVector::GetData<double>(bbox_vec[1]);
-+		const auto max_x_data = FlatVector::GetData<double>(bbox_vec[2]);
-+		const auto max_y_data = FlatVector::GetData<double>(bbox_vec[3]);
++		const auto min_x_data = FlatVector::GetDataMutable<double>(bbox_vec[0]);
++		const auto min_y_data = FlatVector::GetDataMutable<double>(bbox_vec[1]);
++		const auto max_x_data = FlatVector::GetDataMutable<double>(bbox_vec[2]);
++		const auto max_y_data = FlatVector::GetDataMutable<double>(bbox_vec[3]);
  
  		UnifiedVectorFormat input_vdata1;
  		UnifiedVectorFormat input_vdata2;
@@ -1000,8 +1168,8 @@ index 31cd743..c98b7f7 100644
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  		UnaryExecutor::Execute<list_entry_t, double>(input, result, count, [&](list_entry_t polygon) {
  			auto polygon_offset = polygon.offset;
@@ -1055,22 +1223,25 @@ index 31cd743..c98b7f7 100644
  		auto count = args.size();
  		UnifiedVectorFormat geom_format;
  		geom_vec.ToUnifiedFormat(count, geom_format);
-@@ -8138,12 +8138,12 @@ struct ST_PointN {
+@@ -8138,14 +8138,14 @@ struct ST_PointN {
  		auto line_vertex_entries = ListVector::GetData(geom_vec);
  		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
  		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
 -		auto line_x_data = FlatVector::GetData<double>(*line_vertex_vec_children[0]);
 -		auto line_y_data = FlatVector::GetData<double>(*line_vertex_vec_children[1]);
-+		auto line_x_data = FlatVector::GetData<double>(line_vertex_vec_children[0]);
-+		auto line_y_data = FlatVector::GetData<double>(line_vertex_vec_children[1]);
++		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
++		auto line_y_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[1]);
  
  		auto &point_vertex_children = StructVector::GetEntries(result);
 -		auto point_x_data = FlatVector::GetData<double>(*point_vertex_children[0]);
 -		auto point_y_data = FlatVector::GetData<double>(*point_vertex_children[1]);
-+		auto point_x_data = FlatVector::GetData<double>(point_vertex_children[0]);
-+		auto point_y_data = FlatVector::GetData<double>(point_vertex_children[1]);
++		auto point_x_data = FlatVector::GetDataMutable<double>(point_vertex_children[0]);
++		auto point_y_data = FlatVector::GetDataMutable<double>(point_vertex_children[1]);
  
- 		auto index_data = FlatVector::GetData<int32_t>(index_vec);
+-		auto index_data = FlatVector::GetData<int32_t>(index_vec);
++		auto index_data = FlatVector::GetDataMutable<int32_t>(index_vec);
+ 
+ 		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  
 @@ -8429,15 +8429,15 @@ struct ST_RemoveRepeatedPoints {
  	// LINESTRING_2D
@@ -1086,8 +1257,8 @@ index 31cd743..c98b7f7 100644
  		auto &in_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(input));
 -		auto in_x_data = FlatVector::GetData<double>(*in_line_vertex_vec[0]);
 -		auto in_y_data = FlatVector::GetData<double>(*in_line_vertex_vec[1]);
-+		auto in_x_data = FlatVector::GetData<double>(in_line_vertex_vec[0]);
-+		auto in_y_data = FlatVector::GetData<double>(in_line_vertex_vec[1]);
++		auto in_x_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[0]);
++		auto in_y_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[1]);
  
  		auto out_line_entries = ListVector::GetData(result);
  		auto &out_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(result));
@@ -1097,8 +1268,8 @@ index 31cd743..c98b7f7 100644
  				ListVector::Reserve(result, out_offset + in_length);
 -				auto out_x_data = FlatVector::GetData<double>(*out_line_vertex_vec[0]);
 -				auto out_y_data = FlatVector::GetData<double>(*out_line_vertex_vec[1]);
-+				auto out_x_data = FlatVector::GetData<double>(out_line_vertex_vec[0]);
-+				auto out_y_data = FlatVector::GetData<double>(out_line_vertex_vec[1]);
++				auto out_x_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[0]);
++				auto out_y_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[1]);
  
  				// If the line has less than 3 points, we can't remove any points
  				// so we just copy the line
@@ -1108,8 +1279,8 @@ index 31cd743..c98b7f7 100644
  				ListVector::Reserve(result, out_offset + 2);
 -				auto out_x_data = FlatVector::GetData<double>(*out_line_vertex_vec[0]);
 -				auto out_y_data = FlatVector::GetData<double>(*out_line_vertex_vec[1]);
-+				auto out_x_data = FlatVector::GetData<double>(out_line_vertex_vec[0]);
-+				auto out_y_data = FlatVector::GetData<double>(out_line_vertex_vec[1]);
++				auto out_x_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[0]);
++				auto out_y_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[1]);
  				out_x_data[out_offset] = in_x_data[in_offset];
  				out_y_data[out_offset] = in_y_data[in_offset];
  				out_x_data[out_offset + 1] = in_x_data[in_offset + in_length - 1];
@@ -1119,8 +1290,8 @@ index 31cd743..c98b7f7 100644
  			ListVector::Reserve(result, out_offset + points_to_keep);
 -			auto out_x_data = FlatVector::GetData<double>(*out_line_vertex_vec[0]);
 -			auto out_y_data = FlatVector::GetData<double>(*out_line_vertex_vec[1]);
-+			auto out_x_data = FlatVector::GetData<double>(out_line_vertex_vec[0]);
-+			auto out_y_data = FlatVector::GetData<double>(out_line_vertex_vec[1]);
++			auto out_x_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[0]);
++			auto out_y_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[1]);
  
  			// Copy the first point
  			out_x_data[out_offset] = in_x_data[in_offset];
@@ -1141,8 +1312,8 @@ index 31cd743..c98b7f7 100644
  		auto &in_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(input));
 -		auto in_x_data = FlatVector::GetData<double>(*in_line_vertex_vec[0]);
 -		auto in_y_data = FlatVector::GetData<double>(*in_line_vertex_vec[1]);
-+		auto in_x_data = FlatVector::GetData<double>(in_line_vertex_vec[0]);
-+		auto in_y_data = FlatVector::GetData<double>(in_line_vertex_vec[1]);
++		auto in_x_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[0]);
++		auto in_y_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[1]);
  
  		auto out_line_entries = ListVector::GetData(result);
  		auto &out_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(result));
@@ -1152,8 +1323,8 @@ index 31cd743..c98b7f7 100644
  				ListVector::Reserve(result, out_offset + in_length);
 -				auto out_x_data = FlatVector::GetData<double>(*out_line_vertex_vec[0]);
 -				auto out_y_data = FlatVector::GetData<double>(*out_line_vertex_vec[1]);
-+				auto out_x_data = FlatVector::GetData<double>(out_line_vertex_vec[0]);
-+				auto out_y_data = FlatVector::GetData<double>(out_line_vertex_vec[1]);
++				auto out_x_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[0]);
++				auto out_y_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[1]);
  
  				// If the line has less than 3 points, we can't remove any points
  				// so we just copy the line
@@ -1163,8 +1334,8 @@ index 31cd743..c98b7f7 100644
  				ListVector::Reserve(result, out_offset + 2);
 -				auto out_x_data = FlatVector::GetData<double>(*out_line_vertex_vec[0]);
 -				auto out_y_data = FlatVector::GetData<double>(*out_line_vertex_vec[1]);
-+				auto out_x_data = FlatVector::GetData<double>(out_line_vertex_vec[0]);
-+				auto out_y_data = FlatVector::GetData<double>(out_line_vertex_vec[1]);
++				auto out_x_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[0]);
++				auto out_y_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[1]);
  				out_x_data[out_offset] = in_x_data[in_offset];
  				out_y_data[out_offset] = in_y_data[in_offset];
  				out_x_data[out_offset + 1] = in_x_data[in_offset + in_length - 1];
@@ -1174,8 +1345,8 @@ index 31cd743..c98b7f7 100644
  			ListVector::Reserve(result, out_offset + points_to_keep);
 -			auto out_x_data = FlatVector::GetData<double>(*out_line_vertex_vec[0]);
 -			auto out_y_data = FlatVector::GetData<double>(*out_line_vertex_vec[1]);
-+			auto out_x_data = FlatVector::GetData<double>(out_line_vertex_vec[0]);
-+			auto out_y_data = FlatVector::GetData<double>(out_line_vertex_vec[1]);
++			auto out_x_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[0]);
++			auto out_y_data = FlatVector::GetDataMutable<double>(out_line_vertex_vec[1]);
  
  			// Copy the first point
  			out_x_data[out_offset] = in_x_data[in_offset];
@@ -1194,14 +1365,14 @@ index 31cd743..c98b7f7 100644
  		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
 -		auto line_x_data = FlatVector::GetData<double>(*line_vertex_vec_children[0]);
 -		auto line_y_data = FlatVector::GetData<double>(*line_vertex_vec_children[1]);
-+		auto line_x_data = FlatVector::GetData<double>(line_vertex_vec_children[0]);
-+		auto line_y_data = FlatVector::GetData<double>(line_vertex_vec_children[1]);
++		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
++		auto line_y_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[1]);
  
  		auto &point_vertex_children = StructVector::GetEntries(result);
 -		auto point_x_data = FlatVector::GetData<double>(*point_vertex_children[0]);
 -		auto point_y_data = FlatVector::GetData<double>(*point_vertex_children[1]);
-+		auto point_x_data = FlatVector::GetData<double>(point_vertex_children[0]);
-+		auto point_y_data = FlatVector::GetData<double>(point_vertex_children[1]);
++		auto point_x_data = FlatVector::GetDataMutable<double>(point_vertex_children[0]);
++		auto point_y_data = FlatVector::GetDataMutable<double>(point_vertex_children[1]);
  
  		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  			auto in_row_idx = geom_format.sel->get_index(out_row_idx);
@@ -1220,14 +1391,14 @@ index 31cd743..c98b7f7 100644
  		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
 -		auto line_x_data = FlatVector::GetData<double>(*line_vertex_vec_children[0]);
 -		auto line_y_data = FlatVector::GetData<double>(*line_vertex_vec_children[1]);
-+		auto line_x_data = FlatVector::GetData<double>(line_vertex_vec_children[0]);
-+		auto line_y_data = FlatVector::GetData<double>(line_vertex_vec_children[1]);
++		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
++		auto line_y_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[1]);
  
  		auto &point_vertex_children = StructVector::GetEntries(result);
 -		auto point_x_data = FlatVector::GetData<double>(*point_vertex_children[0]);
 -		auto point_y_data = FlatVector::GetData<double>(*point_vertex_children[1]);
-+		auto point_x_data = FlatVector::GetData<double>(point_vertex_children[0]);
-+		auto point_y_data = FlatVector::GetData<double>(point_vertex_children[1]);
++		auto point_x_data = FlatVector::GetDataMutable<double>(point_vertex_children[0]);
++		auto point_y_data = FlatVector::GetDataMutable<double>(point_vertex_children[1]);
  
  		for (idx_t out_row_idx = 0; out_row_idx < count; out_row_idx++) {
  			auto in_row_idx = geom_format.sel->get_index(out_row_idx);
@@ -1258,7 +1429,7 @@ index 31cd743..c98b7f7 100644
  
  		const auto axis = OP::ORDINATE == VertexOrdinate::X ? 0 : 1;
 -		auto ordinate_data = FlatVector::GetData<double>(*line_coords_vec[axis]);
-+		auto ordinate_data = FlatVector::GetData<double>(line_coords_vec[axis]);
++		auto ordinate_data = FlatVector::GetDataMutable<double>(line_coords_vec[axis]);
  
  		UnaryExecutor::ExecuteWithNulls<list_entry_t, double>(
  		    line_vec, result, args.size(), [&](const list_entry_t &line, ValidityMask &mask, idx_t idx) {
@@ -1276,7 +1447,7 @@ index 31cd743..c98b7f7 100644
  		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
  		const auto axis = OP::ORDINATE == VertexOrdinate::X ? 0 : 1;
 -		auto ordinate_data = FlatVector::GetData<double>(*vertex_vec_children[axis]);
-+		auto ordinate_data = FlatVector::GetData<double>(vertex_vec_children[axis]);
++		auto ordinate_data = FlatVector::GetDataMutable<double>(vertex_vec_children[axis]);
  
  		UnaryExecutor::ExecuteWithNulls<list_entry_t, double>(
  		    input, result, count, [&](const list_entry_t &polygon, ValidityMask &mask, idx_t idx) {
@@ -1302,7 +1473,7 @@ index 31cd743..c98b7f7 100644
  			break;
  		default:
 diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
-index 8dd850a..08af76b 100644
+index 8dd850a..7b5b442 100644
 --- a/src/spatial/modules/main/spatial_functions_table.cpp
 +++ b/src/spatial/modules/main/spatial_functions_table.cpp
 @@ -1,7 +1,10 @@
@@ -1324,13 +1495,13 @@ index 8dd850a..08af76b 100644
 -		const auto &x_data = FlatVector::GetData<double>(*point_vec[0]);
 -		const auto &y_data = FlatVector::GetData<double>(*point_vec[1]);
 +		auto &point_vec = StructVector::GetEntries(output.data[0]);
-+		const auto &x_data = FlatVector::GetData<double>(point_vec[0]);
-+		const auto &y_data = FlatVector::GetData<double>(point_vec[1]);
++		const auto &x_data = FlatVector::GetDataMutable<double>(point_vec[0]);
++		const auto &y_data = FlatVector::GetDataMutable<double>(point_vec[1]);
  
  		const auto chunk_size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.count - state.current_idx);
  		for (idx_t i = 0; i < chunk_size; i++) {
 diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
-index 6039454..a8e8744 100644
+index 6039454..c0bd1ec 100644
 --- a/src/spatial/modules/mvt/mvt_module.cpp
 +++ b/src/spatial/modules/mvt/mvt_module.cpp
 @@ -4,6 +4,7 @@
@@ -1370,8 +1541,26 @@ index 6039454..a8e8744 100644
  			}
  		}
  
+@@ -1153,7 +1154,7 @@ struct ST_AsMVT {
+ 		source_vec.ToUnifiedFormat(count, source_format);
+ 
+ 		const auto source_ptr = UnifiedVectorFormat::GetData<State *>(source_format);
+-		const auto target_ptr = FlatVector::GetData<State *>(target_vec);
++		const auto target_ptr = FlatVector::GetDataMutable<State *>(target_vec);
+ 
+ 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+ 			auto &source = *source_ptr[source_format.sel->get_index(row_idx)];
+@@ -1192,7 +1193,7 @@ struct ST_AsMVT {
+ 			state.layer.Finalize(bdata.extent, bdata.tag_names, bdata.layer_name, buffer, tag_dict);
+ 
+ 			// Now we have the layer buffer, we can write it to the result vector
+-			const auto result_data = FlatVector::GetData<string_t>(result);
++			const auto result_data = FlatVector::GetDataMutable<string_t>(result);
+ 			result_data[out_idx] = StringVector::AddStringOrBlob(result, buffer.data(), buffer.size());
+ 		}
+ 	}
 diff --git a/src/spatial/modules/osm/osm_module.cpp b/src/spatial/modules/osm/osm_module.cpp
-index 26e4bc3..bc8bb83 100644
+index 26e4bc3..06916d3 100644
 --- a/src/spatial/modules/osm/osm_module.cpp
 +++ b/src/spatial/modules/osm/osm_module.cpp
 @@ -1,3 +1,5 @@
@@ -1380,8 +1569,172 @@ index 26e4bc3..bc8bb83 100644
  #include "spatial/modules/osm/osm_module.hpp"
  
  #include "duckdb/function/replacement_scan.hpp"
+@@ -42,7 +44,7 @@ unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &in
+ 	// Create an enum type for all osm kinds
+ 	vector<string_t> enum_values = {"node", "way", "relation", "changeset"};
+ 	auto varchar_vector = Vector(LogicalType::VARCHAR, enum_values.size());
+-	auto varchar_data = FlatVector::GetData<string_t>(varchar_vector);
++	auto varchar_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
+ 	for (idx_t i = 0; i < enum_values.size(); i++) {
+ 		auto str = enum_values[i];
+ 		varchar_data[i] = str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
+@@ -73,7 +75,7 @@ unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &in
+ 	// Create an enum type for the member kind
+ 	vector<string_t> member_enum_values = {"node", "way", "relation"};
+ 	auto member_varchar_vector = Vector(LogicalType::VARCHAR, member_enum_values.size());
+-	auto member_varchar_data = FlatVector::GetData<string_t>(member_varchar_vector);
++	auto member_varchar_data = FlatVector::GetDataMutable<string_t>(member_varchar_vector);
+ 	for (idx_t i = 0; i < member_enum_values.size(); i++) {
+ 		auto str = member_enum_values[i];
+ 		member_varchar_data[i] = str.IsInlined() ? str : StringVector::AddString(member_varchar_vector, str);
+@@ -392,8 +394,8 @@ struct LocalState final : LocalTableFunctionState {
+ 			switch (node.tag()) {
+ 			case 1: { // ID
+ 				auto id = node.get_int64();
+-				FlatVector::GetData<uint8_t>(output.data[0])[index] = 0;
+-				FlatVector::GetData<int64_t>(output.data[1])[index] = id;
++				FlatVector::GetDataMutable<uint8_t>(output.data[0])[index] = 0;
++				FlatVector::GetDataMutable<int64_t>(output.data[1])[index] = id;
+ 			} break;
+ 			case 2: { // Tag Keys
+ 				key_iter = node.get_packed_uint32();
+@@ -403,11 +405,11 @@ struct LocalState final : LocalTableFunctionState {
+ 			} break;
+ 			case 8: { // Lat
+ 				auto lat = node.get_sint64();
+-				FlatVector::GetData<double>(output.data[4])[index] = 0.000000001 * (lat_offset + (granularity * lat));
++				FlatVector::GetDataMutable<double>(output.data[4])[index] = 0.000000001 * (lat_offset + (granularity * lat));
+ 			} break;
+ 			case 9: { // Lon
+ 				auto lon = node.get_sint64();
+-				FlatVector::GetData<double>(output.data[5])[index] = 0.000000001 * (lon_offset + (granularity * lon));
++				FlatVector::GetDataMutable<double>(output.data[5])[index] = 0.000000001 * (lon_offset + (granularity * lon));
+ 			} break;
+ 			default:
+ 				node.skip();
+@@ -431,9 +433,9 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto keys = key_iter.begin();
+ 			auto vals = val_iter.begin();
+ 			for (idx_t i = tag_entry.offset; i < tag_entry.offset + tag_count; i++) {
+-				FlatVector::GetData<string_t>(key_vector)[i] =
++				FlatVector::GetDataMutable<string_t>(key_vector)[i] =
+ 				    StringVector::AddString(key_vector, string_table[*keys++]);
+-				FlatVector::GetData<string_t>(value_vector)[i] =
++				FlatVector::GetDataMutable<string_t>(value_vector)[i] =
+ 				    StringVector::AddString(value_vector, string_table[*vals++]);
+ 			}
+ 		} else {
+@@ -514,8 +516,8 @@ struct LocalState final : LocalTableFunctionState {
+ 			switch (way.tag()) {
+ 			case 1: { // ID
+ 				auto id = way.get_int64();
+-				FlatVector::GetData<uint8_t>(output.data[0])[index] = 1;
+-				FlatVector::GetData<int64_t>(output.data[1])[index] = id;
++				FlatVector::GetDataMutable<uint8_t>(output.data[0])[index] = 1;
++				FlatVector::GetDataMutable<int64_t>(output.data[1])[index] = id;
+ 				FlatVector::SetNull(output.data[4], index, true);
+ 				FlatVector::SetNull(output.data[5], index, true);
+ 				FlatVector::SetNull(output.data[6], index, true);
+@@ -550,9 +552,9 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto keys = key_iter.begin();
+ 			auto vals = val_iter.begin();
+ 			for (idx_t i = tag_entry.offset; i < tag_entry.offset + tag_count; i++) {
+-				FlatVector::GetData<string_t>(key_vector)[i] =
++				FlatVector::GetDataMutable<string_t>(key_vector)[i] =
+ 				    StringVector::AddString(key_vector, string_table[*keys++]);
+-				FlatVector::GetData<string_t>(value_vector)[i] =
++				FlatVector::GetDataMutable<string_t>(value_vector)[i] =
+ 				    StringVector::AddString(value_vector, string_table[*vals++]);
+ 			}
+ 		} else {
+@@ -569,7 +571,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			ref_entry.offset = total_refs;
+ 			ref_entry.length = ref_count;
+ 
+-			auto ref_data = FlatVector::GetData<int64_t>(ref_vector);
++			auto ref_data = FlatVector::GetDataMutable<int64_t>(ref_vector);
+ 
+ 			int64_t last_ref = 0;
+ 			for (auto ref : ref_iter) {
+@@ -596,8 +598,8 @@ struct LocalState final : LocalTableFunctionState {
+ 			switch (relation.tag()) {
+ 			case 1: { // ID
+ 				auto id = relation.get_int64();
+-				FlatVector::GetData<uint8_t>(output.data[0])[index] = 2;
+-				FlatVector::GetData<int64_t>(output.data[1])[index] = id;
++				FlatVector::GetDataMutable<uint8_t>(output.data[0])[index] = 2;
++				FlatVector::GetDataMutable<int64_t>(output.data[1])[index] = id;
+ 				FlatVector::SetNull(output.data[4], index, true);
+ 				FlatVector::SetNull(output.data[5], index, true);
+ 			} break;
+@@ -639,9 +641,9 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto keys = key_iter.begin();
+ 			auto vals = val_iter.begin();
+ 			for (idx_t i = tag_entry.offset; i < tag_entry.offset + tag_count; i++) {
+-				FlatVector::GetData<string_t>(key_vector)[i] =
++				FlatVector::GetDataMutable<string_t>(key_vector)[i] =
+ 				    StringVector::AddString(key_vector, string_table[*keys++]);
+-				FlatVector::GetData<string_t>(value_vector)[i] =
++				FlatVector::GetDataMutable<string_t>(value_vector)[i] =
+ 				    StringVector::AddString(value_vector, string_table[*vals++]);
+ 			}
+ 		} else {
+@@ -666,7 +668,7 @@ struct LocalState final : LocalTableFunctionState {
+ 				if (role_str.empty()) {
+ 					FlatVector::SetNull(role_vector, i, true);
+ 				} else {
+-					FlatVector::GetData<string_t>(role_vector)[i] = StringVector::AddString(role_vector, role_str);
++					FlatVector::GetDataMutable<string_t>(role_vector)[i] = StringVector::AddString(role_vector, role_str);
+ 				}
+ 			}
+ 		} else {
+@@ -685,7 +687,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			ref_entry.offset = total_refs;
+ 			ref_entry.length = ref_count;
+ 
+-			auto ref_data = FlatVector::GetData<int64_t>(ref_vector);
++			auto ref_data = FlatVector::GetDataMutable<int64_t>(ref_vector);
+ 
+ 			int64_t last_ref = 0;
+ 			for (auto ref : ref_iter) {
+@@ -708,7 +710,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			type_entry.offset = total_types;
+ 			type_entry.length = type_count;
+ 
+-			auto type_data = FlatVector::GetData<uint8_t>(type_vector);
++			auto type_data = FlatVector::GetDataMutable<uint8_t>(type_vector);
+ 			for (auto type : type_iter) {
+ 				type_data[total_types++] = (uint8_t)type;
+ 			}
+@@ -725,10 +727,10 @@ struct LocalState final : LocalTableFunctionState {
+ 		auto nodes_to_write = capacity - index;
+ 		auto nodes_to_read = std::min(nodes_to_write, dense_node_ids.size() - dense_node_index);
+ 
+-		auto kind_data = FlatVector::GetData<uint8_t>(output.data[0]);
+-		auto id_data = FlatVector::GetData<int64_t>(output.data[1]);
+-		auto lat_data = FlatVector::GetData<double>(output.data[4]);
+-		auto lon_data = FlatVector::GetData<double>(output.data[5]);
++		auto kind_data = FlatVector::GetDataMutable<uint8_t>(output.data[0]);
++		auto id_data = FlatVector::GetDataMutable<int64_t>(output.data[1]);
++		auto lat_data = FlatVector::GetDataMutable<double>(output.data[4]);
++		auto lon_data = FlatVector::GetDataMutable<double>(output.data[5]);
+ 
+ 		for (idx_t i = 0; i < nodes_to_read; i++) {
+ 			auto id = dense_node_ids[dense_node_index];
+@@ -764,9 +766,9 @@ struct LocalState final : LocalTableFunctionState {
+ 						auto key_id = dense_node_tags[t];
+ 						auto val_id = dense_node_tags[t + 1];
+ 
+-						FlatVector::GetData<string_t>(key_vector)[r] =
++						FlatVector::GetDataMutable<string_t>(key_vector)[r] =
+ 						    StringVector::AddString(key_vector, string_table[key_id]);
+-						FlatVector::GetData<string_t>(value_vector)[r] =
++						FlatVector::GetDataMutable<string_t>(value_vector)[r] =
+ 						    StringVector::AddString(value_vector, string_table[val_id]);
+ 
+ 						t += 2;
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index 206624e..64b165b 100644
+index 206624e..d11d09e 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
 +++ b/src/spatial/modules/proj/proj_module.cpp
 @@ -813,8 +813,8 @@ struct ST_Area_Spheroid {
@@ -1390,8 +1743,8 @@ index 206624e..64b165b 100644
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
@@ -1401,8 +1754,8 @@ index 206624e..64b165b 100644
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
@@ -1412,13 +1765,13 @@ index 206624e..64b165b 100644
  		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
 -		auto x_data = FlatVector::GetData<double>(*coord_vec_children[0]);
 -		auto y_data = FlatVector::GetData<double>(*coord_vec_children[1]);
-+		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
-+		auto y_data = FlatVector::GetData<double>(coord_vec_children[1]);
++		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
++		auto y_data = FlatVector::GetDataMutable<double>(coord_vec_children[1]);
  
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
 diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
-index 57b34d0..1e975af 100644
+index 57b34d0..ecf3163 100644
 --- a/src/spatial/modules/shapefile/shapefile_module.cpp
 +++ b/src/spatial/modules/shapefile/shapefile_module.cpp
 @@ -1,3 +1,5 @@
@@ -1427,8 +1780,51 @@ index 57b34d0..1e975af 100644
  #include "spatial/modules/shapefile/shapefile_module.hpp"
  #include "spatial/geometry/geometry_serialization.hpp"
  #include "spatial/geometry/sgl.hpp"
-@@ -1005,11 +1007,11 @@ struct Shapefile_Meta {
- 		auto shape_type_data = FlatVector::GetData<uint8_t>(shape_type_vector);
+@@ -651,7 +653,7 @@ struct ST_ReadSHP {
+ 			blob.Finalize();
+ 
+ 			// Set the blob in the result vector
+-			FlatVector::GetData<string_t>(result)[result_idx] = blob;
++			FlatVector::GetDataMutable<string_t>(result)[result_idx] = blob;
+ 		}
+ 	}
+ 
+@@ -743,7 +745,7 @@ struct ST_ReadSHP {
+ 			if (DBFIsAttributeNULL(dbf_handle, record_idx, field_idx)) {
+ 				FlatVector::SetNull(result, row_idx, true);
+ 			} else {
+-				FlatVector::GetData<typename OP::TYPE>(result)[row_idx] =
++				FlatVector::GetDataMutable<typename OP::TYPE>(result)[row_idx] =
+ 				    OP::Convert(result, dbf_handle, record_idx, field_idx);
+ 			}
+ 			record_idx++;
+@@ -773,7 +775,7 @@ struct ST_ReadSHP {
+ 					throw InvalidInputException("Could not decode VARCHAR field as valid UTF-8, try passing "
+ 					                            "encoding='blob' to skip decoding of string attributes");
+ 				}
+-				FlatVector::GetData<string_t>(result)[row_idx] = result_str;
++				FlatVector::GetDataMutable<string_t>(result)[row_idx] = result_str;
+ 			}
+ 			record_idx++;
+ 		}
+@@ -958,7 +960,7 @@ struct Shapefile_Meta {
+ 
+ 		auto shape_type_count = sizeof(shape_type_map) / sizeof(ShapeTypeEntry);
+ 		auto varchar_vector = Vector(LogicalType::VARCHAR, shape_type_count);
+-		auto varchar_data = FlatVector::GetData<string_t>(varchar_vector);
++		auto varchar_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
+ 		for (idx_t i = 0; i < shape_type_count; i++) {
+ 			auto str = string_t(shape_type_map[i].shp_name);
+ 			varchar_data[i] = str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
+@@ -1000,17 +1002,17 @@ struct Shapefile_Meta {
+ 		auto &fs = FileSystem::GetFileSystem(context);
+ 
+ 		auto &file_name_vector = output.data[0];
+-		auto file_name_data = FlatVector::GetData<string_t>(file_name_vector);
++		auto file_name_data = FlatVector::GetDataMutable<string_t>(file_name_vector);
+ 		auto &shape_type_vector = output.data[1];
+-		auto shape_type_data = FlatVector::GetData<uint8_t>(shape_type_vector);
++		auto shape_type_data = FlatVector::GetDataMutable<uint8_t>(shape_type_vector);
  		auto &bounds_vector = output.data[2];
  		auto &bounds_vector_children = StructVector::GetEntries(bounds_vector);
 -		auto minx_data = FlatVector::GetData<double>(*bounds_vector_children[0]);
@@ -1436,14 +1832,16 @@ index 57b34d0..1e975af 100644
 -		auto maxx_data = FlatVector::GetData<double>(*bounds_vector_children[2]);
 -		auto maxy_data = FlatVector::GetData<double>(*bounds_vector_children[3]);
 -		auto record_count_vector = output.data[3];
-+		auto minx_data = FlatVector::GetData<double>(bounds_vector_children[0]);
-+		auto miny_data = FlatVector::GetData<double>(bounds_vector_children[1]);
-+		auto maxx_data = FlatVector::GetData<double>(bounds_vector_children[2]);
-+		auto maxy_data = FlatVector::GetData<double>(bounds_vector_children[3]);
+-		auto record_count_data = FlatVector::GetData<int32_t>(record_count_vector);
++		auto minx_data = FlatVector::GetDataMutable<double>(bounds_vector_children[0]);
++		auto miny_data = FlatVector::GetDataMutable<double>(bounds_vector_children[1]);
++		auto maxx_data = FlatVector::GetDataMutable<double>(bounds_vector_children[2]);
++		auto maxy_data = FlatVector::GetDataMutable<double>(bounds_vector_children[3]);
 +		auto &record_count_vector = output.data[3];
- 		auto record_count_data = FlatVector::GetData<int32_t>(record_count_vector);
++		auto record_count_data = FlatVector::GetDataMutable<int32_t>(record_count_vector);
  
  		auto output_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.files.size() - state.current_file_idx);
+ 
 diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
 index 0e5c07c..48596c5 100644
 --- a/src/spatial/operators/spatial_join_logical.cpp
@@ -1562,7 +1960,7 @@ index 725512d..b0b219c 100644
  	spatial_join->has_estimated_cardinality = any_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = any_join.estimated_cardinality;
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index 5738f83..8dcb622 100644
+index 5738f83..e601047 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
 @@ -1,3 +1,5 @@
@@ -1571,6 +1969,15 @@ index 5738f83..8dcb622 100644
  #include "spatial/operators/spatial_join_physical.hpp"
  #include "spatial/operators/spatial_join_logical.hpp"
  #include "spatial/geometry/sgl.hpp"
+@@ -303,7 +305,7 @@ public:
+ 		}
+ 
+ 		idx_t count = 0;
+-		const auto ptr = FlatVector::GetData<data_ptr_t>(state.matches);
++		const auto ptr = FlatVector::GetDataMutable<data_ptr_t>(state.matches);
+ 		Lookup(state, [&](const data_ptr_t &row) {
+ 			ptr[count++] = row;
+ 			return count == STANDARD_VECTOR_SIZE;
 @@ -426,14 +428,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
  
  	// Probe-side
@@ -1613,10 +2020,10 @@ index 5738f83..8dcb622 100644
 -		const auto xmax_data = FlatVector::GetData<float>(*entries[2]);
 -		const auto ymax_data = FlatVector::GetData<float>(*entries[3]);
 +		auto &entries = StructVector::GetEntries(bbox_chunk.data[0]);
-+		const auto xmin_data = FlatVector::GetData<float>(entries[0]);
-+		const auto ymin_data = FlatVector::GetData<float>(entries[1]);
-+		const auto xmax_data = FlatVector::GetData<float>(entries[2]);
-+		const auto ymax_data = FlatVector::GetData<float>(entries[3]);
++		const auto xmin_data = FlatVector::GetDataMutable<float>(entries[0]);
++		const auto ymin_data = FlatVector::GetDataMutable<float>(entries[1]);
++		const auto xmax_data = FlatVector::GetDataMutable<float>(entries[2]);
++		const auto ymax_data = FlatVector::GetDataMutable<float>(entries[3]);
  
  		// Push the bounding boxes into the R-Tree
  		auto &validity = FlatVector::Validity(bbox_chunk.data[0]);
@@ -1637,6 +2044,24 @@ index 5738f83..8dcb622 100644
  
  			// Reference the columns that we actually care about
  			lstate.probe_side_row_chunk.ReferenceColumns(input, probe_side_output_columns);
+@@ -1053,7 +1041,7 @@ OperatorResultType PhysicalSpatialJoin::ExecuteInternal(ExecutionContext &contex
+ 
+ 			// Also collect the build side row pointers (if we have a match column)
+ 			if (IsRightOuterJoin(join_type)) {
+-				const auto ptrs = FlatVector::GetData<data_ptr_t>(row_pointers);
++				const auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(row_pointers);
+ 				for (idx_t i = 0; i < scan_count; i++) {
+ 					lstate.build_side_pointers[output_index + i] = ptrs[i];
+ 				}
+@@ -1262,7 +1250,7 @@ SourceResultType PhysicalSpatialJoin::GetDataInternal(ExecutionContext &context,
+ 		return SourceResultType::FINISHED;
+ 	}
+ 
+-	const auto matches = FlatVector::GetData<bool>(lstate.scan_chunk.data.back());
++	const auto matches = FlatVector::GetDataMutable<bool>(lstate.scan_chunk.data.back());
+ 
+ 	idx_t result_count = 0;
+ 	for (idx_t i = 0; i < lstate.scan_chunk.size(); i++) {
 diff --git a/src/spatial/spatial_settings.cpp b/src/spatial/spatial_settings.cpp
 index dd2659d..656da67 100644
 --- a/src/spatial/spatial_settings.cpp
@@ -1649,6 +2074,19 @@ index dd2659d..656da67 100644
  
  namespace duckdb {
  
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index 0435a6e..1c0cf53 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -75,7 +75,7 @@ LogicalType GeoTypes::POLYGON_3D() {
+ 
+ LogicalType GeoTypes::CreateEnumType(const string &name, const vector<string> &members) {
+ 	auto varchar_vector = Vector(LogicalType::VARCHAR, members.size());
+-	auto varchar_data = FlatVector::GetData<string_t>(varchar_vector);
++	auto varchar_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
+ 	for (idx_t i = 0; i < members.size(); i++) {
+ 		auto str = string_t(members[i]);
+ 		varchar_data[i] = str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
 diff --git a/src/spatial/util/function_builder.cpp b/src/spatial/util/function_builder.cpp
 index 5bd4f95..d4c6e43 100644
 --- a/src/spatial/util/function_builder.cpp

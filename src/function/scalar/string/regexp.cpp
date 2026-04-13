@@ -175,6 +175,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &patterns = args.data[1];
 	auto &replaces = args.data[2];
 
+	auto &heap = StringVector::GetStringHeap(result);
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
@@ -185,7 +186,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 			    } else {
 				    RE2::Replace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
 			    }
-			    return StringVector::AddString(result, sstring);
+			    return heap.AddString(sstring);
 		    });
 	} else {
 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
@@ -200,7 +201,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 			    } else {
 				    RE2::Replace(&sstring, re, CreateStringPiece(replace));
 			    }
-			    return StringVector::AddString(result, sstring);
+			    return heap.AddString(sstring);
 		    });
 	}
 }
@@ -232,16 +233,17 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
+	auto &heap = StringVector::GetStringHeap(result);
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-			return Extract(input, result, lstate.constant_pattern, info.rewrite);
+			return Extract(input, heap, lstate.constant_pattern, info.rewrite);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(strings, patterns, result, args.size(),
 		                                                      [&](string_t input, string_t pattern) {
 			                                                      RE2 re(CreateStringPiece(pattern), info.options);
-			                                                      return Extract(input, result, re, info.rewrite);
+			                                                      return Extract(input, heap, re, info.rewrite);
 		                                                      });
 	}
 }
@@ -315,7 +317,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			                                            UnsafeNumericCast<int>(groups.size()));
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
-				auto cdata = FlatVector::GetData<string_t>(child_entry);
+				auto cdata = FlatVector::GetDataMutable<string_t>(child_entry);
 				auto &extracted = ws[col];
 				cdata[entry.index] =
 				    string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));

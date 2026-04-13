@@ -33,6 +33,7 @@ public:
 	idx_t GetCount() const {
 		return total_string_count;
 	}
+	void SetVectorType(VectorType vector_type) override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
@@ -43,15 +44,16 @@ private:
 struct FSSTVector {
 	static inline const ValidityMask &Validity(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.validity;
+		return vector.buffer->GetValidityMask();
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.validity;
+		return vector.buffer->GetValidityMask();
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		vector.validity.Initialize(new_validity);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Initialize(new_validity);
 	}
 	static inline const string_t *GetCompressedData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
@@ -77,6 +79,7 @@ struct FSSTVector {
 
 private:
 	static VectorFSSTStringBuffer &GetFSSTBuffer(const Vector &vector);
+	static StringHeap &GetStringHeap(const Vector &vector);
 };
 
 } // namespace duckdb

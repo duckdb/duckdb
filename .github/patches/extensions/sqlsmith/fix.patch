@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 72e8f5b..8eafec0 100644
+index 72e8f5b..afd174d 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -18,6 +18,7 @@
@@ -26,7 +26,26 @@ index 72e8f5b..8eafec0 100644
  	}
 
  	return delete_statement;
-@@ -957,9 +958,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+@@ -302,7 +303,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
+ 	}
+ 	while (RandomPercentage(20)) {
+ 		auto cte = make_uniq<CommonTableExpressionInfo>();
+-		cte->query = unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect());
++		cte->query_node = std::move(unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect())->node);
+ 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
+ 			cte->aliases.push_back(GenerateIdentifier());
+ 		}
+@@ -806,6 +807,9 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		max_parameters = min_parameters;
+ 		break;
+ 	}
++	case CatalogType::WINDOW_FUNCTION_ENTRY:
++		//	FIXME: Use the function, not a random builtin
++		return GenerateWindowFunction();
+ 	default:
+ 		throw InternalException("StatementGenerator::GenerateFunction");
+ 	}
+@@ -957,9 +961,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
  		case ExpressionType::WINDOW_NTILE:
  		case ExpressionType::WINDOW_FIRST_VALUE:
  		case ExpressionType::WINDOW_LAST_VALUE:
@@ -39,7 +58,7 @@ index 72e8f5b..8eafec0 100644
  			break;
  		case ExpressionType::WINDOW_NTH_VALUE:
  			min_parameters = 2;
-@@ -970,7 +974,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+@@ -970,7 +977,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
  		max_parameters = min_parameters;
  	}
  	WindowChecker checker(*this);
@@ -48,7 +67,7 @@ index 72e8f5b..8eafec0 100644
  	result->children = GenerateChildren(min_parameters, max_parameters);
  	while (RandomPercentage(50)) {
  		result->partitions.push_back(GenerateExpression());
-@@ -1014,15 +1018,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+@@ -1014,15 +1021,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
  	default:
  		break;
  	}
@@ -65,7 +84,7 @@ index 72e8f5b..8eafec0 100644
  }
 
 diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
-index 4602928..3e56aca 100644
+index 4602928..3b46e19 100644
 --- a/src/statement_simplifier.cpp
 +++ b/src/statement_simplifier.cpp
 @@ -8,8 +8,11 @@
@@ -79,6 +98,15 @@ index 4602928..3e56aca 100644
 +#include "duckdb/parser/query_node/delete_query_node.hpp"
  #include "duckdb/parser/statement/select_statement.hpp"
  #endif
+
+@@ -206,7 +209,7 @@ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
+ 	SimplifyMap(cte.map);
+ 	for (auto &cte_child : cte.map) {
+ 		// simplify individual ctes
+-		Simplify(cte_child.second->query->node);
++		Simplify(cte_child.second->query_node);
+ 	}
+ }
 
 @@ -357,8 +360,6 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
  		SimplifyChildExpression(expr, window.filter_expr);

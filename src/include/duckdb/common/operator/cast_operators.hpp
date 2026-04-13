@@ -776,21 +776,21 @@ duckdb::string_t CastFromTimeNS::Operation(duckdb::dtime_ns_t input, Vector &res
 
 struct CastFromTimestampNS {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast to string could not be performed!");
 	}
 };
 
 struct CastFromTimestampMS {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast to string could not be performed!");
 	}
 };
 
 struct CastFromTimestampSec {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast to string could not be performed!");
 	}
 };
@@ -936,32 +936,32 @@ template <>
 duckdb::timestamp_t CastTimestampSecToNs::Operation(duckdb::timestamp_t input);
 
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, Vector &result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, StringHeap &heap);
 template <>
-duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result);
+duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, StringHeap &heap);
 template <>
-duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, Vector &result);
+duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, StringHeap &heap);
 
 //===--------------------------------------------------------------------===//
 // Blobs
 //===--------------------------------------------------------------------===//
 struct CastFromBlob {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast from blob could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
+duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, StringHeap &heap);
 
 struct CastFromBlobToBit {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw NotImplementedException("Cast from blob could not be performed!");
 	}
 };
 template <>
-string_t CastFromBlobToBit::Operation(string_t input, Vector &result);
+string_t CastFromBlobToBit::Operation(string_t input, StringHeap &heap);
 
 struct TryCastToBlob {
 	template <class SRC, class DST>
@@ -977,12 +977,12 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 struct CastFromBitToString {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast from bit could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &vector);
+duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, StringHeap &heap);
 
 struct CastFromBitToNumeric {
 	template <class SRC = string_t, class DST>
@@ -992,8 +992,9 @@ struct CastFromBitToNumeric {
 		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
 		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
-			throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
-			                          GetTypeId<DST>());
+			HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<DST>()),
+			                             parameters);
+			return false;
 		}
 		Bit::BitToNumeric(input, result);
 		return (true);
@@ -1008,9 +1009,9 @@ bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, CastPar
 
 struct CastFromBitToBlob {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		D_ASSERT(input.GetSize() > 1);
-		return StringVector::AddStringOrBlob(result, Bit::BitToBlob(input));
+		return heap.AddBlob(Bit::BitToBlob(input));
 	}
 };
 
@@ -1029,12 +1030,12 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 //===--------------------------------------------------------------------===//
 struct CastFromUUID {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast from uuid could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromUUID::Operation(duckdb::hugeint_t input, Vector &vector);
+duckdb::string_t CastFromUUID::Operation(duckdb::hugeint_t input, StringHeap &heap);
 
 struct TryCastToUUID {
 	template <class SRC, class DST>
@@ -1049,12 +1050,12 @@ DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vect
 
 struct CastFromUUIDToBlob {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast from uuid to blob could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromUUIDToBlob::Operation(duckdb::hugeint_t input, Vector &vector);
+duckdb::string_t CastFromUUIDToBlob::Operation(duckdb::hugeint_t input, StringHeap &heap);
 
 struct TryCastBlobToUUID {
 	template <class SRC, class DST>
@@ -1107,23 +1108,23 @@ bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &resu
 //===--------------------------------------------------------------------===//
 struct CastFromPointer {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast from pointer could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromPointer::Operation(uintptr_t input, Vector &vector);
+duckdb::string_t CastFromPointer::Operation(uintptr_t input, StringHeap &heap);
 
 //===--------------------------------------------------------------------===//
 // Types
 //===--------------------------------------------------------------------===//
 struct CastFromType {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, StringHeap &heap) {
 		throw duckdb::NotImplementedException("Cast from pointer could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromType::Operation(string_t input, Vector &vector);
+duckdb::string_t CastFromType::Operation(string_t input, StringHeap &heap);
 
 } // namespace duckdb

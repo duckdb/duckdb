@@ -358,7 +358,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &child_data = ListVector::GetEntry(result);
 
 	idx_t current_offset = old_len;

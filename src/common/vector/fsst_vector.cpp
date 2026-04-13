@@ -6,6 +6,11 @@ namespace duckdb {
 
 VectorFSSTStringBuffer::VectorFSSTStringBuffer(idx_t capacity) : VectorStringBuffer(capacity) {
 	buffer_type = VectorBufferType::FSST_BUFFER;
+	vector_type = VectorType::FSST_VECTOR;
+}
+
+void VectorFSSTStringBuffer::SetVectorType(VectorType new_vector_type) {
+	throw InternalException("SetVectorType not supported for FSST vector");
 }
 
 VectorFSSTStringBuffer &FSSTVector::GetFSSTBuffer(const Vector &vector) {
@@ -19,18 +24,19 @@ VectorFSSTStringBuffer &FSSTVector::GetFSSTBuffer(const Vector &vector) {
 	return vector.buffer->Cast<VectorFSSTStringBuffer>();
 }
 
+StringHeap &FSSTVector::GetStringHeap(const Vector &vector) {
+	auto &fsst_buffer = GetFSSTBuffer(vector);
+	return fsst_buffer.GetHeap();
+}
+
 string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
 	return FSSTVector::AddCompressedString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (data.IsInlined()) {
-		// string will be inlined: no need to store in string heap
-		return data;
-	}
-	auto &fsst_string_buffer = GetFSSTBuffer(vector);
-	return fsst_string_buffer.AddBlob(data);
+	auto &fsst_heap = GetStringHeap(vector);
+	return fsst_heap.AddBlob(data);
 }
 
 void *FSSTVector::GetDecoder(const Vector &vector) {
@@ -46,7 +52,6 @@ vector<unsigned char> &FSSTVector::GetDecompressBuffer(const Vector &vector) {
 void FSSTVector::Create(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder, const idx_t string_block_limit,
                         idx_t capacity) {
 	vector.buffer = make_buffer<VectorFSSTStringBuffer>(capacity);
-	vector.SetVectorType(VectorType::FSST_VECTOR);
 	auto &fsst_string_buffer = vector.buffer->Cast<VectorFSSTStringBuffer>();
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder, string_block_limit);
 }
@@ -68,7 +73,7 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 	auto dst_mask = FlatVector::Validity(dst);
 	auto ldata = FSSTVector::GetCompressedData(src);
 	auto decoder = FSSTVector::GetDecoder(src);
-	auto tdata = FlatVector::GetData<string_t>(dst);
+	auto tdata = FlatVector::GetDataMutable<string_t>(dst);
 	auto &str_allocator = StringVector::GetStringAllocator(dst);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel->get_index(src_offset + i);
