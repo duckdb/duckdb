@@ -106,4 +106,6 @@ TEST_CASE("Test extract statements for `ALTER TABLE ... ADD COLUMN ... DEFAULT` 
 	REQUIRE(wrapper->statements[3]->query ==
 	        "ALTER TABLE my_table ALTER COLUMN my_column SET DEFAULT non_existent_function();");
 	REQUIRE(wrapper->statements[4]->query == "COMMIT;");
+
+	duckdb_destroy_extracted(&stmts);
 }
