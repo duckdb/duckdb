@@ -1414,7 +1414,7 @@ SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
 
-ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'
+ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'
 ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
 ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
 

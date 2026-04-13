@@ -7,7 +7,7 @@ require autocomplete
 require icu
 
 statement ok
-set allow_parser_override_extension=strict;
+call enable_peg_parser();
 
 statement ok
 SET threads=1;

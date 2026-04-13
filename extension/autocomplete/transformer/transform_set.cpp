@@ -77,18 +77,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneValue(PEGTransf
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-
-	const auto &name = choice_pr.name;
+	if (choice_pr.result->type == ParseResultType::STRING) {
+		return make_uniq<ConstantExpression>(Value(choice_pr.result->Cast<StringLiteralParseResult>().result));
+	}
+	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
+		return make_uniq<ConstantExpression>(Value(choice_pr.result->Cast<IdentifierParseResult>().identifier));
+	}
+	const auto &name = choice_pr.result->name;
 	if (name == "ZoneIntervalWithPrecision" || name == "ZoneIntervalWithInterval" || name == "NumberLiteral") {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.result);
 	}
-	if (name == "StringLiteral") {
-		return make_uniq<ConstantExpression>(Value(choice_pr.result->Cast<StringLiteralParseResult>().result));
-	}
-	if (name == "Identifier") {
-		return make_uniq<ConstantExpression>(Value(choice_pr.result->Cast<IdentifierParseResult>().identifier));
-	}
-	// DEFAULT or LOCAL
 	return make_uniq<DefaultExpression>();
 }
 

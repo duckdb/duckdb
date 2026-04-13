@@ -1295,7 +1295,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"SetStatement <- 'SET' (StandardAssignment / SetTimeZone)\n"
 	"StandardAssignment <- (SetVariable / SetSetting) SetAssignment\n"
 	"SetTimeZone <- 'TIME' 'ZONE' ZoneValue\n"
-	"ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'\n"
+	"ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'\n"
 	"ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?\n"
 	"ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral\n"
 	"SetSetting <- SettingScope? SettingName\n"
