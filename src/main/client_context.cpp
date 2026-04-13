@@ -940,7 +940,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 						reparsed_transaction_stmt.info->invalidation_policy =
 						    previous_transaction_stmt.info->invalidation_policy;
 						// re-apply auto rollback
-						parser.statements[0]->Cast<TransactionStatement>().info->auto_rollback =
+						reparsed_transaction_stmt.info->auto_rollback =
 						    statement->Cast<TransactionStatement>().info->auto_rollback;
 					}
 					statement = std::move(parser.statements[0]);
