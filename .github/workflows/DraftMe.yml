@@ -11,7 +11,7 @@ concurrency:
 jobs:
   mark-as-draft:
     name: Mark as draft
-    if: github.event.pull_request.draft == false && !contains(fromJSON('["OWNER","MEMBER"]'), github.event.pull_request.author_association)
+    if: github.event.pull_request.draft == false && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Save PR number
