@@ -35,7 +35,6 @@ string UpdateQueryNode::ToString() const {
 			result += col;
 		}
 	}
-	result += ";";
 	return result;
 }
 
