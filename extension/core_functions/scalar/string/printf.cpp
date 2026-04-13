@@ -72,30 +72,31 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 }
 
 struct StandardConstructArgument {
-	template<class T, class CTX>
-	static void ConstructArgument(T input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
+	template <class T, class CTX>
+	static void ConstructArgument(const T &input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
 		result.emplace_back(duckdb_fmt::internal::make_arg<CTX>(input));
 	}
 };
 
 struct StringConstructArgument {
-	template<class T, class CTX>
-	static void ConstructArgument(T input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
+	template <class T, class CTX>
+	static void ConstructArgument(const T &input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
 		auto string_view = duckdb_fmt::basic_string_view<char>(input.GetData(), input.GetSize());
 		result.emplace_back(duckdb_fmt::internal::make_arg<CTX>(string_view));
 	}
 };
 
-template<class T, class OP = StandardConstructArgument, class CTX>
-void ConvertArguments(const Vector &input, idx_t count, FlatVector::FlatStringWriter &writer, vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
+template <class T, class OP = StandardConstructArgument, class CTX>
+void ConvertArguments(const Vector &input, idx_t count, FlatVector::FlatStringWriter &writer,
+                      vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
 	auto result = input.Values<T>(count);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto entry = result[i];
 		if (!entry.IsValid()) {
 			writer.SetInvalid(i);
 			continue;
 		}
-		OP::ConstructArgument(entry.value, result_args[i]);
+		OP::ConstructArgument(entry.GetValue(), result_args[i]);
 	}
 }
 
@@ -154,12 +155,17 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	// now perform the actual formatting
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t idx = 0; idx < count; idx++) {
+		auto entry = format_data[idx];
+		if (!entry.IsValid()) {
+			result_validity.SetInvalid(idx);
+			continue;
+		}
 		if (!result_validity.RowIsValid(idx)) {
 			// this entry is NULL: skip it
 			continue;
 		}
 
-		auto format_string = format_data[idx].value.GetString();
+		auto format_string = entry.GetValue().GetString();
 		auto &current_args = format_args[idx];
 
 		// finally actually perform the format
