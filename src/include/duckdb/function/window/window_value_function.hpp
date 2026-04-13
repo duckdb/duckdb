@@ -95,11 +95,6 @@ public:
 	    : WindowValueExecutor(wexpr, shared) {
 	}
 
-	//! Never ignore nulls (that's the point!)
-	bool IgnoreNulls() const override {
-		return false;
-	}
-
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
 	                                             const idx_t payload_count, const ValidityMask &partition_mask,
 	                                             const ValidityMask &order_mask);

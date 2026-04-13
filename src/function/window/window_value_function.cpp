@@ -34,7 +34,7 @@ public:
 
 	void Finalize(CollectionPtr collection) {
 		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (value_idx != DConstants::INVALID_INDEX && executor.IgnoreNulls()) {
+		if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
 			ignore_nulls = &collection->validities[value_idx];
 		}
 	}
@@ -64,7 +64,7 @@ public:
 
 		if (gvstate.value_tree) {
 			local_value = gvstate.value_tree->GetLocalState(context);
-			if (gvstate.executor.IgnoreNulls()) {
+			if (gvstate.executor.wexpr.ignore_nulls) {
 				sort_nulls.Initialize();
 			}
 		}
@@ -103,7 +103,7 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 		const auto coll_count = coll_chunk.size();
 		auto &values = coll_chunk.data[gvstate.value_idx];
 		auto validity = values.Validity(coll_count);
-		if (gvstate.executor.IgnoreNulls() && validity.CanHaveNull()) {
+		if (gvstate.executor.wexpr.ignore_nulls && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
 				if (validity.IsValid(i)) {
 					sort_nulls[filtered++] = i;
@@ -1070,6 +1070,9 @@ WindowFunction FillFun::GetFunction() {
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
 	                   WindowFillExecutor::GetGlobal);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
+
+	//! Never ignore nulls (that's the point!)
+	fun.can_ignore_nulls = false;
 
 	return fun;
 }
