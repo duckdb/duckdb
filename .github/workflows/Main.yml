@@ -255,28 +255,22 @@ jobs:
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Build
-      run: python3 scripts/ci/retry.py -- make relassert
-
     - name: Write changed tests file
       shell: bash
       run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
 
-    - name: Smoke tests
-      run: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      with:
+        build: python3 scripts/ci/retry.py -- make relassert
+        test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+        bundle: make relassert-artifact
+        upload-name: linux-debug-relassert-build
+        upload-path: build/relassert-artifact.tar.gz
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
-
-    - name: Prepare relassert artifact
-      run: make relassert-artifact
-
-    - name: Upload relassert build artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-debug-relassert-build
-        path: build/relassert-artifact.tar.gz
-        if-no-files-found: error
 
  linux-debug-tests:
     name: Linux Debug Tests
@@ -432,27 +426,29 @@ jobs:
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Write changed tests file
-      shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
-
-    - uses: ./.github/actions/linux_release_build
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        BUILD_BENCHMARK: 1
+        BUILD_JEMALLOC: 1
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        DISABLE_SANITIZER: 1
       with:
-        artifact_name: linux-release-build
-        changed_tests_file: ${{ runner.temp }}/changed_tests.txt
-        save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+        build: python3 scripts/ci/retry.py -- make release
+        # Run all (slow) tests for the release build.
+        test: make allunit
+        bundle: make release-artifact
+        upload-name: linux-release-build
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Test
-      shell: bash
-      run: |
-        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
-          make allunit
-        else
-          make unittest_release SKIP_BUILD=1
-        fi
+    - name: Clean
+      run: make clean
 
     - name: Build linux default release
-      run: make clean release
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      with:
+        build: python3 scripts/ci/retry.py -- make release
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
