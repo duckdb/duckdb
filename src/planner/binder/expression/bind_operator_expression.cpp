@@ -106,6 +106,12 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		//! This binder is used to throw when the child expression is of a type that is not allowed.
 		TryOperatorBinder try_operator_binder(binder, context);
 		try_operator_binder.BindChild(op.children[0], depth, error);
+		// Preserve bound-column tracking for GROUP BY validation without delegating the full TRY binding to
+		// the parent binder. This keeps TRY's aggregate restrictions intact while exposing correlated/grouped
+		// column references to the surrounding binder.
+		for (const auto &bound_col : try_operator_binder.GetBoundColumns()) {
+			bound_columns.push_back(bound_col);
+		}
 	} else {
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			BindChild(op.children[i], depth, error);

@@ -11,4 +11,27 @@ BindResult TryOperatorBinder::BindAggregate(FunctionExpression &expr, AggregateF
                                             idx_t depth) {
 	throw BinderException("aggregates are not allowed inside the TRY expression");
 }
+
+bool TryOperatorBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
+                                                 BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+	if (!stored_binder) {
+		return false;
+	}
+	return stored_binder->TryResolveAliasReference(colref, depth, root_expression, result, expr_ptr);
+}
+
+bool TryOperatorBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	if (!stored_binder) {
+		return false;
+	}
+	return stored_binder->DoesColumnAliasExist(colref);
+}
+
+BindResult TryOperatorBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
+                                             bool root_expression) {
+	if (stored_binder && expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		return stored_binder->BindExpression(expr_ptr, depth, root_expression);
+	}
+	return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+}
 } // namespace duckdb

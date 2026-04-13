@@ -7,6 +7,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -51,6 +52,89 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 		cond.right = make_uniq<BoundColumnRefExpression>(col.name, col.type, bindings[binding_idx]);
 		cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		delim_join.conditions.push_back(std::move(cond));
+	}
+}
+
+static bool TryExtractSingleBinding(const Expression &expr, ColumnBinding &binding) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return false;
+	}
+	binding = expr.Cast<BoundColumnRefExpression>().binding;
+	return true;
+}
+
+static bool TryRemapCorrelatedBinding(const LogicalProjection &projection, const ColumnBinding &current_binding,
+                                      ColumnBinding &new_binding) {
+	for (idx_t i = 0; i < projection.expressions.size(); i++) {
+		ColumnBinding expression_binding;
+		if (!TryExtractSingleBinding(*projection.expressions[i], expression_binding)) {
+			continue;
+		}
+		if (expression_binding != current_binding) {
+			continue;
+		}
+		new_binding = ColumnBinding(projection.table_index, i);
+		return true;
+	}
+	return false;
+}
+
+static bool TryRemapCorrelatedBinding(const LogicalAggregate &aggregate, const ColumnBinding &current_binding,
+                                      ColumnBinding &new_binding) {
+	for (idx_t i = 0; i < aggregate.groups.size(); i++) {
+		ColumnBinding expression_binding;
+		if (!TryExtractSingleBinding(*aggregate.groups[i], expression_binding)) {
+			continue;
+		}
+		if (expression_binding != current_binding) {
+			continue;
+		}
+		new_binding = ColumnBinding(aggregate.group_index, i);
+		return true;
+	}
+	for (idx_t i = 0; i < aggregate.expressions.size(); i++) {
+		auto output_binding = ColumnBinding(aggregate.aggregate_index, i);
+		ColumnBinding expression_binding;
+		if (!TryExtractSingleBinding(*aggregate.expressions[i], expression_binding)) {
+			continue;
+		}
+		if (expression_binding != current_binding) {
+			continue;
+		}
+		new_binding = output_binding;
+		return true;
+	}
+	return false;
+}
+
+static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
+	auto left_bindings = left_side.GetColumnBindings();
+	for (auto &column : correlated_columns) {
+		bool binding_present = false;
+		for (const auto &binding : left_bindings) {
+			if (binding == column.binding) {
+				binding_present = true;
+				break;
+			}
+		}
+		if (binding_present) {
+			continue;
+		}
+		ColumnBinding new_binding;
+		bool found_binding = false;
+		switch (left_side.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalProjection>(), column.binding, new_binding);
+			break;
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalAggregate>(), column.binding, new_binding);
+			break;
+		default:
+			break;
+		}
+		if (found_binding) {
+			column.binding = new_binding;
+		}
 	}
 }
 
@@ -145,6 +229,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
+		RemapCorrelatedBindings(op.correlated_columns, *op.children[0]);
 
 		op.duplicate_eliminated_columns.clear();
 		op.mark_types.clear();
@@ -422,12 +507,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
 				auto &col = correlated_columns[right_offset + i];
 				JoinCondition cond;
-				cond.left = make_uniq<BoundColumnRefExpression>(col.type,
-				                                                ColumnBinding(left_binding.table_index,
-				                                                              left_binding.column_index + i));
-				cond.right = make_uniq<BoundColumnRefExpression>(col.type,
-				                                                 ColumnBinding(base_binding.table_index,
-				                                                               base_binding.column_index + right_offset + i));
+				cond.left = make_uniq<BoundColumnRefExpression>(
+				    col.type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+				cond.right = make_uniq<BoundColumnRefExpression>(
+				    col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + right_offset + i));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(std::move(cond));
 			}
