@@ -1,6 +1,24 @@
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 #include "writer/variant_column_writer.hpp"
 #include "parquet_writer.hpp"
-#include "duckdb/common/types/decimal.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
+#include "parquet_column_schema.hpp"
 
 namespace duckdb {
 

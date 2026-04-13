@@ -164,7 +164,7 @@ public:
 
 			if (function.HasBindCallback()) {
 				try {
-					bind_data = function.GetBindCallback()(context, function, children);
+					bind_data = function.Bind(context, children);
 				} catch (std::exception &ex) {
 					ErrorData error(ex);
 					throw SerializationException("Error during bind of function in deserialization: %s",

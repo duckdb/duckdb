@@ -187,8 +187,10 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
 }
 
-static unique_ptr<FunctionData> StructContainsBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {

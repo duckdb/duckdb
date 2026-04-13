@@ -243,8 +243,10 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	ListVector::SetListSize(result, column_count * args.size());
 }
 
-unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
@@ -294,13 +296,12 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	ScalarFunctionSet set("list_value");
 
 	// Overload for 0 arguments, which returns an empty list.
-	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, nullptr,
-	                         ListValueStats);
+	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, ListValueStats);
 	set.AddFunction(empty_fun);
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.
 	auto element_type = LogicalType::TEMPLATE("T");
-	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
+	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr,
 	                         ListValueStats);
 	value_fun.varargs = element_type;
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
@@ -310,8 +311,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 }
 
 ScalarFunction UnpivotListFun::GetFunction() {
-	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, nullptr,
-	                   ListValueStats);
+	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, ListValueStats);
 	fun.varargs = LogicalTypeId::ANY;
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;

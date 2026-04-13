@@ -454,20 +454,20 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		                   //	10:		prevIdcs[i] ← sorted[i-1].second
 		                   for (idx_t j = 0; j < nmatch; ++j) {
 			                   auto scan_idx = matching.get_index(j);
-			                   auto i = input_idx[scan_idx].value;
-			                   auto second = scan_idx ? input_idx[scan_idx - 1].value : prev_i;
+			                   auto i = input_idx[scan_idx].GetValue();
+			                   auto second = scan_idx ? input_idx[scan_idx - 1].GetValue() : prev_i;
 			                   prev_idcs[i] = ZippedTuple(second + 1, i);
 		                   }
 		                   //	11:	else
 		                   //	12:		prevIdcs[i] ← “-”
 		                   for (idx_t j = 0; j < ndistinct; ++j) {
 			                   auto scan_idx = distinct.get_index(j);
-			                   auto i = input_idx[scan_idx].value;
+			                   auto i = input_idx[scan_idx].GetValue();
 			                   prev_idcs[i] = ZippedTuple(0, i);
 		                   }
 
 		                   //	Remember the last input_idx of this chunk.
-		                   prev_i = input_idx[count - 1].value;
+		                   prev_i = input_idx[count - 1].GetValue();
 	                   });
 
 	//	13:	return prevIdcs

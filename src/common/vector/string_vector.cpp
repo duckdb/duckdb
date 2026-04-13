@@ -1,5 +1,7 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bit.hpp"
 
 namespace duckdb {
 
@@ -38,7 +40,7 @@ VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, VectorStringBuffer &other)
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
     : StandardVectorBuffer(std::move(data_p)) {
 	auto auxiliary_data = other.GetAuxiliaryData();
 	if (auxiliary_data) {
@@ -56,6 +58,85 @@ StringHeap &VectorStringBuffer::AllocateHeap(Allocator &allocator) {
 
 StringHeap &VectorStringBuffer::AllocateHeap() {
 	return AllocateHeap(Allocator::DefaultAllocator());
+}
+
+idx_t StringHeapHolder::GetAllocationSize() const {
+	return heap.AllocationSize();
+}
+
+buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	auto type_size = GetTypeIdSize(type.InternalType());
+	auto offset_ptr = data_ptr + type_size * offset;
+	auto result = make_buffer<VectorStringBuffer>(offset_ptr);
+	result->GetValidityMask().Slice(validity, offset, end - offset);
+	// keep the heap alive
+	if (auxiliary_data) {
+		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
+	}
+	return result;
+}
+
+void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	if (!val.IsNull() && val.type() != type) {
+		SetValue(type, index, val.DefaultCastAs(type));
+		return;
+	}
+	validity.Set(index, !val.IsNull());
+	if (!val.IsNull()) {
+		reinterpret_cast<string_t *>(data_ptr)[index] = GetHeap().AddBlob(StringValue::Get(val));
+	}
+}
+
+void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	StandardVectorBuffer::Verify(type, sel, count);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		count = 1;
+	}
+	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
+	auto data = reinterpret_cast<const string_t *>(data_ptr);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : sel.get_index(i);
+		if (!validity.RowIsValid(idx)) {
+			// NULL
+			continue;
+		}
+		auto &str = data[idx];
+		switch (type.id()) {
+		case LogicalTypeId::BIT: {
+			auto buf = str.GetData();
+			D_ASSERT(idx_t(*buf) < 8);
+			Bit::Verify(str);
+			break;
+		}
+		case LogicalTypeId::BIGNUM:
+			Bignum::Verify(static_cast<bignum_t>(str));
+			break;
+		case LogicalTypeId::VARCHAR:
+			// verify that the string is correct unicode
+			str.Verify();
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data) const {
+	return make_buffer<VectorStringBuffer>(std::move(new_data), *this);
+}
+
+buffer_ptr<VectorBuffer> VectorStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                     idx_t count) const {
+	auto result = StandardVectorBuffer::Flatten(type, sel, count);
+	if (!result) {
+		// already flat - bail
+		return nullptr;
+	}
+	// add heap reference from source to result
+	if (auxiliary_data) {
+		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
+	}
+	return result;
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {

@@ -17,6 +17,8 @@ struct StringHeapHolder : AuxiliaryDataHolder {
 	explicit StringHeapHolder(Allocator &allocator) : heap(allocator) {
 	}
 
+	idx_t GetAllocationSize() const override;
+
 	StringHeap heap;
 };
 
@@ -28,7 +30,7 @@ public:
 	explicit VectorStringBuffer(idx_t capacity);
 	explicit VectorStringBuffer(data_ptr_t data_ptr_p);
 	explicit VectorStringBuffer(AllocatedData &&data_p);
-	VectorStringBuffer(AllocatedData &&data_p, VectorStringBuffer &other);
+	VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other);
 
 public:
 	StringHeap &GetHeap() {
@@ -52,6 +54,15 @@ public:
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}
+
+public:
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data) const override;
 
 private:
 	StringHeap &AllocateHeap(Allocator &allocator);

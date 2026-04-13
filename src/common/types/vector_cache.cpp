@@ -19,7 +19,7 @@ public:
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
-			auto child_vector = make_uniq<Vector>(child_type, VectorType::FLAT_VECTOR, nullptr);
+			auto child_vector = make_uniq<Vector>(child_type, nullptr);
 			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector), capacity);
 			break;
 		}

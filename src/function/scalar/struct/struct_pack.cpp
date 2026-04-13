@@ -34,8 +34,9 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 template <bool IS_STRUCT_PACK>
-static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	case_insensitive_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
@@ -77,7 +78,7 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
-	                   StructPackBind<IS_STRUCT_PACK>, nullptr, StructPackStats);
+	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.varargs = LogicalType::ANY;
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);

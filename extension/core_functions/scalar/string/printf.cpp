@@ -22,8 +22,9 @@ struct FMTFormat {
 	}
 };
 
-unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:

@@ -81,12 +81,9 @@ private:
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 	//! Whether or not we are currently binding a window definition
 	bool in_window_definition = false;
-	//! Whether or not we are currently binding a macro definition
-	bool in_macro_definition = false;
 
 	void Clear();
 	bool InWindowDefinition();
-	bool InMacroDefinition();
 
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;

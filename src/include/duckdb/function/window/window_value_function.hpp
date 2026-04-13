@@ -15,8 +15,7 @@ namespace duckdb {
 // Base class for non-aggregate functions that have a payload
 class WindowValueExecutor : public WindowExecutor {
 public:
-	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
@@ -33,8 +32,7 @@ public:
 
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
-	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
 	    : WindowValueExecutor(wexpr, shared) {
@@ -85,19 +83,13 @@ protected:
 
 class WindowFillExecutor : public WindowValueExecutor {
 public:
-	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
 	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
 	WindowFillExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
 	    : WindowValueExecutor(wexpr, shared) {
-	}
-
-	//! Never ignore nulls (that's the point!)
-	bool IgnoreNulls() const override {
-		return false;
 	}
 
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,

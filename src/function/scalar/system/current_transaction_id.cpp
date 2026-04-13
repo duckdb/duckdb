@@ -23,8 +23,8 @@ struct CurrentTransactionIdData : FunctionData {
 	}
 };
 
-unique_ptr<FunctionData> CurrentTransactionIdBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CurrentTransactionIdBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	Value transaction_id;
 	if (context.transaction.HasActiveTransaction()) {
 		transaction_id = Value::UBIGINT(context.transaction.ActiveTransaction().global_transaction_id);
@@ -44,7 +44,7 @@ void CurrentTransactionIdFunction(DataChunk &args, ExpressionState &state, Vecto
 
 ScalarFunction CurrentTransactionId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentTransactionIdFunction, CurrentTransactionIdBind, nullptr,
-	                      nullptr, nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
+	                      nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 }
 
 } // namespace duckdb

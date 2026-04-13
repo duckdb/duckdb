@@ -182,7 +182,7 @@ static idx_t ComparatorSelectOperation(Vector &left, Vector &right, optional_ptr
 				false_sel->set_index(false_count, result_idx);
 			}
 			false_count++;
-		} else if (predicate(entry.value)) {
+		} else if (predicate(entry.GetValue())) {
 			if (true_sel) {
 				true_sel->set_index(true_count, result_idx);
 			}

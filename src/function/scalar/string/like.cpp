@@ -341,8 +341,9 @@ private:
 	bool has_end_percentage;
 };
 
-unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> LikeBindFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	for (auto &arg : arguments) {
@@ -537,7 +538,7 @@ ScalarFunction GlobPatternFun::GetFunction() {
 
 ScalarFunction ILikeFun::GetFunction() {
 	ScalarFunction ilike("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                     ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr, nullptr,
+	                     ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr,
 	                     ILikePropagateStats<ILikeOperatorASCII>);
 	ilike.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return ilike;
@@ -546,7 +547,7 @@ ScalarFunction ILikeFun::GetFunction() {
 ScalarFunction NotILikeFun::GetFunction() {
 	ScalarFunction not_ilike("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                         ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
-	                         nullptr, ILikePropagateStats<NotILikeOperatorASCII>);
+	                         ILikePropagateStats<NotILikeOperatorASCII>);
 	not_ilike.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return not_ilike;
 }
