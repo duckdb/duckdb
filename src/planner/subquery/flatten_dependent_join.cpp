@@ -107,6 +107,33 @@ static bool TryRemapCorrelatedBinding(const LogicalAggregate &aggregate, const C
 	return false;
 }
 
+static idx_t FindCorrelatedColumnIndex(const CorrelatedColumns &correlated_columns,
+                                       const CorrelatedColumnInfo &target) {
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		if (correlated_columns[i].binding == target.binding) {
+			return i;
+		}
+	}
+
+	// Correlated bindings can be remapped through projections/aggregates while the CTE metadata still points at
+	// the original binding. In that case the column name and type identify the carried payload column.
+	idx_t result = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		auto &candidate = correlated_columns[i];
+		if (candidate.name != target.name || candidate.type != target.type) {
+			continue;
+		}
+		if (result != DConstants::INVALID_INDEX) {
+			throw InternalException("Ambiguous CTE ref correlation payload layout");
+		}
+		result = i;
+	}
+	if (result == DConstants::INVALID_INDEX) {
+		throw InternalException("Could not find CTE ref correlation payload column");
+	}
+	return result;
+}
+
 static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
 	auto left_bindings = left_side.GetColumnBindings();
 	for (auto &column : correlated_columns) {
@@ -455,8 +482,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
-		bool recursive_cte_ref = false;
 		bool has_cte_ref_metadata = false;
+		optional_ptr<CorrelatedColumns> cte_ref_correlated_columns;
 		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 			auto &op = plan->Cast<LogicalCTERef>();
 
@@ -465,9 +492,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
 				has_cte_ref_metadata = true;
-				recursive_cte_ref = rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
 
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
+				cte_ref_correlated_columns = rec_cte_op.correlated_columns;
 				if (op.correlated_columns == 0) {
 					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
 					                            CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS);
@@ -496,21 +523,41 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			auto left_binding =
 			    ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
-			idx_t right_offset = 0;
-			if (has_cte_ref_metadata && !recursive_cte_ref) {
-				D_ASSERT(correlated_columns.size() >= cteref.correlated_columns);
-				right_offset = correlated_columns.size() - cteref.correlated_columns;
+			vector<idx_t> right_indexes;
+			if (has_cte_ref_metadata) {
+				if (cteref.correlated_columns > correlated_columns.size()) {
+					throw InternalException("Unexpected CTE ref correlation payload layout");
+				}
+				if (!cte_ref_correlated_columns || cteref.correlated_columns > cte_ref_correlated_columns->size()) {
+					throw InternalException("Missing CTE ref correlation payload metadata");
+				}
+				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
+					right_indexes.push_back(
+					    FindCorrelatedColumnIndex(correlated_columns, (*cte_ref_correlated_columns)[i]));
+				}
+			} else {
+				if (cteref.correlated_columns > correlated_columns.size()) {
+					throw InternalException("Unexpected CTE ref correlation payload layout");
+				}
+				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
+					right_indexes.push_back(i);
+				}
 			}
 			// CTE refs append their carried correlation payload to the end of their own output.
-			// For non-recursive/materialized CTEs the matching delim payload is also a suffix; for recursive CTEs
-			// the recursive rewrite prepends the carried columns and we must keep the original prefix alignment.
+			// The matching delim payload can be interleaved with additional outer correlations, so use the CTE's
+			// correlation metadata instead of assuming a fixed prefix/suffix position.
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-				auto &col = correlated_columns[right_offset + i];
+				auto right_index = right_indexes[i];
+				auto &col = correlated_columns[right_index];
+				auto &left_type = cteref.chunk_types[left_binding.column_index + i];
+				if (left_type != col.type) {
+					throw InternalException("Unexpected CTE ref correlation payload type");
+				}
 				JoinCondition cond;
 				cond.left = make_uniq<BoundColumnRefExpression>(
 				    col.type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 				cond.right = make_uniq<BoundColumnRefExpression>(
-				    col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + right_offset + i));
+				    col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + right_index));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(std::move(cond));
 			}
