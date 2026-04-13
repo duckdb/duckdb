@@ -114,7 +114,7 @@ def find_grammar_rules(grammar_path):
         print(f"Error: No *.gram files found in {grammar_path}", file=sys.stderr)
         sys.exit(1)
 
-    rule_start = re.compile(r"^(\w+)\s*<-", re.MULTILINE)
+    rule_start = re.compile(r"^(\w+)(?:\[([^\]]*)\])?\s*<-", re.MULTILINE)
 
     for file_path in gram_files:
         content = file_path.read_text(encoding="utf-8")
@@ -122,9 +122,10 @@ def find_grammar_rules(grammar_path):
         rules_in_file = []
         for i, match in enumerate(matches):
             rule_name = match.group(1)
+            return_type = match.group(2)  # None if no annotation
             end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
             rule_text = " ".join(content[match.start():end].split())
-            rules_in_file.append((rule_name, rule_text))
+            rules_in_file.append((rule_name, rule_text, return_type))
         all_rules_by_file[file_path.name] = (file_path, rules_in_file)
 
     return all_rules_by_file
@@ -226,13 +227,19 @@ def find_factory_registrations(factory_file_path):
     return enum_rules, registered_rules, direct_registered_functions, direct_registered_rules
 
 
-def generate_declaration_stub(rule_name, rule_text=""):
+def generate_declaration_stub(rule_name, rule_text="", return_type=None):
     """Generates the C++ method declaration (for the .hpp file)."""
     comment = f"// {rule_text}\n" if rule_text else ""
+    if return_type:
+        type_str = return_type
+        todo = ""
+    else:
+        type_str = "unique_ptr<SQLStatement>"
+        todo = "// TODO: Verify this return type is correct\n"
     return (
         f"{comment}"
-        f"// TODO: Verify this return type is correct\n"
-        f"static unique_ptr<SQLStatement> Transform{rule_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);\n"
+        f"{todo}"
+        f"static {type_str} Transform{rule_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);\n"
     )
 
 
@@ -241,13 +248,19 @@ def generate_registration_stub(rule_name):
     return f"REGISTER_TRANSFORM(Transform{rule_name});\n"
 
 
-def generate_implementation_stub(rule_name, rule_text=""):
+def generate_implementation_stub(rule_name, rule_text="", return_type=None):
     """Generates the C++ method implementation (for the transform_...cpp file)."""
     comment = f"// {rule_text}\n" if rule_text else ""
+    if return_type:
+        type_str = return_type
+        todo = ""
+    else:
+        type_str = "unique_ptr<SQLStatement>"
+        todo = "// TODO: Verify this return type is correct\n"
     return (
         f"{comment}"
-        f"// TODO: Verify this return type is correct\n"
-        f"unique_ptr<SQLStatement> PEGTransformerFactory::Transform{rule_name}(PEGTransformer &transformer,\n"
+        f"{todo}"
+        f"{type_str} PEGTransformerFactory::Transform{rule_name}(PEGTransformer &transformer,\n"
         f"                                                                   optional_ptr<ParseResult> parse_result) {{\n"
         f"\tthrow NotImplementedException(\"Transform{rule_name} has not yet been implemented\");\n"
         f"}}\n"
@@ -284,11 +297,11 @@ def generate_code_for_missing_rules(generation_queue, rule_definitions=None):
             )
             continue
 
-        rule_text = rule_definitions.get(rule_name, "")
+        rule_text, return_type = rule_definitions.get(rule_name, ("", None))
 
         print(f"--- Generation for rule: {rule_name} ---")
         print(f"1. Add DECLARATION to: {FACTORY_HPP_FILE}")
-        print(generate_declaration_stub(rule_name, rule_text))
+        print(generate_declaration_stub(rule_name, rule_text, return_type))
 
         print(
             f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:"
@@ -296,7 +309,7 @@ def generate_code_for_missing_rules(generation_queue, rule_definitions=None):
         print(generate_registration_stub(rule_name))
 
         print(f"3. Add IMPLEMENTATION to: {cpp_path}")
-        print(generate_implementation_stub(rule_name, rule_text))
+        print(generate_implementation_stub(rule_name, rule_text, return_type))
         print(f"--- End of {rule_name} ---\n")
 
 
@@ -340,11 +353,11 @@ def main():
         print("Error: Could not find grammar rules. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    # Build a flat dict of rule_name -> rule_text for stub generation
+    # Build a flat dict of rule_name -> (rule_text, return_type) for stub generation
     rule_definitions = {}
     for file_name, (file_path, rules_with_text) in grammar_rules_by_file.items():
-        for rule_name, rule_text in rules_with_text:
-            rule_definitions[rule_name] = rule_text
+        for rule_name, rule_text, return_type in rules_with_text:
+            rule_definitions[rule_name] = (rule_text, return_type)
 
     print("\n--- Rule Coverage Check ---")
 
@@ -374,7 +387,7 @@ def main():
                 print("(No grammar rules found in this file)")
             continue
 
-        for rule_name, _rule_text in sorted(grammar_rules, key=lambda x: x[0]):
+        for rule_name, _rule_text, _return_type in sorted(grammar_rules, key=lambda x: x[0]):
             total_rules_scanned += 1
             if rule_name in EXCLUDED_RULES:
                 if not args.quiet and not args.skip_found:

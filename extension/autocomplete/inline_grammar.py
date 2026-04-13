@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sys
 from enum import Enum, auto
 from pathlib import Path
@@ -478,6 +479,10 @@ for file in os.listdir(statements_dir):
         file_offsets.append((len(contents), file))
         with open(os.path.join(statements_dir, file), "r") as f:
             contents += f.read() + "\n"
+
+# Strip return type annotations (e.g. RuleName[unique_ptr<T>] <- ...)
+# before validation and output -- they are only used by generate_peg_transformer.py.
+contents = re.sub(r"^(\w+)\[[^\]]*\]", r"\1", contents, flags=re.MULTILINE)
 
 validate_grammar(contents, file_offsets)
 
