@@ -10,6 +10,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string.hpp"
+#include <exception>
 
 namespace duckdb {
 class ParsedExpression;
@@ -20,7 +21,9 @@ public:
 	//! Not initialized, default constructor
 	DUCKDB_API ErrorData();
 	//! From std::exception
-	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
+	DUCKDB_API
+	ErrorData(const std::exception &ex, // NOLINT: allow implicit construction from exception
+	          const std::exception_ptr &ptr = std::current_exception());
 	//! From a raw string and exception type
 	DUCKDB_API ErrorData(ExceptionType type, const string &raw_message);
 	//! From a raw string
@@ -69,6 +72,8 @@ private:
 	string final_message;
 	//! Extra exception info
 	unordered_map<string, string> extra_info;
+	//! Original exception
+	std::exception_ptr exception_ptr;
 
 private:
 	DUCKDB_API static string SanitizeErrorMessage(string error);
