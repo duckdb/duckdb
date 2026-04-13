@@ -114,7 +114,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 			auto entry = entries[i];
 			auto res_idx = sel.get_index(i);
 			if (entry.IsValid()) {
-				res[res_idx] = entry.value;
+				res[res_idx] = entry.GetValue();
 			} else {
 				result_mask.SetInvalid(res_idx);
 			}

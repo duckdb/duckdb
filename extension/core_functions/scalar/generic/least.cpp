@@ -148,7 +148,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				auto entry = entries[i];
 				if (entry.IsValid()) {
 					// not a null entry: perform the operation and add to new set
-					auto ivalue = entry.value;
+					auto ivalue = entry.GetValue();
 					if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 						result_has_value[i] = true;
 						result_data[i] = ivalue;

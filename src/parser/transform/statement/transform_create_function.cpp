@@ -6,23 +6,7 @@
 
 namespace duckdb {
 
-template <typename T>
-class RestoreValue {
-public:
-	explicit RestoreValue(T &ref) : ref(ref), val(ref) {
-	}
-	~RestoreValue() {
-		ref = val;
-	}
-
-private:
-	T &ref;
-	const T val;
-};
-
 unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &def) {
-	RestoreValue<bool> save_in_macro(in_macro_definition);
-	in_macro_definition = true;
 	unique_ptr<MacroFunction> macro_func;
 	if (def.function) {
 		auto expression = TransformExpression(def.function);

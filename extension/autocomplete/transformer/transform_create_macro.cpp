@@ -25,9 +25,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGT
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	vector<unique_ptr<MacroFunction>> macro_functions;
 	for (auto macro_definition : macro_definition_list) {
-		transformer.in_macro_definition = true;
 		info->macros.push_back(transformer.Transform<unique_ptr<MacroFunction>>(macro_definition));
-		transformer.in_macro_definition = false;
 	}
 	D_ASSERT(!info->macros.empty());
 	auto macro_type = info->macros[0]->type;

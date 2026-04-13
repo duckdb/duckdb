@@ -91,7 +91,7 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 			break;
 		}
 
-		auto list_entry = entry.value;
+		auto list_entry = entry.GetValue();
 
 		// add the list entry as the first element of "vector"
 		// FIXME: we only need to allocate space for 1 tuple here
