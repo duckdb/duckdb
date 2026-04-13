@@ -26,8 +26,10 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
@@ -126,13 +128,17 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 	return StructExtractAtFun::GetBindData(NumericCast<idx_t>(index - 1));
 }
 
-static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructExtractBindIndex(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return StructExtractBindInternal(context, bound_function, arguments, true);
 }
 
-static unique_ptr<FunctionData> StructExtractAtBind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructExtractAtBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return StructExtractBindInternal(context, bound_function, arguments, false);
 }
 
@@ -151,7 +157,7 @@ unique_ptr<FunctionData> StructExtractAtFun::GetBindData(idx_t index) {
 
 ScalarFunction GetKeyExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
+	                      StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
 }
 
 ScalarFunction GetIndexExtractFunction() {

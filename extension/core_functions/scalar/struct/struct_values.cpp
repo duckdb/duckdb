@@ -53,8 +53,9 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 // Ensure input is a STRUCT, set return type to an unnamed STRUCT with same child types
-static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	const auto arg_type = arguments[0]->return_type;
 	if (arg_type == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();

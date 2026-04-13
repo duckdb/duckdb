@@ -125,8 +125,9 @@ bool IsEmptyMap(const LogicalType &map) {
 	return key_type.id() == LogicalType::SQLNULL && value_type.id() == LogicalType::SQLNULL;
 }
 
-unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &bound_function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto arg_count = arguments.size();
 	if (arg_count < 2) {
 		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");

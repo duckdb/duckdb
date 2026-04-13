@@ -171,8 +171,10 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 template <class LEAST_GREATER_OP>
-unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
@@ -235,8 +237,7 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
 	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, nullptr, nullptr,
-	                      nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
-	                      FunctionNullHandling::SPECIAL_HANDLING);
+	                      LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>

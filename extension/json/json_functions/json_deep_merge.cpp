@@ -109,7 +109,7 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
 	ScalarFunction fun("json_deep_merge", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   DeepMergeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::JSON();
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 

@@ -209,8 +209,10 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		}
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
+
 		function.arguments[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
@@ -348,8 +350,10 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 }
 
 template <bool LAST, bool SKIP_NULLS>
-unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto decimal_type = arguments[0]->return_type;
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
@@ -368,15 +372,18 @@ AggregateFunction GetFirstOperator(const LogicalType &type) {
 }
 
 template <bool LAST, bool SKIP_NULLS>
-unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &function,
-                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto input_type = arguments[0]->return_type;
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	if (function.HasBindCallback()) {
-		return function.GetBindCallback()(context, function, arguments);
+		return function.Bind(input.GetClientContext(), arguments);
+		;
 	} else {
 		return nullptr;
 	}

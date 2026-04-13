@@ -62,8 +62,8 @@ duckdb::AggregateFunctionSet &GetCAggregateFunctionSet(duckdb_aggregate_function
 	return *reinterpret_cast<duckdb::AggregateFunctionSet *>(function_set);
 }
 
-unique_ptr<FunctionData> CAPIAggregateBind(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CAPIAggregateBind(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
 	auto &info = function.function_info->Cast<CAggregateFunctionInfo>();
 	return make_uniq<CAggregateFunctionBindData>(info);
 }

@@ -58,8 +58,10 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
-unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path;
@@ -99,8 +101,10 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 	return paths == other.paths && lens == other.lens;
 }
 
-unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();

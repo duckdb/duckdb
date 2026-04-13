@@ -190,7 +190,7 @@ Window(const ArgType *arg, ValidityMask &filter, ValidityMask &valid,
 ### Bind
 
 ```cpp
-bind(ClientContext &context, AggregateFunction &function,vector<unique_ptr<Expression>> &arguments)
+bind(BindAggregateFunctionInput &input)
 ```
 
 Like scalar functions, aggregates can sometimes have complex binding rules
