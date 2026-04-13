@@ -73,6 +73,8 @@ static int FigureColnameInternal(const BaseExpression &expr, string &name) {
 				name = "bool";
 			} else if (name.starts_with("decimal(")) {
 				name = "numeric";
+			} else if (name == "blob") {
+				name = "bytea";
 			}
 			return 1;
 		}
