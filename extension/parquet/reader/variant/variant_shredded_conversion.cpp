@@ -1,16 +1,33 @@
+#include <stdint.h>
+#include <map>
+#include <string>
+#include <utility>
+
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant/variant_shredded_conversion.hpp"
-#include "column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
-
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/variant_value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "reader/variant/variant_binary_decoder.hpp"
 
 namespace duckdb {
 
