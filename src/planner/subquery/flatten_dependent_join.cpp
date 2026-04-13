@@ -417,21 +417,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			auto left_binding = ColumnBinding(cteref.table_index,
 			                                  ProjectionIndex(cteref.chunk_types.size() - cteref.correlated_columns));
-			D_ASSERT(correlated_columns.size() >= cteref.correlated_columns);
-			auto right_offset = correlated_columns.size() - cteref.correlated_columns;
-			// The CTE scan appends its carried correlated columns to the end of the CTE ref output. Align those
-			// payload columns with the corresponding suffix in the current delim payload instead of assuming they are
-			// the first correlated columns.
+			// add the correlated columns to the join conditions
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-				auto &col = correlated_columns[right_offset + i];
-				D_ASSERT(cteref.chunk_types[left_binding.column_index + i] == col.type);
 				JoinCondition cond(
 				    make_uniq<BoundColumnRefExpression>(
-				        col.type,
+				        correlated_columns[i].type,
 				        ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index + i))),
 				    make_uniq<BoundColumnRefExpression>(
-				        col.type, ColumnBinding(base_binding.table_index,
-				                                ProjectionIndex(base_binding.column_index + right_offset + i))),
+				        correlated_columns[i].type,
+				        ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i))),
 				    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 				join->conditions.push_back(std::move(cond));
 			}
