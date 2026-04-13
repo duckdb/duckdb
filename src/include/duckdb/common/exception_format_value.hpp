@@ -92,6 +92,8 @@ DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const ch
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *const &value);
 template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const std::string_view &value);
+template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const idx_t &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const hugeint_t &value);

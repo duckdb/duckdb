@@ -74,6 +74,10 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *const &value)
 	return ExceptionFormatValue(string(value));
 }
 template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const std::string_view &value) {
+	return ExceptionFormatValue(string(value));
+}
+template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const idx_t &value) {
 	return ExceptionFormatValue(value);
 }
