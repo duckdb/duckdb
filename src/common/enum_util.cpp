@@ -5041,19 +5041,20 @@ SubqueryType EnumUtil::FromString<SubqueryType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetTableColumnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TableColumnType::STANDARD), "STANDARD" },
-		{ static_cast<uint32_t>(TableColumnType::GENERATED), "GENERATED" }
+		{ static_cast<uint32_t>(TableColumnType::GENERATED_VIRTUAL), "GENERATED_VIRTUAL" },
+		{ static_cast<uint32_t>(TableColumnType::GENERATED_STORED), "GENERATED_STORED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value) {
-	return StringUtil::EnumToString(GetTableColumnTypeValues(), 2, "TableColumnType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableColumnTypeValues(), 3, "TableColumnType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
-	return static_cast<TableColumnType>(StringUtil::StringToEnum(GetTableColumnTypeValues(), 2, "TableColumnType", value));
+	return static_cast<TableColumnType>(StringUtil::StringToEnum(GetTableColumnTypeValues(), 3, "TableColumnType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {

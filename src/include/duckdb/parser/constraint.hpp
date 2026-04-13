@@ -62,6 +62,8 @@ public:
 	DUCKDB_API virtual ~Constraint();
 
 	ConstraintType type;
+	//! User-specified constraint name (from CONSTRAINT name ...), or empty.
+	string constraint_name;
 
 public:
 	DUCKDB_API virtual string ToString() const = 0;

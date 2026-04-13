@@ -91,7 +91,11 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
 		}
-		return make_uniq<CheckConstraint>(std::move(expression));
+		auto result = make_uniq<CheckConstraint>(std::move(expression));
+		if (constraint.conname) {
+			result->constraint_name = constraint.conname;
+		}
+		return result;
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 		return TransformForeignKeyConstraint(constraint);
@@ -119,11 +123,17 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 			throw InvalidInputException("\"%s\" has a DEFAULT value set, it can not become a GENERATED column",
 			                            column.Name());
 		}
-		column.SetGeneratedExpression(TransformExpression(constraint.raw_expr));
+		column.SetGeneratedExpression(TransformExpression(constraint.raw_expr), TableColumnType::GENERATED_VIRTUAL);
 		return nullptr;
 	}
-	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED:
-		throw InvalidInputException("Can not create a STORED generated column!");
+	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED: {
+		if (column.HasDefaultValue()) {
+			throw ParserException("both default and generation expression specified for column \"%s\" of table \"%s\"",
+			                      column.GetName(), table_name);
+		}
+		column.SetGeneratedExpression(TransformExpression(constraint.raw_expr), TableColumnType::GENERATED_STORED);
+		return nullptr;
+	}
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
 		if (column.HasDefaultValue()) {
 			throw ParserException("multiple default values specified for column \"%s\" of table \"%s\"",

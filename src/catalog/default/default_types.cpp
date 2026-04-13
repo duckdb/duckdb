@@ -463,7 +463,9 @@ namespace {
 
 using builtin_type_array = std::array<DefaultType, 81>;
 
-const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
+// Lazy-initialized to avoid static initialization order issues with LogicalType.
+static const builtin_type_array &GetBuiltinTypes() {
+static const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"numeric", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"time", LogicalTypeId::TIME, nullptr},
@@ -544,9 +546,11 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"float8", LogicalTypeId::DOUBLE, nullptr},
                                            {"geometry", LogicalTypeId::GEOMETRY, BindGeometryType},
                                            {"type", LogicalTypeId::TYPE, nullptr}}};
+return BUILTIN_TYPES;
+}
 
 optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
-	auto &internal_types = BUILTIN_TYPES;
+	auto &internal_types = GetBuiltinTypes();
 	for (auto &type : internal_types) {
 		if (StringUtil::CIEquals(name, type.name)) {
 			return &type;
@@ -626,7 +630,7 @@ vector<string> DefaultTypeGenerator::GetDefaultEntries() {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return result;
 	}
-	auto &internal_types = BUILTIN_TYPES;
+	auto &internal_types = GetBuiltinTypes();
 	for (auto &type : internal_types) {
 		result.emplace_back(StringUtil::Lower(type.name));
 	}

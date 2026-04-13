@@ -125,6 +125,26 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			auto col_def = TransformColumnDefinition(*pg_col_def);
 
 			if (pg_col_def->constraints) {
+				// Pre-scan for conflicting NULL/NOT NULL declarations (PG compat)
+				bool has_null = false;
+				bool has_not_null = false;
+				bool has_primary_key = false;
+				for (auto cell = pg_col_def->constraints->head; cell != nullptr; cell = cell->next) {
+					auto pg_c = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell->data.ptr_value);
+					if (pg_c->contype == duckdb_libpgquery::PG_CONSTR_NULL) {
+						has_null = true;
+					} else if (pg_c->contype == duckdb_libpgquery::PG_CONSTR_NOTNULL) {
+						has_not_null = true;
+					} else if (pg_c->contype == duckdb_libpgquery::PG_CONSTR_PRIMARY) {
+						has_primary_key = true;
+					}
+				}
+				if (has_null && (has_not_null || has_primary_key)) {
+					throw ParserException(
+					    "conflicting NULL/NOT NULL declarations for column \"%s\" of table \"%s\"",
+					    col_def.Name(), info->table);
+				}
+
 				for (auto cell = pg_col_def->constraints->head; cell != nullptr; cell = cell->next) {
 					auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell->data.ptr_value);
 					auto constraint = TransformConstraint(*pg_constraint, col_def, info->columns.LogicalColumnCount(), info->table);

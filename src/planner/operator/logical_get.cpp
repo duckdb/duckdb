@@ -237,8 +237,8 @@ bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageInde
 	}
 
 	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
-	if (column.Generated()) {
-		//! This is a generated column, can't use the row group pruner
+	if (column.Category() == TableColumnType::GENERATED_VIRTUAL) {
+		//! This is a virtual generated column, can't use the row group pruner
 		return false;
 	}
 	out_index = table->GetStorageIndex(column_index);

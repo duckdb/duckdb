@@ -1129,6 +1129,16 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 } // namespace
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
+	// Integer types: PG-compatible integer division (truncation toward zero)
+	for (auto &type : LogicalType::Numeric()) {
+		if (type.id() == LogicalTypeId::DECIMAL || type.id() == LogicalTypeId::FLOAT ||
+		    type.id() == LogicalTypeId::DOUBLE) {
+			continue;
+		}
+		fp_divide.AddFunction(
+		    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
+	}
+	// Float/double: float division
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
 	                                     BindBinaryFloatingPoint<DivideOperator>));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
