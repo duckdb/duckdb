@@ -385,16 +385,11 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		UnifiedVectorFormat sformat, tformat;
-		source.ToUnifiedFormat(count, sformat);
-		target.ToUnifiedFormat(count, tformat);
-		auto sdata = UnifiedVectorFormat::GetData<const STATE_TYPE *>(sformat);
-		auto tdata = UnifiedVectorFormat::GetData<STATE_TYPE *>(tformat);
+		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
+		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
 		for (idx_t i = 0; i < count; i++) {
-			auto sidx = sformat.sel->get_index(i);
-			auto tidx = tformat.sel->get_index(i);
-			OP::template Combine<STATE_TYPE, OP>(*sdata[sidx], *tdata[tidx], aggr_input_data);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i], *tdata[i], aggr_input_data);
 		}
 	}
 
@@ -506,12 +501,9 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
-		UnifiedVectorFormat sformat;
-		states.ToUnifiedFormat(count, sformat);
-		auto sdata = UnifiedVectorFormat::GetData<STATE_TYPE *>(sformat);
+		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		for (idx_t i = 0; i < count; i++) {
-			auto sidx = sformat.sel->get_index(i);
-			OP::template Destroy<STATE_TYPE>(*sdata[sidx], aggr_input_data);
+			OP::template Destroy<STATE_TYPE>(*sdata[i], aggr_input_data);
 		}
 	}
 };
