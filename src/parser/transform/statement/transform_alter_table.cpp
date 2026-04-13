@@ -82,15 +82,10 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	// Reinstate the original default expression.
 	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
 
-	auto test0 = multi_statement->statements[0]->ToString();
-	auto test1 = multi_statement->statements[1]->ToString();
-	auto test2 = multi_statement->statements[2]->ToString();
-
 	return multi_statement;
 }
 
-unique_ptr<SQLStatement>
-Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) { // NOTE: I think its this
+unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
 	D_ASSERT(stmt.relation);
 	if (stmt.cmds->length != 1) {
 		throw ParserException("Only one ALTER command per statement is supported");
