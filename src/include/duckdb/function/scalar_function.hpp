@@ -377,8 +377,8 @@ public:
 class BindScalarFunctionInput {
 public:
 	BindScalarFunctionInput(ClientContext &context_p, ScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
+	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
+	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), binder(binder_p) {
 	}
 
 	ClientContext &GetClientContext() const {
