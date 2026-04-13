@@ -1,3 +1,4 @@
+#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
@@ -7,7 +8,6 @@
 #include "duckdb/function/window/window_index_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
-#include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -18,7 +18,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowValueGlobalState
 //===--------------------------------------------------------------------===//
-
 class WindowValueGlobalState : public WindowExecutorGlobalState {
 public:
 	using WindowCollectionPtr = unique_ptr<WindowCollection>;
@@ -139,6 +138,18 @@ void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr c
 //===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
+struct WindowValueExecutor {
+	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+};
+
 unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	function.return_type = arguments[0]->return_type;
@@ -295,6 +306,20 @@ void WindowLeadLagLocalState::Finalizer(ExecutionContext &context, CollectionPtr
 //===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
+struct WindowLeadLagExecutor : public WindowValueExecutor {
+public:
+	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
                                                      vector<unique_ptr<Expression>> &arguments) {
 	WindowValueExecutor::Bind(context, function, arguments);
@@ -316,13 +341,14 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	auto local = WindowLeadLagExecutor::GetLocal;
 	auto sink = WindowLeadLagLocalState::Sinker;
 	auto finalize = WindowLeadLagLocalState::Finalizer;
+	auto evaluate = WindowLeadLagExecutor::GetData;
 
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 type, bind, bounds, sharing, global, local, sink, finalize));
+	                                 type, bind, bounds, sharing, global, local, sink, finalize, evaluate));
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds,
-	                                 sharing, global, local, sink, finalize));
+	                                 sharing, global, local, sink, finalize, evaluate));
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global, local,
-	                                 sink, finalize));
+	                                 sink, finalize, evaluate));
 
 	return funcs;
 }
@@ -365,13 +391,15 @@ unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocal(ExecutionContext &con
 	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
-void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                             Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                    idx_t row_idx, OperatorSinkInput &sink) {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
 	auto &llstate = sink.local_state.Cast<WindowLeadLagLocalState>();
 	const auto count = eval_chunk.size();
 	auto &cursor = *llstate.cursor;
 
+	auto &wexpr = glstate.executor.wexpr;
+	auto &child_idx = glstate.executor.child_idx;
 	const bool has_offset = (child_idx.size() > 1);
 	const bool has_default = (child_idx.size() > 2);
 
@@ -527,17 +555,22 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // WindowFirstValueExecutor
 //===--------------------------------------------------------------------===//
+struct WindowFirstValueExecutor : public WindowValueExecutor {
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
 	                   WindowFirstValueExecutor::Bind, WindowFirstValueExecutor::GetBounds,
 	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal,
 	                   WindowFirstValueExecutor::GetLocal, WindowValueLocalState::Sinker,
-	                   WindowValueLocalState::Finalizer);
+	                   WindowValueLocalState::Finalizer, WindowFirstValueExecutor::GetData);
 	return fun;
 }
 
-void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                                Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
@@ -588,16 +621,22 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 //===--------------------------------------------------------------------===//
 // WindowLastValueExecutor
 //===--------------------------------------------------------------------===//
+struct WindowLastValueExecutor : public WindowValueExecutor {
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 WindowFunction LastValueFun::GetFunction() {
-	WindowFunction fun(
-	    Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE, WindowLastValueExecutor::Bind,
-	    WindowLastValueExecutor::GetBounds, WindowLastValueExecutor::GetSharing, WindowLastValueExecutor::GetGlobal,
-	    WindowLastValueExecutor::GetLocal, WindowValueLocalState::Sinker, WindowValueLocalState::Finalizer);
+	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
+	                   WindowLastValueExecutor::Bind, WindowLastValueExecutor::GetBounds,
+	                   WindowLastValueExecutor::GetSharing, WindowLastValueExecutor::GetGlobal,
+	                   WindowLastValueExecutor::GetLocal, WindowValueLocalState::Sinker,
+	                   WindowValueLocalState::Finalizer, WindowLastValueExecutor::GetData);
 	return fun;
 }
 
-void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
@@ -654,17 +693,22 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowNthValueExecutor
 //===--------------------------------------------------------------------===//
+struct WindowNthValueExecutor : public WindowValueExecutor {
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 WindowFunction NthValueFun::GetFunction() {
-	WindowFunction fun(Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ExpressionType::WINDOW_NTH_VALUE, WindowNthValueExecutor::Bind,
-	                   WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
-	                   WindowNthValueExecutor::GetGlobal, WindowNthValueExecutor::GetLocal,
-	                   WindowValueLocalState::Sinker, WindowValueLocalState::Finalizer);
+	WindowFunction fun(
+	    Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_NTH_VALUE,
+	    WindowNthValueExecutor::Bind, WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
+	    WindowNthValueExecutor::GetGlobal, WindowNthValueExecutor::GetLocal, WindowValueLocalState::Sinker,
+	    WindowValueLocalState::Finalizer, WindowNthValueExecutor::GetData);
 	return fun;
 }
 
-void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                              Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                     Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
@@ -673,6 +717,7 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
+	const auto &child_idx = gvstate.executor.child_idx;
 	const auto nth_idx = child_idx[1];
 	WindowInputExpression nth_col(eval_chunk, nth_idx);
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
@@ -729,6 +774,22 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 //===--------------------------------------------------------------------===//
 // WindowFillExecutor
 //===--------------------------------------------------------------------===//
+struct WindowFillExecutor : public WindowValueExecutor {
+	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
+	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 template <class TO, class FROM>
 TO LossyFillCast(FROM val) {
 	return LossyNumericCast<TO, FROM>(val);
@@ -1085,7 +1146,7 @@ WindowFunction FillFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
 	                   WindowFillExecutor::GetGlobal, WindowFillExecutor::GetLocal, WindowFillLocalState::Sinker,
-	                   WindowFillLocalState::Finalizer);
+	                   WindowFillLocalState::Finalizer, WindowFillExecutor::GetData);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
 
 	//! Never ignore nulls (that's the point!)
@@ -1105,8 +1166,8 @@ unique_ptr<LocalSinkState> WindowFillExecutor::GetLocal(ExecutionContext &contex
 	return make_uniq<WindowFillLocalState>(context, gfstate);
 }
 
-void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                          Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                 idx_t row_idx, OperatorSinkInput &sink) {
 	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
 	const auto count = eval_chunk.size();
 	auto &cursor = *lfstate.cursor;
@@ -1128,6 +1189,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 	idx_t prev_valid = DConstants::INVALID_INDEX;
 	idx_t next_valid = DConstants::INVALID_INDEX;
 
+	const auto &wexpr = gfstate.executor.wexpr;
 	auto interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->return_type);
 	auto value_func = GetFillValueFunction(wexpr.children[0]->return_type);
 

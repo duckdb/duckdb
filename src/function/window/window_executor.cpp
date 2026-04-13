@@ -100,4 +100,11 @@ void WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collectio
 	}
 }
 
+void WindowExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+	if (wexpr.window && wexpr.window->HasEvaluateCallback()) {
+		wexpr.window->GetEvaluateCallback()(context, eval_chunk, bounds, result, row_idx, sink);
+	}
+}
+
 } // namespace duckdb

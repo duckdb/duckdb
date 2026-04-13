@@ -1,4 +1,4 @@
-#include "duckdb/function/window/window_rownumber_function.hpp"
+#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
@@ -86,11 +86,24 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
+struct WindowRowNumberExecutor {
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 WindowFunction RowNumberFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr,
-	                   WindowRowNumberExecutor::GetBounds, WindowRowNumberExecutor::GetSharing,
-	                   WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal,
-	                   WindowRowNumberLocalState::Sinker, WindowRowNumberLocalState::Finalizer);
+	WindowFunction fun(
+	    Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr, WindowRowNumberExecutor::GetBounds,
+	    WindowRowNumberExecutor::GetSharing, WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal,
+	    WindowRowNumberLocalState::Sinker, WindowRowNumberLocalState::Finalizer, WindowRowNumberExecutor::GetData);
 	return fun;
 }
 
@@ -129,8 +142,8 @@ unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocal(ExecutionContext &c
 	return make_uniq<WindowRowNumberLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
-void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
 	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	const auto count = eval_chunk.size();
@@ -160,6 +173,16 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowNtileExecutor
 //===--------------------------------------------------------------------===//
+// NTILE is just scaled ROW_NUMBER
+struct WindowNtileExecutor : public WindowRowNumberExecutor {
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 class WindowNtileLocalState : public WindowRowNumberLocalState {
 public:
 	WindowNtileLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
@@ -170,7 +193,8 @@ public:
 WindowFunction NtileFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
 	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal,
-	                   WindowNtileExecutor::GetLocal, WindowNtileLocalState::Sinker, WindowNtileLocalState::Finalizer);
+	                   WindowNtileExecutor::GetLocal, WindowNtileLocalState::Sinker, WindowNtileLocalState::Finalizer,
+	                   WindowNtileExecutor::GetData);
 	return fun;
 }
 
@@ -189,8 +213,8 @@ unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocal(ExecutionContext &conte
 	return make_uniq<WindowNtileLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
-void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                           Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                  idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
 	const auto count = eval_chunk.size();
 
@@ -202,7 +226,7 @@ void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk 
 		partition_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	}
 	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
-	const auto ntile_idx = child_idx[0];
+	const auto ntile_idx = grstate.executor.child_idx[0];
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {
