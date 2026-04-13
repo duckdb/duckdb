@@ -729,7 +729,8 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	for (idx_t k = 0; k < key_count; k++) {
 		// Cast to storage type, only insert if it succeeds
 		auto value = build_vector.GetValue(k);
-		if (!value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
+		if (info.columns[filter_idx].storage_type.IsValid() &&
+		    !value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
 			return; // it's all or nothing sadly
 		}
 		unique_ht_values.insert(value);
@@ -826,12 +827,13 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto max_val = final_min_max->data[max_idx].GetValue(0);
 
 			// Cast to storage type, skip if fails
-			D_ASSERT(pushdown_column.storage_type.IsValid());
-			if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-				continue;
-			}
-			if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-				continue;
+			if (pushdown_column.storage_type.IsValid()) {
+				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
 			}
 
 			if (min_val.IsNull() || max_val.IsNull()) {
