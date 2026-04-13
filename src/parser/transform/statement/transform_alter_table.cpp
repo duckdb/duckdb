@@ -29,6 +29,7 @@ vector<string> Transformer::TransformNameList(duckdb_libpgquery::PGList &list) {
 void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, unique_ptr<AlterInfo> alter_info) {
 	auto alter_statement = make_uniq<AlterStatement>();
 	alter_statement->info = std::move(alter_info);
+	alter_statement->query = alter_statement->ToString();
 	multi_statement->statements.push_back(std::move(alter_statement));
 }
 
@@ -49,6 +50,7 @@ void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement
 	set_info->expressions.push_back(original_expression->Copy());
 	update_statement->set_info = std::move(set_info);
 
+	update_statement->query = update_statement->ToString();
 	multi_statement->statements.push_back(std::move(update_statement));
 }
 
@@ -73,17 +75,22 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
 
-	// 2. `UPDATE t SET u = <expression>;`
+	// 2. `UPDATE t SET col = <expression>;`
 	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);
 
-	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	// 3. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
 	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+
+	auto test0 = multi_statement->statements[0]->ToString();
+	auto test1 = multi_statement->statements[1]->ToString();
+	auto test2 = multi_statement->statements[2]->ToString();
 
 	return multi_statement;
 }
 
-unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
+unique_ptr<SQLStatement>
+Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) { // NOTE: I think its this
 	D_ASSERT(stmt.relation);
 	if (stmt.cmds->length != 1) {
 		throw ParserException("Only one ALTER command per statement is supported");
