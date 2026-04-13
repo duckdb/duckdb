@@ -529,7 +529,7 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 		if (stats.GetType().id() != LogicalTypeId::VARCHAR || key_type.id() != LogicalTypeId::VARCHAR) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
+		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		min = Value(StringStats::Min(stats));
