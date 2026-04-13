@@ -163,7 +163,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
-			        type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			        type.id() == LogicalTypeId::AGGREGATE_STATE || type.id() == LogicalTypeId::TYPE) {
 				    return true;
 			    }
 			    if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
@@ -174,7 +174,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			return;
 		}
 
-		Vector intermediate(LogicalType::VARIANT(), true, false, count);
+		Vector intermediate(LogicalType::VARIANT(), count);
 
 		//! First cast to VARIANT
 		if (HasContext()) {
@@ -185,7 +185,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		intermediate.Verify(count);
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
-		Vector result(vector.GetType(), true, false, count);
+		Vector result(vector.GetType(), count);
 		//! Then cast back into the original type
 		if (HasContext()) {
 			VectorOperations::Cast(GetContext(), intermediate, result, count, true);
@@ -301,6 +301,8 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+	case ExpressionClass::BOUND_FUNCTION:
+		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel, false_sel);
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
@@ -362,7 +364,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();
 	}
-	if (!idata.validity.AllValid()) {
+	if (idata.validity.CanHaveNull()) {
 		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
 	} else {
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);

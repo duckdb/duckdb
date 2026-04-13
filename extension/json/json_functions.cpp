@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "json_functions.hpp"
 
 #include "duckdb/common/file_system.hpp"
@@ -159,6 +162,8 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
+	functions.push_back(GetMergePatchDiffFunction());
+	functions.push_back(GetDeepMergeFunction());
 
 	// Structure/Transform
 	functions.push_back(GetStructureFunction());
@@ -178,6 +183,8 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetDeserializeSqlFunction());
 
 	functions.push_back(GetPrettyPrintFunction());
+	functions.push_back(GetNormalizeFunction());
+	functions.push_back(GetStripNullsFunction());
 
 	return functions;
 }
@@ -352,7 +359,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 		    }
 
 		    // Populate list
-		    const auto result_jsons = FlatVector::GetData<string_t>(ListVector::GetEntry(result));
+		    const auto result_jsons = FlatVector::GetDataMutable<string_t>(ListVector::GetEntry(result));
 		    size_t arr_idx, max;
 		    yyjson_val *val;
 		    yyjson_arr_foreach(doc->root, arr_idx, max, val) {

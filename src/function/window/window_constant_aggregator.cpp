@@ -36,7 +36,7 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
                                                                          const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, STANDARD_VECTOR_SIZE), statef(client, aggr) {
 	// Locate the partition boundaries
-	if (partition_mask.AllValid()) {
+	if (partition_mask.CannotHaveNull()) {
 		partition_offsets.emplace_back(0);
 	} else {
 		idx_t entry_idx;
@@ -230,7 +230,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	    1;
 
 	auto state_f_data = statef.GetData();
-	auto state_p_data = FlatVector::GetData<data_ptr_t>(statep);
+	auto state_p_data = FlatVector::GetDataMutable<data_ptr_t>(statep);
 
 	auto &child_idx = gstate.aggregator.child_idx;
 	for (column_t c = 0; c < child_idx.size(); ++c) {

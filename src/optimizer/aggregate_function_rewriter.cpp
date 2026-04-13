@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -144,6 +145,106 @@ public:
 	}
 };
 
+//! list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+class BindingMatcher : public ExpressionMatcher {
+public:
+	explicit BindingMatcher(idx_t binding_idx) : ExpressionMatcher(ExpressionClass::INVALID), binding_idx(binding_idx) {
+	}
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override {
+		if (!expr.Equals(bindings[binding_idx])) {
+			return false;
+		}
+		bindings.push_back(expr);
+		return true;
+	}
+
+	const idx_t binding_idx;
+};
+
+class OrderedAggregateMatcher : public ExpressionMatcher {
+public:
+	OrderedAggregateMatcher() : ExpressionMatcher(ExpressionClass::BOUND_AGGREGATE) {
+	}
+
+	bool Match(Expression &expr_p, vector<reference<Expression>> &bindings) override {
+		if (!ExpressionMatcher::Match(expr_p, bindings)) {
+			return false;
+		}
+		auto &expr = expr_p.Cast<BoundAggregateExpression>();
+		if (!FunctionMatcher::Match(function, expr.function.name)) {
+			return false;
+		}
+		if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
+			return false;
+		}
+		if (!expr.order_bys && !order_bys.empty()) {
+			return false;
+		}
+		if (order_bys.size() != expr.order_bys->orders.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < order_bys.size(); ++i) {
+			if (!order_bys[i]->Match(*expr.order_bys->orders[i].expression, bindings)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The function name to match
+	unique_ptr<FunctionMatcher> function;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+	//! The matchers for the order by expressions
+	vector<unique_ptr<ExpressionMatcher>> order_bys;
+};
+
+class ListRewriteRule : public AggregateRewriteRule {
+public:
+	explicit ListRewriteRule(Optimizer &optimizer) : AggregateRewriteRule(optimizer) {
+		auto op = make_uniq<OrderedAggregateMatcher>();
+		op->function = make_uniq<SpecificFunctionMatcher>("list");
+		op->policy = SetMatcher::Policy::ORDERED;
+		op->matchers.push_back(make_uniq<StableExpressionMatcher>());
+		op->order_bys.emplace_back(make_uniq<BindingMatcher>(idx_t(1)));
+
+		matcher = std::move(op);
+	}
+
+	bool ShouldSkip(const LogicalAggregate &aggr) const override {
+		return false;
+	}
+
+	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
+	                               vector<unique_ptr<Expression>> &additional_expressions) override;
+
+	unique_ptr<Expression> CreateProjectionExpression(const LogicalType &, unique_ptr<Expression> aggr_ref,
+	                                                  vector<unique_ptr<Expression>> addnl) override {
+		return optimizer.BindScalarFunction("list_sort", std::move(aggr_ref), std::move(addnl[0]), std::move(addnl[1]));
+	}
+};
+
+unique_ptr<Expression> ListRewriteRule::Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
+                                                vector<unique_ptr<Expression>> &additional_expressions) {
+	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
+
+	auto &order_bys = aggr.order_bys;
+	auto &order_by = order_bys->orders[0];
+
+	auto sense = make_uniq<BoundConstantExpression>(EnumUtil::ToChars(order_by.type));
+	auto nulls = make_uniq<BoundConstantExpression>(EnumUtil::ToChars(order_by.null_order));
+
+	additional_expressions.emplace_back(std::move(sense));
+	additional_expressions.emplace_back(std::move(nulls));
+
+	order_bys.reset();
+
+	return nullptr;
+}
+
 //! Internal LogicalOperatorVisitor that does the actual rewriting
 class AggregateFunctionRewriterInternal : public LogicalOperatorVisitor {
 public:
@@ -218,11 +319,13 @@ private:
 			RewriteInfo rewrite_info;
 			auto count_arg = rule.Rewrite(expr, bindings, rewrite_info.additional_expressions);
 
-			// Add COUNT(x) to the aggregate list
+			// Add COUNT([x]) to the aggregate list
 			FunctionBinder function_binder(optimizer.context);
 			const auto count_fun = CountFunctionBase::GetFunction();
 			vector<unique_ptr<Expression>> count_args;
-			count_args.push_back(std::move(count_arg));
+			if (count_arg) {
+				count_args.push_back(std::move(count_arg));
+			}
 			auto count_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_args), nullptr,
 			                                                        AggregateType::NON_DISTINCT);
 
@@ -242,16 +345,16 @@ private:
 
 		// Pass group bindings through and register them in the aggregate_map
 		for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
-			ColumnBinding aggregate_binding(aggr.group_index, group_idx);
-			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, group_idx);
+			ColumnBinding aggregate_binding(aggr.group_index, ProjectionIndex(group_idx));
+			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, ProjectionIndex(group_idx));
 			auto group_ref =
 			    make_uniq<BoundColumnRefExpression>(aggr.groups[group_idx]->return_type, aggregate_binding);
 			projection_expressions.push_back(std::move(group_ref));
 		}
 
 		for (idx_t i = 0; i < aggr_count; i++) {
-			ColumnBinding aggregate_binding(aggr.aggregate_index, i);
-			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, group_count + i);
+			ColumnBinding aggregate_binding(aggr.aggregate_index, ProjectionIndex(i));
+			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, ProjectionIndex(group_count + i));
 			auto &aggr_type = aggr.expressions[i]->return_type;
 			auto aggr_ref = make_uniq<BoundColumnRefExpression>(aggr_type, aggregate_binding);
 
@@ -263,7 +366,7 @@ private:
 			}
 
 			auto &rewrite_info = rewrite_entry->second;
-			ColumnBinding count_binding(aggr.aggregate_index, rewrite_info.count_idx);
+			ColumnBinding count_binding(aggr.aggregate_index, ProjectionIndex(rewrite_info.count_idx));
 			auto count_ref = make_uniq<BoundColumnRefExpression>(aggr.expressions[rewrite_info.count_idx]->return_type,
 			                                                     count_binding);
 
@@ -290,6 +393,7 @@ private:
 AggregateFunctionRewriter::AggregateFunctionRewriter(Optimizer &optimizer) : optimizer(optimizer) {
 	rules.push_back(make_uniq<AvgRewriteRule>(optimizer));
 	rules.push_back(make_uniq<SumRewriteRule>(optimizer));
+	rules.push_back(make_uniq<ListRewriteRule>(optimizer));
 }
 
 AggregateFunctionRewriter::~AggregateFunctionRewriter() {

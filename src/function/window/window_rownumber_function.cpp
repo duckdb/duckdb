@@ -1,6 +1,8 @@
 #include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -11,11 +13,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowRowNumberGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowRowNumberGlobalState(ClientContext &client, const WindowRowNumberExecutor &executor,
-	                           const idx_t payload_count, const ValidityMask &partition_mask,
-	                           const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      ntile_idx(executor.ntile_idx) {
+	WindowRowNumberGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
+	                           const ValidityMask &partition_mask, const ValidityMask &order_mask)
+	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask) {
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
 
@@ -38,9 +38,6 @@ public:
 
 	//! The token tree for ORDER BY arguments
 	unique_ptr<WindowTokenTree> token_tree;
-
-	//! The evaluation index for NTILE
-	const column_t ntile_idx;
 };
 
 //===--------------------------------------------------------------------===//
@@ -53,20 +50,6 @@ public:
 		if (grstate.token_tree) {
 			local_tree = grstate.token_tree->GetLocalState(context);
 		}
-
-		auto &required = state.required;
-		required.clear();
-
-		const auto &wexpr = grstate.executor.wexpr;
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-		}
-
-		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -104,17 +87,42 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
-WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowExecutor(wexpr, shared) {
+WindowFunction RowNumberFun::GetFunction() {
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr,
+	                   WindowRowNumberExecutor::GetBounds, WindowRowNumberExecutor::GetSharing,
+	                   WindowRowNumberExecutor::GetGlobal);
+	return fun;
+}
+
+void WindowRowNumberExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+	}
+}
+
+void WindowRowNumberExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
+	const auto &wexpr = executor.wexpr;
+
+	auto &child_idx = executor.child_idx;
+	for (auto &child : wexpr.children) {
+		child_idx.emplace_back(shared.RegisterEvaluate(child));
+	}
+
+	auto &arg_order_idx = executor.arg_order_idx;
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                                    const ValidityMask &partition_mask,
-                                                                    const ValidityMask &order_mask) const {
-	return make_uniq<WindowRowNumberGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
+                                                               const idx_t payload_count,
+                                                               const ValidityMask &partition_mask,
+                                                               const ValidityMask &order_mask) {
+	return make_uniq<WindowRowNumberGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocalState(ExecutionContext &context,
@@ -126,7 +134,7 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
                                                idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 
 	if (grstate.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
@@ -157,28 +165,24 @@ class WindowNtileLocalState : public WindowRowNumberLocalState {
 public:
 	WindowNtileLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
 	    : WindowRowNumberLocalState(context, grstate) {
-		const auto &wexpr = grstate.executor.wexpr;
-
-		auto &required = state.required;
-		required.clear();
-
-		if (wexpr.arg_orders.empty()) {
-			required.insert(PARTITION_BEGIN);
-			required.insert(PARTITION_END);
-		} else {
-			// Secondary orders need to know where the frame is
-			required.insert(FRAME_BEGIN);
-			required.insert(FRAME_END);
-		}
-
-		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 };
 
-WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowRowNumberExecutor(wexpr, shared) {
-	// NTILE has one argument
-	ntile_idx = shared.RegisterEvaluate(wexpr.children[0]);
+WindowFunction NtileFun::GetFunction() {
+	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
+	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal);
+	return fun;
+}
+
+void WindowNtileExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+	if (wexpr.arg_orders.empty()) {
+		required.insert(PARTITION_BEGIN);
+		required.insert(PARTITION_END);
+	} else {
+		// Secondary orders need to know where the frame is
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+	}
 }
 
 unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocalState(ExecutionContext &context,
@@ -197,7 +201,8 @@ void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk 
 		partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
 		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
 	}
-	auto rdata = FlatVector::GetData<int64_t>(result);
+	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
+	const auto ntile_idx = child_idx[0];
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {

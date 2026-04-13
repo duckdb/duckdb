@@ -81,7 +81,7 @@ private:
 	vector<reference<ColumnCheckpointState>> &checkpoint_states;
 	StorageManager &storage_manager;
 	const RowGroup &row_group;
-	Vector intermediate;
+	DataChunk intermediate;
 	ColumnCheckpointInfo &checkpoint_info;
 
 	bool has_changes = false;

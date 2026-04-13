@@ -1,10 +1,25 @@
 #include "writer/enum_column_writer.hpp"
+
+#include <utility>
+
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
 
 namespace duckdb {
+class Vector;
+
 using duckdb_parquet::Encoding;
 
 class EnumWriterPageState : public ColumnWriterPageState {
@@ -19,7 +34,7 @@ public:
 EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                    vector<string> schema_path_p)
     : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
-	bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(Type()));
+	bit_width = RleBpDecoder::ComputeBitWidthFromValueCount(EnumType::GetSize(Type()));
 }
 
 unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {

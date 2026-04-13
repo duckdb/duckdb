@@ -351,21 +351,22 @@ struct ArrowBignum {
 
 struct ArrowBool8 {
 	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		auto source_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(source));
-		auto result_ptr = reinterpret_cast<bool *>(FlatVector::GetData(result));
+		auto source_ptr = FlatVector::GetData<int8_t>(source);
+		auto result_ptr = FlatVector::GetDataMutable<bool>(result);
 		for (idx_t i = 0; i < count; i++) {
 			result_ptr[i] = source_ptr[i];
 		}
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		UnifiedVectorFormat format;
-		source.ToUnifiedFormat(count, format);
-		FlatVector::SetValidity(result, format.validity);
-		auto source_ptr = reinterpret_cast<bool *>(format.data);
-		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
+		auto entries = source.Values<bool>(count);
+		auto &result_validity = FlatVector::Validity(result);
+		auto result_ptr = FlatVector::GetDataMutable<int8_t>(result);
 		for (idx_t i = 0; i < count; i++) {
-			if (format.validity.RowIsValid(i)) {
-				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			auto entry = entries[i];
+			if (entry.IsValid()) {
+				result_ptr[i] = static_cast<int8_t>(entry.value);
+			} else {
+				result_validity.SetInvalid(i);
 			}
 		}
 	}

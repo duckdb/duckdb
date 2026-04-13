@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -12,7 +16,7 @@ namespace duckdb {
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	idx_t count = args.size();
 	idx_t args_size = args.ColumnCount();
-	auto *result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	auto &result_struct = ListVector::GetEntry(result);
 	auto &struct_entries = StructVector::GetEntries(result_struct);
 	bool truncate_flags_set = false;
@@ -111,15 +115,16 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		result_data[j].offset = offset;
 		offset += len;
 	}
-	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
-		if (args.data[child_idx].GetType() != LogicalType::SQLNULL) {
-			struct_entries[child_idx]->Slice(ListVector::GetEntry(args.data[child_idx]), selections[child_idx],
-			                                 result_size);
+	if (result_size > 0) {
+		for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
+			if (args.data[child_idx].GetType() != LogicalType::SQLNULL) {
+				struct_entries[child_idx].Slice(ListVector::GetEntry(args.data[child_idx]), selections[child_idx],
+				                                result_size);
+			}
+			struct_entries[child_idx].Flatten(result_size);
+			FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);
 		}
-		struct_entries[child_idx]->Flatten(result_size);
-		FlatVector::SetValidity((*struct_entries[child_idx]), masks[child_idx]);
 	}
-	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 
 static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,

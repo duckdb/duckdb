@@ -89,6 +89,8 @@ EXCLUDED_RULES = {
     "DefArg",
     "NoneLiteral",
     "RowOrStruct",
+    "ForEachRow",
+    "ForEachStatement",
 }
 
 

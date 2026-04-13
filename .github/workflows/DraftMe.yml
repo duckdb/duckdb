@@ -11,7 +11,7 @@ concurrency:
 jobs:
   mark-as-draft:
     name: Mark as draft
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'smvv'
     runs-on: ubuntu-latest
     steps:
       - name: Save PR number
@@ -19,8 +19,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.node_id }}
         run: |
           mkdir -p ./pr
-          echo $PR_NUMBER > ./pr/pr_number
-      - uses: actions/upload-artifact@v4
+          echo "$PR_NUMBER" > ./pr/pr_number
+      - uses: actions/upload-artifact@v7
         with:
           name: pr_number
           path: pr/

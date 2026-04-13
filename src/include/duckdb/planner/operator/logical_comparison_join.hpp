@@ -57,8 +57,8 @@ public:
 
 	static void ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                  unique_ptr<LogicalOperator> &left_child, unique_ptr<LogicalOperator> &right_child,
-	                                  const unordered_set<idx_t> &left_bindings,
-	                                  const unordered_set<idx_t> &right_bindings,
+	                                  const unordered_set<TableIndex> &left_bindings,
+	                                  const unordered_set<TableIndex> &right_bindings,
 	                                  vector<unique_ptr<Expression>> &expressions, vector<JoinCondition> &conditions);
 	static void ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                  unique_ptr<LogicalOperator> &left_child, unique_ptr<LogicalOperator> &right_child,

@@ -158,7 +158,7 @@ static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
 
 template <class T>
 static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
 	                                  [&](UpdateInfo &current) { MergeUpdateInfo<T>(current, result_data); });
 }
@@ -239,7 +239,7 @@ static void FetchCommittedValidity(UpdateInfo &info, Vector &result) {
 
 template <class T>
 static void TemplatedFetchCommitted(UpdateInfo &info, Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	MergeUpdateInfo<T>(info, result_data);
 }
 
@@ -336,7 +336,7 @@ static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, id
 template <class T>
 static void TemplatedFetchCommittedRange(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
                                          Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data);
 }
 
@@ -440,7 +440,7 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 template <class T>
 static void TemplatedFetchRow(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, idx_t row_idx,
                               Vector &result, idx_t result_idx) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<T>();
 		auto tuples = current.GetTuples();
@@ -672,7 +672,7 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 	auto &update_mask = update.validity;
 	auto tuple_data = update_info.GetData<bool>();
 
-	if (!update_mask.AllValid()) {
+	if (update_mask.CanHaveNull()) {
 		for (idx_t i = 0; i < update_info.N; i++) {
 			auto idx = update.sel->get_index(sel.get_index(i));
 			tuple_data[i] = update_mask.RowIsValidUnsafe(idx);
@@ -686,7 +686,7 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 	auto &base_mask = FlatVector::Validity(base_data);
 	auto base_tuple_data = base_info.GetData<bool>();
 	auto base_tuples = base_info.GetTuples();
-	if (!base_mask.AllValid()) {
+	if (base_mask.CanHaveNull()) {
 		for (idx_t i = 0; i < base_info.N; i++) {
 			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_tuples[i]);
 		}
@@ -706,7 +706,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element) {
-	return element.IsInlined() ? element : segment.GetStringHeap().AddBlob(element);
+	return segment.GetStringHeap().AddBlob(element);
 }
 
 template <class T>
@@ -943,7 +943,7 @@ template <class T>
 static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
                             UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
                             idx_t row_group_start) {
-	auto base_table_data = FlatVector::GetData<T>(base_data);
+	auto base_table_data = FlatVector::GetDataMutable<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
 	                              sel, row_group_start);
@@ -999,7 +999,7 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
                                idx_t count, SelectionVector &sel) {
 	auto &mask = update.validity;
 	auto &validity = stats.statistics;
-	if (!mask.AllValid() && !validity.CanHaveNull()) {
+	if (mask.CanHaveNull() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (!mask.RowIsValid(idx)) {
@@ -1007,6 +1007,9 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 				break;
 			}
 		}
+	}
+	if (!validity.CanHaveNoNull() && !mask.CheckAllInvalid(count)) {
+		validity.SetHasNoNullFast();
 	}
 	sel.Initialize(nullptr);
 	return count;
@@ -1018,7 +1021,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 	auto update_data = update.GetData<T>(update);
 	auto &mask = update.validity;
 
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
@@ -1045,17 +1048,14 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update, idx_t count,
                              SelectionVector &sel) {
-	auto update_data = update.GetDataNoConst<string_t>(update);
+	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
-	if (mask.AllValid()) {
+	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			auto &str = update_data[idx];
 			StringStats::Update(stats.statistics, str);
-			if (!str.IsInlined()) {
-				update_data[idx] = segment->GetStringHeap().AddBlob(str);
-			}
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -1069,9 +1069,6 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 				sel.set_index(not_null_count++, i);
 				auto &str = update_data[idx];
 				StringStats::Update(stats.statistics, str);
-				if (!str.IsInlined()) {
-					update_data[idx] = segment->GetStringHeap().AddBlob(str);
-				}
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
@@ -1297,6 +1294,18 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 	}
 	if (count == 0) {
 		return;
+	}
+	if (statistics_update_function == UpdateStringStatistics) {
+		// for strings - we need to push all strings we are going to place here into the string heap of the segment
+		update_p.Flatten(count);
+		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
+		auto &validity = FlatVector::Validity(update_p);
+		for (idx_t i = 0; i < count; i++) {
+			if (validity.RowIsValid(i)) {
+				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
+			}
+		}
+		update_p.ToUnifiedFormat(count, update_format);
 	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique

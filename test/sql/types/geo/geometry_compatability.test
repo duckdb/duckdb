@@ -11,10 +11,10 @@ require vector_size 2048
 
 # Make a copy of the testing database so we can make modifications
 statement ok
-copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '__TEST_DIR__/geo.db' (format BLOB);
+copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '{TEST_DIR}/geo.db' (format BLOB);
 
 statement ok
-ATTACH '__TEST_DIR__/geo.db'
+ATTACH '{TEST_DIR}/geo.db'
 
 statement ok
 USE geo;
@@ -62,7 +62,7 @@ select * from t_all_types order by id;
 query I
 select stats(g) from t_all_types limit 1
 ----
-{'extent': {'x_min': -inf, 'x_max': inf, 'y_min': -inf, 'y_max': inf}, 'has_empty_geom': true, 'has_non_empty_geom': true, 'has_empty_part': true, 'has_non_empty_part': true, 'has_null': false, 'has_no_null': true, 'approx_unique': 28}
+{'approx_unique': 28, 'extent': {'x_max': inf, 'x_min': -inf, 'y_max': inf, 'y_min': -inf}, 'has_empty_geom': true, 'has_empty_part': true, 'has_no_null': true, 'has_non_empty_geom': true, 'has_non_empty_part': true, 'has_null': false}
 
 # Additionally, there is an ART index on the geometry, so make sure we can use it and get the same results as a sequential scan.
 # (ART indexing geometries make little sense, but nevertheless its important that new geometries are converted to the same byte representation
@@ -106,7 +106,7 @@ statement ok
 DETACH geo;
 
 statement ok
-ATTACH '__TEST_DIR__/geo.db' (STORAGE_VERSION 'v1.5.0');
+ATTACH '{TEST_DIR}/geo.db' (STORAGE_VERSION 'v1.5.0');
 
 statement ok
 USE geo;
@@ -119,7 +119,7 @@ v1.5.0+
 query I
 select stats(g) from t_all_types limit 1
 ----
-{'extent': {'x_min': -inf, 'x_max': inf, 'y_min': -inf, 'y_max': inf}, 'has_empty_geom': true, 'has_non_empty_geom': true, 'has_empty_part': true, 'has_non_empty_part': true, 'has_null': false, 'has_no_null': true, 'approx_unique': 29}
+{'approx_unique': 29, 'extent': {'x_max': inf, 'x_min': -inf, 'y_max': inf, 'y_min': -inf}, 'has_empty_geom': true, 'has_empty_part': true, 'has_no_null': true, 'has_non_empty_geom': true, 'has_non_empty_part': true, 'has_null': false}
 
 # We should still ensure the index converts properly, an detects the duplicate key
 statement error
@@ -139,4 +139,4 @@ checkpoint;
 query I
 select stats(g) from t_all_types limit 1
 ----
-{'extent': {'x_min': 1.0, 'x_max': 11.0, 'y_min': 2.0, 'y_max': 12.0, 'z_min': 3.0, 'z_max': 13.0, 'm_min': 4.0, 'm_max': 14.0}, 'has_empty_geom': false, 'has_non_empty_geom': true, 'has_empty_part': false, 'has_non_empty_part': true, 'has_null': false, 'has_no_null': true, 'approx_unique': 30}
+{'approx_unique': 30, 'extent': {'m_max': 14.0, 'm_min': 4.0, 'x_max': 11.0, 'x_min': 1.0, 'y_max': 12.0, 'y_min': 2.0, 'z_max': 13.0, 'z_min': 3.0}, 'has_empty_geom': false, 'has_empty_part': false, 'has_no_null': true, 'has_non_empty_geom': true, 'has_non_empty_part': true, 'has_null': false}

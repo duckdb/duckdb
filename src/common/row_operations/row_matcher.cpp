@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/row_operations/row_matcher.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -24,8 +27,8 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	const auto &lhs_validity = lhs_format.unified.validity;
 
 #ifdef DUCKDB_SMALLER_BINARY
-	const auto LHS_ALL_VALID = lhs_validity.AllValid();
-	const auto RHS_ALL_VALID = rhs_layout.AllValid();
+	const auto LHS_ALL_VALID = lhs_validity.CannotHaveNull();
+	const auto RHS_ALL_VALID = rhs_layout.CannotHaveNull();
 #endif
 
 	// RHS
@@ -66,8 +69,8 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
 	                                               no_match_sel, no_match_count);
 #else
-	if (lhs_format.unified.validity.AllValid()) {
-		if (rhs_layout.AllValid()) {
+	if (lhs_format.unified.validity.CannotHaveNull()) {
+		if (rhs_layout.CannotHaveNull()) {
 			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true, true>(
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		} else {
@@ -75,7 +78,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		}
 	} else {
-		if (rhs_layout.AllValid()) {
+		if (rhs_layout.CannotHaveNull()) {
 			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false, true>(
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		} else {
@@ -108,11 +111,11 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 		const auto idx = sel.get_index(i);
 
 		const auto lhs_idx = lhs_sel.get_index(idx);
-		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
+		const auto lhs_null = lhs_validity.CannotHaveNull() ? false : !lhs_validity.RowIsValid(lhs_idx);
 
 		const auto &rhs_location = rhs_locations[idx];
 		const auto rhs_null =
-		    !rhs_layout.AllValid() &&
+		    rhs_layout.CanHaveNull() &&
 		    !ValidityBytes::RowIsValid(
 		        ValidityBytes(rhs_location, rhs_layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
@@ -129,7 +132,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	// Create a Vector of pointers to the start of the TupleDataLayout of the STRUCT
 	Vector rhs_struct_row_locations(LogicalType::POINTER);
 	const auto rhs_offset_in_row = rhs_layout.GetOffsets()[col_idx];
-	auto rhs_struct_locations = FlatVector::GetData<data_ptr_t>(rhs_struct_row_locations);
+	auto rhs_struct_locations = FlatVector::GetDataMutable<data_ptr_t>(rhs_struct_row_locations);
 	for (idx_t i = 0; i < match_count; i++) {
 		const auto idx = sel.get_index(i);
 		rhs_struct_locations[idx] = rhs_locations[idx] + rhs_offset_in_row;
@@ -141,7 +144,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	D_ASSERT(rhs_struct_layout.ColumnCount() == lhs_struct_vectors.size());
 
 	for (idx_t struct_col_idx = 0; struct_col_idx < rhs_struct_layout.ColumnCount(); struct_col_idx++) {
-		auto &lhs_struct_vector = *lhs_struct_vectors[struct_col_idx];
+		auto &lhs_struct_vector = lhs_struct_vectors[struct_col_idx];
 		auto &lhs_struct_format = lhs_format.children[struct_col_idx];
 		const auto &child_function = child_functions[struct_col_idx];
 		match_count = child_function.function(lhs_struct_vector, lhs_struct_format, sel, match_count, rhs_struct_layout,

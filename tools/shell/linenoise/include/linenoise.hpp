@@ -94,6 +94,7 @@ public:
 	int Edit();
 
 	static void SetCompletionCallback(linenoiseCompletionCallback *fn);
+	static void SetFormatCallback(linenoiseFormatCallback *fn);
 
 	static void SetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUpPrompt,
 	                      const char *scrollDownPrompt);
@@ -104,6 +105,7 @@ public:
 	void HandleTerminalResize();
 
 	void RefreshLine();
+	void Format();
 	bool CompleteLine(KeyPress &next_key);
 	void InsertCharacter(char c);
 	int EditInsert(char c);

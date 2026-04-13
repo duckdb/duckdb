@@ -76,6 +76,8 @@ public:
 	idx_t HeapBlockCount() const;
 	//! Sets the partition index of this tuple data allocator
 	void SetPartitionIndex(idx_t index);
+	//! Gets the partition index of this tuple data allocator
+	idx_t GetPartitionIndex() const;
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state

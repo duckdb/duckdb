@@ -22,6 +22,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
+#include "duckdb/storage/table/row_number_column_data.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -31,13 +33,14 @@ namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
     : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
-      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false),
+      has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -57,7 +60,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
     : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -123,6 +126,19 @@ void RowGroup::LoadRowIdColumnData() const {
 	row_id_is_loaded = true;
 }
 
+void RowGroup::LoadRowNumberColumnData() const {
+	if (row_number_is_loaded) {
+		return;
+	}
+	lock_guard<mutex> l(row_group_lock);
+	if (row_number_column_data) {
+		return;
+	}
+	row_number_column_data = make_uniq<RowNumberColumnData>(GetBlockManager(), GetTableInfo());
+	row_number_column_data->count = count.load();
+	row_number_is_loaded = true;
+}
+
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	auto &res = GetColumn(c.GetPrimaryIndex());
 	return res;
@@ -130,12 +146,22 @@ ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 
 ColumnData &RowGroup::GetColumn(storage_t c) const {
 	LoadColumn(c);
-	return c == COLUMN_IDENTIFIER_ROW_ID ? *row_id_column_data : *columns[c];
+	if (c == COLUMN_IDENTIFIER_ROW_ID) {
+		return *row_id_column_data;
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
+		return *row_number_column_data;
+	}
+	return *columns[c];
 }
 
 void RowGroup::LoadColumn(storage_t c) const {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
 		LoadRowIdColumnData();
+		return;
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
+		LoadRowNumberColumnData();
 		return;
 	}
 	D_ASSERT(c < columns.size());
@@ -303,7 +329,7 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		column_scans.emplace_back(*this);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].IsRowIdColumn()) {
+		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
 			continue;
 		}
 		auto index = column_ids[i].GetPrimaryIndex();
@@ -525,7 +551,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+		if (filter.IsOnlyForZoneMapFiltering()) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -822,19 +848,6 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfoIfLoaded() const {
 	return nullptr;
 }
 
-bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
-	if (checkpoint_id == MAX_TRANSACTION_ID) {
-		// no id specified - checkpoint all committed data
-		return true;
-	}
-	// check if this row group was committed as of the current checkpoint id
-	auto vinfo = GetVersionInfoIfLoaded();
-	if (!vinfo) {
-		return true;
-	}
-	return vinfo->ShouldCheckpointRowGroup(checkpoint_id, count);
-}
-
 idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
 	if (options.insert_type == InsertedScanType::ALL_ROWS &&
 	    options.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
@@ -876,13 +889,13 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 
 void RowGroup::SetCount(idx_t count) {
 	this->count = count;
-	if (!row_id_is_loaded) {
-		lock_guard<mutex> guard(row_group_lock);
-		if (!row_id_is_loaded) {
-			return;
-		}
+	lock_guard<mutex> guard(row_group_lock);
+	if (row_id_is_loaded) {
+		row_id_column_data->count = count;
 	}
-	row_id_column_data->count = count;
+	if (row_number_is_loaded) {
+		row_number_column_data->count = count;
+	}
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
@@ -969,7 +982,7 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start) {
 	D_ASSERT(updates.ColumnCount() == 1);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 
 	auto primary_column_idx = column_path[0];
 	D_ASSERT(primary_column_idx < columns.size());
@@ -1061,7 +1074,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
-		write_data.should_checkpoint = row_group.get().ShouldCheckpointRowGroup(info.options.transaction_id);
 		result.push_back(std::move(write_data));
 	}
 
@@ -1083,10 +1095,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
-			if (!row_group_write_data.should_checkpoint) {
-				// row group should not be checkpointed - skip
-				continue;
-			}
 			auto &column = row_group.GetColumn(column_idx);
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
@@ -1107,10 +1115,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 		auto &row_group_write_data = result[row_group_idx];
 		auto &row_group = row_groups[row_group_idx].get();
-		if (!row_group_write_data.should_checkpoint) {
-			// row group should not be checkpointed - skip
-			continue;
-		}
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
 		result_row_group->columns = std::move(result_columns[row_group_idx]);
 		result_row_group->version_info = row_group.version_info.load();
@@ -1134,7 +1138,18 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	return count - vinfo->GetCommittedDeletedCount(count);
+	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
+	options.insert_type = InsertedScanType::ALL_ROWS;
+	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+	return vinfo->GetRowCount(options, count);
+}
+
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return count;
+	}
+	return vinfo->GetRowCount(transaction, count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
@@ -1252,6 +1267,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// merge row group stats into the global stats
 		auto lock = global_stats.GetLock();
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+			if (is_loaded && !is_loaded[column_idx] &&
+			    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
+				// column is not loaded from disk - don't load just to update stats
+				writer.SetHasUnloadedColumn(column_idx);
+				continue;
+			}
 			GetColumn(column_idx).MergeIntoStatistics(global_stats.GetStats(*lock, column_idx).Statistics());
 		}
 		return row_group_pointer;
@@ -1417,7 +1438,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-			if (!StringStats::HasMaxStringLength(stats)) {
+			if (!StringStats::HasMinMax(stats) || !StringStats::HasMaxStringLength(stats)) {
 				return false;
 			}
 			const idx_t max_length = StringStats::MaxStringLength(stats);
@@ -1502,6 +1523,9 @@ void RowGroup::Verify() {
 	lock_guard<mutex> guard(row_group_lock);
 	if (row_id_is_loaded) {
 		D_ASSERT(row_id_column_data->count == count);
+	}
+	if (row_number_is_loaded) {
+		D_ASSERT(row_number_column_data->count == count);
 	}
 #endif
 }

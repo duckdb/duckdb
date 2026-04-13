@@ -286,6 +286,10 @@ idx_t DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return scan_state.table_state.row_group->GetCount();
 	}
+	if (state.scan_state.row_number_base.IsValid()) {
+		// start the row number for transaction-local rows from the final row count in the base table
+		scan_state.local_state.row_number_base = state.scan_state.row_number_base.GetIndex();
+	}
 	auto &local_storage = LocalStorage::Get(context, db);
 	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
 		return scan_state.local_state.row_group->GetCount();
@@ -481,13 +485,8 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 		throw ConstraintException("CHECK constraint failed on table %s with expression %s (Unknown Error)", table.name,
 		                          check.ToString());
 	} // LCOV_EXCL_STOP
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(chunk.size(), vdata);
-
-	auto dataptr = UnifiedVectorFormat::GetData<int32_t>(vdata);
-	for (idx_t i = 0; i < chunk.size(); i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx) && dataptr[idx] == 0) {
+	for (auto entry : result.Values<int32_t>(chunk.size())) {
+		if (entry.IsValid() && entry.value == 0) {
 			throw ConstraintException("CHECK constraint failed on table %s with expression %s", table.name,
 			                          check.ToString());
 		}
@@ -1053,6 +1052,13 @@ bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, tr
 	return true;
 }
 
+optional_idx DataTableInfo::CheckpointRowGroupCount(const CheckpointOptions &options) const {
+	if (!last_seen_checkpoint.IsValid() || last_seen_checkpoint.GetIndex() != options.transaction_id) {
+		return optional_idx();
+	}
+	return checkpoint_row_group_count;
+}
+
 void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState &state) {
 	// obtain the append lock for this table
 	if (!state.append_lock) {
@@ -1131,20 +1137,6 @@ void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommi
 	row_groups->Verify();
 }
 
-static void GatherBlockIds(WriteAheadLog &log, const PersistentColumnData &column_data,
-                           unordered_set<block_id_t> &block_ids) {
-	for (const auto &pointer : column_data.pointers) {
-		const auto block_id = pointer.block_pointer.block_id;
-		if (block_id != INVALID_BLOCK && log.NewBlockInUse(block_id)) {
-			block_ids.insert(block_id);
-		}
-	}
-	// Recurse into the children.
-	for (const auto &child_column_data : column_data.child_columns) {
-		GatherBlockIds(log, child_column_data, block_ids);
-	}
-}
-
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
@@ -1167,13 +1159,6 @@ void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx
 		throw InternalException(
 		    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
 		    optimistic_count, count);
-	}
-
-	// Get all the blocks that need to be kept alive as long as the WAL is alive.
-	for (const auto &row_group_data : entry->row_group_data) {
-		for (const auto &column_data : row_group_data.column_data) {
-			GatherBlockIds(log, column_data, commit_state->GetBlockIdsInUse());
-		}
 	}
 
 	// Write any remaining (non-optimistically written) rows to the WAL.
@@ -1456,7 +1441,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector 
 	auto storage = local_storage.GetStorage(*this);
 
 	row_identifiers.Flatten(count);
-	auto ids = FlatVector::GetData<row_t>(row_identifiers);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_identifiers);
 
 	idx_t pos = 0;
 	idx_t delete_count = 0;
@@ -1647,7 +1632,8 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(transaction, *this, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
+		row_groups->Update(transaction, *this, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
+		                   updates_slice);
 	}
 }
 
@@ -1701,6 +1687,7 @@ unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 }
 
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
+	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
 	row_groups->Checkpoint(writer, global_stats);
@@ -1712,9 +1699,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	if (writer.CanOverrideBaseStats()) {
-		row_groups->SetStats(global_stats);
-	}
+	row_groups->SetStats(global_stats);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
@@ -1767,7 +1752,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	vector<unique_ptr<Expression>> expressions;
 
 	for (const auto column_index : column_indexes) {
-		auto binding = ColumnBinding(0, physical_ids.size());
+		auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(physical_ids.size()));
 		auto &col = columns.GetColumn(column_index);
 		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		expressions.push_back(std::move(ref));

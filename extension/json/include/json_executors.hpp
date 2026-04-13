@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "json_functions.hpp"
@@ -75,7 +77,7 @@ public:
 					}
 
 					auto &child_entry = ListVector::GetEntry(result);
-					auto child_vals = FlatVector::GetData<T>(child_entry);
+					auto child_vals = FlatVector::GetDataMutable<T>(child_entry);
 					auto &child_validity = FlatVector::Validity(child_entry);
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
@@ -92,7 +94,7 @@ public:
 			D_ASSERT(info.path_type == JSONCommon::JSONPathType::REGULAR);
 			unique_ptr<Vector> casted_paths;
 			if (args.data[1].GetType().id() == LogicalTypeId::VARCHAR) {
-				casted_paths = make_uniq<Vector>(args.data[1]);
+				casted_paths = make_uniq<Vector>(Vector::Ref(args.data[1]));
 			} else {
 				casted_paths = make_uniq<Vector>(LogicalTypeId::VARCHAR);
 				VectorOperations::DefaultCast(args.data[1], *casted_paths, args.size(), true);
@@ -110,10 +112,6 @@ public:
 				    }
 			    });
 		}
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-
 		JSONAllocator::AddBuffer(result, alc);
 	}
 
@@ -136,11 +134,11 @@ public:
 		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 		ListVector::Reserve(result, list_size);
-		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 		auto &list_validity = FlatVector::Validity(result);
 
 		auto &child = ListVector::GetEntry(result);
-		auto child_data = FlatVector::GetData<T>(child);
+		auto child_data = FlatVector::GetDataMutable<T>(child);
 		auto &child_validity = FlatVector::Validity(child);
 
 		idx_t offset = 0;
@@ -168,11 +166,6 @@ public:
 			offset += num_paths;
 		}
 		ListVector::SetListSize(result, offset);
-
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-
 		JSONAllocator::AddBuffer(result, alc);
 	}
 };

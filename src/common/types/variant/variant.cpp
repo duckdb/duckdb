@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -6,14 +8,14 @@ namespace duckdb {
 VariantVectorData::VariantVectorData(Vector &variant)
     : variant(variant), keys_index_validity(FlatVector::Validity(VariantVector::GetChildrenKeysIndex(variant))),
       keys(VariantVector::GetKeys(variant)) {
-	blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
-	type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
-	byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
-	keys_index_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeysIndex(variant));
-	values_index_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValuesIndex(variant));
-	values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
-	children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
-	keys_data = FlatVector::GetData<list_entry_t>(keys);
+	blob_data = FlatVector::GetDataMutable<string_t>(VariantVector::GetData(variant));
+	type_ids_data = FlatVector::GetDataMutable<uint8_t>(VariantVector::GetValuesTypeId(variant));
+	byte_offset_data = FlatVector::GetDataMutable<uint32_t>(VariantVector::GetValuesByteOffset(variant));
+	keys_index_data = FlatVector::GetDataMutable<uint32_t>(VariantVector::GetChildrenKeysIndex(variant));
+	values_index_data = FlatVector::GetDataMutable<uint32_t>(VariantVector::GetChildrenValuesIndex(variant));
+	values_data = FlatVector::GetDataMutable<list_entry_t>(VariantVector::GetValues(variant));
+	children_data = FlatVector::GetDataMutable<list_entry_t>(VariantVector::GetChildren(variant));
+	keys_data = FlatVector::GetDataMutable<list_entry_t>(keys);
 }
 
 UnifiedVariantVectorData::UnifiedVariantVectorData(const RecursiveUnifiedVectorFormat &variant)

@@ -323,7 +323,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
-			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
 				if (duckdb::FlatVector::IsNull(str_vec, r)) {
 					continue;
@@ -1204,7 +1204,6 @@ public:
 			// wrap all JSON objects in an array
 			out.Print("[");
 		}
-		out.Print("{");
 	}
 
 	bool RequiresQuotes(const duckdb::LogicalType &type) {
@@ -1228,8 +1227,9 @@ public:
 				// wrap all JSON objects in an array
 				out.Print(",");
 			}
-			out.Print("\n{");
+			out.Print("\n");
 		}
+		out.Print("{");
 		auto &data = row.data;
 		auto &is_null = row.is_null;
 		auto &types = result.types;
@@ -1630,6 +1630,7 @@ public:
 private:
 	duckdb::BoxRendererConfig config;
 	unique_ptr<duckdb::BoxRendererState> render_state;
+	unique_ptr<duckdb::ColumnDataCollectionWrapper> wrapper;
 	string error_str;
 };
 
@@ -1680,7 +1681,8 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
 	auto &con = *state.conn;
 	try {
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, materialized.Collection());
+		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
+		render_state = renderer.Prepare(*con.context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();

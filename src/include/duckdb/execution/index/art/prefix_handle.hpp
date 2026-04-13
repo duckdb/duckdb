@@ -21,7 +21,6 @@ namespace duckdb {
 class PrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
-
 	static constexpr uint8_t DEPRECATED_COUNT = 15;
 
 public:

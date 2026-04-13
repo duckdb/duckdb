@@ -1,6 +1,6 @@
 {
   "description": "Run on persistent encrypted databases as storage.",
-  "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__crypto.db' AS __test__config__crypto (ENCRYPTION_KEY 'key={BASE_TEST_NAME}');",
+  "on_init": "ATTACH '{TEST_DIR}/{BASE_TEST_NAME}__test__config__crypto.db' AS __test__config__crypto (ENCRYPTION_KEY 'key={BASE_TEST_NAME}');",
   "on_new_connection": "USE __test__config__crypto;",
   "on_load": "skip",
   "skip_compiled": "true",
@@ -62,6 +62,13 @@
         "test/sql/storage/encryption/wal/encrypted_wal_lazy_creation.test",
         "test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test_slow",
         "test/sql/copy/encryption/different_aes_engines.test"
+      ]
+    },
+    {
+      "reason": "CREATE TRIGGER requires storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/trigger/create_trigger_parse.test",
+        "test/sql/trigger/create_trigger_catalog.test"
       ]
     },
     {

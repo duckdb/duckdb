@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -99,8 +105,8 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 		auto source_idx = cast_data.source_indexes[i];
 		auto target_idx = cast_data.target_indexes[i];
 
-		auto &source_vector = *source_vectors[source_idx];
-		auto &target_vector = *target_children[target_idx];
+		auto &source_vector = source_vectors[source_idx];
+		auto &target_vector = target_children[target_idx];
 
 		auto &child_cast_info = cast_data.child_cast_info[i];
 		CastParameters child_parameters(parameters, child_cast_info.cast_data, l_state.local_states[i]);
@@ -113,10 +119,9 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	if (!cast_data.target_null_indexes.empty()) {
 		for (idx_t i = 0; i < cast_data.target_null_indexes.size(); i++) {
 			auto target_idx = cast_data.target_null_indexes[i];
-			auto &target_vector = *target_children[target_idx];
+			auto &target_vector = target_children[target_idx];
 
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 		}
 	}
 
@@ -147,7 +152,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::Validity(varchar_struct);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
@@ -156,7 +161,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, i, true);
+			result_data.SetInvalid(i);
 			continue;
 		}
 
@@ -166,13 +171,13 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			if (c > 0) {
 				string_length += SEP_LENGTH;
 			}
-			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto add_escapes = !base_children[c].GetType().IsNested();
 			auto string_length_func = add_escapes ? VectorCastHelpers::CalculateEscapedStringLength<false>
 			                                      : VectorCastHelpers::CalculateStringLength;
 
-			children[c]->Flatten(count);
-			auto &child_validity = FlatVector::Validity(*children[c]);
-			auto data = FlatVector::GetData<string_t>(*children[c]);
+			children[c].Flatten(count);
+			auto &child_validity = FlatVector::Validity(children[c]);
+			auto data = FlatVector::GetData<string_t>(children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
 				string_length += VectorCastHelpers::CalculateEscapedStringLength<true>(name, key_needs_quotes[c]);
@@ -186,8 +191,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 		}
 
-		result_data[i] = StringVector::EmptyString(result, string_length);
-		auto dataptr = result_data[i].GetDataWriteable();
+		auto &result_str = result_data[i].EmptyString(string_length);
+		auto dataptr = result_str.GetDataWriteable();
 
 		//! Serialize the struct to the string
 		idx_t offset = 0;
@@ -197,12 +202,12 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto add_escapes = !base_children[c].GetType().IsNested();
 			auto write_string_func =
 			    add_escapes ? VectorCastHelpers::WriteEscapedString<false> : VectorCastHelpers::WriteString;
 
-			auto &child_validity = FlatVector::Validity(*children[c]);
-			auto data = FlatVector::GetData<string_t>(*children[c]);
+			auto &child_validity = FlatVector::Validity(children[c]);
+			auto data = FlatVector::GetData<string_t>(children[c]);
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;
 				// "{<name>: <value>}"
@@ -220,7 +225,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 		}
 		dataptr[offset++] = is_unnamed ? ')' : '}';
-		result_data[i].Finalize();
+		result_str.Finalize();
 	}
 
 	if (constant) {
@@ -275,7 +280,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 		count = 1;
 		if (ConstantVector::IsNull(source)) {
 			// If there's only a null in there we don't need to cast anything
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return true;
 		}
 	}
@@ -293,13 +298,13 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
 	Vector varchar_keys(LogicalType::VARCHAR, total_count);
-	auto key_data = FlatVector::GetData<string_t>(varchar_keys);
+	auto key_data = FlatVector::Writer<string_t>(varchar_keys, count * field_count);
 	auto &field_types = StructType::GetChildTypes(source.GetType());
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
 			auto global_idx = row_idx * field_count + field_idx;
 			auto &field_name = field_types[field_idx].first;
-			key_data[global_idx] = StringVector::AddString(varchar_keys, field_name);
+			key_data[global_idx] = field_name;
 		}
 	}
 
@@ -312,7 +317,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	bool values_converted = true;
 	auto &map_values = MapVector::GetValues(result);
 	for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
-		auto &source_field = *source_children[field_idx];
+		auto &source_field = source_children[field_idx];
 		Vector temp_converted(MapType::ValueType(result.GetType()), count);
 		CastParameters child_params(parameters, cast_data.value_casts[field_idx].cast_data,
 		                            local_state.value_states[field_idx]);
@@ -330,12 +335,10 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	}
 
 	// Check for nulls in the source rows, and set the list data
-	UnifiedVectorFormat format;
-	source.ToUnifiedFormat(count, format);
-	auto &validity = format.validity;
-	auto list_data = ListVector::GetData(result);
+	auto validity_entries = source.Validity(count);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(format.sel->get_index(i))) { // is row null?
+		if (!validity_entries.IsValid(i)) { // is row null?
 			// Note: this must be a FlatVector because if we set it to be a ConstantVector and that was null then we've
 			// already returned
 			FlatVector::SetNull(result, i, true);

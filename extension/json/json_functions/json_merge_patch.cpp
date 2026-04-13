@@ -15,19 +15,16 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 }
 
 static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
-	UnifiedVectorFormat input_data;
-	auto &input_vector = input;
-	input_vector.ToUnifiedFormat(count, input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
+	auto entries = input.Values<string_t>(count);
 
 	// Read the documents
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(idx)) {
+		auto entry = entries[i];
+		if (!entry.IsValid()) {
 			objs[i] = nullptr;
 		} else {
 			objs[i] =
-			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, &doc->alc)->root);
+			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(entry.value, JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }
@@ -63,20 +60,14 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 
 	// Write to result vector
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
-			result_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 		} else {
-			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
+			result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	JSONAllocator::AddBuffer(result, alc);
 }
 

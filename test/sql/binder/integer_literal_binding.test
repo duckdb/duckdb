@@ -9,13 +9,13 @@ PRAGMA enable_verification
 foreach type UTINYINT USMALLINT UINTEGER UBIGINT TINYINT SMALLINT INTEGER BIGINT
 
 query I
-SELECT typeof(100::${type} + 1) == '${type}';
+SELECT typeof(100::{type} + 1) == '{type}';
 ----
 true
 
 
 query I
-SELECT typeof(100 + 1::${type}) == '${type}';
+SELECT typeof(100 + 1::{type}) == '{type}';
 ----
 true
 

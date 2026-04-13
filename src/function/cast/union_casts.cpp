@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -238,8 +242,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 	for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
 		if (!target_member_is_mapped[target_member_idx]) {
 			auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
-			target_member_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_member_vector, true);
+			ConstantVector::SetNull(target_member_vector);
 		}
 	}
 
@@ -251,7 +254,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		// Constant vector case optimization
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			// map the tag
 			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];
@@ -269,16 +272,14 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		}
 
 		// We assume that a union tag vector validity matches the union vector validity.
-		UnifiedVectorFormat source_tag_format;
-		source_tag_vector.ToUnifiedFormat(count, source_tag_format);
+		auto source_tag_entries = source_tag_vector.Values<union_tag_t>(count);
 
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-			auto source_row_idx = source_tag_format.sel->get_index(row_idx);
-			if (source_tag_format.validity.RowIsValid(source_row_idx)) {
+			auto entry = source_tag_entries[row_idx];
+			if (entry.IsValid()) {
 				// map the tag
-				auto source_tag = (UnifiedVectorFormat::GetData<union_tag_t>(source_tag_format))[source_row_idx];
-				auto target_tag = cast_data.tag_map[source_tag];
-				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
+				auto target_tag = cast_data.tag_map[entry.value];
+				FlatVector::GetDataMutable<union_tag_t>(result_tag_vector)[row_idx] =
 				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
 				// Issue: The members of the result is not always flatvectors
@@ -304,29 +305,24 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	// now construct the actual varchar vector
 	// varchar_union.Flatten(count);
 	auto &tag_vector = UnionVector::GetTags(varchar_union);
-	UnifiedVectorFormat tag_format;
-	tag_vector.ToUnifiedFormat(count, tag_format);
+	auto tag_entries = tag_vector.Values<union_tag_t>(count);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		auto tag_idx = tag_format.sel->get_index(i);
-		if (!tag_format.validity.RowIsValid(tag_idx)) {
-			FlatVector::SetNull(result, i, true);
+		auto tag_entry = tag_entries[i];
+		if (!tag_entry.IsValid()) {
+			result_data.SetInvalid(i);
 			continue;
 		}
 
-		auto tag = UnifiedVectorFormat::GetData<union_tag_t>(tag_format)[tag_idx];
+		auto tag = tag_entry.value;
 		auto &member = UnionVector::GetMember(varchar_union, tag);
-		UnifiedVectorFormat member_vdata;
-		member.ToUnifiedFormat(count, member_vdata);
-		auto mapped_idx = member_vdata.sel->get_index(i);
-		auto member_valid = member_vdata.validity.RowIsValid(mapped_idx);
-		if (member_valid) {
-			auto member_str = (UnifiedVectorFormat::GetData<string_t>(member_vdata))[mapped_idx];
-			result_data[i] = StringVector::AddString(result, member_str);
+		auto member_entries = member.Values<string_t>(count);
+		auto member_entry = member_entries[i];
+		if (member_entry.IsValid()) {
+			result_data[i] = member_entry.value;
 		} else {
-			result_data[i] = StringVector::AddString(result, "NULL");
+			result_data[i] = "NULL";
 		}
 	}
 

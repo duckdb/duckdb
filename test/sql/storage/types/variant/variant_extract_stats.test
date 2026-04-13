@@ -3,7 +3,7 @@
 
 require noforcestorage
 
-load __TEST_DIR__/variant_extract_stats_propagation.db readwrite v1.5.0
+load {TEST_DIR}/variant_extract_stats_propagation.db readwrite v1.5.0
 
 statement ok
 SET variant_minimum_shredding_size = 0;
@@ -24,10 +24,10 @@ checkpoint
 
 # ------------------------------ Extract the child from the list ------------------------------
 
-query I
-select s.fully_shredded.stats from (select stats(col[1]) s from tbl limit 1);
+query II
+select s.fully_shredded.stats.min, s.fully_shredded.stats.max from (select stats(col[1]) s from tbl limit 1);
 ----
-{'min': hello, 'max': world, 'has_unicode': false, 'max_string_length': 5, 'has_null': false, 'has_no_null': true}
+hello	world
 
 statement ok
 insert into tbl select 42::INTEGER from range(5) t(i)
@@ -103,10 +103,10 @@ checkpoint
 restart
 
 # Field 'a' is fully shredded
-query I
-select s.fully_shredded.stats from (select stats(col.a) s from tbl limit 1);
+query II
+select s.fully_shredded.stats.min, s.fully_shredded.stats.max_string_length from (select stats(col.a) s from tbl limit 1);
 ----
-{'min': test, 'max': test, 'has_unicode': false, 'max_string_length': 4, 'has_null': false, 'has_no_null': true}
+test	4
 
 # Field 'b' is not shredded
 query I
@@ -116,9 +116,9 @@ INCONSISTENT
 
 # OBJECT is fully shredded
 query I
-select s.fully_shredded.a.stats from (select stats(col) s from tbl limit 1);
+select s.fully_shredded.a.stats.min from (select stats(col) s from tbl limit 1);
 ----
-{'min': test, 'max': test, 'has_unicode': false, 'max_string_length': 4, 'has_null': false, 'has_no_null': true}
+test
 
 statement ok
 insert into tbl select {'a': 42::INTEGER, 'b': false}

@@ -504,7 +504,7 @@ void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t cou
 	const auto &validity = FlatVector::Validity(input);
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->stats.statistics);
 	} else {
 		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->stats.statistics);

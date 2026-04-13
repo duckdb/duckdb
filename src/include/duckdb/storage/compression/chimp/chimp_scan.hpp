@@ -260,7 +260,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	using INTERNAL_TYPE = typename ChimpType<T>::TYPE;
 	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 
-	T *result_data = FlatVector::GetData<T>(result);
+	T *result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto current_result_ptr = (INTERNAL_TYPE *)(result_data + result_offset);

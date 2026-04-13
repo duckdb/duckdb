@@ -10,7 +10,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Basic appender tests", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
@@ -576,7 +575,7 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 
 void setDataChunkInt32(DataChunk &chunk, idx_t col_idx, idx_t row_idx, int32_t value) {
 	auto &col = chunk.data[col_idx];
-	auto data = FlatVector::GetData<int32_t>(col);
+	auto data = FlatVector::GetDataMutable<int32_t>(col);
 	data[row_idx] = value;
 }
 
@@ -629,7 +628,7 @@ TEST_CASE("Test appending with two active normal columns", "[appender]") {
 	for (idx_t i = 0; i < 4; i++) {
 		for (idx_t j = 0; j < 2; j++) {
 			auto &col = chunk.data[j];
-			auto col_data = FlatVector::GetData<int32_t>(col);
+			auto col_data = FlatVector::GetDataMutable<int32_t>(col);
 
 			auto offset = i * STANDARD_VECTOR_SIZE;
 			for (idx_t k = 0; k < STANDARD_VECTOR_SIZE; k++) {
@@ -824,7 +823,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	atomic<bool> flush_started {false};
 
-	thread t([&]() {
+	std::thread t([&]() {
 		flush_started.store(true);
 		try {
 			app.Flush();
@@ -836,7 +835,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	// Wait until the flush thread starts, then interrupt
 	while (!flush_started.load()) {
-		this_thread::yield();
+		std::this_thread::yield();
 	}
 	// Give the flush a tiny moment to get into execution before interrupting
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));

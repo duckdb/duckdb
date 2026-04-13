@@ -62,22 +62,22 @@ Unknown TimeZone
 foreach datatype TIMESTAMP TIMESTAMPTZ
 
 query I
-SELECT 'infinity'::${datatype} AT TIME ZONE 'America/Denver';
+SELECT 'infinity'::{datatype} AT TIME ZONE 'America/Denver';
 ----
 infinity
 
 query I
-SELECT '-infinity'::${datatype} AT TIME ZONE 'America/Denver';
+SELECT '-infinity'::{datatype} AT TIME ZONE 'America/Denver';
 ----
 -infinity
 
 statement error
-SELECT 'infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
+SELECT 'infinity'::{datatype} AT TIME ZONE 'Europe/Duck';
 ----
 Unknown TimeZone
 
 statement error
-SELECT '-infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
+SELECT '-infinity'::{datatype} AT TIME ZONE 'Europe/Duck';
 ----
 Unknown TimeZone
 
@@ -203,7 +203,7 @@ NULL	NULL	NULL
 foreach utc UTC-0800 UTC-08 UTC-8 UTC-08:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -215,7 +215,7 @@ endloop
 foreach utc UTC+0500 UTC+05 UTC+5 UTC+05:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -227,7 +227,7 @@ endloop
 foreach utc UTC+1400 UTC+14 UTC+14:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -239,7 +239,7 @@ endloop
 foreach utc UTC-0 UTC-00 UTC-000 UTC-0000 UTC+0 UTC+00 UTC+000 UTC+0000
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -1063,3 +1063,19 @@ query I
 select '1962-07-31'::timestamptz;
 ----
 1962-07-31 00:00:00-07
+
+# 2026a
+# Since 2022 Moldova has observed EU transition times, that is, it
+# has sprung forward at 03:00, not 02:00, and has fallen back at
+# 04:00, not 03:00.  (Thanks to Heitor David Pinto.)
+statement ok
+set timezone='Europe/Chisinau';
+
+query IIII
+select 
+	'2022-03-27 02:00:00+02'::timestamptz,
+	'2022-03-27 03:00:00+02'::timestamptz,
+	'2022-10-30 03:00:00+03'::timestamptz,
+	'2022-10-30 04:00:00+03'::timestamptz,
+----
+2022-03-27 02:00:00+02	2022-03-27 04:00:00+03	2022-10-30 03:00:00+03	2022-10-30 03:00:00+02

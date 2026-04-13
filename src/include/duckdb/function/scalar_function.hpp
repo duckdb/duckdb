@@ -50,6 +50,22 @@ struct ScalarFunctionInfo {
 	}
 };
 
+//! Optional context passed to lambda bind callbacks
+struct BindLambdaContext {
+	virtual ~BindLambdaContext() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 class Binder;
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
@@ -116,11 +132,15 @@ typedef unique_ptr<FunctionData> (*bind_scalar_function_extended_t)(ScalarFuncti
 typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &state,
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
+//! The type to directly access the selection vector of a scalar function
+typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
+                                          SelectionVector *false_sel);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
+
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                              idx_t parameter_idx);
+                                              idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context);
 
 //! The type to bind lambda-specific parameter types
 typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
@@ -160,6 +180,10 @@ public:
 	bool HasFunctionCallback() const { return function != nullptr; }
 	scalar_function_t GetFunctionCallback() const { return function; }
 	void SetFunctionCallback(scalar_function_t callback) { function = std::move(callback); }
+
+	bool HasSelectCallback() const { return select_function != nullptr; }
+	scalar_function_select_t GetSelectCallback() const { return select_function; }
+	void SetSelectCallback(scalar_function_select_t callback) { select_function = callback; }
 
 	bool HasBindCallback() const { return bind != nullptr; };
 	bind_scalar_function_t GetBindCallback() const { return bind; };
@@ -218,6 +242,8 @@ public:
 public:
 	//! The main scalar function to execute
 	scalar_function_t function;
+	//! Direct selection callback (if any)
+	scalar_function_select_t select_function = nullptr;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
 	//! The bind function that receives extra input to perform more complex binding operations (if any)

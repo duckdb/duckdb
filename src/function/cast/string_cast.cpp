@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -58,7 +65,7 @@ static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastPara
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		auto source_sel = vdata.sel;
 		auto source_mask = vdata.validity;
-		auto result_data = FlatVector::GetData<T>(result);
+		auto result_data = FlatVector::GetDataMutable<T>(result);
 		auto &result_mask = FlatVector::Validity(result);
 
 		VectorTryCastData vector_cast_data(result, parameters);
@@ -142,8 +149,8 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	ListVector::Reserve(result, total_list_size);
 	ListVector::SetListSize(result, total_list_size);
 
-	auto list_data = ListVector::GetData(result);
-	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto child_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
@@ -174,14 +181,12 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	    cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
 	    vector_cast_data.all_converted;
 	if (!all_converted && parameters.nullify_parent) {
-		UnifiedVectorFormat inserted_column_data;
-		result_child.ToUnifiedFormat(total_list_size, inserted_column_data);
-		UnifiedVectorFormat parse_column_data;
-		varchar_vector.ToUnifiedFormat(total_list_size, parse_column_data);
+		auto result_child_validity = result_child.Validity(total_list_size);
+		auto varchar_vector_validity = varchar_vector.Validity(total_list_size);
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
-				if (!inserted_column_data.validity.RowIsValid(j) && parse_column_data.validity.RowIsValid(j)) {
+				if (!result_child_validity.IsValid(j) && varchar_vector_validity.IsValid(j)) {
 					result_mask.SetInvalid(i);
 					break;
 				}
@@ -218,7 +223,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 		if (!is_unnamed) {
 			child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
 		}
-		child_masks.emplace_back(FlatVector::Validity(*child_vectors[child_idx]));
+		child_masks.emplace_back(FlatVector::Validity(child_vectors[child_idx]));
 		child_masks[child_idx].get().SetAllInvalid(count);
 	}
 
@@ -247,8 +252,8 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	D_ASSERT(cast_data.child_cast_info.size() == result_children.size());
 
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
-		auto &child_varchar_vector = *child_vectors[child_idx];
-		auto &result_child_vector = *result_children[child_idx];
+		auto &child_varchar_vector = child_vectors[child_idx];
+		auto &result_child_vector = result_children[child_idx];
 		auto &child_cast_info = cast_data.child_cast_info[child_idx];
 		CastParameters child_parameters(parameters, child_cast_info.cast_data, lstate.local_states[child_idx]);
 		if (!child_cast_info.function(child_varchar_vector, result_child_vector, count, child_parameters)) {
@@ -293,12 +298,12 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 
 	Vector varchar_key_vector(LogicalType::VARCHAR, total_elements);
 	Vector varchar_val_vector(LogicalType::VARCHAR, total_elements);
-	auto child_key_data = FlatVector::GetData<string_t>(varchar_key_vector);
-	auto child_val_data = FlatVector::GetData<string_t>(varchar_val_vector);
+	auto child_key_data = FlatVector::GetDataMutable<string_t>(varchar_key_vector);
+	auto child_val_data = FlatVector::GetDataMutable<string_t>(varchar_val_vector);
 
 	ListVector::Reserve(result, total_elements);
 	ListVector::SetListSize(result, total_elements);
-	auto list_data = ListVector::GetData(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
@@ -392,7 +397,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 
 	auto child_count = array_size * count;
 	Vector varchar_vector(LogicalType::VARCHAR, child_count);
-	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+	auto child_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;

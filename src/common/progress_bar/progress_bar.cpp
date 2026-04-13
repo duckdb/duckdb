@@ -57,7 +57,7 @@ unique_ptr<ProgressBarDisplay> ProgressBar::DefaultProgressBarDisplay() {
 }
 
 ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,
-                         progress_bar_display_create_func_t create_display_func)
+                         const progress_bar_display_create_func_t &create_display_func)
     : executor(executor), show_progress_after(show_progress_after) {
 	if (create_display_func) {
 		display = create_display_func();

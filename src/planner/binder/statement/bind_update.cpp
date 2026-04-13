@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
@@ -18,7 +19,7 @@
 
 namespace duckdb {
 
-void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
                            TableCatalogEntry &table, vector<PhysicalIndex> &columns,
                            vector<unique_ptr<Expression>> &update_expressions,
                            vector<unique_ptr<Expression>> &projection_expressions, bool prioritize_table_when_binding) {
@@ -60,9 +61,11 @@ void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, 
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(bound_expr, root);
 
-			update_expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
-			projection_expressions.push_back(std::move(bound_expr));
+			auto bound_type = bound_expr->return_type;
+			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
+
+			update_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(bound_type, ColumnBinding(proj_index, expr_index)));
 		}
 	}
 }
@@ -104,8 +107,8 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 				break;
 			}
 		}
-		auto row_id_expr =
-		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx));
+		auto row_id_expr = make_uniq<BoundColumnRefExpression>(
+		    row_id_entry->second.type, ColumnBinding(get.table_index, ProjectionIndex(column_idx)));
 		row_id_expr->alias = row_id_entry->second.name;
 		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {
@@ -115,10 +118,14 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
+	return Bind(*stmt.node);
+}
+
+BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	unique_ptr<LogicalOperator> root;
 
 	// visit the table reference
-	auto bound_table = Bind(*stmt.table);
+	auto bound_table = Bind(*node.table);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only update base table");
 	}
@@ -130,11 +137,11 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto &table = *table_ptr;
 
 	optional_ptr<LogicalGet> get;
-	if (stmt.from_table) {
+	if (node.from_table) {
 		auto from_binder = Binder::CreateBinder(context, this);
 		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
 		bound_crossproduct.left = std::move(bound_table);
-		bound_crossproduct.right = from_binder->Bind(*stmt.from_table);
+		bound_crossproduct.right = from_binder->Bind(*node.from_table);
 		root = CreatePlan(bound_crossproduct);
 		get = &root->children[0]->Cast<LogicalGet>();
 		bind_context.AddContext(std::move(from_binder->bind_context));
@@ -151,7 +158,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto update = make_uniq<LogicalUpdate>(table);
 
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
-	if (!stmt.returning_list.empty()) {
+	if (!node.returning_list.empty()) {
 		update->return_chunk = true;
 	}
 	// bind the default values
@@ -161,9 +168,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
-	if (stmt.set_info->condition) {
+	if (node.set_info->condition) {
 		WhereBinder binder(*this, context);
-		auto condition = binder.Bind(stmt.set_info->condition);
+		auto condition = binder.Bind(node.set_info->condition);
 
 		PlanSubqueries(condition, root);
 		auto filter = make_uniq<LogicalFilter>(std::move(condition));
@@ -171,11 +178,11 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		root = std::move(filter);
 	}
 
-	D_ASSERT(stmt.set_info);
-	D_ASSERT(stmt.set_info->columns.size() == stmt.set_info->expressions.size());
+	D_ASSERT(node.set_info);
+	D_ASSERT(node.set_info->columns.size() == node.set_info->expressions.size());
 
-	auto proj_tmp = BindUpdateSet(*update, std::move(root), *stmt.set_info, table, update->columns,
-	                              stmt.prioritize_table_when_binding);
+	auto proj_tmp = BindUpdateSet(*update, std::move(root), *node.set_info, table, update->columns,
+	                              node.prioritize_table_when_binding);
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
 
@@ -190,10 +197,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	auto update_table_index = GenerateTableIndex();
 	update->table_index = update_table_index;
-	if (!stmt.returning_list.empty()) {
+	if (!node.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
+		return BindReturning(std::move(node.returning_list), table, node.table->alias, update_table_index,
 		                     std::move(update_as_logicaloperator));
 	}
 

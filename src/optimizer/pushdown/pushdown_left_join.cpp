@@ -31,7 +31,7 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_expr,
-                                                    unordered_set<idx_t> &right_bindings) {
+                                                    unordered_set<TableIndex> &right_bindings) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
@@ -44,7 +44,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_
 }
 
 static unique_ptr<LogicalOperator> CreateDummyRHS(Optimizer &optimizer, unique_ptr<LogicalOperator> &rhs_op) {
-	unordered_map<idx_t, vector<unique_ptr<Expression>>> projections_groups;
+	unordered_map<TableIndex, vector<unique_ptr<Expression>>> projections_groups;
 	auto column_bindings = rhs_op->GetColumnBindings();
 	rhs_op->ResolveOperatorTypes();
 	auto &types = rhs_op->types;
@@ -54,7 +54,7 @@ static unique_ptr<LogicalOperator> CreateDummyRHS(Optimizer &optimizer, unique_p
 		    make_uniq<BoundConstantExpression>(Value(types[i])));
 	}
 
-	auto create_proj_dummy_scan = [&](idx_t table_index) {
+	auto create_proj_dummy_scan = [&](TableIndex table_index) {
 		auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
 		auto proj = make_uniq<LogicalProjection>(table_index, std::move(projections_groups[table_index]));
 		proj->AddChild(std::move(dummy_scan));
@@ -75,7 +75,7 @@ static unique_ptr<LogicalOperator> CreateDummyRHS(Optimizer &optimizer, unique_p
 }
 
 static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewriter, Expression *expr,
-                              unordered_set<idx_t> &right_bindings) {
+                              unordered_set<TableIndex> &right_bindings) {
 	// make a copy of the expression
 	auto copy = expr->Copy();
 	// replace all BoundColumnRef expressions from the RHS with NULL constants in the copied expression
@@ -105,13 +105,9 @@ static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewrit
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<idx_t> &left_bindings,
-                                                             unordered_set<idx_t> &right_bindings) {
+                                                             unordered_set<TableIndex> &left_bindings,
+                                                             unordered_set<TableIndex> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
-	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		op = PushFiltersIntoDelimJoin(std::move(op));
-		return FinishPushdown(std::move(op));
-	}
 	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join

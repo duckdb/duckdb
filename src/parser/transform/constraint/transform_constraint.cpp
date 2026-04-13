@@ -91,7 +91,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
 		}
-		return make_uniq<CheckConstraint>(TransformExpression(constraint.raw_expr));
+		return make_uniq<CheckConstraint>(std::move(expression));
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 		return TransformForeignKeyConstraint(constraint);
@@ -132,7 +132,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		case CompressionType::COMPRESSION_AUTO:
 		case CompressionType::COMPRESSION_CONSTANT:
 		case CompressionType::COMPRESSION_EMPTY:
-			throw InvalidInputException("Compression method %d cannot be forced", constraint.compression_name);
+			throw InvalidInputException("Compression method %s cannot be forced", constraint.compression_name);
 		default:
 			break;
 		}

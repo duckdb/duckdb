@@ -45,12 +45,14 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
-	virtual idx_t GetRootIndex();
+	virtual TableIndex GetRootIndex();
 	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
 	void PrintColumnBindings();
-	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
-	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
-	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
+	static vector<ColumnBinding> GenerateColumnBindings(TableIndex table_idx, idx_t column_count);
+	static vector<LogicalType> MapTypes(const vector<LogicalType> &types,
+	                                    const vector<ProjectionIndex> &projection_map);
+	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types,
+	                                         const vector<ProjectionIndex> &projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
@@ -86,7 +88,7 @@ public:
 	}
 
 	//! Returns the set of table indexes of this operator
-	virtual vector<idx_t> GetTableIndex() const;
+	virtual vector<TableIndex> GetTableIndex() const;
 
 protected:
 	//! Resolve types for this specific operator

@@ -191,12 +191,12 @@ NULL
 foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT
 
 query I
-SELECT '0.5'::${inttype};
+SELECT '0.5'::{inttype};
 ----
 1
 
 query I
-SELECT '-0.5'::${inttype};
+SELECT '-0.5'::{inttype};
 ----
 -1
 
@@ -206,7 +206,7 @@ endloop
 foreach inttype TINYINT SMALLINT INTEGER BIGINT
 
 query I
-SELECT '0x1e'::${inttype};
+SELECT '0x1e'::{inttype};
 ----
 30
 
@@ -216,7 +216,7 @@ endloop
 foreach hex 0xfade 0Xfade 0xFADE 0XFADE 0xFaDe 0xFaDE 0XFaDe 0xfAdE
 
 query I
-SELECT '${hex}'::INT;
+SELECT '{hex}'::INT;
 ----
 64222
 
@@ -226,7 +226,7 @@ endloop
 foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT DECIMAL
 
 query I
-SELECT '0'::${inttype};
+SELECT '0'::{inttype};
 ----
 0
 
@@ -237,22 +237,22 @@ endloop
 foreach ts timestamp timestamp_ms timestamp_ns timestamp_s timestamptz
 
 query I
-SELECT ('infinity'::${ts})::VARCHAR
+SELECT ('infinity'::{ts})::VARCHAR
 ----
 infinity
 
 query I
-SELECT ('-infinity'::${ts})::VARCHAR
+SELECT ('-infinity'::{ts})::VARCHAR
 ----
 -infinity
 
 query I
-SELECT TRY_CAST('infinity' AS ${ts})
+SELECT TRY_CAST('infinity' AS {ts})
 ----
 infinity
 
 query I
-SELECT TRY_CAST('-infinity' AS ${ts})
+SELECT TRY_CAST('-infinity' AS {ts})
 ----
 -infinity
 

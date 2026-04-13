@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp" // VariableReturnBindData
@@ -23,26 +25,26 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	// We would use result.Reference(input) also for this case,
 	// but that function asserts that the logical types are the same
 	for (idx_t i = 0; i < input_children.size(); i++) {
-		result_children[i]->Reference(*input_children[i]);
+		result_children[i].Reference(input_children[i]);
 	}
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		const bool is_null = ConstantVector::IsNull(input);
-		ConstantVector::SetNull(result, is_null);
+		if (ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result);
+		}
 	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+		// set only the struct buffer's type - do not propagate to children
+		// since children reference external vectors (input children) that may have incompatible buffer types
+		result.GetBuffer()->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
-		UnifiedVectorFormat input_data;
-		input.ToUnifiedFormat(count, input_data);
+		auto validity_entries = input.Validity(count);
 
-		if (!input_data.validity.AllValid()) {
+		if (validity_entries.CanHaveNull()) {
 			auto &validity = FlatVector::Validity(result);
 
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = input_data.sel->get_index(i);
-				if (!input_data.validity.RowIsValid(idx)) {
+				if (!validity_entries.IsValid(i)) {
 					validity.SetInvalid(i);
 				}
 			}

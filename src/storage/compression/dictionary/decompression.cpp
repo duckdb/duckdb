@@ -50,7 +50,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
 	dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::GetData<string_t>(dictionary->data);
+	auto dict_child_data = FlatVector::GetDataMutable<string_t>(dictionary->data);
 	FlatVector::SetNull(dictionary->data, 0, true);
 	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
@@ -60,7 +60,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 }
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, result_offset + scan_count);
 
 	// Handling non-bitpacking-group-aligned start values;
 	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;

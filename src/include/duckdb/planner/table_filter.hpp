@@ -10,10 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/reference_map.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/column_index.hpp"
 
@@ -36,6 +32,7 @@ enum class TableFilterType : uint8_t {
 	EXPRESSION_FILTER = 9,         // an arbitrary expression
 	BLOOM_FILTER = 10,             // a probabilistic filter that can test whether a value is in a set of other value
 	PERFECT_HASH_JOIN_FILTER = 11, // perfect hash join probe pushed down
+	PREFIX_RANGE_FILTER = 12,      // probabilistic range-based filter
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
@@ -59,6 +56,10 @@ public:
 	}
 	virtual unique_ptr<Expression> ToExpression(const Expression &column) const = 0;
 
+	virtual bool IsOnlyForZoneMapFiltering() const {
+		return false;
+	}
+
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
@@ -78,66 +79,6 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
-};
-
-//! The filters in here are non-composite (only need a single column to be evaluated)
-//! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
-class TableFilterSet {
-public:
-	map<idx_t, unique_ptr<TableFilter>> filters;
-
-public:
-	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
-
-	bool Equals(TableFilterSet &other) {
-		if (filters.size() != other.filters.size()) {
-			return false;
-		}
-		for (auto &entry : filters) {
-			auto other_entry = other.filters.find(entry.first);
-			if (other_entry == other.filters.end()) {
-				return false;
-			}
-			if (!entry.second->Equals(*other_entry->second)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	static bool Equals(TableFilterSet *left, TableFilterSet *right) {
-		if (left == right) {
-			return true;
-		}
-		if (!left || !right) {
-			return false;
-		}
-		return left->Equals(*right);
-	}
-
-	unique_ptr<TableFilterSet> Copy() const {
-		auto copy = make_uniq<TableFilterSet>();
-		for (auto &it : filters) {
-			copy->filters.emplace(it.first, it.second->Copy());
-		}
-		return copy;
-	}
-
-	void Serialize(Serializer &serializer) const;
-	static TableFilterSet Deserialize(Deserializer &deserializer);
-};
-
-class DynamicTableFilterSet {
-public:
-	void ClearFilters(const PhysicalOperator &op);
-	void PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter);
-
-	bool HasFilters() const;
-	unique_ptr<TableFilterSet> GetFinalTableFilters(const PhysicalTableScan &scan,
-	                                                optional_ptr<TableFilterSet> existing_filters) const;
-
-private:
-	mutable mutex lock;
-	reference_map_t<const PhysicalOperator, unique_ptr<TableFilterSet>> filters;
 };
 
 } // namespace duckdb

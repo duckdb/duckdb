@@ -28,6 +28,7 @@ set(TEST_API_OBJECTS
     test_relation_api.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
+    test_scalar_function_select_hook.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_progress_bar.cpp
@@ -38,7 +39,10 @@ set(TEST_API_OBJECTS
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
     test_object_cache.cpp
-    test_buffer_pool_eviction.cpp)
+    test_buffer_pool_eviction.cpp
+    test_update_query_node.cpp
+    test_delete_query_node.cpp
+    test_insert_query_node.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

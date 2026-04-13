@@ -1,4 +1,16 @@
+#include <stdint.h>
+
+#include "duckdb/common/vector/array_vector.hpp"
 #include "writer/array_column_writer.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "writer/list_column_writer.hpp"
 
 namespace duckdb {
 

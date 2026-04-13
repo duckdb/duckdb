@@ -397,7 +397,7 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 }
 
 EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
+    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(Vector::Ref(values_insert_order_p)),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
 }
 
@@ -511,8 +511,7 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::Copy() const {
-	Vector values_insert_order_copy(LogicalType::VARCHAR, false, false, 0);
-	values_insert_order_copy.Reference(values_insert_order);
+	Vector values_insert_order_copy(Vector::Ref(values_insert_order));
 	return make_shared_ptr<EnumTypeInfo>(values_insert_order_copy, dict_size);
 }
 

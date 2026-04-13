@@ -25,7 +25,19 @@ unique_ptr<LogicalOperator> CTEInlining::Optimize(unique_ptr<LogicalOperator> op
 	return op;
 }
 
-static idx_t CountCTEReferences(const LogicalOperator &op, idx_t cte_index) {
+static idx_t CountBaseTableReferences(const LogicalOperator &op) {
+	idx_t number_of_references = 0;
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		number_of_references++;
+	}
+	for (auto &child : op.children) {
+		number_of_references += CountBaseTableReferences(*child);
+	}
+
+	return number_of_references;
+}
+
+static idx_t CountCTEReferences(const LogicalOperator &op, TableIndex cte_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cte = op.Cast<LogicalCTERef>();
 		if (cte.cte_index == cte_index) {
@@ -75,6 +87,23 @@ bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
 	return false;
 }
 
+static bool HasSideEffects(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+		return true;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (HasSideEffects(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
 		// we are in a prepare statement, if we have to copy an operator during inlining,
@@ -92,6 +121,10 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 		auto &cte = op->Cast<LogicalMaterializedCTE>();
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
 		if (ref_count == 0) {
+			if (HasSideEffects(*cte.children[0])) {
+				// DML CTEs must always execute for side effects even when unreferenced
+				return;
+			}
 			// this CTE is not referenced, we can remove it
 			op = std::move(op->children[1]);
 			return;
@@ -130,6 +163,13 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// Prevent inlining if the CTE ends in an aggregate or distinct operator
 			// This mimics the behavior of the CTE materialization in the binder
 			if (EndsInAggregateOrDistinct(*op->children[0])) {
+				return;
+			}
+
+			// Check how many base table references the CTE has
+			auto base_table_references = CountBaseTableReferences(*op->children[0]);
+
+			if (base_table_references > 2 && base_table_references * ref_count > 10) {
 				return;
 			}
 

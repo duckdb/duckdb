@@ -216,53 +216,51 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t scan_count) {
-	// Get src's validity mask
-	auto &validity = FlatVector::Validity(src);
-
-	auto write_ptr = dst.GetData() + offset;
-	if (validity.AllValid()) {
+void ExtractValidityMaskToData(const ValidityMask &validity, Vector &dst, idx_t offset, idx_t scan_count) {
+	auto write_ptr = FlatVector::GetDataMutable<uint8_t>(dst) + offset;
+	if (validity.CannotHaveNull()) {
 		memset(write_ptr, 1, scan_count); // 1 is for valid
 	} else if (scan_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0) {
 		// "Bit-Unpack" src's validity_mask and put it in dst's data
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(dst.GetData() + offset, data_ptr_cast(validity.GetData()),
-		                                            scan_count, 1);
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(write_ptr, data_ptr_cast(validity.GetData()), scan_count, 1);
 	} else {
 		// Because UnPackBuffer writes in batches of BITPACKING_ALGORITHM_GROUP_SIZE, we create a tmp_buffer first to
 		// prevent overflow in the case dst is smaller than the batch.
-		const auto tmp_buffer =
-		    Vector(dst.GetType(), AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(scan_count));
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(tmp_buffer.GetData(), data_ptr_cast(validity.GetData()), scan_count,
-		                                            1);
-		memcpy(write_ptr, tmp_buffer.GetData(), scan_count);
+		auto tmp_data = make_uniq_array<uint8_t>(
+		    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(scan_count));
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(tmp_data.get(), data_ptr_cast(validity.GetData()), scan_count, 1);
+		memcpy(write_ptr, tmp_data.get(), scan_count);
 	}
 }
+
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
-
-	scan_state.ScanPartial(start, result, result_offset, scan_count);
+	auto &result_mask = FlatVector::Validity(result);
+	scan_state.ScanPartial(start, result_mask, result_offset, scan_count);
 }
 void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
 
-	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
-	scan_state.ScanPartial(start, dummy, 0, scan_count);
-	ExtractValidityMaskToData(dummy, result, result_offset, scan_count);
+	ValidityMask mask(scan_count);
+	scan_state.ScanPartial(start, mask, 0, scan_count);
+	ExtractValidityMaskToData(mask, result, result_offset, scan_count);
 }
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	result.Flatten(scan_count);
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
 void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// Dummy vector, only created to capture the booleans in the validity mask, as the current RoaringScan populates the
-	// scanned data in the vector's validity mask
-	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
-	RoaringScan(segment, state, scan_count, dummy);
-	ExtractValidityMaskToData(dummy, result, 0, scan_count);
+	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
+	auto start = state.GetPositionInSegment();
+
+	ValidityMask mask(scan_count);
+	scan_state.ScanPartial(start, mask, 0, scan_count);
+	ExtractValidityMaskToData(mask, result, 0, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -275,7 +273,7 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
 	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
-	scan_state.ScanInternal(container_state, 1, result, result_idx);
+	scan_state.ScanInternal(container_state, 1, FlatVector::Validity(result), result_idx);
 }
 void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                             idx_t result_idx) {
@@ -285,9 +283,9 @@ void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
 	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
-	Vector dummy(LogicalType::UBIGINT, false, false, 1);
-	scan_state.ScanInternal(container_state, 1, dummy, 0);
-	ExtractValidityMaskToData(dummy, result, result_idx, 1);
+	ValidityMask validity(1);
+	scan_state.ScanInternal(container_state, 1, validity, 0);
+	ExtractValidityMaskToData(validity, result, result_idx, 1);
 }
 
 void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {

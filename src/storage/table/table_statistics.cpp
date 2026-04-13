@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
 
@@ -127,6 +128,9 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 	lock_guard<mutex> lock(*stats_lock);
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
+	}
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
 	}
 }
 

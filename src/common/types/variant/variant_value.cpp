@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant_value.hpp"
 #include "yyjson.hpp"
 
@@ -572,17 +576,18 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 
 //! Copied and modified from 'to_variant.cpp'
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size) {
+	auto count = offsets.size();
 	auto &keys = VariantVector::GetKeys(result);
-	auto keys_data = ListVector::GetData(keys);
+	auto keys_data = FlatVector::Writer<list_entry_t>(keys, count);
 
 	auto &children = VariantVector::GetChildren(result);
-	auto children_data = ListVector::GetData(children);
+	auto children_data = FlatVector::Writer<list_entry_t>(children, count);
 
 	auto &values = VariantVector::GetValues(result);
-	auto values_data = ListVector::GetData(values);
+	auto values_data = FlatVector::Writer<list_entry_t>(values, count);
 
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_data = FlatVector::Writer<string_t>(blob, count);
 
 	idx_t children_offset = 0;
 	idx_t values_offset = 0;
@@ -593,7 +598,6 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto values_sizes = variant::OffsetData::GetValues(offsets);
 	auto blob_sizes = variant::OffsetData::GetBlob(offsets);
 
-	auto count = offsets.size();
 	for (idx_t i = 0; i < count; i++) {
 		auto &keys_entry = keys_data[i];
 		auto &children_entry = children_data[i];
@@ -615,7 +619,7 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 		values_offset += values_entry.length;
 
 		//! value
-		blob_data[i] = StringVector::EmptyString(blob, blob_sizes[i]);
+		blob_data[i].EmptyString(blob_sizes[i]);
 	}
 
 	//! Reserve for the children of the lists
@@ -660,7 +664,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	auto &keys = VariantVector::GetKeys(result);
 	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	DataChunk conversion_offsets;
 	conversion_offsets.Initialize(

@@ -8,12 +8,26 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+
 #include "column_writer.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+
+namespace duckdb_parquet {
+class FileMetaData;
+} // namespace duckdb_parquet
 
 namespace duckdb {
 
@@ -23,7 +37,7 @@ class ColumnReader;
 class ClientContext;
 
 struct GeometryColumnReader {
-	static unique_ptr<ColumnReader> Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+	static unique_ptr<ColumnReader> Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                                       ClientContext &context);
 };
 

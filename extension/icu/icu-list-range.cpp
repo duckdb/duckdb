@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -142,7 +144,7 @@ struct ICUListRange : public ICUDateFunc {
 				break;
 			}
 		}
-		auto list_data = FlatVector::GetData<list_entry_t>(result);
+		auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		auto &result_validity = FlatVector::Validity(result);
 		int64_t total_size = 0;
 		for (idx_t i = 0; i < args_size; i++) {
@@ -159,7 +161,7 @@ struct ICUListRange : public ICUDateFunc {
 
 		// now construct the child vector of the list
 		ListVector::Reserve(result, total_size);
-		auto range_data = FlatVector::GetData<timestamp_t>(ListVector::GetEntry(result));
+		auto range_data = FlatVector::GetDataMutable<timestamp_t>(ListVector::GetEntry(result));
 		idx_t total_idx = 0;
 		for (idx_t i = 0; i < args_size; i++) {
 			timestamp_t start_value = info.StartListValue(i);

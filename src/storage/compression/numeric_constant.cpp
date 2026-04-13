@@ -2,6 +2,8 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -34,7 +36,7 @@ template <class T>
 void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &nstats = segment.stats.statistics;
 
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	auto constant_value = NumericStats::GetMin<T>(nstats);
 	for (idx_t i = 0; i < count; i++) {
 		data[start_idx + i] = constant_value;
@@ -58,9 +60,9 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
-		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
+		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			ConstantVector::SetNull(result);
 		} else {
 			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
@@ -72,7 +74,7 @@ template <class T>
 void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &nstats = segment.stats.statistics;
 
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	data[0] = NumericStats::GetMin<T>(nstats);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 }
@@ -170,7 +172,8 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		filters_nulls = bf.FiltersNullValues();
 		break;
 	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		filters_nulls = true;
 		break;
 	}

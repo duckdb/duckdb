@@ -1,0 +1,33 @@
+# name: test/sql/transactions/statement-preprocessor/multistatement_is_transactional_chained_PRAGMA.test
+# group: [statement-preprocessor]
+
+statement ok
+ATTACH '{TEST_DIR}/wal_replay.db';
+
+statement ok
+USE wal_replay;
+
+statement ok
+SET wal_autocheckpoint='1TB'
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
+
+statement error
+PRAGMA disable_checkpoint_on_shutdown; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();
+----
+non_existent_function
+
+query I
+from t;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

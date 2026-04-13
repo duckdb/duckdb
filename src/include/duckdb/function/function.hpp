@@ -33,6 +33,8 @@ class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
+class WindowFunction;
+class WindowFunctionSet;
 
 struct PragmaInfo;
 

@@ -27,6 +27,8 @@ enum class AlterType : uint8_t {
 	ALTER_DATABASE = 9
 };
 
+enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
+
 struct AlterEntryData {
 	AlterEntryData() {
 	}
@@ -60,6 +62,8 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
+	//! Determine whether to skip Bind
+	AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

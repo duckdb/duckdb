@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
 #include "duckdb/common/likely.hpp"
@@ -58,8 +62,7 @@ bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result);
 	return success;
 }
 
@@ -87,7 +90,7 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 	D_ASSERT(source_entries.size() == result_entries.size());
 
 	for (idx_t i = 0; i < source_entries.size(); i++) {
-		result_entries[i]->Reference(*source_entries[i]);
+		result_entries[i].Reference(source_entries[i]);
 	}
 
 	source.Flatten(count);
@@ -113,8 +116,7 @@ static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType 
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result);
 	return true;
 }
 

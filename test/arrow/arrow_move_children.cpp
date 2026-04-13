@@ -45,7 +45,7 @@ void AssertExpectedResult(ArrowSchema *schema, ArrowArrayWrapper &array, T expec
 		}
 		REQUIRE(chunk->ColumnCount() == 1);
 		REQUIRE(chunk->size() == STANDARD_VECTOR_SIZE);
-		auto vec = chunk->data[0];
+		auto &vec = chunk->data[0];
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 			auto value = vec.GetValue(i);
 			auto expected = Value(expected_value);

@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/scalar/map_functions.hpp"
@@ -12,10 +13,6 @@ static void MapContainsFunction(DataChunk &input, ExpressionState &state, Vector
 	auto &arg_vec = input.data[1];
 
 	ListSearchOp<bool>(map_vec, key_vec, arg_vec, result, count);
-
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 ScalarFunction MapContainsFun::GetFunction() {

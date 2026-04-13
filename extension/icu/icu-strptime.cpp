@@ -114,8 +114,7 @@ struct ICUStrptime : public ICUDateFunc {
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(fmt_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			UnaryExecutor::Execute<string_t, timestamp_t>(str_arg, result, args.size(), [&](string_t input) {
 				ParseResult parsed;
@@ -152,8 +151,7 @@ struct ICUStrptime : public ICUDateFunc {
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(fmt_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
@@ -427,8 +425,7 @@ struct ICUStrftime : public ICUDateFunc {
 		if (fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(fmt_arg)) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				StrfTimeFormat format;
 				ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);

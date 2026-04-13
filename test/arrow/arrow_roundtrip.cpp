@@ -89,6 +89,30 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
+TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
+	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
+	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons
+	// in extension metadata (e.g. CRS strings like "ogc:crs84"), causing std::stoi to crash.
+	{
+		string format = "w:16";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+	{
+		string format = "w:1";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+	{
+		string format = "w:128";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+}
+
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
@@ -186,11 +210,11 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 
 	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM lineitem_no_constraint;", false));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(
-	    con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem_no_constraint ORDER BY l_orderkey DESC;", false));
+	    con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem_no_constraint ORDER BY l_orderkey DESC;", true));
 	REQUIRE(
-	    ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem_no_constraint FROM lineitem_no_constraint;", false));
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem_no_constraint] FROM lineitem_no_constraint;",
-	                                            false));
+	    ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem_no_constraint FROM lineitem_no_constraint;", true));
+	REQUIRE(
+	    ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem_no_constraint] FROM lineitem_no_constraint;", true));
 }
 
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {

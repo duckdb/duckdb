@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -6,6 +9,8 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
 #include "duckdb/function/variant/variant_value_convert.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -186,7 +191,7 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);
 	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+	auto keys_entry_data = FlatVector::GetDataMutable<string_t>(keys_entry);
 
 	bool already_sorted = true;
 
@@ -226,7 +231,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! keys_entry
 	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(format);
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
-	D_ASSERT(keys_entry.validity.AllValid());
+	D_ASSERT(keys_entry.validity.CannotHaveNull());
 
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(format);
@@ -349,6 +354,56 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	}
 
 	return true;
+}
+
+LogicalType VariantUtils::ShreddedType(const LogicalType &logical_type) {
+	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			return LogicalType::STRUCT({{"typed_value", type}});
+		}
+		return type;
+	});
+	return LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
+}
+
+bool VariantUtils::VariantSupportsType(const LogicalType &type) {
+	if (type.IsJSONType()) {
+		return false;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::DECIMAL:
+		return true;
+	default:
+		return false;
+	}
 }
 
 } // namespace duckdb
