@@ -188,7 +188,9 @@ TEST_CASE("Lateral table in out function preserves constant struct fields", "[ta
 		CROSS JOIN LATERAL lateral_struct_echo({'outer_i': i, 'limit': 1, 'label': 'fixed'}) AS echoed
 		ORDER BY echoed.outer_i
 	)");
-	INFO(result->GetError());
+	if (result->HasError()) {
+		INFO(result->GetError());
+	}
 	REQUIRE(!result->HasError());
 	REQUIRE(result->ColumnCount() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
