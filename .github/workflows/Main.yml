@@ -1,6 +1,10 @@
 name: Main
 on:
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        type: boolean
+        default: false
   repository_dispatch:
   push:
     branches-ignore:
@@ -69,6 +73,7 @@ jobs:
       enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
       save_cache: ${{ steps.config.outputs.save_cache }}
       runner_provider: ${{ steps.config.outputs.runner_provider }}
+      skip_tests: ${{ steps.config.outputs.skip_tests }}
     env:
       GEN: ninja
     steps:
@@ -126,6 +131,8 @@ jobs:
             run_slow_tests=false
           fi
           echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && inputs.skip_tests || false }}"
+          echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
@@ -200,7 +207,8 @@ jobs:
           python3 scripts/ci/job_stages.py \
             --event "${{ github.event_name }}" \
             --ref_name "${{ github.ref_name }}" \
-            --repository "${{ github.repository }}"
+            --repository "${{ github.repository }}" \
+            --skip-tests "$skip_tests"
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
@@ -372,7 +380,7 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
-      skip_tests: false
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: true
       runners: ${{ needs.prepare.outputs.runners }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -436,7 +444,7 @@ jobs:
       with:
         build: python3 scripts/ci/retry.py -- make release
         # Run all (slow) tests for the release build.
-        test: make allunit
+        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make allunit' }}
         bundle: make release-artifact
         upload-name: linux-release-build
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -474,6 +482,7 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install pytest
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         python3 -m pip install --break-system-packages pytest
 
@@ -531,6 +540,7 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Release tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: |
         if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
@@ -540,9 +550,11 @@ jobs:
         fi
 
     - name: Tools Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
@@ -623,6 +635,7 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       env:
         RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
@@ -696,6 +709,7 @@ jobs:
         ls -lah build/release/src/libduckdb.so*
 
     - name: Run Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: |
         JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
@@ -759,7 +773,7 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
-      skip_tests: false
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: true
 
  no-string-inline:
@@ -794,6 +808,7 @@ jobs:
         run: python3 scripts/ci/retry.py -- make relassert
 
       - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
 
  vector-sizes:
@@ -823,6 +838,7 @@ jobs:
         run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_reldebug
 
  valgrind:
@@ -862,6 +878,7 @@ jobs:
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
@@ -895,10 +912,11 @@ jobs:
       run: THREADSAN=1 make reldebug
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan
 
     - name: Test Extra
-      if: github.ref_name == 'main'
+      if: ${{ github.ref_name == 'main' && !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan_extra
 
  amalgamation-tests:
