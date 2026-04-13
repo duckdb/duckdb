@@ -5,9 +5,7 @@ import sys
 from enum import Enum, auto
 from pathlib import Path
 
-parser = argparse.ArgumentParser(
-    description="Inline the auto-complete PEG grammar files"
-)
+parser = argparse.ArgumentParser(description="Inline the auto-complete PEG grammar files")
 parser.add_argument(
     "--print",
     action="store_true",
@@ -215,9 +213,7 @@ def parse_peg_grammar(grammar_text, file_offsets):
             and len(tokens) > 0
         ):
             if rule_name in rules:
-                raise RuntimeError(
-                    f"{loc(rule_start_pos)}: Duplicate rule name '{rule_name}'"
-                )
+                raise RuntimeError(f"{loc(rule_start_pos)}: Duplicate rule name '{rule_name}'")
             rules[rule_name] = {
                 "tokens": list(tokens),
                 "parameters": list(parameters),
@@ -253,28 +249,20 @@ def parse_peg_grammar(grammar_text, file_offsets):
             if ch == "(":
                 # Parse parameter
                 if parameters:
-                    raise RuntimeError(
-                        f"{loc(c)}: Multiple parameter lists in rule '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(c)}: Multiple parameter lists in rule '{rule_name}'")
                 c += 1
                 param_start = c
                 while c < length and grammar[c].isalnum():
                     c += 1
                 if c == param_start:
-                    raise RuntimeError(
-                        f"{loc(c)}: Expected parameter name in rule '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(c)}: Expected parameter name in rule '{rule_name}'")
                 parameters.append(grammar[param_start:c])
                 if c >= length or grammar[c] != ")":
-                    raise RuntimeError(
-                        f"{loc(c)}: Expected closing ')' for parameter in rule '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(c)}: Expected closing ')' for parameter in rule '{rule_name}'")
                 c += 1
             else:
                 if c + 1 >= length or grammar[c] != "<" or grammar[c + 1] != "-":
-                    raise RuntimeError(
-                        f"{loc(c)}: Expected '<-' after rule name '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(c)}: Expected '<-' after rule name '{rule_name}'")
                 c += 2
                 state = PEGParseState.RULE_DEFINITION
 
@@ -289,15 +277,11 @@ def parse_peg_grammar(grammar_text, file_offsets):
                         c += 1
                     c += 1
                 if c >= length:
-                    raise RuntimeError(
-                        f"{loc(lit_start - 1)}: Unclosed quote in rule '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(lit_start - 1)}: Unclosed quote in rule '{rule_name}'")
                 tokens.append((PEGTokenType.LITERAL, grammar[lit_start:c]))
                 c += 1
                 if c < length and grammar[c] == "i":
-                    raise RuntimeError(
-                        f"{loc(c)}: Unexpected 'i' suffix on literal in rule '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(c)}: Unexpected 'i' suffix on literal in rule '{rule_name}'")
             elif ch.isalnum():
                 # Reference or function call
                 ref_start = c
@@ -321,9 +305,7 @@ def parse_peg_grammar(grammar_text, file_offsets):
                     if c < length:
                         c += 1
                 if c >= length:
-                    raise RuntimeError(
-                        f"{loc(regex_start)}: Unclosed '{ch}' in rule '{rule_name}'"
-                    )
+                    raise RuntimeError(f"{loc(regex_start)}: Unclosed '{ch}' in rule '{rule_name}'")
                 c += 1
                 tokens.append((PEGTokenType.REGEX, grammar[regex_start:c]))
             elif ch in PEG_OPERATORS:
@@ -331,34 +313,26 @@ def parse_peg_grammar(grammar_text, file_offsets):
                     bracket_count += 1
                 elif ch == ")":
                     if bracket_count == 0:
-                        raise RuntimeError(
-                            f"{loc(c)}: Unbalanced ')' in rule '{rule_name}'"
-                        )
+                        raise RuntimeError(f"{loc(c)}: Unbalanced ')' in rule '{rule_name}'")
                     bracket_count -= 1
                 elif ch == "/":
                     in_or_clause = True
                 tokens.append((PEGTokenType.OPERATOR, ch))
                 c += 1
             else:
-                raise RuntimeError(
-                    f"{loc(c)}: Unrecognized character '{ch}' in rule '{rule_name}'"
-                )
+                raise RuntimeError(f"{loc(c)}: Unrecognized character '{ch}' in rule '{rule_name}'")
 
         if c >= length:
             break
 
     # Handle final rule
     if state == PEGParseState.RULE_SEPARATOR:
-        raise RuntimeError(
-            f"{loc(rule_start_pos)}: Rule '{rule_name}' does not have a definition"
-        )
+        raise RuntimeError(f"{loc(rule_start_pos)}: Rule '{rule_name}' does not have a definition")
     if state == PEGParseState.RULE_DEFINITION:
         if not tokens:
             raise RuntimeError(f"{loc(rule_start_pos)}: Rule '{rule_name}' is empty")
         if rule_name in rules:
-            raise RuntimeError(
-                f"{loc(rule_start_pos)}: Duplicate rule name '{rule_name}'"
-            )
+            raise RuntimeError(f"{loc(rule_start_pos)}: Duplicate rule name '{rule_name}'")
         rules[rule_name] = {
             "tokens": list(tokens),
             "parameters": list(parameters),
@@ -376,19 +350,9 @@ def validate_references(rules, rule_locations):
         loc = rule_locations[rule_name]
         for token_type, token_text in rule["tokens"]:
             if token_type in (PEGTokenType.REFERENCE, PEGTokenType.FUNCTION_CALL):
-                if (
-                    token_text not in rules
-                    and token_text not in RULE_OVERRIDES
-                    and token_text not in param_names
-                ):
-                    kind = (
-                        "calls"
-                        if token_type == PEGTokenType.FUNCTION_CALL
-                        else "references"
-                    )
-                    errors.append(
-                        f"{loc}: Rule '{rule_name}' {kind} undefined rule '{token_text}'"
-                    )
+                if token_text not in rules and token_text not in RULE_OVERRIDES and token_text not in param_names:
+                    kind = "calls" if token_type == PEGTokenType.FUNCTION_CALL else "references"
+                    errors.append(f"{loc}: Rule '{rule_name}' {kind} undefined rule '{token_text}'")
     return errors
 
 
@@ -413,15 +377,9 @@ def find_unused_rules(rules, rule_locations):
 
     warnings = []
     for rule_name in sorted(rules.keys()):
-        if (
-            rule_name not in visited
-            and rule_name not in RULE_OVERRIDES
-            and rule_name != "%whitespace"
-        ):
+        if rule_name not in visited and rule_name not in RULE_OVERRIDES and rule_name != "%whitespace":
             loc = rule_locations[rule_name]
-            warnings.append(
-                f"{loc}: Rule '{rule_name}' is defined but not reachable from 'Statement'"
-            )
+            warnings.append(f"{loc}: Rule '{rule_name}' is defined but not reachable from 'Statement'")
     return warnings
 
 

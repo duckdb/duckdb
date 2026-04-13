@@ -6,21 +6,15 @@ from pathlib import Path
 
 GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
 TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
-FACTORY_REG_FILE = Path(
-    "extension/autocomplete/transformer/peg_transformer_factory.cpp"
-)
-FACTORY_HPP_FILE = Path(
-    "extension/autocomplete/include/transformer/peg_transformer.hpp"
-)
+FACTORY_REG_FILE = Path("extension/autocomplete/transformer/peg_transformer_factory.cpp")
+FACTORY_HPP_FILE = Path("extension/autocomplete/include/transformer/peg_transformer.hpp")
 
 # Matches: PEGTransformerFactory::TransformRuleName(
 TRANSFORMER_REGEX = re.compile(r"PEGTransformerFactory::Transform(\w+)\s*\(")
 
 # Matches: static ReturnType TransformRuleName(PEGTransformer ...
 # Used to extract declared return types from the header file.
-DECLARATION_REGEX = re.compile(
-    r"static\s+([\w<>:, *]+?)\s+Transform(\w+)\s*\(PEGTransformer"
-)
+DECLARATION_REGEX = re.compile(r"static\s+([\w<>:, *]+?)\s+Transform(\w+)\s*\(PEGTransformer")
 
 # Matches: RegisterEnum<...>("RuleName", ...);
 ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
@@ -148,7 +142,7 @@ def find_grammar_rules(grammar_path):
             rule_name = match.group(1)
             return_type = match.group(2)  # None if no annotation
             end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-            rule_text = " ".join(content[match.start():end].split())
+            rule_text = " ".join(content[match.start() : end].split())
             rules_in_file.append((rule_name, rule_text, return_type))
         all_rules_by_file[file_path.name] = (file_path, rules_in_file)
 
@@ -335,9 +329,7 @@ def generate_code_for_missing_rules(generation_queue, rule_definitions=None):
 
         # Constraint: Do not generate code for non-existent files
         if not cpp_path.is_file():
-            print(
-                f"\n// --- SKIPPING: {rule_name} (File not found: {cpp_filename}) ---"
-            )
+            print(f"\n// --- SKIPPING: {rule_name} (File not found: {cpp_filename}) ---")
             continue
 
         rule_text, return_type = rule_definitions.get(rule_name, ("", None))
@@ -346,9 +338,7 @@ def generate_code_for_missing_rules(generation_queue, rule_definitions=None):
         print(f"1. Add DECLARATION to: {FACTORY_HPP_FILE}")
         print(generate_declaration_stub(rule_name, rule_text, return_type))
 
-        print(
-            f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:"
-        )
+        print(f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:")
         print(generate_registration_stub(rule_name))
 
         print(f"3. Add IMPLEMENTATION to: {cpp_path}")
@@ -360,18 +350,14 @@ def main():
     """
     Main script to find rules, compare them, and print a report.
     """
-    parser = argparse.ArgumentParser(
-        description="Check transformer coverage and optionally generate stubs."
-    )
+    parser = argparse.ArgumentParser(description="Check transformer coverage and optionally generate stubs.")
     parser.add_argument(
         "-g",
         "--generate",
         action="store_true",
         help="Generate C++ stubs (declaration, registration, implementation) for missing rules.",
     )
-    parser.add_argument(
-        "-s", "--skip-found", action="store_true", help="Skip output of [ FOUND ] rules"
-    )
+    parser.add_argument("-s", "--skip-found", action="store_true", help="Skip output of [ FOUND ] rules")
     parser.add_argument(
         "-q",
         "--quiet",
@@ -387,11 +373,11 @@ def main():
     args = parser.parse_args()
 
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
-    transformer_impls, transformer_rule_files = find_transformer_rules(
-        Path(TRANSFORMER_DIR)
-    )
+    transformer_impls, transformer_rule_files = find_transformer_rules(Path(TRANSFORMER_DIR))
     transformer_return_types = find_transformer_return_types(Path(FACTORY_HPP_FILE))
-    enum_rules, registered_rules, direct_registered_functions, direct_registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
+    enum_rules, registered_rules, direct_registered_functions, direct_registered_rules = find_factory_registrations(
+        Path(FACTORY_REG_FILE)
+    )
 
     if not grammar_rules_by_file:
         print("Error: Could not find grammar rules. Exiting.", file=sys.stderr)
@@ -500,9 +486,7 @@ def main():
 
     total_covered = total_found_enum + total_found_registered
     total_issues = total_missing_implementation + total_missing_registration + total_type_mismatches
-    coverage = (
-        (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
-    )
+    coverage = (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
 
     print("\n--- Summary: Rule Coverage ---")
     print(f"{'TOTAL RULES SCANNED':<25} : {total_rules_scanned}")
