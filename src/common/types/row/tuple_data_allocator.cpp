@@ -499,17 +499,14 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	auto sort_keys = reinterpret_cast<SORT_KEY *const *>(row_locations);
 
-	UnifiedVectorFormat old_heap_data;
-	old_heap_ptrs.ToUnifiedFormat(offset + count, old_heap_data);
-	const auto old_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(old_heap_data);
-	const auto &old_heap_usel = *old_heap_data.sel;
+	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
 	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto &new_heap_sel = *new_heap_data.sel;
 
-	if (!old_heap_usel.IsSet() && !new_heap_sel.IsSet()) {
+	if (!old_heap_sel.IsSet() && !new_heap_sel.IsSet()) {
 		// Fast path
 		for (idx_t i = 0; i < count; i++) {
 			const auto idx = offset + i;
@@ -523,7 +520,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			const auto idx = offset + i;
-			const auto &old_heap_ptr = old_heap_locations[old_heap_usel.get_index(idx)];
+			const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 			const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
 			auto &sort_key = *sort_keys[idx];
@@ -554,9 +551,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 		return;
 	}
 
-	UnifiedVectorFormat old_heap_data;
-	old_heap_ptrs.ToUnifiedFormat(offset + count, old_heap_data);
-	const auto old_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(old_heap_data);
+	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
 	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
@@ -588,7 +583,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 					continue;
 				}
 
-				const auto &old_heap_ptr = old_heap_locations[old_heap_data.sel->get_index(idx)];
+				const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 				const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
 				const auto string_location = row_location + col_offset;
@@ -616,7 +611,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 					continue;
 				}
 
-				const auto &old_heap_ptr = old_heap_locations[old_heap_data.sel->get_index(idx)];
+				const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 				const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
 				const auto &list_ptr_location = row_location + col_offset;
