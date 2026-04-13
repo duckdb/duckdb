@@ -315,13 +315,17 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
-unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindConcatFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return BindConcatFunctionInternal(context, bound_function, arguments, false);
 }
 
-unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindConcatOperator(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return BindConcatFunctionInternal(context, bound_function, arguments, true);
 }
 
@@ -338,8 +342,8 @@ unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStati
 
 ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr,
-	                          ListConcatStats);
+	auto fun =
+	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
 	fun.varargs = LogicalType::LIST(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;

@@ -280,8 +280,10 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 	return EnumUtil::FromString<T>(order_name.c_str());
 }
 
-static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListGradeUpBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
 	auto order = OrderType::ORDER_DEFAULT;
 	auto null_order = OrderByNullType::ORDER_DEFAULT;
@@ -306,8 +308,10 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.GetReturnType(), child_type, context);
 }
 
-static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListNormalSortBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
 	auto order = OrderType::ORDER_DEFAULT;
 	auto null_order = OrderByNullType::ORDER_DEFAULT;
@@ -326,8 +330,10 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
-static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto order = OrderType::ORDER_DEFAULT;
 	auto null_order = OrderByNullType::ORDER_DEFAULT;
 

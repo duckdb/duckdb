@@ -326,8 +326,11 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 	}
 }
 
-unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	// arguments: string, pattern, LIST<VARCHAR> group_names [, options]
 	if (arguments.size() < 3) {
 		throw BinderException("regexp_extract_all struct variant requires at least 3 arguments");
@@ -336,7 +339,7 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, Sc
 	string constant_string;
 	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
 	if (!constant_pattern) {
-		throw BinderException("%s with LIST requires a constant pattern", bound_function.name);
+		throw BinderException("%s with LIST requires a constant pattern", function.name);
 	}
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
@@ -344,15 +347,17 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, Sc
 	options.set_log_errors(false);
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
-	regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options, true,
-	                                group_names, struct_children);
-	bound_function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
+	regexp_util::ParseGroupNameList(context, function.name, *arguments[2], constant_string, options, true, group_names,
+	                                struct_children);
+	function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
 	                                                 std::move(group_names));
 }
 
-unique_ptr<FunctionData> RegexpExtractAll::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RegexpExtractAll::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	D_ASSERT(arguments.size() >= 2);
 
 	duckdb_re2::RE2::Options options;

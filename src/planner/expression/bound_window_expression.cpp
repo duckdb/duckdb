@@ -333,7 +333,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto bound = func.functions.GetFunctionByOffset(best.GetIndex());
 		if (bound.HasBindCallback()) {
-			result->bind_info = bound.GetBindCallback()(context, bound, result->children);
+			result->bind_info = bound.Bind(context, result->children);
 			// Builtins do not change their argument counts
 		}
 
