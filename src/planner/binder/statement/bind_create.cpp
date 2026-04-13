@@ -527,6 +527,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	auto &properties = GetStatementProperties();
+	properties.return_type = StatementReturnType::NOTHING;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
@@ -737,8 +739,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw InternalException("Unrecognized type!");
 	}
-	properties.return_type = StatementReturnType::NOTHING;
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+
 	return result;
 }
 
