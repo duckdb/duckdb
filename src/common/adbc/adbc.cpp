@@ -1758,7 +1758,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		// Ownership transferred; disarm the scope guard
 		stream_wrapper = nullptr;
 	}
-	// When out is null the guard fires and cleans up stream_wrapper + result
 
 	return ADBC_STATUS_OK;
 }
