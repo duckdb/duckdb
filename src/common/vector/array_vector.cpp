@@ -144,6 +144,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_
 	validity.Resize(new_size);
 	// resize the child
 	child->Resize(current_size * array_size, new_size * array_size);
+	size = new_size;
 	return nullptr;
 }
 
