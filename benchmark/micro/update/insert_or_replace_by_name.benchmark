@@ -1,0 +1,12 @@
+# name: benchmark/micro/update/insert_or_replace_by_name.benchmark
+# description: INSERT OR REPLACE BY NAME performance
+# group: [update]
+
+load
+CREATE TABLE t1 (col1 INT PRIMARY KEY);
+CREATE TABLE t2 (col1 INT);
+INSERT INTO t1 SELECT * FROM range(1000000);
+INSERT INTO t2 SELECT * FROM range(1000000);
+
+run
+INSERT OR REPLACE INTO t1 BY NAME SELECT * FROM t2;

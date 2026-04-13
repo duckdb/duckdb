@@ -64,6 +64,9 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			action.update_info = make_uniq<UpdateSetInfo>();
 			if (action.column_order == InsertColumnOrder::INSERT_BY_NAME) {
 				for (idx_t i = 0; i < source_names.size(); i++) {
+					if (actsourion.exclude_columns.count(source_names[i])) {
+						continue;
+					}
 					action.update_info->columns.push_back(source_names[i]);
 					action.update_info->expressions.push_back(bind_context.CreateColumnReference(
 					    source_aliases[i], source_names[i], ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));

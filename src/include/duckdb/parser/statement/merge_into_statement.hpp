@@ -34,10 +34,11 @@ public:
 	InsertColumnOrder column_order = InsertColumnOrder::INSERT_BY_POSITION;
 	//! Whether or not this is a INSERT DEFAULT VALUES
 	bool default_values = false;
+	//! INSERT_BY_NAME exclude column list - columns to skip when generating the SET list
+	unordered_set<string> exclude_columns;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;
-	unordered_set<string> exclude_columns;
 };
 
 class MergeIntoStatement : public SQLStatement {
