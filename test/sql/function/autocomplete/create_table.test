@@ -122,8 +122,9 @@ SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE attac')
 ----
 attached_in_memory.	13
 
+# suggest schemas in attached catalog matching prefix
 query II
-SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE attached_in_memory.a') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE attached_in_memory.m') LIMIT 1;
 ----
 main.	32
 
