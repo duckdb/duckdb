@@ -25,14 +25,22 @@ struct ConstantVector {
 #endif
 	}
 
+	static void VerifyConstantVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			throw InternalException("Operation requires a flat vector but a non-flat vector was encountered");
+		}
+#endif
+	}
+
 	static inline const_data_ptr_t GetData(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyConstantVector(vector);
 		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	static inline data_ptr_t GetData(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyConstantVector(vector);
 		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	template <class T>

@@ -1540,7 +1540,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
-	const auto target_list_entries = FlatVector::GetDataUnsafe<list_entry_t>(target);
+	const auto target_list_entries = FlatVector::GetDataMutableUnsafe<list_entry_t>(target);
 	auto &target_list_validity = FlatVector::Validity(target);
 
 	// Precompute mask indexes
