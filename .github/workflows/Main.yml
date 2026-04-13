@@ -52,7 +52,7 @@ jobs:
     # We run all other jobs on PRs only if they are not draft PR
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
+      (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER"]'), github.event.pull_request.author_association))
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
