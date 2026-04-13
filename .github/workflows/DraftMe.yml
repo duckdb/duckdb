@@ -17,9 +17,11 @@ jobs:
       - name: Save PR number
         env:
           PR_NUMBER: ${{ github.event.pull_request.node_id }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
           mkdir -p ./pr
           echo "$PR_NUMBER" > ./pr/pr_number
+          echo "AUTHOR_ASSOCIATION: $AUTHOR_ASSOCIATION"
       - uses: actions/upload-artifact@v7
         with:
           name: pr_number
