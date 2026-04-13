@@ -102,7 +102,7 @@ void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const Select
 		auto idx = sel.get_index(i);
 		auto entry = entries[idx];
 		if (entry.IsValid()) {
-			total_list_count += entry.value.length;
+			total_list_count += entry.GetValue().length;
 		}
 	}
 	SelectionVector list_sel(total_list_count);
@@ -111,7 +111,7 @@ void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const Select
 		auto idx = sel.get_index(i);
 		auto entry = entries[idx];
 		if (entry.IsValid()) {
-			auto list = entry.value;
+			auto list = entry.GetValue();
 			for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 				list_sel.set_index(list_count++, list.offset + list_idx);
 			}

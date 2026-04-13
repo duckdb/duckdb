@@ -62,7 +62,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 			continue;
 		}
 
-		const auto child_offset = TryGetChildOffset(list_entry.value, offsets_entry.value);
+		const auto child_offset = TryGetChildOffset(list_entry.GetValue(), offsets_entry.GetValue());
 
 		if (!child_offset.IsValid()) {
 			invalid_offsets.push_back(i);

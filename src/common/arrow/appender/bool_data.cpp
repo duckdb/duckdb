@@ -25,9 +25,9 @@ void ArrowBoolData::Append(ArrowAppendData &append_data, Vector &input, idx_t fr
 	for (idx_t i = from; i < to; i++) {
 		auto entry = data[i];
 		// append the validity mask
-		if (!entry.is_valid) {
+		if (!entry.IsValid()) {
 			append_data.SetNull(validity_data, current_byte, current_bit);
-		} else if (!entry.value) {
+		} else if (!entry.GetValue()) {
 			ArrowAppendData::UnsetBit(result_data, current_byte, current_bit);
 		}
 		ArrowAppendData::NextBit(current_byte, current_bit);

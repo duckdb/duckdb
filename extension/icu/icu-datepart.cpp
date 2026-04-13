@@ -424,8 +424,8 @@ struct ICUDatePart : public ICUDateFunc {
 				auto entry = entries[i];
 				if (entry.IsValid()) {
 					res_valid.SetValid(i);
-					auto micros = SetTime(calendar, entry.value);
-					const auto is_finite = Timestamp::IsFinite(entry.value);
+					auto micros = SetTime(calendar, entry.GetValue());
+					const auto is_finite = Timestamp::IsFinite(entry.GetValue());
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {

@@ -56,7 +56,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				if (!entry.IsValid()) {
 					continue;
 				}
-				result_lengths[entry.index] += entry.value.GetSize();
+				result_lengths[entry.GetIndex()] += entry.GetValue().GetSize();
 			}
 		}
 	}
@@ -95,8 +95,8 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				if (!entry.IsValid()) {
 					continue;
 				}
-				auto &input_str = entry.value;
-				auto i = entry.index;
+				auto &input_str = entry.GetValue();
+				auto i = entry.GetIndex();
 				auto input_ptr = input_str.GetData();
 				auto input_len = input_str.GetSize();
 				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);

@@ -319,7 +319,7 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
 	idx_t total_count = 0;
 	for (auto entry : list.ValidValues<list_entry_t>(count)) {
-		total_count += entry.value.length;
+		total_count += entry.GetValue().length;
 	}
 	return total_count;
 }
@@ -332,10 +332,10 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 	idx_t first_length = 0;
 	for (idx_t i = offset; i < offset + count; i++) {
 		auto entry = list_data[i];
-		if (!entry.is_valid) {
+		if (!entry.IsValid()) {
 			continue;
 		}
-		auto &list_val = entry.value;
+		auto &list_val = entry.GetValue();
 		info.child_list_info.offset = list_val.offset;
 		first_length = list_val.length;
 		break;
@@ -354,10 +354,10 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 	bool is_consecutive = true;
 	for (idx_t i = offset; i < offset + count; i++) {
 		auto entry = list_data[i];
-		if (!entry.is_valid) {
+		if (!entry.IsValid()) {
 			continue;
 		}
-		auto &list_val = entry.value;
+		auto &list_val = entry.GetValue();
 		if (list_val.offset != info.child_list_info.offset || list_val.length != first_length) {
 			info.is_constant = false;
 		}
@@ -384,10 +384,10 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 	idx_t entry = 0;
 	for (idx_t i = offset; i < offset + count; i++) {
 		auto list_entry = list_data[i];
-		if (!list_entry.is_valid) {
+		if (!list_entry.IsValid()) {
 			continue;
 		}
-		auto &list_val = list_entry.value;
+		auto &list_val = list_entry.GetValue();
 		for (idx_t k = 0; k < list_val.length; k++) {
 			//			child_sel.set_index(entry++, list_data[idx].offset + k);
 			sel.set_index(entry++, list_val.offset + k);

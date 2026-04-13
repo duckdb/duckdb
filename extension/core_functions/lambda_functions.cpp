@@ -116,8 +116,8 @@ struct ListFilterFunctor {
 			}
 
 			// found a true value
-			if (entry.is_valid && entry.value) {
-				sel.set_index(count++, entry.index);
+			if (entry.IsValid() && entry.GetValue()) {
+				sel.set_index(count++, entry.GetIndex());
 				info.length++;
 			}
 

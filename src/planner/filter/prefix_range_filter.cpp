@@ -76,7 +76,7 @@ public:
 	template <typename T, typename CONVERTER>
 	void InsertKeys(Vector &keys, idx_t count, uint64_t *state_bitmap) const {
 		for (const auto &entry : keys.template ValidValues<T>(count)) {
-			const U y = CONVERTER::Convert(entry.value) - min;
+			const U y = CONVERTER::Convert(entry.GetValue()) - min;
 			// All keys are in-range by construction, so the range check can be omitted here.
 			const U idx = y >> shift;
 			state_bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
@@ -109,14 +109,14 @@ public:
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const {
 		idx_t found_count = 0;
 		for (const auto &entry : keys.template ValidValues<T>(count)) {
-			const U comparable = CONVERTER::Convert(entry.value);
+			const U comparable = CONVERTER::Convert(entry.GetValue());
 			const U y = comparable - min;
 			const U bit_idx = y >> shift;
 			const uint8_t in_range = y <= span;
 			const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
 			const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 
-			result_sel.set_index(found_count, entry.index);
+			result_sel.set_index(found_count, entry.GetIndex());
 			found_count += bit & in_range;
 		}
 		return found_count;
