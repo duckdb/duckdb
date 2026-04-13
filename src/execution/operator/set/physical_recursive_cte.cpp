@@ -89,11 +89,6 @@ public:
 		intermediate_table.InitializeAppend(intermediate_append_state);
 	}
 
-	void InitializeWorkingAppend() {
-		D_ASSERT(op.working_table);
-		op.working_table->InitializeAppend(working_append_state);
-	}
-
 	void InitializeRecurringAppend() {
 		D_ASSERT(op.recurring_table);
 		op.recurring_table->InitializeAppend(recurring_append_state);
@@ -106,14 +101,6 @@ public:
 	}
 
 	ColumnDataCollection &CurrentOutputTable() {
-		if (op.using_key || !output_is_working) {
-			return intermediate_table;
-		}
-		D_ASSERT(op.working_table);
-		return *op.working_table;
-	}
-
-	const ColumnDataCollection &CurrentOutputTable() const {
 		if (op.using_key || !output_is_working) {
 			return intermediate_table;
 		}
@@ -164,7 +151,8 @@ public:
 		if (op.using_key || !output_is_working) {
 			InitializeIntermediateAppend();
 		} else {
-			InitializeWorkingAppend();
+			D_ASSERT(op.working_table);
+			op.working_table->InitializeAppend(working_append_state);
 		}
 	}
 
