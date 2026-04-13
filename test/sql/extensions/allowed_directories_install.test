@@ -3,10 +3,10 @@
 # group: [extensions]
 
 statement ok
-set extension_directory='__TEST_DIR__/extension_dir'
+set extension_directory='{TEST_DIR}/extension_dir'
 
 statement ok
-SET allowed_directories=['__TEST_DIR__', 'http://foo.com/bar', 'https://foo.com/baz'];
+SET allowed_directories=['{TEST_DIR}', 'http://foo.com/bar', 'https://foo.com/baz'];
 
 statement ok
 SET enable_external_access=false;

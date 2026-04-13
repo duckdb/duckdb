@@ -12,7 +12,7 @@ DropEntries <-
 	DropSecret /
 	DropTrigger
 
-DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
+DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)

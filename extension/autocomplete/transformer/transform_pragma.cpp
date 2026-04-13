@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransfo
 	auto &info = *result->info;
 	info.name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto value_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
-	if (value_list.size() > 1) {
+	if (value_list.size() != 1) {
 		throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 	}
 	auto &expr = value_list[0];

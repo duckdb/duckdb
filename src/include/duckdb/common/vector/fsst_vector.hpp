@@ -14,7 +14,7 @@ namespace duckdb {
 
 class VectorFSSTStringBuffer : public VectorStringBuffer {
 public:
-	VectorFSSTStringBuffer();
+	explicit VectorFSSTStringBuffer(idx_t capacity);
 
 public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
@@ -33,6 +33,7 @@ public:
 	idx_t GetCount() const {
 		return total_string_count;
 	}
+	void SetVectorType(VectorType vector_type) override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
@@ -43,15 +44,16 @@ private:
 struct FSSTVector {
 	static inline const ValidityMask &Validity(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.validity;
+		return vector.buffer->GetValidityMask();
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.validity;
+		return vector.buffer->GetValidityMask();
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		vector.validity.Initialize(new_validity);
+		auto &validity = vector.buffer->GetValidityMask();
+		validity.Initialize(new_validity);
 	}
 	static inline const string_t *GetCompressedData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
@@ -67,13 +69,17 @@ struct FSSTVector {
 
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, string_t data);
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, const char *data, idx_t len);
-	DUCKDB_API static void RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder,
-	                                       const idx_t string_block_limit);
+	DUCKDB_API static void Create(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder, const idx_t string_block_limit,
+	                              idx_t capacity);
 	DUCKDB_API static void *GetDecoder(const Vector &vector);
 	DUCKDB_API static vector<unsigned char> &GetDecompressBuffer(const Vector &vector);
 	//! Setting the string count is required to be able to correctly flatten the vector
 	DUCKDB_API static void SetCount(Vector &vector, idx_t count);
 	DUCKDB_API static idx_t GetCount(const Vector &vector);
+
+private:
+	static VectorFSSTStringBuffer &GetFSSTBuffer(const Vector &vector);
+	static StringHeap &GetStringHeap(const Vector &vector);
 };
 
 } // namespace duckdb

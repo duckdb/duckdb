@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
@@ -21,7 +21,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 # Verify that total_memory_allocated is tracked (may be 0 for small queries, but should be present)
 query I
@@ -37,7 +37,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
@@ -50,7 +50,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 # Verify that total_memory_allocated is tracked
 query I
@@ -66,7 +66,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true", "OPERATOR_NAME": "true", "OPERATOR_TYPE": "true"}';
@@ -78,7 +78,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 # Check that root has total_memory_allocated
 query I
@@ -105,7 +105,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "false"}';
@@ -117,7 +117,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement error
 SELECT total_memory_allocated FROM metrics_output;
@@ -129,7 +129,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
@@ -145,7 +145,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 # Verify that total_memory_allocated is tracked (should be > 0 for large operations)
 query I

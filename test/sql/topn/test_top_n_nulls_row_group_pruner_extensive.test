@@ -11,10 +11,10 @@ PRAGMA enable_verification
 statement ok
 SET threads TO 1
 
-load __TEST_DIR__/top_n_nulls_row_group_pruner_extensive_main.duckdb
+load {TEST_DIR}/top_n_nulls_row_group_pruner_extensive_main.duckdb
 
 statement ok
-ATTACH '__TEST_DIR__/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+ATTACH '{TEST_DIR}/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 CREATE TABLE db.ints AS SELECT CASE WHEN i = 0 THEN 0 ELSE 3 END AS i FROM range(2048) tbl(i)
@@ -75,70 +75,70 @@ INSERT INTO db.offset_boundary SELECT NULL::BIGINT FROM range(2048)
 foreach type BIGINT VARCHAR
 
 statement ok
-CREATE TABLE db.null_prefix_${type} AS SELECT NULL::${type} AS v FROM range(2048)
+CREATE TABLE db.null_prefix_{type} AS SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_${type} SELECT NULL::${type} AS v FROM range(2048)
+INSERT INTO db.null_prefix_{type} SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_${type} SELECT CAST('1' AS ${type}) AS v FROM range(2048)
+INSERT INTO db.null_prefix_{type} SELECT CAST('1' AS {type}) AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
+INSERT INTO db.null_prefix_{type} SELECT CAST('2' AS {type}) AS v FROM range(2048)
 
 statement ok
-CREATE TABLE db.null_then_values_${type} AS SELECT NULL::${type} AS v FROM range(2048)
+CREATE TABLE db.null_then_values_{type} AS SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_then_values_${type} SELECT NULL::${type} AS v FROM range(2048)
+INSERT INTO db.null_then_values_{type} SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_then_values_${type} SELECT CAST('1' AS ${type}) AS v FROM range(2048)
+INSERT INTO db.null_then_values_{type} SELECT CAST('1' AS {type}) AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_then_values_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
+INSERT INTO db.null_then_values_{type} SELECT CAST('2' AS {type}) AS v FROM range(2048)
 
 statement ok
-CREATE TABLE db.null_mixed_value_${type} AS SELECT NULL::${type} AS v FROM range(2048)
+CREATE TABLE db.null_mixed_value_{type} AS SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_mixed_value_${type}
-SELECT CASE WHEN i < 1023 THEN NULL ELSE CAST('1' AS ${type}) END AS v FROM range(2048) tbl(i)
+INSERT INTO db.null_mixed_value_{type}
+SELECT CASE WHEN i < 1023 THEN NULL ELSE CAST('1' AS {type}) END AS v FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.null_mixed_value_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
+INSERT INTO db.null_mixed_value_{type} SELECT CAST('2' AS {type}) AS v FROM range(2048)
 
 statement ok
-CREATE TABLE db.scattered_nulls_${type} AS SELECT NULL::${type} AS v FROM range(2048)
+CREATE TABLE db.scattered_nulls_{type} AS SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.scattered_nulls_${type}
-SELECT CASE WHEN i < 1023 THEN NULL ELSE CAST('1' AS ${type}) END AS v FROM range(2048) tbl(i)
+INSERT INTO db.scattered_nulls_{type}
+SELECT CASE WHEN i < 1023 THEN NULL ELSE CAST('1' AS {type}) END AS v FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.scattered_nulls_${type} SELECT NULL::${type} AS v FROM range(2048)
+INSERT INTO db.scattered_nulls_{type} SELECT NULL::{type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.scattered_nulls_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
+INSERT INTO db.scattered_nulls_{type} SELECT CAST('2' AS {type}) AS v FROM range(2048)
 
 statement ok
-CREATE TABLE db.all_null_offset_${type} AS
-SELECT i FROM repeat(NULL::${type}, 2048) t(i);
+CREATE TABLE db.all_null_offset_{type} AS
+SELECT i FROM repeat(NULL::{type}, 2048) t(i);
 
 statement ok
-INSERT INTO db.all_null_offset_${type}
-SELECT i FROM repeat(NULL::${type}, 2048) t(i);
+INSERT INTO db.all_null_offset_{type}
+SELECT i FROM repeat(NULL::{type}, 2048) t(i);
 
 statement ok
-INSERT INTO db.all_null_offset_${type}
-SELECT i FROM repeat(NULL::${type}, 2048) t(i);
+INSERT INTO db.all_null_offset_{type}
+SELECT i FROM repeat(NULL::{type}, 2048) t(i);
 
 endloop
 
 restart
 
 statement ok
-ATTACH '__TEST_DIR__/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db
+ATTACH '{TEST_DIR}/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db
 
 query II
 EXPLAIN ANALYZE SELECT i FROM db.ints ORDER BY i NULLS LAST LIMIT 2

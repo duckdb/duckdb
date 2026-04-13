@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+
 #include "duckdb/planner/table_filter_state.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"

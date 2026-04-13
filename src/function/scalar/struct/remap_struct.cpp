@@ -101,12 +101,11 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		auto list_data = FlatVector::GetData<list_entry_t>(input);
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		auto entries = input.Values<list_entry_t>(result_size);
@@ -119,7 +118,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 			}
 			has_top_level_null = result_validity.CanHaveNull();
 		}
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
 			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
@@ -151,12 +150,11 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		auto list_data = FlatVector::GetData<list_entry_t>(input);
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		auto entries = input.Values<list_entry_t>(result_size);
@@ -169,7 +167,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 			}
 			has_top_level_null = result_validity.CanHaveNull();
 		}
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
 			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
@@ -196,8 +194,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 	} else {

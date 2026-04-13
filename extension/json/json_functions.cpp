@@ -162,6 +162,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
+	functions.push_back(GetMergePatchDiffFunction());
 	functions.push_back(GetDeepMergeFunction());
 
 	// Structure/Transform
@@ -183,6 +184,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	functions.push_back(GetPrettyPrintFunction());
 	functions.push_back(GetNormalizeFunction());
+	functions.push_back(GetStripNullsFunction());
 
 	return functions;
 }
@@ -357,7 +359,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 		    }
 
 		    // Populate list
-		    const auto result_jsons = FlatVector::GetData<string_t>(ListVector::GetEntry(result));
+		    const auto result_jsons = FlatVector::GetDataMutable<string_t>(ListVector::GetEntry(result));
 		    size_t arr_idx, max;
 		    yyjson_val *val;
 		    yyjson_arr_foreach(doc->root, arr_idx, max, val) {

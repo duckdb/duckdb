@@ -49,49 +49,39 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
-      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.select_runner.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.build_runners.outputs.runners }}
-      linux_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_cli_matrix }}
-      linux_musl_cli_matrix: ${{ steps.build_linux_cli_matrices.outputs.linux_musl_cli_matrix }}
+      runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
+      runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.config.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.config.outputs.runner_windows_2022_x64 }}
+      runner_macos_arm64: ${{ steps.config.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.config.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.config.outputs.runners }}
+      linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
+      linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
-      extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
+      changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
+      changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
+      run_slow_tests: ${{ steps.config.outputs.run_slow_tests }}
+      extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
+      enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
+      save_cache: ${{ steps.config.outputs.save_cache }}
+      runner_provider: ${{ steps.config.outputs.runner_provider }}
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
-      # Avoid downloading blobs >50 KB until they are actually needed by git.
-      GIT_FETCH_FILTER: blob:limit=50k
-      GIT_CONFIG_COUNT: 1
-      GIT_CONFIG_KEY_0: checkout.workers
-      GIT_CONFIG_VALUE_0: 4
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          filter: ${{ env.GIT_FETCH_FILTER }}
-
-      - name: Fetch PR base branch history
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # changed-files needs base branch history for merge-base lookup
-          # and the exact base SHA for comparison.
-          git fetch --no-tags --depth=100 --filter="${GIT_FETCH_FILTER}" origin \
-            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} \
-            ${{ github.event.pull_request.base.sha }}
+          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          fetch_depth: 0
 
       - name: Detect changes
         id: changed
         uses: tj-actions/changed-files@v47
         with:
-          base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          skip_initial_fetch: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           files_yaml: |
             github:
               - .github/**
@@ -99,124 +89,142 @@ jobs:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+            tests:
+              - test/**/*.test
+            tests_slow:
+              - test/**/*.cpp
+              - test/**/*.test_slow
 
-      - name: Check workflow files
+      - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
         run: |
           echo "::add-matcher::.github/actionlint-matcher.json"
+          echo "::group::ShellCheck version"
           shellcheck --version
+          echo "::endgroup::"
+          echo "::group::Install actionlint"
           bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "::endgroup::"
           ./actionlint -color
+          make test_ci
         shell: bash
 
-      - name: Configure extensions
-        id: extensions
+      - name: Configure CI
+        id: config
         run: |
           if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
+            extra_exclude_archs=
           else
-            echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+            extra_exclude_archs=windows_amd64\;wasm_eh
           fi
 
-      - name: Select CI runner
-        id: select_runner
-        run: |
+          echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ steps.changed.outputs.tests_slow_any_changed }}" == "true" || "${{ github.ref_name }}" == "main" ]]; then
+            run_slow_tests=true
+          else
+            run_slow_tests=false
+          fi
+          echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
+
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
-            {
-              echo "runner_linux_small=namespace-profile-linux-small"
-              echo "runner_linux_x64=namespace-profile-linux-x64"
-              echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
-              echo "runner_linux_arm64=namespace-profile-linux-arm64"
-              echo "runner_windows_2022_x64=namespace-profile-windows-x64"
-              echo "runner_macos_arm64=namespace-profile-macos-arm64"
-              echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
-            } >> "$GITHUB_OUTPUT"
+            runner_provider=namespace
+            runner_linux_small=namespace-profile-linux-small
+            runner_linux_x64=namespace-profile-linux-x64
+            runner_linux_22_x64=namespace-profile-linux-22-x64
+            runner_linux_arm64=namespace-profile-linux-arm64
+            runner_windows_2022_x64=namespace-profile-windows-x64
+            runner_macos_arm64=namespace-profile-macos-arm64
+            runner_macos_14_arm64=namespace-profile-macos-14-arm64
           else
-            {
-              echo "runner_linux_small=ubuntu-latest"
-              echo "runner_linux_x64=ubuntu-latest"
-              echo "runner_linux_22_x64=ubuntu-22.04"
-              echo "runner_linux_arm64=ubuntu-24.04-arm"
-              echo "runner_windows_2022_x64=windows-2022"
-              echo "runner_macos_arm64=macos-14"
-              echo "runner_macos_14_arm64=macos-14"
-            } >> "$GITHUB_OUTPUT"
+            runner_provider=github
+            runner_linux_small=ubuntu-latest
+            runner_linux_x64=ubuntu-latest
+            runner_linux_22_x64=ubuntu-22.04
+            runner_linux_arm64=ubuntu-24.04-arm
+            runner_windows_2022_x64=windows-2022
+            runner_macos_arm64=macos-14
+            runner_macos_14_arm64=macos-14
           fi
 
-          grep runner_ "$GITHUB_OUTPUT"
+          {
+            echo "runner_provider=$runner_provider"
+            echo "runner_linux_small=$runner_linux_small"
+            echo "runner_linux_x64=$runner_linux_x64"
+            echo "runner_linux_22_x64=$runner_linux_22_x64"
+            echo "runner_linux_arm64=$runner_linux_arm64"
+            echo "runner_windows_2022_x64=$runner_windows_2022_x64"
+            echo "runner_macos_arm64=$runner_macos_arm64"
+            echo "runner_macos_14_arm64=$runner_macos_14_arm64"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Build runners JSON
-        id: build_runners
-        run: |
           {
             echo "runners<<EOF"
             cat <<EOF
           {
-            "linux_x64": "${{ steps.select_runner.outputs.runner_linux_x64 }}",
-            "linux_22_x64": "${{ steps.select_runner.outputs.runner_linux_22_x64 }}",
-            "linux_arm64": "${{ steps.select_runner.outputs.runner_linux_arm64 }}",
-            "windows_2022_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
-            "windows_x64": "${{ steps.select_runner.outputs.runner_windows_2022_x64 }}",
-            "macos_arm64": "${{ steps.select_runner.outputs.runner_macos_arm64 }}",
-            "macos_14_arm64": "${{ steps.select_runner.outputs.runner_macos_14_arm64 }}"
+            "linux_x64": "$runner_linux_x64",
+            "linux_22_x64": "$runner_linux_22_x64",
+            "linux_arm64": "$runner_linux_arm64",
+            "windows_2022_x64": "$runner_windows_2022_x64",
+            "windows_x64": "$runner_windows_2022_x64",
+            "macos_arm64": "$runner_macos_arm64",
+            "macos_14_arm64": "$runner_macos_14_arm64"
           }
           EOF
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build Linux CLI matrices
-        id: build_linux_cli_matrices
-        run: |
           linux_cli_matrix=$(
-            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+            jq -nc --arg runner "$runner_linux_x64" \
               '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
           )
 
           linux_musl_cli_matrix=$(
-            jq -nc --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+            jq -nc --arg runner "$runner_linux_arm64" \
               '[{runner: $runner, arch: "arm64"}]'
           )
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
-              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_arm64 }}" \
+              jq -c --arg runner "$runner_linux_arm64" \
                 '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
             )
 
             linux_musl_cli_matrix=$(
-              jq -c --arg runner "${{ steps.select_runner.outputs.runner_linux_x64 }}" \
+              jq -c --arg runner "$runner_linux_x64" \
                 '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
             )
           fi
 
+          python3 scripts/ci/job_stages.py \
+            --event "${{ github.event_name }}" \
+            --ref_name "${{ github.ref_name }}" \
+            --repository "${{ github.repository }}"
+
+          grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
           echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
-      - name: Install tools
-        run: make format_tools
+      - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
-      - name: List Installed Packages
-        run: pip3 freeze
+      - name: Install format tools
+        run: python3 scripts/ci/retry.py -- make format_tools
 
       - name: Check format
         run: |
-          clang-format --version
-          clang-format --dump-config
-          black --version
-          make format-check-silent
-
-      - name: Check generated files
-        run: |
+          make format-check-silent enum-integrity-check
+          echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
-
-      - name: Test CI scripts
-        run: make test_ci
+          echo "::endgroup::"
 
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
@@ -231,7 +239,11 @@ jobs:
       EXTENSIONS_STATIC_BUILD: 0
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -240,12 +252,18 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
       run: python3 scripts/ci/retry.py -- make relassert
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - name: Smoke tests
-      run: make smoke
+      run: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
@@ -262,6 +280,7 @@ jobs:
 
  linux-debug-tests:
     name: Linux Debug Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug-tests') }}
     needs:
       - prepare
       - linux-debug
@@ -294,6 +313,7 @@ jobs:
       run: make unittest_relassert
 
  regression:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'regression') }}
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
     needs:
@@ -302,15 +322,54 @@ jobs:
       - linux-release
     with:
       build_current_release: false
+      run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
- code-quality:
-    uses: ./.github/workflows/CodeQuality.yml
-    secrets: inherit
+ tidy-check:
+    name: Tidy Check
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc
+      CXX: g++
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
+        python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
+
+    - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Download clang-tidy-cache
+      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
+      run: |
+        set -e
+        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
+        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
+        chmod +x /tmp/clang-tidy-cache
+
+    - name: Tidy Check
+      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
+      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+
+    - name: Tidy Check Diff
+      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
  extensions:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
     needs:
@@ -322,13 +381,17 @@ jobs:
       skip_tests: false
       run_all: true
       runners: ${{ needs.prepare.outputs.runners }}
+      save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  wasm-eh:
     name: Wasm EH
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'wasm-eh') }}
     needs:
       - prepare
       - linux-debug
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      GEN: make
 
     steps:
     - uses: actions/checkout@v6
@@ -340,106 +403,66 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
     - name: Build
       run: make wasm_ci
 
  linux-release:
     name: Linux Release
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
 
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build
+        changed_tests_file: ${{ runner.temp }}/changed_tests.txt
+        save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Test
+      shell: bash
+      run: |
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make allunit
+        else
+          make unittest_release SKIP_BUILD=1
+        fi
 
     - name: Build linux default release
       run: make clean release
 
-    - name: Prepare linux default release artifact
-      run: |
-        make release-artifact
-        mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
-
-    - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-default-release-build
-        path: build/linux-default-release.tar.gz
-        if-no-files-found: error
-
- linux-release-tests:
-    name: Linux Release Tests
-    needs:
-      - prepare
-      - linux-release
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-
-    steps:
-    - uses: actions/checkout@v6
-    - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
-
-    - name: Download release build artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-release-build
-        path: build
-
-    - name: Extract release build artifact
-      shell: bash
-      run: |
-        rm -rf build/release
-        tar -xzf build/release-artifact.tar.gz -C build
-
-    - name: Test
-      run: make allunit
-
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-24.04
-    needs:
-      - prepare
-      - linux-release
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Download linux default release artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-default-release-build
-        path: build
-
-    - name: Extract linux default release artifact
-      run: |
-        rm -rf build/release
-        tar -xzf build/linux-default-release.tar.gz -C build
-
-    - name: Symbol Leakage Test
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Banned Symbol Check
-      run: python3 scripts/banned_symbols_check.py --directory build/release/src
+    - name: Symbol Checks
+      run: make -j4 --output-sync=target symbol-checks
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -459,6 +482,9 @@ jobs:
         python3 -m pip install --break-system-packages pytest
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+        key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
       run: |
@@ -508,11 +534,14 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
-    - name: Test
-      run: make allunit
-
-    - name: Release specific tests
-      run: make unittest_release_tag
+    - name: Release tests
+      shell: bash
+      run: |
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
 
     - name: Tools Tests
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
@@ -524,9 +553,10 @@ jobs:
 
  linux-musl-release-cli:
     name: Linux CLI (${{ matrix.config.arch }}-musl)
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-musl-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -542,6 +572,9 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+        key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
       shell: bash
@@ -595,10 +628,13 @@ jobs:
 
     - name: Test
       shell: bash
+      env:
+        RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
       run: |
         docker run   \
         -v"$PWD:$PWD" \
         -e CI=1      \
+        -e RUN_SLOW_TESTS="$RUN_SLOW_TESTS" \
         alpine:3.22                                                         \
         sh -c "
           set -e
@@ -608,10 +644,12 @@ jobs:
             python3    \
             py3-pytest
           cd \"$PWD\"
-          echo Tests
-          make allunit
-          echo Release specific tests
-          make unittest_release_tag
+          echo Release tests
+          if [ \"\$RUN_SLOW_TESTS\" = \"true\" ]; then
+            make alltest_release_tag
+          else
+            make test_release_tag
+          fi
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
@@ -621,8 +659,10 @@ jobs:
 
  main_julia:
     name: Julia ${{ matrix.version }}
-    if: ${{ github.ref_name == 'main' }}
-    needs: linux-release-cli
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'main_julia') }}
+    needs:
+      - prepare
+      - linux-release-cli
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -680,7 +720,10 @@ jobs:
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
-    needs: linux-release-cli
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'upload-libduckdb-src') }}
+    needs:
+      - prepare
+      - linux-release-cli
     runs-on: ubuntu-latest
 
     steps:
@@ -701,6 +744,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
     needs:
@@ -710,6 +754,7 @@ jobs:
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'windows') }}
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
     needs:
@@ -723,6 +768,7 @@ jobs:
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-string-inline') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
@@ -745,6 +791,8 @@ jobs:
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
         run: python3 scripts/ci/retry.py -- make relassert
@@ -754,13 +802,14 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
       - linux-debug
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
@@ -771,6 +820,8 @@ jobs:
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
         run: STANDARD_VECTOR_SIZE=2 make reldebug
@@ -780,9 +831,11 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'valgrind') }}
     runs-on: ubuntu-24.04
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
@@ -801,6 +854,8 @@ jobs:
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
       shell: bash
@@ -816,6 +871,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'threadsan') }}
     needs:
       - prepare
       - linux-debug
@@ -836,6 +892,8 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
       run: THREADSAN=1 make reldebug
@@ -843,8 +901,13 @@ jobs:
     - name: Test
       run: make unittest_threadsan
 
+    - name: Test Extra
+      if: github.ref_name == 'main'
+      run: make unittest_threadsan_extra
+
  amalgamation-tests:
     name: Amalgamation Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'amalgamation-tests') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
     needs:
       - prepare
@@ -870,6 +933,7 @@ jobs:
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-configs') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
@@ -1047,3 +1111,48 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser_strict.json ./build/release/test/unittest
+
+ summary:
+    name: Summary
+    if: ${{ always() }}
+    runs-on: ubuntu-slim
+    needs:
+      - prepare
+      - linux-debug
+      - linux-debug-tests
+      - regression
+      - tidy-check
+      - extensions
+      - wasm-eh
+      - linux-release
+      - linux-release-cli
+      - linux-musl-release-cli
+      - main_julia
+      - upload-libduckdb-src
+      - swift
+      - windows
+      - no-string-inline
+      - vector-sizes
+      - valgrind
+      - threadsan
+      - amalgamation-tests
+      - linux-configs
+    steps:
+      - name: Check CI status
+        shell: bash
+        run: |
+          NEEDS_JSON='${{ toJSON(needs) }}'
+
+          failed_or_cancelled=$(
+            jq -r '
+              to_entries[]
+              | select(.value.result == "failure" or .value.result == "cancelled")
+              | "\(.key): \(.value.result)"
+            ' <<<"$NEEDS_JSON"
+          )
+
+          if [[ -n "$failed_or_cancelled" ]]; then
+            echo "One or more required jobs failed or were cancelled."
+            echo "$failed_or_cancelled"
+            exit 1
+          fi

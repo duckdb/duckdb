@@ -64,6 +64,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		result = LogicalCreateTable::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
+		result = LogicalCreate::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		result = LogicalCreate::Deserialize(deserializer);
 		break;

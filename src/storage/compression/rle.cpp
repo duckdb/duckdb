@@ -365,8 +365,7 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 		return;
 	}
 
-	auto result_data = FlatVector::GetData<T>(result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 
 	const idx_t result_end = result_offset + scan_count;
 	while (result_offset < result_end) {
@@ -417,8 +416,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		return;
 	}
 
-	auto result_data = FlatVector::GetData<T>(result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::Writer<T>(result, sel_count);
 
 	idx_t prev_idx = 0;
 	for (idx_t i = 0; i < sel_count; i++) {
@@ -481,7 +479,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		return;
 	}
 	// scan (the subset of) the matching runs AND set the output selection vector with the rows that match
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	idx_t matching_count = 0;
@@ -559,7 +557,7 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	result_data[result_idx] = data_pointer[scan_state.entry_pos];
 }
 

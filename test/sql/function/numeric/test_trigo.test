@@ -464,7 +464,7 @@ Invalid Input Error: ACOS is undefined outside [-1,1]
 foreach value 1.1 -1.1
 
 statement error
-select atanh(${value});
+select atanh({value});
 ----
 Invalid Input Error: ATANH is undefined outside [-1,1]
 
@@ -473,7 +473,7 @@ endloop
 query II
 select atanh(1), atanh(-1);
 ----
-inf	inf
+inf	-inf
 
 query III
 select atanh(-0.5), atanh(0), atanh(0.5);

@@ -49,7 +49,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				intermediate.Reference(comp_res);
 			} else {
 				// otherwise OR together
-				Vector new_result(LogicalType::BOOLEAN, true, false);
+				Vector new_result(LogicalType::BOOLEAN);
 				VectorOperations::Or(intermediate, comp_res, new_result, count);
 				intermediate.Reference(new_result);
 			}

@@ -240,8 +240,8 @@ void BignumAddition(data_ptr_t result, int64_t result_end, bool is_target_absolu
 	}
 }
 
-string_t BignumIntermediate::Negate(Vector &result_vector) const {
-	auto target = StringVector::EmptyString(result_vector, size + Bignum::BIGNUM_HEADER_SIZE);
+string_t BignumIntermediate::Negate(StringHeap &heap) const {
+	auto target = heap.EmptyString(size + Bignum::BIGNUM_HEADER_SIZE);
 	auto ptr = target.GetDataWriteable();
 
 	if (!is_negative && size == 1 && data[0] == 0x00) {
@@ -287,7 +287,7 @@ string ProduceOverUnderFlowError(bool is_result_negative, idx_t actual_start, id
 	return error.str();
 }
 
-string_t BignumIntermediate::Add(Vector &result_vector, const BignumIntermediate &lhs, const BignumIntermediate &rhs) {
+string_t BignumIntermediate::Add(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs) {
 	const bool same_sign = lhs.is_negative == rhs.is_negative;
 	const uint32_t actual_size = lhs.size - lhs.GetStartDataPos();
 	const uint32_t actual_rhs_size = rhs.size - rhs.GetStartDataPos();
@@ -304,10 +304,11 @@ string_t BignumIntermediate::Add(Vector &result_vector, const BignumIntermediate
 		auto is_absolute_bigger = lhs.IsAbsoluteBigger(rhs);
 		if (is_absolute_bigger == EQUAL) {
 			// We set this value to 0
-			auto target = StringVector::EmptyString(result_vector, result_size);
+			auto target = heap.EmptyString(result_size);
 			auto target_data = target.GetDataWriteable();
 			Bignum::SetHeader(target_data, 1, false);
 			target_data[Bignum::BIGNUM_HEADER_SIZE] = 0;
+			target.SetSizeAndFinalize(1 + Bignum::BIGNUM_HEADER_SIZE, result_size);
 			return target;
 
 		} else if (is_absolute_bigger == SMALLER) {
@@ -315,7 +316,7 @@ string_t BignumIntermediate::Add(Vector &result_vector, const BignumIntermediate
 		}
 	}
 
-	auto target = StringVector::EmptyString(result_vector, result_size);
+	auto target = heap.EmptyString(result_size);
 	auto result_size_data = result_size - Bignum::BIGNUM_HEADER_SIZE;
 
 	auto target_data = target.GetDataWriteable();

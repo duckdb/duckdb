@@ -52,7 +52,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 		member_vector.Flatten(count);
 		union_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
-		if (member_vector.validity.CannotHaveNull()) {
+		if (FlatVector::Validity(member_vector).CannotHaveNull()) {
 			// if the member vector is all valid, we can set the tag to constant
 			tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 			auto tag_data = ConstantVector::GetData<union_tag_t>(tag_vector);
@@ -68,7 +68,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 				FlatVector::Validity(tag_vector) = FlatVector::Validity(member_vector);
 			}
 
-			auto tag_data = FlatVector::GetData<union_tag_t>(tag_vector);
+			auto tag_data = FlatVector::GetDataMutable<union_tag_t>(tag_vector);
 			memset(tag_data, tag, count);
 		}
 	}

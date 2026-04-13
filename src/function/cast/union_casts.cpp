@@ -242,8 +242,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 	for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
 		if (!target_member_is_mapped[target_member_idx]) {
 			auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
-			target_member_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_member_vector, true);
+			ConstantVector::SetNull(target_member_vector);
 		}
 	}
 
@@ -255,7 +254,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		// Constant vector case optimization
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			// map the tag
 			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];
@@ -280,7 +279,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 			if (entry.IsValid()) {
 				// map the tag
 				auto target_tag = cast_data.tag_map[entry.value];
-				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
+				FlatVector::GetDataMutable<union_tag_t>(result_tag_vector)[row_idx] =
 				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
 				// Issue: The members of the result is not always flatvectors
@@ -308,12 +307,11 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	auto &tag_vector = UnionVector::GetTags(varchar_union);
 	auto tag_entries = tag_vector.Values<union_tag_t>(count);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto tag_entry = tag_entries[i];
 		if (!tag_entry.IsValid()) {
-			FlatVector::SetNull(result, i, true);
+			result_data.SetInvalid(i);
 			continue;
 		}
 
@@ -322,9 +320,9 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		auto member_entries = member.Values<string_t>(count);
 		auto member_entry = member_entries[i];
 		if (member_entry.IsValid()) {
-			result_data[i] = StringVector::AddString(result, member_entry.value);
+			result_data[i] = member_entry.value;
 		} else {
-			result_data[i] = StringVector::AddString(result, "NULL");
+			result_data[i] = "NULL";
 		}
 	}
 

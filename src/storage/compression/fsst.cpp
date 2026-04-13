@@ -143,11 +143,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 
 		if (string_size > 0) {
 			state.have_valid_row = true;
-			if (data[idx].IsInlined()) {
-				state.fsst_strings.push_back(data[idx]);
-			} else {
-				state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
-			}
+			state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
 			state.fsst_string_total_size += string_size;
 		} else {
 			state.empty_strings++;
@@ -558,7 +554,7 @@ struct FSSTScanState : public StringScanState {
 	}
 	inline string_t DecompressString(StringDictionaryContainer dict, data_ptr_t baseptr,
 	                                 const bp_delta_offsets_t &offsets, idx_t index,
-	                                 VectorStringBuffer &str_buffer) const {
+	                                 ArenaAllocator &str_allocator) const {
 		uint32_t str_len = bitunpack_buffer[offsets.scan_offset + index];
 		auto str_ptr = FSSTStorage::FetchStringPointer(
 		    dict, baseptr,
@@ -570,7 +566,7 @@ struct FSSTScanState : public StringScanState {
 		if (all_values_inlined) {
 			return FSSTPrimitives::DecompressInlinedValue(duckdb_fsst_decoder_ptr, str_ptr, str_len);
 		} else {
-			return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder_ptr, str_buffer, str_ptr, str_len);
+			return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder_ptr, str_allocator, str_ptr, str_len);
 		}
 	}
 };
@@ -670,17 +666,16 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		D_ASSERT(result_offset == 0);
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
-			result.SetVectorType(VectorType::FSST_VECTOR);
 			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
-			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
+			FSSTVector::Create(result, scan_state.duckdb_fsst_decoder, string_block_limit, scan_count);
 			result_data = FSSTVector::GetCompressedData(result);
 		} else {
 			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-			result_data = FlatVector::GetData<string_t>(result);
+			result_data = FlatVector::GetDataMutable<string_t>(result);
 		}
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		result_data = FlatVector::GetData<string_t>(result);
+		result_data = FlatVector::GetDataMutable<string_t>(result);
 	}
 
 	auto offsets = StartScan(scan_state, base_data, start, scan_count);
@@ -698,9 +693,9 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		}
 	} else {
 		// Just decompress
-		auto &str_buffer = StringVector::GetStringBuffer(result);
+		auto &str_allocator = StringVector::GetStringAllocator(result);
 		for (idx_t i = 0; i < scan_count; i++) {
-			result_data[i + result_offset] = scan_state.DecompressString(dict, baseptr, offsets, i, str_buffer);
+			result_data[i + result_offset] = scan_state.DecompressString(dict, baseptr, offsets, i, str_allocator);
 		}
 	}
 	EndScan(scan_state, offsets, start, scan_count);
@@ -724,13 +719,13 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto &str_buffer = StringVector::GetStringBuffer(result);
+	auto &str_allocator = StringVector::GetStringAllocator(result);
 	auto offsets = StartScan(scan_state, base_data, start, vector_count);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);
-		result_data[i] = scan_state.DecompressString(dict, baseptr, offsets, index, str_buffer);
+		result_data[i] = scan_state.DecompressString(dict, baseptr, offsets, index, str_allocator);
 	}
 	EndScan(scan_state, offsets, start, vector_count);
 }
@@ -751,7 +746,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto block_size = segment.GetBlockSize();
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, block_size);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	if (!have_symbol_table) {
 		// There is no FSST symtable. This is only the case for empty strings or NULLs. We emit an empty string.
 		result_data[result_idx] = string_t(nullptr, 0);
@@ -775,9 +770,9 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	    segment, dict.end, result, base_ptr,
 	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
 
-	auto &str_buffer = StringVector::GetStringBuffer(result);
-	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, str_buffer, compressed_string.GetData(),
-	                                                          compressed_string.GetSize());
+	auto &str_allocator = StringVector::GetStringAllocator(result);
+	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, str_allocator,
+	                                                          compressed_string.GetData(), compressed_string.GetSize());
 }
 
 //===--------------------------------------------------------------------===//

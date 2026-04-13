@@ -21,7 +21,7 @@ INSERT INTO integers SELECT range FROM range(100);
 loop j 0 40
 
 query I
-SELECT COUNT(*) = ${i} + 1 FROM integers WHERE i = ${j};
+SELECT COUNT(*) = {i} + 1 FROM integers WHERE i = {j};
 ----
 1
 

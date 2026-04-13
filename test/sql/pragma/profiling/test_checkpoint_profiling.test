@@ -16,7 +16,7 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown;
 
 statement ok
-ATTACH '__TEST_DIR__/checkpoint_prof.db';
+ATTACH '{TEST_DIR}/checkpoint_prof.db';
 
 statement ok
 CREATE TABLE checkpoint_prof.tbl(id INTEGER, category INTEGER);
@@ -31,7 +31,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cp_noop.json';
+PRAGMA profiling_output = '{TEST_DIR}/cp_noop.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
@@ -46,7 +46,7 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END FROM '__TEST_DIR__/cp_noop.json';
+SELECT CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_noop.json';
 ----
 true
 
@@ -57,7 +57,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cp_first.json';
+PRAGMA profiling_output = '{TEST_DIR}/cp_first.json';
 
 statement ok
 CHECKPOINT checkpoint_prof;
@@ -66,7 +66,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE TABLE first_cp AS SELECT checkpoint_latency AS latency FROM '__TEST_DIR__/cp_first.json';
+CREATE TABLE first_cp AS SELECT checkpoint_latency AS latency FROM '{TEST_DIR}/cp_first.json';
 
 query I
 SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM first_cp;
@@ -80,7 +80,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cp_second.json';
+PRAGMA profiling_output = '{TEST_DIR}/cp_second.json';
 
 statement ok
 CHECKPOINT checkpoint_prof;
@@ -89,7 +89,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE TABLE second_cp AS SELECT checkpoint_latency AS latency FROM '__TEST_DIR__/cp_second.json';
+CREATE TABLE second_cp AS SELECT checkpoint_latency AS latency FROM '{TEST_DIR}/cp_second.json';
 
 query I
 SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM second_cp;
@@ -110,7 +110,7 @@ loop x 0 10
 
 onlyif threadid<>0
 statement maybe
-INSERT INTO checkpoint_prof.tbl SELECT range + (2000000 + ${threadid} * 10000 + ${x} * 1000), range % 100 FROM range(1000);
+INSERT INTO checkpoint_prof.tbl SELECT range + (2000000 + {threadid} * 10000 + {x} * 1000), range % 100 FROM range(1000);
 ----
 
 onlyif threadid=0
@@ -119,7 +119,7 @@ PRAGMA enable_profiling = 'json';
 
 onlyif threadid=0
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cp_concurrent_${x}.json';
+PRAGMA profiling_output = '{TEST_DIR}/cp_concurrent_{x}.json';
 
 onlyif threadid=0
 statement maybe
@@ -132,7 +132,7 @@ PRAGMA disable_profiling;
 
 onlyif threadid=0
 query I
-SELECT CASE WHEN checkpoint_latency >= 0 THEN 'true' ELSE 'false' END FROM '__TEST_DIR__/cp_concurrent_${x}.json';
+SELECT CASE WHEN checkpoint_latency >= 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_concurrent_{x}.json';
 ----
 true
 
@@ -141,7 +141,7 @@ endloop
 endloop
 
 statement ok
-CREATE OR REPLACE TABLE metrics AS SELECT * FROM '__TEST_DIR__/cp_concurrent_0.json';
+CREATE OR REPLACE TABLE metrics AS SELECT * FROM '{TEST_DIR}/cp_concurrent_0.json';
 
 query I
 SELECT CASE WHEN checkpoint_latency > 0 THEN 'true' ELSE 'false' END FROM metrics;

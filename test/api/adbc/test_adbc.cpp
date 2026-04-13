@@ -1,5 +1,6 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
+#include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
@@ -2901,7 +2902,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	}
 	// 6. Test constraints
 	//
-	// Available constraints: https://duckdb.org/docs/stable/sql/constraints.html
+	// Available constraints: https://duckdb.org/docs/current/sql/constraints.html
 	{
 		ADBCTestDatabase db("test_constraints");
 		// Create table 'foreign_table'
@@ -4370,4 +4371,105 @@ TEST_CASE("ADBC - Re-execute same statement while prior stream is open", "[adbc]
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
 }
 
+TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	const auto query = "CREATE MACRO my_macro(x) AS x + 1";
+	auto result = db.Query(query);
+	REQUIRE(!result->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, query, &db.adbc_error)));
+
+	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
+	int64_t rows_affected = -1;
+	auto status = AdbcStatementExecuteQuery(&stmt, &out_stream, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(out_stream.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto &input_data = db.QueryArrow("SELECT 44 as value");
+
+	AdbcStatement adbc_statement;
+	InitializeADBCError(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "nonexistent_schema",
+	                                       &db.adbc_error)));
+
+	const char *ingest_option_mode;
+	SECTION("REPLACE") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_REPLACE;
+	}
+	SECTION("CREATE_APPEND") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_CREATE_APPEND;
+	}
+
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ingest_option_mode, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto r1 = db.Query("CREATE TABLE test_table(x INTEGER UNIQUE)");
+	REQUIRE(!r1->HasError());
+	auto r2 = db.Query("INSERT INTO test_table VALUES (42)");
+	REQUIRE(!r2->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "INSERT INTO test_table VALUES ($1)", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&stmt, &db.adbc_error)));
+
+	// Bind a stream containing the duplicate value — will trigger a UNIQUE violation
+	auto &input_data = db.QueryArrow("SELECT 42 AS x");
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &db.adbc_error)));
+
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&stmt, nullptr, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
 } // namespace duckdb

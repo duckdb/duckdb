@@ -14,6 +14,12 @@
 #include "duckdb/parser/tableref/at_clause.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
 
@@ -300,7 +306,11 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectClause(PEGTransform
 			result->modifiers.push_back(std::move(distinct_modifier));
 		}
 	}
-	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto opt_target_list = list_pr.Child<OptionalParseResult>(2);
+	if (!opt_target_list.HasResult()) {
+		throw ParserException("SELECT clause without selection list");
+	}
+	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_target_list.optional_result);
 	for (auto &expr_ptr : target_list) {
 		result->select_list.push_back(std::move(expr_ptr));
 	}
@@ -358,7 +368,7 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	MacroParameter parameter;
 	parameter.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
-	parameter.name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	parameter.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	parameter.is_default = true;
 	transformer.TransformOptional<LogicalType>(list_pr, 1, parameter.type);
 	return parameter;
@@ -1482,7 +1492,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		auto type_str = transformer.Transform<string>(group_by_list.Child<ListParseResult>(0));
 		auto extract_parens = ExtractResultFromParens(group_by_list.Child<ListParseResult>(1));
 		if (!extract_parens->Cast<OptionalParseResult>().HasResult()) {
-			throw ParserException("CUBE or ROLLUP column list cannot be emptied");
+			throw ParserException("CUBE or ROLLUP column list cannot be empty");
 		}
 		auto expr_list = ExtractParseResultsFromList(extract_parens->Cast<OptionalParseResult>().optional_result);
 
@@ -1593,7 +1603,15 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
 
 		if (is_recursive) {
-			auto &query_node = with_entry.second->query->node;
+			auto &query_node = with_entry.second->query_node;
+			if (!query_node) {
+				throw ParserException("Recursive CTEs with DML statements are not supported");
+			}
+			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
+			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
+			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
+				throw ParserException("Recursive CTEs with DML statements are not supported");
+			}
 			if (!query_node->modifiers.empty()) {
 				for (auto &modifier : query_node->modifiers) {
 					if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
@@ -1641,8 +1659,41 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, optio
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(5));
 	D_ASSERT(table_ref->type == TableReferenceType::SUBQUERY);
 	auto subquery_ref = unique_ptr_cast<TableRef, SubqueryRef>(std::move(table_ref));
-	result->query = std::move(subquery_ref->subquery);
+	result->query_node = std::move(subquery_ref->subquery->node);
 	return make_pair(cte_name, std::move(result));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformCTEBody(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// CTEBody <- Parens(CTEBodyContent)
+	auto inner = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	// CTEBodyContent <- SelectStatementInternal / Statement
+	auto &content_list = inner->Cast<ListParseResult>();
+	auto &body_choice = content_list.Child<ChoiceParseResult>(0);
+	if (body_choice.result->name == "SelectStatementInternal") {
+		auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(body_choice.result);
+		return make_uniq<SubqueryRef>(std::move(select_statement));
+	}
+	// DML body (INSERT / UPDATE / DELETE) - transform as a Statement and extract its QueryNode
+	auto sql_stmt = transformer.Transform<unique_ptr<SQLStatement>>(body_choice.result);
+	unique_ptr<QueryNode> query_node;
+	switch (sql_stmt->type) {
+	case StatementType::INSERT_STATEMENT:
+		query_node = unique_ptr_cast<InsertQueryNode, QueryNode>(std::move(sql_stmt->Cast<InsertStatement>().node));
+		break;
+	case StatementType::UPDATE_STATEMENT:
+		query_node = unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(sql_stmt->Cast<UpdateStatement>().node));
+		break;
+	case StatementType::DELETE_STATEMENT:
+		query_node = unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(sql_stmt->Cast<DeleteStatement>().node));
+		break;
+	default:
+		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement");
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	select_statement->node = std::move(query_node);
+	return make_uniq<SubqueryRef>(std::move(select_statement));
 }
 
 bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
@@ -1696,7 +1747,9 @@ PEGTransformerFactory::TransformWindowClause(PEGTransformer &transformer, option
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	transformer.in_window_definition = true;
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
+	transformer.in_window_definition = false;
 	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
 	return std::move(window_function);
 }

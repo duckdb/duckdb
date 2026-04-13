@@ -30,10 +30,11 @@ inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
-inline string_t Extract(const string_t &input, Vector &result, const RE2 &re, const duckdb_re2::StringPiece &rewrite) {
+inline string_t Extract(const string_t &input, StringHeap &heap, const RE2 &re,
+                        const duckdb_re2::StringPiece &rewrite) {
 	string extracted;
 	RE2::Extract(input.GetString(), re, rewrite, &extracted);
-	return StringVector::AddString(result, extracted.c_str(), extracted.size());
+	return heap.AddString(extracted.c_str(), extracted.size());
 }
 
 } // namespace regexp_util

@@ -286,6 +286,10 @@ idx_t DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return scan_state.table_state.row_group->GetCount();
 	}
+	if (state.scan_state.row_number_base.IsValid()) {
+		// start the row number for transaction-local rows from the final row count in the base table
+		scan_state.local_state.row_number_base = state.scan_state.row_number_base.GetIndex();
+	}
 	auto &local_storage = LocalStorage::Get(context, db);
 	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
 		return scan_state.local_state.row_group->GetCount();
@@ -1048,6 +1052,13 @@ bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, tr
 	return true;
 }
 
+optional_idx DataTableInfo::CheckpointRowGroupCount(const CheckpointOptions &options) const {
+	if (!last_seen_checkpoint.IsValid() || last_seen_checkpoint.GetIndex() != options.transaction_id) {
+		return optional_idx();
+	}
+	return checkpoint_row_group_count;
+}
+
 void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState &state) {
 	// obtain the append lock for this table
 	if (!state.append_lock) {
@@ -1430,7 +1441,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector 
 	auto storage = local_storage.GetStorage(*this);
 
 	row_identifiers.Flatten(count);
-	auto ids = FlatVector::GetData<row_t>(row_identifiers);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_identifiers);
 
 	idx_t pos = 0;
 	idx_t delete_count = 0;
@@ -1621,7 +1632,8 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(transaction, *this, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
+		row_groups->Update(transaction, *this, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
+		                   updates_slice);
 	}
 }
 
@@ -1675,6 +1687,7 @@ unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 }
 
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
+	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
 	row_groups->Checkpoint(writer, global_stats);
@@ -1686,9 +1699,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	if (writer.CanOverrideBaseStats()) {
-		row_groups->SetStats(global_stats);
-	}
+	row_groups->SetStats(global_stats);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {

@@ -158,7 +158,7 @@ static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
 
 template <class T>
 static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
 	                                  [&](UpdateInfo &current) { MergeUpdateInfo<T>(current, result_data); });
 }
@@ -239,7 +239,7 @@ static void FetchCommittedValidity(UpdateInfo &info, Vector &result) {
 
 template <class T>
 static void TemplatedFetchCommitted(UpdateInfo &info, Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	MergeUpdateInfo<T>(info, result_data);
 }
 
@@ -336,7 +336,7 @@ static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, id
 template <class T>
 static void TemplatedFetchCommittedRange(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
                                          Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data);
 }
 
@@ -440,7 +440,7 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 template <class T>
 static void TemplatedFetchRow(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, idx_t row_idx,
                               Vector &result, idx_t result_idx) {
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<T>();
 		auto tuples = current.GetTuples();
@@ -706,7 +706,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element) {
-	return element.IsInlined() ? element : segment.GetStringHeap().AddBlob(element);
+	return segment.GetStringHeap().AddBlob(element);
 }
 
 template <class T>
@@ -943,7 +943,7 @@ template <class T>
 static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
                             UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
                             idx_t row_group_start) {
-	auto base_table_data = FlatVector::GetData<T>(base_data);
+	auto base_table_data = FlatVector::GetDataMutable<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
 	                              sel, row_group_start);
@@ -1298,10 +1298,10 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 	if (statistics_update_function == UpdateStringStatistics) {
 		// for strings - we need to push all strings we are going to place here into the string heap of the segment
 		update_p.Flatten(count);
-		auto update_data = FlatVector::GetData<string_t>(update_p);
+		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
 		auto &validity = FlatVector::Validity(update_p);
 		for (idx_t i = 0; i < count; i++) {
-			if (validity.RowIsValid(i) && !update_data[i].IsInlined()) {
+			if (validity.RowIsValid(i)) {
 				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
 			}
 		}

@@ -40,6 +40,7 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/partitioned_execution.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
+#include "duckdb/optimizer/row_number_rewriter.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
@@ -343,6 +344,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
 	});
+
+	// Rewrite ROW_NUMBER() OVER() window functions to use the row_number virtual column
+	RunOptimizer(OptimizerType::ROW_NUMBER_REWRITER, [&]() {
+		RowNumberRewriter window_rewriter;
+		plan = window_rewriter.Optimize(std::move(plan));
+	});
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
@@ -386,6 +393,15 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	children.push_back(std::move(c2));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	children.push_back(std::move(c3));
 	return BindScalarFunction(name, std::move(children));
 }
 

@@ -44,6 +44,7 @@ add_library_unity(
   topn_window_elimination.cpp
   unnest_rewriter.cpp
   window_self_join.cpp
+  row_number_rewriter.cpp
   sampling_pushdown.cpp
   projection_pullup.cpp)
 set(ALL_OBJECT_FILES

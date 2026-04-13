@@ -137,6 +137,9 @@ idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionS
 	throw InternalException("ExpressionExecutor::Select not available with DUCKDB_SMALLER_BINARY");
 #else
 	// resolve the children
+	// reset intermediate vectors to undo any type changes from previous calls
+	// (e.g. SetVectorType(CONSTANT) modifies the shared buffer)
+	state->intermediate_chunk.Reset();
 	Vector input(Vector::Ref(state->intermediate_chunk.data[0]));
 	Vector lower(Vector::Ref(state->intermediate_chunk.data[1]));
 	Vector upper(Vector::Ref(state->intermediate_chunk.data[2]));

@@ -3,7 +3,7 @@
 # group: [delete]
 
 # load the DB from disk
-load __TEST_DIR__/test_unchanged_deletes.db
+load {TEST_DIR}/test_unchanged_deletes.db
 
 statement ok
 CREATE TABLE integers AS FROM range(4) t(i)
@@ -30,7 +30,7 @@ SELECT COUNT(*) FROM integers
 2
 
 statement ok
-INSERT INTO integers2 VALUES (${i});
+INSERT INTO integers2 VALUES ({i});
 
 restart
 

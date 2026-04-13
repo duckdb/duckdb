@@ -416,7 +416,22 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	if (StringUtil::CIEquals(choice_pr.name, "IntervalToInterval")) {
+		return transformer.Transform<DatePartSpecifier>(choice_pr.result);
+	} else {
+		return transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	}
+}
+
+DatePartSpecifier PEGTransformerFactory::TransformIntervalToInterval(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto inner_list = choice_pr.result->Cast<ListParseResult>();
+	auto first_interval = transformer.TransformEnum<DatePartSpecifier>(inner_list.GetChild(0));
+	auto second_interval = transformer.TransformEnum<DatePartSpecifier>(inner_list.GetChild(2));
+	throw ParserException("%s TO %s is not supported", EnumUtil::ToString(first_interval),
+	                      EnumUtil::ToString(second_interval));
 }
 
 bool PEGTransformerFactory::TryNegateValue(Value &val) {

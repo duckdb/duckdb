@@ -135,7 +135,7 @@ struct BinaryExecutor {
 		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 
 		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right)) {
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		*result_data = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
@@ -151,13 +151,12 @@ struct BinaryExecutor {
 
 		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
 			// either left or right is constant NULL: result is constant NULL
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &result_validity = FlatVector::Validity(result);
 		if (LEFT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
@@ -225,7 +224,7 @@ struct BinaryExecutor {
 		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
 		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result),
