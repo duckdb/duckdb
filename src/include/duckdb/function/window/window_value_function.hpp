@@ -23,8 +23,6 @@ public:
 	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared) : WindowExecutor(wexpr, shared) {
 	}
 
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
-
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
 	                                             const idx_t payload_count, const ValidityMask &partition_mask,
 	                                             const ValidityMask &order_mask);
