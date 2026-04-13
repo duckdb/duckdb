@@ -126,7 +126,6 @@ bool PhysicalLeftDelimJoin::ResetGlobalSinkState(ClientContext &context, GlobalS
 
 bool PhysicalLeftDelimJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &state_p) const {
-	(void)gstate_p;
 	auto &state = state_p.Cast<LeftDelimJoinLocalState>();
 	state.lhs_data.ResetForReuse();
 	state.lhs_data.InitializeAppend(state.append_state);

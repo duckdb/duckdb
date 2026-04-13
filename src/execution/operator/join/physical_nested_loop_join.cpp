@@ -289,7 +289,6 @@ bool PhysicalNestedLoopJoin::ResetGlobalSinkState(ClientContext &context, Global
 
 bool PhysicalNestedLoopJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                  LocalSinkState &state_p) const {
-	(void)context;
 	auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalState>();
 	auto &state = state_p.Cast<NestedLoopJoinLocalState>();
 	state.right_condition.Reset();
@@ -358,7 +357,6 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExecutionCont
 }
 
 bool PhysicalNestedLoopJoin::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	(void)context;
 	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
 	state.ResetCachingState();
 	state.fetch_next_left = true;
@@ -571,7 +569,6 @@ unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(Executi
 }
 
 bool PhysicalNestedLoopJoin::ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state_p) const {
-	(void)context;
 	auto &state = state_p.Cast<NestedLoopJoinGlobalScanState>();
 	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();
 	sink.right_outer.InitializeScan(sink.right_payload_data, state.scan_state);
@@ -580,7 +577,6 @@ bool PhysicalNestedLoopJoin::ResetGlobalSourceState(ClientContext &context, Glob
 
 bool PhysicalNestedLoopJoin::ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate_p,
                                                    LocalSourceState &state_p) const {
-	(void)context;
 	auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalScanState>();
 	auto &state = state_p.Cast<NestedLoopJoinLocalScanState>();
 	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();

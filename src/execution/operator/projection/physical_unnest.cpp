@@ -132,7 +132,6 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &con
 }
 
 bool PhysicalUnnest::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	(void)context;
 	auto &state = state_p.Cast<UnnestOperatorState>();
 	state.Reset();
 	state.list_data.Reset();

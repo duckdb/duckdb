@@ -1766,8 +1766,6 @@ bool PhysicalHashJoin::ResetGlobalSourceState(ClientContext &context, GlobalSour
 
 bool PhysicalHashJoin::ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate_p,
                                              LocalSourceState &state_p) const {
-	(void)context;
-	(void)gstate_p;
 	auto &state = state_p.Cast<HashJoinLocalSourceState>();
 	state.local_stage = HashJoinSourceStage::INIT;
 	state.build_chunk_idx_from = DConstants::INVALID_INDEX;

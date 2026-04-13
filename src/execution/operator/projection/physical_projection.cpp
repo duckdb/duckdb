@@ -37,8 +37,6 @@ unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ExecutionContext 
 }
 
 bool PhysicalProjection::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	(void)context;
-	(void)state_p;
 	return true;
 }
 

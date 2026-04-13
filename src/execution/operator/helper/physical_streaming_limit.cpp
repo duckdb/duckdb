@@ -40,14 +40,12 @@ unique_ptr<GlobalOperatorState> PhysicalStreamingLimit::GetGlobalOperatorState(C
 }
 
 bool PhysicalStreamingLimit::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	(void)context;
 	auto &state = state_p.Cast<StreamingLimitOperatorState>();
 	PhysicalLimit::SetInitialLimits(limit_val, offset_val, state.limit, state.offset);
 	return true;
 }
 
 bool PhysicalStreamingLimit::ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state_p) const {
-	(void)context;
 	auto &state = state_p.Cast<StreamingLimitGlobalState>();
 	state.current_offset = 0;
 	return true;

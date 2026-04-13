@@ -71,7 +71,6 @@ unique_ptr<LocalSinkState> PhysicalRightDelimJoin::GetLocalSinkState(ExecutionCo
 }
 
 bool PhysicalRightDelimJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
-	(void)state_p;
 	RightDelimResetSinkState(join, context, join.sink_state);
 	RightDelimResetSinkState(distinct, context, distinct.sink_state);
 	if (delim_scans.size() > 1) {
@@ -82,7 +81,6 @@ bool PhysicalRightDelimJoin::ResetGlobalSinkState(ClientContext &context, Global
 
 bool PhysicalRightDelimJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                  LocalSinkState &state_p) const {
-	(void)gstate_p;
 	auto &state = state_p.Cast<RightDelimJoinLocalState>();
 	RightDelimResetLocalSinkState(join, context, *join.sink_state, state.join_state);
 	RightDelimResetLocalSinkState(distinct, context, *distinct.sink_state, state.distinct_state);

@@ -1238,14 +1238,13 @@ void ColumnDataCollection::Swap(ColumnDataCollection &other) {
 	if (types != other.types) {
 		throw InternalException("Attempting to swap ColumnDataCollections with mismatching types");
 	}
-	using std::swap;
-	swap(allocator, other.allocator);
-	swap(types, other.types);
-	swap(count, other.count);
-	swap(segments, other.segments);
-	swap(copy_functions, other.copy_functions);
-	swap(finished_append, other.finished_append);
-	swap(partition_index, other.partition_index);
+	std::swap(allocator, other.allocator);
+	std::swap(types, other.types);
+	std::swap(count, other.count);
+	std::swap(segments, other.segments);
+	std::swap(copy_functions, other.copy_functions);
+	std::swap(finished_append, other.finished_append);
+	std::swap(partition_index, other.partition_index);
 }
 
 //===--------------------------------------------------------------------===//

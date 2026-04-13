@@ -546,6 +546,8 @@ void TupleDataCollection::Reset() {
 		// All segments were null (moved out by Combine).  The old allocator is still shared by
 		// those moved-out segments and must keep its row_blocks intact.  Create a fresh allocator.
 		segments.clear();
+
+		// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
 		allocator = make_shared_ptr<TupleDataAllocator>(*allocator);
 	}
 }
@@ -589,8 +591,7 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, TupleDataPin
 
 void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
                                          TupleDataPinProperties properties) const {
-	state.pin_state.row_handles.clear();
-	state.pin_state.heap_handles.clear();
+	state.Reset();
 	state.pin_state.properties = properties;
 	state.segment_index = 0;
 	state.chunk_index = 0;

@@ -13,8 +13,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
-#include <new>
-
 namespace duckdb {
 
 RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p,
@@ -901,8 +899,7 @@ void RadixHTLocalSourceState::Reset() {
 	scan_status = RadixHTScanStatus::DONE;
 	aggregate_allocator.Reset();
 	row_state.addresses.reset();
-	scan_state.~TupleDataScanState();
-	new (&scan_state) TupleDataScanState();
+	scan_state.Reset();
 	scan_chunk.Reset();
 }
 

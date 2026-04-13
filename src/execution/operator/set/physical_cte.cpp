@@ -61,7 +61,6 @@ unique_ptr<LocalSinkState> PhysicalCTE::GetLocalSinkState(ExecutionContext &cont
 }
 
 bool PhysicalCTE::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
-	(void)context;
 	auto &state = state_p.Cast<CTEGlobalState>();
 	working_table->Reset();
 	state.working_table_ref = working_table.get();
@@ -70,8 +69,6 @@ bool PhysicalCTE::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &
 
 bool PhysicalCTE::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
                                       LocalSinkState &state_p) const {
-	(void)context;
-	(void)gstate_p;
 	auto &state = state_p.Cast<CTELocalState>();
 	state.lhs_data.Reset();
 	state.lhs_data.InitializeAppend(state.append_state);

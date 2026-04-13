@@ -34,7 +34,7 @@ public:
 	}
 
 public:
-	const ColumnDataCollection *collection;
+	optional_ptr<const ColumnDataCollection> collection;
 	ColumnDataParallelScanState global_scan_state;
 
 	idx_t max_threads;
