@@ -11,9 +11,7 @@
 #include "duckdb/main/settings.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
-#endif
 #endif
 #ifndef DUCKDB_NO_THREADS
 #include <chrono>
