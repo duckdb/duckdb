@@ -124,15 +124,6 @@ bool Transformer::InWindowDefinition() {
 	return false;
 }
 
-bool Transformer::InMacroDefinition() {
-	if (in_macro_definition) {
-		return true;
-	}
-	if (parent) {
-		return parent->InMacroDefinition();
-	}
-	return false;
-}
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall &root) {
 	auto name = root.funcname;
 	string catalog, schema, function_name;
@@ -323,29 +314,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
-	} else if (lowercase_name == "list" && order_bys->orders.size() == 1 && !InMacroDefinition()) {
-		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
-		if (children.size() != 1) {
-			throw ParserException("Wrong number of arguments to LIST.");
-		}
-		auto arg_expr = children[0].get();
-		auto &order_by = order_bys->orders[0];
-		if (arg_expr->Equals(*order_by.expression)) {
-			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
-			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
-			order_bys = nullptr;
-			auto unordered = make_uniq<FunctionExpression>(catalog, schema, lowercase_name.c_str(), std::move(children),
-			                                               std::move(filter_expr), std::move(order_bys),
-			                                               root.agg_distinct, false, root.export_state);
-			lowercase_name = "list_sort";
-			order_bys.reset();   // NOLINT
-			filter_expr.reset(); // NOLINT
-			children.clear();    // NOLINT
-			root.agg_distinct = false;
-			children.emplace_back(std::move(unordered));
-			children.emplace_back(std::move(sense));
-			children.emplace_back(std::move(nulls));
-		}
 	} else if (lowercase_name == "date") {
 		if (children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to DATE function");

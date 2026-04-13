@@ -2501,7 +2501,7 @@ void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t
 			continue;
 		}
 
-		const auto &source = entry.value;
+		const auto &source = entry.GetValue();
 		BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
 		const auto required_size = FromLegacyGeometryRequiredSize(reader);
 

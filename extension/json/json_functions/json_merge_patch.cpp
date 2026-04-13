@@ -23,8 +23,8 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 		if (!entry.IsValid()) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] =
-			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(entry.value, JSONCommon::READ_FLAG, &doc->alc)->root);
+			objs[i] = yyjson_val_mut_copy(
+			    doc, JSONCommon::ReadDocument(entry.GetValue(), JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }

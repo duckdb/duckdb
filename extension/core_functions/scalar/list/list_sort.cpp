@@ -154,7 +154,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			continue;
 		}
 
-		const auto &list_entry = entry.value;
+		const auto &list_entry = entry.GetValue();
 
 		// empty list, no sorting required
 		if (list_entry.length == 0) {

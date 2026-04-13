@@ -44,8 +44,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// - STRUCTs have exactly two fields, a key-field, and a value-field
 	// - key names are unique
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-
 	if (MapIsNull(args)) {
 		auto &validity = FlatVector::Validity(result);
 		validity.SetInvalid(0);

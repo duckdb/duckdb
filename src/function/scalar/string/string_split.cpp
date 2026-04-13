@@ -135,13 +135,13 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 		StringSplitInput split_input(result, child_entry, total_splits);
 		if (!delim_entry.IsValid()) {
 			// delim is NULL: copy the complete entry
-			split_input.AddSplit(input_entry.value.GetData(), input_entry.value.GetSize(), 0);
+			split_input.AddSplit(input_entry.GetValue().GetData(), input_entry.GetValue().GetSize(), 0);
 			list_struct_data[i].length = 1;
 			list_struct_data[i].offset = total_splits;
 			total_splits++;
 			continue;
 		}
-		auto list_length = StringSplitter::Split<OP>(input_entry.value, delim_entry.value, split_input, data);
+		auto list_length = StringSplitter::Split<OP>(input_entry.GetValue(), delim_entry.GetValue(), split_input, data);
 		list_struct_data[i].length = list_length;
 		list_struct_data[i].offset = total_splits;
 		total_splits += list_length;

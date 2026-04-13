@@ -1,11 +1,21 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
+
+#include <memory>
+#include <stdexcept>
+
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
-#include "utf8proc_wrapper.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class Vector;
 
 DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader)
     : reader(reader), length_buffer(reader.encoding_buffers[0]), length_idx(0) {

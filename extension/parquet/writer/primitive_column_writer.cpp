@@ -1,7 +1,27 @@
 #include "writer/primitive_column_writer.hpp"
+
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_geometry.hpp"
 
 namespace duckdb {
 using duckdb_parquet::Encoding;
