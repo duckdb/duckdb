@@ -4,29 +4,28 @@
 namespace duckdb {
 
 FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
-    : vector(vector), data(FlatVector::GetData<string_t>(vector)), validity(FlatVector::Validity(vector)),
-      count(count) {
+    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)), count(count) {
 }
 
 void FlatVector::FlatStringWriter::InitializeHeap() {
 	heap = StringVector::GetStringHeap(vector);
 }
 
-VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0)) {
+VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0), sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
-    : StandardVectorBuffer(allocator, 0), heap(AllocateHeap(allocator)) {
+    : StandardVectorBuffer(allocator, 0, sizeof(string_t)), heap(AllocateHeap(allocator)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(Allocator &allocator, idx_t capacity)
-    : StandardVectorBuffer(allocator, capacity * sizeof(string_t)) {
+    : StandardVectorBuffer(allocator, capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity * sizeof(string_t)) {
+VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 

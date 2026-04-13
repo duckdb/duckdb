@@ -402,7 +402,7 @@ static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const Lis
 		}
 	}
 
-	auto aggr_vector_data = FlatVector::GetData<T>(result);
+	auto aggr_vector_data = FlatVector::GetDataMutable<T>(result);
 
 	// load values
 	for (idx_t i = 0; i < segment->count; i++) {
@@ -418,7 +418,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
 	// use length and (reconstructed) offset to get the correct substrings
-	auto aggr_vector_data = FlatVector::GetData<string_t>(result);
+	auto aggr_vector_data = FlatVector::GetDataMutable<string_t>(result);
 	auto str_length_data = GetListLengthData(segment);
 
 	auto null_mask = GetNullMask(segment);
@@ -472,7 +472,7 @@ static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const
 		}
 	}
 
-	auto list_vector_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_vector_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	// get the starting offset
 	idx_t offset = 0;

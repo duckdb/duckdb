@@ -1,21 +1,18 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_cte_scan.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -103,8 +100,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 			// and perform all duplicate elimination on that row number instead
 			const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
 			auto window = make_uniq<LogicalWindow>(op_col.binding.table_index);
-			auto row_number = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
-			                                                   nullptr, nullptr);
+			auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
+			auto row_number =
+			    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
 			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 			row_number->SetAlias("delim_index");
@@ -419,15 +417,21 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			auto left_binding = ColumnBinding(cteref.table_index,
 			                                  ProjectionIndex(cteref.chunk_types.size() - cteref.correlated_columns));
-			// add the correlated columns to the join conditions
+			D_ASSERT(correlated_columns.size() >= cteref.correlated_columns);
+			auto right_offset = correlated_columns.size() - cteref.correlated_columns;
+			// The CTE scan appends its carried correlated columns to the end of the CTE ref output. Align those
+			// payload columns with the corresponding suffix in the current delim payload instead of assuming they are
+			// the first correlated columns.
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
+				auto &col = correlated_columns[right_offset + i];
+				D_ASSERT(cteref.chunk_types[left_binding.column_index + i] == col.type);
 				JoinCondition cond(
 				    make_uniq<BoundColumnRefExpression>(
-				        correlated_columns[i].type,
+				        col.type,
 				        ColumnBinding(left_binding.table_index, ProjectionIndex(left_binding.column_index + i))),
 				    make_uniq<BoundColumnRefExpression>(
-				        correlated_columns[i].type,
-				        ColumnBinding(base_binding.table_index, ProjectionIndex(base_binding.column_index + i))),
+				        col.type, ColumnBinding(base_binding.table_index,
+				                                ProjectionIndex(base_binding.column_index + right_offset + i))),
 				    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 				join->conditions.push_back(std::move(cond));
 			}
@@ -860,8 +864,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we push a row_number() OVER (PARTITION BY [correlated columns])
 		auto window_index = binder.GenerateTableIndex();
 		auto window = make_uniq<LogicalWindow>(window_index);
-		auto row_number =
-		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+		auto rn = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
+		auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn), nullptr);
 		auto partition_count = perform_delim ? correlated_columns.size() : 1;
 		for (idx_t i = 0; i < partition_count; i++) {
 			auto &col = correlated_columns[i];

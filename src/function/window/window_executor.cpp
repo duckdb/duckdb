@@ -39,10 +39,17 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
-}
 
-bool WindowExecutor::IgnoreNulls() const {
-	return wexpr.ignore_nulls;
+	if (wexpr.window) {
+		if (wexpr.window->HasSharingCallback()) {
+			wexpr.window->GetSharingCallback()(*this, shared);
+		} else {
+			//	If no one overrides, assume the arguments are only needed at evaluate time
+			for (auto &child : wexpr.children) {
+				child_idx.emplace_back(shared.RegisterEvaluate(child));
+			}
+		}
+	}
 }
 
 void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
@@ -85,6 +92,9 @@ void WindowExecutorLocalState::Finalize(ExecutionContext &context, CollectionPtr
 unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                            const ValidityMask &partition_mask,
                                                            const ValidityMask &order_mask) const {
+	if (wexpr.window && wexpr.window->HasGlobalCallback()) {
+		return wexpr.window->GetGlobalCallback()(client, *this, payload_count, partition_mask, order_mask);
+	}
 	return make_uniq<WindowExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 

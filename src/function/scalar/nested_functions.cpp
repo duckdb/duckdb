@@ -12,7 +12,7 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto &input_values = MapVector::GetValues(input);
 
 	// Copy the list offsets and top-level validity
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	for (auto entry : input.Values<list_entry_t>(count)) {
 		if (!entry.IsValid()) {

@@ -13,12 +13,14 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
 
 namespace duckdb {
 
 class BufferHandle;
 class VectorBuffer;
 class Vector;
+struct ValidityMask;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER,   // VectorType::FLAT/CONSTANT - Fixed-Size Type - Holds a single array of data
@@ -61,7 +63,7 @@ private:
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
-	explicit VectorBuffer(VectorBufferType type) : buffer_type(type) {
+	explicit VectorBuffer(VectorType vector_type, VectorBufferType type) : vector_type(vector_type), buffer_type(type) {
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -69,6 +71,9 @@ public:
 public:
 	virtual data_ptr_t GetData() {
 		return nullptr;
+	}
+	virtual ValidityMask &GetValidityMask() {
+		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
@@ -94,11 +99,21 @@ public:
 	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
 	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
 
+	inline VectorType GetVectorType() const {
+		return vector_type;
+	}
+	virtual void SetVectorType(VectorType vector_type);
+	//! Set only this buffer's vector type without propagating to children (for struct/array buffers)
+	void SetVectorTypeOnly(VectorType new_vector_type) {
+		vector_type = new_vector_type;
+	}
+
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;
 	}
 
 protected:
+	VectorType vector_type;
 	VectorBufferType buffer_type;
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 

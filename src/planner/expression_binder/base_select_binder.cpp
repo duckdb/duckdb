@@ -33,7 +33,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	case ExpressionClass::DEFAULT:
 		return BindResult(BinderException::Unsupported(expr, "SELECT clause cannot contain DEFAULT clause"));
 	case ExpressionClass::WINDOW:
-		return BindWindow(expr.Cast<WindowExpression>(), depth);
+		return BindWindowExpression(expr.Cast<WindowExpression>(), depth);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 	}

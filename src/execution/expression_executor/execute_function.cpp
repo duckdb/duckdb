@@ -171,6 +171,47 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 #endif
 }
 
+static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+                                  Vector &result) {
+	if (expr.return_type != LogicalType::BOOLEAN) {
+		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.name,
+		                            expr.return_type.ToString());
+	}
+	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
+		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
+		                            "execution requires a scalar callback to produce NULL results",
+		                            expr.function.name);
+	}
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto count = args.size();
+	auto result_data = FlatVector::GetDataMutable<bool>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = false;
+	}
+
+	auto &result_validity = FlatVector::Validity(result);
+	result_validity.SetAllValid(count);
+	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	for (auto &arg : args.data) {
+		auto entries = arg.Validity(count);
+		if (!entries.CanHaveNull()) {
+			continue;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			if (!entries.IsValid(i)) {
+				result_validity.SetInvalid(i);
+			}
+		}
+	}
+
+	SelectionVector true_sel(count);
+	auto true_count = expr.function.GetSelectCallback()(args, state, &true_sel, nullptr);
+	for (idx_t i = 0; i < true_count; i++) {
+		result_data[true_sel.get_index(i)] = true;
+	}
+}
+
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
@@ -198,10 +239,18 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.SetCardinality(all_constant ? 1 : count);
 	arguments.Verify(context ? context->db : nullptr);
 
-	D_ASSERT(expr.function.HasFunctionCallback());
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	if (all_constant || !execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
+	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
+	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
+	if (expr.function.HasFunctionCallback() && !dictionary_executed) {
 		expr.function.GetFunctionCallback()(arguments, *state, result);
+	} else if (expr.function.HasSelectCallback()) {
+		ExecuteSelectFunction(expr, arguments, *state, result);
+	} else if (dictionary_executed) {
+		D_ASSERT(expr.function.HasFunctionCallback());
+	} else {
+		throw InternalException("Scalar function %s has neither an execution nor a select callback",
+		                        expr.function.name);
 	}
 	if (all_constant) {
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
@@ -215,6 +264,51 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
+}
+
+static void ScatterSelectionResult(const SelectionVector &source, idx_t source_count, const SelectionVector *sel,
+                                   SelectionVector *target) {
+	if (!target) {
+		return;
+	}
+	for (idx_t i = 0; i < source_count; i++) {
+		auto idx = source.get_index(i);
+		target->set_index(i, sel ? sel->get_index(idx) : idx);
+	}
+}
+
+idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
+	if (!expr.function.HasSelectCallback()) {
+		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
+	}
+
+	state->intermediate_chunk.Reset();
+	auto &arguments = state->intermediate_chunk;
+	for (idx_t i = 0; i < expr.children.size(); i++) {
+		D_ASSERT(state->types[i] == expr.children[i]->return_type);
+		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+	}
+	arguments.SetCardinality(count);
+	arguments.Verify(context ? context->db : nullptr);
+
+	const bool has_sel = sel && sel != FlatVector::IncrementalSelectionVector();
+	if (!has_sel) {
+		return expr.function.GetSelectCallback()(arguments, *state, true_sel, false_sel);
+	}
+
+	SelectionVector temp_true(count);
+	SelectionVector temp_false(count);
+	auto dense_true_sel = true_sel ? &temp_true : nullptr;
+	auto dense_false_sel = false_sel ? &temp_false : nullptr;
+	auto true_count = expr.function.GetSelectCallback()(arguments, *state, dense_true_sel, dense_false_sel);
+	ScatterSelectionResult(temp_true, true_count, sel, true_sel);
+	if (false_sel) {
+		auto false_count = count - true_count;
+		ScatterSelectionResult(temp_false, false_count, sel, false_sel);
+	}
+	return true_count;
 }
 
 } // namespace duckdb

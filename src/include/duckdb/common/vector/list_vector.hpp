@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class VectorListBuffer : public VectorBuffer {
+class VectorListBuffer : public StandardVectorBuffer {
 public:
 	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
@@ -41,29 +41,18 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() {
+	idx_t GetSize() const {
 		return size;
 	}
 
-	idx_t GetCapacity() {
+	idx_t GetCapacity() const {
 		return capacity;
 	}
 
 	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
 
-	data_ptr_t GetData() override {
-		return data_ptr;
-	}
-
-	optional_ptr<Allocator> GetAllocator() const override {
-		return allocated_data.GetAllocator();
-	}
-
 private:
-	// data for list offsets
-	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;
@@ -71,17 +60,18 @@ private:
 };
 
 struct ListVector {
-	static inline const list_entry_t *GetData(const Vector &v) {
+	[[deprecated("Use FlatVector::GetData<list_entry_t> instead")]] static inline const list_entry_t *
+	GetData(const Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
 		return FlatVector::GetData<const list_entry_t>(v);
 	}
-	static inline list_entry_t *GetData(Vector &v) {
+	[[deprecated("Use FlatVector::GetData<list_entry_t> instead")]] static inline list_entry_t *GetData(Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
-		return FlatVector::GetData<list_entry_t>(v);
+		return FlatVector::GetDataMutable<list_entry_t>(v);
 	}
 	//! Gets a reference to the underlying child-vector of a list
 	DUCKDB_API static const Vector &GetEntry(const Vector &vector);

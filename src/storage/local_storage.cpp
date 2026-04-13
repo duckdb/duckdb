@@ -543,7 +543,7 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 		                                           IndexRemovalType::MAIN_INDEX_ONLY);
 	}
 
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	idx_t delete_count = storage->GetCollection().Delete(TransactionData(0, 0), table, ids, count);
 	storage->deleted_rows += delete_count;
 	return delete_count;
@@ -555,7 +555,7 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	storage->GetCollection().Update(TransactionData(0, 0), table, ids, column_ids, updates);
 }
 

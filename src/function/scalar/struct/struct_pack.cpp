@@ -27,7 +27,9 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 		// same holds for this
 		child_entries[i].Reference(args.data[i]);
 	}
-	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+	// set only the struct buffer's type - do not propagate to children
+	// since children reference external vectors (args) that may have incompatible buffer types
+	result.GetBuffer()->SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.Verify(args.size());
 }
 

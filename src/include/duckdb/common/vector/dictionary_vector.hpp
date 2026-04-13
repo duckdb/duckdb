@@ -31,21 +31,11 @@ public:
 //! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
 class DictionaryBuffer : public VectorBuffer {
 public:
-	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel), entry(std::move(entry_p)) {
-	}
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)), entry(std::move(entry_p)) {
-	}
-	explicit DictionaryBuffer(const SelectionVector &sel)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
-	}
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
-	}
-	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
-	}
+	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(const SelectionVector &sel);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data);
+	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE);
 
 public:
 	const SelectionVector &GetSelVector() const {

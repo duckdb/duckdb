@@ -1,17 +1,56 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <string.h>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/types/variant.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
-#include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class ClientContext;
+struct ExpressionState;
 
 static idx_t CalculateByteLength(idx_t value) {
 	if (value == 0) {
@@ -48,7 +87,7 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, idx_t count) {
 	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
 	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
-	auto metadata_data = FlatVector::GetData<string_t>(metadata);
+	auto metadata_data = FlatVector::GetDataMutable<string_t>(metadata);
 	for (idx_t row = 0; row < count; row++) {
 		uint64_t dictionary_count = 0;
 		if (variant.RowIsValid(row)) {
@@ -739,7 +778,7 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
                          optional_ptr<const SelectionVector> result_sel,
                          optional_ptr<ParquetVariantShreddingState> shredding_state, idx_t count) {
 	auto &validity = FlatVector::Validity(value);
-	auto value_data = FlatVector::GetData<string_t>(value);
+	auto value_data = FlatVector::GetDataMutable<string_t>(value);
 
 	for (idx_t i = 0; i < count; i++) {
 		idx_t value_index = 0;

@@ -217,10 +217,9 @@ unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, Colum
 // Scan base data
 //===--------------------------------------------------------------------===//
 
-void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx_t input_start, Vector &result,
-                                         idx_t result_offset, idx_t scan_count) {
+void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx_t input_start,
+                                         ValidityMask &result_mask, idx_t result_offset, idx_t scan_count) {
 	D_ASSERT(input_start < input_size);
-	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = reinterpret_cast<validity_t *>(input);
 
 #ifdef DEBUG
@@ -431,13 +430,13 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #endif
 }
 
-void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vector &result, idx_t scan_count) {
+void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, ValidityMask &result_mask,
+                                       idx_t scan_count) {
 	D_ASSERT(input_start % ValidityMask::BITS_PER_VALUE == 0);
 
 	// aligned scan: no need to do anything fancy
 	// note: this is only an optimization which avoids having to do messy bitshifting in the common case
 	// it is not required for correctness
-	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = reinterpret_cast<validity_t *>(input);
 	auto result_data = result_mask.GetData();
 	idx_t start_offset = input_start / ValidityMask::BITS_PER_VALUE;
@@ -464,7 +463,8 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 
 	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	D_ASSERT(scan_state.block_id == segment.block->BlockId());
-	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result, result_offset, scan_count);
+	auto &result_mask = FlatVector::Validity(result);
+	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result_mask, result_offset, scan_count);
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -476,7 +476,8 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 
 		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 		D_ASSERT(scan_state.block_id == segment.block->BlockId());
-		ValidityUncompressed::AlignedScan(buffer_ptr, start, result, scan_count);
+		auto &result_mask = FlatVector::Validity(result);
+		ValidityUncompressed::AlignedScan(buffer_ptr, start, result_mask, scan_count);
 	} else {
 		// unaligned scan: fall back to scan_partial which does bitshift tricks
 		ValidityScanPartial(segment, state, scan_count, result, 0);

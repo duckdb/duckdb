@@ -17,6 +17,7 @@
 namespace duckdb {
 
 struct GeometryStatsData;
+class StringHeap;
 
 enum class GeometryType : uint8_t {
 	INVALID = 0,
@@ -250,13 +251,13 @@ public:
 	static LogicalType GetSpatialGeometryType();
 
 	//! Convert from WKT
-	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict);
 
 	//! Convert to WKT
-	DUCKDB_API static string_t ToString(Vector &result, const string_t &geom);
+	DUCKDB_API static string_t ToString(StringHeap &heap, const string_t &geom);
 
 	//! Convert from WKB
-	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, StringHeap &heap, bool strict);
 	DUCKDB_API static bool FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
 
 	//! Convert to WKB

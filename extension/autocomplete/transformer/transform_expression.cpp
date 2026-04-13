@@ -296,28 +296,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("Wrong number of arguments provided to DATE function");
 		}
 		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
-	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1) {
-		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments to LIST.");
-		}
-		auto arg_expr = function_children[0].get();
-		auto &order_by = order_modifier->orders[0];
-		if (arg_expr->Equals(*order_by.expression)) {
-			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
-			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
-			auto unordered = make_uniq<FunctionExpression>(
-			    qualified_function.catalog, qualified_function.schema, lowercase_name, std::move(function_children),
-			    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
-			lowercase_name = "list_sort";
-			order_modifier = make_uniq<OrderModifier>(); // NOLINT
-			filter_expr.reset();                         // NOLINT
-			function_children.clear();                   // NOLINT
-			distinct = false;
-			function_children.emplace_back(std::move(unordered));
-			function_children.emplace_back(std::move(sense));
-			function_children.emplace_back(std::move(nulls));
-		}
 	}
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (within_group_opt.HasResult()) {
