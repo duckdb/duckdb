@@ -389,6 +389,15 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	return BindScalarFunction(name, std::move(children));
 }
 
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	children.push_back(std::move(c3));
+	return BindScalarFunction(name, std::move(children));
+}
+
 unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
 	FunctionBinder binder(context);
 	ErrorData error;
