@@ -1,6 +1,7 @@
 import argparse
 import re
 import sys
+from enum import Enum
 from pathlib import Path
 
 GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
@@ -14,6 +15,12 @@ FACTORY_HPP_FILE = Path(
 
 # Matches: PEGTransformerFactory::TransformRuleName(
 TRANSFORMER_REGEX = re.compile(r"PEGTransformerFactory::Transform(\w+)\s*\(")
+
+# Matches: static ReturnType TransformRuleName(PEGTransformer ...
+# Used to extract declared return types from the header file.
+DECLARATION_REGEX = re.compile(
+    r"static\s+([\w<>:, *]+?)\s+Transform(\w+)\s*\(PEGTransformer"
+)
 
 # Matches: RegisterEnum<...>("RuleName", ...);
 ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
@@ -89,6 +96,23 @@ EXCLUDED_RULES = {
     "ForEachRow",
     "ForEachStatement",
 }
+
+
+class RuleStatus(Enum):
+    EXCLUDED = "[ EXCLUDED ]"
+    ENUM = "[ ENUM ]"
+    FOUND = "[ FOUND ]"
+    NOT_REGISTERED = "[ NOT REG'D ]"
+    TYPE_MISMATCH = "[ TYPE MISMATCH ]"
+    MISSING = "[ MISSING ]"
+
+    @property
+    def is_issue(self):
+        return self in {RuleStatus.NOT_REGISTERED, RuleStatus.TYPE_MISMATCH, RuleStatus.MISSING}
+
+    @property
+    def is_covered(self):
+        return self in {RuleStatus.ENUM, RuleStatus.FOUND}
 
 
 def find_grammar_rules(grammar_path):
@@ -171,6 +195,25 @@ def find_transformer_rules(transformer_path):
             continue
 
     return transformer_rules, transformer_rule_files
+
+
+def find_transformer_return_types(hpp_path):
+    """
+    Scans the transformer header for static TransformXxx declarations and returns
+    a dict mapping rule_name -> return_type (whitespace-normalised).
+    """
+    if not hpp_path.is_file():
+        print(f"Error: Header file not found: {hpp_path}", file=sys.stderr)
+        return {}
+
+    content = hpp_path.read_text(encoding="utf-8")
+    result = {}
+    for match in DECLARATION_REGEX.finditer(content):
+        return_type = match.group(1)
+        rule_name = match.group(2)
+        # Normalise whitespace so "pair<string, T>" == "pair<string,T>"
+        result[rule_name] = re.sub(r"\s+", "", return_type)
+    return result
 
 
 def find_factory_registrations(factory_file_path):
@@ -347,6 +390,7 @@ def main():
     transformer_impls, transformer_rule_files = find_transformer_rules(
         Path(TRANSFORMER_DIR)
     )
+    transformer_return_types = find_transformer_return_types(Path(FACTORY_HPP_FILE))
     enum_rules, registered_rules, direct_registered_functions, direct_registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
 
     if not grammar_rules_by_file:
@@ -367,6 +411,7 @@ def main():
     total_found_registered = 0
     total_missing_registration = 0
     total_missing_implementation = 0
+    total_type_mismatches = 0
     all_grammar_rules_flat = set()
     missing_rules_by_file = {}
 
@@ -387,11 +432,11 @@ def main():
                 print("(No grammar rules found in this file)")
             continue
 
-        for rule_name, _rule_text, _return_type in sorted(grammar_rules, key=lambda x: x[0]):
+        for rule_name, _rule_text, grammar_return_type in sorted(grammar_rules, key=lambda x: x[0]):
             total_rules_scanned += 1
             if rule_name in EXCLUDED_RULES:
                 if not args.quiet and not args.skip_found:
-                    print(f"{'[ EXCLUDED ]':<14} {rule_name}")
+                    print(f"{RuleStatus.EXCLUDED.value:<14} {rule_name}")
                 continue
 
             all_grammar_rules_flat.add(rule_name)
@@ -402,32 +447,50 @@ def main():
             is_registered = rule_name in registered_rules
 
             if is_enum:
-                status_str = "[ ENUM ]"
+                status = RuleStatus.ENUM
                 total_found_enum += 1
             elif is_transformer:
                 if is_registered:
-                    status_str = "[ FOUND ]"
-                    total_found_registered += 1
+                    if grammar_return_type is not None:
+                        declared = transformer_return_types.get(rule_name)
+                        normalised_grammar = re.sub(r"\s+", "", grammar_return_type)
+                        if declared is not None and declared != normalised_grammar:
+                            status = RuleStatus.TYPE_MISMATCH
+                            total_type_mismatches += 1
+                            missing_count_this_file += 1
+                        else:
+                            status = RuleStatus.FOUND
+                            total_found_registered += 1
+                    else:
+                        status = RuleStatus.FOUND
+                        total_found_registered += 1
                 else:
-                    status_str = "[ NOT REG'D ]"
+                    status = RuleStatus.NOT_REGISTERED
                     total_missing_registration += 1
                     missing_count_this_file += 1
             else:
-                status_str = "[ MISSING ]"
+                status = RuleStatus.MISSING
                 total_missing_implementation += 1
                 missing_count_this_file += 1
                 missing_rules_for_gen.append(rule_name)
 
             if args.quiet:
-                # In quiet mode, only print issues
-                if "MISSING" in status_str or "NOT REG" in status_str:
-                    print(f"{status_str:<14} {rule_name}")
+                if status.is_issue:
+                    detail = ""
+                    if status == RuleStatus.TYPE_MISMATCH:
+                        declared = transformer_return_types.get(rule_name, "?")
+                        detail = f"  (grammar: {grammar_return_type}, declared: {declared})"
+                    print(f"{status.value:<14} {rule_name}{detail}")
                 continue
 
-            if args.skip_found and ("FOUND" in status_str or "ENUM" in status_str):
+            if args.skip_found and status.is_covered:
                 continue
 
-            print(f"{status_str:<14} {rule_name}")
+            detail = ""
+            if status == RuleStatus.TYPE_MISMATCH:
+                declared = transformer_return_types.get(rule_name, "?")
+                detail = f"  (grammar: {grammar_return_type}, declared: {declared})"
+            print(f"{status.value:<14} {rule_name}{detail}")
 
         if missing_count_this_file > 0:
             missing_rules_by_file[file_name] = missing_count_this_file
@@ -436,7 +499,7 @@ def main():
             generation_queue[cpp_filename] = missing_rules_for_gen
 
     total_covered = total_found_enum + total_found_registered
-    total_issues = total_missing_implementation + total_missing_registration
+    total_issues = total_missing_implementation + total_missing_registration + total_type_mismatches
     coverage = (
         (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
     )
@@ -450,6 +513,9 @@ def main():
     print(f"  {'  - Enum':<23} : {total_found_enum}")
     print(f"  {'  - Registered':<23} : {total_found_registered}")
     print(f"{'TOTAL ISSUES':<25} : {total_issues}")
+    print(f"  {'  - Missing impl':<23} : {total_missing_implementation}")
+    print(f"  {'  - Not registered':<23} : {total_missing_registration}")
+    print(f"  {'  - Type mismatches':<23} : {total_type_mismatches}")
 
     if missing_rules_by_file:
         print("\n--- Summary: Issues Per File ---")
@@ -494,7 +560,7 @@ def main():
     if args.generate:
         generate_code_for_missing_rules(generation_queue, rule_definitions)
 
-    if args.strict and total_missing_implementation > 0:
+    if args.strict and total_issues > 0:
         sys.exit(1)
 
 
