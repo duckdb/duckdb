@@ -715,7 +715,17 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto addresses_ptrs = FlatVector::GetDataMutable<data_ptr_t>(state);
+
+	UnifiedVectorFormat state_format;
+	state.ToUnifiedFormat(count, state_format);
+	auto state_data = UnifiedVectorFormat::GetData<data_ptr_t>(state_format);
+
+	// Collect state pointers into a flat array for downstream use
+	vector<data_ptr_t> addresses(count);
+	for (idx_t i = 0; i < count; i++) {
+		addresses[i] = state_data[state_format.sel->get_index(i)];
+	}
+	auto addresses_ptrs = addresses.data();
 
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 
@@ -819,7 +829,15 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 	auto state_size = bind_data.state_size;
-	auto addresses_ptrs = FlatVector::GetDataMutable<data_ptr_t>(state);
+
+	UnifiedVectorFormat state_format;
+	state.ToUnifiedFormat(count, state_format);
+	auto state_data = UnifiedVectorFormat::GetData<data_ptr_t>(state_format);
+	vector<data_ptr_t> addresses(count);
+	for (idx_t i = 0; i < count; i++) {
+		addresses[i] = state_data[state_format.sel->get_index(i)];
+	}
+	auto addresses_ptrs = addresses.data();
 
 	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
 

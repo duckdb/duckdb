@@ -431,11 +431,11 @@ struct ICUDatePart : public ICUDateFunc {
 						if (is_finite) {
 							FlatVector::Validity(child_entry).SetValid(i);
 							if (IsBigintDatepart(info.part_codes[col])) {
-								auto pdata = ConstantVector::GetData<int64_t>(child_entry);
+								auto pdata = FlatVector::GetDataMutable<int64_t>(child_entry);
 								auto adapter = info.bigints[col];
 								pdata[i] = adapter(calendar, micros);
 							} else {
-								auto pdata = ConstantVector::GetData<double>(child_entry);
+								auto pdata = FlatVector::GetDataMutable<double>(child_entry);
 								auto adapter = info.doubles[col];
 								pdata[i] = adapter(calendar, micros);
 							}

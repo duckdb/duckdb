@@ -75,9 +75,9 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 			auto &child_entry = child_entries[col];
 			auto &left_child_entry = left_child_entries[col];
 			auto &right_child_entry = right_child_entries[col];
-			auto pdata = ConstantVector::GetData<int32_t>(child_entry);
-			auto left_pdata = ConstantVector::GetData<int32_t>(left_child_entry);
-			auto right_pdata = ConstantVector::GetData<int32_t>(right_child_entry);
+			auto pdata = FlatVector::GetDataMutable<int32_t>(child_entry);
+			auto left_pdata = FlatVector::GetData<int32_t>(left_child_entry);
+			auto right_pdata = FlatVector::GetData<int32_t>(right_child_entry);
 			pdata[base_idx] = left_pdata[lhs_list_index] + right_pdata[rhs_list_index];
 		}
 	}
@@ -115,9 +115,9 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 			auto &child_entry = child_entries[col];
 			auto &left_child_entry = left_child_entries[col];
 			auto &right_child_entry = right_child_entries[col];
-			auto pdata = ConstantVector::GetData<int32_t>(child_entry);
-			auto left_pdata = ConstantVector::GetData<int32_t>(left_child_entry);
-			auto right_pdata = ConstantVector::GetData<int32_t>(right_child_entry);
+			auto pdata = FlatVector::GetDataMutable<int32_t>(child_entry);
+			auto left_pdata = FlatVector::GetData<int32_t>(left_child_entry);
+			auto right_pdata = FlatVector::GetData<int32_t>(right_child_entry);
 			pdata[base_idx] = left_pdata[lhs_list_index] - right_pdata[rhs_list_index];
 		}
 	}

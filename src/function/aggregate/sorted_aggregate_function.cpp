@@ -522,6 +522,9 @@ struct SortedAggregateFunction {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &client = order_bind.context;
 
+		UnifiedVectorFormat states_format;
+		states.ToUnifiedFormat(count, states_format);
+
 		auto &buffer_allocator = BufferManager::GetBufferManager(client).GetBufferAllocator();
 		DataChunk scanned;
 		scanned.Initialize(buffer_allocator, order_bind.scan_types);
@@ -544,11 +547,12 @@ struct SortedAggregateFunction {
 		auto update = aggr.GetStateUpdateCallback();
 		auto finalize = aggr.GetStateFinalizeCallback();
 
-		auto sdata = FlatVector::GetData<SortedAggregateState *>(states);
+		auto sdata = UnifiedVectorFormat::GetData<SortedAggregateState *>(states_format);
 
 		vector<idx_t> state_unprocessed(count, 0);
 		for (idx_t i = 0; i < count; ++i) {
-			state_unprocessed[i] = sdata[i]->count;
+			auto sidx = states_format.sel->get_index(i);
+			state_unprocessed[i] = sdata[sidx]->count;
 		}
 
 		ThreadContext thread(client);
@@ -566,7 +570,7 @@ struct SortedAggregateFunction {
 		idx_t sorted = 0;
 		for (idx_t finalized = 0; finalized < count;) {
 			if (unsorted_count < order_bind.threshold) {
-				auto state = sdata[finalized];
+				auto state = sdata[states_format.sel->get_index(finalized)];
 				prefixed.Reset();
 				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
 				OperatorSinkInput sink {*global_sink, *local_sink, interrupt};

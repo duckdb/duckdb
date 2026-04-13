@@ -30,7 +30,7 @@ struct ConstantVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 #else
 		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			throw InternalException("Operation requires a flat vector but a non-flat vector was encountered");
+			throw InternalException("Operation requires a constant vector but a non-constant vector was encountered");
 		}
 #endif
 	}

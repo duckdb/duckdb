@@ -40,8 +40,10 @@ struct WindowInputExpression {
 	template <typename T>
 	inline T GetCell(idx_t i) const {
 		D_ASSERT(!chunk.data.empty());
-		const auto data = FlatVector::GetData<T>(chunk.data[col_idx]);
-		return data[scalar ? 0 : i];
+		if (scalar) {
+			return *ConstantVector::GetData<T>(chunk.data[col_idx]);
+		}
+		return FlatVector::GetData<T>(chunk.data[col_idx])[i];
 	}
 
 	inline bool CellIsNull(idx_t i) const {

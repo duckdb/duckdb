@@ -264,7 +264,7 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 	if (ConstantVector::IsNull(input_vector)) {
 		return;
 	}
-	const auto &input_data = FlatVector::GetData<string_t>(input_vector)[0];
+	const auto &input_data = ConstantVector::GetData<string_t>(input_vector)[0];
 	lstate.doc = JSONCommon::ReadDocument(input_data, JSONCommon::READ_FLAG, lstate.alc);
 	const auto root = JSONCommon::GetUnsafe(lstate.doc->root, lstate.path.c_str(), lstate.len);
 
@@ -351,7 +351,7 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 	if (gstate.root_column_index.IsValid()) {
 		auto &root_vector = output.data[gstate.root_column_index.GetIndex()];
 		root_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		FlatVector::GetDataMutable<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
+		ConstantVector::GetData<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
 	}
 	if (gstate.empty_column_idex.IsValid()) {
 		auto &empty_vector = output.data[gstate.empty_column_idex.GetIndex()];

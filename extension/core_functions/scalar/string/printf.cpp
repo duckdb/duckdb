@@ -94,7 +94,13 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 	idx_t count = args.size();
 
-	auto format_data = FlatVector::GetData<string_t>(format_string_vec);
+	// Convert all columns to UnifiedVectorFormat for type-agnostic access
+	vector<UnifiedVectorFormat> col_formats(args.ColumnCount());
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		args.data[i].ToUnifiedFormat(count, col_formats[i]);
+	}
+
+	auto format_data = UnifiedVectorFormat::GetData<string_t>(col_formats[0]);
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t idx = 0; idx < count; idx++) {
 		if (result.GetVectorType() == VectorType::FLAT_VECTOR && FlatVector::IsNull(result, idx)) {
@@ -103,7 +109,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 
 		// first fetch the format string
-		auto fmt_idx = format_string_vec.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto fmt_idx = col_formats[0].sel->get_index(idx);
 		auto format_string = format_data[fmt_idx].GetString();
 
 		// now gather all the format arguments
@@ -112,60 +118,61 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			auto &col = args.data[col_idx];
-			idx_t arg_idx = col.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
+			auto &col_format = col_formats[col_idx];
+			idx_t arg_idx = col_format.sel->get_index(idx);
 			switch (col.GetType().id()) {
 			case LogicalTypeId::BOOLEAN: {
-				auto arg_data = FlatVector::GetData<bool>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<bool>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::TINYINT: {
-				auto arg_data = FlatVector::GetData<int8_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<int8_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::SMALLINT: {
-				auto arg_data = FlatVector::GetData<int16_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<int16_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::INTEGER: {
-				auto arg_data = FlatVector::GetData<int32_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<int32_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::BIGINT: {
-				auto arg_data = FlatVector::GetData<int64_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<int64_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::UBIGINT: {
-				auto arg_data = FlatVector::GetData<uint64_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<uint64_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::FLOAT: {
-				auto arg_data = FlatVector::GetData<float>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<float>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::HUGEINT: {
-				auto arg_data = FlatVector::GetData<hugeint_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<hugeint_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::UHUGEINT: {
-				auto arg_data = FlatVector::GetData<uhugeint_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<uhugeint_t>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::DOUBLE: {
-				auto arg_data = FlatVector::GetData<double>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<double>(col_format);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
 			case LogicalTypeId::VARCHAR: {
-				auto arg_data = FlatVector::GetData<string_t>(col);
+				auto arg_data = UnifiedVectorFormat::GetData<string_t>(col_format);
 				auto string_view =
 				    duckdb_fmt::basic_string_view<char>(arg_data[arg_idx].GetData(), arg_data[arg_idx].GetSize());
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(string_view));
