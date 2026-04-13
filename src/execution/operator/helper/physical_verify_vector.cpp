@@ -57,9 +57,14 @@ struct ConstantOrSequenceInfo {
 	bool is_constant = true;
 };
 
-OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
+OperatorResultType VerifyEmitSequenceVector(const DataChunk &input_p, DataChunk &chunk, OperatorState &state_p) {
 	auto &state = state_p.Cast<VerifyVectorState>();
-	D_ASSERT(state.const_idx < input.size());
+	D_ASSERT(state.const_idx < input_p.size());
+
+	// FIXME: work-around for variant bug...
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), input_p.GetTypes());
+	input_p.Copy(input);
 
 	// find the longest length sequence or constant vector to emit
 	vector<ConstantOrSequenceInfo> infos;

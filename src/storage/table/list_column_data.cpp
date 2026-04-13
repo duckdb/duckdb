@@ -109,14 +109,14 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	validity->ScanCount(state.child_states[0], result, count);
 
 	auto data = offset_vector.Values<uint64_t>(scan_count);
-	auto last_entry = data[scan_count - 1].value;
+	auto last_entry = data[scan_count - 1].GetValue();
 
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::Writer<list_entry_t>(result, scan_count);
 	auto base_offset = state.last_offset;
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto offset = data[i].value;
+		auto offset = data[i].GetValue();
 		result_data[i].offset = current_offset;
 		result_data[i].length = offset - current_offset - base_offset;
 		current_offset += result_data[i].length;
@@ -194,12 +194,12 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	bool child_contiguous = true;
 	for (idx_t i = 0; i < count; i++) {
 		auto list_entry = input_offsets[i];
-		if (!list_entry.is_valid) {
+		if (!list_entry.IsValid()) {
 			append_mask.SetInvalid(i);
 			append_offsets[i] = start_offset + child_count;
 			continue;
 		}
-		auto &input_list = list_entry.value;
+		auto &input_list = list_entry.GetValue();
 		if (input_list.offset != child_count) {
 			child_contiguous = false;
 		}
@@ -215,10 +215,10 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 		idx_t current_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto list_entry = input_offsets[i];
-			if (!list_entry.is_valid) {
+			if (!list_entry.IsValid()) {
 				continue;
 			}
-			auto &input_list = list_entry.value;
+			auto &input_list = list_entry.GetValue();
 			for (idx_t list_idx = 0; list_idx < input_list.length; list_idx++) {
 				child_sel.set_index(current_count++, input_list.offset + list_idx);
 			}

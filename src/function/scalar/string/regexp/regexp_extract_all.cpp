@@ -129,7 +129,7 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 	if (!entry.IsValid()) {
 		return false;
 	}
-	result = entry.value;
+	result = entry.GetValue();
 	return true;
 }
 
@@ -192,7 +192,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			if (!pattern_entry.IsValid()) {
 				pattern_valid = false;
 			} else {
-				auto &pattern_p = pattern_entry.value;
+				auto &pattern_p = pattern_entry.GetValue();
 				auto pattern_strpiece = CreateStringPiece(pattern_p);
 				stored_re = make_uniq<duckdb_re2::RE2>(pattern_strpiece, info.options);
 
@@ -220,7 +220,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 		auto &re = GetPattern(info, state, stored_re);
 		auto &groups = GetGroupsBuffer(info, state, non_const_args);
-		auto &string = string_entry.value;
+		auto &string = string_entry.GetValue();
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
 	}
 }
@@ -321,7 +321,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 			list_entries.SetInvalid(row);
 			continue;
 		}
-		auto &string_val = string_entry.value;
+		auto &string_val = string_entry.GetValue();
 		ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result, row);
 	}
 }

@@ -2075,8 +2075,9 @@ struct StructDatePart {
 			for (idx_t i = 0; i < count; ++i) {
 				auto entry = entries[i];
 				if (entry.IsValid()) {
-					if (Value::IsFinite(entry.value)) {
-						DatePart::StructOperator::Operation(bigint_values, double_values, entry.value, i, part_mask);
+					if (Value::IsFinite(entry.GetValue())) {
+						DatePart::StructOperator::Operation(bigint_values, double_values, entry.GetValue(), i,
+						                                    part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
 							FlatVector::Validity(child_entry).SetInvalid(i);

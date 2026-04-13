@@ -47,10 +47,10 @@ struct HistogramBinState {
 		counts = new unsafe_vector<idx_t>();
 		auto bin_counts = bin_vector.Values<list_entry_t>(count);
 		auto bin_entry = bin_counts[pos];
-		if (!bin_entry.is_valid) {
+		if (!bin_entry.IsValid()) {
 			throw BinderException("Histogram bin list cannot be NULL");
 		}
-		auto bin_list = bin_entry.value;
+		auto bin_list = bin_entry.GetValue();
 
 		auto &bin_child = ListVector::GetEntry(bin_vector);
 		auto bin_count = ListVector::GetListSize(bin_vector);
@@ -166,7 +166,7 @@ void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input,
 		if (!input_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (!state.IsSet()) {
 			state.template InitializeBins<OP>(bin_vector, count, i, aggr_input);
 		}
@@ -277,7 +277,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	bool supports_other_bucket = SupportsOtherBucket(MapType::KeyType(result.GetType()));
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (!state.bin_boundaries) {
 			continue;
 		}
@@ -297,7 +297,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (!state.bin_boundaries) {
 			mask.SetInvalid(rid);
 			continue;

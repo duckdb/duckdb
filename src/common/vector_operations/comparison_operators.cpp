@@ -197,7 +197,7 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 		if (!entry.IsValid()) {
 			result_data.SetInvalid(i);
 		} else {
-			result_data[i] = predicate(entry.value);
+			result_data[i] = predicate(entry.GetValue());
 		}
 	}
 }

@@ -12,7 +12,7 @@ void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result,
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = cmp_data[i].value != 0;
+		result_data[i] = cmp_data[i].GetValue() != 0;
 	}
 }
 
@@ -24,7 +24,7 @@ void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &resu
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = cmp_data[i].value == 0;
+		result_data[i] = cmp_data[i].GetValue() == 0;
 	}
 }
 
@@ -40,7 +40,7 @@ static idx_t DistinctComparatorSelect(Vector &left, Vector &right, optional_ptr<
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto result_idx = sel ? sel->get_index(i) : i;
-		if (predicate(cmp_data[i].value)) {
+		if (predicate(cmp_data[i].GetValue())) {
 			if (true_sel) {
 				true_sel->set_index(true_count, result_idx);
 			}

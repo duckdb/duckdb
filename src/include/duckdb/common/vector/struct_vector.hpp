@@ -17,11 +17,14 @@ class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
 	explicit VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
-	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
+	VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
 public:
 	ValidityMask &GetValidityMask() override {
+		return validity;
+	}
+	const ValidityMask &GetValidityMask() const override {
 		return validity;
 	}
 	const vector<Vector> &GetChildren() const {
@@ -31,6 +34,20 @@ public:
 		return children;
 	}
 	void SetVectorType(VectorType vector_type) override;
+
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	ValidityMask validity;
