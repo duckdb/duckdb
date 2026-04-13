@@ -1,4 +1,4 @@
-UseStatement <- 'USE' UseTarget
+UseStatement[unique_ptr<SQLStatement>] <- 'USE' UseTarget
 
-UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
+UseTarget[QualifiedName] <- UseTargetCatalogSchema / SchemaName / CatalogName
+UseTargetCatalogSchema[QualifiedName] <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
