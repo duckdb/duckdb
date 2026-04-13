@@ -229,10 +229,8 @@ string AddColumnInfo::ToString() const {
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
 	}
-	// TODO: What about columns in structs? e.g.: ALTER TABLE test ADD COLUMN s.a.value.b VARCHAR
 	result += " " + this->new_column.GetName();
 	result += " " + this->new_column.GetType().ToString();
-
 	if (this->new_column.HasDefaultValue()) {
 		result += " DEFAULT ";
 		result += this->new_column.DefaultValue().ToString();
