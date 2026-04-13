@@ -37,6 +37,7 @@ public:
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;
+	unordered_set<string> exclude_columns;
 };
 
 class MergeIntoStatement : public SQLStatement {

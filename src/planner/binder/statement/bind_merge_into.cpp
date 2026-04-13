@@ -63,20 +63,23 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			// empty update list - generate it
 			action.update_info = make_uniq<UpdateSetInfo>();
 			if (action.column_order == InsertColumnOrder::INSERT_BY_NAME) {
-				// UPDATE BY NAME - get the name list from the source binder
-				action.update_info->columns = source_names;
+				for (idx_t i = 0; i < source_names.size(); i++) {
+					action.update_info->columns.push_back(source_names[i]);
+					action.update_info->expressions.push_back(bind_context.CreateColumnReference(
+					    source_aliases[i], source_names[i], ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+				}
 			} else {
 				// UPDATE BY POSITION - get the name list from the table
 				for (auto &col : table.GetColumns().Physical()) {
 					action.update_info->columns.push_back(col.Name());
 				}
+				if (source_names.size() != action.update_info->columns.size()) {
+					throw BinderException(
+					    "Data provided for UPDATE did not match column count in table - expected %d columns but got %d",
+					    action.update_info->columns.size(), source_names.size());
+				}
+				action.update_info->expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 			}
-			if (source_names.size() != action.update_info->columns.size()) {
-				throw BinderException(
-				    "Data provided for UPDATE did not match column count in table - expected %d columns but got %d",
-				    action.update_info->columns.size(), source_names.size());
-			}
-			action.update_info->expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
 		BindUpdateSet(proj_index, root, *action.update_info, table, result->columns, result->expressions, expressions);
 
