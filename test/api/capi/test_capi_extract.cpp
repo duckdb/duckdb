@@ -85,7 +85,7 @@ TEST_CASE("Test invalid PRAGMA in C API", "[capi]") {
 	duckdb_close(&db);
 }
 
-TEST_CASE("Test extract statements for `ALTER TABLE ... ADD COLUMN... DEFAULT` in C API", "[capi]") {
+TEST_CASE("Test extract statements for `ALTER TABLE ... ADD COLUMN ... DEFAULT` in C API", "[capi]") {
 	CAPITester tester;
 	duckdb_result res;
 	duckdb_extracted_statements stmts = nullptr;
