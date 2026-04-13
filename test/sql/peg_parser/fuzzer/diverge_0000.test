@@ -1,0 +1,17 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0000.test
+# description: PEG should reject (currently accepts): Parser Error: syntax error at or near "EXISTS"
+# group: [fuzzer]
+
+require autocomplete
+
+statement ok
+CALL enable_peg_parser();
+
+statement ok
+DETACH IF EXISTS my_table;
+
+statement ok
+CALL disable_peg_parser();
+
+statement ok
+DETACH IF EXISTS my_table

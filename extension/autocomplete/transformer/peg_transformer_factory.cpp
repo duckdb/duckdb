@@ -386,6 +386,7 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropIndex);
 	REGISTER_TRANSFORM(TransformQualifiedIndexName);
 	REGISTER_TRANSFORM(TransformDropSequence);
+	REGISTER_TRANSFORM(TransformCollationName);
 	REGISTER_TRANSFORM(TransformDropCollation);
 	REGISTER_TRANSFORM(TransformDropType);
 	REGISTER_TRANSFORM(TransformDropBehavior);
@@ -832,6 +833,9 @@ void PEGTransformerFactory::RegisterSet() {
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+	REGISTER_TRANSFORM(TransformZoneValue);
+	REGISTER_TRANSFORM(TransformZoneIntervalWithInterval);
+	REGISTER_TRANSFORM(TransformZoneIntervalWithPrecision);
 }
 
 void PEGTransformerFactory::RegisterTransaction() {
