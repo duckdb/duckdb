@@ -12,9 +12,6 @@ FACTORY_HPP_FILE = Path(
     "extension/autocomplete/include/transformer/peg_transformer.hpp"
 )
 
-# Matches: RuleName <- ...
-GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
-
 # Matches: PEGTransformerFactory::TransformRuleName(
 TRANSFORMER_REGEX = re.compile(r"PEGTransformerFactory::Transform(\w+)\s*\(")
 
@@ -101,6 +98,10 @@ def find_grammar_rules(grammar_path):
 
     Returns a dictionary mapping:
     { "filename.gram": (Path, [(rule_name, rule_text), ...]) }
+
+    Assumes well-formed grammar (validated upstream by inline_grammar.py).
+    '<-' appears only as the rule assignment operator, never in rule bodies,
+    so it is used as a reliable structural delimiter.
     """
     all_rules_by_file = {}
 
@@ -108,51 +109,22 @@ def find_grammar_rules(grammar_path):
         print(f"Error: Grammar directory not found: {grammar_path}", file=sys.stderr)
         sys.exit(1)
 
-    gram_files = sorted(list(grammar_path.glob("*.gram")))
+    gram_files = sorted(grammar_path.glob("*.gram"))
     if not gram_files:
         print(f"Error: No *.gram files found in {grammar_path}", file=sys.stderr)
         sys.exit(1)
+
+    rule_start = re.compile(r"^(\w+)\s*<-", re.MULTILINE)
+
     for file_path in gram_files:
+        content = file_path.read_text(encoding="utf-8")
+        matches = list(rule_start.finditer(content))
         rules_in_file = []
-        try:
-            with file_path.open("r", encoding="utf-8") as f:
-                content = f.read()
-            lines = content.split("\n")
-            current_rule_name = None
-            current_rule_lines = []
-
-            for line in lines:
-                match = GRAMMAR_REGEX.match(line)
-                if match:
-                    # Save previous rule if any
-                    if current_rule_name is not None:
-                        rule_text = " ".join(current_rule_lines).strip()
-                        rules_in_file.append((current_rule_name, rule_text))
-                    current_rule_name = match.group(1)
-                    current_rule_lines = [line.strip()]
-                elif (
-                    current_rule_name is not None
-                    and line.strip()
-                    and not line.strip().startswith("#")
-                ):
-                    # Continuation line (e.g. multi-line rules with / alternatives)
-                    current_rule_lines.append(line.strip())
-                elif current_rule_name is not None and not line.strip():
-                    # Blank line ends the current rule block
-                    rule_text = " ".join(current_rule_lines).strip()
-                    rules_in_file.append((current_rule_name, rule_text))
-                    current_rule_name = None
-                    current_rule_lines = []
-
-            # Don't forget the last rule if file doesn't end with blank line
-            if current_rule_name is not None:
-                rule_text = " ".join(current_rule_lines).strip()
-                rules_in_file.append((current_rule_name, rule_text))
-
-        except Exception as e:
-            print(f"Error reading {file_path}: {e}", file=sys.stderr)
-            continue
-
+        for i, match in enumerate(matches):
+            rule_name = match.group(1)
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+            rule_text = " ".join(content[match.start():end].split())
+            rules_in_file.append((rule_name, rule_text))
         all_rules_by_file[file_path.name] = (file_path, rules_in_file)
 
     return all_rules_by_file
