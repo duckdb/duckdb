@@ -77,7 +77,11 @@ template <>
 VariantValue ConvertShreddedValue<double>::Convert(double val) {
 	return VariantValue(Value::DOUBLE(val));
 }
-//! decimal4/decimal8/decimal16
+//! decimal2/decimal4/decimal8/decimal16
+template <>
+VariantValue ConvertShreddedValue<int16_t>::ConvertDecimal(int16_t val, uint8_t width, uint8_t scale) {
+	return VariantValue(Value::DECIMAL(val, width, scale));
+}
 template <>
 VariantValue ConvertShreddedValue<int32_t>::ConvertDecimal(int32_t val, uint8_t width, uint8_t scale) {
 	return VariantValue(Value::DECIMAL(val, width, scale));
@@ -250,10 +254,14 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 		return ConvertTypedValues<double, ConvertShreddedValue<double>, LogicalTypeId::DOUBLE>(
 		    typed_value, metadata, value, offset, length, total_size, is_field);
 	}
-	//! decimal4/decimal8/decimal16
+	//! decimal2/decimal4/decimal8/decimal16
 	case LogicalTypeId::DECIMAL: {
 		auto physical_type = type.InternalType();
 		switch (physical_type) {
+		case PhysicalType::INT16: {
+			return ConvertTypedValues<int16_t, ConvertShreddedValue<int16_t>, LogicalTypeId::DECIMAL>(
+			    typed_value, metadata, value, offset, length, total_size, is_field);
+		}
 		case PhysicalType::INT32: {
 			return ConvertTypedValues<int32_t, ConvertShreddedValue<int32_t>, LogicalTypeId::DECIMAL>(
 			    typed_value, metadata, value, offset, length, total_size, is_field);

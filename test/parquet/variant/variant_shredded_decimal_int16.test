@@ -1,0 +1,30 @@
+# name: test/parquet/variant/variant_shredded_decimal_int16.test
+# group: [variant]
+
+require parquet
+
+# DECIMAL width ≤ 4 uses PhysicalType::INT16 (see DecimalWidth<int16_t>).
+# Shredded Variant parquet must materialize typed_value leaves via
+# ConvertShreddedValue<int16_t>::ConvertDecimal (not Convert, which would yield SMALLINT).
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		({'d': 42.5::DECIMAL(4, 1)}::VARIANT),
+		({'d': -12.3::DECIMAL(4, 1)}::VARIANT),
+		({'d': 999.9::DECIMAL(4, 1)}::VARIANT),
+		({'d': -999.9::DECIMAL(4, 1)}::VARIANT)
+	) AS t(var)
+) TO '__TEST_DIR__/shredded_variant_dec_int16.parquet' (
+	SHREDDING {
+		'var': 'STRUCT(d DECIMAL(4,1))'
+	}
+)
+
+query I nosort
+SELECT * FROM '__TEST_DIR__/shredded_variant_dec_int16.parquet';
+----
+{'d': 42.5}
+{'d': -12.3}
+{'d': 999.9}
+{'d': -999.9}
