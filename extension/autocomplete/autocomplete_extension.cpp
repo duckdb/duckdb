@@ -711,8 +711,10 @@ static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<uniqu
 	return config;
 }
 
-static unique_ptr<FunctionData> FormatSQLBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = make_uniq<FormatSQLBindData>();
 	bind_data->config = ParseFormatterConfig(context, arguments);
 	return std::move(bind_data);

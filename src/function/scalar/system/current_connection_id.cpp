@@ -22,8 +22,8 @@ struct CurrentConnectionIdData : FunctionData {
 	}
 };
 
-unique_ptr<FunctionData> CurrentConnectionIdBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CurrentConnectionIdBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	return make_uniq<CurrentConnectionIdData>(Value::UBIGINT(context.GetConnectionId()));
 }
 
@@ -37,7 +37,7 @@ void CurrentConnectionIdFunction(DataChunk &args, ExpressionState &state, Vector
 
 ScalarFunction CurrentConnectionId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentConnectionIdFunction, CurrentConnectionIdBind, nullptr,
-	                      nullptr, nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
+	                      nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 }
 
 } // namespace duckdb

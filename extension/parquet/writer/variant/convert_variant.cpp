@@ -994,8 +994,10 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	return res;
 }
 
-static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		return nullptr;
 	}

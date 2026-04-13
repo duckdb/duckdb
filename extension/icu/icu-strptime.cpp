@@ -177,8 +177,11 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static bind_scalar_function_t bind_strptime; // NOLINT
 
-	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(BindScalarFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &bound_function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
+
 		if (arguments[1]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -233,7 +236,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Fall back to faster, non-TZ parsing
 		bound_function.SetBindCallback(bind_strptime);
-		return bind_strptime(context, bound_function, arguments);
+		return bound_function.Bind(context, arguments);
 	}
 
 	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {

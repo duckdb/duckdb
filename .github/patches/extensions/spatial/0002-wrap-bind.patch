@@ -1,0 +1,731 @@
+From 97d341e6763ebf57d1e69a0f637f9fa8cd3ceae0 Mon Sep 17 00:00:00 2001
+From: Max Gabrielsson <max@gabrielsson.com>
+Date: Mon, 13 Apr 2026 14:53:36 +0200
+Subject: [PATCH] wrap bind
+
+---
+ src/spatial/modules/geos/geos_module.cpp      |  29 +++--
+ .../modules/main/spatial_functions_cast.cpp   |  12 +--
+ .../modules/main/spatial_functions_scalar.cpp | 102 ++++++++++--------
+ src/spatial/modules/mvt/mvt_module.cpp        |   8 +-
+ src/spatial/modules/osm/osm_module.cpp        |  16 +--
+ src/spatial/modules/proj/proj_module.cpp      |  23 ++--
+ src/spatial/spatial_types.cpp                 |  14 ++-
+ src/spatial/spatial_types.hpp                 |  33 +++---
+ 8 files changed, 134 insertions(+), 103 deletions(-)
+
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 4b0a544..91470a6 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -229,8 +229,11 @@ struct ST_AsMVTGeom {
+ 		}
+ 	};
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++		auto &bound_function = input.GetBoundFunction();
++		auto &context = input.GetClientContext();
++
+ 		auto result = make_uniq<BindData>();
+ 
+ 		// Extract parameters
+@@ -846,8 +849,9 @@ struct ST_ConvexHull {
+ 
+ struct ST_CoverageInvalidEdges {
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++
++		auto &arguments = input.GetArguments();
+ 
+ 		// Set the default value for the tolerance parameter
+ 		if (arguments.size() == 1) {
+@@ -941,8 +945,9 @@ struct ST_CoverageInvalidEdges {
+ 
+ struct ST_CoverageSimplify {
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++
+ 		// Set the default value for the simplify_boundary parameter
+ 		if (arguments.size() == 2) {
+ 			arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::BOOLEAN(true)));
+@@ -2876,8 +2881,10 @@ struct GEOSCoverageAggFunction {
+ 
+ struct ST_CoverageSimplify_Agg : GEOSCoverageAggFunction {
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++		auto &function = input.GetBoundFunction();
++
+ 		if (arguments.size() == 2) {
+ 			arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::BOOLEAN(true)));
+ 			function.arguments.push_back(LogicalType::BOOLEAN);
+@@ -3045,8 +3052,10 @@ struct ST_CoverageUnion_Agg : GEOSCoverageAggFunction {
+ 
+ struct ST_CoverageInvalidEdges_Agg : GEOSCoverageAggFunction {
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++		auto &function = input.GetBoundFunction();
++
+ 		if (arguments.size() == 1) {
+ 			arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::DOUBLE(0.0)));
+ 			function.arguments.push_back(LogicalType::DOUBLE);
+diff --git a/src/spatial/modules/main/spatial_functions_cast.cpp b/src/spatial/modules/main/spatial_functions_cast.cpp
+index 8796650..cad93a6 100644
+--- a/src/spatial/modules/main/spatial_functions_cast.cpp
++++ b/src/spatial/modules/main/spatial_functions_cast.cpp
+@@ -586,7 +586,7 @@ struct PolygonCasts {
+ 		auto &arena = lstate.GetArena();
+ 
+ 		auto &ring_vec = ListVector::GetEntry(source);
+-		const auto ring_entries = ListVector::GetData(ring_vec);
++		const auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		const auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
+ 		auto x_data = FlatVector::GetData<double>(coord_vec_children[0]);
+@@ -687,7 +687,7 @@ struct PolygonCasts {
+ 
+ 					ListVector::Reserve(ring_vec, total_coords + ring_size);
+ 
+-					const auto ring_entries = ListVector::GetData(ring_vec);
++					const auto ring_entries = FlatVector::GetDataMutable<list_entry_t>(ring_vec);
+ 					auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 					auto &coord_vec_children = StructVector::GetEntries(coord_vec);
+ 					auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
+@@ -748,7 +748,7 @@ struct PolygonCasts {
+ 		auto &ring_dst = ListVector::GetEntry(result);
+ 
+ 		auto &ring_src = ListVector::GetEntry(source);
+-		const auto ring_entries_src = ListVector::GetData(ring_src);
++		const auto ring_entries_src = FlatVector::GetData<list_entry_t>(ring_src);
+ 		const auto &coord_src = ListVector::GetEntry(ring_src);
+ 		auto &coord_src_children = StructVector::GetEntries(coord_src);
+ 		auto x_src = FlatVector::GetData<double>(coord_src_children[0]);
+@@ -768,7 +768,7 @@ struct PolygonCasts {
+ 
+ 				ListVector::Reserve(ring_dst, total_coords + ring_size);
+ 
+-				const auto ring_entries_dst = ListVector::GetData(ring_dst);
++				const auto ring_entries_dst = FlatVector::GetDataMutable<list_entry_t>(ring_dst);
+ 				auto &coord_dst = ListVector::GetEntry(ring_dst);
+ 				auto &coord_dst_children = StructVector::GetEntries(coord_dst);
+ 				auto x_dst = FlatVector::GetDataMutable<double>(coord_dst_children[0]);
+@@ -1028,7 +1028,7 @@ void CoreVectorOperations::LineString3DToVarchar(Vector &source, Vector &result,
+ void CoreVectorOperations::Polygon2DToVarchar(Vector &source, Vector &result, idx_t count) {
+ 	auto &poly_vector = source;
+ 	auto &ring_vector = ListVector::GetEntry(poly_vector);
+-	auto ring_entries = ListVector::GetData(ring_vector);
++	auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vector);
+ 	auto &point_vector = ListVector::GetEntry(ring_vector);
+ 	auto &point_children = StructVector::GetEntries(point_vector);
+ 	auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
+@@ -1070,7 +1070,7 @@ void CoreVectorOperations::Polygon2DToVarchar(Vector &source, Vector &result, id
+ void CoreVectorOperations::Polygon3DToVarchar(Vector &source, Vector &result, idx_t count) {
+ 	auto &poly_vector = source;
+ 	auto &ring_vector = ListVector::GetEntry(poly_vector);
+-	auto ring_entries = ListVector::GetData(ring_vector);
++	auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vector);
+ 	auto &point_vector = ListVector::GetEntry(ring_vector);
+ 	auto &point_children = StructVector::GetEntries(point_vector);
+ 	auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 5310f80..1c5031e 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -439,7 +439,7 @@ struct ST_Area {
+ 		auto count = args.size();
+ 
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
+ 		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
+@@ -1391,7 +1391,7 @@ struct ST_Centroid {
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
+ 
+-		auto line_vertex_entries = ListVector::GetData(input);
++		auto line_vertex_entries = FlatVector::GetData<list_entry_t>(input);
+ 		auto &line_vertex_vec = ListVector::GetEntry(input);
+ 		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
+ 		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
+@@ -1448,9 +1448,9 @@ struct ST_Centroid {
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
+ 
+-		auto poly_entries = ListVector::GetData(input);
++		auto poly_entries = FlatVector::GetData<list_entry_t>(input);
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &vertex_vec = ListVector::GetEntry(ring_vec);
+ 		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
+ 		auto x_data = FlatVector::GetDataMutable<double>(vertex_vec_children[0]);
+@@ -2016,9 +2016,9 @@ struct ST_Contains {
+ 		auto p_y_data = FlatVector::GetDataMutable<double>(p_children[1]);
+ 
+ 		// Setup polygon vectors
+-		auto polygon_entries = ListVector::GetData(in_polygon);
++		auto polygon_entries = FlatVector::GetData<list_entry_t>(in_polygon);
+ 		auto &ring_vec = ListVector::GetEntry(in_polygon);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 		auto &coord_children = StructVector::GetEntries(coord_vec);
+ 		auto x_data = FlatVector::GetDataMutable<double>(coord_children[0]);
+@@ -2445,7 +2445,7 @@ struct ST_Distance {
+ 		auto &y = children[1];
+ 		auto x_data = FlatVector::GetDataMutable<double>(x);
+ 		auto y_data = FlatVector::GetDataMutable<double>(y);
+-		auto lines = ListVector::GetData(in_line);
++		auto lines = FlatVector::GetData<list_entry_t>(in_line);
+ 
+ 		auto result_data = FlatVector::GetDataMutable<double>(result);
+ 		for (idx_t i = 0; i < count; i++) {
+@@ -2658,8 +2658,11 @@ struct ST_DistanceWithin {
+ 	};
+ 
+ 	// We try to constant-fold the distance parameter here, because it's a very common have a constant distance
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++
++		auto &arguments = input.GetArguments();
++		auto &bound_function = input.GetBoundFunction();
++		auto &context = input.GetClientContext();
+ 
+ 		if (arguments.back()->IsFoldable()) {
+ 			const auto dist_expr = ExpressionExecutor::EvaluateScalar(context, *arguments.back());
+@@ -2885,7 +2888,7 @@ struct ST_Dump {
+ 			}
+ 
+ 			// Push to the result vector
+-			auto result_entries = ListVector::GetData(result);
++			auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+ 
+ 			auto geom_offset = total_geom_count;
+ 			auto geom_length = items.size();
+@@ -2920,7 +2923,7 @@ struct ST_Dump {
+ 				ListVector::Reserve(result_path_vec, total_path_count);
+ 				ListVector::SetListSize(result_path_vec, total_path_count);
+ 
+-				auto path_entries = ListVector::GetData(result_path_vec);
++				auto path_entries = FlatVector::GetDataMutable<list_entry_t>(result_path_vec);
+ 
+ 				path_entries[geom_offset + i].offset = path_offset;
+ 				path_entries[geom_offset + i].length = path_length;
+@@ -3400,9 +3403,9 @@ struct ST_ExteriorRing {
+ 	static void ExecutePolygon(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		D_ASSERT(args.data.size() == 1);
+ 		auto &poly_vec = args.data[0];
+-		auto poly_entries = ListVector::GetData(poly_vec);
++		auto poly_entries = FlatVector::GetData<list_entry_t>(poly_vec);
+ 		auto &ring_vec = ListVector::GetEntry(poly_vec);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &vertex_vec = ListVector::GetEntry(ring_vec);
+ 		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
+ 		auto poly_x_data = FlatVector::GetDataMutable<double>(vertex_vec_children[0]);
+@@ -3431,7 +3434,7 @@ struct ST_ExteriorRing {
+ 		ListVector::Reserve(line_vec, total_vertex_count);
+ 		ListVector::SetListSize(line_vec, total_vertex_count);
+ 
+-		auto line_entries = ListVector::GetData(line_vec);
++		auto line_entries = FlatVector::GetDataMutable<list_entry_t>(line_vec);
+ 		auto &line_coord_vec = StructVector::GetEntries(ListVector::GetEntry(line_vec));
+ 		auto line_data_x = FlatVector::GetDataMutable<double>(line_coord_vec[0]);
+ 		auto line_data_y = FlatVector::GetDataMutable<double>(line_coord_vec[1]);
+@@ -3559,8 +3562,8 @@ struct ST_FlipCoordinates {
+ 		ListVector::Reserve(result, coord_count);
+ 		ListVector::SetListSize(result, coord_count);
+ 
+-		auto line_entries_in = ListVector::GetData(input);
+-		auto line_entries_out = ListVector::GetData(result);
++		auto line_entries_in = FlatVector::GetData<list_entry_t>(input);
++		auto line_entries_out = FlatVector::GetDataMutable<list_entry_t>(result);
+ 		memcpy(line_entries_out, line_entries_in, count * sizeof(list_entry_t));
+ 
+ 		auto &coord_vec_out = ListVector::GetEntry(result);
+@@ -3602,12 +3605,12 @@ struct ST_FlipCoordinates {
+ 		ListVector::Reserve(ring_vec_out, coord_count);
+ 		ListVector::SetListSize(ring_vec_out, coord_count);
+ 
+-		auto ring_entries_in = ListVector::GetData(input);
+-		auto ring_entries_out = ListVector::GetData(result);
++		auto ring_entries_in = FlatVector::GetData<list_entry_t>(input);
++		auto ring_entries_out = FlatVector::GetDataMutable<list_entry_t>(result);
+ 		memcpy(ring_entries_out, ring_entries_in, count * sizeof(list_entry_t));
+ 
+-		auto coord_entries_in = ListVector::GetData(ring_vec_in);
+-		auto coord_entries_out = ListVector::GetData(ring_vec_out);
++		auto coord_entries_in = FlatVector::GetData<list_entry_t>(ring_vec_in);
++		auto coord_entries_out = FlatVector::GetDataMutable<list_entry_t>(ring_vec_out);
+ 		memcpy(coord_entries_out, coord_entries_in, ring_count * sizeof(list_entry_t));
+ 
+ 		auto &coord_vec_out = ListVector::GetEntry(ring_vec_out);
+@@ -3910,8 +3913,7 @@ struct ST_GeometryType {
+ 	static constexpr uint8_t LEGACY_GEOMETRYCOLLECTION_TYPE = 6;
+ 	static constexpr uint8_t LEGACY_UNKNOWN_TYPE = 7;
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+ 		// Create an enum type for all geometry types
+ 		// Ensure that these are in the same order as the LegacyGeometryType enum
+ 		const vector<string> enum_values = {"POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
+@@ -3919,7 +3921,7 @@ struct ST_GeometryType {
+ 		                                    // or...
+ 		                                    "UNKNOWN"};
+ 
+-		bound_function.return_type = GeoTypes::CreateEnumType("GEOMETRY_TYPE", enum_values);
++		input.GetBoundFunction().SetReturnType(GeoTypes::CreateEnumType("GEOMETRY_TYPE", enum_values));
+ 		return nullptr;
+ 	}
+ 
+@@ -4591,8 +4593,10 @@ struct ST_GeomFromText {
+ 		bool ignore_invalid = false;
+ 	};
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++		auto &context = input.GetClientContext();
++
+ 		if (arguments.empty()) {
+ 			throw InvalidInputException("ST_GeomFromText requires at least one argument");
+ 		}
+@@ -4800,7 +4804,7 @@ struct ST_GeomFromWKB {
+ 		wkb_blobs.Flatten(count);
+ 
+ 		auto &inner = ListVector::GetEntry(result);
+-		const auto lines = ListVector::GetData(result);
++		const auto lines = FlatVector::GetDataMutable<list_entry_t>(result);
+ 		const auto wkb_data = FlatVector::GetDataMutable<string_t>(wkb_blobs);
+ 
+ 		idx_t total_size = 0;
+@@ -4872,7 +4876,7 @@ struct ST_GeomFromWKB {
+ 
+ 		// Set up output data
+ 		auto &ring_vec = ListVector::GetEntry(result);
+-		auto polygons = ListVector::GetData(result);
++		auto polygons = FlatVector::GetDataMutable<list_entry_t>(result);
+ 
+ 		idx_t total_ring_count = 0;
+ 		idx_t total_point_count = 0;
+@@ -4914,7 +4918,7 @@ struct ST_GeomFromWKB {
+ 					const auto point_count = ring->get_vertex_count();
+ 
+ 					ListVector::Reserve(ring_vec, total_point_count + point_count);
+-					auto ring_entries = ListVector::GetData(ring_vec);
++					auto ring_entries = FlatVector::GetDataMutable<list_entry_t>(ring_vec);
+ 					auto &inner = ListVector::GetEntry(ring_vec);
+ 
+ 					auto &children = StructVector::GetEntries(inner);
+@@ -5452,8 +5456,9 @@ struct ST_LocateAlong {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	// Bind
+ 	//------------------------------------------------------------------------------------------------------------------
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++
+ 		if (arguments.size() == 2) {
+ 			// Push back offset constant
+ 			arguments.push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0.0)));
+@@ -5553,8 +5558,9 @@ struct ST_LocateBetween {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	// Bind
+ 	//------------------------------------------------------------------------------------------------------------------
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++
+ 		if (arguments.size() == 3) {
+ 			// Push back offset constant
+ 			arguments.push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0.0)));
+@@ -5792,8 +5798,10 @@ struct ST_Distance_Sphere {
+ 		}
+ 	};
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &func,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &context = input.GetClientContext();
++		auto &func = input.GetBoundFunction();
++
+ 		auto bind_data = make_uniq<BindData>();
+ 
+ 		bool is_set = false;
+@@ -6193,9 +6201,9 @@ struct ST_InteriorRingN {
+ 		auto &n_vec = args.data[1];
+ 
+ 		// same layout as ST_ExteriorRing::ExecutePolygon
+-		auto poly_entries = ListVector::GetData(poly_vec);
++		auto poly_entries = FlatVector::GetData<list_entry_t>(poly_vec);
+ 		auto &ring_vec = ListVector::GetEntry(poly_vec);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &vertex_vec = ListVector::GetEntry(ring_vec);
+ 		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
+ 		auto poly_x_data = FlatVector::GetDataMutable<double>(vertex_vec_children[0]);
+@@ -6253,7 +6261,7 @@ struct ST_InteriorRingN {
+ 		ListVector::Reserve(line_vec, total_vertex_count);
+ 		ListVector::SetListSize(line_vec, total_vertex_count);
+ 
+-		auto line_entries = ListVector::GetData(line_vec);
++		auto line_entries = FlatVector::GetDataMutable<list_entry_t>(line_vec);
+ 		auto &line_coord_vec = StructVector::GetEntries(ListVector::GetEntry(line_vec));
+ 		auto line_data_x = FlatVector::GetDataMutable<double>(line_coord_vec[0]);
+ 		auto line_data_y = FlatVector::GetDataMutable<double>(line_coord_vec[1]);
+@@ -7604,7 +7612,7 @@ struct ST_NPoints {
+ 		auto &input = args.data[0];
+ 		auto count = args.size();
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 
+ 		UnaryExecutor::Execute<list_entry_t, idx_t>(input, result, count, [&](list_entry_t polygon) {
+ 			auto polygon_offset = polygon.offset;
+@@ -7718,7 +7726,7 @@ struct ST_Perimeter {
+ 		auto count = args.size();
+ 
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
+ 		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
+@@ -8135,7 +8143,7 @@ struct ST_PointN {
+ 		UnifiedVectorFormat index_format;
+ 		index_vec.ToUnifiedFormat(count, index_format);
+ 
+-		auto line_vertex_entries = ListVector::GetData(geom_vec);
++		auto line_vertex_entries = FlatVector::GetData<list_entry_t>(geom_vec);
+ 		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
+ 		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
+ 		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
+@@ -8434,12 +8442,12 @@ struct ST_RemoveRepeatedPoints {
+ 		UnifiedVectorFormat format;
+ 		input.ToUnifiedFormat(count, format);
+ 
+-		auto in_line_entries = ListVector::GetData(input);
++		auto in_line_entries = FlatVector::GetData<list_entry_t>(input);
+ 		auto &in_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(input));
+ 		auto in_x_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[0]);
+ 		auto in_y_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[1]);
+ 
+-		auto out_line_entries = ListVector::GetData(result);
++		auto out_line_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+ 		auto &out_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(result));
+ 
+ 		idx_t out_offset = 0;
+@@ -8556,12 +8564,12 @@ struct ST_RemoveRepeatedPoints {
+ 		UnifiedVectorFormat tolerance_format;
+ 		tolerance.ToUnifiedFormat(count, tolerance_format);
+ 
+-		auto in_line_entries = ListVector::GetData(input);
++		auto in_line_entries = FlatVector::GetData<list_entry_t>(input);
+ 		auto &in_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(input));
+ 		auto in_x_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[0]);
+ 		auto in_y_data = FlatVector::GetDataMutable<double>(in_line_vertex_vec[1]);
+ 
+-		auto out_line_entries = ListVector::GetData(result);
++		auto out_line_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+ 		auto &out_line_vertex_vec = StructVector::GetEntries(ListVector::GetEntry(result));
+ 
+ 		idx_t out_offset = 0;
+@@ -8764,7 +8772,7 @@ struct ST_StartPoint {
+ 		UnifiedVectorFormat geom_format;
+ 		geom_vec.ToUnifiedFormat(count, geom_format);
+ 
+-		auto line_vertex_entries = ListVector::GetData(geom_vec);
++		auto line_vertex_entries = FlatVector::GetData<list_entry_t>(geom_vec);
+ 		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
+ 		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
+ 		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
+@@ -8889,7 +8897,7 @@ struct ST_EndPoint {
+ 		UnifiedVectorFormat geom_format;
+ 		geom_vec.ToUnifiedFormat(count, geom_format);
+ 
+-		auto line_vertex_entries = ListVector::GetData(geom_vec);
++		auto line_vertex_entries = FlatVector::GetData<list_entry_t>(geom_vec);
+ 		auto &line_vertex_vec = ListVector::GetEntry(geom_vec);
+ 		auto &line_vertex_vec_children = StructVector::GetEntries(line_vertex_vec);
+ 		auto line_x_data = FlatVector::GetDataMutable<double>(line_vertex_vec_children[0]);
+@@ -9255,7 +9263,7 @@ struct VertexAggFunctionBase {
+ 		input.ToUnifiedFormat(count, format);
+ 
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &vertex_vec = ListVector::GetEntry(ring_vec);
+ 		auto &vertex_vec_children = StructVector::GetEntries(vertex_vec);
+ 		const auto axis = OP::ORDINATE == VertexOrdinate::X ? 0 : 1;
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index c0bd1ec..34b85e1 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -824,8 +824,12 @@ struct ST_AsMVT {
+ 		}
+ 	};
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+-	                                     vector<unique_ptr<Expression>> &arguments) {
++	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
++		auto &context = input.GetClientContext();
++		auto &arguments = input.GetArguments();
++		auto &function = input.GetBoundFunction();
++
++
+ 		auto result = make_uniq<BindData>();
+ 
+ 		// Figure part of the row is the geometry column
+diff --git a/src/spatial/modules/osm/osm_module.cpp b/src/spatial/modules/osm/osm_module.cpp
+index 06916d3..9154622 100644
+--- a/src/spatial/modules/osm/osm_module.cpp
++++ b/src/spatial/modules/osm/osm_module.cpp
+@@ -422,7 +422,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_tags = ListVector::GetListSize(output.data[2]);
+ 			ListVector::Reserve(output.data[2], total_tags + tag_count);
+ 			ListVector::SetListSize(output.data[2], total_tags + tag_count);
+-			auto &tag_entry = ListVector::GetData(output.data[2])[index];
++			auto &tag_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[2])[index];
+ 
+ 			tag_entry.offset = total_tags;
+ 			tag_entry.length = tag_count;
+@@ -541,7 +541,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_tags = ListVector::GetListSize(output.data[2]);
+ 			ListVector::Reserve(output.data[2], total_tags + tag_count);
+ 			ListVector::SetListSize(output.data[2], total_tags + tag_count);
+-			auto &tag_entry = ListVector::GetData(output.data[2])[index];
++			auto &tag_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[2])[index];
+ 
+ 			tag_entry.offset = total_tags;
+ 			tag_entry.length = tag_count;
+@@ -566,7 +566,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_refs = ListVector::GetListSize(output.data[3]);
+ 			ListVector::Reserve(output.data[3], total_refs + ref_count);
+ 			ListVector::SetListSize(output.data[3], total_refs + ref_count);
+-			auto &ref_entry = ListVector::GetData(output.data[3])[index];
++			auto &ref_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[3])[index];
+ 			auto &ref_vector = ListVector::GetEntry(output.data[3]);
+ 			ref_entry.offset = total_refs;
+ 			ref_entry.length = ref_count;
+@@ -630,7 +630,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_tags = ListVector::GetListSize(output.data[2]);
+ 			ListVector::Reserve(output.data[2], total_tags + tag_count);
+ 			ListVector::SetListSize(output.data[2], total_tags + tag_count);
+-			auto &tag_entry = ListVector::GetData(output.data[2])[index];
++			auto &tag_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[2])[index];
+ 
+ 			tag_entry.offset = total_tags;
+ 			tag_entry.length = tag_count;
+@@ -657,7 +657,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_roles = ListVector::GetListSize(output.data[6]);
+ 			ListVector::Reserve(output.data[6], total_roles + role_count);
+ 			ListVector::SetListSize(output.data[6], total_roles + role_count);
+-			auto &role_entry = ListVector::GetData(output.data[6])[index];
++			auto &role_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[6])[index];
+ 			auto &role_vector = ListVector::GetEntry(output.data[6]);
+ 			role_entry.offset = total_roles;
+ 			role_entry.length = role_count;
+@@ -682,7 +682,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_refs = ListVector::GetListSize(output.data[3]);
+ 			ListVector::Reserve(output.data[3], total_refs + ref_count);
+ 			ListVector::SetListSize(output.data[3], total_refs + ref_count);
+-			auto &ref_entry = ListVector::GetData(output.data[3])[index];
++			auto &ref_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[3])[index];
+ 			auto &ref_vector = ListVector::GetEntry(output.data[3]);
+ 			ref_entry.offset = total_refs;
+ 			ref_entry.length = ref_count;
+@@ -705,7 +705,7 @@ struct LocalState final : LocalTableFunctionState {
+ 			auto total_types = ListVector::GetListSize(output.data[7]);
+ 			ListVector::Reserve(output.data[7], total_types + type_count);
+ 			ListVector::SetListSize(output.data[7], total_types + type_count);
+-			auto &type_entry = ListVector::GetData(output.data[7])[index];
++			auto &type_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[7])[index];
+ 			auto &type_vector = ListVector::GetEntry(output.data[7]);
+ 			type_entry.offset = total_types;
+ 			type_entry.length = type_count;
+@@ -751,7 +751,7 @@ struct LocalState final : LocalTableFunctionState {
+ 					auto total_tags = ListVector::GetListSize(output.data[2]);
+ 					ListVector::Reserve(output.data[2], total_tags + tag_count);
+ 					ListVector::SetListSize(output.data[2], total_tags + tag_count);
+-					auto &tag_entry = ListVector::GetData(output.data[2])[index];
++					auto &tag_entry = FlatVector::GetDataMutable<list_entry_t>(output.data[2])[index];
+ 
+ 					tag_entry.offset = total_tags;
+ 					tag_entry.length = tag_count;
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index d11d09e..ec69387 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -163,7 +163,10 @@ struct ST_Transform {
+ 		}
+ 	};
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &ctx, ScalarFunction &, vector<unique_ptr<Expression>> &args) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &ctx = input.GetClientContext();
++		auto &args = input.GetArguments();
++
+ 		auto result = make_uniq<BindData>();
+ 
+ 		// If always_xy is set, then always normalize
+@@ -239,8 +242,10 @@ struct ST_Transform {
+ 		}
+ 	};
+ 
+-	static unique_ptr<FunctionData> BindTyped(ClientContext &ctx, ScalarFunction &func,
+-	                                          vector<unique_ptr<Expression>> &args) {
++	static unique_ptr<FunctionData> BindTyped(BindScalarFunctionInput &input) {
++		auto &ctx = input.GetClientContext();
++		auto &func = input.GetBoundFunction();
++		auto &args = input.GetArguments();
+ 
+ 		auto result = make_uniq<TypedBindData>();
+ 
+@@ -725,8 +730,10 @@ struct GeodesicBindData final : FunctionData {
+ 		return always_xy == data.always_xy;
+ 	}
+ 
+-	static unique_ptr<FunctionData> Bind(ClientContext &ctx, ScalarFunction &func,
+-	                                     vector<unique_ptr<Expression>> &args) {
++	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &ctx = input.GetClientContext();
++		auto &func = input.GetBoundFunction();
++
+ 		auto result = make_uniq<GeodesicBindData>();
+ 
+ 		bool is_set = false;
+@@ -797,7 +804,7 @@ struct GeodesicLocalState final : FunctionLocalState {
+ 
+ struct ST_Area_Spheroid {
+ 
+-	//------------------------------------------------------------------------------------------------------------------
++	//--------------------------------------------------------------------------------------o----------------------------
+ 	// Execute (POLYGON_2D)
+ 	//------------------------------------------------------------------------------------------------------------------
+ 
+@@ -810,7 +817,7 @@ struct ST_Area_Spheroid {
+ 		auto count = args.size();
+ 
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
+ 		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
+@@ -1004,7 +1011,7 @@ struct ST_Perimeter_Spheroid {
+ 		auto count = args.size();
+ 
+ 		auto &ring_vec = ListVector::GetEntry(input);
+-		auto ring_entries = ListVector::GetData(ring_vec);
++		auto ring_entries = FlatVector::GetData<list_entry_t>(ring_vec);
+ 		auto &coord_vec = ListVector::GetEntry(ring_vec);
+ 		auto &coord_vec_children = StructVector::GetEntries(coord_vec);
+ 		auto x_data = FlatVector::GetDataMutable<double>(coord_vec_children[0]);
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index 1c0cf53..082b436 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -142,13 +142,19 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, B
+ 
+ 	return nullptr;
+ }
+-unique_ptr<FunctionData> GeoTypes::PropagateCRS(ClientContext &context, ScalarFunction &bound_function,
+-                                                vector<unique_ptr<Expression>> &arguments) {
++unique_ptr<FunctionData> GeoTypes::PropagateCRS(BindScalarFunctionInput &input) {
++	auto &context = input.GetClientContext();
++	auto &bound_function = input.GetBoundFunction();
++	auto &arguments = input.GetArguments();
++
+ 	return PropagateTypesInternal(context, bound_function, arguments);
+ }
+ 
+-unique_ptr<FunctionData> GeoTypes::PropagateCRS(ClientContext &context, AggregateFunction &bound_function,
+-                                                vector<unique_ptr<Expression>> &arguments) {
++unique_ptr<FunctionData> GeoTypes::PropagateCRS(BindAggregateFunctionInput &input) {
++	auto &context = input.GetClientContext();
++	auto &bound_function = input.GetBoundFunction();
++	auto &arguments = input.GetArguments();
++
+ 	return PropagateTypesInternal(context, bound_function, arguments);
+ }
+ 
+diff --git a/src/spatial/spatial_types.hpp b/src/spatial/spatial_types.hpp
+index 9af0cca..ae01922 100644
+--- a/src/spatial/spatial_types.hpp
++++ b/src/spatial/spatial_types.hpp
+@@ -13,11 +13,11 @@ class ScalarFunction;
+ class AggregateFunction;
+ class ClientContext;
+ class Expression;
++class BindScalarFunctionInput;
++class BindAggregateFunctionInput;
+ 
+-typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
+-                                                           vector<unique_ptr<Expression>> &arguments);
+-typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
+-                                                              vector<unique_ptr<Expression>> &arguments);
++typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BindScalarFunctionInput &input);
++typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BindAggregateFunctionInput &input);
+ 
+ struct GeoTypes {
+ 	static LogicalType POINT_2D();
+@@ -34,25 +34,22 @@ struct GeoTypes {
+ 
+ 	static LogicalType CreateEnumType(const string &name, const vector<string> &members);
+ 
+-	static unique_ptr<FunctionData> PropagateCRS(ClientContext &context, ScalarFunction &bound_function,
+-	                                             vector<unique_ptr<Expression>> &arguments);
++	static unique_ptr<FunctionData> PropagateCRS(BindScalarFunctionInput &input);
++	static unique_ptr<FunctionData> PropagateCRS(BindAggregateFunctionInput &input);
+ 
+-	static unique_ptr<FunctionData> PropagateCRS(ClientContext &context, AggregateFunction &bound_function,
+-	                                             vector<unique_ptr<Expression>> &arguments);
+ 
+-	template <bind_aggregate_function_t BIND>
+-	static unique_ptr<FunctionData> PropagateCRS(ClientContext &context, AggregateFunction &bound_function,
+-	                                             vector<unique_ptr<Expression>> &arguments) {
+-		PropagateCRS(context, bound_function, arguments);
+-		return BIND(context, bound_function, arguments);
++	template <bind_scalar_function_t BIND>
++	static unique_ptr<FunctionData> PropagateCRS(BindScalarFunctionInput &input) {
++		PropagateCRS(input);
++		return BIND(input);
+ 	}
+ 
+-	template <bind_scalar_function_t BIND>
+-	static unique_ptr<FunctionData> PropagateCRS(ClientContext &context, ScalarFunction &bound_function,
+-	                                             vector<unique_ptr<Expression>> &arguments) {
+-		PropagateCRS(context, bound_function, arguments);
+-		return BIND(context, bound_function, arguments);
++	template <bind_aggregate_function_t BIND>
++	static unique_ptr<FunctionData> PropagateCRS(BindAggregateFunctionInput &input) {
++		PropagateCRS(input);
++		return BIND(input);
+ 	}
++
+ };
+ 
+ } // namespace duckdb
+-- 
+2.39.5 (Apple Git-154)
+

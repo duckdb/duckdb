@@ -191,8 +191,9 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 }
 
 template <bool IS_MODULO = false>
-unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &context, ScalarFunction &bound_function,
-                                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	// get the max width and scale of the input arguments
@@ -246,9 +247,10 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &conte
 }
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindDecimalArithmetic(context, bound_function, arguments);
+unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+
+	auto bind_data = BindDecimalArithmetic(input);
 
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
@@ -298,8 +300,10 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	return std::move(bind_data);
 }
 
-unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> NopDecimalBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	bound_function.SetReturnType(arguments[0]->return_type);
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
@@ -316,7 +320,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	}
 }
 
-void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result, args.size(),
 	                                                      [&](bignum_t a, bignum_t b) {
@@ -326,7 +330,7 @@ void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	                                                      });
 }
 
-void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](bignum_t a, bignum_t b) {
@@ -339,7 +343,7 @@ void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	    });
 }
 
-void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
+static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, args.size(), [&](bignum_t a) {
 		const BignumIntermediate lhs(a);
@@ -359,7 +363,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
-			                        nullptr, nullptr,
+			                        nullptr,
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
 			return function;
@@ -557,8 +561,10 @@ struct DecimalNegateBindData : public FunctionData {
 	LogicalTypeId bound_type;
 };
 
-unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = make_uniq<DecimalNegateBindData>();
 
 	auto &decimal_type = arguments[0]->return_type;
@@ -583,8 +589,10 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 	return nullptr;
 }
 
-unique_ptr<FunctionData> IntegerNegateBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	D_ASSERT(arguments.size() == 1);
 	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return nullptr;
@@ -637,7 +645,7 @@ struct NegatePropagateStatistics {
 	}
 };
 
-unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
@@ -684,7 +692,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 		func.SetFallible();
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
-		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
+		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, NegateBindStatistics);
 		return func;
 	} else if (type.id() == LogicalTypeId::BIGNUM) {
 		ScalarFunction func("+", {type}, LogicalType::BIGNUM, BignumNegate);
@@ -692,7 +700,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	} else {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
-		                    IntegerNegateBind, nullptr, NegateBindStatistics);
+		                    IntegerNegateBind, NegateBindStatistics);
 		func.SetFallible();
 		return func;
 	}
@@ -711,7 +719,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
-			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
+			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
 			return function;
@@ -869,8 +877,10 @@ struct MultiplyPropagateStatistics {
 	}
 };
 
-unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	uint8_t result_width = 0, result_scale = 0;
@@ -953,8 +963,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 		} else if (TypeIsIntegral(type.InternalType())) {
 			multiply.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
-			    nullptr, nullptr,
-			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
+			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
 			multiply.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
@@ -1104,8 +1113,10 @@ scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 }
 
 template <class OP>
-unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+
 	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
@@ -1151,9 +1162,9 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 // % [modulo]
 //===--------------------------------------------------------------------===//
 template <class OP>
-static unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindDecimalArithmetic<true>(context, bound_function, arguments);
+static unique_ptr<FunctionData> BindDecimalModulo(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto bind_data = BindDecimalArithmetic<true>(input);
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {
 		// fallback to DOUBLE if the decimal type is not guaranteed to fit within the max decimal width

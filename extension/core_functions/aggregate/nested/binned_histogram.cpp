@@ -376,8 +376,9 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 }
 
 template <class HIST>
-unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, AggregateFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
