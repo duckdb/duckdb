@@ -115,7 +115,6 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 static unique_ptr<FunctionData> BindConcatWSFunction(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	for (auto &arg : bound_function.arguments) {
 		arg = LogicalType::VARCHAR;
 	}
