@@ -43,13 +43,25 @@ public:
 
 public:
 	struct VectorValueEntry {
-		idx_t index;
-		T value;
-		bool is_valid;
-
-		bool IsValid() const {
-			return is_valid;
+		VectorValueEntry(UnifiedVectorFormat &format, const T *data, idx_t index) : format(format), data(data), index(index) {
+			sel_index = format.sel->get_index(index);
 		}
+
+		const T &GetValue() const {
+			return data[sel_index];
+		}
+		bool IsValid() const {
+			return format.validity.RowIsValid(sel_index);
+		}
+		idx_t GetIndex() const {
+			return index;
+		}
+
+	private:
+		UnifiedVectorFormat &format;
+		const T *data;
+		idx_t sel_index;
+		idx_t index;
 	};
 
 private:
@@ -117,14 +129,7 @@ private:
 
 	private:
 		VectorValueEntry GetEntry(idx_t i) const {
-			VectorValueEntry result;
-			result.index = i;
-			auto sel_idx = format.sel->get_index(i);
-			result.is_valid = format.validity.RowIsValid(sel_idx);
-			if (result.is_valid) {
-				result.value = data[sel_idx];
-			}
-			return result;
+			return VectorValueEntry(format, data, i);
 		}
 
 	private:
