@@ -1,29 +1,29 @@
-InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+InsertStatement[unique_ptr<SQLStatement>] <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
-OrAction <- 'OR' 'REPLACE' / 'IGNORE'
-ByNameOrPosition <- 'BY' InsertByName / InsertByPosition
+OrAction[OnConflictAction] <- 'OR' 'REPLACE' / 'IGNORE'
+ByNameOrPosition[InsertColumnOrder] <- 'BY' InsertByName / InsertByPosition
 InsertByName <- 'NAME'
 InsertByPosition <- 'POSITION'
 
-InsertTarget <- BaseTableName InsertAlias?
-InsertAlias <- 'AS' Identifier
+InsertTarget[unique_ptr<BaseTableRef>] <- BaseTableName InsertAlias?
+InsertAlias[string] <- 'AS' Identifier
 
-ColumnList <- List(ColId)
-InsertColumnList <- Parens(ColumnList)
+ColumnList[vector<string>] <- List(ColId)
+InsertColumnList[vector<string>] <- Parens(ColumnList)
 
-InsertValues <- SelectStatementInternal / DefaultValues
+InsertValues[InsertValues] <- SelectStatementInternal / DefaultValues
 DefaultValues <- 'DEFAULT' 'VALUES'
 
-OnConflictClause <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction
+OnConflictClause[unique_ptr<OnConflictInfo>] <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction
 
-OnConflictTarget <- OnConflictExpressionTarget / OnConflictIndexTarget
-OnConflictExpressionTarget <- ColumnIdList WhereClause?
-OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
+OnConflictTarget[OnConflictExpressionTarget] <- OnConflictExpressionTarget / OnConflictIndexTarget
+OnConflictExpressionTarget[OnConflictExpressionTarget] <- ColumnIdList WhereClause?
+OnConflictIndexTarget[OnConflictExpressionTarget] <- 'ON' 'CONSTRAINT' ConstraintName
 
 
-OnConflictAction <- OnConflictUpdate / OnConflictNothing
+OnConflictAction[unique_ptr<OnConflictInfo>] <- OnConflictUpdate / OnConflictNothing
 
-OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
-OnConflictNothing <- 'DO' 'NOTHING'
+OnConflictUpdate[unique_ptr<OnConflictInfo>] <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
+OnConflictNothing[unique_ptr<OnConflictInfo>] <- 'DO' 'NOTHING'
 
-ReturningClause <- 'RETURNING' TargetList
+ReturningClause[vector<unique_ptr<ParsedExpression>>] <- 'RETURNING' TargetList

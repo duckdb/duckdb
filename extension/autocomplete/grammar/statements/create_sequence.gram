@@ -1,6 +1,6 @@
-CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
+CreateSequenceStmt[unique_ptr<CreateStatement>] <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
 
-SequenceOption <-
+SequenceOption[pair<string, unique_ptr<SequenceOption>>] <-
 	SeqSetCycle /
 	SeqSetIncrement /
 	SeqSetMinMax /
@@ -8,13 +8,13 @@ SequenceOption <-
 	SeqStartWith /
 	SeqOwnedBy
 
-SeqSetCycle <- 'NO'? 'CYCLE'
-SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
-SeqSetMinMax <- SeqMinOrMax Expression
-SeqNoMinMax <- 'NO' SeqMinOrMax
-SeqStartWith <- 'START' 'WITH'? Expression
-SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
+SeqSetCycle[pair<string, unique_ptr<SequenceOption>>] <- 'NO'? 'CYCLE'
+SeqSetIncrement[pair<string, unique_ptr<SequenceOption>>] <- 'INCREMENT' 'BY'? Expression
+SeqSetMinMax[pair<string, unique_ptr<SequenceOption>>] <- SeqMinOrMax Expression
+SeqNoMinMax[pair<string, unique_ptr<SequenceOption>>] <- 'NO' SeqMinOrMax
+SeqStartWith[pair<string, unique_ptr<SequenceOption>>] <- 'START' 'WITH'? Expression
+SeqOwnedBy[pair<string, unique_ptr<SequenceOption>>] <- 'OWNED' 'BY' QualifiedName
 
-SeqMinOrMax <- MinValue / MaxValue
+SeqMinOrMax[string] <- MinValue / MaxValue
 MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'

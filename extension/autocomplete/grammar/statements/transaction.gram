@@ -1,13 +1,13 @@
-TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
+TransactionStatement[unique_ptr<SQLStatement>] <- BeginTransaction / RollbackTransaction / CommitTransaction
 
-BeginTransaction <- StartOrBegin Transaction? ReadOrWrite?
-RollbackTransaction <- AbortOrRollback Transaction?
-CommitTransaction <- CommitOrEnd Transaction?
+BeginTransaction[unique_ptr<TransactionStatement>] <- StartOrBegin Transaction? ReadOrWrite?
+RollbackTransaction[unique_ptr<TransactionStatement>] <- AbortOrRollback Transaction?
+CommitTransaction[unique_ptr<TransactionStatement>] <- CommitOrEnd Transaction?
 
 StartOrBegin <- 'START' / 'BEGIN'
 Transaction <- 'WORK' / 'TRANSACTION'
-ReadOrWrite <- 'READ' ReadOnlyOrReadWrite
-ReadOnlyOrReadWrite <- ReadOnly / ReadWrite
+ReadOrWrite[TransactionModifierType] <- 'READ' ReadOnlyOrReadWrite
+ReadOnlyOrReadWrite[TransactionModifierType] <- ReadOnly / ReadWrite
 ReadOnly <- 'ONLY'
 ReadWrite <- 'WRITE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'

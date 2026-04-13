@@ -1,9 +1,9 @@
-SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetStatement[unique_ptr<SQLStatement>] <- 'SET' (StandardAssignment / SetTimeZone)
 
-StandardAssignment <- (SetVariable / SetSetting) SetAssignment
-SetTimeZone <- 'TIME' 'ZONE' Expression
-SetSetting <- SettingScope? SettingName
-SetVariable <- VariableScope Identifier
+StandardAssignment[unique_ptr<SetStatement>] <- (SetVariable / SetSetting) SetAssignment
+SetTimeZone[unique_ptr<SetStatement>] <- 'TIME' 'ZONE' Expression
+SetSetting[SettingInfo] <- SettingScope? SettingName
+SetVariable[SettingInfo] <- VariableScope Identifier
 VariableScope <- 'VARIABLE'
 
 SettingScope <- LocalScope / SessionScope / GlobalScope
@@ -11,9 +11,9 @@ LocalScope <- 'LOCAL'
 SessionScope <- 'SESSION'
 GlobalScope <- 'GLOBAL'
 
-SetAssignment <- VariableAssign VariableList
+SetAssignment[vector<unique_ptr<ParsedExpression>>] <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
-VariableList <- List(Expression)
+VariableList[vector<unique_ptr<ParsedExpression>>] <- List(Expression)
 
-ResetStatement <- 'RESET' (SetVariable / SetSetting)
+ResetStatement[unique_ptr<SQLStatement>] <- 'RESET' (SetVariable / SetSetting)

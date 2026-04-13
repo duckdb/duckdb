@@ -1,82 +1,82 @@
-CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
-CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
+CreateStatement[unique_ptr<SQLStatement>] <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
+CreateStatementVariation[unique_ptr<CreateStatement>] <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
 OrReplace <- 'OR' 'REPLACE'
-Temporary <- Persistent / TempPersistent / TemporaryPersistent
+Temporary[SecretPersistType] <- Persistent / TempPersistent / TemporaryPersistent
 Persistent <- 'PERSISTENT'
 TempPersistent <- 'TEMP'
 TemporaryPersistent <- 'TEMPORARY'
 
-CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
+CreateTableStmt[unique_ptr<CreateStatement>] <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' Statement WithData?
-PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
-PartitionOptSortedOptions <- PartitionOptions SortedOptions?
-SortedOptPartitionOptions <- SortedOptions PartitionOptions?
-PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
-SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
+CreateTableAs[CreateTableAs] <- IdentifierList? PartitionSortedOptions? WithList? 'AS' Statement WithData?
+PartitionSortedOptions[PartitionSortedOptions] <- PartitionOptSortedOptions / SortedOptPartitionOptions
+PartitionOptSortedOptions[PartitionSortedOptions] <- PartitionOptions SortedOptions?
+SortedOptPartitionOptions[PartitionSortedOptions] <- SortedOptions PartitionOptions?
+PartitionOptions[vector<unique_ptr<ParsedExpression>>] <- 'PARTITIONED' 'BY' Parens(List(Expression))
+SortedOptions[vector<unique_ptr<ParsedExpression>>] <- 'SORTED' 'BY' Parens(List(Expression))
 
-WithData <- 'WITH' 'NO'? 'DATA'
-IdentifierList <- Parens(List(Identifier))
-CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
+WithData[bool] <- 'WITH' 'NO'? 'DATA'
+IdentifierList[ColumnList] <- Parens(List(Identifier))
+CreateColumnList[ColumnElements] <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
-QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
-SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
-CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification ReservedIdentifierOrStringLiteral
-IdentifierOrStringLiteral <- Identifier / StringLiteral
-ReservedIdentifierOrStringLiteral <- ReservedIdentifier / StringLiteral
-CatalogQualification <- CatalogName '.'
-SchemaQualification <- SchemaName '.'
+QualifiedName[QualifiedName] <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
+SchemaReservedIdentifierOrStringLiteral[QualifiedName] <- SchemaQualification ReservedIdentifierOrStringLiteral
+CatalogReservedSchemaIdentifier[QualifiedName] <- CatalogQualification ReservedSchemaQualification ReservedIdentifierOrStringLiteral
+IdentifierOrStringLiteral[QualifiedName] <- Identifier / StringLiteral
+ReservedIdentifierOrStringLiteral[string] <- ReservedIdentifier / StringLiteral
+CatalogQualification[string] <- CatalogName '.'
+SchemaQualification[string] <- SchemaName '.'
 ReservedSchemaQualification <- ReservedSchemaName '.'
-TableQualification <- TableName '.'
-ReservedTableQualification <- ReservedTableName '.'
+TableQualification[string] <- TableName '.'
+ReservedTableQualification[string] <- ReservedTableName '.'
 
-CreateTableColumnList <- List(CreateTableColumnElement)
+CreateTableColumnList[ColumnElements] <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
-ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
+ColumnDefinition[ConstraintColumnDefinition] <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
-NotNullConstraint <- 'NOT'? 'NULL'
-UniqueConstraint <- 'UNIQUE'
-PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
-DefaultValue <- 'DEFAULT' Expression
-CheckConstraint <- 'CHECK' Parens(Expression)
-ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
-ColumnCollation <- 'COLLATE' DottedIdentifier
-ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
+NotNullConstraint[pair<bool, ConstraintType>] <- 'NOT'? 'NULL'
+UniqueConstraint[pair<bool, ConstraintType>] <- 'UNIQUE'
+PrimaryKeyConstraint[pair<bool, ConstraintType>] <- 'PRIMARY' 'KEY'
+DefaultValue[unique_ptr<ParsedExpression>] <- 'DEFAULT' Expression
+CheckConstraint[unique_ptr<Constraint>] <- 'CHECK' Parens(Expression)
+ForeignKeyConstraint[unique_ptr<ForeignKeyConstraint>] <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
+ColumnCollation[LogicalType] <- 'COLLATE' DottedIdentifier
+ColumnCompression[CompressionType] <- 'USING' 'COMPRESSION' ColIdOrString
 
-KeyActions <- UpdateAction? DeleteAction?
-UpdateAction <- 'ON' 'UPDATE' KeyAction
-DeleteAction <- 'ON' 'DELETE' KeyAction
-KeyAction <- NoKeyAction / RestrictKeyAction / CascadeKeyAction / SetNullKeyAction / SetDefaultKeyAction
-NoKeyAction <- 'NO' 'ACTION'
-RestrictKeyAction <- 'RESTRICT'
-CascadeKeyAction <- 'CASCADE'
-SetNullKeyAction <- 'SET' 'NULL'
-SetDefaultKeyAction <- 'SET' 'DEFAULT'
+KeyActions[KeyActions] <- UpdateAction? DeleteAction?
+UpdateAction[string] <- 'ON' 'UPDATE' KeyAction
+DeleteAction[string] <- 'ON' 'DELETE' KeyAction
+KeyAction[string] <- NoKeyAction / RestrictKeyAction / CascadeKeyAction / SetNullKeyAction / SetDefaultKeyAction
+NoKeyAction[string] <- 'NO' 'ACTION'
+RestrictKeyAction[string] <- 'RESTRICT'
+CascadeKeyAction[string] <- 'CASCADE'
+SetNullKeyAction[string] <- 'SET' 'NULL'
+SetDefaultKeyAction[string] <- 'SET' 'DEFAULT'
 
-TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
-TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
+TopLevelConstraint[unique_ptr<Constraint>] <- ConstraintNameClause? TopLevelConstraintList
+TopLevelConstraintList[unique_ptr<Constraint>] <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
 ConstraintNameClause <- 'CONSTRAINT' Identifier
-TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
-TopUniqueConstraint <- 'UNIQUE' ColumnIdList
-TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
-ColumnIdList <- Parens(List(ColId))
+TopPrimaryKeyConstraint[unique_ptr<Constraint>] <- 'PRIMARY' 'KEY' ColumnIdList
+TopUniqueConstraint[unique_ptr<Constraint>] <- 'UNIQUE' ColumnIdList
+TopForeignKeyConstraint[unique_ptr<Constraint>] <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
+ColumnIdList[vector<string>] <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-DottedIdentifier <- Identifier ('.' ColLabel)*
-Identifier <- QuotedIdentifier / PlainIdentifier
+DottedIdentifier[vector<string>] <- Identifier ('.' ColLabel)*
+Identifier[string] <- QuotedIdentifier / PlainIdentifier
 
-ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
-ColIdOrString <- ColId / StringLiteral
-TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
+ColId[string] <- UnreservedKeyword / ColumnNameKeyword / Identifier
+ColIdOrString[string] <- ColId / StringLiteral
+TypeFuncName[string] <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
-ColLabelOrString <- ColLabel / StringLiteral
-GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
+ColLabelOrString[string] <- ColLabel / StringLiteral
+GeneratedColumn[GeneratedColumnDefinition] <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
-GeneratedColumnType <- 'VIRTUAL' / 'STORED'
+GeneratedColumnType[bool] <- 'VIRTUAL' / 'STORED'
 
-CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
-PreserveOrDelete <- 'PRESERVE' / 'DELETE'
+CommitAction[bool] <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
+PreserveOrDelete[bool] <- 'PRESERVE' / 'DELETE'

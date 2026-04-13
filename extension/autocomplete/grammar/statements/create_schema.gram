@@ -1,1 +1,1 @@
-CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
+CreateSchemaStmt[unique_ptr<CreateStatement>] <- 'SCHEMA' IfNotExists? QualifiedName

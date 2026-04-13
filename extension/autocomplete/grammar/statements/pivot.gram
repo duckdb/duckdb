@@ -1,24 +1,24 @@
-PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
+PivotStatement[unique_ptr<SelectStatement>] <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
 
-PivotOn <- 'ON' PivotColumnList
-PivotUsing <- 'USING' TargetList
-PivotColumnList <- List(PivotColumnEntry)
-PivotColumnEntry <- PivotColumnSubquery / PivotValueList / PivotColumnEntryInternal
-PivotColumnEntryInternal <- Expression
-PivotColumnSubquery <- BaseExpression 'IN' Parens(SelectStatementInternal)
+PivotOn[vector<PivotColumn>] <- 'ON' PivotColumnList
+PivotUsing[vector<unique_ptr<ParsedExpression>>] <- 'USING' TargetList
+PivotColumnList[vector<PivotColumn>] <- List(PivotColumnEntry)
+PivotColumnEntry[PivotColumn] <- PivotColumnSubquery / PivotValueList / PivotColumnEntryInternal
+PivotColumnEntryInternal[PivotColumn] <- Expression
+PivotColumnSubquery[PivotColumn] <- BaseExpression 'IN' Parens(SelectStatementInternal)
 
 PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
 UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
-UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
+UnpivotStatement[unique_ptr<SelectStatement>] <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues[UnpivotNameValues] <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 
-IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
+IncludeOrExcludeNulls[bool] <- IncludeNulls / ExcludeNulls
 IncludeNulls <- 'INCLUDE' 'NULLS'
 ExcludeNulls <- 'EXCLUDE' 'NULLS'
-UnpivotHeader <- UnpivotHeaderSingle / UnpivotHeaderList
-UnpivotHeaderSingle <- ColIdOrString
-UnpivotHeaderList <- Parens(List(ColIdOrString))
+UnpivotHeader[vector<string>] <- UnpivotHeaderSingle / UnpivotHeaderList
+UnpivotHeaderSingle[vector<string>] <- ColIdOrString
+UnpivotHeaderList[vector<string>] <- Parens(List(ColIdOrString))

@@ -1,6 +1,6 @@
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? GenericCopyOptionList? ExplainableStatements
+ExplainStatement[unique_ptr<SQLStatement>] <- 'EXPLAIN' 'ANALYZE'? GenericCopyOptionList? ExplainableStatements
 
-ExplainableStatements <-
+ExplainableStatements[unique_ptr<SQLStatement>] <-
     AlterStatement /
     AnalyzeStatement /
     CallStatement /

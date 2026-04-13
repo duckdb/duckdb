@@ -1,2 +1,2 @@
-AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
-AnalyzeTarget <- BaseTableName NameList?
+AnalyzeStatement[unique_ptr<SQLStatement>] <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
+AnalyzeTarget[AnalyzeTarget] <- BaseTableName NameList?

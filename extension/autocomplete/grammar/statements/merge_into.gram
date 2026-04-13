@@ -1,22 +1,22 @@
-MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
-MergeIntoUsingClause <- 'USING' TableRef
-MergeMatch <- MatchedClause / NotMatchedClause
-MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
-MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
-UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
-UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
-DeleteMatchClause <- 'DELETE'
-InsertMatchClause <- 'INSERT' InsertMatchInfo?
-InsertMatchInfo <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
-InsertDefaultValues <- 'DEFAULT' 'VALUES'
-InsertByNameOrPosition <- ByNameOrPosition? '*'?
-InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
-DoNothingMatchClause <- 'DO' 'NOTHING'
-ErrorMatchClause <- 'ERROR' Expression?
-UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
-AndExpression <- 'AND' Expression
-NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
-BySourceOrTarget <- BySource / ByTarget
+MergeIntoStatement[unique_ptr<SQLStatement>] <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
+MergeIntoUsingClause[unique_ptr<TableRef>] <- 'USING' TableRef
+MergeMatch[pair<MergeActionCondition, unique_ptr<MergeIntoAction>>] <- MatchedClause / NotMatchedClause
+MatchedClause[pair<MergeActionCondition, unique_ptr<MergeIntoAction>>] <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
+MatchedClauseAction[unique_ptr<MergeIntoAction>] <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
+UpdateMatchClause[unique_ptr<MergeIntoAction>] <- 'UPDATE' UpdateMatchInfo?
+UpdateMatchInfo[unique_ptr<MergeIntoAction>] <- UpdateMatchSetClause / ByNameOrPosition
+DeleteMatchClause[unique_ptr<MergeIntoAction>] <- 'DELETE'
+InsertMatchClause[unique_ptr<MergeIntoAction>] <- 'INSERT' InsertMatchInfo?
+InsertMatchInfo[unique_ptr<MergeIntoAction>] <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
+InsertDefaultValues[unique_ptr<MergeIntoAction>] <- 'DEFAULT' 'VALUES'
+InsertByNameOrPosition[unique_ptr<MergeIntoAction>] <- ByNameOrPosition? '*'?
+InsertValuesList[unique_ptr<MergeIntoAction>] <- InsertColumnList? 'VALUES' Parens(List(Expression))
+DoNothingMatchClause[unique_ptr<MergeIntoAction>] <- 'DO' 'NOTHING'
+ErrorMatchClause[unique_ptr<MergeIntoAction>] <- 'ERROR' Expression?
+UpdateMatchSetClause[unique_ptr<UpdateSetInfo>] <- 'SET' (UpdateSetClause / '*')
+AndExpression[unique_ptr<ParsedExpression>] <- 'AND' Expression
+NotMatchedClause[pair<MergeActionCondition, unique_ptr<MergeIntoAction>>] <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
+BySourceOrTarget[MergeActionCondition] <- BySource / ByTarget
 BySource <- 'BY' 'SOURCE'
 ByTarget <- 'BY' 'TARGET'
 

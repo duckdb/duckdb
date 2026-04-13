@@ -1,5 +1,5 @@
-LoadStatement <- 'LOAD' ColIdOrString
-InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
-UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
-FromSource <- 'FROM' (Identifier / StringLiteral)
-VersionNumber <- 'VERSION' IdentifierOrStringLiteral
+LoadStatement[unique_ptr<SQLStatement>] <- 'LOAD' ColIdOrString
+InstallStatement[unique_ptr<SQLStatement>] <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+UpdateExtensionsStatement[unique_ptr<SQLStatement>] <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
+FromSource[ExtensionRepositoryInfo] <- 'FROM' (Identifier / StringLiteral)
+VersionNumber[string] <- 'VERSION' IdentifierOrStringLiteral

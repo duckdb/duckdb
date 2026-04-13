@@ -1,1 +1,1 @@
-CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatementInternal
+CreateViewStmt[unique_ptr<CreateStatement>] <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatementInternal

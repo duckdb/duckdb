@@ -1,104 +1,104 @@
-SelectStatement <- SelectStatementInternal
-SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
-SelectSetOpChain <- IntersectChain (SetopClause IntersectChain)*
-IntersectChain <- SelectAtom (SetIntersectClause SelectAtom)*
-SetIntersectClause <- 'INTERSECT' DistinctOrAll?
-SelectAtom <- SelectParens / SelectStatementType
+SelectStatement[unique_ptr<SQLStatement>] <- SelectStatementInternal
+SelectStatementInternal[unique_ptr<SelectStatement>] <- WithClause? SelectSetOpChain ResultModifiers?
+SelectSetOpChain[unique_ptr<SelectStatement>] <- IntersectChain (SetopClause IntersectChain)*
+IntersectChain[unique_ptr<SelectStatement>] <- SelectAtom (SetIntersectClause SelectAtom)*
+SetIntersectClause[unique_ptr<SetOperationNode>] <- 'INTERSECT' DistinctOrAll?
+SelectAtom[unique_ptr<SelectStatement>] <- SelectParens / SelectStatementType
 
-SelectParens <- Parens(SelectStatementInternal)
+SelectParens[unique_ptr<SelectStatement>] <- Parens(SelectStatementInternal)
 
-SetopClause <- SetopType DistinctOrAll? ByName?
-SetopType <- SetopUnion / SetopExcept
+SetopClause[unique_ptr<SetOperationNode>] <- SetopType DistinctOrAll? ByName?
+SetopType[SetOperationType] <- SetopUnion / SetopExcept
 SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
 ByName <- 'BY' 'NAME'
 
-SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
-ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetLimitClause
-LimitOffsetClause <- LimitClause OffsetClause?
-OffsetLimitClause <- OffsetClause LimitClause?
-TableStatement <- 'TABLE' BaseTableName
-OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
-SimpleSelectParens <- Parens(SimpleSelect)
-SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
+SelectStatementType[unique_ptr<SelectStatement>] <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+ResultModifiers[vector<unique_ptr<ResultModifier>>] <- OrderByClause? LimitOffset?
+LimitOffset[unique_ptr<ResultModifier>] <- LimitOffsetClause / OffsetLimitClause
+LimitOffsetClause[unique_ptr<ResultModifier>] <- LimitClause OffsetClause?
+OffsetLimitClause[unique_ptr<ResultModifier>] <- OffsetClause LimitClause?
+TableStatement[unique_ptr<SelectStatement>] <- 'TABLE' BaseTableName
+OptionalParensSimpleSelect[unique_ptr<SelectStatement>] <- SimpleSelectParens / SimpleSelect
+SimpleSelectParens[unique_ptr<SelectStatement>] <- Parens(SimpleSelect)
+SimpleSelect[unique_ptr<SelectStatement>] <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
-SelectFrom <- SelectFromClause / FromSelectClause
-SelectFromClause <- SelectClause FromClause?
-FromSelectClause <- FromClause SelectClause?
-WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
-CTEBody <- Parens(CTEBodyContent)
+SelectFrom[unique_ptr<SelectNode>] <- SelectFromClause / FromSelectClause
+SelectFromClause[unique_ptr<SelectNode>] <- SelectClause FromClause?
+FromSelectClause[unique_ptr<SelectNode>] <- FromClause SelectClause?
+WithStatement[pair<string, unique_ptr<CommonTableExpressionInfo>>] <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
+CTEBody[unique_ptr<TableRef>] <- Parens(CTEBodyContent)
 CTEBodyContent <- SelectStatementInternal / Statement
-UsingKey <- 'USING' 'KEY' ColumnIdList
-Materialized <- 'NOT'? 'MATERIALIZED'
-WithClause <- 'WITH' Recursive? List(WithStatement)
+UsingKey[vector<unique_ptr<ParsedExpression>>] <- 'USING' 'KEY' ColumnIdList
+Materialized[bool] <- 'NOT'? 'MATERIALIZED'
+WithClause[CommonTableExpressionMap] <- 'WITH' Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'
-SelectClause <- 'SELECT' DistinctClause? TargetList?
-TargetList <- List(AliasedExpression)
-ColumnAliases <- Parens(List(ColIdOrString))
+SelectClause[unique_ptr<SelectNode>] <- 'SELECT' DistinctClause? TargetList?
+TargetList[vector<unique_ptr<ParsedExpression>>] <- List(AliasedExpression)
+ColumnAliases[vector<string>] <- Parens(List(ColIdOrString))
 
-DistinctClause <- DistinctOn / DistinctAll
-DistinctAll <- 'ALL'
-DistinctOn <- 'DISTINCT' DistinctOnTargets?
-DistinctOnTargets <- 'ON' Parens(List(Expression))
+DistinctClause[DistinctClause] <- DistinctOn / DistinctAll
+DistinctAll[DistinctClause] <- 'ALL'
+DistinctOn[DistinctClause] <- 'DISTINCT' DistinctOnTargets?
+DistinctOnTargets[vector<unique_ptr<ParsedExpression>>] <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
+InnerTableRef[unique_ptr<TableRef>] <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
-TableRef <- InnerTableRef JoinOrPivot*
-TableSubquery <- Lateral? SubqueryReference TableAlias?
-BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
-TableAliasColon <- ColIdOrString ':'
-ValuesRef <- ValuesClause TableAlias?
-ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
+TableRef[unique_ptr<TableRef>] <- InnerTableRef JoinOrPivot*
+TableSubquery[unique_ptr<TableRef>] <- Lateral? SubqueryReference TableAlias?
+BaseTableRef[unique_ptr<TableRef>] <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
+TableAliasColon[string] <- ColIdOrString ':'
+ValuesRef[unique_ptr<TableRef>] <- ValuesClause TableAlias?
+ParensTableRef[unique_ptr<TableRef>] <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
-JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+JoinOrPivot[unique_ptr<TableRef>] <- JoinClause / TablePivotClause / TableUnpivotClause
 
-TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ PivotGroupByList?) TableAlias?
-PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
-TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
+TablePivotClause[unique_ptr<TableRef>] <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ PivotGroupByList?) TableAlias?
+PivotGroupByList[vector<string>] <- 'GROUP' 'BY' List(ColIdOrString)
+TableUnpivotClause[unique_ptr<TableRef>] <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
 
-PivotHeader <- BaseExpression
-PivotValueList <- PivotHeader 'IN' (Identifier / PivotTargetList)
-UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
-PivotTargetList <- Parens(TargetList)
-UnpivotTargetList <- Parens(TargetList)
+PivotHeader[unique_ptr<ParsedExpression>] <- BaseExpression
+PivotValueList[PivotColumn] <- PivotHeader 'IN' (Identifier / PivotTargetList)
+UnpivotValueList[PivotColumn] <- UnpivotHeader 'IN' UnpivotTargetList
+PivotTargetList[vector<PivotColumnEntry>] <- Parens(TargetList)
+UnpivotTargetList[vector<PivotColumnEntry>] <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 
-BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
-SchemaReservedTable <- SchemaQualification ReservedTableName
-CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
+BaseTableName[unique_ptr<BaseTableRef>] <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
+SchemaReservedTable[unique_ptr<BaseTableRef>] <- SchemaQualification ReservedTableName
+CatalogReservedSchemaTable[unique_ptr<BaseTableRef>] <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
-TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
-TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
+TableFunction[unique_ptr<TableRef>] <- TableFunctionLateralOpt / TableFunctionAliasColon
+TableFunctionLateralOpt[unique_ptr<TableRef>] <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
+TableFunctionAliasColon[unique_ptr<TableRef>] <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'
-QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
-TableFunctionArguments <- Parens(List(FunctionArgument)?)
-FunctionArgument <- NamedParameter / Expression
-NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
+QualifiedTableFunction[QualifiedName] <- CatalogQualification? SchemaQualification? TableFunctionName
+TableFunctionArguments[vector<unique_ptr<ParsedExpression>>] <- Parens(List(FunctionArgument)?)
+FunctionArgument[unique_ptr<ParsedExpression>] <- NamedParameter / Expression
+NamedParameter[MacroParameter] <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- TableAliasAs / TableAliasWithoutAs
-TableAliasAs <- 'AS' IdentifierOrStringLiteral ColumnAliases?
-TableAliasWithoutAs <- Identifier ColumnAliases?
+TableAlias[TableAlias] <- TableAliasAs / TableAliasWithoutAs
+TableAliasAs[TableAlias] <- 'AS' IdentifierOrStringLiteral ColumnAliases?
+TableAliasWithoutAs[TableAlias] <- Identifier ColumnAliases?
 
-AtClause <- 'AT' Parens(AtSpecifier)
-AtSpecifier <- AtUnit '=>' Expression
-AtUnit <- 'VERSION' / 'TIMESTAMP'
+AtClause[unique_ptr<AtClause>] <- 'AT' Parens(AtSpecifier)
+AtSpecifier[unique_ptr<AtClause>] <- AtUnit '=>' Expression
+AtUnit[string] <- 'VERSION' / 'TIMESTAMP'
 
-JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
-JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
-JoinQualifier <- OnClause / UsingClause
-OnClause <- 'ON' Expression
-UsingClause <- 'USING' Parens(List(ColumnName))
+JoinClause[unique_ptr<TableRef>] <- RegularJoinClause / JoinWithoutOnClause
+RegularJoinClause[unique_ptr<TableRef>] <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
+JoinWithoutOnClause[unique_ptr<TableRef>] <- JoinPrefix 'JOIN' TableRef
+JoinQualifier[JoinQualifier] <- OnClause / UsingClause
+OnClause[JoinQualifier] <- 'ON' Expression
+UsingClause[JoinQualifier] <- 'USING' Parens(List(ColumnName))
 
-JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
-JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
-CrossJoinPrefix <- 'CROSS'
-NaturalJoinPrefix <- 'NATURAL' JoinType?
-PositionalJoinPrefix <- 'POSITIONAL'
+JoinType[JoinType] <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
+JoinPrefix[JoinPrefix] <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
+CrossJoinPrefix[JoinPrefix] <- 'CROSS'
+NaturalJoinPrefix[JoinPrefix] <- 'NATURAL' JoinType?
+PositionalJoinPrefix[JoinPrefix] <- 'POSITIONAL'
 FullJoin <- 'FULL' 'OUTER'?
 LeftJoin <- 'LEFT' 'OUTER'?
 RightJoin <- 'RIGHT' 'OUTER'?
@@ -106,68 +106,68 @@ SemiJoin <- 'SEMI'
 AntiJoin <- 'ANTI'
 InnerJoin <- 'INNER'
 
-FromClause <- 'FROM' List(TableRef)
-WhereClause <- 'WHERE' Expression
-GroupByClause <- 'GROUP' 'BY' GroupByExpressions
-HavingClause <- 'HAVING' Expression
-QualifyClause <- 'QUALIFY' Expression
-SampleClause <- (TableSample / UsingSample) SampleEntry
+FromClause[unique_ptr<TableRef>] <- 'FROM' List(TableRef)
+WhereClause[unique_ptr<ParsedExpression>] <- 'WHERE' Expression
+GroupByClause[GroupByNode] <- 'GROUP' 'BY' GroupByExpressions
+HavingClause[unique_ptr<ParsedExpression>] <- 'HAVING' Expression
+QualifyClause[unique_ptr<ParsedExpression>] <- 'QUALIFY' Expression
+SampleClause[unique_ptr<SampleOptions>] <- (TableSample / UsingSample) SampleEntry
 UsingSample <- 'USING' 'SAMPLE'
 TableSample <- 'TABLESAMPLE'
-WindowClause <- 'WINDOW' List(WindowDefinition)
-WindowDefinition <- Identifier 'AS' WindowFrameDefinition
+WindowClause[vector<unique_ptr<ParsedExpression>>] <- 'WINDOW' List(WindowDefinition)
+WindowDefinition[unique_ptr<ParsedExpression>] <- Identifier 'AS' WindowFrameDefinition
 
-SampleEntry <- SampleEntryFunction / SampleEntryCount
-SampleEntryCount <- SampleCount Parens(SampleProperties)?
-SampleEntryFunction <- SampleFunction? Parens(SampleCount) RepeatableSample?
-SampleFunction <- ColId
-SampleProperties <- ColId (',' SampleSeed)?
-RepeatableSample <- 'REPEATABLE' Parens(SampleSeed)
+SampleEntry[unique_ptr<SampleOptions>] <- SampleEntryFunction / SampleEntryCount
+SampleEntryCount[unique_ptr<SampleOptions>] <- SampleCount Parens(SampleProperties)?
+SampleEntryFunction[unique_ptr<SampleOptions>] <- SampleFunction? Parens(SampleCount) RepeatableSample?
+SampleFunction[SampleMethod] <- ColId
+SampleProperties[pair<SampleMethod, optional_idx>] <- ColId (',' SampleSeed)?
+RepeatableSample[optional_idx] <- 'REPEATABLE' Parens(SampleSeed)
 
-SampleSeed <- NumberLiteral
+SampleSeed[optional_idx] <- NumberLiteral
 
-SampleCount <- SampleValue SampleUnit?
-SampleValue <- NumberLiteral / Parameter
-SampleUnit <- SamplePercentage / SampleRows
+SampleCount[unique_ptr<SampleOptions>] <- SampleValue SampleUnit?
+SampleValue[unique_ptr<ParsedExpression>] <- NumberLiteral / Parameter
+SampleUnit[bool] <- SamplePercentage / SampleRows
 SamplePercentage <- '%' / 'PERCENT'
 SampleRows <- 'ROWS'
 
-GroupByExpressions <- GroupByList / GroupByAll
-GroupByAll <- 'ALL'
-GroupByList <- List(GroupByExpression)
-GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
-EmptyGroupingItem <- '(' ')'
-CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
-CubeOrRollup <- 'CUBE' / 'ROLLUP'
-GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
+GroupByExpressions[GroupByNode] <- GroupByList / GroupByAll
+GroupByAll[GroupByNode] <- 'ALL'
+GroupByList[GroupByNode] <- List(GroupByExpression)
+GroupByExpression[unique_ptr<ParsedExpression>] <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
+EmptyGroupingItem[unique_ptr<ParsedExpression>] <- '(' ')'
+CubeOrRollupClause[unique_ptr<ParsedExpression>] <- CubeOrRollup Parens(List(Expression)?)
+CubeOrRollup[string] <- 'CUBE' / 'ROLLUP'
+GroupingSetsClause[unique_ptr<ParsedExpression>] <- 'GROUPING' 'SETS' Parens(GroupByList)
 
-SubqueryReference <- Parens(SelectStatementInternal)
+SubqueryReference[unique_ptr<TableRef>] <- Parens(SelectStatementInternal)
 
-OrderByExpression <- Expression DescOrAsc? NullsFirstOrLast?
-DescOrAsc <- DescendingOrder / AscendingOrder
+OrderByExpression[OrderByNode] <- Expression DescOrAsc? NullsFirstOrLast?
+DescOrAsc[OrderType] <- DescendingOrder / AscendingOrder
 DescendingOrder <- 'DESC' / 'DESCENDING'
 AscendingOrder <- 'ASC' / 'ASCENDING'
-NullsFirstOrLast <- NullsFirst / NullsLast
+NullsFirstOrLast[OrderByNullType] <- NullsFirst / NullsLast
 NullsFirst <- 'NULLS' 'FIRST'
 NullsLast <- 'NULLS' 'LAST'
-OrderByClause <- 'ORDER' 'BY' OrderByExpressions
-OrderByExpressions <- OrderByAll / OrderByExpressionList
-OrderByExpressionList <- List(OrderByExpression)
-OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
+OrderByClause[vector<OrderByNode>] <- 'ORDER' 'BY' OrderByExpressions
+OrderByExpressions[vector<OrderByNode>] <- OrderByAll / OrderByExpressionList
+OrderByExpressionList[vector<OrderByNode>] <- List(OrderByExpression)
+OrderByAll[vector<OrderByNode>] <- 'ALL' DescOrAsc? NullsFirstOrLast?
 
-LimitClause <- 'LIMIT' LimitValue
-OffsetClause <- 'OFFSET' OffsetValue
-OffsetValue <- Expression RowOrRows?
+LimitClause[LimitPercentResult] <- 'LIMIT' LimitValue
+OffsetClause[LimitPercentResult] <- 'OFFSET' OffsetValue
+OffsetValue[LimitPercentResult] <- Expression RowOrRows?
 RowOrRows <- 'ROW' / 'ROWS'
-LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
-LimitAll <- 'ALL'
-LimitLiteralPercent <- NumberLiteral 'PERCENT'
-LimitExpression <- Expression '%'?
+LimitValue[LimitPercentResult] <- LimitAll / LimitLiteralPercent / LimitExpression
+LimitAll[LimitPercentResult] <- 'ALL'
+LimitLiteralPercent[LimitPercentResult] <- NumberLiteral 'PERCENT'
+LimitExpression[LimitPercentResult] <- Expression '%'?
 
-AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
-ColIdExpression <- ColId ':' Expression
-ExpressionAsCollabel <- Expression 'AS' ColLabelOrString
-ExpressionOptIdentifier <- Expression Identifier?
+AliasedExpression[unique_ptr<ParsedExpression>] <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
+ColIdExpression[unique_ptr<ParsedExpression>] <- ColId ':' Expression
+ExpressionAsCollabel[unique_ptr<ParsedExpression>] <- Expression 'AS' ColLabelOrString
+ExpressionOptIdentifier[unique_ptr<ParsedExpression>] <- Expression Identifier?
 
-ValuesClause <- 'VALUES' List(ValuesExpressions)
-ValuesExpressions <- Parens(List(Expression))
+ValuesClause[unique_ptr<SelectStatement>] <- 'VALUES' List(ValuesExpressions)
+ValuesExpressions[vector<unique_ptr<ParsedExpression>>] <- Parens(List(Expression))

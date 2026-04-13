@@ -1,5 +1,5 @@
-ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
+ExportStatement[unique_ptr<SQLStatement>] <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
 
-ExportSource <- CatalogName 'TO'
+ExportSource[string] <- CatalogName 'TO'
 
-ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
+ImportStatement[unique_ptr<SQLStatement>] <- 'IMPORT' 'DATABASE' StringLiteral
