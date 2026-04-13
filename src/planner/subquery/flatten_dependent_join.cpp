@@ -482,7 +482,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
-		bool has_cte_ref_metadata = false;
 		optional_ptr<CorrelatedColumns> cte_ref_correlated_columns;
 		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 			auto &op = plan->Cast<LogicalCTERef>();
@@ -491,8 +490,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			if (rec_cte != binder.recursive_ctes.end()) {
 				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
-				has_cte_ref_metadata = true;
-
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
 				cte_ref_correlated_columns = rec_cte_op.correlated_columns;
 				if (op.correlated_columns == 0) {
@@ -523,12 +520,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			auto left_binding =
 			    ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
+			if (cteref.correlated_columns > correlated_columns.size()) {
+				throw InternalException("Unexpected CTE ref correlation payload layout");
+			}
 			vector<idx_t> right_indexes;
-			if (has_cte_ref_metadata) {
-				if (cteref.correlated_columns > correlated_columns.size()) {
-					throw InternalException("Unexpected CTE ref correlation payload layout");
-				}
-				if (!cte_ref_correlated_columns || cteref.correlated_columns > cte_ref_correlated_columns->size()) {
+			right_indexes.reserve(cteref.correlated_columns);
+			if (cte_ref_correlated_columns) {
+				if (cteref.correlated_columns > cte_ref_correlated_columns->size()) {
 					throw InternalException("Missing CTE ref correlation payload metadata");
 				}
 				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
@@ -536,9 +534,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 					    FindCorrelatedColumnIndex(correlated_columns, (*cte_ref_correlated_columns)[i]));
 				}
 			} else {
-				if (cteref.correlated_columns > correlated_columns.size()) {
-					throw InternalException("Unexpected CTE ref correlation payload layout");
-				}
 				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
 					right_indexes.push_back(i);
 				}
