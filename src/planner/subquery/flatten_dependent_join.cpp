@@ -7,7 +7,6 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -55,22 +54,14 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 	}
 }
 
-static bool TryExtractSingleBinding(const Expression &expr, ColumnBinding &binding) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		return false;
-	}
-	binding = expr.Cast<BoundColumnRefExpression>().binding;
-	return true;
-}
-
 static bool TryRemapCorrelatedBinding(const LogicalProjection &projection, const ColumnBinding &current_binding,
                                       ColumnBinding &new_binding) {
 	for (idx_t i = 0; i < projection.expressions.size(); i++) {
-		ColumnBinding expression_binding;
-		if (!TryExtractSingleBinding(*projection.expressions[i], expression_binding)) {
+		auto &expression = *projection.expressions[i];
+		if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 			continue;
 		}
-		if (expression_binding != current_binding) {
+		if (expression.Cast<BoundColumnRefExpression>().binding != current_binding) {
 			continue;
 		}
 		new_binding = ColumnBinding(projection.table_index, i);
@@ -82,86 +73,75 @@ static bool TryRemapCorrelatedBinding(const LogicalProjection &projection, const
 static bool TryRemapCorrelatedBinding(const LogicalAggregate &aggregate, const ColumnBinding &current_binding,
                                       ColumnBinding &new_binding) {
 	for (idx_t i = 0; i < aggregate.groups.size(); i++) {
-		ColumnBinding expression_binding;
-		if (!TryExtractSingleBinding(*aggregate.groups[i], expression_binding)) {
+		auto &group = *aggregate.groups[i];
+		if (group.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 			continue;
 		}
-		if (expression_binding != current_binding) {
+		if (group.Cast<BoundColumnRefExpression>().binding != current_binding) {
 			continue;
 		}
 		new_binding = ColumnBinding(aggregate.group_index, i);
 		return true;
 	}
 	for (idx_t i = 0; i < aggregate.expressions.size(); i++) {
-		auto output_binding = ColumnBinding(aggregate.aggregate_index, i);
-		ColumnBinding expression_binding;
-		if (!TryExtractSingleBinding(*aggregate.expressions[i], expression_binding)) {
+		auto &expression = *aggregate.expressions[i];
+		if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 			continue;
 		}
-		if (expression_binding != current_binding) {
+		if (expression.Cast<BoundColumnRefExpression>().binding != current_binding) {
 			continue;
 		}
-		new_binding = output_binding;
+		new_binding = ColumnBinding(aggregate.aggregate_index, i);
 		return true;
 	}
 	return false;
 }
 
-static idx_t FindCorrelatedColumnIndex(const CorrelatedColumns &correlated_columns,
-                                       const CorrelatedColumnInfo &target) {
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		if (correlated_columns[i].binding == target.binding) {
-			return i;
-		}
-	}
-
-	// Correlated bindings can be remapped through projections/aggregates while the CTE metadata still points at
-	// the original binding. In that case the column name and type identify the carried payload column.
-	idx_t result = DConstants::INVALID_INDEX;
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		auto &candidate = correlated_columns[i];
-		if (candidate.name != target.name || candidate.type != target.type) {
-			continue;
-		}
-		if (result != DConstants::INVALID_INDEX) {
-			throw InternalException("Ambiguous CTE ref correlation payload layout");
-		}
-		result = i;
-	}
-	if (result == DConstants::INVALID_INDEX) {
-		throw InternalException("Could not find CTE ref correlation payload column");
-	}
-	return result;
-}
-
 static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
 	auto left_bindings = left_side.GetColumnBindings();
-	for (auto &column : correlated_columns) {
-		bool binding_present = false;
-		for (const auto &binding : left_bindings) {
-			if (binding == column.binding) {
-				binding_present = true;
-				break;
+	switch (left_side.type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = left_side.Cast<LogicalProjection>();
+		for (auto &column : correlated_columns) {
+			bool binding_present = false;
+			for (const auto &binding : left_bindings) {
+				if (binding == column.binding) {
+					binding_present = true;
+					break;
+				}
+			}
+			if (binding_present) {
+				continue;
+			}
+			ColumnBinding new_binding;
+			if (TryRemapCorrelatedBinding(projection, column.binding, new_binding)) {
+				column.binding = new_binding;
 			}
 		}
-		if (binding_present) {
-			continue;
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggregate = left_side.Cast<LogicalAggregate>();
+		for (auto &column : correlated_columns) {
+			bool binding_present = false;
+			for (const auto &binding : left_bindings) {
+				if (binding == column.binding) {
+					binding_present = true;
+					break;
+				}
+			}
+			if (binding_present) {
+				continue;
+			}
+			ColumnBinding new_binding;
+			if (TryRemapCorrelatedBinding(aggregate, column.binding, new_binding)) {
+				column.binding = new_binding;
+			}
 		}
-		ColumnBinding new_binding;
-		bool found_binding = false;
-		switch (left_side.type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalProjection>(), column.binding, new_binding);
-			break;
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			found_binding = TryRemapCorrelatedBinding(left_side.Cast<LogicalAggregate>(), column.binding, new_binding);
-			break;
-		default:
-			break;
-		}
-		if (found_binding) {
-			column.binding = new_binding;
-		}
+		return;
+	}
+	default:
+		return;
 	}
 }
 
@@ -482,7 +462,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
-		optional_ptr<CorrelatedColumns> cte_ref_correlated_columns;
+		bool correlated_payload_in_suffix = false;
 		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 			auto &op = plan->Cast<LogicalCTERef>();
 
@@ -491,7 +471,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
-				cte_ref_correlated_columns = rec_cte_op.correlated_columns;
+				correlated_payload_in_suffix = rec_cte_op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 				if (op.correlated_columns == 0) {
 					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
 					                            CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS);
@@ -523,36 +503,16 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			if (cteref.correlated_columns > correlated_columns.size()) {
 				throw InternalException("Unexpected CTE ref correlation payload layout");
 			}
-			vector<idx_t> right_indexes;
-			right_indexes.reserve(cteref.correlated_columns);
-			if (cte_ref_correlated_columns) {
-				if (cteref.correlated_columns > cte_ref_correlated_columns->size()) {
-					throw InternalException("Missing CTE ref correlation payload metadata");
-				}
-				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-					right_indexes.push_back(
-					    FindCorrelatedColumnIndex(correlated_columns, (*cte_ref_correlated_columns)[i]));
-				}
-			} else {
-				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-					right_indexes.push_back(i);
-				}
-			}
-			// CTE refs append their carried correlation payload to the end of their own output.
-			// The matching delim payload can be interleaved with additional outer correlations, so use the CTE's
-			// correlation metadata instead of assuming a fixed prefix/suffix position.
+			idx_t right_offset =
+			    correlated_payload_in_suffix ? correlated_columns.size() - cteref.correlated_columns : 0;
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-				auto right_index = right_indexes[i];
-				auto &col = correlated_columns[right_index];
-				auto &left_type = cteref.chunk_types[left_binding.column_index + i];
-				if (left_type != col.type) {
-					throw InternalException("Unexpected CTE ref correlation payload type");
-				}
+				auto &right_column = correlated_columns[right_offset + i];
 				JoinCondition cond;
 				cond.left = make_uniq<BoundColumnRefExpression>(
-				    col.type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+				    right_column.type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 				cond.right = make_uniq<BoundColumnRefExpression>(
-				    col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + right_index));
+				    right_column.type,
+				    ColumnBinding(base_binding.table_index, base_binding.column_index + right_offset + i));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(std::move(cond));
 			}
