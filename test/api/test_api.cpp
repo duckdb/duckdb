@@ -736,6 +736,15 @@ TEST_CASE("Test a logical execute still has types after an optimization pass", "
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }
 
+TEST_CASE("Test ExtractPlan type resolution with projections", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("CREATE TABLE t (a INTEGER, b INTEGER)");
+	con.Query("INSERT INTO t VALUES (1, 10), (2, 20), (3, 30)");
+
+	REQUIRE_NOTHROW(con.ExtractPlan("SELECT a FROM t WHERE a <> b ORDER BY a LIMIT 1"));
+}
+
 TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements with alias of RETURNING clause", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
