@@ -260,6 +260,10 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
 			                      bound_function.name);
 		}
+		if (window.has_ignore_nulls && !bound_function.can_ignore_nulls) {
+			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for the window function \"%s\"",
+			                      bound_function.name);
+		}
 
 		//	Check for unresolved arguments
 		for (const auto &type : types) {

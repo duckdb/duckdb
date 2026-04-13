@@ -137,6 +137,8 @@ public:
 	bool can_order_by = true;
 	//! Does the window function support EXCLUDE?
 	bool can_exclude = false;
+	//! Does the window function support RESPECT/IGNORE NULLS?
+	bool can_ignore_nulls = true;
 
 	//! The bind function (may be null)
 	window_bind_function_t bind = nullptr;
