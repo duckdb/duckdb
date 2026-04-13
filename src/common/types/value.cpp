@@ -161,6 +161,9 @@ Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
 Value::Value(string_t val) : Value(val.GetString()) {
 }
 
+Value::Value(std::string_view val) : Value(std::string(val)) {
+}
+
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	if (!Value::StringIsValid(val.c_str(), val.size())) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
