@@ -229,11 +229,6 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				all_constant = false;
 			}
-#ifdef DEBUG
-			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
-				arguments.data[i].UTFVerify(count);
-			}
-#endif
 		}
 	}
 	arguments.SetCardinality(all_constant ? 1 : count);

@@ -104,8 +104,6 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	varchar_list.Flatten(count);
 	auto &validity = FlatVector::Validity(varchar_list);
 	auto &child = ArrayVector::GetEntry(varchar_list);
-
-	child.Flatten(count);
 	auto &child_validity = FlatVector::Validity(child);
 
 	auto in_data = FlatVector::GetData<string_t>(child);
