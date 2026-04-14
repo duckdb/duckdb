@@ -565,14 +565,11 @@ private:
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
-	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, TableIndex proj_index,
-	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names, MergeActionCondition condition,
-	                                                 const unordered_set<TableIndex> &source_table_indexes,
-	                                                 const unordered_set<TableIndex> &target_table_indexes);
+	unique_ptr<BoundMergeIntoAction>
+	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
+	                vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root,
+	                MergeIntoAction &action, const vector<BindingAlias> &source_aliases,
+	                const vector<string> &source_names, MergeActionCondition condition);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
