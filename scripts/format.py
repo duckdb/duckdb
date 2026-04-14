@@ -299,7 +299,7 @@ def get_formatted_text(f, full_path, directory, ext):
     if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage' or ext == '.benchmark':
         # optimization: import and call the function directly
         # instead of running a subprocess
-        with open(full_path, "r", encoding="utf-8", errors='backslashreplace') as f:
+        with open(full_path, "r", encoding="utf-8", errors='surrogateescape') as f:
             original_lines = f.readlines()
         formatted, status = format_file_content(full_path, original_lines)
         if formatted is None:
@@ -334,7 +334,7 @@ def file_is_generated(text):
 
 def format_file(f, full_path, directory, ext):
     global difference_files
-    with open_utf8(full_path, 'r', errors='backslashreplace') as f:
+    with open_utf8(full_path, 'r', errors='surrogateescape') as f:
         old_text = f.read()
     # do not format auto-generated files
     if file_is_generated(old_text) and ext != '.py':
@@ -364,7 +364,7 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
-        with open_utf8(tmpfile, 'w+', newline='\n') as f:
+        with open_utf8(tmpfile, 'w+', newline='\n', errors='surrogateescape') as f:
             f.write(new_text)
         shutil.move(tmpfile, full_path)
 
