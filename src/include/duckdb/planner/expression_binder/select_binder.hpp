@@ -27,7 +27,7 @@ protected:
 
 	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name) override;
 
-protected:
+public:
 	idx_t unnest_level = 0;
 };
 
