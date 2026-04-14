@@ -920,6 +920,33 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDistinct(un
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionGet(unique_ptr<LogicalOperator> plan,
+                                                                                   bool parent_propagate_null_values,
+                                                                                   idx_t lateral_depth,
+                                                                                   PushDownState state) {
+	auto child_result =
+	    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth, state);
+	plan->children[0] = std::move(child_result.plan);
+	state = child_result.state;
+	parent_propagate_null_values = child_result.propagate_null_values;
+
+	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+
+	auto &expr_get = plan->Cast<LogicalExpressionGet>();
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		for (auto &expr_list : expr_get.expressions) {
+			auto colref = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i));
+			expr_list.push_back(std::move(colref));
+		}
+		expr_get.expr_types.push_back(correlated_columns[i].type);
+	}
+	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
+	state = PushDownState::CreateContiguous(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)),
+	                                        correlated_offset, correlated_columns.size());
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
+
 
 		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -1048,6 +1075,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDistinct(un
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		return PushDownDistinct(std::move(plan), parent_propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+		return PushDownExpressionGet(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
