@@ -165,6 +165,20 @@ but takes additional arguments for the frame bounds and the row index inside the
 
 ## Streaming APIs
 
+In addition to the blocking window operator, there is a streaming window operator
+that can be used under certain conditions.
+In order to be streamable, all window functions must satisfy the following criteria:
+
+* The `OVER()` clause must be empty (e.g., single partition, "natural ordering");
+* No `ORDER BY` arguments are allowed;
+* No `EXCLUDE` clause.
+
+A function that can stream under these constraints can provide a `window_canstream_function_t` callback:
+
+* `ClientContext &client` - The query's execution context;
+* `const BoundWindowExpression &wexpr` - The function being checked;
+* `idx_t max_delta` - The number of rows the operator is willing to buffer on behalf of the function (forward or backward).
+
 ## Serialization APIs
 
 The serialization APIs are used to serialize and deserialize the `FunctionData` objects created during binding.

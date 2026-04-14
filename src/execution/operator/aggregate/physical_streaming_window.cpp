@@ -3,6 +3,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -355,46 +356,22 @@ StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) : 
 	local_state = make_uniq<StreamingWindowState>(client);
 }
 
-bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
+bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, unique_ptr<Expression> &expr) {
 	auto &wexpr = expr->Cast<BoundWindowExpression>();
 	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
-	switch (wexpr.GetExpressionType()) {
-	// TODO: add more expression types here?
-	case ExpressionType::WINDOW_AGGREGATE:
+	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		// Aggregates with destructors (e.g., quantile) are too slow to repeatedly update/finalize
 		if (wexpr.aggregate->HasStateDestructorCallback()) {
 			return false;
 		}
 		// We can stream aggregates if they are "running totals"
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-		return true;
-	case ExpressionType::WINDOW_FIRST_VALUE:
-		if (wexpr.ignore_nulls) {
-			// We can stream first values ignoring NULLs if they are "running totals"
-			return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
-		}
-		return true;
-	case ExpressionType::WINDOW_LAST_VALUE:
-		// We can stream last values if they are "running totals"
-		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_LEAD:
-		if (!wexpr.ignore_nulls) {
-			// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
-			Value dflt;
-			int64_t offset;
-			return StreamingWindowState::LeadLagState::ComputeDefault(context, wexpr, dflt) &&
-			       StreamingWindowState::LeadLagState::ComputeOffset(context, wexpr, offset);
-		}
-		return false;
-	default:
+	} else if (wexpr.window && wexpr.window->HasCanStreamCallback()) {
+		return wexpr.window->CanStream(client, wexpr, StreamingWindowState::LeadLagState::MAX_BUFFER);
+	} else {
 		return false;
 	}
 }

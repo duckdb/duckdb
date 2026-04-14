@@ -113,9 +113,12 @@ typedef void (*window_sink_function_t)(ExecutionContext &context, DataChunk &sin
 typedef void (*window_finalize_function_t)(ExecutionContext &context, optional_ptr<WindowCollection> collection,
                                            OperatorSinkInput &sink);
 
-//! Comultes the function for a single chunk
+//! Computes the function for a single chunk
 typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                            Vector &result, idx_t row_idx, OperatorSinkInput &sink);
+
+//! Does the function support streaming?
+typedef bool (*window_canstream_function_t)(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -188,6 +191,14 @@ public:
 	window_evaluate_function_t GetEvaluateCallback() const { return evaluate; }
 	void SetEvaluateCallback(window_evaluate_function_t callback) { evaluate = callback; }
 
+	bool HasCanStreamCallback() const { return can_stream != nullptr; }
+	window_canstream_function_t GetCanStreamCallback() const { return can_stream; }
+	void SetCanStreamCallback(window_canstream_function_t callback) { can_stream = callback; }
+	bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) const {
+		D_ASSERT(can_stream);
+		return GetCanStreamCallback()(client, wexpr, max_delta);
+	}
+
 	bool HasSerializationCallbacks() const { return false; }
 	void SetSerializeCallback(window_serialize_t callback) { serialize = callback; }
 	void SetDeserializeCallback(window_deserialize_t callback) { deserialize = callback; }
@@ -213,6 +224,7 @@ public:
 	window_bind_function_t bind = nullptr;
 	//! The sort validation function
 	window_validate_function_t validate = nullptr;
+
 	//! The framing bounds lists
 	window_bounds_function_t bounds = nullptr;
 	//! The children sharing requirements
@@ -227,6 +239,9 @@ public:
 	window_finalize_function_t finalize = nullptr;
 	//! The thread-local evaluation function
 	window_evaluate_function_t evaluate = nullptr;
+
+	//! Can the function stream?
+	window_canstream_function_t can_stream = nullptr;
 
 	//! Serialization specialization. Not yet implemented
 	window_serialize_t serialize = nullptr;

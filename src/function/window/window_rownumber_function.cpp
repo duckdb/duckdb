@@ -87,6 +87,7 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
 struct WindowRowNumberExecutor {
+	//! Blocking APIs
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
@@ -97,6 +98,11 @@ struct WindowRowNumberExecutor {
 
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		return true;
+	}
 };
 
 WindowFunction RowNumberFun::GetFunction() {
@@ -104,6 +110,8 @@ WindowFunction RowNumberFun::GetFunction() {
 	    Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr, WindowRowNumberExecutor::GetBounds,
 	    WindowRowNumberExecutor::GetSharing, WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal,
 	    WindowRowNumberLocalState::Sinker, WindowRowNumberLocalState::Finalizer, WindowRowNumberExecutor::GetData);
+	fun.SetCanStreamCallback(WindowRowNumberExecutor::CanStream);
+
 	return fun;
 }
 

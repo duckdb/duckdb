@@ -309,6 +309,7 @@ void WindowLeadLagLocalState::Finalizer(ExecutionContext &context, CollectionPtr
 //===--------------------------------------------------------------------===//
 struct WindowLeadLagExecutor : public WindowValueExecutor {
 public:
+	//! Blocking APIs
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
@@ -318,6 +319,9 @@ public:
 
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
 };
 
 unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
@@ -332,6 +336,65 @@ unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &in
 
 	return nullptr;
 }
+
+class LeadLagStreamingState : public LocalSourceState {
+public:
+	static bool ComputeOffset(ClientContext &client, const BoundWindowExpression &wexpr, int64_t &offset) {
+		offset = 1;
+		if (wexpr.children.size() > 1) {
+			auto &offset_expr = wexpr.children[1];
+			if (offset_expr->HasParameter() || !offset_expr->IsFoldable()) {
+				return false;
+			}
+			auto offset_value = ExpressionExecutor::EvaluateScalar(client, *offset_expr);
+			if (offset_value.IsNull()) {
+				return false;
+			}
+			Value bigint_value;
+			if (!offset_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+				return false;
+			}
+			offset = bigint_value.GetValue<int64_t>();
+		}
+
+		//	We can only support LEAD and LAG values within one standard vector
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+			offset = -offset;
+		}
+		return true;
+	}
+
+	static bool ComputeDefault(ClientContext &client, const BoundWindowExpression &wexpr, Value &result) {
+		if (wexpr.children.size() < 3) {
+			result = Value(wexpr.return_type);
+			return true;
+		}
+
+		auto &default_expr = wexpr.children[2];
+		if (default_expr && (default_expr->HasParameter() || !default_expr->IsFoldable())) {
+			return false;
+		}
+		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
+		return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
+	}
+
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
+		if (!wexpr.ignore_nulls) {
+			Value dflt;
+			if (!LeadLagStreamingState::ComputeDefault(client, wexpr, dflt)) {
+				return false;
+			}
+			int64_t offset;
+			if (!LeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
+				return false;
+			}
+
+			return std::abs(offset) < max_delta;
+		}
+		return false;
+	}
+};
 
 static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const ExpressionType &type) {
 	WindowFunctionSet funcs(name);
@@ -351,6 +414,10 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	                                 sharing, global, local, sink, finalize, evaluate));
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global, local,
 	                                 sink, finalize, evaluate));
+
+	for (auto &f : funcs.functions) {
+		f.SetCanStreamCallback(LeadLagStreamingState::CanStream);
+	}
 
 	return funcs;
 }
@@ -558,8 +625,18 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 // WindowFirstValueExecutor
 //===--------------------------------------------------------------------===//
 struct WindowFirstValueExecutor : public WindowValueExecutor {
+	//! Blocking APIs
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (wexpr.ignore_nulls) {
+			// We can stream first values ignoring NULLs if they are "running totals"
+			return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+		}
+		return true;
+	}
 };
 
 WindowFunction FirstValueFun::GetFunction() {
@@ -568,6 +645,7 @@ WindowFunction FirstValueFun::GetFunction() {
 	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal,
 	                   WindowFirstValueExecutor::GetLocal, WindowValueLocalState::Sinker,
 	                   WindowValueLocalState::Finalizer, WindowFirstValueExecutor::GetData);
+	fun.SetCanStreamCallback(WindowFirstValueExecutor::CanStream);
 	return fun;
 }
 
@@ -624,8 +702,15 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 // WindowLastValueExecutor
 //===--------------------------------------------------------------------===//
 struct WindowLastValueExecutor : public WindowValueExecutor {
+	//! Blocking APIs
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can stream last values if they are "running totals"
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+	}
 };
 
 WindowFunction LastValueFun::GetFunction() {
@@ -634,6 +719,7 @@ WindowFunction LastValueFun::GetFunction() {
 	                   WindowLastValueExecutor::GetSharing, WindowLastValueExecutor::GetGlobal,
 	                   WindowLastValueExecutor::GetLocal, WindowValueLocalState::Sinker,
 	                   WindowValueLocalState::Finalizer, WindowLastValueExecutor::GetData);
+	fun.SetCanStreamCallback(WindowLastValueExecutor::CanStream);
 	return fun;
 }
 

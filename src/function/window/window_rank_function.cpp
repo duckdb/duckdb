@@ -104,11 +104,17 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 // WindowPeerExecutor
 //===--------------------------------------------------------------------===//
 struct WindowPeerExecutor : public WindowExecutor {
+	//! Blocking APIs
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
 	                                             const idx_t payload_count, const ValidityMask &partition_mask,
 	                                             const ValidityMask &order_mask);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		return true;
+	}
 };
 
 void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
@@ -128,6 +134,7 @@ unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobal(ClientContext &client,
 // WindowRankExecutor
 //===--------------------------------------------------------------------===//
 struct WindowRankExecutor : public WindowPeerExecutor {
+	//! Blocking APIs
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
@@ -160,6 +167,7 @@ WindowFunction RankFun::GetFunction() {
 	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing, WindowRankExecutor::GetGlobal,
 	                   WindowRankExecutor::GetLocal, WindowRankLocalState::Sinker, WindowRankLocalState::Finalizer,
 	                   WindowRankExecutor::GetData);
+	fun.SetCanStreamCallback(WindowRankExecutor::CanStream);
 	return fun;
 }
 
@@ -234,6 +242,7 @@ WindowFunction DenseRankFun::GetFunction() {
 	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowDenseRankExecutor::GetGlobal,
 	                   WindowDenseRankExecutor::GetLocal, nullptr, nullptr, WindowDenseRankExecutor::GetData);
 	fun.can_order_by = false;
+	fun.SetCanStreamCallback(WindowDenseRankExecutor::CanStream);
 	return fun;
 }
 
@@ -343,6 +352,7 @@ WindowFunction PercentRankFun::GetFunction() {
 	                   WindowPercentRankExecutor::GetGlobal, WindowPercentRankExecutor::GetLocal,
 	                   WindowPercentRankLocalState::Sinker, WindowPercentRankLocalState::Finalizer,
 	                   WindowPercentRankExecutor::GetData);
+	fun.SetCanStreamCallback(WindowPercentRankExecutor::CanStream);
 	return fun;
 }
 
@@ -432,6 +442,7 @@ WindowFunction CumeDistFun::GetFunction() {
 	    Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr, WindowCumeDistExecutor::GetBounds,
 	    WindowCumeDistExecutor::GetSharing, WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal,
 	    WindowCumeDistLocalState::Sinker, WindowCumeDistLocalState::Finalizer, WindowCumeDistExecutor::GetData);
+	//	Not streamable?
 	return fun;
 }
 
