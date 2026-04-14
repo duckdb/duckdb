@@ -21,22 +21,21 @@
 namespace duckdb {
 
 //! Validates that column references in MERGE action expressions are valid for the match context.
-//! Validates that column references in MERGE action expressions are valid for the match context.
-static void ValidateMergeColumns(const Expression &expr, MergeActionCondition condition,
-                                 TableIndex target_table_index) {
-	// 技巧1：短路返回。如果条件是 WHEN MATCHED，目标表和源表列都是合法的，直接跳过树遍历
+static void ValidateMergeColumns(const Expression &expr, MergeActionCondition condition, TableIndex target_table_index,
+                                 const unordered_set<idx_t> &source_table_indices) {
 	if (condition == MergeActionCondition::WHEN_MATCHED) {
 		return;
 	}
 
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		bool is_target_column = (colref.binding.table_index == target_table_index);
+		bool is_source_column = source_table_indices.count(colref.binding.table_index.index) > 0;
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
 			                      colref.alias.empty() ? colref.ToString() : colref.alias);
 		}
-		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && !is_target_column) {
+		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && is_source_column) {
 			throw BinderException("Source column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE clause",
 			                      colref.alias.empty() ? colref.ToString() : colref.alias);
 		}
@@ -60,7 +59,8 @@ unique_ptr<BoundMergeIntoAction>
 Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
                         vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root,
                         MergeIntoAction &action, const vector<BindingAlias> &source_aliases,
-                        const vector<string> &source_names, MergeActionCondition condition) {
+                        const vector<string> &source_names, MergeActionCondition condition,
+                        const unordered_set<idx_t> &source_table_indices) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	auto expr_start_idx = expressions.size();
@@ -190,7 +190,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 
 	for (idx_t i = expr_start_idx; i < expressions.size(); i++) {
 		if (expressions[i]) {
-			ValidateMergeColumns(*expressions[i], condition, get.table_index);
+			ValidateMergeColumns(*expressions[i], condition, get.table_index, source_table_indices);
 		}
 	}
 	return result;
@@ -353,12 +353,21 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
+	// collect source table indices for validation
+	source->ResolveOperatorTypes();
+	auto source_bindings = source->GetColumnBindings();
+	unordered_set<idx_t> source_table_indices;
+	for (auto &binding : source_bindings) {
+		source_table_indices.insert(binding.table_index.index);
+	}
+
 	for (auto &entry : stmt.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
 			CheckMergeAction(entry.first, action->action_type);
 			bound_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index, projection_expressions, root,
-			                                        *action, source_aliases, source_names, entry.first));
+			                                        *action, source_aliases, source_names, entry.first,
+			                                        source_table_indices));
 		}
 		merge_into->actions.emplace(entry.first, std::move(bound_actions));
 	}
@@ -368,8 +377,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		// this marker tells us if we have found a source match or not
 		auto new_proj_index = GenerateTableIndex();
 
-		source->ResolveOperatorTypes();
-		auto source_bindings = source->GetColumnBindings();
+		// source_bindings was already computed above for validation
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t c = 0; c < source_bindings.size(); c++) {
 			select_list.push_back(make_uniq<BoundColumnRefExpression>(source->types[c], source_bindings[c]));
