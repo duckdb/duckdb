@@ -68,16 +68,25 @@ struct FlatVector {
 		}
 #endif
 	}
+	static void VerifyFlatOrConst(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR || vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR && vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException("Operation requires a flat or constant vector but a non-flat/non-constant vector was encountered");
+		}
+#endif
+	}
 	static inline const_data_ptr_t GetData(Vector &vector) {
-		VerifyFlatVector(vector);
+		VerifyFlatOrConst(vector);
 		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	static inline const_data_ptr_t GetData(const Vector &vector) {
-		VerifyFlatVector(vector);
+		VerifyFlatOrConst(vector);
 		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	static inline data_ptr_t GetDataMutable(Vector &vector) {
-		VerifyFlatVector(vector);
+		VerifyFlatOrConst(vector);
 		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	template <class T>
