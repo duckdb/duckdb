@@ -141,7 +141,6 @@ private:
 	CorrelatedLayout PushDownChildFresh(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
 	                                    CorrelatedLayout layout);
 	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownUnnest(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
 	PushDownResult PushDownProjection(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                  CorrelatedLayout layout, bool exit_projection,
 	                                  unique_ptr<LogicalOperator> delim_scan);

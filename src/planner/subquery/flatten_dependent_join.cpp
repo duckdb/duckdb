@@ -482,19 +482,6 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(uniq
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
-FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownUnnest(unique_ptr<LogicalOperator> plan,
-                                                                            PushDownContext context,
-                                                                            CorrelatedLayout layout) {
-	for (auto &expr : plan->expressions) {
-		any_join |= SubqueryDependentFilter(*expr);
-	}
-	layout = PushDownChild(plan->children[0], context, std::move(layout));
-
-	RewriteCorrelatedExpressions rewriter(layout.correlated_bindings, correlated_map, context.lateral_depth);
-	rewriter.VisitOperator(*plan);
-	return PushDownResult(std::move(plan), std::move(layout));
-}
-
 FlattenDependentJoins::PushDownResult
 FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, PushDownContext context,
                                           CorrelatedLayout layout, bool exit_projection,
@@ -1100,11 +1087,9 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 		}
 	}
 	switch (plan->type) {
+	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		return PushDownFilter(std::move(plan), context, std::move(layout));
-	}
-	case LogicalOperatorType::LOGICAL_UNNEST: {
-		return PushDownUnnest(std::move(plan), context, std::move(layout));
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		return PushDownProjection(std::move(plan), context, std::move(layout), exit_projection, std::move(delim_scan));
