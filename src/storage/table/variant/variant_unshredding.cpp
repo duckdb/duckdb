@@ -163,12 +163,9 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 
 		auto &list_val = res[i];
 		list_val = VariantValue(VariantValueType::ARRAY);
-		list_val.array_items.reserve(list_entry.length);
-		list_val.array_items.insert(
-		    list_val.array_items.end(),
-		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(current_offset)),
-		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(current_offset + list_entry.length)));
-		current_offset += list_entry.length;
+		list_val.ReserveItems(list_entry.length);
+		list_val.AddItems(child_values.begin() + static_cast<int64_t>(list_entry.offset),
+		                  child_values.begin() + static_cast<int64_t>(list_entry.offset + list_entry.length));
 	}
 	return res;
 }
@@ -234,7 +231,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 			//! Partial shredding, already has a shredded value that this has to be combined into
 			D_ASSERT(res[i].value_type == VariantValueType::OBJECT);
 			D_ASSERT(unshredded.value_type == VariantValueType::OBJECT);
-			auto &object_children = unshredded.object_children;
+			auto object_children = unshredded.TakeObjectChildren();
 			for (auto &entry : object_children) {
 				res[i].AddChild(entry.first, std::move(entry.second));
 			}

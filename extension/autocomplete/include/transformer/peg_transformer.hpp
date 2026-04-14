@@ -642,7 +642,8 @@ private:
 	static string TransformSetNullKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformSetDefaultKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	static LogicalType TransformColumnCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformColumnCollation(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	static bool TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformCommitAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformPreserveOrDelete(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -866,6 +867,8 @@ private:
 	                                                  optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformParameter(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+	                                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAnonymousParameter(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformNumberedParameter(PEGTransformer &transformer,
