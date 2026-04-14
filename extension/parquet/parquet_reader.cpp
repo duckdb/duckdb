@@ -27,6 +27,10 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 
 namespace duckdb {
 
@@ -1184,6 +1188,168 @@ static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+// ---------------------------------------------------------------------------
+// GeoParquet 1.1 bbox covering helpers
+// ---------------------------------------------------------------------------
+
+// Extract the enclosing GeometryExtent of a row group from the per-row-group
+// Parquet min/max statistics of the GeoParquet 1.1 covering bbox struct column.
+//
+// The covering struct has sub-columns xmin/ymin/xmax/ymax (FLOAT).  For a row
+// group whose flat per-column stats are in |columns|:
+//   row_group_extent.x_min = min(xmin)   → xmin sub-column min_value
+//   row_group_extent.x_max = max(xmax)   → xmax sub-column max_value
+//   (same for y_min / y_max)
+//
+// Returns GeometryExtent::Unknown() when stats are unavailable.
+static GeometryExtent TryBuildCoveringExtent(const string &bbox_col_name, const ParquetColumnSchema &root_schema,
+                                             const vector<ColumnChunk> &columns) {
+	// Find the bbox column at the top level of the schema
+	const ParquetColumnSchema *bbox_schema = nullptr;
+	for (const auto &child : root_schema.children) {
+		if (child.name == bbox_col_name) {
+			bbox_schema = &child;
+			break;
+		}
+	}
+	if (!bbox_schema || bbox_schema->type.id() != LogicalTypeId::STRUCT) {
+		return GeometryExtent::Unknown();
+	}
+
+	double x_min = 0, y_min = 0, x_max = 0, y_max = 0;
+	bool found_xmin = false, found_ymin = false, found_xmax = false, found_ymax = false;
+
+	for (const auto &sub : bbox_schema->children) {
+		if (sub.schema_type != ParquetColumnSchemaType::COLUMN) {
+			continue;
+		}
+		if (sub.column_index >= columns.size()) {
+			return GeometryExtent::Unknown();
+		}
+		const auto &chunk = columns[sub.column_index];
+		if (!chunk.__isset.meta_data || !chunk.meta_data.__isset.statistics) {
+			return GeometryExtent::Unknown();
+		}
+		const auto &pq_stats = chunk.meta_data.statistics;
+
+		// Prefer the newer min_value/max_value; fall back to legacy min/max
+		const bool has_new = pq_stats.__isset.min_value && pq_stats.__isset.max_value;
+		const bool has_old = pq_stats.__isset.min && pq_stats.__isset.max;
+		if (!has_new && !has_old) {
+			return GeometryExtent::Unknown();
+		}
+		const auto &min_bytes = has_new ? pq_stats.min_value : pq_stats.min;
+		const auto &max_bytes = has_new ? pq_stats.max_value : pq_stats.max;
+
+		auto min_val = ParquetStatisticsUtils::ConvertValue(sub.type, sub, min_bytes);
+		auto max_val = ParquetStatisticsUtils::ConvertValue(sub.type, sub, max_bytes);
+		if (min_val.IsNull() || max_val.IsNull()) {
+			return GeometryExtent::Unknown();
+		}
+
+		// Cast to double so the caller gets uniform double precision
+		const double d_min = min_val.DefaultCastAs(LogicalType::DOUBLE).GetValue<double>();
+		const double d_max = max_val.DefaultCastAs(LogicalType::DOUBLE).GetValue<double>();
+
+		if (sub.name == "xmin") {
+			x_min = d_min;
+			found_xmin = true;
+		} else if (sub.name == "ymin") {
+			y_min = d_min;
+			found_ymin = true;
+		} else if (sub.name == "xmax") {
+			x_max = d_max;
+			found_xmax = true;
+		} else if (sub.name == "ymax") {
+			y_max = d_max;
+			found_ymax = true;
+		}
+	}
+
+	if (!found_xmin || !found_ymin || !found_xmax || !found_ymax) {
+		return GeometryExtent::Unknown();
+	}
+
+	// Build the enclosing envelope for the row group
+	GeometryExtent result = GeometryExtent::Empty();
+	result.x_min = x_min;
+	result.y_min = y_min;
+	result.x_max = x_max;
+	result.y_max = y_max;
+	// Z / M remain as EMPTY sentinel values (no covering for those axes)
+	return result;
+}
+
+// Returns true if |name| is a spatial predicate for which bounding-box
+// intersection is a necessary condition (i.e. disjoint bboxes → always false).
+static bool IsSpatialBBoxPredicate(const string &name) {
+	static const char *const predicates[] = {"st_intersects",  "st_within",          "st_contains",
+	                                          "st_covers",      "st_coveredby",       "st_crosses",
+	                                          "st_overlaps",    "st_touches",         "&&",
+	                                          "st_intersects_extent", nullptr};
+	for (const char *const *p = predicates; *p; ++p) {
+		if (StringUtil::CIEquals(name, *p)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Try to prune a row group using a spatial ExpressionFilter and the covering
+// extent derived from GeoParquet 1.1 bbox column statistics.
+//
+// If the query geometry's bbox does not intersect |rg_extent|, every geometry
+// in the row group is guaranteed to fail the predicate → FILTER_ALWAYS_FALSE.
+// Otherwise returns NO_PRUNING_POSSIBLE (conservative).
+static FilterPropagateResult TrySpatialBBoxPrune(const ExpressionFilter &filter, const GeometryExtent &rg_extent) {
+	D_ASSERT(rg_extent.HasXY());
+
+	if (filter.expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const auto &func = filter.expr->Cast<BoundFunctionExpression>();
+	if (func.children.size() != 2) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!IsSpatialBBoxPredicate(func.function.name)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	// Both arguments must be geometry-typed
+	if (func.children[0]->return_type.id() != LogicalTypeId::GEOMETRY ||
+	    func.children[1]->return_type.id() != LogicalTypeId::GEOMETRY) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// One argument must be a constant (the query geometry); the other a column ref
+	const Value *const_geom = nullptr;
+	if (func.children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		const_geom = &func.children[0]->Cast<BoundConstantExpression>().value;
+	} else if (func.children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		const_geom = &func.children[1]->Cast<BoundConstantExpression>().value;
+	}
+	if (!const_geom || const_geom->IsNull() || const_geom->type().id() != LogicalTypeId::GEOMETRY) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// Extract the query geometry's bounding box
+	const auto &geom_blob = StringValue::Get(*const_geom);
+	GeometryExtent query_extent = GeometryExtent::Empty();
+	if (Geometry::GetExtent(string_t(geom_blob), query_extent) == 0) {
+		// Empty geometry: no geometry can intersect it → always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!query_extent.HasXY()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// If the row group's enclosing bbox and the query bbox do not intersect,
+	// no geometry in this row group can satisfy the predicate
+	if (!rg_extent.IntersectsXY(query_extent)) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
@@ -1240,6 +1406,25 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			                                                group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			}
+
+			// GeoParquet 1.1 spatial bbox pruning via covering column statistics.
+			// When a geometry column has a GeoParquet 1.1 covering bbox struct column,
+			// use the bbox sub-column min/max Parquet statistics to derive the
+			// enclosing envelope of the row group and prune if the query bbox
+			// does not intersect it.
+			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE &&
+			    filter.filter_type == TableFilterType::EXPRESSION_FILTER &&
+			    column_reader.Schema().schema_type == ParquetColumnSchemaType::GEOMETRY &&
+			    metadata->geo_metadata && root_schema) {
+				const auto geo_col_meta = metadata->geo_metadata->GetColumnMeta(column_reader.Schema().name);
+				if (geo_col_meta && !geo_col_meta->bbox_column_name.empty()) {
+					const auto rg_extent =
+					    TryBuildCoveringExtent(geo_col_meta->bbox_column_name, *root_schema, group.columns);
+					if (rg_extent.HasXY()) {
+						prune_result = TrySpatialBBoxPrune(filter.Cast<ExpressionFilter>(), rg_extent);
+					}
+				}
 			}
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
