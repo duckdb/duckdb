@@ -128,7 +128,7 @@ public:
 	void TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target) {
 		auto &opt = list_pr.Child<OptionalParseResult>(child_idx);
 		if (opt.HasResult()) {
-			target = Transform<T>(*opt.optional_result);
+			target = Transform<T>(opt.GetResult());
 		}
 	}
 

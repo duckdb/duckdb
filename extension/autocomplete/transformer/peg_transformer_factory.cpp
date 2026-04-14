@@ -19,7 +19,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
 	if (!transformer.named_parameter_map.empty()) {
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = transformer.named_parameter_map;
@@ -64,7 +64,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings, options);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(*match_result);
 	if (!transformer.pivot_entries.empty()) {
 		result = transformer.CreatePivotStatement(std::move(result));
 	}
@@ -1087,7 +1087,7 @@ PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> par
 	result.push_back(list_pr.GetChild(0));
 	auto opt_child = list_pr.Child<OptionalParseResult>(1);
 	if (opt_child.HasResult()) {
-		auto repeat_result = opt_child.optional_result->Cast<RepeatParseResult>();
+		auto repeat_result = opt_child.GetResult().Cast<RepeatParseResult>();
 		for (auto &child : repeat_result.children) {
 			auto &list_child = child->Cast<ListParseResult>();
 			result.push_back(list_child.GetChild(1));
