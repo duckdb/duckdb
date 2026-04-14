@@ -1066,6 +1066,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownLimit(uniqu
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		return PushDownAggregate(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
 	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		return PushDownCrossProduct(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
+	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");
