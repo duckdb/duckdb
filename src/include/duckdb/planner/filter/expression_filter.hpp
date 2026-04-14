@@ -39,6 +39,8 @@ public:
 	//! Access a runtime ExpressionFilter, failing fast if a legacy filter somehow reached an active code path.
 	static const ExpressionFilter &GetExpressionFilter(const TableFilter &filter, const char *context);
 	static ExpressionFilter &GetExpressionFilter(TableFilter &filter, const char *context);
+	//! Build a COMPARE_IN expression over a single-column filter subject.
+	static unique_ptr<Expression> CreateInExpression(unique_ptr<Expression> column, vector<Value> values);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);
