@@ -170,7 +170,6 @@ private:
 	DuckDBAdbcStreamWrapper *ptr;
 };
 
-
 static bool IsInterruptError(const char *message) {
 	if (!message) {
 		return false;
