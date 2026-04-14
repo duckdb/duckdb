@@ -49,6 +49,11 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	if (access_time < current_last_modified) {
 		return false; // Last modified in the future?
 	}
+	int64_t last_modified_time;
+	if (!access_time.TrySubtract(current_last_modified, last_modified_time)) {
+		// ouf ot range
+		return false;
+	}
 	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
 }
 
