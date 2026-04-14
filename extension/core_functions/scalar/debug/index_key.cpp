@@ -132,8 +132,10 @@ struct IndexKeyBindData : public FunctionData {
 	vector<LogicalType> key_types;
 };
 
-static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}

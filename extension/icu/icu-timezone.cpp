@@ -291,9 +291,8 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		timestamp_t now;
 	};
 
-	static duckdb::unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
-	                                                vector<duckdb::unique_ptr<Expression>> &arguments) {
-		return make_uniq<BindDataNow>(context);
+	static duckdb::unique_ptr<FunctionData> BindNow(BindScalarFunctionInput &input) {
+		return make_uniq<BindDataNow>(input.GetClientContext());
 	}
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {

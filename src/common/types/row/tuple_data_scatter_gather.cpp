@@ -1368,7 +1368,7 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.function(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
 	                         cached_cast_vector, gather_function.child_functions);
-	Vector::Verify(result, target_sel, scan_count);
+	result.Verify(target_sel, scan_count);
 }
 
 #ifdef DUCKDB_SMALLER_BINARY

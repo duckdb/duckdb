@@ -34,7 +34,7 @@ public:
 
 	void Finalize(CollectionPtr collection) {
 		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (value_idx != DConstants::INVALID_INDEX && executor.IgnoreNulls()) {
+		if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
 			ignore_nulls = &collection->validities[value_idx];
 		}
 	}
@@ -64,7 +64,7 @@ public:
 
 		if (gvstate.value_tree) {
 			local_value = gvstate.value_tree->GetLocalState(context);
-			if (gvstate.executor.IgnoreNulls()) {
+			if (gvstate.executor.wexpr.ignore_nulls) {
 				sort_nulls.Initialize();
 			}
 		}
@@ -103,7 +103,7 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 		const auto coll_count = coll_chunk.size();
 		auto &values = coll_chunk.data[gvstate.value_idx];
 		auto validity = values.Validity(coll_count);
-		if (gvstate.executor.IgnoreNulls() && validity.CanHaveNull()) {
+		if (gvstate.executor.wexpr.ignore_nulls && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
 				if (validity.IsValid(i)) {
 					sort_nulls[filtered++] = i;
@@ -135,8 +135,10 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 //===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	function.return_type = arguments[0]->return_type;
 
 	return nullptr;
@@ -297,9 +299,11 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 //===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 
 	if (arguments.size() > 2) {
 		function.arguments[2] = function.return_type;
@@ -936,9 +940,10 @@ static bool IsFillType(const LogicalType &type) {
 	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
-unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	const auto &arguments = input.GetArguments();
 
 	//	Check FILL arguments support subtraction
 	if (!IsFillType(arguments[0]->return_type)) {
@@ -951,7 +956,9 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, Window
 void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
                                   vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
                                   vector<OrderByNode> &arg_orders) {
-	WindowValueExecutor::Bind(context, function, arguments);
+	BindWindowFunctionInput input(context, function, arguments);
+	WindowValueExecutor::Bind(input);
+
 	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
@@ -1070,6 +1077,9 @@ WindowFunction FillFun::GetFunction() {
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
 	                   WindowFillExecutor::GetGlobal);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
+
+	//! Never ignore nulls (that's the point!)
+	fun.can_ignore_nulls = false;
 
 	return fun;
 }

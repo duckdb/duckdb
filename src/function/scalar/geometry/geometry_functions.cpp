@@ -90,8 +90,10 @@ static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionIn
 	return make_uniq<BoundConstantExpression>(GetCRSValue(return_type));
 }
 
-static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindCRSFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	if (arguments[0]->return_type.id() != LogicalTypeId::GEOMETRY) {
 		return nullptr;
 	}
@@ -108,8 +110,11 @@ ScalarFunction StCrsFun::GetFunction() {
 	return geom_func;
 }
 
-static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> SetCRSBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	// Check if the CRS is set in the second argument
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();

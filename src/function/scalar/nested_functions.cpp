@@ -16,10 +16,10 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto &result_validity = FlatVector::Validity(result);
 	for (auto entry : input.Values<list_entry_t>(count)) {
 		if (!entry.IsValid()) {
-			result_validity.SetInvalid(entry.index);
+			result_validity.SetInvalid(entry.GetIndex());
 			continue;
 		}
-		result_data[entry.index] = entry.value;
+		result_data[entry.GetIndex()] = entry.GetValue();
 	}
 	ListVector::SetListSize(result, ListVector::GetListSize(input));
 

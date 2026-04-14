@@ -97,8 +97,11 @@ struct ExtensionFunctionInfo : public ScalarFunctionInfo {
 	string extension;
 };
 
-unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindExtensionFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	// if this is triggered we are trying to call a method that is present in an extension
 	// but the extension is not loaded
 	// try to autoload the extension
@@ -124,7 +127,8 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 	if (!bound_function.HasBindCallback()) {
 		return nullptr;
 	}
-	return bound_function.GetBindCallback()(context, bound_function, arguments);
+	return bound_function.Bind(context, arguments);
+	;
 }
 
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {

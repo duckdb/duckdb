@@ -110,8 +110,7 @@ void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &res
 } // namespace
 
 ScalarFunction RandomFun::GetFunction() {
-	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
-	                      RandomInitLocalState);
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, RandomInitLocalState);
 	random.SetStability(FunctionStability::VOLATILE);
 	return random;
 }
@@ -121,7 +120,7 @@ ScalarFunction UUIDFun::GetFunction() {
 }
 
 ScalarFunction UUIDv4Fun::GetFunction() {
-	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr, nullptr,
+	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v4
 	uuid_v4_function.SetStability(FunctionStability::VOLATILE);
@@ -129,7 +128,7 @@ ScalarFunction UUIDv4Fun::GetFunction() {
 }
 
 ScalarFunction UUIDv7Fun::GetFunction() {
-	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr, nullptr,
+	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v7
 	uuid_v7_function.SetStability(FunctionStability::VOLATILE);

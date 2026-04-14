@@ -242,8 +242,14 @@ function(duckdb_codesign_for_debugging target)
         "<plist version=\"1.0\"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>"
       )
     endif()
+    set(CODESIGN_SCRIPT "${CMAKE_BINARY_DIR}/codesign_debug.cmake")
+    if(NOT EXISTS "${CODESIGN_SCRIPT}")
+      file(WRITE "${CODESIGN_SCRIPT}"
+        "execute_process(COMMAND codesign -s - -f --entitlements \"\${ENTITLEMENTS_FILE}\" \"\${TARGET_FILE}\" ERROR_QUIET)\n"
+      )
+    endif()
     add_custom_command(TARGET ${target} POST_BUILD
-      COMMAND codesign -s - -f --entitlements "${ENTITLEMENTS_FILE}" "$<TARGET_FILE:${target}>"
+      COMMAND ${CMAKE_COMMAND} -DTARGET_FILE=$<TARGET_FILE:${target}> -DENTITLEMENTS_FILE=${ENTITLEMENTS_FILE} -P "${CODESIGN_SCRIPT}"
       VERBATIM
     )
   endif()

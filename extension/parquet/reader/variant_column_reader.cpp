@@ -1,10 +1,41 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/variant_binary_decoder.hpp"
 #include "reader/variant/variant_shredded_conversion.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/variant_value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "parquet_column_schema.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ClientContext;
+class ParquetReader;
+class ThriftFileTransport;
 
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
