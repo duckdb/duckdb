@@ -49,10 +49,10 @@ static void RunFuzzIteration(const uint8_t *data, size_t size, bool safe_mode) {
 	auto &shell_state = ShellState::GetReference();
 	if (shell_state) {
 		delete shell_state;
-		shell_state = nullptr;
 	}
+	shell_state = new ShellState();
 
-	auto &state = ShellState::Get();
+	auto &state = *shell_state;
 	state.out = tmpfile();
 	if (!state.out) {
 		state.out = stdout;
