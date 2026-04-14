@@ -9,8 +9,9 @@ namespace duckdb {
 
 namespace {
 
-unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionTagBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw BinderException("Missing required arguments for union_tag function.");
 	}

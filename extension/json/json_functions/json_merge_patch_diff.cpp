@@ -106,7 +106,7 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 
 ScalarFunctionSet JSONFunctions::GetMergePatchDiffFunction() {
 	ScalarFunction fun("json_merge_patch_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   MergePatchDiffFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   MergePatchDiffFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);

@@ -309,8 +309,10 @@ double CheckReservoirQuantile(const Value &quantile_val) {
 	return quantile;
 }
 
-unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() >= 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -361,10 +363,11 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
 }
 
-unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
-	auto bind_data = BindReservoirQuantile(context, function, arguments);
+	auto bind_data = BindReservoirQuantile(input);
 	function.name = "reservoir_quantile";
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);

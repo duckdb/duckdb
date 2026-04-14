@@ -52,7 +52,7 @@ TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName[string] <- Identifier
 TriggerName[string] <- Identifier
-CollationName <- Identifier
+CollationName[string] <- Identifier
 CopyOptionName <- ColLabel
 SecretName[string] <- ColId
 

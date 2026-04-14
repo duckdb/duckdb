@@ -413,8 +413,10 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 }
 
 template <bool IS_AGGR = false>
-unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
@@ -482,21 +484,21 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
 
-unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// the list column and the name of the aggregate function
 	D_ASSERT(bound_function.arguments.size() >= 2);
 	D_ASSERT(arguments.size() >= 2);
 
-	return ListAggregatesBind<true>(context, bound_function, arguments);
+	return ListAggregatesBind<true>(input);
 }
 
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result =
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                   ListAggregateFunction, ListAggregateBind, nullptr, nullptr, ListAggregatesInitLocalState);
+	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
+	                             ListAggregateFunction, ListAggregateBind, nullptr, ListAggregatesInitLocalState);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.varargs = LogicalType::ANY;
@@ -508,12 +510,12 @@ ScalarFunction ListAggregateFun::GetFunction() {
 ScalarFunction ListDistinctFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T"))},
 	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
-	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
+	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
+	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 }
 
 } // namespace duckdb

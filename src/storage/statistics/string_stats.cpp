@@ -325,7 +325,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 		if (!entry.IsValid()) {
 			continue;
 		}
-		auto value = entry.value;
+		auto value = entry.GetValue();
 		auto data = value.GetData();
 		auto len = value.GetSize();
 		// LCOV_EXCL_START

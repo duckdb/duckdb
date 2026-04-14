@@ -1,10 +1,18 @@
 SetStatement[unique_ptr<SQLStatement>] <- 'SET' (StandardAssignment / SetTimeZone)
 
 StandardAssignment[unique_ptr<SetStatement>] <- (SetVariable / SetSetting) SetAssignment
+SetTimeZone[unique_ptr<SetStatement>] <- 'TIME' 'ZONE' ZoneValue
+
+SetSetting[unique_ptr<SetStatement>] <- SettingScope? SettingName
+SetVariable[SettingInfo] <- VariableScope Identifier
+StandardAssignment[unique_ptr<SetStatement>] <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone[unique_ptr<SetStatement>] <- 'TIME' 'ZONE' Expression
 SetSetting[SettingInfo] <- SettingScope? SettingName
-SetVariable[SettingInfo] <- VariableScope Identifier
 VariableScope <- 'VARIABLE'
+
+ZoneValue[unique_ptr<ParsedExpression>] <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral
+ZoneIntervalWithInterval[unique_ptr<ParsedExpression>] <- 'INTERVAL' StringLiteral Interval?
+ZoneIntervalWithPrecision[unique_ptr<ParsedExpression>] <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
 
 SettingScope <- LocalScope / SessionScope / GlobalScope
 LocalScope <- 'LOCAL'

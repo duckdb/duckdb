@@ -1330,8 +1330,9 @@ LimitPercentResult PEGTransformerFactory::TransformLimitValue(PEGTransformer &tr
 
 LimitPercentResult PEGTransformerFactory::TransformLimitAll(PEGTransformer &transformer,
                                                             optional_ptr<ParseResult> parse_result) {
+	// LIMIT ALL is represented as a NULL constant, matching PostgreSQL behavior (makeNullAConst)
 	LimitPercentResult result;
-	result.expression = make_uniq<StarExpression>();
+	result.expression = make_uniq<ConstantExpression>(Value());
 	result.is_percent = false;
 	return result;
 }
@@ -1589,17 +1590,6 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
 			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
 				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
-			if (!query_node->modifiers.empty()) {
-				for (auto &modifier : query_node->modifiers) {
-					if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
-					    modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-						throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
-					}
-					if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-						throw ParserException("ORDER BY in a recursive query is not allowed");
-					}
-				}
 			}
 			// Now safe to call on SELECT, VALUES, etc.
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,

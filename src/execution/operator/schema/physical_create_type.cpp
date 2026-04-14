@@ -53,7 +53,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		if (!vec_entry.IsValid()) {
 			continue;
 		}
-		auto str = vec_entry.value;
+		auto str = vec_entry.GetValue();
 		auto found = gstate.found_strings.find(str);
 		if (found != gstate.found_strings.end()) {
 			// entry was already found - skip

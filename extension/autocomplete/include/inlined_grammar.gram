@@ -1410,7 +1410,12 @@ EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)
 SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
-SetTimeZone <- 'TIME' 'ZONE' Expression
+SetTimeZone <- 'TIME' 'ZONE' ZoneValue
+
+ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral / 'DEFAULT' / 'LOCAL'
+ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
+ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
+
 SetSetting <- SettingScope? SettingName
 SetVariable <- VariableScope Identifier
 VariableScope <- 'VARIABLE'

@@ -79,7 +79,7 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 		if (!input_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (!state.hist) {
 			state.hist = MAP_TYPE::CreateEmpty(aggr_input.allocator);
 		}
@@ -99,7 +99,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	idx_t new_entries = 0;
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (!state.hist) {
 			continue;
 		}
@@ -115,7 +115,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (!state.hist) {
 			mask.SetInvalid(rid);
 			continue;
@@ -205,8 +205,9 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 }
 
 template <bool IS_ORDERED = true>
-unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 1);
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {

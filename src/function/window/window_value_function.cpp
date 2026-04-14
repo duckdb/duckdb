@@ -56,10 +56,10 @@ public:
 //===--------------------------------------------------------------------===//
 
 //! A class representing the state of the first_value, last_value and nth_value functions
-class WindowValueLocalState : public WindowExecutorBoundsLocalState {
+class WindowValueLocalState : public WindowExecutorLocalState {
 public:
 	WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
-	    : WindowExecutorBoundsLocalState(context, gvstate), gvstate(gvstate) {
+	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 
 		if (gvstate.value_tree) {
@@ -91,7 +91,7 @@ public:
 
 void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
                                  idx_t input_idx, OperatorSinkInput &sink) {
-	WindowExecutorBoundsLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+	WindowExecutorLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 
 	if (local_value) {
 		const auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
@@ -118,7 +118,7 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 }
 
 void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowExecutorBoundsLocalState::Finalize(context, collection, sink);
+	WindowExecutorLocalState::Finalize(context, collection, sink);
 
 	if (local_value) {
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
@@ -135,8 +135,10 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 //===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	function.return_type = arguments[0]->return_type;
 
 	return nullptr;
@@ -181,8 +183,7 @@ void WindowValueExecutor::Finalize(ExecutionContext &context, CollectionPtr coll
 	WindowExecutor::Finalize(context, collection, sink);
 }
 
-unique_ptr<LocalSinkState> WindowValueExecutor::GetLocalState(ExecutionContext &context,
-                                                              const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowValueExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	return make_uniq<WindowValueLocalState>(context, gvstate);
 }
@@ -297,9 +298,11 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 //===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 
 	if (arguments.size() > 2) {
 		function.arguments[2] = function.return_type;
@@ -315,12 +318,14 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	auto bounds = WindowLeadLagLocalState::GetBounds;
 	auto sharing = WindowLeadLagExecutor::GetSharing;
 	auto global = WindowLeadLagExecutor::GetGlobal;
+	auto local = WindowLeadLagExecutor::GetLocal;
 
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 type, bind, bounds, sharing, global));
+	                                 type, bind, bounds, sharing, global, local));
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds,
-	                                 sharing, global));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global));
+	                                 sharing, global, local));
+	funcs.AddFunction(
+	    WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global, local));
 
 	return funcs;
 }
@@ -358,16 +363,16 @@ unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobal(ClientContext &clie
 	return make_uniq<WindowLeadLagGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocalState(ExecutionContext &context,
-                                                                const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	const auto &glstate = gstate.Cast<WindowLeadLagGlobalState>();
 	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
-void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                             idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                             Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
 	auto &llstate = sink.local_state.Cast<WindowLeadLagLocalState>();
+	const auto count = eval_chunk.size();
 	auto &cursor = *llstate.cursor;
 
 	const bool has_offset = (child_idx.size() > 1);
@@ -379,8 +384,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	WindowInputExpression leadlag_offset(eval_chunk, offset_idx);
 	WindowInputExpression leadlag_default(eval_chunk, default_idx);
 
-	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
-	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
+	auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+	auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 
 	if (glstate.row_tree) {
 		// TODO: Handle subframes (SelectNth can handle it but Rank can't)
@@ -428,8 +433,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 		return;
 	}
 
-	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
+	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 
 	// Only shift within the frame if we are using a shared ordering clause.
 	if (glstate.use_framing) {
@@ -525,16 +530,17 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
 	                   WindowFirstValueExecutor::Bind, WindowFirstValueExecutor::GetBounds,
-	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal);
+	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal,
+	                   WindowFirstValueExecutor::GetLocal);
 	return fun;
 }
 
-void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                                idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                                Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto &bounds = lvstate.bounds;
+	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
@@ -581,16 +587,17 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 WindowFunction LastValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
 	                   WindowLastValueExecutor::Bind, WindowLastValueExecutor::GetBounds,
-	                   WindowLastValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal);
+	                   WindowLastValueExecutor::GetSharing, WindowLastValueExecutor::GetGlobal,
+	                   WindowLastValueExecutor::GetLocal);
 	return fun;
 }
 
-void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                               idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto &bounds = lvstate.bounds;
+	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
@@ -644,16 +651,16 @@ WindowFunction NthValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ExpressionType::WINDOW_NTH_VALUE, WindowNthValueExecutor::Bind,
 	                   WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
-	                   WindowNthValueExecutor::GetGlobal);
+	                   WindowNthValueExecutor::GetGlobal, WindowNthValueExecutor::GetLocal);
 	return fun;
 }
 
-void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                              idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                              Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto &bounds = lvstate.bounds;
+	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
@@ -936,9 +943,10 @@ static bool IsFillType(const LogicalType &type) {
 	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
-unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	const auto &arguments = input.GetArguments();
 
 	//	Check FILL arguments support subtraction
 	if (!IsFillType(arguments[0]->return_type)) {
@@ -951,7 +959,9 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, Window
 void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
                                   vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
                                   vector<OrderByNode> &arg_orders) {
-	WindowValueExecutor::Bind(context, function, arguments);
+	BindWindowFunctionInput input(context, function, arguments);
+	WindowValueExecutor::Bind(input);
+
 	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
@@ -1068,7 +1078,7 @@ void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr col
 WindowFunction FillFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
-	                   WindowFillExecutor::GetGlobal);
+	                   WindowFillExecutor::GetGlobal, WindowFillExecutor::GetLocal);
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
 
 	//! Never ignore nulls (that's the point!)
@@ -1083,15 +1093,15 @@ unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobal(ClientContext &client,
 	return make_uniq<WindowFillGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<LocalSinkState> WindowFillExecutor::GetLocalState(ExecutionContext &context,
-                                                             const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowFillExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	const auto &gfstate = gstate.Cast<WindowFillGlobalState>();
 	return make_uniq<WindowFillLocalState>(context, gfstate);
 }
 
-void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
-                                          idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                          Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
+	const auto count = eval_chunk.size();
 	auto &cursor = *lfstate.cursor;
 
 	//	Assume the best and just batch copy all the values
@@ -1105,8 +1115,8 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 
 	//	Missing values - linear interpolation
 	auto &gfstate = sink.global_state.Cast<WindowFillGlobalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lfstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lfstate.bounds.data[PARTITION_END]);
+	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 
 	idx_t prev_valid = DConstants::INVALID_INDEX;
 	idx_t next_valid = DConstants::INVALID_INDEX;
@@ -1228,9 +1238,9 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		return;
 	}
 
-	auto valid_begin = FlatVector::GetData<const idx_t>(lfstate.bounds.data[VALID_BEGIN]);
-	auto valid_end = FlatVector::GetData<const idx_t>(lfstate.bounds.data[VALID_END]);
-	auto &order_cursor = *lfstate.range_cursor;
+	auto valid_begin = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
+	auto valid_end = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
+	auto &order_cursor = *lfstate.state.range;
 	idx_t prev_partition = DConstants::INVALID_INDEX;
 	auto slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
 	auto order_value_func = GetFillValueFunction(wexpr.orders[0].expression->return_type);

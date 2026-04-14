@@ -17,8 +17,6 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	idx_t count = args.size();
 	idx_t args_size = args.ColumnCount();
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
-	auto &result_struct = ListVector::GetEntry(result);
-	auto &struct_entries = StructVector::GetEntries(result_struct);
 	bool truncate_flags_set = false;
 
 	// Check flag
@@ -72,6 +70,8 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	ListVector::SetListSize(result, result_size);
 	ListVector::Reserve(result, result_size);
+	auto &result_struct = ListVector::GetEntry(result);
+	auto &struct_entries = StructVector::GetEntries(result_struct);
 	vector<SelectionVector> selections;
 	vector<ValidityMask> masks;
 	for (idx_t i = 0; i < args_size; i++) {
@@ -127,8 +127,10 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	child_list_t<LogicalType> struct_children;
 
 	// The last argument could be a flag to be set if we want a minimal list or a maximal list
