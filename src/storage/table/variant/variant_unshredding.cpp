@@ -164,8 +164,9 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 		auto &list_val = res[i];
 		list_val = VariantValue(VariantValueType::ARRAY);
 		list_val.ReserveItems(list_entry.length);
-		list_val.AddItems(child_values.begin() + static_cast<int64_t>(list_entry.offset),
-		                  child_values.begin() + static_cast<int64_t>(list_entry.offset + list_entry.length));
+		list_val.AddItems(child_values.begin() + static_cast<int64_t>(current_offset),
+		                  child_values.begin() + static_cast<int64_t>(current_offset + list_entry.length));
+		current_offset += list_entry.length;
 	}
 	return res;
 }
