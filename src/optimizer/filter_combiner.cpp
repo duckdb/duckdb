@@ -556,8 +556,8 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	// if this is not a dense range we can push an optional filter for zone-map pruning
-	auto in_expr = ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.children[0]),
-	                                                   std::move(in_list));
+	auto in_expr =
+	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.children[0]), std::move(in_list));
 	auto optional_filter = make_uniq<OptionalFilter>(make_uniq<ExpressionFilter>(std::move(in_expr)));
 	table_filters.PushFilter(proj_index, std::move(optional_filter));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
