@@ -49,6 +49,7 @@ public:
 		}
 
 		const T &GetValue() const {
+			D_ASSERT(IsValid());
 			return data[sel_index];
 		}
 		bool IsValid() const {
