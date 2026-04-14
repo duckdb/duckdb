@@ -17,7 +17,7 @@ namespace duckdb {
 //! Helper class to rewrite correlated expressions within a single LogicalOperator
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
-	RewriteCorrelatedExpressions(ColumnBinding base_binding, column_binding_map_t<idx_t> &correlated_map,
+	RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map,
 	                             idx_t lateral_depth, bool recursive_rewrite = false);
 
 	void VisitOperator(LogicalOperator &op) override;
@@ -27,7 +27,7 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:
-	ColumnBinding base_binding;
+	vector<ColumnBinding> correlated_bindings;
 	column_binding_map_t<idx_t> &correlated_map;
 	// To keep track of the number of dependent joins encountered
 	idx_t lateral_depth;
