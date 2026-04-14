@@ -32,6 +32,11 @@ void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
+void StandardVectorBuffer::ResetCapacity(idx_t capacity) {
+	this->capacity = capacity;
+	validity.Reset(capacity);
+}
+
 idx_t StandardVectorBuffer::GetAllocationSize() const {
 	idx_t size = VectorBuffer::GetAllocationSize();
 	size += allocated_data.GetSize();

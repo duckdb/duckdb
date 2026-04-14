@@ -83,6 +83,9 @@ public:
 	virtual idx_t Capacity() const {
 		throw InternalException("VectorBuffer does not have a capacity");
 	}
+	virtual void ResetCapacity(idx_t capacity) {
+		throw InternalException("VectorBuffer does not have a capacity");
+	}
 	virtual ValidityMask &GetValidityMask() {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}

@@ -53,7 +53,7 @@ public:
 		auto internal_type = type.InternalType();
 		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
-		result.buffer->GetValidityMask().Reset(capacity);
+		result.buffer->ResetCapacity(capacity);
 		// use SetVectorTypeOnly to avoid propagating to children
 		// for nested types (struct/array/list) children may have stale incompatible buffers
 		// from a previous execution - they will be reset individually below

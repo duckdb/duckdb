@@ -47,6 +47,11 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
+void VectorStructBuffer::ResetCapacity(idx_t capacity) {
+	this->capacity = capacity;
+	validity.Reset(capacity);
+}
+
 idx_t VectorStructBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
 	idx_t size = validity.GetAllocationSize();
 	for (auto &child : children) {
