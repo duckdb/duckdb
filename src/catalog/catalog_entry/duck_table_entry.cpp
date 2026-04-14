@@ -1318,19 +1318,27 @@ void DuckTableEntry::SetAsRoot() {
 
 void DuckTableEntry::CommitAlter(string &column_name, CommitDropAccumulator &acc) {
 	D_ASSERT(!column_name.empty());
-	optional_idx removed_index;
+	optional_idx logical_column_idx;
+	auto column_path = StringUtil::Split(column_name, '.');
+	D_ASSERT(!column_path.empty());
+	auto &root_column_name = column_path[0];
+	idx_t column_position = 0;
 	for (auto &col : columns.Logical()) {
-		if (col.Name() == column_name) {
+		if (StringUtil::CIEquals(col.Name(), root_column_name)) {
 			// No need to alter storage, removed column is generated column
 			if (col.Generated()) {
 				return;
 			}
-			removed_index = col.Oid();
+			logical_column_idx = column_position;
 			break;
 		}
+		column_position++;
 	}
 
-	auto logical_column_index = LogicalIndex(removed_index.GetIndex());
+	if (!logical_column_idx.IsValid()) {
+		return;
+	}
+	auto logical_column_index = LogicalIndex(logical_column_idx.GetIndex());
 	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
 	storage->CommitDropColumn(column_index, acc);
 }

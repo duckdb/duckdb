@@ -550,20 +550,21 @@ struct UDFSum {
 	template <class STATE_TYPE>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
+		auto sdata = source.Values<const STATE_TYPE *>(count);
 		auto tdata = FlatVector::GetDataMutable<STATE_TYPE *>(target);
 		// OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
 		for (idx_t i = 0; i < count; i++) {
-			if (!sdata[i]->isset) {
+			auto &state = *sdata[i].GetValue();
+			if (!state.isset) {
 				// source is NULL, nothing to do
 				return;
 			}
 			if (!tdata[i]->isset) {
 				// target is NULL, use source value directly
-				*tdata[i] = *sdata[i];
+				*tdata[i] = state;
 			} else {
 				// else perform the operation
-				tdata[i]->value += sdata[i]->value;
+				tdata[i]->value += state.value;
 			}
 		}
 	}

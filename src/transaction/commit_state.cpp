@@ -92,7 +92,7 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 #endif
 
 	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers), count);
 
 	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;

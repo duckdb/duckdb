@@ -380,12 +380,12 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 }
 
 static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
-                             uint64_t parent_offset) {
+                             uint64_t parent_offset, idx_t size) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) +
 	    internal_type * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-	FlatVector::SetData(vector, data_ptr);
+	FlatVector::SetData(vector, data_ptr, size);
 }
 
 template <class T>
@@ -531,7 +531,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, i
 // Find the index of the first run-end that is strictly greater than the offset.
 // count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
-static idx_t FindRunIndex(const VectorValueIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
+static idx_t FindRunIndex(const VectorIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
 	// Binary-search within the [0, count) range. For example:
 	// [0, 0, 0, 1, 1, 2] encoded as
 	// run_ends: [3, 5, 6]:
@@ -580,7 +580,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			auto run_end_entry = run_ends_data[run];
 			auto value_entry = values_data[run];
 			auto &value = value_entry.GetValue();
-			auto run_end = static_cast<idx_t>(run_end_entry.GetValue());
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValueUnsafe());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
@@ -603,7 +603,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 		for (; run < compressed_size; ++run) {
 			auto run_end_entry = run_ends_data[run];
 			auto value_entry = values_data[run];
-			auto run_end = static_cast<idx_t>(run_end_entry.GetValue());
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValueUnsafe());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
@@ -762,10 +762,10 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT32: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_32) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, size);
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -780,10 +780,10 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT64: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_64) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, size);
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -798,10 +798,10 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT128: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_128) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, size);
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -882,7 +882,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME_TZ: {
-		DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+		DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 		break;
 	}
 	case LogicalTypeId::UUID:
@@ -942,7 +942,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::DAYS: {
-			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
@@ -1038,7 +1038,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
-			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {

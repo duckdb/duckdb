@@ -385,11 +385,12 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
-		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
+		auto sdata = source.Values<const STATE_TYPE *>(count);
+		auto tdata = target.Values<STATE_TYPE *>(count);
 
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Combine<STATE_TYPE, OP>(*sdata[i], *tdata[i], aggr_input_data);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
+			                                     aggr_input_data);
 		}
 	}
 
@@ -501,9 +502,10 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
-		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+		auto sdata = states.Values<STATE_TYPE *>(count);
+		;
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Destroy<STATE_TYPE>(*sdata[i], aggr_input_data);
+			OP::template Destroy<STATE_TYPE>(*sdata[i].GetValueUnsafe(), aggr_input_data);
 		}
 	}
 };

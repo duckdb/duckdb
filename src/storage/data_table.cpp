@@ -1191,7 +1191,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 	if (!info->indexes.Empty()) {
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
-		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
+		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data), STANDARD_VECTOR_SIZE);
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
 		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {

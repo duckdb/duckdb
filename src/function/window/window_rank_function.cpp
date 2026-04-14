@@ -51,10 +51,10 @@ public:
 	}
 
 	//! Accumulate the secondary sort values
-	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-	          OperatorSinkInput &sink) override;
+	static void Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                   OperatorSinkInput &sink);
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
+	static void Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 
@@ -69,19 +69,17 @@ public:
 	unique_ptr<LocalSinkState> local_tree;
 };
 
-void WindowPeerLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                idx_t input_idx, OperatorSinkInput &sink) {
-	WindowExecutorLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
-
+void WindowPeerLocalState::Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                  idx_t input_idx, OperatorSinkInput &sink) {
+	auto &local_tree = sink.local_state.Cast<WindowPeerLocalState>().local_tree;
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
 		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0, sink.interrupt_state);
 	}
 }
 
-void WindowPeerLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowExecutorLocalState::Finalize(context, collection, sink);
-
+void WindowPeerLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+	auto &local_tree = sink.local_state.Cast<WindowPeerLocalState>().local_tree;
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
 		local_tokens.Finalize(context, sink.interrupt_state);
@@ -143,7 +141,7 @@ void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowE
 WindowFunction RankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK, nullptr,
 	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing, WindowRankExecutor::GetGlobal,
-	                   WindowRankExecutor::GetLocal);
+	                   WindowRankExecutor::GetLocal, WindowRankLocalState::Sinker, WindowRankLocalState::Finalizer);
 	return fun;
 }
 
@@ -205,8 +203,8 @@ void WindowDenseRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWi
 
 WindowFunction DenseRankFun::GetFunction() {
 	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE, nullptr,
-	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowCumeDistExecutor::GetGlobal,
-	                   WindowCumeDistExecutor::GetLocal);
+	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowDenseRankExecutor::GetGlobal,
+	                   WindowDenseRankExecutor::GetLocal);
 	fun.can_order_by = false;
 	return fun;
 }
@@ -305,7 +303,8 @@ void WindowPercentRankExecutor::GetBounds(WindowBoundsSet &required, const Bound
 WindowFunction PercentRankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK, nullptr,
 	                   WindowPercentRankExecutor::GetBounds, WindowPercentRankExecutor::GetSharing,
-	                   WindowPercentRankExecutor::GetGlobal, WindowPercentRankExecutor::GetLocal);
+	                   WindowPercentRankExecutor::GetGlobal, WindowPercentRankExecutor::GetLocal,
+	                   WindowPercentRankLocalState::Sinker, WindowPercentRankLocalState::Finalizer);
 	return fun;
 }
 
@@ -384,7 +383,8 @@ void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWin
 WindowFunction CumeDistFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr,
 	                   WindowCumeDistExecutor::GetBounds, WindowCumeDistExecutor::GetSharing,
-	                   WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal);
+	                   WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal,
+	                   WindowCumeDistLocalState::Sinker, WindowCumeDistLocalState::Finalizer);
 	return fun;
 }
 

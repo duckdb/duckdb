@@ -146,8 +146,9 @@ struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
-		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
+		auto ldata = LEFT_CONSTANT ? ConstantVector::GetData<LEFT_TYPE>(left) : FlatVector::GetData<LEFT_TYPE>(left);
+		auto rdata =
+		    RIGHT_CONSTANT ? ConstantVector::GetData<RIGHT_TYPE>(right) : FlatVector::GetData<RIGHT_TYPE>(right);
 
 		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
 			// either left or right is constant NULL: result is constant NULL
@@ -392,8 +393,9 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static idx_t SelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                        SelectionVector *true_sel, SelectionVector *false_sel) {
-		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
-		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
+		auto ldata = LEFT_CONSTANT ? ConstantVector::GetData<LEFT_TYPE>(left) : FlatVector::GetData<LEFT_TYPE>(left);
+		auto rdata =
+		    RIGHT_CONSTANT ? ConstantVector::GetData<RIGHT_TYPE>(right) : FlatVector::GetData<RIGHT_TYPE>(right);
 
 		if (LEFT_CONSTANT && ConstantVector::IsNull(left)) {
 			if (false_sel) {

@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests sync_out_of_tree_extensions
 
 all: release
 opt: release
@@ -7,6 +7,9 @@ unit: unittest
 EXTENSION_CONFIG_STEP ?=
 ifdef USE_MERGED_VCPKG_MANIFEST
 	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+endif
+ifdef DUCKDB_NEW_EXTENSION_BUILD
+	EXTENSION_CONFIG_STEP = sync_out_of_tree_extensions
 endif
 
 GENERATOR ?=
@@ -37,12 +40,10 @@ T ?=
 
 CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || printf '%s\n' "$${NUMBER_OF_PROCESSORS:-1}")
 CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
-ifneq ($(filter 1 true TRUE,$(CI)),)
 ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
-endif
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -192,11 +193,11 @@ ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/in_tree_extensions.cmake
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/out_of_tree_extensions.cmake
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
@@ -354,6 +355,11 @@ endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
+ifdef DUCKDB_NEW_EXTENSION_BUILD
+ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build'
+endif
+endif
 
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
@@ -398,7 +404,7 @@ release: ${EXTENSION_CONFIG_STEP}
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" -DDISABLE_UNITY=1 . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
@@ -433,6 +439,9 @@ clreldebug:
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
+
+sync_out_of_tree_extensions:
+	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)")
 
 extension_configuration: build/extension_configuration/vcpkg.json
 

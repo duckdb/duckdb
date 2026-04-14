@@ -194,6 +194,8 @@ def get_process_rss_bytes(pid: int):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
+                encoding="utf8",
+                errors="backslashreplace",
             )
         except OSError:
             return None
@@ -243,6 +245,8 @@ def generate_test_list(
     proc = subprocess.run(
         command,
         text=True,
+        encoding="utf8",
+        errors="backslashreplace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -307,7 +311,7 @@ def format_batch_failure(
 
 def normalize_output(output):
     if isinstance(output, bytes):
-        return output.decode("utf8", errors="replace")
+        return output.decode("utf8", errors="backslashreplace")
     return output or ""
 
 
@@ -331,6 +335,8 @@ def run_batch(config: TestRunnerConfig, batch):
         proc = subprocess.Popen(
             shlex.split(command),
             text=True,
+            encoding="utf8",
+            errors="backslashreplace",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

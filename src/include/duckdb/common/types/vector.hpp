@@ -24,7 +24,7 @@ struct SelCache;
 enum class VectorConstructorAction;
 
 template <class T>
-class VectorValueIterator;
+class VectorIterator;
 template <class T>
 class VectorValidValueIterator;
 class VectorValidityIterator;
@@ -64,7 +64,7 @@ public:
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	DUCKDB_API explicit Vector(const VectorCache &cache);
 	//! Create a non-owning vector that references the specified data
-	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr);
+	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr, idx_t count);
 	//! Create a vector with an explicitly created vector buffer
 	DUCKDB_API Vector(LogicalType type, buffer_ptr<VectorBuffer> buffer);
 	// but moving of vectors is allowed
@@ -190,7 +190,7 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorValueIterator<T> Values(idx_t count) const;
+	VectorIterator<T> Values(idx_t count) const;
 
 	template <class T>
 	VectorValidValueIterator<T> ValidValues(idx_t count) const;
