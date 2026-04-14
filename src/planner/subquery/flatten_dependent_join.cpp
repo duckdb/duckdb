@@ -73,8 +73,10 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 			D_ASSERT(entry != has_correlated_expressions.end());
 
 			if (entry->second) {
-				op.children[0] =
-				    PushDownDependentJoin(std::move(op.children[0]), parent_propagate_null_values, lateral_depth);
+				auto left_result = PushDownDependentJoin(std::move(op.children[0]), parent_propagate_null_values,
+				                                         lateral_depth, state);
+				op.children[0] = std::move(left_result.plan);
+				state = left_result.state;
 			} else {
 				// There might be unrelated correlation, so we have to traverse the tree
 				op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
@@ -86,13 +88,16 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 			// rewrite
 			idx_t next_lateral_depth = 0;
 
-			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, next_lateral_depth);
+			RewriteCorrelatedExpressions rewriter(state.base_binding, correlated_map, next_lateral_depth);
 			rewriter.VisitOperator(*plan);
 
-			RewriteCorrelatedExpressions recursive_rewriter(base_binding, correlated_map, next_lateral_depth, true);
+			RewriteCorrelatedExpressions recursive_rewriter(state.base_binding, correlated_map, next_lateral_depth,
+			                                                true);
 			recursive_rewriter.VisitOperator(*plan);
 		} else {
-			op.children[0] = Decorrelate(std::move(op.children[0]));
+			auto left_result = Decorrelate(std::move(op.children[0]), true, 0, state);
+			op.children[0] = std::move(left_result.plan);
+			state = left_result.state;
 		}
 
 		if (!op.perform_delim) {
@@ -127,22 +132,24 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 					// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
 					auto cte = std::move(delim_join->children[1]);
 					delim_join->children[1] = std::move(cte->children[1]);
-					cte->children[1] = Decorrelate(std::move(delim_join), parent_propagate_null_values, lateral_depth);
-					return cte;
+					auto decorrelated =
+					    Decorrelate(std::move(delim_join), parent_propagate_null_values, lateral_depth, state);
+					cte->children[1] = std::move(decorrelated.plan);
+					return PushDownResult(std::move(cte), decorrelated.state, parent_propagate_null_values);
 				}
 			}
 		}
 
 		// now we push the dependent join down
-		delim_join->children[1] =
+		auto flatten_result =
 		    flatten.PushDownDependentJoin(std::move(delim_join->children[1]), propagate_null_values, lateral_depth);
-		data_offset = flatten.data_offset;
+		delim_join->children[1] = std::move(flatten_result.plan);
 		const auto left_offset = delim_join->children[0]->GetColumnBindings().size();
 		if (!parent) {
-			delim_offset = left_offset + flatten.delim_offset;
+			state.delim_offset = left_offset + flatten_result.state.delim_offset;
 		}
 
-		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
+		RewriteCorrelatedExpressions rewriter(state.base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 
 		op.duplicate_eliminated_columns.clear();
@@ -167,7 +174,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 			}
 
 			// then add the delim join conditions
-			CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten.delim_offset, op.perform_delim);
+			CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten_result.state.delim_offset,
+			                          op.perform_delim);
 
 			// check if there are any arbitrary expressions left
 			if (!op.arbitrary_expressions.empty()) {
@@ -179,12 +187,13 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 				auto filter = make_uniq<LogicalFilter>();
 				filter->expressions = std::move(op.arbitrary_expressions);
 				filter->AddChild(std::move(plan));
-				return std::move(filter);
+				return PushDownResult(std::move(filter), state, parent_propagate_null_values);
 			}
-			return plan;
+			return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 		}
 
-		CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten.delim_offset, op.perform_delim);
+		CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten_result.state.delim_offset,
+		                          op.perform_delim);
 
 		if (op.subquery_type == SubqueryType::ANY) {
 			// add the actual condition based on the ANY/ALL predicate
@@ -204,16 +213,18 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 			}
 		}
 
-		return plan;
+		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 	}
 	default: {
 		for (auto &child : plan->children) {
-			child = Decorrelate(std::move(child));
+			auto child_result = Decorrelate(std::move(child), true, 0, state);
+			child = std::move(child_result.plan);
+			state = child_result.state;
 		}
 	}
 	}
 
-	return plan;
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool lateral, idx_t lateral_depth,
