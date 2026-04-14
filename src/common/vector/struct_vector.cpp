@@ -186,6 +186,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx
 	for (auto &child : children) {
 		child.Resize(current_size, new_size);
 	}
+	capacity = new_size;
 	return nullptr;
 }
 
