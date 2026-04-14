@@ -1082,7 +1082,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 					//	not the index of the rhs_get schema.
 					auto schema_idx = rowid_idx;
 					if (last_table_idx == rhs_get.table_index && !rhs_get.projection_ids.empty()) {
-						for (schema_idx = ProjectionIndex(0); schema_idx < rhs_get.projection_ids.size(); ++schema_idx) {
+						for (schema_idx = ProjectionIndex(0); schema_idx < rhs_get.projection_ids.size();
+						     ++schema_idx) {
 							if (rhs_get.projection_ids[schema_idx] == rowid_idx) {
 								break;
 							}
