@@ -489,7 +489,7 @@ public:
 	}
 
 	void Append(Vector &input, idx_t count) {
-		for(auto entry : input.Values<T>(count)) {
+		for (auto entry : input.Values<T>(count)) {
 			state.template Update<BitpackingWriter>(entry);
 		}
 	}
