@@ -1031,33 +1031,7 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-static bool HasNonRootDML(const LogicalOperator &op, bool is_root) {
-	if (!is_root) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_INSERT:
-		case LogicalOperatorType::LOGICAL_DELETE:
-		case LogicalOperatorType::LOGICAL_UPDATE:
-			return true;
-		default:
-			break;
-		}
-	}
-	for (auto &child : op.children) {
-		if (HasNonRootDML(*child, false)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
-	// If the plan contains a DML statement as a non-root node (e.g. inside a CTE), bail out entirely.
-	// DML modifies table state, so subplans that read from the same table before and after the DML
-	// must not be deduplicated — they may produce different results.
-	if (HasNonRootDML(*op, true)) {
-		return op;
-	}
-
 	// Bottom-up identification of identical subplans
 	CommonSubplanFinder finder(optimizer.context);
 	finder.FindCommonSubplans(op);

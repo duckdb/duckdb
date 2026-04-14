@@ -117,6 +117,29 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
 }
 
+// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE) as a
+// non-root node — i.e. inside a CTE body.  When that is the case, several
+// optimizations are unsafe because they use table statistics captured at plan
+// time, which do not reflect the table state after the DML has executed.
+static bool PlanContainsNonRootDML(const LogicalOperator &op, bool is_root = true) {
+	if (!is_root) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_INSERT:
+		case LogicalOperatorType::LOGICAL_DELETE:
+		case LogicalOperatorType::LOGICAL_UPDATE:
+			return true;
+		default:
+			break;
+		}
+	}
+	for (auto &child : op.children) {
+		if (PlanContainsNonRootDML(*child, false)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void Optimizer::RunBuiltInOptimizers() {
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
@@ -266,10 +289,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// convert common subplans into materialized CTEs
-	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-		CommonSubplanOptimizer common_subplan_optimizer(*this);
-		plan = common_subplan_optimizer.Optimize(std::move(plan));
-	});
+	// Skip when the plan contains a DML CTE: table statistics are stale at plan
+	// time and could cause incorrect deduplication of scans across a DML boundary.
+	if (!PlanContainsNonRootDML(*plan)) {
+		RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+			CommonSubplanOptimizer common_subplan_optimizer(*this);
+			plan = common_subplan_optimizer.Optimize(std::move(plan));
+		});
+	}
 
 	// pushes LIMIT below PROJECTION
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
@@ -301,12 +328,18 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
+	// Skip when the plan contains a DML CTE: statistics are captured at plan time
+	// and do not reflect the table state after the DML executes.  Propagating them
+	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
+	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-		StatisticsPropagator propagator(*this, *plan);
-		propagator.PropagateStatistics(plan);
-		statistics_map = propagator.GetStatisticsMap();
-	});
+	if (!PlanContainsNonRootDML(*plan)) {
+		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+			StatisticsPropagator propagator(*this, *plan);
+			propagator.PropagateStatistics(plan);
+			statistics_map = propagator.GetStatisticsMap();
+		});
+	}
 
 	// rewrite row_number window function + filter on row_number to aggregate
 	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
