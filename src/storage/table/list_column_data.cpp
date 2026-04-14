@@ -109,14 +109,14 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	validity->ScanCount(state.child_states[0], result, count);
 
 	auto data = offset_vector.Values<uint64_t>(scan_count);
-	auto last_entry = data[scan_count - 1].GetValue();
+	auto last_entry = data[scan_count - 1].GetValueUnsafe();
 
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::Writer<list_entry_t>(result, scan_count);
 	auto base_offset = state.last_offset;
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto offset = data[i].GetValue();
+		auto offset = data[i].GetValueUnsafe();
 		result_data[i].offset = current_offset;
 		result_data[i].length = offset - current_offset - base_offset;
 		current_offset += result_data[i].length;

@@ -389,7 +389,7 @@ public:
 		auto tdata = target.Values<STATE_TYPE *>(count);
 
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValue(), *tdata[i].GetValue(), aggr_input_data);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(), aggr_input_data);
 		}
 	}
 
@@ -504,7 +504,7 @@ public:
 		auto sdata = states.Values<STATE_TYPE *>(count);
 		;
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Destroy<STATE_TYPE>(*sdata[i].GetValue(), aggr_input_data);
+			OP::template Destroy<STATE_TYPE>(*sdata[i].GetValueUnsafe(), aggr_input_data);
 		}
 	}
 };
