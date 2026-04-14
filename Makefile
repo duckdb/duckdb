@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests sync_out_of_tree_extensions
 
 all: release
 opt: release
@@ -7,6 +7,9 @@ unit: unittest
 EXTENSION_CONFIG_STEP ?=
 ifdef USE_MERGED_VCPKG_MANIFEST
 	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+endif
+ifdef DUCKDB_NEW_EXTENSION_BUILD
+	EXTENSION_CONFIG_STEP = sync_out_of_tree_extensions
 endif
 
 GENERATOR ?=
@@ -352,6 +355,11 @@ endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
+ifdef DUCKDB_NEW_EXTENSION_BUILD
+ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build'
+endif
+endif
 
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
@@ -431,6 +439,9 @@ clreldebug:
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
+
+sync_out_of_tree_extensions:
+	$(PYTHON) scripts/sync_out_of_tree_extensions.py
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
