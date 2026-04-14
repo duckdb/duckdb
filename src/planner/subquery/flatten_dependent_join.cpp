@@ -829,26 +829,30 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownLimit(uniqu
 	return PushDownResult(std::move(filter), state, parent_propagate_null_values);
 }
 
-		// we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownWindow(unique_ptr<LogicalOperator> plan,
+                                                                            bool parent_propagate_null_values,
+                                                                            idx_t lateral_depth, PushDownState state) {
+	auto &window = plan->Cast<LogicalWindow>();
+	auto child_result =
+	    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth, state);
+	plan->children[0] = std::move(child_result.plan);
+	state = child_result.state;
+	parent_propagate_null_values = child_result.propagate_null_values;
 
-		// add the correlated columns to the PARTITION BY clauses in the Window
-		for (auto &expr : window.expressions) {
-			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto &w = expr->Cast<BoundWindowExpression>();
-			for (idx_t i = 0; i < correlated_columns.size(); i++) {
-				w.partitions.push_back(
-				    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i)));
-			}
+	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+
+	for (auto &expr : window.expressions) {
+		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto &w = expr->Cast<BoundWindowExpression>();
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			w.partitions.push_back(
+			    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i)));
 		}
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 	}
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_UNION: {
-		auto &setop = plan->Cast<LogicalSetOperation>();
-		// set operator, push into both children
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
+
 #ifdef DEBUG
 		for (auto &child : plan->children) {
 			child->ResolveOperatorTypes();
@@ -1076,6 +1080,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownLimit(uniqu
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		return PushDownLimit(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_WINDOW: {
+		return PushDownWindow(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
