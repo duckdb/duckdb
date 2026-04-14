@@ -31,17 +31,18 @@ VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(ca
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p) : StandardVectorBuffer(data_ptr_p) {
+VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p, idx_t capacity)
+    : StandardVectorBuffer(data_ptr_p, capacity) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p)
-    : StandardVectorBuffer(std::move(data_p)), heap(AllocateHeap()) {
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity)
+    : StandardVectorBuffer(std::move(data_p), capacity), heap(AllocateHeap()) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
-VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, const VectorStringBuffer &other)
-    : StandardVectorBuffer(std::move(data_p)) {
+VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity, const VectorStringBuffer &other)
+    : StandardVectorBuffer(std::move(data_p), capacity) {
 	auto auxiliary_data = other.GetAuxiliaryData();
 	if (auxiliary_data) {
 		AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(std::move(auxiliary_data)));
@@ -67,7 +68,7 @@ idx_t StringHeapHolder::GetAllocationSize() const {
 buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<VectorStringBuffer>(offset_ptr);
+	auto result = make_buffer<VectorStringBuffer>(offset_ptr, end - offset);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
 	// keep the heap alive
 	if (auxiliary_data) {
@@ -121,8 +122,8 @@ void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data) const {
-	return make_buffer<VectorStringBuffer>(std::move(new_data), *this);
+buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
+	return make_buffer<VectorStringBuffer>(std::move(new_data), capacity, *this);
 }
 
 buffer_ptr<VectorBuffer> VectorStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
@@ -162,7 +163,7 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 	}
 	// check if the main buffer is a VectorStringBuffer
 	if (!vector.buffer) {
-		vector.buffer = make_buffer<VectorStringBuffer>(nullptr);
+		vector.buffer = make_buffer<VectorStringBuffer>(nullptr, 0);
 	}
 	if (vector.buffer->GetBufferType() != VectorBufferType::STRING_BUFFER) {
 		throw InternalException(
