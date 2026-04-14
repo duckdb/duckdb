@@ -19,14 +19,43 @@ namespace duckdb {
 //! flattened subquery
 struct FlattenDependentJoins {
 	struct PushDownState {
-		PushDownState() : delim_offset(DConstants::INVALID_INDEX) {
+		PushDownState() {
 		}
-		PushDownState(ColumnBinding base_binding_p, idx_t delim_offset_p)
-		    : base_binding(base_binding_p), delim_offset(delim_offset_p) {
+		PushDownState(vector<ColumnBinding> correlated_bindings_p, vector<idx_t> correlated_offsets_p)
+		    : correlated_bindings(std::move(correlated_bindings_p)),
+		      correlated_offsets(std::move(correlated_offsets_p)) {
+			D_ASSERT(correlated_bindings.size() == correlated_offsets.size());
 		}
 
-		ColumnBinding base_binding;
-		idx_t delim_offset;
+		static PushDownState CreateContiguous(ColumnBinding base_binding, idx_t correlated_offset, idx_t count) {
+			vector<ColumnBinding> correlated_bindings;
+			vector<idx_t> correlated_offsets;
+			for (idx_t i = 0; i < count; i++) {
+				correlated_bindings.emplace_back(base_binding.table_index,
+				                                 ProjectionIndex(base_binding.column_index + i));
+				correlated_offsets.push_back(correlated_offset + i);
+			}
+			return PushDownState(std::move(correlated_bindings), std::move(correlated_offsets));
+		}
+
+		const ColumnBinding &GetBinding(idx_t index) const {
+			D_ASSERT(index < correlated_bindings.size());
+			return correlated_bindings[index];
+		}
+
+		idx_t GetOffset(idx_t index) const {
+			D_ASSERT(index < correlated_offsets.size());
+			return correlated_offsets[index];
+		}
+
+		void ShiftOffsets(idx_t offset) {
+			for (auto &entry : correlated_offsets) {
+				entry += offset;
+			}
+		}
+
+		vector<ColumnBinding> correlated_bindings;
+		vector<idx_t> correlated_offsets;
 	};
 
 	struct PushDownResult {
