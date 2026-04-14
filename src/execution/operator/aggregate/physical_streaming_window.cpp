@@ -20,15 +20,20 @@ class StreamingWindowGlobalState : public GlobalOperatorState {
 public:
 	explicit StreamingWindowGlobalState(ClientContext &client);
 
-	//! The next row number.
-	std::atomic<int64_t> row_number;
 	//! The single local state
 	unique_ptr<OperatorState> local_state;
 };
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 class StreamingWindowState : public OperatorState {
 public:
-	struct AggregateState {
+	class AggregateState : public WindowExecutorStreamingState {
+	public:
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
 		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
 		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)), hashes(LogicalType::HASH),
@@ -59,7 +64,7 @@ public:
 			}
 		}
 
-		~AggregateState() {
+		~AggregateState() override {
 			if (dtor) {
 				AggregateInputData aggr_input_data(bind_data, arena_allocator);
 				state_ptr = state.data();
@@ -110,7 +115,15 @@ public:
 		Vector addresses;
 	};
 
-	struct LeadLagState {
+	class ValueState : public WindowExecutorStreamingState {
+	public:
+		explicit ValueState(const Value &val) : vec(val) {
+		}
+		Vector vec;
+	};
+
+	class LeadLagState : public WindowExecutorStreamingState {
+	public:
 		//	Fixed size
 		static constexpr int64_t MAX_BUFFER = 2048;
 
@@ -247,8 +260,6 @@ public:
 		BoundWindowExpression &wexpr;
 		//! Cache the executor to cut down on memory allocation
 		ExpressionExecutor executor;
-		//! The constant offset
-		int64_t offset;
 		//! The number of rows we have buffered
 		idx_t buffered;
 		//! The constant default value
@@ -280,42 +291,42 @@ public:
 	}
 
 	void Initialize(ClientContext &context, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
-		const_vectors.resize(expressions.size());
-		aggregate_states.resize(expressions.size());
-		lead_lag_states.resize(expressions.size());
+		states.resize(expressions.size());
 
 		for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 			auto &expr = *expressions[expr_idx];
 			auto &wexpr = expr.Cast<BoundWindowExpression>();
+			auto &fstate = states[expr_idx];
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_AGGREGATE:
-				aggregate_states[expr_idx] = make_uniq<AggregateState>(context, wexpr, allocator);
+				fstate = make_uniq<AggregateState>(context, wexpr, allocator);
 				break;
 			case ExpressionType::WINDOW_FIRST_VALUE:
 			case ExpressionType::WINDOW_LAST_VALUE:
 				// Just execute the expression once
-				const_vectors[expr_idx] = make_uniq<Vector>(GetFirstValue(context, input, wexpr));
+				fstate = make_uniq<ValueState>(GetFirstValue(context, input, wexpr));
 				break;
 			case ExpressionType::WINDOW_PERCENT_RANK: {
-				const_vectors[expr_idx] = make_uniq<Vector>(Value((double)0));
+				fstate = make_uniq<ValueState>(Value((double)0));
 				break;
 			}
+			case ExpressionType::WINDOW_ROW_NUMBER:
 			case ExpressionType::WINDOW_RANK:
 			case ExpressionType::WINDOW_RANK_DENSE: {
-				const_vectors[expr_idx] = make_uniq<Vector>(Value((int64_t)1));
+				fstate = make_uniq<ValueState>(Value((int64_t)1));
 				break;
 			}
 			case ExpressionType::WINDOW_LAG:
 			case ExpressionType::WINDOW_LEAD: {
-				lead_lag_states[expr_idx] = make_uniq<LeadLagState>(context, wexpr);
-				const auto offset = lead_lag_states[expr_idx]->offset;
-				if (offset < 0) {
-					lead_count = MaxValue<idx_t>(idx_t(-offset), lead_count);
-				}
+				fstate = make_uniq<LeadLagState>(context, wexpr);
 				break;
 			}
 			default:
 				break;
+			}
+			const auto offset = fstate->Cast<WindowExecutorStreamingState>().offset;
+			if (offset < 0) {
+				lead_count = MaxValue<idx_t>(idx_t(-offset), lead_count);
 			}
 		}
 		if (lead_count) {
@@ -335,13 +346,9 @@ public:
 public:
 	//! We can't initialise until we have an input chunk
 	bool initialized;
-	//! The values that are determined by the first row.
-	vector<unique_ptr<Vector>> const_vectors;
-	//! Aggregation states
-	vector<unique_ptr<AggregateState>> aggregate_states;
+	//! Function states
+	vector<unique_ptr<LocalSourceState>> states;
 	Allocator &allocator;
-	//! Lead/Lag states
-	vector<unique_ptr<LeadLagState>> lead_lag_states;
 	//! The number of rows ahead to buffer for LEAD
 	idx_t lead_count = 0;
 	//! A buffer for delayed input
@@ -352,7 +359,7 @@ public:
 	SelectionVector sel;
 };
 
-StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) : row_number(1) {
+StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
 	local_state = make_uniq<StreamingWindowState>(client);
 }
 
@@ -497,20 +504,21 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		auto &expr = *select_list[expr_idx];
 		auto &wexpr = expr.Cast<BoundWindowExpression>();
 		auto &result = output.data[col_idx];
+		auto &fstate = state.states[expr_idx];
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE:
-			state.aggregate_states[expr_idx]->Execute(context, output, result);
+			fstate->Cast<StreamingWindowState::AggregateState>().Execute(context, output, result);
 			break;
 		case ExpressionType::WINDOW_PERCENT_RANK:
 		case ExpressionType::WINDOW_RANK:
 		case ExpressionType::WINDOW_RANK_DENSE:
 			// Reference constant vector
-			output.data[col_idx].Reference(*state.const_vectors[expr_idx]);
+			output.data[col_idx].Reference(state.states[expr_idx]->Cast<StreamingWindowState::ValueState>().vec);
 			break;
 		case ExpressionType::WINDOW_FIRST_VALUE:
 			// If we are ignoring NULLs and we started with a NULL,
 			// then look for a non-NULL value and update it
-			if (wexpr.ignore_nulls && ConstantVector::IsNull(*state.const_vectors[expr_idx])) {
+			if (wexpr.ignore_nulls && ConstantVector::IsNull(fstate->Cast<StreamingWindowState::ValueState>().vec)) {
 				//	Find the first non-NULL value
 				ExpressionExecutor executor(context.client);
 				executor.AddExpression(*wexpr.children[0]);
@@ -519,7 +527,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				UnifiedVectorFormat unified;
 				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
-				auto &prev = *state.const_vectors[expr_idx];
+				auto &prev = fstate->Cast<StreamingWindowState::ValueState>().vec;
 				if (validity.CannotHaveNull()) {
 					prev.Reference(arg.GetValue(0));
 					result.Reference(prev);
@@ -541,7 +549,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				}
 			} else {
 				// Reference constant vector
-				result.Reference(*state.const_vectors[expr_idx]);
+				result.Reference(fstate->Cast<StreamingWindowState::ValueState>().vec);
 			}
 			break;
 		case ExpressionType::WINDOW_LAST_VALUE: {
@@ -549,7 +557,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 			ExpressionExecutor executor(context.client);
 			executor.AddExpression(*wexpr.children[0]);
 			if (wexpr.ignore_nulls) {
-				auto &prev = *state.const_vectors[expr_idx];
+				auto &prev = fstate->Cast<StreamingWindowState::ValueState>().vec;
 				Vector arg(wexpr.children[0]->return_type);
 				executor.ExecuteExpression(output, arg);
 				UnifiedVectorFormat unified;
@@ -585,22 +593,22 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
-			int64_t start_row = gstate.row_number;
+			auto &row_number =
+			    *FlatVector::GetDataMutable<int64_t>(fstate->Cast<StreamingWindowState::ValueState>().vec);
 			auto rdata = FlatVector::GetDataMutable<int64_t>(output.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
-				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
+				rdata[i] = row_number++;
 			}
 			break;
 		}
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_LEAD:
-			state.lead_lag_states[expr_idx]->Execute(context, output, delayed, result);
+			fstate->Cast<StreamingWindowState::LeadLagState>().Execute(context, output, delayed, result);
 			break;
 		default:
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
 		}
 	}
-	gstate.row_number += NumericCast<int64_t>(count);
 }
 
 void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
