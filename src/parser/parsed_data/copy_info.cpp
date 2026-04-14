@@ -25,6 +25,7 @@ unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	if (select_statement) {
 		result->select_statement = select_statement->Copy();
 	}
+	result->where_clause = where_clause ? where_clause->Copy() : nullptr;
 	return result;
 }
 
@@ -117,6 +118,9 @@ string CopyInfo::ToString() const {
 		result += StringUtil::Format(" %s", SQLString(file_path));
 	}
 	result += CopyOptionsToString();
+	if (where_clause) {
+		result += " WHERE " + where_clause->ToString();
+	}
 	result += ";";
 	return result;
 }

@@ -19,6 +19,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
@@ -443,7 +445,22 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}
-	insert_statement.plan->children.push_back(std::move(get));
+	unique_ptr<LogicalOperator> source = std::move(get);
+
+	// COPY FROM ... WHERE: inject a filter between the file scan and insert.
+	if (stmt.info->where_clause) {
+		auto get_index = source->Cast<LogicalGet>().table_index;
+		bind_context.AddGenericBinding(get_index, table.name, expected_names,
+		                               bound_insert.expected_types);
+		WhereBinder where_binder(*this, context);
+		auto condition = where_binder.Bind(stmt.info->where_clause);
+		PlanSubqueries(condition, source);
+		auto filter = make_uniq<LogicalFilter>(std::move(condition));
+		filter->AddChild(std::move(source));
+		source = std::move(filter);
+	}
+
+	insert_statement.plan->children.push_back(std::move(source));
 	result.plan = std::move(insert_statement.plan);
 	return result;
 }
@@ -530,13 +547,71 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
 			}
 			info.format = StringUtil::Lower(inputs[0].ToString());
+			// PG compat: FORMAT TEXT = tab-delimited, no quoting.
+			if (info.format == "text") {
+				info.format = "csv";
+				info.options["delimiter"] = {Value("\t")};
+				info.options["quote"] = {Value("")};
+				info.options["escape"] = {Value("")};
+				info.options["null"] = {Value("\\N")};
+			} else if (info.format == "jsonl" || info.format == "ndjson" || info.format == "json") {
+				info.format = "csv";
+				info.options["delimiter"] = {Value(string("\0", 1))};
+				info.options["quote"] = {Value("")};
+				info.options["escape"] = {Value("")};
+				info.options["header"] = {Value::BOOLEAN(false)};
+				if (info.is_from) {
+					info.options["auto_detect"] = {Value::BOOLEAN(false)};
+				}
+			}
 			info.is_format_auto_detected = false;
+			continue;
+		}
+		// PG compat aliases: ON_ERROR 'ignore' -> ignore_errors true,
+		// REJECT_LIMIT N -> rejects_limit N.
+		if (StringUtil::CIEquals(entry.first, "on_error")) {
+			auto val = inputs.empty() ? "" : inputs[0].ToString();
+			if (StringUtil::CIEquals(val, "ignore")) {
+				info.options["ignore_errors"] = {Value::BOOLEAN(true)};
+			} else if (StringUtil::CIEquals(val, "stop")) {
+				// STOP is the default — do nothing.
+			} else {
+				throw ParserException("invalid value for parameter \"%s\": \"%s\"", entry.first, val);
+			}
+			continue;
+		}
+		if (StringUtil::CIEquals(entry.first, "reject_limit")) {
+			if (!inputs.empty()) {
+				auto limit = inputs[0].GetValue<int64_t>();
+				if (limit < 0) {
+					throw ParserException("REJECT_LIMIT (%lld) must be greater than zero", limit);
+				}
+			}
+			info.options["rejects_limit"] = std::move(inputs);
+			info.options["store_rejects"] = {Value::BOOLEAN(true)};
 			continue;
 		}
 		info.options[entry.first] = std::move(inputs);
 	}
 	if (info.is_format_auto_detected && info.format.empty()) {
 		info.format = ExtractFormat(info.file_path);
+	}
+	// Apply PG format translations for auto-detected formats too.
+	if (info.format == "text") {
+		info.format = "csv";
+		info.options.insert({"delimiter", {Value("\t")}});
+		info.options.insert({"quote", {Value("")}});
+		info.options.insert({"escape", {Value("")}});
+		info.options.insert({"null", {Value("\\N")}});
+	} else if (info.format == "jsonl" || info.format == "ndjson" || info.format == "json") {
+		info.format = "csv";
+		info.options.insert({"delimiter", {Value(string("\0", 1))}});
+		info.options.insert({"quote", {Value("")}});
+		info.options.insert({"escape", {Value("")}});
+		info.options.insert({"header", {Value::BOOLEAN(false)}});
+		if (info.is_from) {
+			info.options.insert({"auto_detect", {Value::BOOLEAN(false)}});
+		}
 	}
 	info.parsed_options.clear();
 }

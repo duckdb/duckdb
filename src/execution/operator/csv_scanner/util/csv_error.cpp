@@ -16,7 +16,8 @@ LinesPerBoundary::LinesPerBoundary(idx_t boundary_idx_p, idx_t lines_in_batch_p)
     : boundary_idx(boundary_idx_p), lines_in_batch(lines_in_batch_p) {
 }
 
-CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
+CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p, idx_t rejects_limit_p)
+    : ignore_errors(ignore_errors_p), rejects_limit(rejects_limit_p) {
 }
 
 void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
@@ -71,6 +72,12 @@ void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 
 void CSVErrorHandler::ErrorIfNeeded() {
 	lock_guard<mutex> parallel_lock(main_mutex);
+	// Enforce rejects_limit after the batch accumulates all its errors.
+	if (rejects_limit > 0 && errors.size() > rejects_limit) {
+		throw InvalidInputException(
+		    "skipped more than REJECT_LIMIT (%llu) rows due to data type incompatibility\n%s",
+		    rejects_limit, errors.back().error_message);
+	}
 	if (ignore_errors || errors.empty()) {
 		// Nothing to error
 		return;

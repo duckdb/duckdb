@@ -1538,6 +1538,7 @@ typedef struct PGCopyStmt {
 	bool is_program;      /* is 'filename' a program to popen? */
 	PGNode *filename;     /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
+	PGNode *whereClause;  /* WHERE condition (or NULL) */
 } PGCopyStmt;
 
 /* ----------------------
@@ -1771,6 +1772,7 @@ typedef struct PGFunctionDefinition {
 	PGList *returns_table_columns;   /* RETURNS TABLE(...) list of PGColumnDef */
 	PGNode *returns_type;            /* RETURNS typename */
 	bool has_language;               /* LANGUAGE SQL was specified (PG-style body) */
+	char *pg_body;                   /* PG-style function body string (AS $$...$$) */
 } PGFunctionDefinition;
 
 typedef struct PGCreateFunctionStmt {

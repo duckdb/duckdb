@@ -1,5 +1,5 @@
 CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
-			copy_from opt_program copy_file_name copy_delimiter opt_with copy_options
+			copy_from opt_program copy_file_name copy_delimiter opt_with copy_options where_clause
 				{
 					PGCopyStmt *n = makeNode(PGCopyStmt);
 					n->relation = $3;
@@ -15,6 +15,12 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 								 errmsg("STDIN/STDOUT not allowed with PROGRAM"),
 								 parser_errposition(@8)));
 
+					if ($12 && !n->is_from)
+						ereport(ERROR,
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
+								 errmsg("WHERE clause not allowed with COPY TO"),
+								 parser_errposition(@12)));
+
 					n->options = NIL;
 					/* Concatenate user-supplied flags */
 					if ($2)
@@ -25,6 +31,7 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 						n->options = lappend(n->options, $9);
 					if ($11)
 						n->options = list_concat(n->options, $11);
+					n->whereClause = $12;
 					$$ = (PGNode *)n;
 				}
 			| COPY '(' SelectStmt ')' TO opt_program copy_file_name opt_with copy_options

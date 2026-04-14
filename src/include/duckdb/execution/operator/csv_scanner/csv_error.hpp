@@ -118,7 +118,7 @@ public:
 
 class CSVErrorHandler {
 public:
-	explicit CSVErrorHandler(bool ignore_errors = false);
+	explicit CSVErrorHandler(bool ignore_errors = false, idx_t rejects_limit = 0);
 	//! Throws the error
 	void Error(const CSVError &csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
@@ -161,6 +161,7 @@ private:
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
+	idx_t rejects_limit = 0;
 	bool print_line = true;
 	//! Set of errors
 	vector<CSVError> errors;

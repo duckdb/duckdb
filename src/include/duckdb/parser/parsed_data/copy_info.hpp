@@ -50,6 +50,8 @@ public:
 	case_insensitive_map_t<vector<Value>> options;
 	//! The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
+	//! Optional WHERE clause for filtering rows during COPY FROM (PG 12+)
+	unique_ptr<ParsedExpression> where_clause;
 
 public:
 	string CopyOptionsToString() const;

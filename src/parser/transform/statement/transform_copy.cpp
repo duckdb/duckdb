@@ -71,6 +71,11 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 	// handle the different options of the COPY statement
 	TransformCopyOptions(info, stmt.options);
 
+	// PG 12+: COPY FROM ... WHERE condition
+	if (stmt.whereClause) {
+		info.where_clause = TransformExpression(*stmt.whereClause);
+	}
+
 	return result;
 }
 
