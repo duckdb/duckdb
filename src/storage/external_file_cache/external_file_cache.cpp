@@ -54,7 +54,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		// ouf ot range
 		return false;
 	}
-	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
+	return last_modified_time > LAST_MODIFIED_THRESHOLD;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
