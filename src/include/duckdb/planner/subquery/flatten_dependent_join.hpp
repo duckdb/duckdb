@@ -44,8 +44,8 @@ struct FlattenDependentJoins {
 
 	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<LogicalOperator> Decorrelate(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values = true,
-	                                        idx_t lateral_depth = 0);
+	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values = true,
+	                           idx_t lateral_depth = 0, PushDownState state = PushDownState());
 
 private:
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
@@ -57,14 +57,11 @@ private:
 	bool MarkSubtreeCorrelated(LogicalOperator &op, TableIndex cte_index);
 
 	//! Push the dependent join down a LogicalOperator
-	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
-	                                                  bool propagates_null_values = true, idx_t lateral_depth = 0);
+	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, bool propagates_null_values = true,
+	                                     idx_t lateral_depth = 0, PushDownState state = PushDownState());
 
 public:
 	Binder &binder;
-	ColumnBinding base_binding;
-	idx_t delim_offset;
-	idx_t data_offset;
 	reference_map_t<LogicalOperator, bool> has_correlated_expressions;
 	column_binding_map_t<idx_t> correlated_map;
 	column_binding_map_t<idx_t> replacement_map;
@@ -76,8 +73,8 @@ public:
 	optional_ptr<FlattenDependentJoins> parent;
 
 private:
-	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
-	                                                          bool &parent_propagate_null_values, idx_t lateral_depth);
+	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+	                                             idx_t lateral_depth, PushDownState state);
 };
 
 } // namespace duckdb
