@@ -136,9 +136,37 @@ void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr c
 }
 
 //===--------------------------------------------------------------------===//
+// WindowValueStreamingState
+//===--------------------------------------------------------------------===//
+class WindowValueStreamingState : public WindowExecutorStreamingState {
+public:
+	static Value GetFirstValue(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr) {
+		// Just execute the expression once
+		ExpressionExecutor executor(client);
+		executor.AddExpression(*wexpr.children[0]);
+		DataChunk result;
+		result.Initialize(client, {wexpr.children[0]->return_type});
+		executor.Execute(input, result);
+
+		return result.GetValue(0, 0);
+	}
+
+	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
+	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr)), sel(STANDARD_VECTOR_SIZE) {
+	}
+
+	const BoundWindowExpression &wexpr;
+	//! A constant vector holding the repeated value
+	Vector vec;
+	//! A reusable selection vector
+	SelectionVector sel;
+};
+
+//===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
 struct WindowValueExecutor {
+	//! Blocking APIs
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
@@ -147,6 +175,12 @@ struct WindowValueExecutor {
 	                                             const idx_t payload_count, const ValidityMask &partition_mask,
 	                                             const ValidityMask &order_mask);
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	//! Streaming APIs
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
+	}
 };
 
 unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &input) {
@@ -305,39 +339,9 @@ void WindowLeadLagLocalState::Finalizer(ExecutionContext &context, CollectionPtr
 }
 
 //===--------------------------------------------------------------------===//
-// WindowLeadLagExecutor
+// WindowLeadLagStreamingState
 //===--------------------------------------------------------------------===//
-struct WindowLeadLagExecutor : public WindowValueExecutor {
-public:
-	//! Blocking APIs
-	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
-
-	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
-	                                             const idx_t payload_count, const ValidityMask &partition_mask,
-	                                             const ValidityMask &order_mask);
-	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
-
-	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
-	                    idx_t row_idx, OperatorSinkInput &sink);
-
-	//! Streaming APIs
-	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
-};
-
-unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
-	WindowValueExecutor::Bind(input);
-
-	auto &function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-
-	if (arguments.size() > 2) {
-		function.arguments[2] = function.return_type;
-	}
-
-	return nullptr;
-}
-
-class LeadLagStreamingState : public LocalSourceState {
+class WindowLeadLagStreamingState : public WindowExecutorStreamingState {
 public:
 	static bool ComputeOffset(ClientContext &client, const BoundWindowExpression &wexpr, int64_t &offset) {
 		offset = 1;
@@ -378,23 +382,177 @@ public:
 		return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
 	}
 
+	static inline void Reset(DataChunk &chunk) {
+		//	Reset trashes the capacity...
+		const auto capacity = chunk.GetCapacity();
+		chunk.Reset();
+		chunk.SetCapacity(capacity);
+	}
+
+	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
+	    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.return_type), temp(wexpr.return_type),
+	      sel(STANDARD_VECTOR_SIZE) {
+		ComputeOffset(context, wexpr, offset);
+		ComputeDefault(context, wexpr, dflt);
+
+		buffered = idx_t(std::abs(offset));
+		prev.Reference(dflt);
+		prev.Flatten(buffered);
+		temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
+	}
+
+	void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+		if (!curr_chunk.ColumnCount()) {
+			curr_chunk.Initialize(context.client, {result.GetType()}, delayed.GetCapacity());
+		}
+
+		if (offset >= 0) {
+			ExecuteLag(context, input, result);
+		} else {
+			ExecuteLead(context, input, delayed, result);
+		}
+	}
+
+	void ExecuteLag(ExecutionContext &context, DataChunk &input, Vector &result) {
+		D_ASSERT(offset >= 0);
+		auto &curr = curr_chunk.data[0];
+		curr_chunk.Reset();
+		executor.Execute(input, curr_chunk);
+		const idx_t count = input.size();
+		//	Copy prev[0, buffered] => result[0, buffered]
+		idx_t source_count = MinValue<idx_t>(buffered, count);
+		VectorOperations::Copy(prev, result, source_count, 0, 0);
+		// Special case when we have buffered enough values for the output
+		if (count < buffered) {
+			//	Shift down incomplete buffers
+			//	Copy prev[count, buffered] => temp[0, buffered-count]
+			source_count = buffered - count;
+			FlatVector::Validity(temp).Reset();
+			VectorOperations::Copy(prev, temp, buffered, count, 0);
+
+			// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
+			FlatVector::Validity(prev).Reset();
+			VectorOperations::Copy(temp, prev, source_count, 0, 0);
+			// 	Copy curr[0, count] => prev[buffered-count, buffered]
+			VectorOperations::Copy(curr, prev, count, 0, source_count);
+		} else {
+			//	Copy input values beyond what we have buffered
+			source_count = count - buffered;
+			//	Copy curr[0, count-buffered] => result[buffered, count]
+			VectorOperations::Copy(curr, result, source_count, 0, buffered);
+			// 	Copy curr[count-buffered, count] => prev[0, buffered]
+			FlatVector::Validity(prev).Reset();
+			VectorOperations::Copy(curr, prev, count, source_count, 0);
+		}
+	}
+
+	void ExecuteLead(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+		//	We treat input || delayed as a logical unified buffer
+		D_ASSERT(offset < 0);
+		// Input has been set up with the number of rows we CAN produce.
+		const idx_t count = input.size();
+		auto &curr = curr_chunk.data[0];
+		// Copy unified[buffered:count] => result[pos:]
+		idx_t pos = 0;
+		idx_t unified_offset = buffered;
+		if (unified_offset < count) {
+			Reset(curr_chunk);
+			executor.Execute(input, curr_chunk);
+			VectorOperations::Copy(curr, result, count, unified_offset, pos);
+			pos += count - unified_offset;
+			unified_offset = count;
+		}
+		// Copy unified[unified_offset:] => result[pos:]
+		idx_t unified_count = count + delayed.size();
+		if (unified_offset < unified_count) {
+			Reset(curr_chunk);
+			executor.Execute(delayed, curr_chunk);
+			idx_t delayed_offset = unified_offset - count;
+			// Only copy as many values as we need
+			idx_t delayed_count = MinValue<idx_t>(delayed.size(), delayed_offset + (count - pos));
+			VectorOperations::Copy(curr, result, delayed_count, delayed_offset, pos);
+			pos += delayed_count - delayed_offset;
+		}
+		// Copy default[:count-pos] => result[pos:]
+		if (pos < count) {
+			const idx_t defaulted = count - pos;
+			VectorOperations::Copy(prev, result, defaulted, 0, pos);
+		}
+	}
+
+	//! The aggregate expression
+	const BoundWindowExpression &wexpr;
+	//! Cache the executor to cut down on memory allocation
+	ExpressionExecutor executor;
+	//! The number of rows we have buffered
+	idx_t buffered;
+	//! The constant default value
+	Value dflt;
+	//! The current set of values
+	DataChunk curr_chunk;
+	//! The previous set of values
+	Vector prev;
+	//! The copy buffer
+	Vector temp;
+	//! A temporary selection vector
+	SelectionVector sel;
+};
+
+//===--------------------------------------------------------------------===//
+// WindowLeadLagExecutor
+//===--------------------------------------------------------------------===//
+struct WindowLeadLagExecutor : public WindowValueExecutor {
+public:
+	//! Blocking APIs
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
 		// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
 		if (!wexpr.ignore_nulls) {
 			Value dflt;
-			if (!LeadLagStreamingState::ComputeDefault(client, wexpr, dflt)) {
+			if (!WindowLeadLagStreamingState::ComputeDefault(client, wexpr, dflt)) {
 				return false;
 			}
 			int64_t offset;
-			if (!LeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
+			if (!WindowLeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
 				return false;
 			}
 
-			return std::abs(offset) < max_delta;
+			return UnsafeNumericCast<idx_t>(std::abs(offset)) < max_delta;
 		}
 		return false;
 	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowLeadLagStreamingState>(client, wexpr);
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
+	                       LocalSourceState &state) {
+		state.Cast<WindowLeadLagStreamingState>().Execute(context, input, delayed, result);
+	}
 };
+
+unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	if (arguments.size() > 2) {
+		function.arguments[2] = function.return_type;
+	}
+
+	return nullptr;
+}
 
 static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const ExpressionType &type) {
 	WindowFunctionSet funcs(name);
@@ -416,7 +574,9 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	                                 sink, finalize, evaluate));
 
 	for (auto &f : funcs.functions) {
-		f.SetCanStreamCallback(LeadLagStreamingState::CanStream);
+		f.SetCanStreamCallback(WindowLeadLagExecutor::CanStream);
+		f.SetStreamingStateCallback(WindowLeadLagExecutor::GetStreamingState);
+		f.SetStreamingDataCallback(WindowLeadLagExecutor::StreamData);
 	}
 
 	return funcs;
@@ -637,7 +797,52 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 		}
 		return true;
 	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
+	                       LocalSourceState &state);
 };
+
+void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
+                                          Vector &result, LocalSourceState &state) {
+	auto &sstate = state.Cast<WindowValueStreamingState>();
+	auto &wexpr = sstate.wexpr;
+	const auto count = input.size();
+
+	// If we are ignoring NULLs and we started with a NULL,
+	// then look for a non-NULL value and update it
+	if (wexpr.ignore_nulls && ConstantVector::IsNull(sstate.vec)) {
+		//	Find the first non-NULL value
+		ExpressionExecutor executor(context.client);
+		executor.AddExpression(*wexpr.children[0]);
+		Vector arg(wexpr.children[0]->return_type);
+		executor.ExecuteExpression(input, arg);
+		UnifiedVectorFormat unified;
+		arg.ToUnifiedFormat(count, unified);
+		const auto &validity = unified.validity;
+		auto &prev = sstate.vec;
+		if (validity.CannotHaveNull()) {
+			prev.Reference(arg.GetValue(0));
+			result.Reference(prev);
+		} else {
+			auto &sel = sstate.sel;
+			Vector split(wexpr.children[0]->return_type);
+			split.SetValue(0, prev.GetValue(0));
+			sel_t s = 0;
+			for (sel_t i = 0; i < count; ++i) {
+				if (!s && validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
+					auto v = arg.GetValue(i);
+					prev.Reference(v);
+					s = 1;
+					split.SetValue(s, v);
+				}
+				sel.set_index(i, s);
+			}
+			result.Slice(split, sel, count);
+		}
+	} else {
+		// Reference constant vector
+		result.Reference(sstate.vec);
+	}
+}
 
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
@@ -646,6 +851,8 @@ WindowFunction FirstValueFun::GetFunction() {
 	                   WindowFirstValueExecutor::GetLocal, WindowValueLocalState::Sinker,
 	                   WindowValueLocalState::Finalizer, WindowFirstValueExecutor::GetData);
 	fun.SetCanStreamCallback(WindowFirstValueExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowFirstValueExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowFirstValueExecutor::StreamData);
 	return fun;
 }
 
@@ -711,7 +918,52 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 		// We can stream last values if they are "running totals"
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
 	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
+	                       LocalSourceState &state);
 };
+
+void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
+                                         Vector &result, LocalSourceState &state) {
+	//	Evaluate the argument and copy the values
+	auto &sstate = state.Cast<WindowValueStreamingState>();
+	auto &wexpr = sstate.wexpr;
+	const auto count = input.size();
+	ExpressionExecutor executor(context.client);
+	executor.AddExpression(*wexpr.children[0]);
+	if (wexpr.ignore_nulls) {
+		auto &prev = sstate.vec;
+		Vector arg(wexpr.children[0]->return_type);
+		executor.ExecuteExpression(input, arg);
+		UnifiedVectorFormat unified;
+		arg.ToUnifiedFormat(count, unified);
+		const auto &validity = unified.validity;
+		if (validity.CannotHaveNull()) {
+			VectorOperations::Copy(arg, result, count, 0, 0);
+		} else {
+			//	Copy the data as it may be a reference to the argument
+			Vector copy(wexpr.children[0]->return_type);
+			VectorOperations::Copy(arg, copy, count, 0, 0);
+			//	Overwrite the previous non-NULL value if the first one is NULL
+			if (!validity.RowIsValidUnsafe(0)) {
+				VectorOperations::Copy(prev, copy, 1, 0, 0);
+			}
+			//	Select appropriate the non-NULL values to copy over
+			auto &sel = sstate.sel;
+			sel_t non_null = 0;
+			for (sel_t i = 0; i < count; ++i) {
+				if (validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
+					non_null = i;
+				}
+				sel.set_index(i, non_null);
+			}
+			result.Slice(copy, sel, count);
+		}
+		//	Remember the last non-NULL value for the next iteration
+		prev.Reference(result.GetValue(count - 1));
+	} else {
+		executor.ExecuteExpression(input, result);
+	}
+}
 
 WindowFunction LastValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
@@ -720,6 +972,8 @@ WindowFunction LastValueFun::GetFunction() {
 	                   WindowLastValueExecutor::GetLocal, WindowValueLocalState::Sinker,
 	                   WindowValueLocalState::Finalizer, WindowLastValueExecutor::GetData);
 	fun.SetCanStreamCallback(WindowLastValueExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowLastValueExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowLastValueExecutor::StreamData);
 	return fun;
 }
 
