@@ -1,0 +1,22 @@
+# name: test/sql/types/bignum/test_bignum_literal_precision.test
+# description: Test that large numeric literals maintain precision when inserted into BIGNUM columns (issue #22027)
+# group: [bignum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (val bignum);
+
+statement ok
+insert into t values 
+    (123456789101112131415161718192021222324252627282930),
+    (987654321098765432109876543210987654321098765432109876543210),
+    (-123456789101112131415161718192021222324252627282930);
+
+query I
+select * from t order by val;
+----
+-123456789101112131415161718192021222324252627282930
+123456789101112131415161718192021222324252627282930
+987654321098765432109876543210987654321098765432109876543210
