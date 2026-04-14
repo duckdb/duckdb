@@ -1,31 +1,3 @@
-From d902db238d2bca76a919f4e12306da6e3771b0ec Mon Sep 17 00:00:00 2001
-From: Max Gabrielsson <max@gabrielsson.com>
-Date: Mon, 13 Apr 2026 12:54:05 +0200
-Subject: [PATCH] applied patch: fix.patch
-
----
- src/spatial/index/rtree/rtree_index.cpp       |  16 +-
- .../rtree/rtree_index_create_logical.cpp      |   2 +-
- .../rtree/rtree_index_create_physical.cpp     |  14 +-
- .../index/rtree/rtree_index_plan_scan.cpp     |  50 ++-
- .../index/rtree/rtree_index_pragmas.cpp       |  16 +-
- src/spatial/modules/geos/geos_module.cpp      |  41 +-
- .../modules/main/spatial_functions_cast.cpp   |  78 ++--
- .../modules/main/spatial_functions_scalar.cpp | 360 +++++++++---------
- .../modules/main/spatial_functions_table.cpp  |   9 +-
- src/spatial/modules/mvt/mvt_module.cpp        |  17 +-
- src/spatial/modules/osm/osm_module.cpp        |  54 +--
- src/spatial/modules/proj/proj_module.cpp      |  12 +-
- .../modules/shapefile/shapefile_module.cpp    |  26 +-
- .../operators/spatial_join_logical.cpp        |  14 +-
- .../operators/spatial_join_logical.hpp        |   6 +-
- .../operators/spatial_join_optimizer.cpp      |  14 +-
- .../operators/spatial_join_physical.cpp       |  46 +--
- src/spatial/spatial_settings.cpp              |   1 +
- src/spatial/spatial_types.cpp                 |   2 +-
- src/spatial/util/function_builder.cpp         |  40 +-
- 20 files changed, 411 insertions(+), 407 deletions(-)
-
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
 index 239d546..9de9355 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
@@ -2181,6 +2153,3 @@ index 5bd4f95..d4c6e43 100644
  }
  
  void FunctionBuilder::AddTableFunctionDocs(ExtensionLoader &loader, const char *name, const char *desc,
--- 
-2.39.5 (Apple Git-154)
-

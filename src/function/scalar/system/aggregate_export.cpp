@@ -160,7 +160,8 @@ struct LoadFieldOp {
 
 struct StoreFieldOp {
 	template <class T>
-	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources, idx_t field_offset) {
+	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, const data_ptr_t *sources,
+	                      idx_t field_offset) {
 		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::Writer<T>(child, count);
 
@@ -263,7 +264,7 @@ void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stri
 // Serialize packed binary states into a struct result vector.
 // Uses StoreFieldOp for tight SIMD-friendly loops
 void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, idx_t count,
-                           data_ptr_t *addresses_ptrs) {
+                           const data_ptr_t *addresses_ptrs) {
 	idx_t offset_in_state = 0;
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
 		auto &field_type = layout.child_types->at(field_idx).second;
@@ -717,7 +718,15 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto addresses_ptrs = FlatVector::GetDataMutable<data_ptr_t>(state);
+	const data_ptr_t *addresses_ptrs;
+	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (count != 1) {
+			throw InternalException("Finalize with a constant vector only supported with count of 1");
+		}
+		addresses_ptrs = ConstantVector::GetData<data_ptr_t>(state);
+	} else {
+		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	}
 
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 
@@ -824,7 +833,15 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 	auto state_size = bind_data.state_size;
-	auto addresses_ptrs = FlatVector::GetDataMutable<data_ptr_t>(state);
+	const data_ptr_t *addresses_ptrs;
+	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (count != 1) {
+			throw InternalException("Finalize with a constant vector only supported with count of 1");
+		}
+		addresses_ptrs = ConstantVector::GetData<data_ptr_t>(state);
+	} else {
+		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	}
 
 	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
 

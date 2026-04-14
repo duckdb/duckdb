@@ -531,7 +531,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, i
 // Find the index of the first run-end that is strictly greater than the offset.
 // count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
-static idx_t FindRunIndex(const VectorValueIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
+static idx_t FindRunIndex(const VectorIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
 	// Binary-search within the [0, count) range. For example:
 	// [0, 0, 0, 1, 1, 2] encoded as
 	// run_ends: [3, 5, 6]:
@@ -580,7 +580,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			auto run_end_entry = run_ends_data[run];
 			auto value_entry = values_data[run];
 			auto &value = value_entry.GetValue();
-			auto run_end = static_cast<idx_t>(run_end_entry.GetValue());
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValueUnsafe());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
@@ -603,7 +603,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 		for (; run < compressed_size; ++run) {
 			auto run_end_entry = run_ends_data[run];
 			auto value_entry = values_data[run];
-			auto run_end = static_cast<idx_t>(run_end_entry.GetValue());
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValueUnsafe());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);

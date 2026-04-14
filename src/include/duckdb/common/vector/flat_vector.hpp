@@ -68,35 +68,62 @@ struct FlatVector {
 		}
 #endif
 	}
-
+	static void VerifyFlatOrConst(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR &&
+		    vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException(
+			    "Operation requires a flat or constant vector but a non-flat/non-constant vector was encountered");
+		}
+#endif
+	}
 	static inline const_data_ptr_t GetData(Vector &vector) {
-		return ConstantVector::GetData(vector);
+		VerifyFlatOrConst(vector);
+		return GetDataUnsafe(vector);
 	}
 	static inline const_data_ptr_t GetData(const Vector &vector) {
-		return ConstantVector::GetData(vector);
+		VerifyFlatOrConst(vector);
+		return GetDataUnsafe(vector);
 	}
 	static inline data_ptr_t GetDataMutable(Vector &vector) {
-		return ConstantVector::GetData(vector);
+		VerifyFlatOrConst(vector);
+		return GetDataMutableUnsafe(vector);
+	}
+	static inline const_data_ptr_t GetDataUnsafe(const Vector &vector) {
+		return vector.buffer ? vector.buffer->GetData() : nullptr;
+	}
+	static inline data_ptr_t GetDataMutableUnsafe(Vector &vector) {
+		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
-		return ConstantVector::GetData<T>(vector);
+		ConstantVector::VerifyVectorType<T>(vector);
+		return GetDataUnsafe<T>(vector);
 	}
 	template <class T>
 	static inline const T *GetData(Vector &vector) {
-		return ConstantVector::GetData<T>(vector);
+		ConstantVector::VerifyVectorType<T>(vector);
+		return GetDataUnsafe<T>(vector);
 	}
 	template <class T>
 	static inline T *GetDataMutable(Vector &vector) {
-		return ConstantVector::GetData<T>(vector);
+		ConstantVector::VerifyVectorType<T>(vector);
+		return GetDataMutableUnsafe<T>(vector);
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
-		return ConstantVector::GetDataUnsafe<T>(vector);
+		return reinterpret_cast<const T *>(GetData(vector));
 	}
 	template <class T>
-	static inline T *GetDataUnsafe(Vector &vector) {
-		return ConstantVector::GetDataUnsafe<T>(vector);
+	static inline const T *GetDataUnsafe(Vector &vector) {
+		return reinterpret_cast<const T *>(GetDataUnsafe(vector));
+	}
+	template <class T>
+	static inline T *GetDataMutableUnsafe(Vector &vector) {
+		return reinterpret_cast<T *>(GetDataMutableUnsafe(vector));
 	}
 	static void SetData(Vector &vector, data_ptr_t data);
 	template <class T>
