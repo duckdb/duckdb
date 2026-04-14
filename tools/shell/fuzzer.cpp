@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
+#include <unistd.h>
+#endif
 
 #include "shell_fuzzer.hpp"
 #include "shell_state.hpp"
