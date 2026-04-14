@@ -119,10 +119,6 @@ public:
 	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
 	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 
-	//! Accumulates the ART's on-disk blocks for deferred marking (applied post-FlushCommit). The in-memory state is not
-	//! destroyed.
-	void CommitDrop(IndexLock &index_lock, class CommitDropAccumulator &acc) override;
-
 	//! Reset all ART storage.
 	void ResetStorage(IndexLock &index_lock) override;
 

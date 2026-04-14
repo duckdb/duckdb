@@ -113,9 +113,6 @@ public:
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
 	void Reset();
-	//! Accumulates on-disk buffer blocks for deferred marking-as-modified (applied post-FlushCommit). In-memory data is
-	//! not destroyed.
-	void CommitDrop(class CommitDropAccumulator &acc);
 
 	//! Returns the in-memory size in bytes
 	idx_t GetInMemorySize() const;

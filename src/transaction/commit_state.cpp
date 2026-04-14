@@ -9,6 +9,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
@@ -22,6 +23,16 @@
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// CommitDropAccumulator
+//===--------------------------------------------------------------------===//
+void CommitDropAccumulator::Apply() {
+	for (auto &m : block_marks) {
+		m.block_manager.get().MarkBlockAsModified(m.id);
+	}
+	Clear();
+}
 
 //===--------------------------------------------------------------------===//
 // IndexDataRemover

@@ -20,6 +20,7 @@ class StorageCommitState;
 class WriteAheadLog;
 struct UndoBufferPointer;
 struct CommitInfo;
+struct CommitDropAccumulator;
 
 struct UndoBufferProperties {
 	idx_t estimated_size = 0;
@@ -56,10 +57,7 @@ public:
 	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state);
-	//! Commit the changes made in the UndoBuffer: should be called on commit. Accumulates deferred block marks into the
-	//! provided accumulator; the caller applies them post-FlushCommit.
-	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info,
-	            class CommitDropAccumulator &drop_accumulator);
+	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info, CommitDropAccumulator &drop_accumulator);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on

@@ -24,7 +24,7 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
@@ -615,12 +615,6 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 //===--------------------------------------------------------------------===//
 // Drop and Delete
 //===--------------------------------------------------------------------===//
-
-void ART::CommitDrop(IndexLock &index_lock, CommitDropAccumulator &acc) {
-	for (auto &allocator : *allocators) {
-		allocator->CommitDrop(acc);
-	}
-}
 
 void ART::ResetStorage(IndexLock &index_lock) {
 	for (auto &allocator : *allocators) {

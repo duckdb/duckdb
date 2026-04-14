@@ -19,6 +19,7 @@ namespace duckdb {
 
 class AttachedDatabase;
 class TableIOManager;
+struct CommitDropAccumulator;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -83,8 +84,7 @@ public:
 		return column_id_set;
 	}
 
-	// All indexes can be dropped, even if they are unbound
-	virtual void CommitDrop(class CommitDropAccumulator &acc) = 0;
+	virtual void CommitDrop(CommitDropAccumulator &acc) = 0;
 
 public:
 	template <class TARGET>

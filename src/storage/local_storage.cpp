@@ -1,5 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"

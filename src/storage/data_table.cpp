@@ -1,6 +1,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -1721,13 +1721,9 @@ idx_t DataTable::GetTotalRows() const {
 }
 
 void DataTable::CommitDropTable(CommitDropAccumulator &acc) {
-	// commit a drop of this table: mark all blocks as modified, so they can be reclaimed later on
 	row_groups->CommitDropTable(acc);
-
-	// propagate dropping this table to its indexes: frees all index memory
 	for (auto &index : info->indexes.Indexes()) {
-		D_ASSERT(index.IsBound());
-		index.Cast<BoundIndex>().CommitDrop(acc);
+		index.CommitDrop(acc);
 	}
 }
 

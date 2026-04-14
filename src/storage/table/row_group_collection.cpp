@@ -1,5 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"

@@ -1,5 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"

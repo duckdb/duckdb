@@ -9,12 +9,14 @@
 #pragma once
 
 #include "duckdb/transaction/undo_buffer.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/block.hpp"
 
 namespace duckdb {
+class BlockManager;
 class CatalogEntry;
 class DataChunk;
 class DuckTransaction;
@@ -27,6 +29,26 @@ struct DeleteInfo;
 struct UpdateInfo;
 
 enum class CommitMode { COMMIT, REVERT_COMMIT };
+
+struct CommitDropAccumulator {
+	struct BlockMark {
+		reference<BlockManager> block_manager;
+		block_id_t id;
+	};
+
+	vector<BlockMark> block_marks;
+
+	void AddBlock(BlockManager &bm, block_id_t id) {
+		block_marks.push_back(BlockMark {bm, id});
+	}
+	void Apply();
+	void Clear() {
+		block_marks.clear();
+	}
+	bool Empty() const {
+		return block_marks.empty();
+	}
+};
 
 struct IndexDataRemover {
 public:

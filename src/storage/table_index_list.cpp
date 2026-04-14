@@ -1,5 +1,5 @@
 #include "duckdb/storage/table/table_index_list.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"

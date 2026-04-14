@@ -5,7 +5,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/transaction/commit_drop_accumulator.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {
 

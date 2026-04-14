@@ -17,6 +17,7 @@ namespace duckdb {
 
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
+struct CommitDropAccumulator;
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
@@ -46,8 +47,8 @@ public:
 
 	void SetAsRoot() override;
 
-	void CommitAlter(string &column_name, class CommitDropAccumulator &acc);
-	void CommitDrop(class CommitDropAccumulator &acc);
+	void CommitAlter(string &column_name, CommitDropAccumulator &acc);
+	void CommitDrop(CommitDropAccumulator &acc);
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 

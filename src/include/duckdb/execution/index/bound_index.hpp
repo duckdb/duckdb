@@ -121,12 +121,8 @@ public:
 	//! Verifies the constraint for a chunk of data.
 	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
-	//! Marks the index's on-disk blocks as reclaimable via the accumulator (applied post-FlushCommit). The in-memory
-	//! state is not destroyed; it is freed later when the deleted catalog entry is GC'd. The lock obtained from
-	//! InitializeLock must be held.
-	virtual void CommitDrop(IndexLock &index_lock, class CommitDropAccumulator &acc) = 0;
-	//! Marks the index's on-disk blocks as reclaimable via the accumulator. The in-memory state is not destroyed.
-	void CommitDrop(class CommitDropAccumulator &acc) override;
+	void CommitDrop(CommitDropAccumulator &acc) override {
+	}
 	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
 	virtual void ResetStorage(IndexLock &index_lock) = 0;
 	//! Resets all index storage, clearing the index entirely
