@@ -531,7 +531,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, i
 // Find the index of the first run-end that is strictly greater than the offset.
 // count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
-static idx_t FindRunIndex(const VectorValueIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
+static idx_t FindRunIndex(const VectorIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
 	// Binary-search within the [0, count) range. For example:
 	// [0, 0, 0, 1, 1, 2] encoded as
 	// run_ends: [3, 5, 6]:
