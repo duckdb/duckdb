@@ -140,11 +140,11 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 		}
 
 		auto tag_entry = tag_data[mapped_idx];
-		if (!tag_entry.is_valid) {
+		if (!tag_entry.IsValid()) {
 			// we can't have NULL tags!
 			return UnionInvalidReason::NULL_TAG;
 		}
-		auto tag = tag_entry.value;
+		auto tag = tag_entry.GetValue();
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}

@@ -655,15 +655,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
-	} else if (bound_function.HasBindExtendedCallback()) {
-		if (!binder) {
-			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
-			                        "a reference to a Binder",
-			                        bound_function.name);
-		}
-		ScalarFunctionBindInput bind_input(*binder);
-		bind_info = bound_function.GetBindExtendedCallback()(bind_input, bound_function, children);
+		bind_info = bound_function.Bind(context, children, binder);
 	}
 
 	// After the "bind" callback, we verify that all template types are bound to concrete types.
@@ -703,7 +695,7 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
+		bind_info = bound_function.Bind(context, children);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
@@ -726,7 +718,7 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunct
 
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
+		bind_info = bound_function.Bind(context, children);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}

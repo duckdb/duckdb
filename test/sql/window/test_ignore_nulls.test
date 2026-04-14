@@ -351,4 +351,11 @@ FROM range(10) tbl(x)
 ----
 Binder Error: RESPECT/IGNORE NULLS is not supported for windowed aggregates
 
+# Windowed fill
+statement error
+SELECT FILL(x {modifier} NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
+FROM range(10) tbl(x)
+----
+Binder Error: RESPECT/IGNORE NULLS is not supported for the window function "fill"
+
 endloop

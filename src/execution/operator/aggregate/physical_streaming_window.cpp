@@ -160,7 +160,7 @@ public:
 			buffered = idx_t(std::abs(offset));
 			prev.Reference(dflt);
 			prev.Flatten(buffered);
-			temp.Initialize(false, buffered);
+			temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 		}
 
 		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {

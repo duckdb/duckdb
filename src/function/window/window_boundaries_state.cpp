@@ -2,6 +2,8 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_boundaries_state.hpp"
+#include "duckdb/function/window/window_executor.hpp"
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -412,17 +414,44 @@ void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const Boun
 	}
 }
 
-WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
-    : type(wexpr.GetExpressionType()), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
-      partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
-      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
-      has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)) {
+WindowBoundariesState::WindowBoundariesState(ExecutionContext &context, const WindowExecutorGlobalState &gstate)
+    : partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
+      type(gstate.executor.wexpr.GetExpressionType()), input_size(gstate.payload_count),
+      start_boundary(gstate.executor.wexpr.start), end_boundary(gstate.executor.wexpr.end),
+      boundary_start_idx(gstate.executor.boundary_start_idx), boundary_end_idx(gstate.executor.boundary_end_idx),
+      partition_count(gstate.executor.wexpr.partitions.size()), order_count(gstate.executor.wexpr.orders.size()),
+      range_sense(gstate.executor.wexpr.orders.empty() ? OrderType::INVALID : gstate.executor.wexpr.orders[0].type),
+      has_preceding_range(HasPrecedingRange(gstate.executor.wexpr)),
+      has_following_range(HasFollowingRange(gstate.executor.wexpr)), range_idx(gstate.executor.range_idx) {
+	if (gstate.executor.wexpr.window) {
+		const auto &wfunc = *gstate.executor.wexpr.window;
+		if (wfunc.HasBoundsCallback()) {
+			wfunc.GetBoundsCallback()(required, gstate.executor.wexpr);
+			AddImpliedBounds(required, gstate.executor.wexpr);
+		}
+	} else {
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+		AddImpliedBounds(required, gstate.executor.wexpr);
+	}
+
+	vector<LogicalType> bounds_types(8, LogicalType(LogicalTypeId::UBIGINT));
+	bounds.Initialize(Allocator::Get(context.client), bounds_types);
 }
 
-void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_ptr<WindowCursor> range,
-                                   const idx_t count, WindowInputExpression &boundary_start,
-                                   WindowInputExpression &boundary_end, const ValidityMask &partition_mask,
-                                   const ValidityMask &order_mask) {
+void WindowBoundariesState::Finalize(CollectionPtr collection) {
+	if (range_idx != DConstants::INVALID_INDEX) {
+		range = make_uniq<WindowCursor>(*collection, range_idx);
+	}
+}
+
+void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk) {
+	// Evaluate the row-level arguments
+	WindowInputExpression boundary_start(eval_chunk, boundary_start_idx);
+	WindowInputExpression boundary_end(eval_chunk, boundary_end_idx);
+
+	const auto count = eval_chunk.size();
+
 	bounds.Reset();
 	D_ASSERT(bounds.ColumnCount() == 8);
 
@@ -433,36 +462,35 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_pt
 	}
 
 	if (required.count(PARTITION_BEGIN)) {
-		PartitionBegin(bounds, row_idx, count, is_jump, partition_mask);
+		PartitionBegin(row_idx, count, is_jump);
 	}
 	if (required.count(PARTITION_END)) {
-		PartitionEnd(bounds, row_idx, count, is_jump, partition_mask);
+		PartitionEnd(row_idx, count, is_jump);
 	}
 	if (required.count(PEER_BEGIN)) {
-		PeerBegin(bounds, row_idx, count, is_jump, partition_mask, order_mask);
+		PeerBegin(row_idx, count, is_jump);
 	}
 	if (required.count(PEER_END)) {
-		PeerEnd(bounds, row_idx, count, partition_mask, order_mask);
+		PeerEnd(row_idx, count);
 	}
 	if (required.count(VALID_BEGIN)) {
-		ValidBegin(bounds, row_idx, count, is_jump, partition_mask, order_mask, range);
+		ValidBegin(row_idx, count, is_jump);
 	}
 	if (required.count(VALID_END)) {
-		ValidEnd(bounds, row_idx, count, is_jump, partition_mask, order_mask, range);
+		ValidEnd(row_idx, count, is_jump);
 	}
 	if (required.count(FRAME_BEGIN)) {
-		FrameBegin(bounds, row_idx, count, boundary_start, order_mask, range);
+		FrameBegin(row_idx, count, boundary_start);
 	}
 	if (required.count(FRAME_END)) {
-		FrameEnd(bounds, row_idx, count, boundary_end, order_mask, range);
+		FrameEnd(row_idx, count, boundary_end);
 	}
 	next_pos += count;
 
 	bounds.SetCardinality(count);
 }
 
-void WindowBoundariesState::PartitionBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-                                           const ValidityMask &partition_mask) {
+void WindowBoundariesState::PartitionBegin(idx_t row_idx, const idx_t count, bool is_jump) {
 	auto partition_begin_data = FlatVector::Writer<idx_t>(bounds.data[PARTITION_BEGIN]);
 
 	//	OVER()
@@ -492,8 +520,7 @@ void WindowBoundariesState::PartitionBegin(DataChunk &bounds, idx_t row_idx, con
 	}
 }
 
-void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-                                         const ValidityMask &partition_mask) {
+void WindowBoundariesState::PartitionEnd(idx_t row_idx, const idx_t count, bool is_jump) {
 	auto partition_end_data = FlatVector::Writer<idx_t>(bounds.data[PARTITION_END]);
 
 	//	OVER()
@@ -525,8 +552,7 @@ void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const
 	}
 }
 
-void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-                                      const ValidityMask &partition_mask, const ValidityMask &order_mask) {
+void WindowBoundariesState::PeerBegin(idx_t row_idx, const idx_t count, bool is_jump) {
 	auto peer_begin_data = FlatVector::Writer<idx_t>(bounds.data[PEER_BEGIN]);
 
 	//	OVER()
@@ -560,8 +586,7 @@ void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const id
 	}
 }
 
-void WindowBoundariesState::PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
-                                    const ValidityMask &partition_mask, const ValidityMask &order_mask) {
+void WindowBoundariesState::PeerEnd(idx_t row_idx, const idx_t count) {
 	//	OVER()
 	if (!order_count) {
 		bounds.data[PEER_END].Reference(bounds.data[PARTITION_END]);
@@ -583,9 +608,7 @@ void WindowBoundariesState::PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_
 	}
 }
 
-void WindowBoundariesState::ValidBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-                                       const ValidityMask &partition_mask, const ValidityMask &order_mask,
-                                       optional_ptr<WindowCursor> range) {
+void WindowBoundariesState::ValidBegin(idx_t row_idx, const idx_t count, bool is_jump) {
 	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto valid_begin_data = FlatVector::Writer<idx_t>(bounds.data[VALID_BEGIN]);
@@ -616,9 +639,7 @@ void WindowBoundariesState::ValidBegin(DataChunk &bounds, idx_t row_idx, const i
 	}
 }
 
-void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
-                                     const ValidityMask &partition_mask, const ValidityMask &order_mask,
-                                     optional_ptr<WindowCursor> range) {
+void WindowBoundariesState::ValidEnd(idx_t row_idx, const idx_t count, bool is_jump) {
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto valid_begin_data = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end_data = FlatVector::Writer<idx_t>(bounds.data[VALID_END]);
@@ -649,9 +670,7 @@ void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx
 	}
 }
 
-void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count,
-                                       WindowInputExpression &boundary_begin, const ValidityMask &order_mask,
-                                       optional_ptr<WindowCursor> range) {
+void WindowBoundariesState::FrameBegin(idx_t row_idx, const idx_t count, WindowInputExpression &boundary_begin) {
 	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_begin_data = FlatVector::GetDataMutable<idx_t>(bounds.data[PEER_BEGIN]);
@@ -805,9 +824,7 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 	ClampFrame(count, frame_begin_data, partition_begin_data, partition_end_data);
 }
 
-void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
-                                     WindowInputExpression &boundary_end, const ValidityMask &order_mask,
-                                     optional_ptr<WindowCursor> range) {
+void WindowBoundariesState::FrameEnd(idx_t row_idx, const idx_t count, WindowInputExpression &boundary_end) {
 	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
 	auto peer_end_data = FlatVector::GetDataMutable<idx_t>(bounds.data[PEER_END]);

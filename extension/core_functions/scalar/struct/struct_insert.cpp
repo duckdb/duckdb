@@ -30,8 +30,9 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw InvalidInputException("Missing required arguments for struct_insert function.");
 	}
@@ -89,7 +90,7 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 }
 
 ScalarFunction StructInsertFun::GetFunction() {
-	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr, StructInsertStats);
+	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.varargs = LogicalType::ANY;
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);

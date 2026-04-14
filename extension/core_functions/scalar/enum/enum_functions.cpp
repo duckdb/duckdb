@@ -71,8 +71,8 @@ static void CheckEnumParameter(const Expression &expr) {
 	}
 }
 
-static unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumFunction(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
@@ -80,8 +80,9 @@ static unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarF
 	return nullptr;
 }
 
-static unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumCodeFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
@@ -108,8 +109,8 @@ static unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, Sca
 	return nullptr;
 }
 
-static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	CheckEnumParameter(*arguments[1]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {

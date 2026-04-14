@@ -21,10 +21,10 @@ public:
 		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
 		decompress_buffer.resize(string_block_limit + 1);
 	}
-	void *GetDecoder() {
+	void *GetDecoder() const {
 		return duckdb_fsst_decoder.get();
 	}
-	vector<unsigned char> &GetDecompressBuffer() {
+	vector<unsigned char> &GetDecompressBuffer() const {
 		return decompress_buffer;
 	}
 	void SetCount(idx_t count) {
@@ -33,11 +33,17 @@ public:
 	idx_t GetCount() const {
 		return total_string_count;
 	}
+	void SetVectorType(VectorType vector_type) override;
+
+public:
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
-	vector<unsigned char> decompress_buffer;
+	mutable vector<unsigned char> decompress_buffer;
 };
 
 struct FSSTVector {
@@ -62,9 +68,6 @@ struct FSSTVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
 		return reinterpret_cast<string_t *>(vector.buffer->GetData());
 	}
-	//! Decompresses an FSST_VECTOR into a FLAT_VECTOR. Note: validity is not copied.
-	static void DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,
-	                             const SelectionVector *sel);
 
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, string_t data);
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, const char *data, idx_t len);

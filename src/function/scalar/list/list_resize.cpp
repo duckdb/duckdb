@@ -118,8 +118,10 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	}
 }
 
-static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListResizeBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
 	bound_function.arguments[1] = LogicalType::UBIGINT;
 

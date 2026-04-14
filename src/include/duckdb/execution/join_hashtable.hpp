@@ -130,6 +130,8 @@ public:
 		void NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		void NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		void NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		//! Next operator for left join when RHS keys are unique (single-pass, no state machine)
+		void NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false
 		//! for every tuple

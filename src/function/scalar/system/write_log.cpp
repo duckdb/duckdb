@@ -51,8 +51,11 @@ void ThrowIfNotConstant(const Expression &arg) {
 	}
 }
 
-unique_ptr<FunctionData> WriteLogBind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	if (arguments.empty()) {
 		throw BinderException("write_log takes at least one argument");
 	}
@@ -160,7 +163,7 @@ ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunctionSet set("write_log");
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr,
-	                               nullptr, nullptr, LogicalType::ANY, FunctionStability::VOLATILE));
+	                               nullptr, LogicalType::ANY, FunctionStability::VOLATILE));
 
 	return set;
 }

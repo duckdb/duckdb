@@ -74,8 +74,10 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 	}
 }
 
-static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -252,7 +254,7 @@ static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target,
                                     Vector &string_vector, JSONTransformOptions &options) {
 	if (count > STANDARD_VECTOR_SIZE) {
-		string_vector.Initialize(false, count);
+		string_vector.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	}
 	auto data = FlatVector::GetDataMutable<string_t>(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
@@ -988,7 +990,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<false>,
-	                               JSONTransformBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
@@ -1000,7 +1002,7 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 
 static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<true>,
-	                               JSONTransformBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
