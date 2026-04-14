@@ -106,7 +106,7 @@ SELECT COUNT(*) FROM promotion
 query T
 SELECT COUNT(*) FROM reason
 ----
-35
+75
 
 query T
 SELECT COUNT(*) FROM ship_mode
