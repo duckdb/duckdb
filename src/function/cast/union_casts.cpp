@@ -1,16 +1,52 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/bound_cast_data.hpp"
-
-#include <algorithm> // for std::sort
 
 namespace duckdb {
+
+struct UnionMemberBoundCastData : public BoundCastData {
+	// mapping from source member index to target member index
+	// these are always the same size as the source member count
+	// (since all source members must be present in the target)
+	vector<union_tag_t> tag_map;
+	vector<BoundCastInfo> member_casts;
+
+	LogicalType type;
+
+	bool is_member_to_member;
+
+	UnionMemberBoundCastData(vector<union_tag_t> tag_map, vector<BoundCastInfo> member_casts, const LogicalType &type,
+	                         bool is_member_to_member)
+	    : tag_map(std::move(tag_map)), member_casts(std::move(member_casts)), type(type.Copy()),
+	      is_member_to_member(is_member_to_member) {
+	}
+
+	UnionMemberBoundCastData(vector<union_tag_t> tag_map, vector<BoundCastInfo> member_cast_infos,
+	                         const LogicalType &type)
+	    : tag_map(std::move(tag_map)), member_casts(std::move(member_cast_infos)), type(type.Copy()),
+	      is_member_to_member(true) {
+	}
+
+	// This is ugly to take a vector of BoundCastInfo, however otherwise the compiler complains
+	UnionMemberBoundCastData(union_tag_t member_idx, BoundCastInfo member_cast_info, const LogicalType &type)
+	    : tag_map(1, member_idx), type(type.Copy()), is_member_to_member(false) {
+		member_casts = vector<BoundCastInfo>();
+		member_casts.emplace_back(member_cast_info.Copy());
+	}
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		vector<BoundCastInfo> member_casts_copy;
+		for (auto &member_cast : member_casts) {
+			member_casts_copy.push_back(member_cast.Copy());
+		}
+		return make_uniq<UnionMemberBoundCastData>(tag_map, std::move(member_casts_copy), type, is_member_to_member);
+	}
+};
 
 //--------------------------------------------------------------------------------------------------
 // ??? -> UNION
@@ -21,16 +57,24 @@ static unique_ptr<BoundCastData> BindToUnionMemberCast(BindCastInput &input, con
                                                        const LogicalType &target) {
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
-	vector<UnionBoundCastData> candidates;
+	// Vector of names/candidates that are optimal for cost
+	vector<string> names;
+	vector<UnionMemberBoundCastData> candidates;
+
+	int64_t best_cost = std::numeric_limits<int64_t>::max();
 
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(target); member_idx++) {
 		auto member_type = UnionType::GetMemberType(target, member_idx);
 		auto member_name = UnionType::GetMemberName(target, member_idx);
 		auto member_cast_cost = input.function_set.ImplicitCastCost(nullptr, source, member_type);
-		if (member_cast_cost != -1) {
-			auto member_cast_info = input.GetCastFunction(source, member_type);
-			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost,
-			                        std::move(member_cast_info));
+		if (member_cast_cost >= 0 && member_cast_cost <= best_cost) {
+			if (member_cast_cost != best_cost) {
+				names.clear();
+				candidates.clear();
+				best_cost = member_cast_cost;
+			}
+			names.emplace_back(member_name);
+			candidates.emplace_back(member_idx, std::move(input.GetCastFunction(source, member_type)), member_type);
 		}
 	};
 
@@ -51,25 +95,16 @@ static unique_ptr<BoundCastData> BindToUnionMemberCast(BindCastInput &input, con
 		throw ConversionException(message);
 	}
 
-	// sort the candidate casts by cost
-	std::sort(candidates.begin(), candidates.end(), UnionBoundCastData::SortByCostAscending);
-
-	// select the lowest possible cost cast
-	auto &selected_cast = candidates[0];
-	auto selected_cost = candidates[0].cost;
-
 	// check if the cast is ambiguous (2 or more casts have the same cost)
-	if (candidates.size() > 1 && candidates[1].cost == selected_cost) {
+	if (candidates.size() > 1) {
 		// collect all the ambiguous types
 		auto message = StringUtil::Format(
 		    "Type %s can't be cast as %s. The cast is ambiguous, multiple possible members in target: ", source,
 		    target);
 		for (size_t i = 0; i < candidates.size(); i++) {
-			if (candidates[i].cost == selected_cost) {
-				message += StringUtil::Format("'%s (%s)'", candidates[i].name, candidates[i].type.ToString());
-				if (i < candidates.size() - 1) {
-					message += ", ";
-				}
+			message += StringUtil::Format("'%s (%s)'", names[i], candidates[i].type.ToString());
+			if (i < candidates.size() - 1) {
+				message += ", ";
 			}
 		}
 		message += ". Disambiguate the target type by using the 'union_value(<tag> := <arg>)' function to promote the "
@@ -78,7 +113,7 @@ static unique_ptr<BoundCastData> BindToUnionMemberCast(BindCastInput &input, con
 	}
 
 	// otherwise, return the selected cast
-	return make_uniq<UnionBoundCastData>(std::move(selected_cast));
+	return make_uniq<UnionMemberBoundCastData>(std::move(candidates[0]));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -98,29 +133,6 @@ static unique_ptr<BoundCastData> BindToUnionMemberCast(BindCastInput &input, con
 // INVALID:	UNION(A, B) 	->	UNION(A, C)		if B can't be implicitly cast to C
 // INVALID:	UNION(A, B, D) 	->	UNION(A, B, C)
 
-struct UnionMemberBoundCastData : public BoundCastData {
-	// mapping from source member index to target member index
-	// these are always the same size as the source member count
-	// (since all source members must be present in the target)
-	vector<idx_t> tag_map;
-	vector<BoundCastInfo> member_casts;
-
-	LogicalType target_type;
-
-	UnionMemberBoundCastData(vector<idx_t> tag_map, vector<BoundCastInfo> member_casts, LogicalType target_type)
-	    : tag_map(std::move(tag_map)), member_casts(std::move(member_casts)), target_type(std::move(target_type)) {
-	}
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		vector<BoundCastInfo> member_casts_copy;
-		for (auto &member_cast : member_casts) {
-			member_casts_copy.push_back(member_cast.Copy());
-		}
-		return make_uniq<UnionMemberBoundCastData>(tag_map, std::move(member_casts_copy), target_type);
-	}
-};
-
 static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const LogicalType &source,
                                                       const LogicalType &target) {
 	D_ASSERT(source.id() == LogicalTypeId::UNION);
@@ -128,7 +140,7 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 
 	auto source_member_count = UnionType::GetMemberCount(source);
 
-	auto tag_map = vector<idx_t>(source_member_count);
+	auto tag_map = vector<union_tag_t>(source_member_count);
 	auto member_casts = vector<BoundCastInfo>();
 
 	for (idx_t source_idx = 0; source_idx < source_member_count; source_idx++) {
@@ -167,16 +179,9 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 }
 
 static unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParameters &parameters) {
-	if (dynamic_cast<UnionBoundCastData *>(&*parameters.cast_data)) {
-		auto &cast_data = parameters.cast_data->Cast<UnionBoundCastData>();
-		if (!cast_data.member_cast_info.HasInitLocalState()) {
-			return nullptr;
-		}
-		CastLocalStateParameters child_parameters(parameters, cast_data.member_cast_info.GetCastData());
-		return cast_data.member_cast_info.InitLocalState(child_parameters);
-	} else {
-		// Casting a union to union via member mapping
-		auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
+	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
+
+	if (cast_data.is_member_to_member) {
 		auto result = make_uniq<StructCastLocalState>();
 
 		for (auto &entry : cast_data.member_casts) {
@@ -187,22 +192,30 @@ static unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParame
 			}
 			result->local_states.push_back(std::move(child_state));
 		}
-		return std::move(result);
+		return result;
+	} else {
+		auto member_cast_info = cast_data.member_casts[0].Copy();
+		if (!member_cast_info.HasInitLocalState()) {
+			return nullptr;
+		}
+		CastLocalStateParameters child_parameters(parameters, member_cast_info.GetCastData());
+		return member_cast_info.InitLocalState(child_parameters);
 	}
 }
 
 static bool ToUnionMemberCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UNION);
-	auto &cast_data = parameters.cast_data->Cast<UnionBoundCastData>();
-	auto &selected_member_vector = UnionVector::GetMember(result, cast_data.tag);
+	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
+	auto &selected_member_vector = UnionVector::GetMember(result, cast_data.tag_map[0]);
+	auto member_cast_info = cast_data.member_casts[0].Copy();
 
-	CastParameters child_parameters(parameters, cast_data.member_cast_info.GetCastData(), parameters.local_state);
-	if (!cast_data.member_cast_info.Cast(source, selected_member_vector, count, child_parameters)) {
+	CastParameters child_parameters(parameters, member_cast_info.GetCastData(), parameters.local_state);
+	if (!member_cast_info.Cast(source, selected_member_vector, count, child_parameters)) {
 		return false;
 	}
 
 	// cast succeeded, create union vector
-	UnionVector::SetToMember(result, cast_data.tag, selected_member_vector, count, true);
+	UnionVector::SetToMember(result, cast_data.tag_map[0], selected_member_vector, count, true);
 
 	result.Verify(count);
 
@@ -297,10 +310,12 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 
 static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UNION);
-	if (dynamic_cast<UnionBoundCastData *>(&*parameters.cast_data)) {
-		ToUnionMemberCast(source, result, count, parameters);
-	} else {
+	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
+
+	if (cast_data.is_member_to_member) {
 		UnionMemberToMemberCast(source, result, count, parameters);
+	} else {
+		ToUnionMemberCast(source, result, count, parameters);
 	}
 	return true;
 }
@@ -319,7 +334,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast all union members to varchar
 	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
-	Vector varchar_union(cast_data.target_type, count);
+	Vector varchar_union(cast_data.type, count);
 
 	ToUnionCast(source, varchar_union, count, parameters);
 
