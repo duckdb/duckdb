@@ -298,7 +298,7 @@ struct LikeMatcher : public FunctionData {
 		}
 	}
 
-	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern, char escape = '\0') {
+	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern, char escape = '\\') {
 		vector<LikeSegment> segments;
 		idx_t last_non_pattern = 0;
 		bool has_start_percentage = false;
@@ -411,11 +411,11 @@ struct NotLikeEscapeOperator {
 struct LikeOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return LikeOperatorFunction(str, pattern);
+		return LikeOperatorFunction(str, pattern, '\\');
 	}
 };
 
-bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0') {
+bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\\') {
 	auto str_data = str.GetData();
 	auto str_size = str.GetSize();
 	auto pat_data = pattern.GetData();
@@ -459,7 +459,7 @@ struct ILikeOperator {
 struct NotLikeOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return !LikeOperatorFunction(str, pattern);
+		return !LikeOperatorFunction(str, pattern, '\\');
 	}
 };
 
@@ -473,8 +473,8 @@ struct NotILikeOperator {
 struct ILikeOperatorASCII {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return TemplatedLikeOperator<'%', '_', false, ASCIILCaseReader>(str.GetData(), str.GetSize(), pattern.GetData(),
-		                                                                pattern.GetSize(), '\0');
+		return TemplatedLikeOperator<'%', '_', true, ASCIILCaseReader>(str.GetData(), str.GetSize(), pattern.GetData(),
+		                                                               pattern.GetSize(), '\\');
 	}
 };
 
