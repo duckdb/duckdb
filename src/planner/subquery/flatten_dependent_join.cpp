@@ -731,97 +731,103 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique
 	return PushDownResult(std::move(plan), result_state, parent_propagate_null_values);
 }
 
-		// check if the direct child of this LIMIT node is an ORDER BY node, if so, keep it separate
-		// this is done for an optimization to avoid having to compute the total order
-		if (plan->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-			order_by = unique_ptr_cast<LogicalOperator, LogicalOrder>(std::move(plan->children[0]));
-			auto child_result = PushDownDependentJoinInternal(std::move(order_by->children[0]),
-			                                                  parent_propagate_null_values, lateral_depth, state);
-			child = std::move(child_result.plan);
-			state = child_result.state;
-			parent_propagate_null_values = child_result.propagate_null_values;
-		} else {
-			auto child_result = PushDownDependentJoinInternal(std::move(plan->children[0]),
-			                                                  parent_propagate_null_values, lateral_depth, state);
-			child = std::move(child_result.plan);
-			state = child_result.state;
-			parent_propagate_null_values = child_result.propagate_null_values;
-		}
-		auto child_column_count = child->GetColumnBindings().size();
-		// we push a row_number() OVER (PARTITION BY [correlated columns])
-		auto window_index = binder.GenerateTableIndex();
-		auto window = make_uniq<LogicalWindow>(window_index);
-		auto rn = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-		auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn), nullptr);
-		auto partition_count = perform_delim ? correlated_columns.size() : 1;
-		for (idx_t i = 0; i < partition_count; i++) {
-			auto &col = correlated_columns[i];
-			auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-			row_number->partitions.push_back(std::move(colref));
-		}
-		if (order_by) {
-			// optimization: if there is an ORDER BY node followed by a LIMIT
-			// rather than computing the entire order, we push the ORDER BY expressions into the row_num computation
-			// this way, the order only needs to be computed per partition
-			row_number->orders = std::move(order_by->orders);
-		}
-		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-		window->expressions.push_back(std::move(row_number));
-		window->children.push_back(std::move(child));
-
-		// add a filter based on the row_number
-		// the filter we add is "row_number > offset AND row_number <= offset + limit"
-		auto filter = make_uniq<LogicalFilter>();
-		unique_ptr<Expression> condition;
-		auto row_num_ref = make_uniq<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT,
-		                                                       ColumnBinding(window_index, ProjectionIndex(0)));
-
-		if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			auto upper_bound_limit = NumericLimits<int64_t>::Maximum();
-			auto limit_val = int64_t(limit.limit_val.GetConstantValue());
-			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-				// both offset and limit specified - upper bound is offset + limit
-				auto offset_val = int64_t(limit.offset_val.GetConstantValue());
-				TryAddOperator::Operation(limit_val, offset_val, upper_bound_limit);
-			} else {
-				// no offset - upper bound is only the limit
-				upper_bound_limit = limit_val;
-			}
-			auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
-			condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                                                 row_num_ref->Copy(), std::move(upper_bound));
-		}
-		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
-		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			auto offset_val = int64_t(limit.offset_val.GetConstantValue());
-			auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(offset_val));
-			auto lower_comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
-			                                                       row_num_ref->Copy(), std::move(lower_bound));
-			if (condition) {
-				auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-				                                                  std::move(lower_comp), std::move(condition));
-				condition = std::move(conj);
-			} else {
-				condition = std::move(lower_comp);
-			}
-		}
-		filter->expressions.push_back(std::move(condition));
-		filter->children.push_back(std::move(window));
-		// we prune away the row_number after the filter clause using the projection map
-		for (idx_t i = 0; i < child_column_count; i++) {
-			filter->projection_map.emplace_back(i);
-		}
-		return PushDownResult(std::move(filter), state, parent_propagate_null_values);
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOperator> plan,
+                                                                           bool parent_propagate_null_values,
+                                                                           idx_t lateral_depth, PushDownState state) {
+	auto &limit = plan->Cast<LogicalLimit>();
+	switch (limit.limit_val.Type()) {
+	case LimitNodeType::CONSTANT_PERCENTAGE:
+	case LimitNodeType::EXPRESSION_PERCENTAGE:
+		throw ParserException("Limit percent operator not supported in correlated subquery");
+	case LimitNodeType::EXPRESSION_VALUE:
+		throw ParserException("Non-constant limit not supported in correlated subquery");
+	default:
+		break;
 	}
-	case LogicalOperatorType::LOGICAL_WINDOW: {
-		auto &window = plan->Cast<LogicalWindow>();
-		// push into children
-		auto child_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
-		                                                  lateral_depth, state);
-		plan->children[0] = std::move(child_result.plan);
+	switch (limit.offset_val.Type()) {
+	case LimitNodeType::EXPRESSION_VALUE:
+		throw ParserException("Non-constant offset not supported in correlated subquery");
+	case LimitNodeType::CONSTANT_PERCENTAGE:
+	case LimitNodeType::EXPRESSION_PERCENTAGE:
+		throw InternalException("Percentage offset in FlattenDependentJoin");
+	default:
+		break;
+	}
+	auto rownum_alias = "limit_rownum";
+	unique_ptr<LogicalOperator> child;
+	unique_ptr<LogicalOrder> order_by;
+
+	if (plan->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+		order_by = unique_ptr_cast<LogicalOperator, LogicalOrder>(std::move(plan->children[0]));
+		auto child_result = PushDownDependentJoinInternal(std::move(order_by->children[0]),
+		                                                  parent_propagate_null_values, lateral_depth, state);
+		child = std::move(child_result.plan);
 		state = child_result.state;
 		parent_propagate_null_values = child_result.propagate_null_values;
+	} else {
+		auto child_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
+		                                                  lateral_depth, state);
+		child = std::move(child_result.plan);
+		state = child_result.state;
+		parent_propagate_null_values = child_result.propagate_null_values;
+	}
+	auto child_column_count = child->GetColumnBindings().size();
+	auto window_index = binder.GenerateTableIndex();
+	auto window = make_uniq<LogicalWindow>(window_index);
+	auto rn = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
+	auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn), nullptr);
+	auto partition_count = perform_delim ? correlated_columns.size() : 1;
+	for (idx_t i = 0; i < partition_count; i++) {
+		auto &col = correlated_columns[i];
+		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
+		row_number->partitions.push_back(std::move(colref));
+	}
+	if (order_by) {
+		row_number->orders = std::move(order_by->orders);
+	}
+	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	window->expressions.push_back(std::move(row_number));
+	window->children.push_back(std::move(child));
+
+	auto filter = make_uniq<LogicalFilter>();
+	unique_ptr<Expression> condition;
+	auto row_num_ref = make_uniq<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT,
+	                                                       ColumnBinding(window_index, ProjectionIndex(0)));
+
+	if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		auto upper_bound_limit = NumericLimits<int64_t>::Maximum();
+		auto limit_val = int64_t(limit.limit_val.GetConstantValue());
+		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			auto offset_val = int64_t(limit.offset_val.GetConstantValue());
+			TryAddOperator::Operation(limit_val, offset_val, upper_bound_limit);
+		} else {
+			upper_bound_limit = limit_val;
+		}
+		auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
+		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
+		                                                 std::move(upper_bound));
+	}
+	if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		auto offset_val = int64_t(limit.offset_val.GetConstantValue());
+		auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(offset_val));
+		auto lower_comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(),
+		                                                       std::move(lower_bound));
+		if (condition) {
+			auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower_comp),
+			                                                  std::move(condition));
+			condition = std::move(conj);
+		} else {
+			condition = std::move(lower_comp);
+		}
+	}
+	filter->expressions.push_back(std::move(condition));
+	filter->children.push_back(std::move(window));
+	for (idx_t i = 0; i < child_column_count; i++) {
+		filter->projection_map.emplace_back(i);
+	}
+	return PushDownResult(std::move(filter), state, parent_propagate_null_values);
+}
 
 		// we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
