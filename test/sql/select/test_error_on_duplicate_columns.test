@@ -46,6 +46,25 @@ SELECT * FROM (SELECT 1 AS x) a, (SELECT 2 AS x) b;
 ----
 1	2
 
+# CTE with duplicate column names errors
+statement error
+WITH cte AS (SELECT 42 a, 84 a) SELECT * FROM cte;
+----
+duplicate column name "a"
+
+# top-level UNION with duplicate column names is fine
+query II
+SELECT 42 a, 84 a UNION ALL SELECT 1, 2;
+----
+42	84
+1	2
+
+# UNION inside a subquery with duplicate column names errors
+statement error
+SELECT * FROM (SELECT 42 a, 84 a UNION ALL SELECT 1, 2) sub;
+----
+duplicate column name "a"
+
 # can be toggled off within session
 statement ok
 SET preserve_duplicate_column_names = false;

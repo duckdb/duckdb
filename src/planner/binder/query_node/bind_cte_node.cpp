@@ -10,6 +10,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -140,7 +141,9 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	}
 
 	// Rename columns if duplicate names are detected
-	QueryResult::DeduplicateColumns(names);
+	if (!Settings::Get<PreserveDuplicateColumnNamesSetting>(parent_binder.context)) {
+		QueryResult::DeduplicateColumns(names);
+	}
 }
 
 BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement) {
