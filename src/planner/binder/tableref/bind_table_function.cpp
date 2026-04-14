@@ -276,6 +276,11 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = column_name_alias[i];
 	}
+	// PG compat: single-column function with a table alias but no explicit
+	// column aliases -> output column takes the table alias name.
+	if (column_name_alias.empty() && return_names.size() == 1 && !ref.alias.empty()) {
+		return_names[0] = ref.alias;
+	}
 	for (idx_t i = 0; i < return_names.size(); i++) {
 		if (return_names[i].empty()) {
 			return_names[i] = "C" + to_string(i);

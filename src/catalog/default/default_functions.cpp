@@ -92,7 +92,7 @@ static const DefaultMacro internal_macros[] = {
 	// Test default parameters
 	{DEFAULT_SCHEMA, "array_to_string_comma_default", "(arr, sep := ',') AS case len(arr::varchar[]) when 0 then '' else list_aggr(arr::varchar[], 'string_agg', sep) end"},
 
-	{DEFAULT_SCHEMA, "generate_subscripts", "(arr, dim) AS unnest(generate_series(1, array_length(arr, dim)))"},
+	{DEFAULT_SCHEMA, "generate_subscripts", "(arr, dim, reverse := false) AS unnest(CASE WHEN reverse THEN generate_series(array_length(arr, dim), 1, -1) ELSE generate_series(1, array_length(arr, dim)) END)"},
 	{DEFAULT_SCHEMA, "fdiv", "(x, y) AS floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", "(x, y) AS (x-y*floor(x/y))"},
 	{DEFAULT_SCHEMA, "split_part", "(string, delimiter, \"position\") AS if(string IS NOT NULL AND delimiter IS NOT NULL AND position IS NOT NULL, coalesce(string_split(string, delimiter)[position],''), NULL)"},

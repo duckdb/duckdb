@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
@@ -159,6 +160,11 @@ static int FigureColnameInternal(const BaseExpression &expr, string &name) {
 		default:
 			return 0;
 		}
+	}
+	case ExpressionClass::WINDOW: {
+		auto &window = expr.Cast<WindowExpression>();
+		name = StringUtil::Lower(window.function_name);
+		return 2;
 	}
 	default:
 		return 0;
