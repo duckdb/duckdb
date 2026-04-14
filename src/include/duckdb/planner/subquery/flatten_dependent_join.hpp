@@ -23,7 +23,11 @@ class LogicalJoin;
 
 //! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
 //! flattened subquery
-struct FlattenDependentJoins {
+class FlattenDependentJoins {
+public:
+	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
+
+private:
 	struct PushDownContext {
 		PushDownContext() {
 		}
@@ -99,12 +103,11 @@ struct FlattenDependentJoins {
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 
-	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
-
 	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
 	                           CorrelatedLayout layout = CorrelatedLayout());
-
-private:
+	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
+	                                      const CorrelatedColumns &correlated_columns, vector<ColumnBinding> bindings,
+	                                      const CorrelatedLayout &layout, bool perform_delim);
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
 	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0,
@@ -116,10 +119,9 @@ private:
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
 	                                     CorrelatedLayout layout = CorrelatedLayout());
+	PushDownResult FinalizePushDownResult(PushDownResult result);
 	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                        CorrelatedLayout layout);
-
-public:
 	Binder &binder;
 	reference_map_t<LogicalOperator, bool> has_correlated_expressions;
 	column_binding_map_t<idx_t> correlated_map;
@@ -130,8 +132,6 @@ public:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
-
-private:
 	CorrelatedLayout CreateCorrelatedLayout(TableIndex table_index, idx_t binding_offset,
 	                                        idx_t correlated_offset) const;
 	CorrelatedLayout CreateCorrelatedLayout(TableIndex table_index, idx_t correlated_offset) const;

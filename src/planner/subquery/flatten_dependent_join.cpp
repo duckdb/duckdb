@@ -26,9 +26,10 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedCol
 	}
 }
 
-static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const CorrelatedColumns &correlated_columns,
-                                      vector<ColumnBinding> bindings,
-                                      const FlattenDependentJoins::CorrelatedLayout &layout, bool perform_delim) {
+void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
+                                                      const CorrelatedColumns &correlated_columns,
+                                                      vector<ColumnBinding> bindings, const CorrelatedLayout &layout,
+                                                      bool perform_delim) {
 	// Determine the range of columns to process
 	idx_t start = 0;
 	idx_t end = perform_delim ? correlated_columns.size() : 1;
@@ -405,7 +406,10 @@ bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, TableInde
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
                                                                                    PushDownContext context,
                                                                                    CorrelatedLayout layout) {
-	auto result = PushDownDependentJoinInternal(std::move(plan), context, std::move(layout));
+	return FinalizePushDownResult(PushDownDependentJoinInternal(std::move(plan), context, std::move(layout)));
+}
+
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizePushDownResult(PushDownResult result) {
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
