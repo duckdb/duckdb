@@ -16,7 +16,7 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ListVector::SetListSize(result, 0);
 
-	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto result_data = ConstantVector::GetData<list_entry_t>(result);
 	result_data[0] = list_entry_t();
 	result.Verify(row_count);
 }
@@ -44,7 +44,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// - STRUCTs have exactly two fields, a key-field, and a value-field
 	// - key names are unique
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
-
 	if (MapIsNull(args)) {
 		auto &validity = FlatVector::Validity(result);
 		validity.SetInvalid(0);
