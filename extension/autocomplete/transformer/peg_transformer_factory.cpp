@@ -1079,25 +1079,24 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterEnums();
 }
 
-vector<optional_ptr<ParseResult>>
+vector<reference<ParseResult>>
 PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result) {
 	// List(D) <- D (',' D)* ','?
-	vector<optional_ptr<ParseResult>> result;
+	vector<reference<ParseResult>> result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	result.push_back(list_pr.GetChild(0));
 	auto opt_child = list_pr.Child<OptionalParseResult>(1);
 	if (opt_child.HasResult()) {
 		auto repeat_result = opt_child.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat_result.children) {
-			auto &list_child = child->Cast<ListParseResult>();
+		for (auto &child : repeat_result.GetChildren()) {
+			auto &list_child = child.get().Cast<ListParseResult>();
 			result.push_back(list_child.GetChild(1));
 		}
 	}
-
 	return result;
 }
 
-optional_ptr<ParseResult> PEGTransformerFactory::ExtractResultFromParens(optional_ptr<ParseResult> parse_result) {
+ParseResult &PEGTransformerFactory::ExtractResultFromParens(optional_ptr<ParseResult> parse_result) {
 	// Parens(D) <- '(' D ')'
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.GetChild(1);

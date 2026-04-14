@@ -203,8 +203,8 @@ public:
 	//! Helper functions
 	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
 	                                          Matcher &root_matcher);
-	static optional_ptr<ParseResult> ExtractResultFromParens(optional_ptr<ParseResult> parse_result);
-	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
+	static ParseResult &ExtractResultFromParens(optional_ptr<ParseResult> parse_result);
+	static vector<reference<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);

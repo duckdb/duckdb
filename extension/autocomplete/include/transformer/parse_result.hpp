@@ -245,10 +245,13 @@ private:
 
 struct RepeatParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::REPEAT;
-	vector<reference<ParseResult>> children;
 
 	explicit RepeatParseResult(vector<reference<ParseResult>> results_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
+	}
+
+	vector<reference<ParseResult>> GetChildren() const {
+		return children;
 	}
 
 	template <class T>
@@ -280,6 +283,8 @@ struct RepeatParseResult : ParseResult {
 			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
 		}
 	}
+private:
+	vector<reference<ParseResult>> children;
 };
 
 struct OptionalParseResult : ParseResult {
