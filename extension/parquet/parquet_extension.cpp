@@ -457,10 +457,10 @@ static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
 	for (auto &child : struct_entries) {
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
-	auto *xmin_data = FlatVector::GetData<float>(struct_entries[0]);
-	auto *ymin_data = FlatVector::GetData<float>(struct_entries[1]);
-	auto *xmax_data = FlatVector::GetData<float>(struct_entries[2]);
-	auto *ymax_data = FlatVector::GetData<float>(struct_entries[3]);
+	auto *xmin_data = FlatVector::GetDataMutable<float>(struct_entries[0]);
+	auto *ymin_data = FlatVector::GetDataMutable<float>(struct_entries[1]);
+	auto *xmax_data = FlatVector::GetDataMutable<float>(struct_entries[2]);
+	auto *ymax_data = FlatVector::GetDataMutable<float>(struct_entries[3]);
 
 	auto &struct_validity = FlatVector::Validity(bbox_col);
 	// Propagate struct validity into children too
