@@ -853,116 +853,59 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownWindow(uniq
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownSetOperation(unique_ptr<LogicalOperator> plan,
+                                                                                  bool parent_propagate_null_values,
+                                                                                  PushDownState state) {
+	auto &setop = plan->Cast<LogicalSetOperation>();
 #ifdef DEBUG
-		for (auto &child : plan->children) {
-			child->ResolveOperatorTypes();
-		}
-		for (idx_t i = 1; i < plan->children.size(); i++) {
-			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
-		}
+	for (auto &child : plan->children) {
+		child->ResolveOperatorTypes();
+	}
+	for (idx_t i = 1; i < plan->children.size(); i++) {
+		D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
+	}
 #endif
-		for (auto &child : plan->children) {
-			auto child_result = PushDownDependentJoin(std::move(child), true, 0, state);
-			child = std::move(child_result.plan);
-			state = child_result.state;
-		}
-		for (idx_t i = 0; i < plan->children.size(); i++) {
-			if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-				auto proj_index = binder.GenerateTableIndex();
-				auto bindings = plan->children[i]->GetColumnBindings();
-				plan->children[i]->ResolveOperatorTypes();
-				auto types = plan->children[i]->types;
-				vector<unique_ptr<Expression>> expressions;
-				expressions.reserve(bindings.size());
-				D_ASSERT(bindings.size() == types.size());
+	for (auto &child : plan->children) {
+		auto child_result = PushDownDependentJoin(std::move(child), true, 0, state);
+		child = std::move(child_result.plan);
+		state = child_result.state;
+	}
+	for (idx_t i = 0; i < plan->children.size(); i++) {
+		if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			auto proj_index = binder.GenerateTableIndex();
+			auto bindings = plan->children[i]->GetColumnBindings();
+			plan->children[i]->ResolveOperatorTypes();
+			auto types = plan->children[i]->types;
+			vector<unique_ptr<Expression>> expressions;
+			expressions.reserve(bindings.size());
+			D_ASSERT(bindings.size() == types.size());
 
-				// No column binding replacement is needed because the parent operator is
-				// a setop which will immediately assign new bindings.
-				for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
-					expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
-				}
-				auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-				proj->children.push_back(std::move(plan->children[i]));
-				plan->children[i] = std::move(proj);
+			for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
+				expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
 			}
+			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
+			proj->children.push_back(std::move(plan->children[i]));
+			plan->children[i] = std::move(proj);
 		}
+	}
 
-		// here we need to check the children. If they have reorderable bindings, you need to plan a projection
-		// on top that will guarantee the order of the bindings.
 #ifdef DEBUG
-		for (idx_t i = 1; i < plan->children.size(); i++) {
-			D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[i]->GetColumnBindings().size());
-		}
-		for (auto &child : plan->children) {
-			child->ResolveOperatorTypes();
-		}
-		for (idx_t i = 1; i < plan->children.size(); i++) {
-			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
-		}
+	for (idx_t i = 1; i < plan->children.size(); i++) {
+		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[i]->GetColumnBindings().size());
+	}
+	for (auto &child : plan->children) {
+		child->ResolveOperatorTypes();
+	}
+	for (idx_t i = 1; i < plan->children.size(); i++) {
+		D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
+	}
 #endif
-		// we have to refer to the setop index now
-		state = PushDownState::CreateContiguous(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-		                                        setop.column_count, correlated_columns.size());
-		setop.column_count += correlated_columns.size();
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
-	}
-	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = plan->Cast<LogicalDistinct>();
-		// push down into child
-		auto child_result = PushDownDependentJoin(std::move(distinct.children[0]), true, 0, state);
-		distinct.children[0] = std::move(child_result.plan);
-		state = child_result.state;
-		// add all correlated columns to the distinct targets
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			distinct.distinct_targets.push_back(
-			    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i)));
-		}
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
-	}
-	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-		// expression get
-		// first we flatten the dependent join in the child
-		auto child_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
-		                                                  lateral_depth, state);
-		plan->children[0] = std::move(child_result.plan);
-		state = child_result.state;
-		parent_propagate_null_values = child_result.propagate_null_values;
-		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
-		// now we add all the correlated columns to each of the expressions of the expression scan
-		auto &expr_get = plan->Cast<LogicalExpressionGet>();
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			for (auto &expr_list : expr_get.expressions) {
-				auto colref = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i));
-				expr_list.push_back(std::move(colref));
-			}
-			expr_get.expr_types.push_back(correlated_columns[i].type);
-		}
-		auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
-		state = PushDownState::CreateContiguous(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)),
-		                                        correlated_offset, correlated_columns.size());
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
-	}
-	case LogicalOperatorType::LOGICAL_PIVOT:
-		throw BinderException("PIVOT is not supported in correlated subqueries yet");
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto child_result = PushDownDependentJoin(std::move(plan->children[0]), true, 0, state);
-		plan->children[0] = std::move(child_result.plan);
-		return PushDownResult(std::move(plan), child_result.state, parent_propagate_null_values);
-	}
-	case LogicalOperatorType::LOGICAL_GET: {
-		auto &get = plan->Cast<LogicalGet>();
-		if (get.children.size() != 1) {
-			throw InternalException("Flatten dependent joins - logical get encountered without children");
-		}
-		auto child_result = PushDownDependentJoin(std::move(plan->children[0]), true, 0, state);
-		plan->children[0] = std::move(child_result.plan);
-		state = child_result.state;
-		auto correlated_offset = get.GetColumnBindings().size();
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			get.projected_input.push_back(state.GetOffset(i));
-		}
+	state = PushDownState::CreateContiguous(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
+	                                        setop.column_count, correlated_columns.size());
+	setop.column_count += correlated_columns.size();
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
+
 
 		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -1083,6 +1026,11 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownWindow(uniq
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		return PushDownWindow(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_UNION: {
+		return PushDownSetOperation(std::move(plan), parent_propagate_null_values, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
