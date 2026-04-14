@@ -955,17 +955,30 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownOrderBy(uni
 	return PushDownResult(std::move(plan), child_result.state, parent_propagate_null_values);
 }
 
-
-		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
-		state.correlated_offsets.clear();
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			state.correlated_offsets.push_back(correlated_offset + i);
-		}
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOperator> plan,
+                                                                         bool parent_propagate_null_values,
+                                                                         idx_t lateral_depth, PushDownState state) {
+	auto &get = plan->Cast<LogicalGet>();
+	if (get.children.size() != 1) {
+		throw InternalException("Flatten dependent joins - logical get encountered without children");
 	}
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+	auto child_result = PushDownDependentJoin(std::move(plan->children[0]), true, 0, state);
+	plan->children[0] = std::move(child_result.plan);
+	state = child_result.state;
+	auto correlated_offset = get.GetColumnBindings().size();
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		get.projected_input.push_back(state.GetOffset(i));
+	}
+
+	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+	state.correlated_offsets.clear();
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		state.correlated_offsets.push_back(correlated_offset + i);
+	}
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
+
 #ifdef DEBUG
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();
@@ -1091,6 +1104,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownOrderBy(uni
 		throw BinderException("PIVOT is not supported in correlated subqueries yet");
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		return PushDownOrderBy(std::move(plan), parent_propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_GET: {
+		return PushDownGet(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
