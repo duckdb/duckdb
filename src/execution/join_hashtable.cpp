@@ -565,12 +565,11 @@ static inline void InsertMatchesAndIncrementMisses(atomic<ht_entry_t> entries[],
                                                    idx_t ht_offsets[], const hash_t hash_salts[],
                                                    const idx_t capacity_mask, const idx_t key_match_count,
                                                    const idx_t key_no_match_count) {
-	if (key_match_count != 0) {
-		ht.chains_longer_than_one = true;
-	}
-
 	// Insert the rows that match
 	if (ht.insert_duplicate_keys) {
+		if (key_match_count != 0) {
+			ht.chains_longer_than_one = true;
+		}
 		for (idx_t i = 0; i < key_match_count; i++) {
 			const auto need_compare_idx = state.key_match_sel.get_index(i);
 			const auto entry_index = state.keys_to_compare_sel.get_index(need_compare_idx);
