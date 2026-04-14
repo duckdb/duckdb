@@ -22,7 +22,6 @@ static void ReleaseError(struct AdbcError *error);
 #include <string.h>
 
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/scope_exit.hpp"
 
 #include "duckdb/parser/keyword_helper.hpp"
 
@@ -137,6 +136,38 @@ struct DuckDBAdbcStreamWrapper {
 	AdbcError adbc_error;
 	MaterializedData *materialized;
 	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
+};
+
+class DuckDBAdbcStreamWrapperGuard {
+public:
+	explicit DuckDBAdbcStreamWrapperGuard(DuckDBAdbcStreamWrapper *ptr_p) : ptr(ptr_p) {
+	}
+	DuckDBAdbcStreamWrapperGuard(const DuckDBAdbcStreamWrapperGuard &) = delete;
+	DuckDBAdbcStreamWrapperGuard &operator=(const DuckDBAdbcStreamWrapperGuard &) = delete;
+
+	~DuckDBAdbcStreamWrapperGuard() {
+		if (ptr) {
+			duckdb_destroy_result(&ptr->result);
+			free(ptr);
+		}
+	}
+
+	DuckDBAdbcStreamWrapper *release() {
+		auto tmp = ptr;
+		ptr = nullptr;
+		return tmp;
+	}
+
+	DuckDBAdbcStreamWrapper *get() const {
+		return ptr;
+	}
+
+	DuckDBAdbcStreamWrapper *operator->() const {
+		return ptr;
+	}
+
+private:
+	DuckDBAdbcStreamWrapper *ptr;
 };
 
 static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper);
@@ -1626,23 +1657,18 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		return ADBC_STATUS_OK;
 	}
 
-	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
-	if (!stream_wrapper) {
+	auto *raw_stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
+	if (!raw_stream_wrapper) {
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	SCOPE_EXIT {
-		if (stream_wrapper) {
-			duckdb_destroy_result(&stream_wrapper->result);
-			free(stream_wrapper);
-		}
-	};
-	stream_wrapper->last_error = nullptr;
-	stream_wrapper->status_code = ADBC_STATUS_OK;
-	stream_wrapper->materialized = nullptr;
-	stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
-	std::memset(&stream_wrapper->adbc_error, 0, sizeof(stream_wrapper->adbc_error));
-	std::memset(&stream_wrapper->result, 0, sizeof(stream_wrapper->result));
+	raw_stream_wrapper->last_error = nullptr;
+	raw_stream_wrapper->status_code = ADBC_STATUS_OK;
+	raw_stream_wrapper->materialized = nullptr;
+	raw_stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
+	std::memset(&raw_stream_wrapper->adbc_error, 0, sizeof(raw_stream_wrapper->adbc_error));
+	std::memset(&raw_stream_wrapper->result, 0, sizeof(raw_stream_wrapper->result));
+	DuckDBAdbcStreamWrapperGuard stream_wrapper(raw_stream_wrapper);
 	// Only process the stream if there are parameters to bind
 	auto prepared_statement_params = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)
 	                                     ->statement->data->properties.parameter_count;
@@ -1745,18 +1771,15 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	}
 
 	if (out) {
-		// We pass ownership of the statement private data to our stream
-		out->private_data = stream_wrapper;
+		auto *released = stream_wrapper.release();
+		out->private_data = released;
 		out->get_schema = get_schema;
 		out->get_next = get_next;
 		out->release = release;
 		out->get_last_error = get_last_error;
-		// Register this stream wrapper so it can be materialized if another query runs
 		if (wrapper->conn_wrapper) {
-			wrapper->conn_wrapper->active_streams.push_back(stream_wrapper);
+			wrapper->conn_wrapper->active_streams.push_back(released);
 		}
-		// Ownership transferred; disarm the scope guard
-		stream_wrapper = nullptr;
 	}
 
 	return ADBC_STATUS_OK;
