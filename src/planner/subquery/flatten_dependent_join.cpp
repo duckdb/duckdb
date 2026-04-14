@@ -18,8 +18,7 @@ namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim,
                                              bool any_join, optional_ptr<FlattenDependentJoins> parent)
-    : binder(binder), delim_offset(DConstants::INVALID_INDEX), correlated_columns(correlated),
-      perform_delim(perform_delim), any_join(any_join), parent(parent) {
+    : binder(binder), correlated_columns(correlated), perform_delim(perform_delim), any_join(any_join), parent(parent) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -56,11 +55,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
-	return flatten.Decorrelate(std::move(plan));
+	return flatten.Decorrelate(std::move(plan)).plan;
 }
 
-unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<LogicalOperator> plan,
-                                                               bool parent_propagate_null_values, idx_t lateral_depth) {
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_ptr<LogicalOperator> plan,
+                                                                         bool parent_propagate_null_values,
+                                                                         idx_t lateral_depth, PushDownState state) {
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &delim_join = plan;
@@ -340,10 +340,11 @@ bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, TableInde
 	return has_correlation;
 }
 
-unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
-                                                                         bool propagate_null_values,
-                                                                         idx_t lateral_depth) {
-	auto result = PushDownDependentJoinInternal(std::move(plan), propagate_null_values, lateral_depth);
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
+                                                                                   bool propagate_null_values,
+                                                                                   idx_t lateral_depth,
+                                                                                   PushDownState state) {
+	auto result = PushDownDependentJoinInternal(std::move(plan), propagate_null_values, lateral_depth, state);
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
@@ -368,9 +369,8 @@ bool SubqueryDependentFilter(Expression &expr) {
 	return false;
 }
 
-unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
-                                                                                 bool &parent_propagate_null_values,
-                                                                                 idx_t lateral_depth) {
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJoinInternal(
+    unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values, idx_t lateral_depth, PushDownState state) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(*plan);
 	bool exit_projection = false;
