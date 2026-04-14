@@ -25,7 +25,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
@@ -894,15 +893,6 @@ bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, option
 	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
 }
 
-static unique_ptr<Expression> CreateInExpression(const LogicalType &type, vector<Value> values) {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
-	result->children.push_back(make_uniq<BoundReferenceExpression>(type, idx_t(0)));
-	for (auto &value : values) {
-		result->children.push_back(make_uniq<BoundConstantExpression>(std::move(value)));
-	}
-	return result;
-}
-
 void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
                                           const PhysicalOperator &op, idx_t filter_idx,
                                           ProjectionIndex filter_col_idx) const {
@@ -938,7 +928,8 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
-	auto in_expr = CreateInExpression(info.columns[filter_idx].storage_type, std::move(in_list));
+	auto in_expr = ExpressionFilter::CreateInExpression(
+	    make_uniq<BoundReferenceExpression>(info.columns[filter_idx].storage_type, idx_t(0)), std::move(in_list));
 	auto filter = make_uniq<OptionalFilter>(make_uniq<ExpressionFilter>(std::move(in_expr)));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
