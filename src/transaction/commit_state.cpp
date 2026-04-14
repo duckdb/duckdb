@@ -29,8 +29,9 @@ namespace duckdb {
 // CommitDropAccumulator
 //===--------------------------------------------------------------------===//
 void CommitDropAccumulator::Apply() {
-	for (auto &m : block_marks) {
-		m.block_manager.get().MarkBlockAsModified(m.id);
+	auto &bm = block_manager.get();
+	for (auto id : block_ids) {
+		bm.MarkBlockAsModified(id);
 	}
 	for (auto &r : pending_index_removals) {
 		auto &indexes = r.indexes.get();

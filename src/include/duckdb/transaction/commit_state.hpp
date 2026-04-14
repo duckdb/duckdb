@@ -32,31 +32,32 @@ struct UpdateInfo;
 enum class CommitMode { COMMIT, REVERT_COMMIT };
 
 struct CommitDropAccumulator {
-	struct BlockMark {
-		reference<BlockManager> block_manager;
-		block_id_t id;
-	};
 	struct IndexRemoval {
 		reference<TableIndexList> indexes;
 		string name;
 	};
 
-	vector<BlockMark> block_marks;
+	explicit CommitDropAccumulator(BlockManager &block_manager) : block_manager(block_manager) {
+	}
+
+	reference<BlockManager> block_manager;
+	vector<block_id_t> block_ids;
 	vector<IndexRemoval> pending_index_removals;
 
 	void AddBlock(BlockManager &bm, block_id_t id) {
-		block_marks.push_back(BlockMark {bm, id});
+		D_ASSERT(&block_manager.get() == &bm);
+		block_ids.push_back(id);
 	}
 	void AddPendingIndexRemoval(TableIndexList &indexes, string name) {
 		pending_index_removals.push_back(IndexRemoval {indexes, std::move(name)});
 	}
 	void Apply();
 	void Clear() {
-		block_marks.clear();
+		block_ids.clear();
 		pending_index_removals.clear();
 	}
 	bool Empty() const {
-		return block_marks.empty() && pending_index_removals.empty();
+		return block_ids.empty() && pending_index_removals.empty();
 	}
 };
 

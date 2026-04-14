@@ -54,7 +54,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection =
 	    parent_collection.AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
-	CommitDropAccumulator local_acc;
+	CommitDropAccumulator local_acc(parent_collection.GetBlockManager());
 	parent_collection.CommitDropColumn(alter_column_index, local_acc);
 	local_acc.Apply();
 	row_groups = std::move(parent.row_groups);
@@ -71,7 +71,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 	// Remove the column from the previous table storage.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection = parent_collection.RemoveColumn(drop_column_index);
-	CommitDropAccumulator local_acc;
+	CommitDropAccumulator local_acc(parent_collection.GetBlockManager());
 	parent_collection.CommitDropColumn(drop_column_index, local_acc);
 	local_acc.Apply();
 	row_groups = std::move(parent.row_groups);
@@ -290,7 +290,7 @@ OptimisticDataWriter &LocalTableStorage::GetOptimisticWriter() {
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
 
-	CommitDropAccumulator local_acc;
+	CommitDropAccumulator local_acc(row_groups->collection->GetBlockManager());
 	for (auto &collection : optimistic_collections) {
 		if (!collection) {
 			continue;

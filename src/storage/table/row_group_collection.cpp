@@ -1260,7 +1260,7 @@ public:
 				}
 			}
 			// drop the row group after merging (checkpoint path; apply marks immediately)
-			CommitDropAccumulator local_acc;
+			CommitDropAccumulator local_acc(current_row_group.GetBlockManager());
 			current_row_group.CommitDrop(local_acc);
 			local_acc.Apply();
 			checkpoint_state.DropSegment(c_idx);
@@ -1340,7 +1340,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		}
 		if (row_group_count == 0) {
 			// empty row group - we can drop it entirely (checkpoint path; apply marks immediately)
-			CommitDropAccumulator local_acc;
+			CommitDropAccumulator local_acc(row_group.GetBlockManager());
 			row_group.CommitDrop(local_acc);
 			local_acc.Apply();
 			checkpoint_state.DropSegment(entry.GetIndex());
@@ -1364,7 +1364,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(NumericCast<int64_t>(segment_idx));
 			auto &row_group = entry.GetNode();
 			D_ASSERT(entry.GetIndex() == segment_idx);
-			CommitDropAccumulator local_acc;
+			CommitDropAccumulator local_acc(row_group.GetBlockManager());
 			row_group.CommitDrop(local_acc);
 			local_acc.Apply();
 			checkpoint_state.DropSegment(segment_idx);
