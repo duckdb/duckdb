@@ -490,7 +490,7 @@ static void ParquetWriteGetWrittenStatistics(ClientContext &context, FunctionDat
 // a pre-allocated STRUCT(xmin FLOAT, ymin FLOAT, xmax FLOAT, ymax FLOAT) vector.
 static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
 	UnifiedVectorFormat geom_udata;
-	geom_col.ToUnifiedFormat(count, geom_udata);
+	geom_col.ToUnifiedFormat(geom_udata);
 	const auto *geom_values = UnifiedVectorFormat::GetData<string_t>(geom_udata);
 
 	bbox_col.SetVectorType(VectorType::FLAT_VECTOR);
@@ -499,15 +499,15 @@ static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
 	for (auto &child : struct_entries) {
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
-	auto *xmin_data = FlatVector::GetData<float>(struct_entries[0]);
-	auto *ymin_data = FlatVector::GetData<float>(struct_entries[1]);
-	auto *xmax_data = FlatVector::GetData<float>(struct_entries[2]);
-	auto *ymax_data = FlatVector::GetData<float>(struct_entries[3]);
+	auto *xmin_data = FlatVector::GetDataMutable<float>(struct_entries[0]);
+	auto *ymin_data = FlatVector::GetDataMutable<float>(struct_entries[1]);
+	auto *xmax_data = FlatVector::GetDataMutable<float>(struct_entries[2]);
+	auto *ymax_data = FlatVector::GetDataMutable<float>(struct_entries[3]);
 
-	auto &struct_validity = FlatVector::Validity(bbox_col);
+	auto &struct_validity = FlatVector::ValidityMutable(bbox_col);
 	// Propagate struct validity into children too
 	for (auto &child : struct_entries) {
-		FlatVector::Validity(child).Initialize(count);
+		FlatVector::ValidityMutable(child).Initialize(count);
 	}
 
 	for (idx_t i = 0; i < count; i++) {
@@ -515,7 +515,7 @@ static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
 		if (!geom_udata.validity.RowIsValid(geom_idx)) {
 			struct_validity.SetInvalid(i);
 			for (auto &child : struct_entries) {
-				FlatVector::Validity(child).SetInvalid(i);
+				FlatVector::ValidityMutable(child).SetInvalid(i);
 			}
 			continue;
 		}
@@ -530,7 +530,7 @@ static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
 		} else {
 			struct_validity.SetInvalid(i);
 			for (auto &child : struct_entries) {
-				FlatVector::Validity(child).SetInvalid(i);
+				FlatVector::ValidityMutable(child).SetInvalid(i);
 			}
 		}
 	}
