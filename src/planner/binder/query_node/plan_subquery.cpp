@@ -237,7 +237,7 @@ static unique_ptr<LogicalDependentJoin> CreateDuplicateEliminatedJoin(const Corr
 }
 
 static bool PerformDelimOnType(const LogicalType &type) {
-	if (type.InternalType() == PhysicalType::LIST) {
+	if (type.InternalType() == PhysicalType::LIST || type.id() == LogicalTypeId::BLOB) {
 		return false;
 	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
