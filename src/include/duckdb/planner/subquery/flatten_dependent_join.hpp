@@ -16,8 +16,10 @@
 namespace duckdb {
 
 class LogicalAggregate;
+class LogicalComparisonJoin;
 class LogicalDependentJoin;
 class LogicalExpressionGet;
+class LogicalJoin;
 
 //! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
 //! flattened subquery
@@ -140,12 +142,18 @@ private:
 	void AddCorrelatedGroupColumns(LogicalAggregate &aggr, const CorrelatedLayout &layout, idx_t group_count) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
 	void AddAnyJoinConditions(LogicalDependentJoin &op, const vector<ColumnBinding> &plan_columns) const;
+	void AddComparisonJoinConditions(LogicalComparisonJoin &join, const CorrelatedLayout &left_layout,
+	                                 const CorrelatedLayout &right_layout) const;
+	void AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
+	                                 const CorrelatedLayout &right_layout) const;
 	void RewriteCorrelatedOperator(LogicalOperator &op, const CorrelatedLayout &layout, idx_t lateral_depth,
 	                               bool recursive = false);
 	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,
 	                                          CorrelatedLayout layout);
 	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
 	                                     const CorrelatedLayout &right_layout, idx_t lateral_depth);
+	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	                                             CorrelatedLayout layout, bool correlated_left);
 	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
 	                               CorrelatedLayout layout);
 	CorrelatedLayout PushDownChildFresh(unique_ptr<LogicalOperator> &child, const PushDownContext &context,

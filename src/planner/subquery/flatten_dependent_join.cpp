@@ -198,6 +198,36 @@ void FlattenDependentJoins::AddAnyJoinConditions(LogicalDependentJoin &op,
 	}
 }
 
+void FlattenDependentJoins::AddComparisonJoinConditions(LogicalComparisonJoin &join,
+                                                        const CorrelatedLayout &left_layout,
+                                                        const CorrelatedLayout &right_layout) const {
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		JoinCondition cond(make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_layout.GetBinding(i)),
+		                   make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_layout.GetBinding(i)),
+		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+		join.conditions.push_back(std::move(cond));
+	}
+}
+
+void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
+                                                        const CorrelatedLayout &right_layout) const {
+	if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		AddComparisonJoinConditions(join.Cast<LogicalComparisonJoin>(), left_layout, right_layout);
+		return;
+	}
+	auto &logical_any_join = join.Cast<LogicalAnyJoin>();
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		auto left = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_layout.GetBinding(i));
+		auto right = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_layout.GetBinding(i));
+		auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+		                                                       std::move(left), std::move(right));
+		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comparison),
+		                                                         std::move(logical_any_join.condition));
+		logical_any_join.condition = std::move(conjunction);
+	}
+}
+
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> plan,
                                                                                    CorrelatedLayout layout,
                                                                                    const CorrelatedLayout &right_layout,
@@ -231,6 +261,19 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizeDependentJo
 
 	if (op.subquery_type == SubqueryType::ANY) {
 		AddAnyJoinConditions(op, plan_columns);
+	}
+	return PushDownResult(std::move(plan), std::move(layout));
+}
+
+FlattenDependentJoins::PushDownResult
+FlattenDependentJoins::PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,
+                                                     CorrelatedLayout layout, bool correlated_left) {
+	auto correlated_idx = correlated_left ? 0 : 1;
+	auto independent_idx = correlated_left ? 1 : 0;
+	layout = PushDownChild(plan->children[correlated_idx], context, std::move(layout));
+	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
+	if (!correlated_left) {
+		layout.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
 	}
 	return PushDownResult(std::move(plan), std::move(layout));
 }
@@ -613,17 +656,10 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCrossProduc
 	bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
 	bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
 	if (!right_has_correlation) {
-		layout = PushDownChild(plan->children[0], context, std::move(layout));
-
-		plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-		return PushDownResult(std::move(plan), std::move(layout));
+		return PushDownSingleCorrelatedChild(std::move(plan), context, std::move(layout), true);
 	}
 	if (!left_has_correlation) {
-		layout = PushDownChild(plan->children[1], context, std::move(layout));
-
-		plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
-		layout.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
-		return PushDownResult(std::move(plan), std::move(layout));
+		return PushDownSingleCorrelatedChild(std::move(plan), context, std::move(layout), false);
 	}
 
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
@@ -631,13 +667,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCrossProduc
 	plan->children[1] = std::move(right_result.plan);
 	auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), context, right_result.layout);
 	plan->children[0] = std::move(left_result.plan);
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		JoinCondition cond(
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_result.layout.GetBinding(i)),
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_result.layout.GetBinding(i)),
-		    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		join->conditions.push_back(std::move(cond));
-	}
+	AddComparisonJoinConditions(*join, left_result.layout, right_result.layout);
 	join->children.push_back(std::move(plan->children[0]));
 	join->children.push_back(std::move(plan->children[1]));
 	return PushDownResult(std::move(join), std::move(left_result.layout));
@@ -653,28 +683,18 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique
 
 	if (join.join_type == JoinType::INNER) {
 		if (!right_has_correlation) {
-			layout = PushDownChild(plan->children[0], context, std::move(layout));
-			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-			return PushDownResult(std::move(plan), std::move(layout));
+			return PushDownSingleCorrelatedChild(std::move(plan), context, std::move(layout), true);
 		}
 		if (!left_has_correlation) {
-			layout = PushDownChild(plan->children[1], context, std::move(layout));
-			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
-			layout.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
-			return PushDownResult(std::move(plan), std::move(layout));
+			return PushDownSingleCorrelatedChild(std::move(plan), context, std::move(layout), false);
 		}
 	} else if (join.join_type == JoinType::LEFT) {
 		if (!right_has_correlation) {
-			layout = PushDownChild(plan->children[0], context, std::move(layout));
-			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-			return PushDownResult(std::move(plan), std::move(layout));
+			return PushDownSingleCorrelatedChild(std::move(plan), context, std::move(layout), true);
 		}
 	} else if (join.join_type == JoinType::RIGHT) {
 		if (!left_has_correlation) {
-			layout = PushDownChild(plan->children[1], context, std::move(layout));
-			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
-			layout.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
-			return PushDownResult(std::move(plan), std::move(layout));
+			return PushDownSingleCorrelatedChild(std::move(plan), context, std::move(layout), false);
 		}
 	} else if (join.join_type == JoinType::MARK) {
 		if (!left_has_correlation && right_has_correlation) {
@@ -685,15 +705,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique
 			    PushDownDependentJoinInternal(std::move(plan->children[0]), context, right_result.layout);
 			plan->children[0] = std::move(left_result.plan);
 
-			for (idx_t i = 0; i < correlated_columns.size(); i++) {
-				JoinCondition cond(
-				    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_result.layout.GetBinding(i)),
-				    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_result.layout.GetBinding(i)),
-				    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-
-				auto &comparison_join = join.Cast<LogicalComparisonJoin>();
-				comparison_join.conditions.push_back(std::move(cond));
-			}
+			AddComparisonJoinConditions(join.Cast<LogicalComparisonJoin>(), left_result.layout, right_result.layout);
 			return PushDownResult(std::move(plan), std::move(left_result.layout));
 		}
 
@@ -716,25 +728,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique
 	} else if (join.join_type == JoinType::RIGHT) {
 		result_layout.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
 	}
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		auto left = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_result.layout.GetBinding(i));
-		auto right = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_result.layout.GetBinding(i));
-
-		if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-		    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-
-			auto &comparison_join = join.Cast<LogicalComparisonJoin>();
-			comparison_join.conditions.push_back(std::move(cond));
-		} else {
-			auto &logical_any_join = join.Cast<LogicalAnyJoin>();
-			auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-			                                                       std::move(left), std::move(right));
-			auto conjunction = make_uniq<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
-			logical_any_join.condition = std::move(conjunction);
-		}
-	}
+	AddCorrelatedJoinConditions(join, left_result.layout, right_result.layout);
 	RewriteCorrelatedOperator(*plan, right_result.layout, context.lateral_depth);
 	return PushDownResult(std::move(plan), std::move(result_layout));
 }
