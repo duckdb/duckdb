@@ -18,6 +18,27 @@ namespace duckdb {
 //! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
 //! flattened subquery
 struct FlattenDependentJoins {
+	struct PushDownState {
+		PushDownState() : delim_offset(DConstants::INVALID_INDEX) {
+		}
+		PushDownState(ColumnBinding base_binding_p, idx_t delim_offset_p)
+		    : base_binding(base_binding_p), delim_offset(delim_offset_p) {
+		}
+
+		ColumnBinding base_binding;
+		idx_t delim_offset;
+	};
+
+	struct PushDownResult {
+		PushDownResult(unique_ptr<LogicalOperator> plan_p, PushDownState state_p, bool propagate_null_values_p = true)
+		    : plan(std::move(plan_p)), state(std::move(state_p)), propagate_null_values(propagate_null_values_p) {
+		}
+
+		unique_ptr<LogicalOperator> plan;
+		PushDownState state;
+		bool propagate_null_values;
+	};
+
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 
