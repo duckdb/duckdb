@@ -612,169 +612,124 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCrossProduc
 	return PushDownResult(std::move(join), left_result.state, parent_propagate_null_values);
 }
 
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique_ptr<LogicalOperator> plan,
+                                                                          bool parent_propagate_null_values,
+                                                                          idx_t lateral_depth, PushDownState state) {
+	auto &join = plan->Cast<LogicalJoin>();
+	D_ASSERT(plan->children.size() == 2);
+	bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
+	bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
 
-		if (join.join_type == JoinType::INNER) {
-			// inner join
-			if (!right_has_correlation) {
-				// only left has correlation: push into left
-				auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]),
-				                                                 parent_propagate_null_values, lateral_depth, state);
-				plan->children[0] = std::move(left_result.plan);
-				parent_propagate_null_values = left_result.propagate_null_values;
-				plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-				// Remove the correlated columns coming from outside for current join node
-				return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
-			}
-			if (!left_has_correlation) {
-				// only right has correlation: push into right
-				auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
-				                                                  parent_propagate_null_values, lateral_depth, state);
-				plan->children[1] = std::move(right_result.plan);
-				parent_propagate_null_values = right_result.propagate_null_values;
-				plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
-				right_result.state.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
-				// Remove the correlated columns coming from outside for current join node
-				return PushDownResult(std::move(plan), right_result.state, parent_propagate_null_values);
-			}
-		} else if (join.join_type == JoinType::LEFT) {
-			// left outer join
-			if (!right_has_correlation) {
-				// only left has correlation: push into left
-				auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]),
-				                                                 parent_propagate_null_values, lateral_depth, state);
-				plan->children[0] = std::move(left_result.plan);
-				parent_propagate_null_values = left_result.propagate_null_values;
-				plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-				// Remove the correlated columns coming from outside for current join node
-				return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
-			}
-		} else if (join.join_type == JoinType::RIGHT) {
-			// right outer join
-			if (!left_has_correlation) {
-				// only right has correlation: push into right
-				auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
-				                                                  parent_propagate_null_values, lateral_depth, state);
-				plan->children[1] = std::move(right_result.plan);
-				parent_propagate_null_values = right_result.propagate_null_values;
-				plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
-				right_result.state.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
-				return PushDownResult(std::move(plan), right_result.state, parent_propagate_null_values);
-			}
-		} else if (join.join_type == JoinType::MARK) {
-			if (!left_has_correlation && right_has_correlation) {
-				// found a MARK join where the left side has no correlation
-				auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
-				                                                  parent_propagate_null_values, lateral_depth, state);
-				plan->children[1] = std::move(right_result.plan);
-				parent_propagate_null_values = right_result.propagate_null_values;
-
-				// now push into the left side of the MARK join even though it has no correlation
-				// this is necessary to add the correlated columns to the column bindings and allow
-				// the join condition to be rewritten correctly
-				auto left_result = PushDownDependentJoinInternal(
-				    std::move(plan->children[0]), parent_propagate_null_values, lateral_depth, right_result.state);
-				plan->children[0] = std::move(left_result.plan);
-				parent_propagate_null_values = left_result.propagate_null_values;
-
-				// add the correlated columns to the join conditions
-				for (idx_t i = 0; i < correlated_columns.size(); i++) {
-					JoinCondition cond(make_uniq<BoundColumnRefExpression>(correlated_columns[i].type,
-					                                                       left_result.state.GetBinding(i)),
-					                   make_uniq<BoundColumnRefExpression>(correlated_columns[i].type,
-					                                                       right_result.state.GetBinding(i)),
-					                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-
-					auto &comparison_join = join.Cast<LogicalComparisonJoin>();
-					comparison_join.conditions.push_back(std::move(cond));
-				}
-				return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
-			}
-
-			// push the child into the LHS
+	if (join.join_type == JoinType::INNER) {
+		if (!right_has_correlation) {
 			auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
 			                                                 lateral_depth, state);
 			plan->children[0] = std::move(left_result.plan);
 			parent_propagate_null_values = left_result.propagate_null_values;
 			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-			// rewrite expressions in the join conditions
-			RewriteCorrelatedExpressions rewriter(left_result.state.correlated_bindings, correlated_map, lateral_depth);
-			rewriter.VisitOperator(*plan);
 			return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
-		} else {
-			throw NotImplementedException("Unsupported join type for flattening correlated subquery");
 		}
-		// both sides have correlation
-		// push into both sides
+		if (!left_has_correlation) {
+			auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
+			                                                  parent_propagate_null_values, lateral_depth, state);
+			plan->children[1] = std::move(right_result.plan);
+			parent_propagate_null_values = right_result.propagate_null_values;
+			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
+			right_result.state.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
+			return PushDownResult(std::move(plan), right_result.state, parent_propagate_null_values);
+		}
+	} else if (join.join_type == JoinType::LEFT) {
+		if (!right_has_correlation) {
+			auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
+			                                                 lateral_depth, state);
+			plan->children[0] = std::move(left_result.plan);
+			parent_propagate_null_values = left_result.propagate_null_values;
+			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
+			return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
+		}
+	} else if (join.join_type == JoinType::RIGHT) {
+		if (!left_has_correlation) {
+			auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
+			                                                  parent_propagate_null_values, lateral_depth, state);
+			plan->children[1] = std::move(right_result.plan);
+			parent_propagate_null_values = right_result.propagate_null_values;
+			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
+			right_result.state.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
+			return PushDownResult(std::move(plan), right_result.state, parent_propagate_null_values);
+		}
+	} else if (join.join_type == JoinType::MARK) {
+		if (!left_has_correlation && right_has_correlation) {
+			auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
+			                                                  parent_propagate_null_values, lateral_depth, state);
+			plan->children[1] = std::move(right_result.plan);
+			parent_propagate_null_values = right_result.propagate_null_values;
+
+			auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
+			                                                 lateral_depth, right_result.state);
+			plan->children[0] = std::move(left_result.plan);
+			parent_propagate_null_values = left_result.propagate_null_values;
+
+			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+				JoinCondition cond(
+				    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_result.state.GetBinding(i)),
+				    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_result.state.GetBinding(i)),
+				    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+
+				auto &comparison_join = join.Cast<LogicalComparisonJoin>();
+				comparison_join.conditions.push_back(std::move(cond));
+			}
+			return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
+		}
+
 		auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
 		                                                 lateral_depth, state);
 		plan->children[0] = std::move(left_result.plan);
 		parent_propagate_null_values = left_result.propagate_null_values;
-		auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values,
-		                                                  lateral_depth, left_result.state);
-		plan->children[1] = std::move(right_result.plan);
-		parent_propagate_null_values = right_result.propagate_null_values;
-		PushDownState result_state = right_result.state;
-		// NOTE: for OUTER JOINS it matters what the BASE BINDING is after the join
-		// for the LEFT OUTER JOIN, we want the LEFT side to be the base binding after we push
-		// because the RIGHT binding might contain NULL values
-		if (join.join_type == JoinType::LEFT) {
-			result_state = left_result.state;
-		} else if (join.join_type == JoinType::RIGHT) {
-			result_state.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
-		}
-		// add the correlated columns to the join conditions
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			auto left =
-			    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_result.state.GetBinding(i));
-			auto right =
-			    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_result.state.GetBinding(i));
-
-			if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-			    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-				JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-
-				auto &comparison_join = join.Cast<LogicalComparisonJoin>();
-				comparison_join.conditions.push_back(std::move(cond));
-			} else {
-				auto &logical_any_join = join.Cast<LogicalAnyJoin>();
-				auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-				                                                       std::move(left), std::move(right));
-				auto conjunction = make_uniq<BoundConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
-				logical_any_join.condition = std::move(conjunction);
-			}
-		}
-		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(right_result.state.correlated_bindings, correlated_map, lateral_depth);
+		plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
+		RewriteCorrelatedExpressions rewriter(left_result.state.correlated_bindings, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
-		return PushDownResult(std::move(plan), result_state, parent_propagate_null_values);
+		return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
+	} else {
+		throw NotImplementedException("Unsupported join type for flattening correlated subquery");
 	}
-	case LogicalOperatorType::LOGICAL_LIMIT: {
-		auto &limit = plan->Cast<LogicalLimit>();
-		switch (limit.limit_val.Type()) {
-		case LimitNodeType::CONSTANT_PERCENTAGE:
-		case LimitNodeType::EXPRESSION_PERCENTAGE:
-			// NOTE: limit percent could be supported in a manner similar to the LIMIT above
-			// but instead of filtering by an exact number of rows, the limit should be expressed as
-			// COUNT computed over the partition multiplied by the percentage
-			throw ParserException("Limit percent operator not supported in correlated subquery");
-		case LimitNodeType::EXPRESSION_VALUE:
-			throw ParserException("Non-constant limit not supported in correlated subquery");
-		default:
-			break;
+
+	auto left_result =
+	    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth, state);
+	plan->children[0] = std::move(left_result.plan);
+	parent_propagate_null_values = left_result.propagate_null_values;
+	auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values,
+	                                                  lateral_depth, left_result.state);
+	plan->children[1] = std::move(right_result.plan);
+	parent_propagate_null_values = right_result.propagate_null_values;
+	PushDownState result_state = right_result.state;
+	if (join.join_type == JoinType::LEFT) {
+		result_state = left_result.state;
+	} else if (join.join_type == JoinType::RIGHT) {
+		result_state.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
+	}
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		auto left = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_result.state.GetBinding(i));
+		auto right = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_result.state.GetBinding(i));
+
+		if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+		    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+
+			auto &comparison_join = join.Cast<LogicalComparisonJoin>();
+			comparison_join.conditions.push_back(std::move(cond));
+		} else {
+			auto &logical_any_join = join.Cast<LogicalAnyJoin>();
+			auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                       std::move(left), std::move(right));
+			auto conjunction = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
+			logical_any_join.condition = std::move(conjunction);
 		}
-		switch (limit.offset_val.Type()) {
-		case LimitNodeType::EXPRESSION_VALUE:
-			throw ParserException("Non-constant offset not supported in correlated subquery");
-		case LimitNodeType::CONSTANT_PERCENTAGE:
-		case LimitNodeType::EXPRESSION_PERCENTAGE:
-			throw InternalException("Percentage offset in FlattenDependentJoin");
-		default:
-			break;
-		}
-		auto rownum_alias = "limit_rownum";
-		unique_ptr<LogicalOperator> child;
-		unique_ptr<LogicalOrder> order_by;
+	}
+	RewriteCorrelatedExpressions rewriter(right_result.state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+	return PushDownResult(std::move(plan), result_state, parent_propagate_null_values);
+}
 
 		// check if the direct child of this LIMIT node is an ORDER BY node, if so, keep it separate
 		// this is done for an optimization to avoid having to compute the total order

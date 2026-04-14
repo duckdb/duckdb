@@ -113,6 +113,8 @@ private:
 	                                 idx_t lateral_depth, PushDownState state);
 	PushDownResult PushDownCrossProduct(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                    idx_t lateral_depth, PushDownState state);
+	PushDownResult PushDownJoin(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+	                            idx_t lateral_depth, PushDownState state);
 	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                             idx_t lateral_depth, PushDownState state);
 };
