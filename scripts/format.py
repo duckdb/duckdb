@@ -192,7 +192,7 @@ if check_only:
 
 def get_changed_files(revision):
     proc = subprocess.Popen(['git', 'diff', '--name-only', revision], stdout=subprocess.PIPE)
-    files = proc.stdout.read().decode('utf8').split('\n')
+    files = proc.stdout.read().decode('utf8', errors='backslashreplace').split('\n')
     changed_files = []
     for f in files:
         if not can_format_file(f):
@@ -299,7 +299,7 @@ def get_formatted_text(f, full_path, directory, ext):
     if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage' or ext == '.benchmark':
         # optimization: import and call the function directly
         # instead of running a subprocess
-        with open(full_path, "r", encoding="utf-8") as f:
+        with open(full_path, "r", encoding="utf-8", errors='backslashreplace') as f:
             original_lines = f.readlines()
         formatted, status = format_file_content(full_path, original_lines)
         if formatted is None:
@@ -308,10 +308,13 @@ def get_formatted_text(f, full_path, directory, ext):
         return formatted
     proc_command = format_commands[ext].split(' ') + [full_path]
     proc = subprocess.Popen(
-        proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(full_path) if ext == '.py' else None
+        proc_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=open(full_path, encoding='utf8', errors='backslashreplace') if ext == '.py' else None,
     )
-    new_text = proc.stdout.read().decode('utf8')
-    stderr = proc.stderr.read().decode('utf8')
+    new_text = proc.stdout.read().decode('utf8', errors='backslashreplace')
+    stderr = proc.stderr.read().decode('utf8', errors='backslashreplace')
     if len(stderr) > 0:
         print(os.getcwd())
         print("Failed to format file " + full_path)
@@ -331,7 +334,7 @@ def file_is_generated(text):
 
 def format_file(f, full_path, directory, ext):
     global difference_files
-    with open_utf8(full_path, 'r') as f:
+    with open_utf8(full_path, 'r', errors='backslashreplace') as f:
         old_text = f.read()
     # do not format auto-generated files
     if file_is_generated(old_text) and ext != '.py':
