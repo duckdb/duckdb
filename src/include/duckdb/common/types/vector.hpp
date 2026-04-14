@@ -24,7 +24,7 @@ struct SelCache;
 enum class VectorConstructorAction;
 
 template <class T>
-class VectorValueIterator;
+class VectorIterator;
 template <class T>
 class VectorValidValueIterator;
 class VectorValidityIterator;
@@ -190,7 +190,7 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorValueIterator<T> Values(idx_t count) const;
+	VectorIterator<T> Values(idx_t count) const;
 
 	template <class T>
 	VectorValidValueIterator<T> ValidValues(idx_t count) const;

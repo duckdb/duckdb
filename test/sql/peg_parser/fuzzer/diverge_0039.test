@@ -1,0 +1,31 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0039.test
+# description: LIMIT ALL should produce all rows (NULL constant), not fail with STAR expression error
+# group: [fuzzer]
+
+require autocomplete
+
+statement ok
+create table t(i bigint);
+
+statement ok
+insert into t values (1), (2), (3);
+
+statement ok
+CALL enable_peg_parser();
+
+query I
+( TABLE t ) LIMIT ALL
+----
+1
+2
+3
+
+statement ok
+CALL disable_peg_parser();
+
+query I
+( TABLE t ) LIMIT ALL
+----
+1
+2
+3

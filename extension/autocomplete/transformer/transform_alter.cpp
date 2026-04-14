@@ -249,10 +249,15 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	AddColumnEntry new_column;
 	new_column.column_path = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<LogicalType>(list_pr, 1, new_column.type);
-	if (list_pr.Child<OptionalParseResult>(2).HasResult()) {
+	bool has_generated = list_pr.Child<OptionalParseResult>(2).HasResult();
+	bool has_type = list_pr.Child<OptionalParseResult>(1).HasResult();
+	if (!has_type && !has_generated) {
+		throw ParserException("Column definition requires a type or generated expression");
+	}
+	if (has_generated) {
 		throw ParserException("Adding generated columns after table creation is not supported yet");
 	}
+	transformer.TransformOptional<LogicalType>(list_pr, 1, new_column.type);
 	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
 	if (!constraints_opt.HasResult()) {
 		return new_column;

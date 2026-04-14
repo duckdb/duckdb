@@ -38,8 +38,9 @@ public:
 	}
 };
 
-static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw BinderException("json_serialize_plan takes at least one argument");
 	}
@@ -201,23 +202,22 @@ ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 	ScalarFunctionSet set("json_serialize_plan");
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializePlanFunction,
-	                               JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
+	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
 	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
 	                               LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
-	    JSONFunctionLocalState::Init));
+	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 	return set;
 }
 

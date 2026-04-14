@@ -50,6 +50,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 		info->options.insert({lower_name, option.GetFirstChildOrExpression()});
 	}
 	if (info->name.empty()) {
+		if (!info->type) {
+			throw ParserException("Failed to create secret - secret must have a type defined");
+		}
 		auto value = GetConstantExpressionValue(info->type);
 		if (value.IsNull()) {
 			throw InvalidInputException(

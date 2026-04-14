@@ -57,9 +57,31 @@ struct WindowFunctionInfo {
 	}
 };
 
-//! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*window_bind_function_t)(ClientContext &context, WindowFunction &function,
-                                                           vector<unique_ptr<Expression>> &arguments);
+class BindWindowFunctionInput {
+public:
+	BindWindowFunctionInput(ClientContext &context_p, WindowFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p)
+	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
+	}
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+	WindowFunction &GetBoundFunction() const {
+		return bound_function;
+	}
+	vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
+
+private:
+	ClientContext &context;
+	WindowFunction &bound_function;
+	vector<unique_ptr<Expression>> &arguments;
+};
+
+//! Binds the window function and creates the function data
+typedef unique_ptr<FunctionData> (*window_bind_function_t)(BindWindowFunctionInput &input);
 
 //! Validates the additional ordering usage.
 typedef void (*window_validate_function_t)(ClientContext &context, WindowFunction &function,
@@ -127,6 +149,12 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	window_bind_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(window_bind_function_t callback) { bind = callback; }
+	unique_ptr<FunctionData> Bind(BindWindowFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
+	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+		BindWindowFunctionInput bind_input(context, *this, arguments);
+		return Bind(bind_input);
+	}
+
 
 	bool HasValidateCallback() const { return validate != nullptr; }
 	window_validate_function_t GetValidateCallback() const { return validate; }

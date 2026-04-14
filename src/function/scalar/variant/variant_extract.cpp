@@ -76,8 +76,10 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	return VariantStats::WrapExtractedFieldAsVariant(variant_stats, *found_stats);
 }
 
-static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
@@ -308,7 +310,7 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 
 	ScalarFunctionSet fun_set;
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
-	                               nullptr, VariantExtractPropagateStats);
+	                               VariantExtractPropagateStats);
 
 	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
 	fun_set.AddFunction(variant_extract);

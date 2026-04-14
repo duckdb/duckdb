@@ -104,7 +104,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 			ConstantVector::SetNull(result);
 			return;
 		}
-		auto list_data = FlatVector::GetData<list_entry_t>(input);
+		auto list_data = ConstantVector::GetData<list_entry_t>(input);
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
@@ -153,7 +153,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 			ConstantVector::SetNull(result);
 			return;
 		}
-		auto list_data = FlatVector::GetData<list_entry_t>(input);
+		auto list_data = ConstantVector::GetData<list_entry_t>(input);
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
@@ -534,8 +534,10 @@ struct RemapEntry {
 	}
 };
 
-unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFunction &bound_function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 4);
 	for (idx_t arg_idx = 0; arg_idx < 3; arg_idx++) {
 		auto &arg = arguments[arg_idx];

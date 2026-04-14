@@ -205,8 +205,9 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 }
 
 template <bool IS_ORDERED = true>
-unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 1);
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {

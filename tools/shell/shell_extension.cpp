@@ -27,8 +27,8 @@ static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	});
 }
 
-static unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> GetEnvBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		throw PermissionException("getenv is disabled through configuration");
 	}

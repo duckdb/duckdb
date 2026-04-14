@@ -139,8 +139,7 @@ void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr c
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
 struct WindowValueExecutor {
-	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
@@ -150,8 +149,10 @@ struct WindowValueExecutor {
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 };
 
-unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	function.return_type = arguments[0]->return_type;
 
 	return nullptr;
@@ -308,8 +309,7 @@ void WindowLeadLagLocalState::Finalizer(ExecutionContext &context, CollectionPtr
 //===--------------------------------------------------------------------===//
 struct WindowLeadLagExecutor : public WindowValueExecutor {
 public:
-	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
 	                                             const idx_t payload_count, const ValidityMask &partition_mask,
@@ -320,9 +320,11 @@ public:
 	                    idx_t row_idx, OperatorSinkInput &sink);
 };
 
-unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 
 	if (arguments.size() > 2) {
 		function.arguments[2] = function.return_type;
@@ -775,8 +777,7 @@ void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 // WindowFillExecutor
 //===--------------------------------------------------------------------===//
 struct WindowFillExecutor : public WindowValueExecutor {
-	static unique_ptr<FunctionData> Bind(ClientContext &context, WindowFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
 	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
@@ -1012,9 +1013,10 @@ static bool IsFillType(const LogicalType &type) {
 	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
-unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	const auto &arguments = input.GetArguments();
 
 	//	Check FILL arguments support subtraction
 	if (!IsFillType(arguments[0]->return_type)) {
@@ -1027,7 +1029,9 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, Window
 void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
                                   vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
                                   vector<OrderByNode> &arg_orders) {
-	WindowValueExecutor::Bind(context, function, arguments);
+	BindWindowFunctionInput input(context, function, arguments);
+	WindowValueExecutor::Bind(input);
+
 	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
