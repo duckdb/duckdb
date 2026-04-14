@@ -121,7 +121,7 @@ public:
 	//! Verifies the constraint for a chunk of data.
 	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
-	void CommitDrop(CommitDropAccumulator &acc) override {
+	void CommitDrop() override {
 	}
 	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
 	virtual void ResetStorage(IndexLock &index_lock) = 0;

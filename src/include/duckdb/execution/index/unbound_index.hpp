@@ -105,7 +105,7 @@ public:
 		return GetCreateInfo().table;
 	}
 
-	void CommitDrop(CommitDropAccumulator &acc) override;
+	void CommitDrop() override;
 
 	//! Buffer Index delete or insert (replay_type) data chunk.
 	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into

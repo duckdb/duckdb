@@ -12,7 +12,6 @@
 
 namespace duckdb {
 class TableCatalogEntry;
-struct CommitDropAccumulator;
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
@@ -48,7 +47,7 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	void CommitDrop(CommitDropAccumulator &acc);
+	void CommitDrop();
 };
 
 } // namespace duckdb

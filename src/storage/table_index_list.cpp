@@ -1,5 +1,4 @@
 #include "duckdb/storage/table/table_index_list.hpp"
-#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
@@ -110,12 +109,12 @@ void TableIndexList::RemoveIndex(const string &name) {
 	}
 }
 
-void TableIndexList::CommitDrop(const string &name, CommitDropAccumulator &acc) {
+void TableIndexList::CommitDrop(const string &name) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (index.GetIndexName() == name) {
-			index.CommitDrop(acc);
+			index.CommitDrop();
 			return;
 		}
 	}

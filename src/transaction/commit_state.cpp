@@ -213,7 +213,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 		}
 		case CatalogType::INDEX_ENTRY: {
 			auto &index_entry = entry.Cast<DuckIndexEntry>();
-			index_entry.CommitDrop(drop_accumulator);
+			index_entry.CommitDrop();
 			break;
 		}
 		default:
