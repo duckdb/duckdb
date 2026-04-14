@@ -1722,11 +1722,6 @@ idx_t DataTable::GetTotalRows() const {
 
 void DataTable::CommitDropTable(CommitDropAccumulator &acc) {
 	row_groups->CommitDropTable(acc);
-#ifdef D_ASSERT_IS_ENABLED
-	for (auto &index : info->indexes.Indexes()) {
-		D_ASSERT(index.IsBound());
-	}
-#endif
 }
 
 //===--------------------------------------------------------------------===//

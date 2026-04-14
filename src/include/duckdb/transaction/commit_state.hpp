@@ -18,6 +18,7 @@
 namespace duckdb {
 class BlockManager;
 class CatalogEntry;
+class TableIndexList;
 class DataChunk;
 class DuckTransaction;
 class WriteAheadLog;
@@ -35,18 +36,27 @@ struct CommitDropAccumulator {
 		reference<BlockManager> block_manager;
 		block_id_t id;
 	};
+	struct IndexRemoval {
+		reference<TableIndexList> indexes;
+		string name;
+	};
 
 	vector<BlockMark> block_marks;
+	vector<IndexRemoval> pending_index_removals;
 
 	void AddBlock(BlockManager &bm, block_id_t id) {
 		block_marks.push_back(BlockMark {bm, id});
 	}
+	void AddPendingIndexRemoval(TableIndexList &indexes, string name) {
+		pending_index_removals.push_back(IndexRemoval {indexes, std::move(name)});
+	}
 	void Apply();
 	void Clear() {
 		block_marks.clear();
+		pending_index_removals.clear();
 	}
 	bool Empty() const {
-		return block_marks.empty();
+		return block_marks.empty() && pending_index_removals.empty();
 	}
 };
 

@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {
 
@@ -55,11 +56,9 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 	return *info->info;
 }
 
-void DuckIndexEntry::CommitDrop() {
+void DuckIndexEntry::CommitDrop(CommitDropAccumulator &acc) {
 	D_ASSERT(info);
-	auto &indexes = GetDataTableInfo().GetIndexes();
-	indexes.CommitDrop(name);
-	indexes.RemoveIndex(name);
+	acc.AddPendingIndexRemoval(GetDataTableInfo().GetIndexes(), name);
 }
 
 } // namespace duckdb

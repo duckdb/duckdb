@@ -47,12 +47,20 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 		state.start = state.handle.Ptr();
 		state.end = state.start + state.current->position;
 		while (state.start < state.end) {
+			data_ptr_t entry_start = state.start;
 			UndoFlags type = Load<UndoFlags>(state.start);
 			state.start += sizeof(UndoFlags);
 
 			uint32_t len = Load<uint32_t>(state.start);
 			state.start += sizeof(uint32_t);
-			callback(type, state.start);
+			try {
+				callback(type, state.start);
+			} catch (...) {
+				// Rewind to the start of the failed entry so RevertCommit's two-arg iteration
+				// (which uses this state as end_state) excludes the entry that did not execute.
+				state.start = entry_start;
+				throw;
+			}
 			state.start += len;
 		}
 		state.current = state.current->prev;

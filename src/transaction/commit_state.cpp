@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/append_info.hpp"
@@ -30,6 +31,11 @@ namespace duckdb {
 void CommitDropAccumulator::Apply() {
 	for (auto &m : block_marks) {
 		m.block_manager.get().MarkBlockAsModified(m.id);
+	}
+	for (auto &r : pending_index_removals) {
+		auto &indexes = r.indexes.get();
+		indexes.CommitDrop(r.name);
+		indexes.RemoveIndex(r.name);
 	}
 	Clear();
 }
@@ -213,7 +219,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 		}
 		case CatalogType::INDEX_ENTRY: {
 			auto &index_entry = entry.Cast<DuckIndexEntry>();
-			index_entry.CommitDrop();
+			index_entry.CommitDrop(drop_accumulator);
 			break;
 		}
 		default:
