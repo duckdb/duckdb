@@ -150,7 +150,25 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 						}
 					}
 
-					// TODO: Parse the bounding box, other metadata that might be useful.
+					// Parse the covering field (GeoParquet 1.1+)
+					// covering.bbox maps each coordinate (xmin/ymin/xmax/ymax) to
+					// [column_name, field_name]. We only need the column name.
+					const auto covering_val = yyjson_obj_get(column_val, "covering");
+					if (covering_val && yyjson_is_obj(covering_val)) {
+						const auto bbox_covering = yyjson_obj_get(covering_val, "bbox");
+						if (bbox_covering && yyjson_is_obj(bbox_covering)) {
+							// All four coords reference the same column; read from xmin
+							const auto xmin_arr = yyjson_obj_get(bbox_covering, "xmin");
+							if (xmin_arr && yyjson_is_arr(xmin_arr) && yyjson_arr_size(xmin_arr) >= 1) {
+								const auto col_name_val = yyjson_arr_get_first(xmin_arr);
+								if (col_name_val && yyjson_is_str(col_name_val)) {
+									column.bbox_column_name = yyjson_get_str(col_name_val);
+								}
+							}
+						}
+					}
+
+					// TODO: Parse the file-level bounding box, other metadata that might be useful.
 					// (Only encoding and geometry types are required to be present)
 				}
 
