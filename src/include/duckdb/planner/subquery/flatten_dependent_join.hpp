@@ -15,6 +15,9 @@
 
 namespace duckdb {
 
+class LogicalAggregate;
+class LogicalExpressionGet;
+
 //! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
 //! flattened subquery
 struct FlattenDependentJoins {
@@ -102,6 +105,14 @@ public:
 	optional_ptr<FlattenDependentJoins> parent;
 
 private:
+	PushDownState CreateCorrelatedState(TableIndex table_index, idx_t binding_offset, idx_t correlated_offset) const;
+	PushDownState CreateCorrelatedState(TableIndex table_index, idx_t correlated_offset) const;
+	PushDownState CreateLeadingCorrelatedState(const vector<ColumnBinding> &bindings) const;
+	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const PushDownState &state, idx_t count,
+	                             bool include_names) const;
+	void AppendCorrelatedColumnsToExpressionGet(LogicalExpressionGet &expr_get, const PushDownState &state) const;
+	void AddCorrelatedGroupColumns(LogicalAggregate &aggr, const PushDownState &state, idx_t group_count) const;
+	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const PushDownState &state) const;
 	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                              idx_t lateral_depth, PushDownState state);
 	PushDownResult PushDownUnnest(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,

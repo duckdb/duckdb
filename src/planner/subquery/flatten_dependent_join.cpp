@@ -380,6 +380,81 @@ bool SubqueryDependentFilter(Expression &expr) {
 	return false;
 }
 
+FlattenDependentJoins::PushDownState FlattenDependentJoins::CreateCorrelatedState(TableIndex table_index,
+                                                                                  idx_t binding_offset,
+                                                                                  idx_t correlated_offset) const {
+	return PushDownState::CreateContiguous(ColumnBinding(table_index, ProjectionIndex(binding_offset)),
+	                                       correlated_offset, correlated_columns.size());
+}
+
+FlattenDependentJoins::PushDownState FlattenDependentJoins::CreateCorrelatedState(TableIndex table_index,
+                                                                                  idx_t correlated_offset) const {
+	return CreateCorrelatedState(table_index, correlated_offset, correlated_offset);
+}
+
+FlattenDependentJoins::PushDownState
+FlattenDependentJoins::CreateLeadingCorrelatedState(const vector<ColumnBinding> &bindings) const {
+	D_ASSERT(bindings.size() >= correlated_columns.size());
+	vector<idx_t> correlated_offsets;
+	correlated_offsets.reserve(correlated_columns.size());
+	vector<ColumnBinding> correlated_bindings;
+	correlated_bindings.reserve(correlated_columns.size());
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		correlated_offsets.push_back(i);
+		correlated_bindings.push_back(bindings[i]);
+	}
+	return PushDownState(std::move(correlated_bindings), std::move(correlated_offsets));
+}
+
+void FlattenDependentJoins::AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions,
+                                                    const PushDownState &state, idx_t count, bool include_names) const {
+	D_ASSERT(count <= correlated_columns.size());
+	for (idx_t i = 0; i < count; i++) {
+		auto &col = correlated_columns[i];
+		if (include_names) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i)));
+		} else {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.type, state.GetBinding(i)));
+		}
+	}
+}
+
+void FlattenDependentJoins::AppendCorrelatedColumnsToExpressionGet(LogicalExpressionGet &expr_get,
+                                                                   const PushDownState &state) const {
+	for (auto &expr_list : expr_get.expressions) {
+		AppendCorrelatedColumns(expr_list, state, correlated_columns.size(), false);
+	}
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		expr_get.expr_types.push_back(correlated_columns[i].type);
+	}
+}
+
+void FlattenDependentJoins::AddCorrelatedGroupColumns(LogicalAggregate &aggr, const PushDownState &state,
+                                                      idx_t group_count) const {
+	D_ASSERT(group_count <= correlated_columns.size());
+	for (idx_t i = 0; i < group_count; i++) {
+		auto &col = correlated_columns[i];
+		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
+		auto new_group_index = ColumnBinding::PushExpression(aggr.groups, std::move(colref));
+		for (auto &set : aggr.grouping_sets) {
+			set.insert(new_group_index);
+		}
+	}
+}
+
+void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const PushDownState &state) const {
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		auto &col = correlated_columns[i];
+		auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
+		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
+		vector<unique_ptr<Expression>> aggr_children;
+		aggr_children.push_back(std::move(colref));
+		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
+		                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
+		aggr.expressions.push_back(std::move(first_fun));
+	}
+}
+
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(unique_ptr<LogicalOperator> plan,
                                                                             bool parent_propagate_null_values,
                                                                             idx_t lateral_depth, PushDownState state) {
@@ -429,16 +504,7 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, bool
 		auto decorrelated = Decorrelate(std::move(plan->children[0]), true, 0, state);
 		auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 		if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			auto bindings = cross_product->GetColumnBindings();
-			vector<idx_t> correlated_offsets;
-			correlated_offsets.reserve(correlated_columns.size());
-			vector<ColumnBinding> correlated_bindings;
-			correlated_bindings.reserve(correlated_columns.size());
-			for (idx_t i = 0; i < correlated_columns.size(); i++) {
-				correlated_offsets.push_back(i);
-				correlated_bindings.push_back(bindings[i]);
-			}
-			state = PushDownState(std::move(correlated_bindings), std::move(correlated_offsets));
+			state = CreateLeadingCorrelatedState(cross_product->GetColumnBindings());
 		}
 		plan->children[0] = std::move(cross_product);
 	} else {
@@ -451,15 +517,10 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, bool
 
 	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
 	rewriter.VisitOperator(*plan);
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		auto &col = correlated_columns[i];
-		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-		plan->expressions.push_back(std::move(colref));
-	}
+	AppendCorrelatedColumns(plan->expressions, state, correlated_columns.size(), true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-	state = PushDownState::CreateContiguous(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)),
-	                                        correlated_offset, correlated_columns.size());
+	state = CreateCorrelatedState(proj.table_index, correlated_offset);
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
@@ -483,27 +544,11 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownAggregate(u
 	TableIndex delim_table_index;
 	idx_t delim_column_offset;
 	auto new_group_count = perform_delim ? correlated_columns.size() : 1;
-	for (idx_t i = 0; i < new_group_count; i++) {
-		auto &col = correlated_columns[i];
-		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-		auto new_group_index = ColumnBinding::PushExpression(aggr.groups, std::move(colref));
-		for (auto &set : aggr.grouping_sets) {
-			set.insert(new_group_index);
-		}
-	}
+	AddCorrelatedGroupColumns(aggr, state, new_group_count);
 	if (!perform_delim) {
 		delim_table_index = aggr.aggregate_index;
 		delim_column_offset = aggr.expressions.size();
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			auto &col = correlated_columns[i];
-			auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
-			auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-			vector<unique_ptr<Expression>> aggr_children;
-			aggr_children.push_back(std::move(colref));
-			auto first_fun = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
-			                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
-			aggr.expressions.push_back(std::move(first_fun));
-		}
+		AddCorrelatedFirstAggregates(aggr, state);
 	} else {
 		delim_table_index = aggr.group_index;
 		delim_column_offset = aggr.groups.size() - correlated_columns.size();
@@ -553,13 +598,11 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownAggregate(u
 				replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 			}
 		}
-		state = PushDownState::CreateContiguous(ColumnBinding(left_index, ProjectionIndex(0)), 0,
-		                                        correlated_columns.size());
+		state = CreateCorrelatedState(left_index, 0);
 		return PushDownResult(std::move(join), state, parent_propagate_null_values);
 	}
 
-	state = PushDownState::CreateContiguous(ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset)),
-	                                        delim_column_offset, correlated_columns.size());
+	state = CreateCorrelatedState(delim_table_index, delim_column_offset);
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
@@ -777,11 +820,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownLimit(uniqu
 	auto rn = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 	auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn), nullptr);
 	auto partition_count = perform_delim ? correlated_columns.size() : 1;
-	for (idx_t i = 0; i < partition_count; i++) {
-		auto &col = correlated_columns[i];
-		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-		row_number->partitions.push_back(std::move(colref));
-	}
+	AppendCorrelatedColumns(row_number->partitions, state, partition_count, true);
 	if (order_by) {
 		row_number->orders = std::move(order_by->orders);
 	}
@@ -845,10 +884,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownWindow(uniq
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &w = expr->Cast<BoundWindowExpression>();
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			w.partitions.push_back(
-			    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i)));
-		}
+		AppendCorrelatedColumns(w.partitions, state, correlated_columns.size(), false);
 	}
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
@@ -900,8 +936,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownSetOperatio
 		D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
 	}
 #endif
-	state = PushDownState::CreateContiguous(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-	                                        setop.column_count, correlated_columns.size());
+	state = CreateCorrelatedState(setop.table_index, setop.column_count);
 	setop.column_count += correlated_columns.size();
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
@@ -913,10 +948,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDistinct(un
 	auto child_result = PushDownDependentJoin(std::move(distinct.children[0]), true, 0, state);
 	distinct.children[0] = std::move(child_result.plan);
 	state = child_result.state;
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		distinct.distinct_targets.push_back(
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i)));
-	}
+	AppendCorrelatedColumns(distinct.distinct_targets, state, correlated_columns.size(), false);
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
@@ -934,16 +966,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionG
 	rewriter.VisitOperator(*plan);
 
 	auto &expr_get = plan->Cast<LogicalExpressionGet>();
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		for (auto &expr_list : expr_get.expressions) {
-			auto colref = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i));
-			expr_list.push_back(std::move(colref));
-		}
-		expr_get.expr_types.push_back(correlated_columns[i].type);
-	}
+	AppendCorrelatedColumnsToExpressionGet(expr_get, state);
 	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
-	state = PushDownState::CreateContiguous(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)),
-	                                        correlated_offset, correlated_columns.size());
+	state = CreateCorrelatedState(expr_get.table_index, correlated_offset);
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
@@ -1007,8 +1032,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCTE(unique_
 	parent_propagate_null_values = left_result.propagate_null_values;
 
 	auto &setop = plan->Cast<LogicalCTE>();
-	state = PushDownState::CreateContiguous(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-	                                        setop.column_count, correlated_columns.size());
+	state = CreateCorrelatedState(setop.table_index, setop.column_count);
 	auto table_index = setop.table_index;
 	setop.correlated_columns = correlated_columns;
 	binder.recursive_ctes[setop.table_index] = &setop;
@@ -1016,11 +1040,10 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCTE(unique_
 	if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		auto &rec_cte = plan->Cast<LogicalRecursiveCTE>();
 
+		if (!rec_cte.key_targets.empty()) {
+			AppendCorrelatedColumns(rec_cte.key_targets, state, correlated_columns.size(), false);
+		}
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			if (!rec_cte.key_targets.empty()) {
-				auto colref = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i));
-				rec_cte.key_targets.push_back(std::move(colref));
-			}
 			rec_cte.internal_types.push_back(correlated_columns[i].type);
 		}
 	}
@@ -1056,8 +1079,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCTE(unique_
 #endif
 
 	if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		state = PushDownState::CreateContiguous(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-		                                        setop.column_count, correlated_columns.size());
+		state = CreateCorrelatedState(setop.table_index, setop.column_count);
 	}
 
 	setop.column_count += correlated_columns.size();
@@ -1069,8 +1091,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCTERef(uniq
                                                                             PushDownState state) {
 	auto &cteref = plan->Cast<LogicalCTERef>();
 	auto correlated_offset = cteref.chunk_types.size() - cteref.correlated_columns;
-	state = PushDownState::CreateContiguous(ColumnBinding(cteref.table_index, ProjectionIndex(correlated_offset)),
-	                                        correlated_offset, correlated_columns.size());
+	state = CreateCorrelatedState(cteref.table_index, correlated_offset);
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
@@ -1105,8 +1126,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJo
 		// create cross product with Delim Join
 		auto delim_index = binder.GenerateTableIndex();
 		auto left_columns = plan->GetColumnBindings().size();
-		state = PushDownState::CreateContiguous(ColumnBinding(delim_index, ProjectionIndex(0)), left_columns,
-		                                        correlated_columns.size());
+		state = CreateCorrelatedState(delim_index, 0, left_columns);
 		delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			// we want to keep the logical projection for positionality.
@@ -1139,14 +1159,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJo
 			auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 			auto result_state = state;
 			if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-				auto bindings = cross_product->GetColumnBindings();
-				vector<idx_t> correlated_offsets;
-				vector<ColumnBinding> correlated_bindings;
-				for (idx_t i = 0; i < correlated_columns.size(); i++) {
-					correlated_offsets.push_back(i);
-					correlated_bindings.push_back(bindings[i]);
-				}
-				result_state = PushDownState(std::move(correlated_bindings), std::move(correlated_offsets));
+				result_state = CreateLeadingCorrelatedState(cross_product->GetColumnBindings());
 			}
 			return PushDownResult(std::move(cross_product), result_state, parent_propagate_null_values);
 		}
