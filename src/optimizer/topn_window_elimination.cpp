@@ -87,8 +87,8 @@ bool BindingsReferenceRowNumber(const vector<ColumnBinding> &bindings, const Log
 	return false;
 }
 
-void GatherLocalCTEInfo(const LogicalOperator &op, unordered_set<idx_t> &definitions,
-                        unordered_set<idx_t> &references) {
+void GatherLocalCTEInfo(const LogicalOperator &op, unordered_set<TableIndex> &definitions,
+                        unordered_set<TableIndex> &references) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
@@ -106,8 +106,8 @@ void GatherLocalCTEInfo(const LogicalOperator &op, unordered_set<idx_t> &definit
 }
 
 bool HasExternalCTEReferences(const LogicalOperator &op) {
-	unordered_set<idx_t> definitions;
-	unordered_set<idx_t> references;
+	unordered_set<TableIndex> definitions;
+	unordered_set<TableIndex> references;
 	GatherLocalCTEInfo(op, definitions, references);
 	for (const auto &cte_index : references) {
 		if (!definitions.count(cte_index)) {
@@ -792,7 +792,7 @@ TopNWindowElimination::UpdateTopmostBindings(TableIndex window_idx, unique_ptr<L
 		auto &new_binding = new_bindings[i];
 		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(types[i], new_binding));
 		new_binding.table_index = proj_table;
-		new_binding.column_index = i;
+		new_binding.column_index = ProjectionIndex(i);
 		replacer.replacement_bindings.emplace_back(topmost_bindings[i], new_binding);
 	}
 
@@ -1082,7 +1082,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 					//	not the index of the rhs_get schema.
 					auto schema_idx = rowid_idx;
 					if (last_table_idx == rhs_get.table_index && !rhs_get.projection_ids.empty()) {
-						for (schema_idx = 0; schema_idx < rhs_get.projection_ids.size(); ++schema_idx) {
+						for (schema_idx = ProjectionIndex(0); schema_idx < rhs_get.projection_ids.size(); ++schema_idx) {
 							if (rhs_get.projection_ids[schema_idx] == rowid_idx) {
 								break;
 							}

@@ -165,7 +165,7 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 			// We do this in backwards order, always adding a column reference to the previously added column,
 			// so that we end up with a chain of column references that all point to the newly added column in the GET.
 
-			auto prev_col_idx = get.GetColumnIds().size() - 1;
+			ProjectionIndex prev_col_idx(get.GetColumnIds().size() - 1);
 			auto prev_tbl_idx = get.GetTableIndex().back();
 
 			for (int64_t i = UnsafeNumericCast<int64_t>(projections.size()) - 1; i >= 0; i--) {
@@ -177,13 +177,13 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 					    proj.expressions.end() - 1,
 					    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(prev_tbl_idx, prev_col_idx)));
 
-					prev_col_idx = proj.expressions.size() - 2;
+					prev_col_idx = ProjectionIndex(proj.expressions.size() - 2);
 					prev_tbl_idx = proj.table_index;
 				} else {
 					proj.expressions.push_back(
 					    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(prev_tbl_idx, prev_col_idx)));
 
-					prev_col_idx = proj.expressions.size() - 1;
+					prev_col_idx = ProjectionIndex(proj.expressions.size() - 1);
 					prev_tbl_idx = proj.table_index;
 				}
 			}

@@ -398,7 +398,7 @@ bool BaseTokenizer::TokenizeInput() {
 				PushToken(last_pos, end_pos, TokenType::OPERATOR);
 				// Push any trimmed '+' characters as individual tokens
 				for (idx_t j = end_pos; j < i; j++) {
-					tokens.emplace_back(string(1, sql[j]), j);
+					tokens.emplace_back(string(1, sql[j]), j, TokenType::OPERATOR);
 				}
 				state = TokenizeState::STANDARD;
 				last_pos = i;

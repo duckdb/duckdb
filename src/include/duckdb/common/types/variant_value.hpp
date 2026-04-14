@@ -46,7 +46,7 @@ public:
 	}
 
 	static VariantValue NullValue() {
-		return VariantValue(Value());
+		return VariantValue(Value(LogicalType::SQLNULL));
 	}
 
 public:

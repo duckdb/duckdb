@@ -1111,7 +1111,7 @@ bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap
 }
 
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
-	return FromString(wkt_text, result, result_vector, strict, optional_idx::Invalid());
+	return FromString(wkt_text, result, StringVector::GetStringHeap(result_vector), strict, optional_idx::Invalid());
 }
 
 string_t Geometry::ToString(StringHeap &heap, const string_t &geom) {

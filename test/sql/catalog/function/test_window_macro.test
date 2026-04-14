@@ -125,24 +125,24 @@ SELECT my_list(i) OVER (PARTITION BY i % 2) FROM range(6) t(i) ORDER BY i;
 statement error
 CREATE MACRO my_lag(x) AS LAG(x);
 ----
-Scalar Function with name
+Binder Error: Window functions are not supported here
 
 statement error
 CREATE MACRO my_lead(x) AS LEAD(x);
 ----
-Scalar Function with name
+Binder Error: Window functions are not supported here
 
 statement error
 CREATE MACRO my_rn() AS ROW_NUMBER();
 ----
-Scalar Function with name
+Binder Error: Window functions are not supported here
 
 statement error
 CREATE MACRO my_rank() AS RANK();
 ----
-Scalar Function with name
+Binder Error: Window functions are not supported here
 
 statement error
 CREATE MACRO my_dense_rank() AS DENSE_RANK();
 ----
-Scalar Function with name
+Binder Error: Window functions are not supported here

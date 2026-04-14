@@ -1098,15 +1098,17 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			auto min_val_before_cast = final_min_max->data[min_idx].GetValue(0);
 			auto max_val_before_cast = final_min_max->data[max_idx].GetValue(0);
 
+			auto min_val = min_val_before_cast;
+			auto max_val = max_val_before_cast;
+
 			// Cast to storage type, skip if fails
 			if (pushdown_column.storage_type.IsValid()) {
-				auto min_val = min_val_before_cast;
-			auto max_val = max_val_before_cast;
-			if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-				continue;
-			}
-			if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-				continue;}
+				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
 			}
 
 			if (min_val.IsNull() || max_val.IsNull()) {
