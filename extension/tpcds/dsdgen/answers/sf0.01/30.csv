@@ -1,5 +1,5 @@
 c_customer_id|c_salutation|c_first_name|c_last_name|c_preferred_cust_flag|c_birth_day|c_birth_month|c_birth_year|c_birth_country|"c_login"|c_email_address|c_last_review_date_sk|ctr_total_return
-AAAAAAAABBCAAAAA|Sir|Michael|Herring|Y|20|9|1932|AMERICAN SAMOA|""|Michael.Herring@jl5PTAS.com|2452300|2306.71
-AAAAAAAABFAAAAAA|Ms.|Jessica|Levesque|Y|17|7|1940|ALBANIA|""|Jessica.Levesque@06mGqI9mHG.org|2452414|10628.66
-AAAAAAAAIOCAAAAA|Dr.|Julio|Mcdaniel|Y|18|4|1952|UNITED STATES|""|Julio.Mcdaniel@2Hc.edu|2452455|3140.58
-AAAAAAAAJMAAAAAA|Dr.|James|Scott|Y|29|3|1988|CANADA|""|James.Scott@Cqo77afYrMqPEL.org|2452622|1564.50
+AAAAAAAABBCAAAAA|Sir|Michael|Herring|Y|20|9|1932|AMERICAN SAMOA|(empty)|Michael.Herring@jl5PTAS.com|2452300|2306.71
+AAAAAAAABFAAAAAA|Ms.|Jessica|Levesque|Y|17|7|1940|ALBANIA|(empty)|Jessica.Levesque@06mGqI9mHG.org|2452414|10628.66
+AAAAAAAAIOCAAAAA|Dr.|Julio|Mcdaniel|Y|18|4|1952|UNITED STATES|(empty)|Julio.Mcdaniel@2Hc.edu|2452455|3140.58
+AAAAAAAAJMAAAAAA|Dr.|James|Scott|Y|29|3|1988|CANADA|(empty)|James.Scott@Cqo77afYrMqPEL.org|2452622|1564.50
