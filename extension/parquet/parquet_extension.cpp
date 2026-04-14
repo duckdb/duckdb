@@ -477,7 +477,7 @@ static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
 			}
 			continue;
 		}
-		GeometryExtent extent;
+		GeometryExtent extent = GeometryExtent::Empty();
 		bool has_empty = false;
 		Geometry::GetExtent(geom_values[geom_idx], extent, has_empty);
 		if (extent.HasXY()) {
@@ -861,13 +861,39 @@ struct ParquetWriteBatchData : public PreparedBatchData {
 	PreparedRowGroup prepared_row_group;
 };
 
-static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
+static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data_p,
                                                               GlobalFunctionData &gstate,
                                                               unique_ptr<ColumnDataCollection> collection) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
 	unique_ptr<ParquetWriteTransformData> transform_data;
-	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
+
+	// In batch execution mode, ParquetWriteSink is not called, so bbox columns must be injected here.
+	if (!bind_data.geo_bbox_infos.empty()) {
+		auto augmented = make_uniq<ColumnDataCollection>(context, bind_data.sql_types);
+		ColumnDataAppendState append_state;
+		augmented->InitializeAppend(append_state);
+		for (auto &input_chunk : collection->Chunks()) {
+			// Allocate a fresh chunk for each batch to ensure struct child buffers are clean.
+			DataChunk chunk;
+			chunk.Initialize(Allocator::DefaultAllocator(), bind_data.sql_types, input_chunk.size());
+			// Reference original columns (zero-copy)
+			for (idx_t i = 0; i < input_chunk.ColumnCount(); i++) {
+				chunk.data[i].Reference(input_chunk.data[i]);
+			}
+			// Compute bbox struct columns
+			for (const auto &info : bind_data.geo_bbox_infos) {
+				ComputeBBoxColumn(input_chunk.data[info.geom_col_idx], chunk.data[info.bbox_col_idx],
+				                  input_chunk.size());
+			}
+			chunk.SetCardinality(input_chunk.size());
+			augmented->Append(append_state, chunk);
+		}
+		global_state.writer->PrepareRowGroup(*augmented, result->prepared_row_group, transform_data);
+	} else {
+		global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
+	}
 	return std::move(result);
 }
 
