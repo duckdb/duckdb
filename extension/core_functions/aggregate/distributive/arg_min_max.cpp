@@ -185,8 +185,10 @@ struct ArgMinMaxBase {
 	}
 
 	template <ArgMinMaxNullHandling NULL_HANDLING>
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
@@ -348,8 +350,10 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 	}
 
 	template <ArgMinMaxNullHandling NULL_HANDLING>
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
@@ -518,8 +522,10 @@ AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const 
 }
 
 template <class OP, ArgMinMaxNullHandling NULL_HANDLING>
-unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->return_type;
 	auto by_type = arguments[1]->return_type;
 
@@ -848,8 +854,9 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 }
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
-unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();

@@ -380,7 +380,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		if (!entry.IsValid()) {
 			continue;
 		}
-		const auto &input_value = entry.value;
+		const auto &input_value = entry.GetValue();
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			// subtract min value to get the idx

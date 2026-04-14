@@ -20,6 +20,14 @@ public:
 	int64_t increment;
 	//! FIXME: should not be necessary once vector has count
 	int64_t count;
+
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	string ToString(const LogicalType &type, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 };
 
 struct SequenceVector {

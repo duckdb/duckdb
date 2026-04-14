@@ -113,8 +113,10 @@ struct StringAggFunction {
 	}
 };
 
-unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction &function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() == 1) {
 		// single argument: default to comma
 		return make_uniq<StringAggBindData>(",");

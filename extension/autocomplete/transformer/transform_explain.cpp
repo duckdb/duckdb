@@ -45,6 +45,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTra
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
+			} else {
+				throw NotImplementedException("Unimplemented explain type: %s", option_name);
 			}
 		}
 	}

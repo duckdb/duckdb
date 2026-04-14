@@ -1,0 +1,26 @@
+From 129bc3aeb4a9abb9f745ae53fe1281ce81556fd3 Mon Sep 17 00:00:00 2001
+From: Max Gabrielsson <max@gabrielsson.com>
+Date: Mon, 13 Apr 2026 15:54:04 +0200
+Subject: [PATCH] wrap bind input
+
+---
+ src/inet_escape_functions.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/inet_escape_functions.cpp b/src/inet_escape_functions.cpp
+index 1503440..dd16694 100644
+--- a/src/inet_escape_functions.cpp
++++ b/src/inet_escape_functions.cpp
+@@ -38,8 +38,7 @@ struct UnescapeBindData : public FunctionData {
+ };
+ 
+ unique_ptr<FunctionData>
+-UnescapeBind(ClientContext &context, ScalarFunction &bound_function,
+-             vector<unique_ptr<Expression>> &arguments) {
++UnescapeBind(BindScalarFunctionInput &) {
+   return make_uniq<UnescapeBindData>();
+ }
+ 
+-- 
+2.39.5 (Apple Git-154)
+

@@ -37,7 +37,6 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 	auto &cnt_vector = args.data[1];
 
 	auto &source_child = ListVector::GetEntry(list_vector);
-	auto &result_child = ListVector::GetEntry(result);
 
 	idx_t current_size = ListVector::GetListSize(result);
 	BinaryExecutor::Execute<list_entry_t, int64_t, list_entry_t>(
@@ -46,6 +45,7 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 		    idx_t result_length = list_input.length * copy_count;
 		    idx_t new_size = current_size + result_length;
 		    ListVector::Reserve(result, new_size);
+		    auto &result_child = ListVector::GetEntry(result);
 		    list_entry_t result_list;
 		    result_list.offset = current_size;
 		    result_list.length = result_length;

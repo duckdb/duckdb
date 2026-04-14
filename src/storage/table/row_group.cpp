@@ -1440,7 +1440,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-			if (!StringStats::HasMaxStringLength(stats)) {
+			if (!StringStats::HasMinMax(stats) || !StringStats::HasMaxStringLength(stats)) {
 				return false;
 			}
 			const idx_t max_length = StringStats::MaxStringLength(stats);

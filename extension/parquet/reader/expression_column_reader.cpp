@@ -1,7 +1,23 @@
 #include "reader/expression_column_reader.hpp"
+
+#include <utility>
+
 #include "parquet_reader.hpp"
+#include "duckdb/common/types/vector.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ClientContext;
 
 //===--------------------------------------------------------------------===//
 // Expression Column Reader

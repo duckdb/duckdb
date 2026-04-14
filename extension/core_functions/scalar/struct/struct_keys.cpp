@@ -70,8 +70,8 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	result.Slice(keys_vector, sel, count);
 }
 
-static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructKeysBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	auto return_type = arguments[0]->return_type;
 	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
