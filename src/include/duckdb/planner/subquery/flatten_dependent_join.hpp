@@ -129,6 +129,10 @@ private:
 	                               PushDownState state);
 	PushDownResult PushDownGet(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values, idx_t lateral_depth,
 	                           PushDownState state);
+	PushDownResult PushDownCTE(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values, idx_t lateral_depth,
+	                           PushDownState state);
+	PushDownResult PushDownCTERef(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+	                              PushDownState state);
 	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                             idx_t lateral_depth, PushDownState state);
 };
