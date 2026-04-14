@@ -414,177 +414,54 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownUnnest(uniq
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
-		// If our immediate children is a DEPENDENT JOIN, the projection expressions did contain
-		// a subquery expression previously—Which does not propagate null values.
-		// We have to account for that.
-		bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
-		parent_propagate_null_values &= !child_is_dependent_join;
-
-		// if the node has no correlated expressions,
-		// push the cross product with the delim get only below the projection.
-		// This will preserve positionality of the columns and prevent errors when reordering of
-		// delim gets is enabled.
-		if (exit_projection) {
-			auto decorrelated = Decorrelate(std::move(plan->children[0]), true, 0, state);
-			auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
-			if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-				auto bindings = cross_product->GetColumnBindings();
-				vector<idx_t> correlated_offsets;
-				correlated_offsets.reserve(correlated_columns.size());
-				vector<ColumnBinding> correlated_bindings;
-				correlated_bindings.reserve(correlated_columns.size());
-				for (idx_t i = 0; i < correlated_columns.size(); i++) {
-					correlated_offsets.push_back(i);
-					correlated_bindings.push_back(bindings[i]);
-				}
-				state = PushDownState(std::move(correlated_bindings), std::move(correlated_offsets));
-			}
-			plan->children[0] = std::move(cross_product);
-		} else {
-			auto child_result = PushDownDependentJoinInternal(std::move(plan->children[0]),
-			                                                  parent_propagate_null_values, lateral_depth, state);
-			plan->children[0] = std::move(child_result.plan);
-			state = child_result.state;
-			parent_propagate_null_values = child_result.propagate_null_values;
-		}
-
-		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
-		// now we add all the columns of the delim_scan to the projection list
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			auto &col = correlated_columns[i];
-			auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-			plan->expressions.push_back(std::move(colref));
-		}
-		auto &proj = plan->Cast<LogicalProjection>();
-		auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-		state = PushDownState::CreateContiguous(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)),
-		                                        correlated_offset, correlated_columns.size());
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+FlattenDependentJoins::PushDownResult
+FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+                                          idx_t lateral_depth, PushDownState state, bool exit_projection,
+                                          unique_ptr<LogicalOperator> delim_scan) {
+	for (auto &expr : plan->expressions) {
+		parent_propagate_null_values &= expr->PropagatesNullValues();
 	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = plan->Cast<LogicalAggregate>();
-		// aggregate and group by
-		// first we flatten the dependent join in the child of the projection
-		for (auto &expr : plan->expressions) {
-			parent_propagate_null_values &= expr->PropagatesNullValues();
+
+	bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
+	parent_propagate_null_values &= !child_is_dependent_join;
+
+	if (exit_projection) {
+		auto decorrelated = Decorrelate(std::move(plan->children[0]), true, 0, state);
+		auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
+		if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			auto bindings = cross_product->GetColumnBindings();
+			vector<idx_t> correlated_offsets;
+			correlated_offsets.reserve(correlated_columns.size());
+			vector<ColumnBinding> correlated_bindings;
+			correlated_bindings.reserve(correlated_columns.size());
+			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+				correlated_offsets.push_back(i);
+				correlated_bindings.push_back(bindings[i]);
+			}
+			state = PushDownState(std::move(correlated_bindings), std::move(correlated_offsets));
 		}
+		plan->children[0] = std::move(cross_product);
+	} else {
 		auto child_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
 		                                                  lateral_depth, state);
 		plan->children[0] = std::move(child_result.plan);
 		state = child_result.state;
 		parent_propagate_null_values = child_result.propagate_null_values;
-		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
-		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-		TableIndex delim_table_index;
-		idx_t delim_column_offset;
-		auto new_group_count = perform_delim ? correlated_columns.size() : 1;
-		for (idx_t i = 0; i < new_group_count; i++) {
-			auto &col = correlated_columns[i];
-			auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-			auto new_group_index = ColumnBinding::PushExpression(aggr.groups, std::move(colref));
-			for (auto &set : aggr.grouping_sets) {
-				set.insert(new_group_index);
-			}
-		}
-		if (!perform_delim) {
-			// if we are not performing the duplicate elimination, we have only added the row_id column to the grouping
-			// operators in this case, we push a FIRST aggregate for each of the remaining expressions
-			delim_table_index = aggr.aggregate_index;
-			delim_column_offset = aggr.expressions.size();
-			for (idx_t i = 0; i < correlated_columns.size(); i++) {
-				auto &col = correlated_columns[i];
-				auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
-				auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
-				vector<unique_ptr<Expression>> aggr_children;
-				aggr_children.push_back(std::move(colref));
-				auto first_fun =
-				    make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children), nullptr,
-				                                        nullptr, AggregateType::NON_DISTINCT);
-				aggr.expressions.push_back(std::move(first_fun));
-			}
-		} else {
-			delim_table_index = aggr.group_index;
-			delim_column_offset = aggr.groups.size() - correlated_columns.size();
-		}
-		bool ungrouped_join = false;
-		if (aggr.grouping_sets.empty()) {
-			ungrouped_join = aggr.groups.size() == new_group_count;
-		} else {
-			for (auto &grouping_set : aggr.grouping_sets) {
-				if (grouping_set.size() == new_group_count) {
-					ungrouped_join = true;
-				}
-			}
-		}
-		if (ungrouped_join) {
-			// we have to perform an INNER or LEFT OUTER JOIN between the result of this aggregate and the delim scan
-			// this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
-			// NULL or a value
-			JoinType join_type = JoinType::INNER;
-			if (any_join || !parent_propagate_null_values) {
-				join_type = JoinType::LEFT;
-			}
-			for (auto &aggr_exp : aggr.expressions) {
-				auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-				if (!b_aggr_exp.PropagatesNullValues()) {
-					join_type = JoinType::LEFT;
-					break;
-				}
-			}
-			unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
-			auto left_index = binder.GenerateTableIndex();
-			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
-			join->children.push_back(std::move(delim_scan));
-			join->children.push_back(std::move(plan));
-			for (idx_t i = 0; i < new_group_count; i++) {
-				auto &col = correlated_columns[i];
-				JoinCondition cond(make_uniq<BoundColumnRefExpression>(col.name, col.type,
-				                                                       ColumnBinding(left_index, ProjectionIndex(i))),
-				                   make_uniq<BoundColumnRefExpression>(
-				                       correlated_columns[i].type,
-				                       ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset + i))),
-				                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-				join->conditions.push_back(std::move(cond));
-			}
-			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
-			// ELSE COUNT(*) END
-			for (idx_t i = 0; i < aggr.expressions.size(); i++) {
-				D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-				auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-				vector<LogicalType> arguments;
-				if (bound.function == CountFunctionBase::GetFunction() ||
-				    bound.function == CountStarFun::GetFunction()) {
-					// have to replace this ColumnBinding with the CASE expression
-					replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
-				}
-			}
-			// now we update the delim_index
-			state = PushDownState::CreateContiguous(ColumnBinding(left_index, ProjectionIndex(0)), 0,
-			                                        correlated_columns.size());
-			return PushDownResult(std::move(join), state, parent_propagate_null_values);
-		}
-		// update the delim_index
-		state = PushDownState::CreateContiguous(ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset)),
-		                                        delim_column_offset, correlated_columns.size());
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 	}
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		// cross product
-		// push into both sides of the plan
-		D_ASSERT(has_correlated_expressions.find(*plan->children[0]) != has_correlated_expressions.end());
-		D_ASSERT(has_correlated_expressions.find(*plan->children[1]) != has_correlated_expressions.end());
-		bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
-		bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
-		if (!right_has_correlation) {
-			// only left has correlation: push into left
-			auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
-			                                                 lateral_depth, state);
-			plan->children[0] = std::move(left_result.plan);
-			parent_propagate_null_values = left_result.propagate_null_values;
+
+	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		auto &col = correlated_columns[i];
+		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
+		plan->expressions.push_back(std::move(colref));
+	}
+	auto &proj = plan->Cast<LogicalProjection>();
+	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
+	state = PushDownState::CreateContiguous(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)),
+	                                        correlated_offset, correlated_columns.size());
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
 
 			// recurse into right children, there may be more local correlations
 			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
