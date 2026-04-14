@@ -77,6 +77,11 @@ string ErrorData::ConstructFinalMessage() const {
 			error += "\n\nStack Trace:\n" + stack_trace;
 		}
 	}
+	// Append hints added by extensions (stored separately so they survive raw_message rebuilds)
+	auto hints_entry = extra_info.find("hints");
+	if (hints_entry != extra_info.end() && !hints_entry->second.empty()) {
+		error += "\n" + hints_entry->second;
+	}
 	return error;
 }
 
@@ -169,6 +174,20 @@ void ErrorData::AddQueryLocation(const ParsedExpression &ref) {
 
 void ErrorData::AddQueryLocation(const TableRef &ref) {
 	AddQueryLocation(ref.query_location);
+}
+
+void ErrorData::AddHint(const string &hint) {
+	if (hint.empty()) {
+		return;
+	}
+	// Store hints in extra_info so they survive raw_message rebuilds (e.g. AddErrorLocation).
+	// No need to rebuild final_message here — it will be rebuilt by ProcessError.
+	auto entry = extra_info.find("hints");
+	if (entry != extra_info.end()) {
+		entry->second += "\n" + hint;
+	} else {
+		extra_info["hints"] = hint;
+	}
 }
 
 } // namespace duckdb

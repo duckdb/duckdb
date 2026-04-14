@@ -1,0 +1,25 @@
+# name: test/extension/test_on_error_callback.test
+# description: Test the OnError extension callback
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+# querying a non-existent table called "quack" should trigger the OnError callback
+# which adds a hint suggesting the quack() table function
+statement error
+SELECT * FROM quack;
+----
+Hint: Did you mean to use the quack() table function?
+
+# querying a different non-existent table should NOT get the quack hint
+statement error
+SELECT * FROM nonexistent_table;
+----
+Table with name nonexistent_table does not exist

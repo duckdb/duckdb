@@ -318,6 +318,10 @@ private:
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
+	//! Wrap an already-processed error into a different result type (skips ProcessError)
+	template <class T>
+	static unique_ptr<T> WrapError(ErrorData error);
+
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
