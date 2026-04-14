@@ -69,8 +69,8 @@ public:
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries.
 	void RemoveIndex(const string &name);
-	//! Removes all remaining memory of an index after dropping the catalog entry.
-	void CommitDrop(const string &name);
+	//! Accumulates the on-disk blocks of the named index for deferred marking (applied post-FlushCommit).
+	void CommitDrop(const string &name, class CommitDropAccumulator &acc);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name);
 	//! Returns an optional pointer to the index matching the name.

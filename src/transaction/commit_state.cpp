@@ -96,10 +96,11 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 // CommitState
 //===--------------------------------------------------------------------===//
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
-                         ActiveTransactionState transaction_state, CommitMode commit_mode)
+                         ActiveTransactionState transaction_state, CommitMode commit_mode,
+                         CommitDropAccumulator &drop_accumulator_p)
     : transaction(transaction_p), commit_id(commit_id),
-      index_data_remover(transaction, *transaction.context.lock(),
-                         GetIndexRemovalType(transaction_state, commit_mode)) {
+      index_data_remover(transaction, *transaction.context.lock(), GetIndexRemovalType(transaction_state, commit_mode)),
+      drop_accumulator(drop_accumulator_p) {
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
@@ -153,7 +154,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 					auto &table_entry = entry.Cast<DuckTableEntry>();
 					D_ASSERT(table_entry.IsDuckTable());
 					// write the alter table in the log
-					table_entry.CommitAlter(column_name);
+					table_entry.CommitAlter(column_name, drop_accumulator);
 				}
 				break;
 			case CatalogType::VIEW_ENTRY:
@@ -196,12 +197,12 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			D_ASSERT(table_entry.IsDuckTable());
 
 			// If the table was renamed, we do not need to drop the DataTable.
-			table_entry.CommitDrop();
+			table_entry.CommitDrop(drop_accumulator);
 			break;
 		}
 		case CatalogType::INDEX_ENTRY: {
 			auto &index_entry = entry.Cast<DuckIndexEntry>();
-			index_entry.CommitDrop();
+			index_entry.CommitDrop(drop_accumulator);
 			break;
 		}
 		default:

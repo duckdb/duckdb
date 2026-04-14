@@ -1,0 +1,43 @@
+# name: test/drop_tests/rollback_drop_table_with_pk.test
+# description: DROP TABLE with a PK index, rolled back due to a write-write conflict, then re-dropped. Index blocks (FixedSizeAllocator buffers) were marked during the failed commit and never unmarked, so the re-drop hits a MarkBlockAsModified double-mark assertion.
+# group: [drop_tests]
+
+load {TEST_DIR}/test_index_block_double_mark_repro.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t1 SELECT i FROM range(10) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i FROM range(10) tbl(i)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DROP TABLE t1
+
+statement ok con1
+DELETE FROM t2 WHERE id < 5
+
+statement ok
+DROP TABLE t2
+
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+statement ok
+DROP TABLE t1

@@ -10,6 +10,7 @@ add_library_unity(
   transaction.cpp
   transaction_manager.cpp
   commit_state.cpp
+  commit_drop_accumulator.cpp
   rollback_state.cpp
   cleanup_state.cpp
   wal_write_state.cpp)

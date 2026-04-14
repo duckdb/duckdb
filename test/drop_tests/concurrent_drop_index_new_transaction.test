@@ -1,0 +1,36 @@
+# name: test/drop_tests/concurrent_drop_index_new_transaction.test
+# description: A new transaction after a DROP INDEX commit must not see the dropped index when an older snapshot is still active.
+# group: [drop_tests]
+
+load {TEST_DIR}/test_race.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t (id INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1)
+
+statement ok
+CREATE UNIQUE INDEX idx1 ON t(id)
+
+statement ok con1
+BEGIN
+
+query I con1
+SELECT COUNT(*) FROM t
+----
+1
+
+statement ok con2
+DROP INDEX idx1
+
+statement ok
+INSERT INTO t VALUES (1)
+
+query I
+SELECT COUNT(*) FROM t
+----
+2

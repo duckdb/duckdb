@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -496,26 +497,27 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	return row_group;
 }
 
-void RowGroup::CommitDrop() {
+void RowGroup::CommitDrop(CommitDropAccumulator &acc) {
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		CommitDropColumn(column_idx);
+		CommitDropColumn(column_idx, acc);
 	}
 }
 
 struct BlockIdDropper : public BlockIdVisitor {
-	explicit BlockIdDropper(BlockManager &manager) : manager(manager) {
+	BlockIdDropper(BlockManager &manager, CommitDropAccumulator &acc) : manager(manager), acc(acc) {
 	}
 
 	void Visit(block_id_t block_id) override {
-		manager.MarkBlockAsModified(block_id);
+		acc.AddBlock(manager, block_id);
 	}
 
 	BlockManager &manager;
+	CommitDropAccumulator &acc;
 };
 
-void RowGroup::CommitDropColumn(const idx_t column_index) {
+void RowGroup::CommitDropColumn(const idx_t column_index, CommitDropAccumulator &acc) {
 	auto &column = GetColumn(column_index);
-	BlockIdDropper dropper(GetBlockManager());
+	BlockIdDropper dropper(GetBlockManager(), acc);
 	column.VisitBlockIds(dropper);
 }
 

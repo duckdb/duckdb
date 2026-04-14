@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -142,6 +143,16 @@ void FixedSizeAllocator::Reset() {
 	buffers_with_free_space.clear();
 	buffer_with_free_space.SetInvalid();
 	total_segment_count = 0;
+}
+
+void FixedSizeAllocator::CommitDrop(CommitDropAccumulator &acc) {
+	for (auto &entry : buffers) {
+		auto &buffer = *entry.second;
+		if (buffer.OnDisk()) {
+			acc.AddBuffer(block_manager, buffer, buffer.GetBlockId());
+			buffer.SetCommitDropped();
+		}
+	}
 }
 
 idx_t FixedSizeAllocator::GetInMemorySize() const {

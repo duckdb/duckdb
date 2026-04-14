@@ -119,8 +119,12 @@ public:
 	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
 	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 
-	//! Drop the ART.
-	void CommitDrop(IndexLock &index_lock) override;
+	//! Accumulates the ART's on-disk blocks for deferred marking (applied post-FlushCommit). The in-memory state is not
+	//! destroyed.
+	void CommitDrop(IndexLock &index_lock, class CommitDropAccumulator &acc) override;
+
+	//! Reset all ART storage.
+	void ResetStorage(IndexLock &index_lock) override;
 
 	//! Build an ART from a vector of sorted keys and their row IDs.
 	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);

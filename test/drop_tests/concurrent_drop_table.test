@@ -1,0 +1,84 @@
+# name: test/drop_tests/concurrent_drop_table.test
+# description: DROP TABLE while a reader holds a snapshot. The index must remain usable to the reader, in-memory index state must be deferred until the snapshot is released, and on-disk blocks must only be reclaimed after both the snapshot releases AND a checkpoint runs.
+# group: [drop_tests]
+
+load {TEST_DIR}/test_concurrent_drop_table.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t SELECT range FROM range(10)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT id FROM t WHERE id = 5
+----
+5
+
+query I
+SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'ART_INDEX'
+----
+524288
+
+query I
+SELECT used_blocks FROM pragma_database_size()
+----
+3
+
+statement ok con1
+BEGIN
+
+query I con1
+SELECT COUNT(*) FROM t
+----
+10
+
+statement ok
+DROP TABLE t
+
+query I
+SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'ART_INDEX'
+----
+524288
+
+query I
+SELECT used_blocks FROM pragma_database_size()
+----
+3
+
+query II con1
+EXPLAIN ANALYZE SELECT id FROM t WHERE id = 5
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I con1
+SELECT id FROM t WHERE id = 5
+----
+5
+
+statement ok con1
+COMMIT
+
+query I
+SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'ART_INDEX'
+----
+0
+
+query I
+SELECT used_blocks FROM pragma_database_size()
+----
+3
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT used_blocks FROM pragma_database_size()
+----
+1

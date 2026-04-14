@@ -1,5 +1,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -1358,7 +1359,8 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
                                   IndexRemovalType removal_type, optional_idx active_checkpoint) {
-	D_ASSERT(IsMainTable());
+	D_ASSERT(IsMainTable() || removal_type == IndexRemovalType::REVERT_MAIN_INDEX ||
+	         removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY);
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
@@ -1702,8 +1704,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->SetStats(global_stats);
 }
 
-void DataTable::CommitDropColumn(const idx_t column_index) {
-	row_groups->CommitDropColumn(column_index);
+void DataTable::CommitDropColumn(const idx_t column_index, CommitDropAccumulator &acc) {
+	row_groups->CommitDropColumn(column_index, acc);
 }
 
 void DataTable::Destroy() {
@@ -1718,14 +1720,14 @@ idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
 }
 
-void DataTable::CommitDropTable() {
+void DataTable::CommitDropTable(CommitDropAccumulator &acc) {
 	// commit a drop of this table: mark all blocks as modified, so they can be reclaimed later on
-	row_groups->CommitDropTable();
+	row_groups->CommitDropTable(acc);
 
 	// propagate dropping this table to its indexes: frees all index memory
 	for (auto &index : info->indexes.Indexes()) {
 		D_ASSERT(index.IsBound());
-		index.Cast<BoundIndex>().CommitDrop();
+		index.Cast<BoundIndex>().CommitDrop(acc);
 	}
 }
 

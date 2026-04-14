@@ -84,7 +84,7 @@ public:
 	}
 
 	// All indexes can be dropped, even if they are unbound
-	virtual void CommitDrop() = 0;
+	virtual void CommitDrop(class CommitDropAccumulator &acc) = 0;
 
 public:
 	template <class TARGET>

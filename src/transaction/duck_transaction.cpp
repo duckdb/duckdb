@@ -1,4 +1,5 @@
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -263,9 +264,10 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
+	CommitDropAccumulator drop_accumulator;
 	try {
 		storage->Commit(commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_info);
+		undo_buffer.Commit(iterator_state, commit_info, drop_accumulator);
 		// if (DebugForceAbortCommit()) {
 		// 	throw InvalidInputException("Force revert");
 		// }
@@ -273,6 +275,9 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
 		}
+		// Apply accumulated block marks only after FlushCommit succeeds (or immediately if no WAL).
+		// On the exception path below, the accumulator is dropped without Apply, leaving nothing marked.
+		drop_accumulator.Apply();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);

@@ -1,0 +1,43 @@
+# name: test/drop_tests/rollback_drop_column.test
+# description: ALTER TABLE DROP COLUMN rolled back due to a write-write conflict, then re-attempted. Column blocks were marked as modified during the failed commit and never unmarked, so the re-attempt hits a MarkBlockAsModified double-mark assertion. Uses non-compressible data so the dropped column's on-disk blocks are not shared via multi_use_blocks refcounting; uses ALTER TABLE ADD COLUMN on the unrelated conflict table so the observable failure is not masked by a successful DROP TABLE commit.
+# group: [drop_tests]
+
+load {TEST_DIR}/test_drop_column_rollback.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER, val INTEGER, extra VARCHAR)
+
+statement ok
+INSERT INTO t1 SELECT i, i, repeat(md5(i::VARCHAR), 200) FROM range(50000) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i FROM range(10) tbl(i)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN
+
+statement ok con1
+ALTER TABLE t1 DROP COLUMN extra
+
+statement ok con1
+DELETE FROM t2 WHERE id < 5
+
+statement ok
+ALTER TABLE t2 ADD COLUMN x INTEGER
+
+statement error con1
+COMMIT
+----
+another transaction has
+
+statement ok
+ALTER TABLE t1 DROP COLUMN extra

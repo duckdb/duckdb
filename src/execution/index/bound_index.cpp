@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/radix.hpp"
@@ -58,10 +59,16 @@ void BoundIndex::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, Confl
 	throw NotImplementedException("this implementation of VerifyConstraint does not exist.");
 }
 
-void BoundIndex::CommitDrop() {
+void BoundIndex::CommitDrop(CommitDropAccumulator &acc) {
 	IndexLock index_lock;
 	InitializeLock(index_lock);
-	CommitDrop(index_lock);
+	CommitDrop(index_lock, acc);
+}
+
+void BoundIndex::ResetStorage() {
+	IndexLock index_lock;
+	InitializeLock(index_lock);
+	ResetStorage(index_lock);
 }
 
 idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,

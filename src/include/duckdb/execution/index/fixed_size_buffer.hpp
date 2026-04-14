@@ -50,6 +50,16 @@ public:
 
 	~FixedSizeBuffer();
 
+	//! Sets the commit_dropped flag. Called from CommitDropAccumulator::Apply after marking the on-disk block, so the
+	//! destructor does not re-mark.
+	void SetCommitDropped() {
+		commit_dropped = true;
+	}
+	//! Returns the on-disk block id, or INVALID_BLOCK if not on disk.
+	block_id_t GetBlockId() const {
+		return block_pointer.block_id;
+	}
+
 private:
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory.
 	//! DEPRECATED. Use segment handles.
@@ -103,6 +113,8 @@ private:
 	bool vacuum;
 	//! True: has been loaded from disk.
 	bool loaded;
+	//! True: on-disk blocks have been marked as modified during CommitDrop.
+	bool commit_dropped;
 
 	//! Partial block id and offset
 	BlockPointer block_pointer;

@@ -46,8 +46,8 @@ public:
 
 	void SetAsRoot() override;
 
-	void CommitAlter(string &column_name);
-	void CommitDrop();
+	void CommitAlter(string &column_name, class CommitDropAccumulator &acc);
+	void CommitDrop(class CommitDropAccumulator &acc);
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 

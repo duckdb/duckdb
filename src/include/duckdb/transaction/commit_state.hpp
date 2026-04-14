@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/transaction/undo_buffer.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -51,7 +52,8 @@ private:
 class CommitState {
 public:
 	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
-	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
+	                     ActiveTransactionState transaction_state, CommitMode commit_mode,
+	                     CommitDropAccumulator &drop_accumulator);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -68,6 +70,7 @@ private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
 	IndexDataRemover index_data_remover;
+	CommitDropAccumulator &drop_accumulator;
 };
 
 } // namespace duckdb

@@ -192,21 +192,24 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info,
+                        CommitDropAccumulator &drop_accumulator) {
 	active_transaction_state = info.active_transactions;
 
-	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT);
+	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT, drop_accumulator);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 
 	state.Verify();
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT);
+	CommitDropAccumulator revert_acc;
+	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT, revert_acc);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 
 	state.Verify();
+	// revert_acc dropped here without Apply — nothing was marked, which is the desired behavior on revert
 }
 
 void UndoBuffer::Rollback() {

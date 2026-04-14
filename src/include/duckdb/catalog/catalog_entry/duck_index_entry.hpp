@@ -47,8 +47,9 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
-	void CommitDrop();
+	//! Accumulates on-disk index blocks for deferred marking (applied post-FlushCommit), then removes this index from
+	//! the table's index list.
+	void CommitDrop(class CommitDropAccumulator &acc);
 };
 
 } // namespace duckdb

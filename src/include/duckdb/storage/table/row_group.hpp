@@ -122,8 +122,8 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
-	void CommitDrop();
-	void CommitDropColumn(const idx_t column_index);
+	void CommitDrop(class CommitDropAccumulator &acc);
+	void CommitDropColumn(const idx_t column_index, class CommitDropAccumulator &acc);
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;

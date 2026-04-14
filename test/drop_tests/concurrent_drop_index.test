@@ -1,0 +1,64 @@
+# name: test/drop_tests/concurrent_drop_index.test
+# description: DROP INDEX while a reader holds a snapshot. The index should remain usable for the reader holding a snapshot started before the drop -- the catalog should still report it for that snapshot's view, AND the in-memory Index must remain alive (not destroyed by RemoveIndex) so the reader's Index Scan still works.
+# group: [drop_tests]
+
+load {TEST_DIR}/test_concurrent_drop_index.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO t1 SELECT i, i * 10 FROM range(10) tbl(i)
+
+statement ok
+CREATE INDEX idx1 ON t1(id)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT id FROM t1 WHERE id = 5
+----
+5
+
+query II
+EXPLAIN ANALYZE SELECT id FROM t1 WHERE id = 5
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+statement ok con1
+BEGIN
+
+query I con1
+SELECT COUNT(*) FROM t1
+----
+10
+
+query II con1
+EXPLAIN ANALYZE SELECT id FROM t1 WHERE id = 5
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+statement ok
+DROP INDEX idx1
+
+query II con1
+EXPLAIN ANALYZE SELECT id FROM t1 WHERE id = 5
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I con1
+SELECT id FROM t1 WHERE id = 5
+----
+5
+
+statement ok con1
+COMMIT
+
+query I
+SELECT COUNT(*) FROM duckdb_indexes WHERE index_name = 'idx1'
+----
+0

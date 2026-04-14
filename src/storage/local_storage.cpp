@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/commit_drop_accumulator.hpp"
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -53,7 +54,9 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection =
 	    parent_collection.AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
-	parent_collection.CommitDropColumn(alter_column_index);
+	CommitDropAccumulator local_acc;
+	parent_collection.CommitDropColumn(alter_column_index, local_acc);
+	local_acc.Apply();
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
 
@@ -68,7 +71,9 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 	// Remove the column from the previous table storage.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection = parent_collection.RemoveColumn(drop_column_index);
-	parent_collection.CommitDropColumn(drop_column_index);
+	CommitDropAccumulator local_acc;
+	parent_collection.CommitDropColumn(drop_column_index, local_acc);
+	local_acc.Apply();
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
 
@@ -285,14 +290,16 @@ OptimisticDataWriter &LocalTableStorage::GetOptimisticWriter() {
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
 
+	CommitDropAccumulator local_acc;
 	for (auto &collection : optimistic_collections) {
 		if (!collection) {
 			continue;
 		}
-		collection->collection->CommitDropTable();
+		collection->collection->CommitDropTable(local_acc);
 	}
 	optimistic_collections.clear();
-	row_groups->collection->CommitDropTable();
+	row_groups->collection->CommitDropTable(local_acc);
+	local_acc.Apply();
 }
 
 //===--------------------------------------------------------------------===//
