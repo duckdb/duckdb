@@ -425,6 +425,15 @@ debug: ${EXTENSION_CONFIG_STEP}
 release: ${EXTENSION_CONFIG_STEP}
 	$(call cmake_build,build/release,Release,${FORCE_WARN_UNUSED_FLAG})
 
+.PHONY: fuzzer
+fuzzer: ${EXTENSION_CONFIG_STEP}
+	@command -v afl-clang-fast >/dev/null 2>&1 || { echo "Error: afl-clang-fast is required (run: brew install afl++)"; exit 1; }
+	@command -v afl-clang-fast++ >/dev/null 2>&1 || { echo "Error: afl-clang-fast++ is required (run: brew install afl++)"; exit 1; }
+	mkdir -p ./build/fuzzer && \
+	cd build/fuzzer && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_C_COMPILER=afl-clang-fast -DCMAKE_CXX_COMPILER=afl-clang-fast++ -DDUCKDB_FUZZER=1 -DFORCE_DEBUG=1 -DBUILD_EXTENSIONS="jemalloc" -DBUILD_UNITTESTS=0 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build . --config Release --target shell
+
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
