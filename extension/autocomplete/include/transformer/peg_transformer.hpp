@@ -66,7 +66,7 @@ struct PEGTransformerState {
 class PEGTransformer {
 public:
 	using AnyTransformFunction =
-	    std::function<unique_ptr<TransformResultValue>(PEGTransformer &, optional_ptr<ParseResult>)>;
+	    std::function<unique_ptr<TransformResultValue>(PEGTransformer &, ParseResult &)>;
 
 	PEGTransformer(ArenaAllocator &allocator, PEGTransformerState &state,
 	               const case_insensitive_map_t<AnyTransformFunction> &transform_functions,
@@ -79,25 +79,25 @@ public:
 
 public:
 	template <typename T>
-	T Transform(optional_ptr<ParseResult> parse_result) {
-		auto it = transform_functions.find(parse_result->name);
+	T Transform(ParseResult &parse_result) {
+		auto it = transform_functions.find(parse_result.name);
 		if (it == transform_functions.end()) {
-			throw NotImplementedException("No transformer function found for rule '%s'", parse_result->name);
+			throw NotImplementedException("No transformer function found for rule '%s'", parse_result.name);
 		}
 		auto &func = it->second;
 
 		unique_ptr<TransformResultValue> base_result = func(*this, parse_result);
 		if (!base_result) {
-			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result->name);
+			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result.name);
 		}
 
 		auto *typed_result_ptr = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
 		if (!typed_result_ptr) {
-			throw InternalException("Transformer for rule '" + parse_result->name + "' returned an unexpected type.");
+			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
 		auto result = std::move(typed_result_ptr->value);
-		SetResultLocation(result, parse_result->offset);
+		SetResultLocation(result, parse_result.offset);
 		return result;
 	}
 
@@ -108,8 +108,8 @@ public:
 	}
 
 	template <typename T>
-	T TransformEnum(optional_ptr<ParseResult> parse_result) {
-		auto enum_rule_name = parse_result->name;
+	T TransformEnum(ParseResult &parse_result) {
+		auto enum_rule_name = parse_result.name;
 
 		auto rule_value = enum_mappings.find(enum_rule_name);
 		if (rule_value == enum_mappings.end()) {
@@ -128,7 +128,7 @@ public:
 	void TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target) {
 		auto &opt = list_pr.Child<OptionalParseResult>(child_idx);
 		if (opt.HasResult()) {
-			target = Transform<T>(opt.optional_result);
+			target = Transform<T>(*opt.optional_result);
 		}
 	}
 

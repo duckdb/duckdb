@@ -293,7 +293,6 @@ struct RepeatParseResult : ParseResult {
 
 struct OptionalParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::OPTIONAL;
-	optional_ptr<ParseResult> optional_result;
 
 	explicit OptionalParseResult() : ParseResult(TYPE, optional_idx()), optional_result(nullptr) {
 	}
@@ -304,6 +303,11 @@ struct OptionalParseResult : ParseResult {
 
 	bool HasResult() const {
 		return optional_result != nullptr;
+	}
+
+	ParseResult &GetResult() {
+		D_ASSERT(optional_result);
+		return *optional_result;
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -317,6 +321,8 @@ struct OptionalParseResult : ParseResult {
 			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [empty]\n";
 		}
 	}
+private:
+	optional_ptr<ParseResult> optional_result;
 };
 
 class ChoiceParseResult : public ParseResult {
@@ -328,24 +334,24 @@ public:
 		name = parse_result_p->name;
 	}
 
-	optional_ptr<ParseResult> result;
-	idx_t selected_idx;
+	ParseResult &GetResult() {
+		return *result;
+	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
-		if (result) {
-			// The choice was resolved. We print a marker and then print the child below it.
-			ss << indent << (is_last ? "└─" : "├─") << " [" << ParseResultToString(type) << " (idx: " << selected_idx
-			   << ")] ->\n";
+		// The choice was resolved. We print a marker and then print the child below it.
+		ss << indent << (is_last ? "└─" : "├─") << " [" << ParseResultToString(type) << " (idx: " << selected_idx
+		   << ")] ->\n";
 
-			// The child is now on a new indentation level and is the only child of our marker.
-			std::string child_indent = indent + (is_last ? "   " : "│  ");
-			result->ToStringInternal(ss, visited, child_indent, true);
-		} else {
-			// The choice had no result.
-			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [no result]\n";
-		}
+		// The child is now on a new indentation level and is the only child of our marker.
+		std::string child_indent = indent + (is_last ? "   " : "│  ");
+		result->ToStringInternal(ss, visited, child_indent, true);
 	}
+
+private:
+	optional_ptr<ParseResult> result;
+	idx_t selected_idx;
 };
 
 class NumberParseResult : public ParseResult {
