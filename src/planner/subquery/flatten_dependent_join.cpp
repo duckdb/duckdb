@@ -947,6 +947,14 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionG
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownOrderBy(unique_ptr<LogicalOperator> plan,
+                                                                             bool parent_propagate_null_values,
+                                                                             PushDownState state) {
+	auto child_result = PushDownDependentJoin(std::move(plan->children[0]), true, 0, state);
+	plan->children[0] = std::move(child_result.plan);
+	return PushDownResult(std::move(plan), child_result.state, parent_propagate_null_values);
+}
+
 
 		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -1078,6 +1086,11 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionG
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		return PushDownExpressionGet(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+		return PushDownOrderBy(std::move(plan), parent_propagate_null_values, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {

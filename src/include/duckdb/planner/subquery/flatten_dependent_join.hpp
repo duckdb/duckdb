@@ -125,6 +125,8 @@ private:
 	                                PushDownState state);
 	PushDownResult PushDownExpressionGet(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                     idx_t lateral_depth, PushDownState state);
+	PushDownResult PushDownOrderBy(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+	                               PushDownState state);
 	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                             idx_t lateral_depth, PushDownState state);
 };
