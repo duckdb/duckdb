@@ -18,12 +18,15 @@ class StandardVectorBuffer : public VectorBuffer {
 public:
 	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p);
-	explicit StandardVectorBuffer(AllocatedData &&data_p);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity);
+	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity);
 
 public:
 	data_ptr_t GetData() override {
 		return data_ptr;
+	}
+	idx_t Capacity() const override {
+		return capacity;
 	}
 	ValidityMask &GetValidityMask() override {
 		return validity;
@@ -50,11 +53,12 @@ protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
-	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data) const;
+	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const;
 
 protected:
 	ValidityMask validity;
 	data_ptr_t data_ptr;
+	idx_t capacity;
 	AllocatedData allocated_data;
 };
 
@@ -107,6 +111,10 @@ struct FlatVector {
 		ConstantVector::VerifyVectorType<T>(vector);
 		return GetDataMutableUnsafe<T>(vector);
 	}
+	static inline idx_t GetCapacity(const Vector &vector) {
+		VerifyFlatVector(vector);
+		return vector.buffer ? vector.buffer->Capacity() : 0;
+	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
 		return reinterpret_cast<const T *>(GetData(vector));
@@ -119,7 +127,7 @@ struct FlatVector {
 	static inline T *GetDataMutableUnsafe(Vector &vector) {
 		return reinterpret_cast<T *>(GetDataMutable(vector));
 	}
-	static void SetData(Vector &vector, data_ptr_t data);
+	static void SetData(Vector &vector, data_ptr_t data, idx_t capacity);
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
 		VerifyFlatVector(vector);

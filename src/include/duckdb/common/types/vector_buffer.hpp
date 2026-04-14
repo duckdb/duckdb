@@ -80,6 +80,9 @@ public:
 	virtual data_ptr_t GetData() {
 		return nullptr;
 	}
+	virtual idx_t Capacity() const {
+		throw InternalException("VectorBuffer does not have a capacity");
+	}
 	virtual ValidityMask &GetValidityMask() {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}

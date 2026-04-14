@@ -8,7 +8,7 @@ namespace duckdb {
 
 VectorArrayBuffer::VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)),
-      array_size(array_size), size(initial_capacity) {
+      array_size(array_size), capacity(initial_capacity) {
 	D_ASSERT(array_size != 0);
 	validity.Resize(initial_capacity);
 }
@@ -30,7 +30,7 @@ idx_t VectorArrayBuffer::GetArraySize() const {
 }
 
 idx_t VectorArrayBuffer::GetChildSize() const {
-	return size * array_size;
+	return capacity * array_size;
 }
 
 void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
@@ -132,7 +132,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, con
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
-	auto result = make_buffer<VectorArrayBuffer>(type);
+	auto result = make_buffer<VectorArrayBuffer>(type, end - offset);
 	auto &result_child = result->GetChild();
 	result_child.Slice(*child, offset * array_size, end * array_size);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
@@ -144,7 +144,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_
 	validity.Resize(new_size);
 	// resize the child
 	child->Resize(current_size * array_size, new_size * array_size);
-	size = new_size;
+	capacity = new_size;
 	return nullptr;
 }
 
