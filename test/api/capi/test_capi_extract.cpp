@@ -1,4 +1,6 @@
 #include "capi_tester.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -82,4 +84,31 @@ TEST_CASE("Test invalid PRAGMA in C API", "[capi]") {
 	duckdb_destroy_extracted(&stmts);
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
+}
+
+TEST_CASE("Test extract statements for `ALTER TABLE ... ADD COLUMN... DEFAULT` in C API", "[capi]") {
+	CAPITester tester;
+	duckdb_result res;
+	duckdb_extracted_statements stmts = nullptr;
+	duckdb_state status;
+	const char *error;
+	duckdb_prepared_statement prepared = nullptr;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	idx_t size = duckdb_extract_statements(
+	    tester.connection,
+	    "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();", &stmts);
+
+	REQUIRE(size == 5);
+	REQUIRE(stmts != nullptr);
+	auto wrapper = (ExtractStatementsWrapper *)stmts;
+
+	REQUIRE(wrapper->statements[0]->query == "BEGIN;");
+	REQUIRE(wrapper->statements[1]->query ==
+	        "ALTER TABLE my_table ADD COLUMN my_column \"TIMESTAMP WITH TIME ZONE\" DEFAULT NULL;");
+	REQUIRE(wrapper->statements[2]->query == "UPDATE my_table SET my_column = non_existent_function();");
+	REQUIRE(wrapper->statements[3]->query ==
+	        "ALTER TABLE my_table ALTER COLUMN my_column SET DEFAULT non_existent_function();");
+	REQUIRE(wrapper->statements[4]->query == "COMMIT;");
 }
