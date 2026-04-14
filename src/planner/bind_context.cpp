@@ -690,32 +690,25 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
-	bool deduplicate = !Settings::Get<PreserveDuplicateColumnNamesSetting>(binder.context);
-	if (deduplicate) {
-		case_insensitive_set_t current_names;
-		// use any provided column aliases first
-		for (idx_t i = 0; i < column_aliases.size(); i++) {
-			result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
-		}
-		// if not enough aliases were provided, use the default names for remaining columns
-		for (idx_t i = column_aliases.size(); i < names.size(); i++) {
-			result.push_back(AddColumnNameToBinding(names[i], current_names));
-		}
-	} else {
-		// preserve duplicate column names as-is
-		for (idx_t i = 0; i < column_aliases.size(); i++) {
-			result.push_back(column_aliases[i]);
-		}
-		for (idx_t i = column_aliases.size(); i < names.size(); i++) {
-			result.push_back(names[i]);
-		}
+	case_insensitive_set_t current_names;
+	// use any provided column aliases first
+	for (idx_t i = 0; i < column_aliases.size(); i++) {
+		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
+	}
+	// if not enough aliases were provided, use the default names for remaining columns
+	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
+		result.push_back(AddColumnNameToBinding(names[i], current_names));
 	}
 	return result;
 }
 
 void BindContext::AddSubquery(TableIndex index, const string &alias, SubqueryRef &ref, BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types);
+	if (Settings::Get<PreserveDuplicateColumnNamesSetting>(binder.context)) {
+		AddGenericBinding(index, alias, subquery.names, subquery.types);
+	} else {
+		auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+		AddGenericBinding(index, alias, names, subquery.types);
+	}
 }
 
 void BindContext::AddEntryBinding(TableIndex index, const string &alias, const vector<string> &names,
@@ -730,8 +723,12 @@ void BindContext::AddView(TableIndex index, const string &alias, SubqueryRef &re
 }
 
 void BindContext::AddSubquery(TableIndex index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types);
+	if (Settings::Get<PreserveDuplicateColumnNamesSetting>(binder.context)) {
+		AddGenericBinding(index, alias, subquery.names, subquery.types);
+	} else {
+		auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+		AddGenericBinding(index, alias, names, subquery.types);
+	}
 }
 
 void BindContext::AddGenericBinding(TableIndex index, const string &alias, const vector<string> &names,
