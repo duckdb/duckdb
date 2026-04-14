@@ -192,8 +192,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 		// "typed_value", "untyped_value"
 		auto &child_vectors = StructVector::GetEntries(shredded);
 		D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
-		auto &child_entries = StructVector::GetEntries(shredded);
-		D_ASSERT(child_entries.size() <= 2);
+		D_ASSERT(child_vectors.size() <= 2);
 		typed_value_ref = child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
 		if (child_vectors.size() > 1) {
 			D_ASSERT(child_vectors.size() == 2);

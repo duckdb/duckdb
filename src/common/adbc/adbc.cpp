@@ -170,7 +170,6 @@ private:
 	DuckDBAdbcStreamWrapper *ptr;
 };
 
-static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper);
 
 static bool IsInterruptError(const char *message) {
 	if (!message) {
