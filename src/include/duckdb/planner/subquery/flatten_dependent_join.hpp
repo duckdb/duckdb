@@ -121,6 +121,8 @@ private:
 	                              idx_t lateral_depth, PushDownState state);
 	PushDownResult PushDownSetOperation(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                    PushDownState state);
+	PushDownResult PushDownDistinct(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+	                                PushDownState state);
 	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                             idx_t lateral_depth, PushDownState state);
 };

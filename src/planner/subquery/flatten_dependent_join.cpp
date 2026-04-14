@@ -906,6 +906,20 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownSetOperatio
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDistinct(unique_ptr<LogicalOperator> plan,
+                                                                              bool parent_propagate_null_values,
+                                                                              PushDownState state) {
+	auto &distinct = plan->Cast<LogicalDistinct>();
+	auto child_result = PushDownDependentJoin(std::move(distinct.children[0]), true, 0, state);
+	distinct.children[0] = std::move(child_result.plan);
+	state = child_result.state;
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		distinct.distinct_targets.push_back(
+		    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state.GetBinding(i)));
+	}
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
+
 
 		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -1031,6 +1045,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownSetOperatio
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION: {
 		return PushDownSetOperation(std::move(plan), parent_propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		return PushDownDistinct(std::move(plan), parent_propagate_null_values, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
