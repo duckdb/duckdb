@@ -87,14 +87,20 @@ struct FlatVector {
 	}
 	static inline const_data_ptr_t GetData(Vector &vector) {
 		VerifyFlatOrConst(vector);
-		return vector.buffer ? vector.buffer->GetData() : nullptr;
+		return GetDataUnsafe(vector);
 	}
 	static inline const_data_ptr_t GetData(const Vector &vector) {
 		VerifyFlatOrConst(vector);
-		return vector.buffer ? vector.buffer->GetData() : nullptr;
+		return GetDataUnsafe(vector);
 	}
 	static inline data_ptr_t GetDataMutable(Vector &vector) {
 		VerifyFlatOrConst(vector);
+		return GetDataMutableUnsafe(vector);
+	}
+	static inline const_data_ptr_t GetDataUnsafe(const Vector &vector) {
+		return vector.buffer ? vector.buffer->GetData() : nullptr;
+	}
+	static inline data_ptr_t GetDataMutableUnsafe(Vector &vector) {
 		return vector.buffer ? vector.buffer->GetData() : nullptr;
 	}
 	template <class T>
@@ -122,11 +128,11 @@ struct FlatVector {
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(Vector &vector) {
-		return reinterpret_cast<const T *>(GetData(vector));
+		return reinterpret_cast<const T *>(GetDataUnsafe(vector));
 	}
 	template <class T>
 	static inline T *GetDataMutableUnsafe(Vector &vector) {
-		return reinterpret_cast<T *>(GetDataMutable(vector));
+		return reinterpret_cast<T *>(GetDataMutableUnsafe(vector));
 	}
 	static void SetData(Vector &vector, data_ptr_t data, idx_t capacity);
 	template <class T>

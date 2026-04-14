@@ -22,8 +22,9 @@ static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector 
 	}
 }
 
-static unique_ptr<FunctionData> CardinalityBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
 		throw BinderException("Cardinality must have exactly one arguments");
 	}

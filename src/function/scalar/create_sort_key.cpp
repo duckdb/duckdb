@@ -32,8 +32,10 @@ struct SortKeyBindData : public FunctionData {
 	}
 };
 
-unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	if (arguments.size() % 2 != 0) {
 		throw BinderException(
 		    "Arguments to create_sort_key must be [key1, sort_specifier1, key2, sort_specifier2, ...]");
@@ -45,7 +47,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		}
 
 		// Rebind to return a date if we are truncating that far
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(context, *arguments[i]);
+		Value sort_specifier = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[i]);
 		if (sort_specifier.IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}
@@ -66,7 +68,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	}
 	if (all_constant) {
 		if (constant_size <= sizeof(int64_t)) {
-			bound_function.SetReturnType(LogicalType::BIGINT);
+			function.SetReturnType(LogicalType::BIGINT);
 		}
 	}
 	return std::move(result);
@@ -799,8 +801,11 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 //===--------------------------------------------------------------------===//
 namespace {
 
-unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	if ((arguments.size() - 1) % 2 != 0) {
 		throw BinderException(
 		    "Arguments to decode_sort_key must be [sort_key, col1, sort_specifier1, col2, sort_specifier2, ...]");
@@ -862,7 +867,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunctio
 		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
 		                      sort_key_arg.return_type.ToString());
 	}
-	bound_function.SetReturnType(LogicalType::STRUCT(std::move(children)));
+	function.SetReturnType(LogicalType::STRUCT(std::move(children)));
 
 	return std::move(result);
 }

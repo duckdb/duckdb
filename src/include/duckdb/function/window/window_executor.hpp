@@ -46,23 +46,6 @@ public:
 	                  OperatorSinkInput &sink);
 	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
-	//! The state used for reading the range collection
-	unique_ptr<WindowCursor> range_cursor;
-};
-
-class WindowExecutorBoundsLocalState : public WindowExecutorLocalState {
-public:
-	WindowExecutorBoundsLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
-	~WindowExecutorBoundsLocalState() override {
-	}
-
-	virtual void UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx, DataChunk &eval_chunk,
-	                          optional_ptr<WindowCursor> range);
-
-	// Frame management
-	const ValidityMask &partition_mask;
-	const ValidityMask &order_mask;
-	DataChunk bounds;
 	WindowBoundariesState state;
 };
 
@@ -108,7 +91,7 @@ public:
 	vector<column_t> aux_idx;
 
 protected:
-	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
+	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                              idx_t row_idx, OperatorSinkInput &sink) const = 0;
 };
 

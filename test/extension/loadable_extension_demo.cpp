@@ -408,8 +408,9 @@ static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
 }
 
-static unique_ptr<FunctionData> BoundedMaxBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 	} else {
@@ -426,8 +427,9 @@ static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	                                                   [&](int32_t left, int32_t right) { return left + right; });
 }
 
-static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BoundedAddBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (BoundedType::GetDefault() == arguments[0]->return_type &&
 	    BoundedType::GetDefault() == arguments[1]->return_type) {
 		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
@@ -458,8 +460,9 @@ struct BoundedFunctionData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.SetReturnType(arguments[0]->return_type);
@@ -630,7 +633,7 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 //===--------------------------------------------------------------------===//
 
 // The bind callback is unused for most extensible table filters
-static unique_ptr<FunctionData> RowIdFilterBind(ClientContext &, ScalarFunction &, vector<unique_ptr<Expression>> &) {
+static unique_ptr<FunctionData> RowIdFilterBind(BindScalarFunctionInput &input) {
 	throw InternalException("rowid_filter: bind should never be called");
 }
 

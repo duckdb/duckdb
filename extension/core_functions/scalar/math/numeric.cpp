@@ -141,8 +141,9 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 }
 
 template <class OP>
-static unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->return_type;
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
@@ -331,8 +332,9 @@ static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state
 }
 
 template <class OP>
-static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
-                                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// ceil essentially removes the scale
 	auto &decimal_type = arguments[0]->return_type;
 	auto scale = DecimalType::GetScale(decimal_type);
@@ -487,8 +489,10 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 }
 
 template <typename NEGOP, typename POSOP>
-unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->return_type;
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();

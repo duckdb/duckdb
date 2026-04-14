@@ -127,8 +127,10 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	child_list_t<LogicalType> struct_children;
 
 	// The last argument could be a flag to be set if we want a minimal list or a maximal list

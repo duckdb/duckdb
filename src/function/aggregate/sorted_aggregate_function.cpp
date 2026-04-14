@@ -548,7 +548,7 @@ struct SortedAggregateFunction {
 
 		vector<idx_t> state_unprocessed(count, 0);
 		for (idx_t i = 0; i < count; ++i) {
-			state_unprocessed[i] = sdata[i].GetValue()->count;
+			state_unprocessed[i] = sdata[i].GetValueUnsafe()->count;
 		}
 
 		ThreadContext thread(client);
@@ -566,7 +566,7 @@ struct SortedAggregateFunction {
 		idx_t sorted = 0;
 		for (idx_t finalized = 0; finalized < count;) {
 			if (unsorted_count < order_bind.threshold) {
-				auto state = sdata[finalized].GetValue();
+				auto state = sdata[finalized].GetValueUnsafe();
 				prefixed.Reset();
 				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
 				OperatorSinkInput sink {*global_sink, *local_sink, interrupt};

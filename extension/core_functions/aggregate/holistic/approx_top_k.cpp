@@ -384,8 +384,9 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	result.Verify(count);
 }
 
-unique_ptr<FunctionData> ApproxTopKBind(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();

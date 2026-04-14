@@ -73,10 +73,18 @@ jobs:
 
       - name: Build current release
         if: ${{ inputs.build_current_release }}
-        uses: ./.github/actions/linux_release_build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          BUILD_BENCHMARK: 1
+          BUILD_JEMALLOC: 1
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_SANITIZER: 1
         with:
-          artifact_name: linux-release-build
-          save_cache: ${{ inputs.save_cache }}
+          build: python3 scripts/ci/retry.py -- make release
+          bundle: make release-artifact
+          upload-name: linux-release-build
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          save-cache: ${{ inputs.save_cache }}
 
       - name: Select base ref
         run: |
@@ -97,17 +105,19 @@ jobs:
           git checkout --detach "${BASE_REF}"
           git submodule update --init --recursive
 
-          # Restore all build related files. This means that any new/changed
-          # compiler/linker optimization is now also applied to the base
-          # comparison build and thus not identical to the "real" base build.
-          git restore --source="${GITHUB_SHA}" --worktree --staged .github Makefile scripts
-
       - name: Build base release
-        uses: ./.github/actions/linux_release_build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          BUILD_BENCHMARK: 1
+          BUILD_JEMALLOC: 1
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_SANITIZER: 1
         with:
-          artifact_name: linux-base-build
-          run_smoke_tests: false
-          save_cache: ${{ inputs.save_cache }}
+          build: python3 scripts/ci/retry.py -- make release
+          bundle: make release-artifact
+          upload-name: linux-base-build
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          save-cache: ${{ inputs.save_cache }}
 
   regression-bench:
     name: Bench ${{ matrix.name }}

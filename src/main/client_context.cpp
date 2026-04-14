@@ -101,6 +101,26 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
+//! RAII wrapper that ensures the active query is reset if an exception occurs during preparation
+struct ActiveQueryGuard {
+	unique_ptr<ActiveQueryContext> &active_query;
+	bool set_active_query;
+
+	ActiveQueryGuard(unique_ptr<ActiveQueryContext> &active_query_p, const string &query)
+	    : active_query(active_query_p), set_active_query(false) {
+		if (!active_query) {
+			active_query = make_uniq<ActiveQueryContext>();
+			set_active_query = true;
+			active_query->query = query;
+		}
+	}
+	~ActiveQueryGuard() {
+		if (set_active_query) {
+			active_query.reset();
+		}
+	}
+};
+
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
@@ -779,7 +799,10 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	PendingQueryParameters parameters;
 	RunFunctionInTransactionInternal(
 	    lock,
-	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters); },
+	    [&]() {
+		    ActiveQueryGuard guard(active_query, statement_query);
+		    prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters);
+	    },
 	    false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),

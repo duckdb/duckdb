@@ -48,8 +48,8 @@ void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	ConstantVector::SetNull(result);
 }
 
-unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SetSeedBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	return make_uniq<SetseedBindData>(context);
 }
 

@@ -44,7 +44,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -296,10 +296,10 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 #ifdef DEBUG
 // Internal verification: export all states to struct, import back, finalize, and compare to main path result
 // using vector operations. Catches serialization/deserialization bugs for struct-based aggregate state.
-static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector &state_vec, idx_t count,
-                                       const UnifiedVectorFormat &state_data, const data_ptr_t *state_vec_ptr,
-                                       const Vector &result, const ExportAggregateBindData &bind_data,
-                                       AggregateInputData &aggr_input_data) {
+void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector &state_vec, idx_t count,
+                                const UnifiedVectorFormat &state_data, const data_ptr_t *state_vec_ptr,
+                                const Vector &result, const ExportAggregateBindData &bind_data,
+                                AggregateInputData &aggr_input_data) {
 	// Build selection of valid state rows
 	SelectionVector valid_sel(count);
 	idx_t valid_count = 0;
@@ -671,7 +671,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		for (auto &arg_type : state_type.bound_argument_types) {
 			args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
 		}
-		auto bind_info = bound_aggr.GetBindCallback()(context, bound_aggr, args);
+		auto bind_info = bound_aggr.Bind(context, args);
 		if (bind_info) {
 			throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
 		}
@@ -685,9 +685,11 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.GetStateSizeCallback()(bound_aggr));
 }
 
-unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindAggregateStateInternal(context, bound_function, arguments, true);
+unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto bind_data =
+	    BindAggregateStateInternal(input.GetClientContext(), input.GetBoundFunction(), input.GetArguments(), true);
 
 	// combine
 	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
@@ -763,8 +765,11 @@ unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deserializer
 	throw NotImplementedException("FIXME: export state deserialize");
 }
 
-unique_ptr<FunctionData> CombineAggrBind(ClientContext &context, AggregateFunction &function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = BindAggregateStateInternal(context, function, arguments, false);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
@@ -911,9 +916,9 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(*other.aggregate);
 }
 
-ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) {
+static ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) {
 	auto function = ScalarFunction("finalize", {aggregate_state_logical_type_id}, LogicalTypeId::INVALID,
-	                               AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	                               AggregateStateFinalize, BindAggregateState, nullptr, InitFinalizeState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetSerializeCallback(ExportStateScalarSerialize);
 	function.SetDeserializeCallback(ExportStateScalarDeserialize);
@@ -921,10 +926,10 @@ ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) 
 	return function;
 }
 
-ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
+static ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
 	auto function = ScalarFunction("combine", {aggregate_state_logical_type_id, LogicalTypeId::ANY},
 	                               aggregate_state_logical_type_id, AggregateStateCombine, BindAggregateState, nullptr,
-	                               nullptr, InitCombineState);
+	                               InitCombineState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetSerializeCallback(ExportStateScalarSerialize);
 	function.SetDeserializeCallback(ExportStateScalarDeserialize);
