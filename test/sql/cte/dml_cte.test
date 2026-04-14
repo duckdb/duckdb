@@ -992,12 +992,6 @@ CREATE VIEW v_bad AS WITH del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
 <REGEX>:.*DML statements.*are not allowed.*VIEW.*
 
 # The outer SELECT must observe rows inserted by a DML CTE in the same WITH clause.
-# Three bugs were fixed:
-#   1. CommonSubplanOptimizer must not deduplicate scans across a DML CTE boundary.
-#   2. PhysicalCTE must add pipeline dependencies so that child pipelines spawned by
-#      the query side (e.g. the scan under an aggregate) run after the DML completes.
-#   3. StatisticsPropagator must not replace scans/filters with EMPTY_RESULT using
-#      stale plan-time statistics when a DML CTE will populate the table at runtime.
 statement ok
 CREATE TABLE cso_t (i INTEGER);
 
