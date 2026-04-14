@@ -17,6 +17,7 @@ class BoundWindowExpression;
 struct WindowSharedExpressions;
 class WindowExecutor;
 class GlobalSinkState;
+class LocalSinkState;
 
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
@@ -98,6 +99,10 @@ typedef unique_ptr<GlobalSinkState> (*window_global_function_t)(ClientContext &c
                                                                 const ValidityMask &partition_mask,
                                                                 const ValidityMask &order_mask);
 
+//! Constructs a thread local state for the hash group.
+//! If not provided, a default WindowExecutorLocalState will be generated, with references to the parameters
+typedef unique_ptr<LocalSinkState> (*window_local_function_t)(ExecutionContext &context, const GlobalSinkState &gstate);
+
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                    const WindowFunction &function);
@@ -108,16 +113,17 @@ public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
 	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr,
-	               window_global_function_t global = nullptr)
+	               window_global_function_t global = nullptr, window_local_function_t local = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
 	                         LogicalType(LogicalTypeId::INVALID), FunctionNullHandling::DEFAULT_NULL_HANDLING),
-	      window_enum(window_enum), bind(bind), bounds(bounds), sharing(sharing), global(global) {
+	      window_enum(window_enum), bind(bind), bounds(bounds), sharing(sharing), global(global), local(local) {
 	}
 
 	WindowFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, ExpressionType window_enum,
 	               window_bind_function_t bind = nullptr, window_bounds_function_t bounds = nullptr,
-	               window_sharing_function_t sharing = nullptr, window_global_function_t global = nullptr)
-	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global) {
+	               window_sharing_function_t sharing = nullptr, window_global_function_t global = nullptr,
+	               window_local_function_t local = nullptr)
+	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global, local) {
 	}
 
 	// clang-format off
@@ -146,6 +152,10 @@ public:
 	bool HasGlobalCallback() const { return global != nullptr; }
 	window_global_function_t GetGlobalCallback() const { return global; }
 	void SetGlobalCallback(window_global_function_t callback) { global = callback; }
+
+	bool HasLocalCallback() const { return local != nullptr; }
+	window_local_function_t GetLocalCallback() const { return local; }
+	void SetLocalCallback(window_local_function_t callback) { local = callback; }
 
 	bool HasSerializationCallbacks() const { return false; }
 	void SetSerializeCallback(window_serialize_t callback) { serialize = callback; }
@@ -178,6 +188,8 @@ public:
 	window_sharing_function_t sharing = nullptr;
 	//! The global state constructor
 	window_global_function_t global = nullptr;
+	//! The local state constructor
+	window_local_function_t local = nullptr;
 
 	//! Serialization specialization. Not yet implemented
 	window_serialize_t serialize = nullptr;

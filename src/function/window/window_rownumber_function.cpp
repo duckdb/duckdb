@@ -43,10 +43,10 @@ public:
 //===--------------------------------------------------------------------===//
 // WindowRowNumberLocalState
 //===--------------------------------------------------------------------===//
-class WindowRowNumberLocalState : public WindowExecutorBoundsLocalState {
+class WindowRowNumberLocalState : public WindowExecutorLocalState {
 public:
 	WindowRowNumberLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
-	    : WindowExecutorBoundsLocalState(context, grstate), grstate(grstate) {
+	    : WindowExecutorLocalState(context, grstate), grstate(grstate) {
 		if (grstate.token_tree) {
 			local_tree = grstate.token_tree->GetLocalState(context);
 		}
@@ -66,7 +66,7 @@ public:
 
 void WindowRowNumberLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
                                      idx_t input_idx, OperatorSinkInput &sink) {
-	WindowExecutorBoundsLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+	WindowExecutorLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
@@ -75,7 +75,7 @@ void WindowRowNumberLocalState::Sink(ExecutionContext &context, DataChunk &sink_
 }
 
 void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowExecutorBoundsLocalState::Finalize(context, collection, sink);
+	WindowExecutorLocalState::Finalize(context, collection, sink);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
@@ -90,7 +90,7 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 WindowFunction RowNumberFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr,
 	                   WindowRowNumberExecutor::GetBounds, WindowRowNumberExecutor::GetSharing,
-	                   WindowRowNumberExecutor::GetGlobal);
+	                   WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal);
 	return fun;
 }
 
@@ -125,20 +125,19 @@ unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobal(ClientContext &cl
 	return make_uniq<WindowRowNumberGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocalState(ExecutionContext &context,
-                                                                  const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	return make_uniq<WindowRowNumberLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
-void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                               idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
 	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
+	const auto count = eval_chunk.size();
 
 	if (grstate.use_framing) {
-		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
-		auto frame_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
+		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (grstate.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				// Row numbers are unique ranks
@@ -152,7 +151,7 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 		return;
 	}
 
-	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
+	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		rdata[i] = UnsafeNumericCast<int64_t>(row_idx - partition_begin[i] + 1);
 	}
@@ -170,7 +169,8 @@ public:
 
 WindowFunction NtileFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
-	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal);
+	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal,
+	                   WindowNtileExecutor::GetLocal);
 	return fun;
 }
 
@@ -185,21 +185,21 @@ void WindowNtileExecutor::GetBounds(WindowBoundsSet &required, const BoundWindow
 	}
 }
 
-unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocalState(ExecutionContext &context,
-                                                              const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	return make_uniq<WindowNtileLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
-void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                           idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                           Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_END]);
+	const auto count = eval_chunk.size();
+
+	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	if (grstate.use_framing) {
 		// With secondary sorts, we restrict to the frame boundaries, but everything else should compute the same.
-		partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
-		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
+		partition_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+		partition_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	}
 	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	const auto ntile_idx = child_idx[0];
