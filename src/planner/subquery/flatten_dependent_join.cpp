@@ -397,16 +397,22 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(uniq
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
-		RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
-		return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownUnnest(unique_ptr<LogicalOperator> plan,
+                                                                            bool parent_propagate_null_values,
+                                                                            idx_t lateral_depth, PushDownState state) {
+	for (auto &expr : plan->expressions) {
+		any_join |= SubqueryDependentFilter(*expr);
 	}
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		// projection
-		// first we flatten the dependent join in the child of the projection
-		for (auto &expr : plan->expressions) {
-			parent_propagate_null_values &= expr->PropagatesNullValues();
-		}
+	auto child_result =
+	    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth, state);
+	plan->children[0] = std::move(child_result.plan);
+	state = child_result.state;
+	parent_propagate_null_values = child_result.propagate_null_values;
+
+	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
 
 		// If our immediate children is a DEPENDENT JOIN, the projection expressions did contain
 		// a subquery expression previously—Which does not propagate null values.
@@ -1115,6 +1121,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(uniq
 
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		return PushDownFilter(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		return PushDownUnnest(std::move(plan), parent_propagate_null_values, lateral_depth, std::move(state));
 	}
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {

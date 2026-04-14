@@ -104,6 +104,8 @@ public:
 private:
 	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                              idx_t lateral_depth, PushDownState state);
+	PushDownResult PushDownUnnest(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
+	                              idx_t lateral_depth, PushDownState state);
 	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values,
 	                                             idx_t lateral_depth, PushDownState state);
 };
