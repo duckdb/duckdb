@@ -1,0 +1,8 @@
+DescribeStatement          unique_ptr<SelectStatement>
+ShowSelect                 unique_ptr<QueryNode>
+ShowAllTables              unique_ptr<QueryNode>
+ShowQualifiedName          unique_ptr<QueryNode>
+ShowTables                 unique_ptr<QueryNode>
+ShowOrDescribeOrSummarize  ShowType
+Summarize                  ShowType
+ShowOrDescribe             ShowType

@@ -1,0 +1,19 @@
+MergeIntoStatement      unique_ptr<SQLStatement>
+MergeIntoUsingClause    unique_ptr<TableRef>
+MergeMatch              pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+MatchedClause           pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+MatchedClauseAction     unique_ptr<MergeIntoAction>
+UpdateMatchClause       unique_ptr<MergeIntoAction>
+UpdateMatchInfo         unique_ptr<MergeIntoAction>
+DeleteMatchClause       unique_ptr<MergeIntoAction>
+InsertMatchClause       unique_ptr<MergeIntoAction>
+InsertMatchInfo         unique_ptr<MergeIntoAction>
+InsertDefaultValues     unique_ptr<MergeIntoAction>
+InsertByNameOrPosition  unique_ptr<MergeIntoAction>
+InsertValuesList        unique_ptr<MergeIntoAction>
+DoNothingMatchClause    unique_ptr<MergeIntoAction>
+ErrorMatchClause        unique_ptr<MergeIntoAction>
+UpdateMatchSetClause    unique_ptr<UpdateSetInfo>
+AndExpression           unique_ptr<ParsedExpression>
+NotMatchedClause        pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+BySourceOrTarget        MergeActionCondition

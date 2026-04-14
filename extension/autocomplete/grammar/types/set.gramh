@@ -1,0 +1,14 @@
+SetStatement               unique_ptr<SQLStatement>
+StandardAssignment         unique_ptr<SetStatement>
+SetTimeZone                unique_ptr<SetStatement>
+SetSetting                 unique_ptr<SetStatement>
+SetVariable                SettingInfo
+StandardAssignment         unique_ptr<SetStatement>
+SetTimeZone                unique_ptr<SetStatement>
+SetSetting                 SettingInfo
+ZoneValue                  unique_ptr<ParsedExpression>
+ZoneIntervalWithInterval   unique_ptr<ParsedExpression>
+ZoneIntervalWithPrecision  unique_ptr<ParsedExpression>
+SetAssignment              vector<unique_ptr<ParsedExpression>>
+VariableList               vector<unique_ptr<ParsedExpression>>
+ResetStatement             unique_ptr<SQLStatement>

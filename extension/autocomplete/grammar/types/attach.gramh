@@ -1,0 +1,4 @@
+AttachStatement  unique_ptr<SQLStatement>
+DatabasePath     unique_ptr<ParsedExpression>
+AttachAlias      string
+AttachOptions    vector<GenericCopyOption>

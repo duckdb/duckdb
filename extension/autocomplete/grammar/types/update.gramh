@@ -1,0 +1,10 @@
+UpdateStatement        unique_ptr<SQLStatement>
+UpdateTarget           unique_ptr<TableRef>
+BaseTableSet           unique_ptr<TableRef>
+BaseTableAliasSet      unique_ptr<TableRef>
+UpdateAlias            string
+UpdateSetClause        unique_ptr<UpdateSetInfo>
+UpdateSetTuple         unique_ptr<UpdateSetInfo>
+UpdateSetElementList   unique_ptr<UpdateSetInfo>
+UpdateSetElement       pair<string, unique_ptr<ParsedExpression>>
+UpdateSetColumnTarget  string

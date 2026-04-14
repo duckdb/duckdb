@@ -1,0 +1,10 @@
+CreateTriggerStmt     unique_ptr<CreateStatement>
+TriggerBody           unique_ptr<SQLStatement>
+TriggerTiming         TriggerTiming
+TriggerEvent          TriggerEventInfo
+TriggerEventInsert    TriggerEventInfo
+TriggerEventDelete    TriggerEventInfo
+TriggerEventUpdate    TriggerEventInfo
+TriggerEventUpdateOf  TriggerEventInfo
+TriggerColumnList     vector<string>
+ForEachClause         TriggerForEach

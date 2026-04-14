@@ -1,0 +1,7 @@
+CreateMacroStmt        unique_ptr<CreateStatement>
+MacroDefinition        unique_ptr<MacroFunction>
+MacroParameters        vector<MacroParameter>
+MacroParameter         MacroParameter
+SimpleParameter        MacroParameter
+ScalarMacroDefinition  unique_ptr<MacroFunction>
+TableMacroDefinition   unique_ptr<MacroFunction>

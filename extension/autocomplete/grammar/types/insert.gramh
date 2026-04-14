@@ -1,0 +1,16 @@
+InsertStatement             unique_ptr<SQLStatement>
+OrAction                    OnConflictAction
+ByNameOrPosition            InsertColumnOrder
+InsertTarget                unique_ptr<BaseTableRef>
+InsertAlias                 string
+ColumnList                  vector<string>
+InsertColumnList            vector<string>
+InsertValues                InsertValues
+OnConflictClause            unique_ptr<OnConflictInfo>
+OnConflictTarget            OnConflictExpressionTarget
+OnConflictExpressionTarget  OnConflictExpressionTarget
+OnConflictIndexTarget       OnConflictExpressionTarget
+OnConflictAction            unique_ptr<OnConflictInfo>
+OnConflictUpdate            unique_ptr<OnConflictInfo>
+OnConflictNothing           unique_ptr<OnConflictInfo>
+ReturningClause             vector<unique_ptr<ParsedExpression>>

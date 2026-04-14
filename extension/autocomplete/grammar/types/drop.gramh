@@ -1,0 +1,17 @@
+DropStatement        unique_ptr<SQLStatement>
+DropEntries          unique_ptr<DropStatement>
+DropTrigger          unique_ptr<DropStatement>
+DropTable            unique_ptr<DropStatement>
+DropTableFunction    unique_ptr<DropStatement>
+DropFunction         unique_ptr<DropStatement>
+DropSchema           unique_ptr<DropStatement>
+DropIndex            unique_ptr<DropStatement>
+QualifiedIndexName   QualifiedName
+DropSequence         unique_ptr<DropStatement>
+DropCollation        unique_ptr<DropStatement>
+DropType             unique_ptr<DropStatement>
+DropSecret           unique_ptr<DropStatement>
+TableOrView          CatalogType
+DropBehavior         bool
+QualifiedSchemaName  QualifiedName
+DropSecretStorage    string

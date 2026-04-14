@@ -1,0 +1,6 @@
+VacuumStatement      unique_ptr<SQLStatement>
+VacuumOptions        VacuumOptions
+VacuumParensOptions  VacuumOptions
+VacuumLegacyOptions  VacuumOptions
+VacuumOption         string
+NameList             vector<string>

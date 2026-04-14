@@ -1,0 +1,5 @@
+LoadStatement              unique_ptr<SQLStatement>
+InstallStatement           unique_ptr<SQLStatement>
+UpdateExtensionsStatement  unique_ptr<SQLStatement>
+FromSource                 ExtensionRepositoryInfo
+VersionNumber              string

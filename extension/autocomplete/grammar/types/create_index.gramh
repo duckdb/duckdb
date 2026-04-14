@@ -1,0 +1,10 @@
+CreateIndexStmt       unique_ptr<CreateStatement>
+WithList              case_insensitive_map_t<unique_ptr<ParsedExpression>>
+RelOptionOrOids       case_insensitive_map_t<unique_ptr<ParsedExpression>>
+RelOptionList         case_insensitive_map_t<unique_ptr<ParsedExpression>>
+Oids                  case_insensitive_map_t<unique_ptr<ParsedExpression>>
+IndexElement          unique_ptr<ParsedExpression>
+IndexType             string
+RelOption             pair<string, unique_ptr<ParsedExpression>>
+RelOptionName         string
+RelOptionArgumentOpt  unique_ptr<ParsedExpression>

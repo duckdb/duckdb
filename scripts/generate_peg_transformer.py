@@ -5,6 +5,7 @@ from enum import Enum
 from pathlib import Path
 
 GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
+TYPES_DIR = Path("extension/autocomplete/grammar/types")
 TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
 FACTORY_REG_FILE = Path("extension/autocomplete/transformer/peg_transformer_factory.cpp")
 FACTORY_HPP_FILE = Path("extension/autocomplete/include/transformer/peg_transformer.hpp")
@@ -109,19 +110,48 @@ class RuleStatus(Enum):
         return self in {RuleStatus.ENUM, RuleStatus.FOUND}
 
 
-def find_grammar_rules(grammar_path):
+def load_gramh_types(types_path, stem):
+    """
+    Load return type annotations from a .gramh file.
+
+    Format: one entry per line -- rule name followed by whitespace then the C++ return type.
+    Lines starting with '#' are comments and are ignored.
+
+    Returns a dict mapping rule_name -> return_type string, or {} if no .gramh file exists.
+    Prints a warning to stderr for any line that has a rule name but no type.
+    """
+    gramh_path = types_path / (stem + ".gramh")
+    if not gramh_path.exists():
+        return {}
+    result = {}
+    for line in gramh_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) == 1:
+            print(f"Warning: {gramh_path}: rule '{parts[0]}' has no type annotation", file=sys.stderr)
+            continue
+        result[parts[0]] = parts[1].strip()
+    return result
+
+
+def find_grammar_rules(grammar_path, types_path):
     """
     Scans the grammar directory for *.gram files and extracts all rule names
     along with their full definition text (including multi-line rules).
+    Return type annotations are loaded from companion *.gramh files in types_path.
 
-    Returns a dictionary mapping:
-    { "filename.gram": (Path, [(rule_name, rule_text), ...]) }
+    Returns a tuple of:
+    - all_rules_by_file: { "filename.gram": (Path, [(rule_name, rule_text, return_type), ...]) }
+    - gramh_all_types: { rule_name: return_type } for every entry across all .gramh files
 
     Assumes well-formed grammar (validated upstream by inline_grammar.py).
     '<-' appears only as the rule assignment operator, never in rule bodies,
     so it is used as a reliable structural delimiter.
     """
     all_rules_by_file = {}
+    gramh_all_types = {}
 
     if not grammar_path.is_dir():
         print(f"Error: Grammar directory not found: {grammar_path}", file=sys.stderr)
@@ -132,21 +162,23 @@ def find_grammar_rules(grammar_path):
         print(f"Error: No *.gram files found in {grammar_path}", file=sys.stderr)
         sys.exit(1)
 
-    rule_start = re.compile(r"^(\w+)(?:\[([^\]]*)\])?\s*<-", re.MULTILINE)
+    rule_start = re.compile(r"^(\w+)\s*<-", re.MULTILINE)
 
     for file_path in gram_files:
         content = file_path.read_text(encoding="utf-8")
+        type_map = load_gramh_types(types_path, file_path.stem)
+        gramh_all_types.update(type_map)
         matches = list(rule_start.finditer(content))
         rules_in_file = []
         for i, match in enumerate(matches):
             rule_name = match.group(1)
-            return_type = match.group(2)  # None if no annotation
+            return_type = type_map.get(rule_name)  # None if not annotated
             end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
             rule_text = " ".join(content[match.start() : end].split())
             rules_in_file.append((rule_name, rule_text, return_type))
         all_rules_by_file[file_path.name] = (file_path, rules_in_file)
 
-    return all_rules_by_file
+    return all_rules_by_file, gramh_all_types
 
 
 def find_transformer_rules(transformer_path):
@@ -369,10 +401,15 @@ def main():
         action="store_true",
         help="Exit with code 1 when there are MISSING rules (useful for CI).",
     )
+    parser.add_argument(
+        "--strict-types",
+        action="store_true",
+        help="Exit with code 1 when any non-excluded grammar rule has no .gramh type annotation.",
+    )
 
     args = parser.parse_args()
 
-    grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
+    grammar_rules_by_file, gramh_all_types = find_grammar_rules(Path(GRAMMAR_DIR), Path(TYPES_DIR))
     transformer_impls, transformer_rule_files = find_transformer_rules(Path(TRANSFORMER_DIR))
     transformer_return_types = find_transformer_return_types(Path(FACTORY_HPP_FILE))
     enum_rules, registered_rules, direct_registered_functions, direct_registered_rules = find_factory_registrations(
@@ -398,8 +435,10 @@ def main():
     total_missing_registration = 0
     total_missing_implementation = 0
     total_type_mismatches = 0
+    total_unannotated = 0
     all_grammar_rules_flat = set()
     missing_rules_by_file = {}
+    unannotated_by_file = {}
 
     generation_queue = {}
 
@@ -427,6 +466,10 @@ def main():
 
             all_grammar_rules_flat.add(rule_name)
             total_grammar_rules += 1
+
+            if grammar_return_type is None:
+                total_unannotated += 1
+                unannotated_by_file.setdefault(file_name, []).append(rule_name)
 
             is_enum = rule_name in enum_rules
             is_transformer = rule_name in transformer_impls
@@ -506,6 +549,14 @@ def main():
         for file_name, count in sorted(missing_rules_by_file.items()):
             print(f"{file_name:<25} : {count} issues")
 
+    if unannotated_by_file:
+        print("\n--- Summary: Missing Type Annotations ---")
+        print(f"{'TOTAL UNANNOTATED':<25} : {total_unannotated}")
+        for file_name, rules in sorted(unannotated_by_file.items()):
+            print(f"  {file_name:<23} : {len(rules)} rules")
+            for rule_name in sorted(rules):
+                print(f"    {rule_name}")
+
     print("\n--- Orphan / Mismatch Check ---")
     orphan_transformers = transformer_impls - all_grammar_rules_flat - EXCLUDED_RULES - direct_registered_functions
     if orphan_transformers:
@@ -526,6 +577,12 @@ def main():
         for rule in sorted(list(orphan_registrations)):
             print(f"  - REGISTER_TRANSFORM(Transform{rule})")
 
+    orphan_gramh = set(gramh_all_types) - all_grammar_rules_flat - EXCLUDED_RULES
+    if orphan_gramh:
+        print("\n[!] Orphan .gramh Entries (No matching grammar rule):")
+        for rule in sorted(orphan_gramh):
+            print(f"  - {rule}  {gramh_all_types[rule]}")
+
     # Direct Register() rules map to a differently-named function
     # (e.g. Register("PragmaName", &TransformIdentifierOrKeyword))
     # so they won't have a TransformPragmaName implementation — that's expected.
@@ -545,6 +602,9 @@ def main():
         generate_code_for_missing_rules(generation_queue, rule_definitions)
 
     if args.strict and total_issues > 0:
+        sys.exit(1)
+
+    if args.strict_types and total_unannotated > 0:
         sys.exit(1)
 
 

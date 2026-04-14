@@ -1,0 +1,4 @@
+DeleteStatement    unique_ptr<SQLStatement>
+TruncateStatement  unique_ptr<SQLStatement>
+TargetOptAlias     unique_ptr<BaseTableRef>
+DeleteUsingClause  vector<unique_ptr<TableRef>>

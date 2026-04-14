@@ -1,0 +1,6 @@
+TransactionStatement  unique_ptr<SQLStatement>
+BeginTransaction      unique_ptr<TransactionStatement>
+RollbackTransaction   unique_ptr<TransactionStatement>
+CommitTransaction     unique_ptr<TransactionStatement>
+ReadOrWrite           TransactionModifierType
+ReadOnlyOrReadWrite   TransactionModifierType

@@ -1,0 +1,3 @@
+CommentStatement  unique_ptr<SQLStatement>
+CommentOnType     CatalogType
+CommentValue      Value

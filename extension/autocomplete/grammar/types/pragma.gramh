@@ -1,0 +1,4 @@
+PragmaStatement   unique_ptr<SQLStatement>
+PragmaAssign      unique_ptr<SQLStatement>
+PragmaFunction    unique_ptr<SQLStatement>
+PragmaParameters  vector<unique_ptr<ParsedExpression>>

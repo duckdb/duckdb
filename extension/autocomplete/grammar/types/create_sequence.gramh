@@ -1,0 +1,9 @@
+CreateSequenceStmt  unique_ptr<CreateStatement>
+SequenceOption      pair<string, unique_ptr<SequenceOption>>
+SeqSetCycle         pair<string, unique_ptr<SequenceOption>>
+SeqSetIncrement     pair<string, unique_ptr<SequenceOption>>
+SeqSetMinMax        pair<string, unique_ptr<SequenceOption>>
+SeqNoMinMax         pair<string, unique_ptr<SequenceOption>>
+SeqStartWith        pair<string, unique_ptr<SequenceOption>>
+SeqOwnedBy          pair<string, unique_ptr<SequenceOption>>
+SeqMinOrMax         string

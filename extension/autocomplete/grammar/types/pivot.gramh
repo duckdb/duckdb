@@ -1,0 +1,13 @@
+PivotStatement            unique_ptr<SelectStatement>
+PivotOn                   vector<PivotColumn>
+PivotUsing                vector<unique_ptr<ParsedExpression>>
+PivotColumnList           vector<PivotColumn>
+PivotColumnEntry          PivotColumn
+PivotColumnEntryInternal  PivotColumn
+PivotColumnSubquery       PivotColumn
+UnpivotStatement          unique_ptr<SelectStatement>
+IntoNameValues            UnpivotNameValues
+IncludeOrExcludeNulls     bool
+UnpivotHeader             vector<string>
+UnpivotHeaderSingle       vector<string>
+UnpivotHeaderList         vector<string>
