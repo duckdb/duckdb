@@ -60,7 +60,7 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
-	D_ASSERT(offset + end <= capacity);
+	D_ASSERT(end <= capacity);
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, end - offset);
