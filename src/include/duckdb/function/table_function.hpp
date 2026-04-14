@@ -27,9 +27,9 @@ namespace duckdb {
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
-	SELF_MANAGED_PARALLELISM = 0,         //! Source handles its own parallelism (default)
-	SEQUENTIAL = 1,                       //! Sequential source, benefits from external parallelization
-	SEQUENTIAL_PREFER_SINGLE_THREADED = 2 //! Sequential source, prefers single-threaded execution
+	SELF_MANAGED_PARALLELISM = 0, //! Source handles its own parallelism (default)
+	SEQUENTIAL = 1,               //! Sequential source, benefits from external parallelization
+	FORCE_SINGLE_THREADED = 2     //! Sequential source, prefers single-threaded execution
 };
 
 class BaseStatistics;

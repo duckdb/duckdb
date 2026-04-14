@@ -5257,7 +5257,7 @@ const StringUtil::EnumStringLiteral *GetTableFunctionParallelismValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TableFunctionParallelism::SELF_MANAGED_PARALLELISM), "SELF_MANAGED_PARALLELISM" },
 		{ static_cast<uint32_t>(TableFunctionParallelism::SEQUENTIAL), "SEQUENTIAL" },
-		{ static_cast<uint32_t>(TableFunctionParallelism::SEQUENTIAL_PREFER_SINGLE_THREADED), "SEQUENTIAL_PREFER_SINGLE_THREADED" }
+		{ static_cast<uint32_t>(TableFunctionParallelism::FORCE_SINGLE_THREADED), "FORCE_SINGLE_THREADED" }
 	};
 	return values;
 }
