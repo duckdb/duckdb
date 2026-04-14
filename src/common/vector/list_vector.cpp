@@ -36,7 +36,8 @@ VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacit
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
-	if (to_reserve > GetChildCapacity()) {
+	idx_t child_capacity = GetChildCapacity();
+	if (to_reserve > child_capacity) {
 		if (to_reserve > DConstants::MAX_VECTOR_SIZE) {
 			// overflow: throw an exception
 			throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s", to_reserve,
@@ -44,7 +45,7 @@ void VectorListBuffer::Reserve(idx_t to_reserve) {
 		}
 		idx_t new_capacity = NextPowerOfTwo(to_reserve);
 		D_ASSERT(new_capacity >= to_reserve);
-		child->Resize(size, new_capacity);
+		child->Resize(child_capacity, new_capacity);
 	}
 }
 
