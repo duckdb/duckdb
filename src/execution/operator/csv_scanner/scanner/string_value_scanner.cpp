@@ -1521,7 +1521,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				if (result.cur_col_id >= result.number_of_columns &&
 				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
 					result.used_unstrictness = true;
-				} else {
+				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
 						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
@@ -1539,14 +1539,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 						}
 						return;
 					}
-					if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
-						value = RemoveEscape(
-						    over_buffer_string.c_str(), over_buffer_string.size(),
-						    state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-						    result.parse_chunk.data[result.chunk_col_id]);
-					}
+					value = RemoveEscape(
+					    over_buffer_string.c_str(), over_buffer_string.size(),
+					    state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					    state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+					    result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}
