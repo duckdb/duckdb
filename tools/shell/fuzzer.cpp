@@ -9,6 +9,10 @@
 #include "shell_fuzzer.hpp"
 #include "shell_state.hpp"
 
+#ifdef DUCKDB_FUZZER
+static int RunAFLFuzzerLoop(bool safe_mode);
+#endif
+
 namespace duckdb_shell {
 
 #ifdef DUCKDB_FUZZER
@@ -87,22 +91,27 @@ static void RunFuzzIteration(const uint8_t *data, size_t size, bool safe_mode) {
 }
 
 int RunFuzzer() {
+	return RunAFLFuzzerLoop(!FuzzerUnsafeModeEnabled());
+}
+#endif
+
+} // namespace duckdb_shell
+
+#ifdef DUCKDB_FUZZER
+static int RunAFLFuzzerLoop(bool safe_mode) {
 	__AFL_FUZZ_INIT();
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 	__AFL_INIT();
 #endif
 
-	auto safe_mode = !FuzzerUnsafeModeEnabled();
 	auto *buf = __AFL_FUZZ_TESTCASE_BUF;
 	while (__AFL_LOOP(1000)) {
 		auto size = static_cast<size_t>(__AFL_FUZZ_TESTCASE_LEN);
 		if (!buf || size == 0) {
 			continue;
 		}
-		RunFuzzIteration(buf, size, safe_mode);
+		duckdb_shell::RunFuzzIteration(buf, size, safe_mode);
 	}
 	return 0;
 }
 #endif
-
-} // namespace duckdb_shell
