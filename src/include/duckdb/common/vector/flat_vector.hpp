@@ -70,10 +70,13 @@ struct FlatVector {
 	}
 	static void VerifyFlatOrConst(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR || vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
 #else
-		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR && vector.GetVectorType() != VectorType::FLAT_VECTOR) {
-			throw InternalException("Operation requires a flat or constant vector but a non-flat/non-constant vector was encountered");
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR &&
+		    vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException(
+			    "Operation requires a flat or constant vector but a non-flat/non-constant vector was encountered");
 		}
 #endif
 	}
