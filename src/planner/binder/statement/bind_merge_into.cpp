@@ -283,11 +283,13 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto source_binder = Binder::CreateBinder(context, this);
 	auto source_binding = source_binder->Bind(*stmt.source);
 
-	// get the source names/types
+	// get the source names/types and collect source table indices for validation
 	vector<BindingAlias> source_aliases;
 	vector<string> source_names;
+	unordered_set<idx_t> source_table_indices;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
+		source_table_indices.insert(binding.GetIndex().index);
 		auto &column_names = binding.GetColumnNames();
 		for (idx_t c = 0; c < column_names.size(); c++) {
 			source_aliases.push_back(binding.GetBindingAlias());
@@ -353,14 +355,6 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
-	// collect source table indices for validation
-	source->ResolveOperatorTypes();
-	auto source_bindings = source->GetColumnBindings();
-	unordered_set<idx_t> source_table_indices;
-	for (auto &binding : source_bindings) {
-		source_table_indices.insert(binding.table_index.index);
-	}
-
 	for (auto &entry : stmt.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
@@ -377,7 +371,8 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		// this marker tells us if we have found a source match or not
 		auto new_proj_index = GenerateTableIndex();
 
-		// source_bindings was already computed above for validation
+		source->ResolveOperatorTypes();
+		auto source_bindings = source->GetColumnBindings();
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t c = 0; c < source_bindings.size(); c++) {
 			select_list.push_back(make_uniq<BoundColumnRefExpression>(source->types[c], source_bindings[c]));
