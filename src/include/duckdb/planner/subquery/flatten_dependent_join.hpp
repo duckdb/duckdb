@@ -136,6 +136,8 @@ private:
 	void AppendCorrelatedColumnsToExpressionGet(LogicalExpressionGet &expr_get, const CorrelatedLayout &layout) const;
 	void AddCorrelatedGroupColumns(LogicalAggregate &aggr, const CorrelatedLayout &layout, idx_t group_count) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
+	void RewriteCorrelatedOperator(LogicalOperator &op, const CorrelatedLayout &layout, idx_t lateral_depth,
+	                               bool recursive = false);
 	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
 	                               CorrelatedLayout layout);
 	CorrelatedLayout PushDownChildFresh(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
