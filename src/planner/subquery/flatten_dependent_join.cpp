@@ -52,6 +52,23 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 	}
 }
 
+static vector<ColumnBinding> GetDependentJoinPlanColumns(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		return op.children[1]->GetColumnBindings();
+	}
+	return op.GetColumnBindings();
+}
+
+static void PopulateDuplicateEliminatedColumns(LogicalDependentJoin &op) {
+	op.duplicate_eliminated_columns.clear();
+	op.mark_types.clear();
+	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
+		auto &col = op.correlated_columns[i];
+		op.duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
+		op.mark_types.push_back(col.type);
+	}
+}
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
@@ -63,149 +80,7 @@ FlattenDependentJoins::PushDownResult
 FlattenDependentJoins::Decorrelate(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout) {
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
-		auto &delim_join = plan;
-		auto &op = plan->Cast<LogicalDependentJoin>();
-
-		// If we have a parent, we unnest the left side of the DEPENDENT JOIN in the parent's context.
-		if (parent) {
-			// only push the dependent join to the left side, if there is correlation.
-			auto entry = has_correlated_expressions.find(*plan);
-			D_ASSERT(entry != has_correlated_expressions.end());
-
-			if (entry->second) {
-				auto left_result = PushDownDependentJoin(std::move(op.children[0]), context, layout);
-				op.children[0] = std::move(left_result.plan);
-				layout = std::move(left_result.layout);
-			} else {
-				// There might be unrelated correlation, so we have to traverse the tree
-				op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
-			}
-
-			// we are now done with the left side, mark it as uncorrelated
-			entry->second = false;
-
-			// rewrite
-			idx_t next_lateral_depth = 0;
-
-			RewriteCorrelatedOperator(*plan, layout, next_lateral_depth);
-			RewriteCorrelatedOperator(*plan, layout, next_lateral_depth, true);
-		} else {
-			auto left_result = Decorrelate(std::move(op.children[0]), context.WithFreshTraversal(), layout);
-			op.children[0] = std::move(left_result.plan);
-			layout = std::move(left_result.layout);
-		}
-
-		if (!op.perform_delim) {
-			// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
-			// and perform all duplicate elimination on that row number instead
-			const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
-			auto window = make_uniq<LogicalWindow>(op_col.binding.table_index);
-			auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-			auto row_number =
-			    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
-			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-			row_number->SetAlias("delim_index");
-			window->expressions.push_back(std::move(row_number));
-			window->AddChild(std::move(op.children[0]));
-			op.children[0] = std::move(window);
-		}
-
-		auto flatten_context = PushDownContext(op.propagate_null_values, 0);
-		FlattenDependentJoins flatten(binder, op.correlated_columns, op.perform_delim, op.any_join, this);
-
-		// first we check which logical operators have correlated expressions in the first place
-		flatten.DetectCorrelatedExpressions(*delim_join->children[1], op.is_lateral_join,
-		                                    flatten_context.lateral_depth);
-
-		if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &cte_ref = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
-			// check if the left side of the CTE has correlated expressions
-			auto entry = flatten.has_correlated_expressions.find(*cte_ref.children[0]);
-			if (entry != flatten.has_correlated_expressions.end()) {
-				if (!entry->second) {
-					// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
-					auto cte = std::move(delim_join->children[1]);
-					delim_join->children[1] = std::move(cte->children[1]);
-					auto decorrelated = Decorrelate(std::move(delim_join),
-					                                context.WithLateralDepth(flatten_context.lateral_depth), layout);
-					cte->children[1] = std::move(decorrelated.plan);
-					return PushDownResult(std::move(cte), std::move(decorrelated.layout));
-				}
-			}
-		}
-
-		// now we push the dependent join down
-		auto flatten_result = flatten.PushDownDependentJoin(std::move(delim_join->children[1]), flatten_context);
-		delim_join->children[1] = std::move(flatten_result.plan);
-		const auto left_offset = delim_join->children[0]->GetColumnBindings().size();
-		if (!parent) {
-			layout = flatten_result.layout;
-			layout.ShiftOffsets(left_offset);
-		}
-
-		RewriteCorrelatedOperator(*plan, layout, flatten_context.lateral_depth);
-
-		op.duplicate_eliminated_columns.clear();
-		op.mark_types.clear();
-		for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
-			auto &col = op.correlated_columns[i];
-			op.duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-			op.mark_types.push_back(col.type);
-		}
-
-		// We are done using the operator as a DEPENDENT JOIN, it is now fully decorrelated,
-		// and we change the type to a DELIM JOIN.
-		delim_join->type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
-
-		auto plan_columns = delim_join->children[1]->GetColumnBindings();
-
-		// Handle lateral joins
-		if (op.is_lateral_join && op.subquery_type == SubqueryType::INVALID) {
-			// in case of a materialized CTE, the output is defined by the second children operator
-			if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-				plan_columns = delim_join->children[1]->children[1]->GetColumnBindings();
-			}
-
-			// then add the delim join conditions
-			CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten_result.layout, op.perform_delim);
-
-			// check if there are any arbitrary expressions left
-			if (!op.arbitrary_expressions.empty()) {
-				// we can only evaluate scalar arbitrary expressions for inner joins
-				if (op.join_type != JoinType::INNER) {
-					throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison between the "
-					                      "left and right side");
-				}
-				auto filter = make_uniq<LogicalFilter>();
-				filter->expressions = std::move(op.arbitrary_expressions);
-				filter->AddChild(std::move(plan));
-				return PushDownResult(std::move(filter), std::move(layout));
-			}
-			return PushDownResult(std::move(plan), std::move(layout));
-		}
-
-		CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten_result.layout, op.perform_delim);
-
-		if (op.subquery_type == SubqueryType::ANY) {
-			// add the actual condition based on the ANY/ALL predicate
-			for (idx_t child_idx = 0; child_idx < op.expression_children.size(); child_idx++) {
-				auto left_expr = std::move(op.expression_children[child_idx]);
-				auto &child_type = op.child_types[child_idx];
-				auto &compare_type = op.child_targets[child_idx];
-				auto right_expr = BoundCastExpression::AddDefaultCastToType(
-				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
-				    op.child_targets[child_idx]);
-				JoinCondition compare_cond(std::move(left_expr), std::move(right_expr), op.comparison_type);
-
-				// push collations
-				ExpressionBinder::PushCollation(binder.context, compare_cond.LeftReference(), compare_type);
-				ExpressionBinder::PushCollation(binder.context, compare_cond.RightReference(), compare_type);
-				op.conditions.push_back(std::move(compare_cond));
-			}
-		}
-
-		return PushDownResult(std::move(plan), std::move(layout));
+		return DecorrelateDependentJoin(std::move(plan), context, std::move(layout));
 	}
 	default: {
 		for (auto &child : plan->children) {
@@ -216,6 +91,147 @@ FlattenDependentJoins::Decorrelate(unique_ptr<LogicalOperator> plan, PushDownCon
 	}
 	}
 
+	return PushDownResult(std::move(plan), std::move(layout));
+}
+
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan,
+                                                                                      PushDownContext context,
+                                                                                      CorrelatedLayout layout) {
+	auto &delim_join = plan;
+	auto &op = plan->Cast<LogicalDependentJoin>();
+	layout = PrepareDependentJoinLeft(op, context, std::move(layout));
+
+	auto flatten_context = PushDownContext(op.propagate_null_values, 0);
+	FlattenDependentJoins flatten(binder, op.correlated_columns, op.perform_delim, op.any_join, this);
+
+	// first we check which logical operators have correlated expressions in the first place
+	flatten.DetectCorrelatedExpressions(*delim_join->children[1], op.is_lateral_join, flatten_context.lateral_depth);
+
+	if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		auto &cte_ref = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
+		// check if the left side of the CTE has correlated expressions
+		auto entry = flatten.has_correlated_expressions.find(*cte_ref.children[0]);
+		if (entry != flatten.has_correlated_expressions.end() && !entry->second) {
+			// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
+			auto cte = std::move(delim_join->children[1]);
+			delim_join->children[1] = std::move(cte->children[1]);
+			auto decorrelated =
+			    Decorrelate(std::move(delim_join), context.WithLateralDepth(flatten_context.lateral_depth), layout);
+			cte->children[1] = std::move(decorrelated.plan);
+			return PushDownResult(std::move(cte), std::move(decorrelated.layout));
+		}
+	}
+
+	// now we push the dependent join down
+	auto flatten_result = flatten.PushDownDependentJoin(std::move(delim_join->children[1]), flatten_context);
+	delim_join->children[1] = std::move(flatten_result.plan);
+	if (!parent) {
+		layout = flatten_result.layout;
+		layout.ShiftOffsets(delim_join->children[0]->GetColumnBindings().size());
+	}
+	return FinalizeDependentJoin(std::move(plan), std::move(layout), flatten_result.layout,
+	                             flatten_context.lateral_depth);
+}
+
+FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDependentJoin &op,
+                                                                                        PushDownContext context,
+                                                                                        CorrelatedLayout layout) {
+	// If we have a parent, we unnest the left side of the DEPENDENT JOIN in the parent's context.
+	if (parent) {
+		// only push the dependent join to the left side, if there is correlation.
+		auto entry = has_correlated_expressions.find(op);
+		D_ASSERT(entry != has_correlated_expressions.end());
+
+		if (entry->second) {
+			auto left_result = PushDownDependentJoin(std::move(op.children[0]), context, layout);
+			op.children[0] = std::move(left_result.plan);
+			layout = std::move(left_result.layout);
+		} else {
+			// There might be unrelated correlation, so we have to traverse the tree
+			op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
+		}
+
+		// we are now done with the left side, mark it as uncorrelated
+		entry->second = false;
+
+		RewriteCorrelatedOperator(op, layout, 0);
+		RewriteCorrelatedOperator(op, layout, 0, true);
+	} else {
+		auto left_result = Decorrelate(std::move(op.children[0]), context.WithFreshTraversal(), std::move(layout));
+		op.children[0] = std::move(left_result.plan);
+		layout = std::move(left_result.layout);
+	}
+
+	if (!op.perform_delim) {
+		// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
+		// and perform all duplicate elimination on that row number instead
+		const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
+		auto window = make_uniq<LogicalWindow>(op_col.binding.table_index);
+		auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
+		auto row_number =
+		    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
+		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		row_number->SetAlias("delim_index");
+		window->expressions.push_back(std::move(row_number));
+		window->AddChild(std::move(op.children[0]));
+		op.children[0] = std::move(window);
+	}
+	return layout;
+}
+
+void FlattenDependentJoins::AddAnyJoinConditions(LogicalDependentJoin &op,
+                                                 const vector<ColumnBinding> &plan_columns) const {
+	// add the actual condition based on the ANY/ALL predicate
+	for (idx_t child_idx = 0; child_idx < op.expression_children.size(); child_idx++) {
+		auto left_expr = std::move(op.expression_children[child_idx]);
+		auto &child_type = op.child_types[child_idx];
+		auto &compare_type = op.child_targets[child_idx];
+		auto right_expr = BoundCastExpression::AddDefaultCastToType(
+		    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), op.child_targets[child_idx]);
+		JoinCondition compare_cond(std::move(left_expr), std::move(right_expr), op.comparison_type);
+
+		// push collations
+		ExpressionBinder::PushCollation(binder.context, compare_cond.LeftReference(), compare_type);
+		ExpressionBinder::PushCollation(binder.context, compare_cond.RightReference(), compare_type);
+		op.conditions.push_back(std::move(compare_cond));
+	}
+}
+
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> plan,
+                                                                                   CorrelatedLayout layout,
+                                                                                   const CorrelatedLayout &right_layout,
+                                                                                   idx_t lateral_depth) {
+	auto &op = plan->Cast<LogicalDependentJoin>();
+	RewriteCorrelatedOperator(*plan, layout, lateral_depth);
+	PopulateDuplicateEliminatedColumns(op);
+
+	// We are done using the operator as a DEPENDENT JOIN, it is now fully decorrelated,
+	// and we change the type to a DELIM JOIN.
+	plan->type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
+
+	auto plan_columns = GetDependentJoinPlanColumns(*plan->children[1]);
+	CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, right_layout, op.perform_delim);
+
+	if (op.is_lateral_join && op.subquery_type == SubqueryType::INVALID) {
+		// check if there are any arbitrary expressions left
+		if (!op.arbitrary_expressions.empty()) {
+			// we can only evaluate scalar arbitrary expressions for inner joins
+			if (op.join_type != JoinType::INNER) {
+				throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison between the left "
+				                      "and right side");
+			}
+			auto filter = make_uniq<LogicalFilter>();
+			filter->expressions = std::move(op.arbitrary_expressions);
+			filter->AddChild(std::move(plan));
+			return PushDownResult(std::move(filter), std::move(layout));
+		}
+		return PushDownResult(std::move(plan), std::move(layout));
+	}
+
+	if (op.subquery_type == SubqueryType::ANY) {
+		AddAnyJoinConditions(op, plan_columns);
+	}
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
