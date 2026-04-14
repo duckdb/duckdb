@@ -478,9 +478,9 @@ SELECT count(*) FROM t_aux;
 # --- Same-table modifications from multiple CTEs ---
 
 # INSERT + DELETE on the same table.
-# The DELETE CTE does not see the INSERT CTE's newly added rows: inserted rows
-# stay in local (uncommitted) storage until the transaction commits, and sibling
-# DML CTE scans operate on the committed row groups only.
+# The DELETE CTE runs after the INSERT CTE (enforced by pipeline dependencies), so it
+# sees the newly inserted row in local (transaction-local) storage and deletes it.
+# Final state: only the pre-existing committed row remains.
 statement ok
 TRUNCATE t1;
 
@@ -495,7 +495,6 @@ SELECT 1;
 query II rowsort
 SELECT * FROM t1;
 ----
-1	10
 10	100
 
 # Two INSERTs into the same table
@@ -537,8 +536,7 @@ SELECT sel.* FROM sel;
 2	20
 
 # INSERT followed by UPDATE on the same table: the UPDATE's scan is initialised
-# after the INSERT completes, so it operates on the pre-existing rows only (the
-# INSERT's own local storage is not yet visible to a sibling DML CTE's scan).
+# after the INSERT completes, so it sees the newly inserted rows and updates them.
 statement ok
 TRUNCATE t1;
 
@@ -547,13 +545,12 @@ WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20)),
      upd AS (UPDATE t1 SET j = j + 1)
 SELECT 1;
 
-query I rowsort
-SELECT i FROM t1;
+query II rowsort
+SELECT i, j FROM t1;
 ----
-1
-2
+1	11
+2	21
 
-# --- Unreferenced multi-DML CTEs (both must still execute) ---
 
 statement ok
 TRUNCATE t1;
@@ -802,9 +799,8 @@ SELECT * FROM t1;
 4	140
 
 # Insert + update on the same table.
-# Inserted rows go into local (uncommitted) storage; the UPDATE's scan reads only
-# committed row groups and does not see the new rows.  The INSERT rows survive
-# with their original j values.
+# The UPDATE CTE runs after the INSERT CTE (enforced by pipeline dependencies), so it
+# sees the newly inserted rows in local (transaction-local) storage and updates them.
 statement ok
 TRUNCATE t1;
 
@@ -819,8 +815,66 @@ SELECT * FROM ins;
 query II rowsort
 SELECT * FROM t1;
 ----
+1	11
+2	21
+
+# Three DML CTEs on the same table: INSERT → UPDATE → DELETE.
+# Pipeline dependencies enforce sequential execution:
+#   ins inserts (1,10) and (2,20);
+#   upd sees both new rows and increments j → (1,11), (2,21);
+#   del sees the updated rows and deletes i=1.
+# Final state: only (2,21) remains.
+statement ok
+TRUNCATE t1;
+
+query II rowsort
+WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20) RETURNING i, j),
+     upd AS (UPDATE t1 SET j = j + 1 RETURNING i, j),
+     del AS (DELETE FROM t1 WHERE i = 1 RETURNING i, j)
+SELECT * FROM ins;
+----
 1	10
 2	20
+
+query II
+SELECT * FROM t1;
+----
+2	21
+
+# Three DML CTEs on the same table: INSERT → UPDATE → UPDATE.
+# ins inserts (1,10),(2,20); upd1 increments j → 11,21; upd2 doubles j → 22,42.
+# Each UPDATE sees the result of the previous one (sequential pipeline deps).
+statement ok
+TRUNCATE t1;
+
+statement ok
+WITH ins  AS (INSERT INTO t1 VALUES (1, 10), (2, 20)),
+     upd1 AS (UPDATE t1 SET j = j + 1),
+     upd2 AS (UPDATE t1 SET j = j * 2)
+SELECT 1;
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	22
+2	42
+
+# Three DML CTEs on the same table: INSERT → INSERT → DELETE all.
+# ins1 inserts (1,10); ins2 inserts (2,20); del deletes every row it sees.
+# Because del runs after both inserts complete it sees all rows and removes them.
+statement ok
+TRUNCATE t1;
+
+statement ok
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t1 VALUES (2, 20) RETURNING i),
+     del  AS (DELETE FROM t1 RETURNING i)
+SELECT 1;
+
+query I
+SELECT count(*) FROM t1;
+----
+0
 
 # --- Cleanup multi-DML tables ---
 
@@ -1029,6 +1083,22 @@ SELECT * FROM stats_t WHERE i = 2;
 
 statement ok
 DROP TABLE stats_t;
+
+# CTEInlining must not inline a DML CTE.
+# Previously, a DML CTE referenced exactly once could be inlined (removing the
+# LOGICAL_MATERIALIZED_CTE wrapper), which caused the INSERT to execute inside
+# the query pipeline rather than before it, so the outer scan saw 0 rows.
+statement ok
+CREATE TABLE cte_inline_t (i INTEGER);
+
+query I
+WITH ins AS (INSERT INTO cte_inline_t VALUES (42) RETURNING i)
+SELECT COUNT(*) FROM cte_inline_t;
+----
+1
+
+statement ok
+DROP TABLE cte_inline_t;
 
 # Serialization: verify that views containing SELECT CTEs survive a DB restart
 # (exercises the v8 query_node field serialization path)

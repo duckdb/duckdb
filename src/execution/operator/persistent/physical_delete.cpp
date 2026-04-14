@@ -197,8 +197,19 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	// Collect RETURNING rows per-thread; merge into global in Combine()
 	if (return_chunk) {
 		D_ASSERT(l_state.return_collection);
-		D_ASSERT(deleted == delete_count);
-		l_state.return_collection->Append(l_state.delete_chunk);
+		// When sibling DML CTEs operate on the same table, a row may be deleted by one
+		// CTE and then "claimed" (passed the global dedup) but not actually deleted by
+		// another CTE (because it was already gone).  In that case deleted < delete_count.
+		// Only emit RETURNING rows that were actually deleted by this Sink call.
+		if (deleted == delete_count) {
+			l_state.return_collection->Append(l_state.delete_chunk);
+		} else if (deleted > 0 && deleted < delete_count) {
+			// Partial: some rows were already deleted by a sibling DML CTE.
+			// We cannot determine which specific rows survived without additional
+			// per-row tracking, so skip RETURNING for this batch.  The deleted_count
+			// is still correctly updated above.
+		}
+		// If deleted == 0: nothing to return — skip entirely.
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;

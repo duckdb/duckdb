@@ -121,15 +121,20 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	const bool cte_has_dml = ContainsDML(children[0].get());
 	vector<shared_ptr<MetaPipeline>> child_meta_pipelines_before;
 	if (cte_has_dml) {
-		meta_pipeline.GetMetaPipelines(child_meta_pipelines_before, false, true);
+		// Use recursive=true so that we capture grandchild (and deeper) MetaPipelines too.
+		// Without recursion, a scanner pipeline that feeds data INTO a sibling DML CTE's sink
+		// would not be captured — it is a child of the sibling's meta pipeline, not a direct
+		// child of the root — and would therefore race with the upstream DML instead of
+		// waiting for it to complete first.
+		meta_pipeline.GetMetaPipelines(child_meta_pipelines_before, true, true);
 	}
 
 	children[1].get().BuildPipelines(current, meta_pipeline);
 
 	if (cte_has_dml) {
-		// Collect the child MetaPipelines that were created while building children[1].
+		// Collect ALL MetaPipelines (recursively) that were created while building children[1].
 		vector<shared_ptr<MetaPipeline>> child_meta_pipelines_after;
-		meta_pipeline.GetMetaPipelines(child_meta_pipelines_after, false, true);
+		meta_pipeline.GetMetaPipelines(child_meta_pipelines_after, true, true);
 
 		reference_set_t<MetaPipeline> before_set;
 		for (auto &mp : child_meta_pipelines_before) {
@@ -141,7 +146,8 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 			if (before_set.find(*mp) != before_set.end()) {
 				continue; // existed before, skip
 			}
-			// All new child MetaPipelines must wait for the DML pipeline to complete.
+			// All new MetaPipelines (including nested scanner pipelines) must wait for
+			// the DML pipeline to complete so that they see the modified table state.
 			mp->GetBasePipeline()->AddDependency(dml_base_pipeline);
 		}
 	}
