@@ -3,11 +3,13 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 
@@ -30,6 +32,17 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 				showref->catalog_name = qualified_name.schema;
 				showref->schema_name = qualified_name.name;
 			}
+		} else if (std::string(stmt.set) == "__show_all_settings") {
+			// PG "SHOW ALL" -> SELECT name, setting, description FROM pg_settings
+			auto result = make_uniq<SelectNode>();
+			result->select_list.emplace_back(make_uniq<ColumnRefExpression>("name"));
+			result->select_list.emplace_back(make_uniq<ColumnRefExpression>("setting"));
+			result->select_list.emplace_back(
+			    make_uniq<ColumnRefExpression>("short_desc", BindingAlias {"description"}));
+			auto tableref = make_uniq<BaseTableRef>();
+			tableref->table_name = "pg_settings";
+			result->from_table = std::move(tableref);
+			return std::move(result);
 		} else {
 			// describing a set (e.g. SHOW ALL TABLES) - push it in the table name
 			showref->table_name = stmt.set;

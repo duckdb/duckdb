@@ -1,8 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
 	if (extension_option.set_function) {
-		extension_option.set_function(context, scope, target_value);
+		extension_option.set_function(context, scope, name.ToStdString(), target_value, false);
 	}
 	if (scope == SetScope::AUTOMATIC) {
 		scope = extension_option.default_scope;

@@ -50,10 +50,17 @@ VariableShowStmt:
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}
-		| show_or_describe ALL opt_tables
+		| show_or_describe ALL TABLES
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 				n->set = (char*) "__show_tables_expanded";
+				n->is_summary = 0;
+				$$ = (PGNode *) n;
+			}
+		| show_or_describe ALL
+			{
+				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
+				n->set = (char*) "__show_all_settings";
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}

@@ -2,15 +2,15 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
 void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &config,
                                            ExtensionOption &extension_option) const {
 	if (extension_option.set_function) {
-		extension_option.set_function(context.client, scope, extension_option.default_value);
+		extension_option.set_function(context.client, scope, name.ToStdString(), extension_option.default_value, true);
 	}
 	if (scope == SetScope::GLOBAL) {
 		config.ResetOption(extension_option);

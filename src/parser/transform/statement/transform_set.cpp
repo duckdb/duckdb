@@ -39,10 +39,6 @@ SetType ToSetType(duckdb_libpgquery::VariableSetKind pg_kind) {
 } // namespace
 
 unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt) {
-	if (stmt.scope == duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_LOCAL) {
-		throw NotImplementedException("SET LOCAL is not implemented.");
-	}
-
 	string name(stmt.name);
 	D_ASSERT(!name.empty()); // parser protect us!
 	if (stmt.args->length != 1) {
@@ -71,10 +67,6 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 
 unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt) {
 	D_ASSERT(stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_RESET);
-
-	if (stmt.scope == duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_LOCAL) {
-		throw NotImplementedException("RESET LOCAL is not implemented.");
-	}
 
 	string name(stmt.name);
 	D_ASSERT(!name.empty()); // parser protect us!
