@@ -263,14 +263,21 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 		D_ASSERT(format[3] == ':');
 
 		std::string prefix = "+us:";
-		// TODO: what are these type ids actually for?
-		auto type_ids = StringUtil::Split(format.substr(prefix.size()), ',');
+		auto type_id_strings = StringUtil::Split(format.substr(prefix.size()), ',');
 
 		child_list_t<LogicalType> members;
 		vector<shared_ptr<ArrowType>> children;
 		if (schema.n_children == 0) {
 			throw InvalidInputException("Attempted to convert a UNION with no fields to DuckDB which is not supported");
 		}
+
+		// Parse the type_id mapping from the format string.
+		// In "+us:5,7,9", type_id 5 maps to child 0, type_id 7 maps to child 1, type_id 9 maps to child 2.
+		vector<int8_t> type_ids;
+		for (auto &id_str : type_id_strings) {
+			type_ids.push_back(NumericCast<int8_t>(std::stoi(id_str)));
+		}
+
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			auto type = schema.children[type_idx];
 
@@ -278,7 +285,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
-		auto type_info = make_uniq<ArrowStructInfo>(std::move(children));
+		auto type_info = make_uniq<ArrowUnionInfo>(std::move(children), std::move(type_ids));
 		auto union_type = make_uniq<ArrowType>(LogicalType::UNION(members), std::move(type_info));
 		return union_type;
 	} else if (format == "+r") {
@@ -367,7 +374,7 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return LogicalType::MAP(StructType::GetChildType(struct_type, 0), StructType::GetChildType(struct_type, 1));
 	}
 	case LogicalTypeId::UNION: {
-		auto &union_info = type_info->Cast<ArrowStructInfo>();
+		auto &union_info = type_info->Cast<ArrowUnionInfo>();
 		child_list_t<LogicalType> new_children;
 		for (idx_t i = 0; i < union_info.ChildCount(); i++) {
 			auto &child = union_info.GetChild(i);
