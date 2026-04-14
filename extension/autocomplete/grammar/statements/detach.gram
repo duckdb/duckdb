@@ -1,1 +1,1 @@
-DetachStatement[unique_ptr<SQLStatement>] <- 'DETACH' Database? IfExists? CatalogName
+DetachStatement <- 'DETACH' Database? IfExists? CatalogName

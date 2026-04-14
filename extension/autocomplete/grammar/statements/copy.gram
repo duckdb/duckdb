@@ -1,38 +1,38 @@
-CopyStatement[unique_ptr<SQLStatement>] <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
+CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
 
-CopyTable[unique_ptr<SQLStatement>] <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
-FromOrTo[bool] <- 'FROM' / 'TO'
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+FromOrTo <- 'FROM' / 'TO'
 
-CopySelect[unique_ptr<SQLStatement>] <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
+CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
-CopyFileName[unique_ptr<ParsedExpression>] <- Parameter / ParensExpression / StringLiteral / Identifier / (Identifier '.' ColId)
-CopyOptions[vector<GenericCopyOption>] <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
-SpecializedOptionList[vector<GenericCopyOption>] <- SpecializedOption*
-SpecializedOption[GenericCopyOption] <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
+CopyFileName <- Parameter / ParensExpression / StringLiteral / Identifier / (Identifier '.' ColId)
+CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
+SpecializedOptionList <- SpecializedOption*
+SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
 	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
 
-SingleOption[GenericCopyOption] <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
+SingleOption <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
 BinaryOption <- 'BINARY'
 FreezeOption <- 'FREEZE'
 OidsOption <- 'OIDS'
 CsvOption <- 'CSV'
 HeaderOption <- 'HEADER'
-NullAsOption[GenericCopyOption] <- 'NULL' 'AS'? StringLiteral
-DelimiterAsOption[GenericCopyOption] <- 'DELIMITER' 'AS'? StringLiteral
-QuoteAsOption[GenericCopyOption] <- 'QUOTE' 'AS'? StringLiteral
-EscapeAsOption[GenericCopyOption] <- 'ESCAPE' 'AS'? StringLiteral
-EncodingOption[GenericCopyOption] <- 'ENCODING' StringLiteral
-ForceQuoteOption[GenericCopyOption] <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
-PartitionByOption[GenericCopyOption] <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
-ForceNullOption[GenericCopyOption] <- 'FORCE' 'NOT'? 'NULL' ColumnList
+NullAsOption <- 'NULL' 'AS'? StringLiteral
+DelimiterAsOption <- 'DELIMITER' 'AS'? StringLiteral
+QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
+EscapeAsOption <- 'ESCAPE' 'AS'? StringLiteral
+EncodingOption <- 'ENCODING' StringLiteral
+ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
+PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
+ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
 StarSymbol <- '*'
 
-GenericCopyOptionList[vector<GenericCopyOption>] <- Parens(List(GenericCopyOption))
-GenericCopyOption[GenericCopyOption] <- CopyOptionName Expression?
+GenericCopyOptionList <- Parens(List(GenericCopyOption))
+GenericCopyOption <- CopyOptionName Expression?
 
-CopyFromDatabase[unique_ptr<SQLStatement>] <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
+CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
 
-CopyDatabaseFlag[CopyDatabaseType] <- Parens(SchemaOrData)
-SchemaOrData[CopyDatabaseType] <- CopySchema / CopyData
+CopyDatabaseFlag <- Parens(SchemaOrData)
+SchemaOrData <- CopySchema / CopyData
 CopySchema <- 'SCHEMA'
 CopyData <- 'DATA'

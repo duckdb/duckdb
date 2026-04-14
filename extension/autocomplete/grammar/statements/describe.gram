@@ -1,13 +1,13 @@
-DescribeStatement[unique_ptr<SelectStatement>] <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
+DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
-ShowSelect[unique_ptr<QueryNode>] <- ShowOrDescribeOrSummarize SelectStatementInternal
-ShowAllTables[unique_ptr<QueryNode>] <- ShowOrDescribe 'ALL' 'TABLES'
-ShowQualifiedName[unique_ptr<QueryNode>] <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
-ShowTables[unique_ptr<QueryNode>] <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
+ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
+ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
+ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
+ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 
-ShowOrDescribeOrSummarize[ShowType] <- ShowOrDescribe / Summarize
-Summarize[ShowType] <- SummarizeRule
+ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
+Summarize <- SummarizeRule
 SummarizeRule <- 'SUMMARIZE'
-ShowOrDescribe[ShowType] <- ShowRule / DescribeRule
+ShowOrDescribe <- ShowRule / DescribeRule
 ShowRule <- 'SHOW'
 DescribeRule <- 'DESCRIBE' / 'DESC'

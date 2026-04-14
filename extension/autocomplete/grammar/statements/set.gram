@@ -1,27 +1,24 @@
-SetStatement[unique_ptr<SQLStatement>] <- 'SET' (StandardAssignment / SetTimeZone)
+SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
 
-StandardAssignment[unique_ptr<SetStatement>] <- (SetVariable / SetSetting) SetAssignment
-SetTimeZone[unique_ptr<SetStatement>] <- 'TIME' 'ZONE' ZoneValue
+StandardAssignment <- (SetVariable / SetSetting) SetAssignment
+SetTimeZone <- 'TIME' 'ZONE' ZoneValue
 
-SetSetting[unique_ptr<SetStatement>] <- SettingScope? SettingName
-SetVariable[SettingInfo] <- VariableScope Identifier
-StandardAssignment[unique_ptr<SetStatement>] <- (SetVariable / SetSetting) SetAssignment
-SetTimeZone[unique_ptr<SetStatement>] <- 'TIME' 'ZONE' Expression
-SetSetting[SettingInfo] <- SettingScope? SettingName
+SetSetting <- SettingScope? SettingName
+SetVariable <- VariableScope Identifier
 VariableScope <- 'VARIABLE'
 
-ZoneValue[unique_ptr<ParsedExpression>] <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral
-ZoneIntervalWithInterval[unique_ptr<ParsedExpression>] <- 'INTERVAL' StringLiteral Interval?
-ZoneIntervalWithPrecision[unique_ptr<ParsedExpression>] <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
+ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral
+ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
+ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
 
 SettingScope <- LocalScope / SessionScope / GlobalScope
 LocalScope <- 'LOCAL'
 SessionScope <- 'SESSION'
 GlobalScope <- 'GLOBAL'
 
-SetAssignment[vector<unique_ptr<ParsedExpression>>] <- VariableAssign VariableList
+SetAssignment <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
-VariableList[vector<unique_ptr<ParsedExpression>>] <- List(Expression)
+VariableList <- List(Expression)
 
-ResetStatement[unique_ptr<SQLStatement>] <- 'RESET' (SetVariable / SetSetting)
+ResetStatement <- 'RESET' (SetVariable / SetSetting)

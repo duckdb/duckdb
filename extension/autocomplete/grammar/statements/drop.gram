@@ -1,6 +1,6 @@
-DropStatement[unique_ptr<SQLStatement>] <- 'DROP' DropEntries DropBehavior?
+DropStatement <- 'DROP' DropEntries DropBehavior?
 
-DropEntries[unique_ptr<DropStatement>] <-
+DropEntries <-
 	DropTable /
 	DropTableFunction /
 	DropFunction /
@@ -12,26 +12,26 @@ DropEntries[unique_ptr<DropStatement>] <-
 	DropSecret /
 	DropTrigger
 
-DropTrigger[unique_ptr<DropStatement>] <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
+DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
-DropTable[unique_ptr<DropStatement>] <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction[unique_ptr<DropStatement>] <- CommentMacroTable IfExists? List(TableFunctionName)
-DropFunction[unique_ptr<DropStatement>] <- FunctionType IfExists? List(FunctionIdentifier)
-DropSchema[unique_ptr<DropStatement>] <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
-DropIndex[unique_ptr<DropStatement>] <- 'INDEX' IfExists? List(QualifiedIndexName)
-QualifiedIndexName[QualifiedName] <- CatalogQualification? SchemaQualification? IndexName
-DropSequence[unique_ptr<DropStatement>] <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
-DropCollation[unique_ptr<DropStatement>] <- 'COLLATION' IfExists? List(CollationName)
-DropType[unique_ptr<DropStatement>] <- 'TYPE' IfExists? List(QualifiedTypeName)
-DropSecret[unique_ptr<DropStatement>] <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
+DropTable <- TableOrView IfExists? List(BaseTableName)
+DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
+DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
+DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
+DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
+QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
+DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
+DropCollation <- 'COLLATION' IfExists? List(CollationName)
+DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
+DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
 
-TableOrView[CatalogType] <- CommentTable / CommentView / MaterializedViewEntry
+TableOrView <- CommentTable / CommentView / MaterializedViewEntry
 MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
 FunctionType <- 'MACRO' / 'FUNCTION'
 
-DropBehavior[bool] <- 'CASCADE' / 'RESTRICT'
+DropBehavior <- 'CASCADE' / 'RESTRICT'
 
 IfExists <- 'IF' 'EXISTS'
-QualifiedSchemaName[QualifiedName] <- CatalogQualification? SchemaName
+QualifiedSchemaName <- CatalogQualification? SchemaName
 
-DropSecretStorage[string] <- 'FROM' Identifier
+DropSecretStorage <- 'FROM' Identifier

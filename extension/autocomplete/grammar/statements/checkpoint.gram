@@ -1,1 +1,1 @@
-CheckpointStatement[unique_ptr<SQLStatement>] <- 'FORCE'? 'CHECKPOINT' CatalogName?
+CheckpointStatement <- 'FORCE'? 'CHECKPOINT' CatalogName?

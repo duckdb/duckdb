@@ -1,1 +1,1 @@
-DeallocateStatement[unique_ptr<SQLStatement>] <- 'DEALLOCATE' 'PREPARE'? Identifier
+DeallocateStatement <- 'DEALLOCATE' 'PREPARE'? Identifier

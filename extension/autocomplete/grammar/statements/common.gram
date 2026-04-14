@@ -1,4 +1,4 @@
-Statement[unique_ptr<SQLStatement>] <-
+Statement <-
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -32,8 +32,8 @@ Statement[unique_ptr<SQLStatement>] <-
 	MergeIntoStatement /
 	ExpressionStatement
 
-ExpressionStatement[unique_ptr<SQLStatement>] <- List(ExpressionAlias)
-ExpressionAlias[unique_ptr<ParsedExpression>] <- ColIdExpression / ExpressionAsCollabel / Expression
+ExpressionStatement <- List(ExpressionAlias)
+ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -43,33 +43,33 @@ ReservedTableName <- Identifier
 ReservedIdentifier <- Identifier
 ColumnName <- Identifier
 ReservedColumnName <- Identifier
-IndexName[string] <- Identifier
+IndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
 ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
-SequenceName[string] <- Identifier
-TriggerName[string] <- Identifier
-CollationName[string] <- Identifier
+SequenceName <- Identifier
+TriggerName <- Identifier
+CollationName <- Identifier
 CopyOptionName <- ColLabel
-SecretName[string] <- ColId
+SecretName <- ColId
 
-NumberLiteral[unique_ptr<ParsedExpression>] <- < [+-]?[0-9]*([.][0-9]*)? >
-StringLiteral[string] <- '\'' [^\']* '\''
+NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+StringLiteral <- '\'' [^\']* '\''
 
-Type[LogicalType] <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType[unique_ptr<ParsedExpression>] <- (CharacterType / QualifiedTypeName) TypeModifiers?
-CharacterType[unique_ptr<ParsedExpression>] <- ('CHARACTER' 'VARYING'?) /
+Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
+SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
+CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
                  ('NATIONAL' 'CHAR' 'VARYING'?) /
                  ('NCHAR' 'VARYING'?) /
                  'VARCHAR'
 
-IntervalType[unique_ptr<ParsedExpression>] <- IntervalInterval / IntervalNumber
-IntervalInterval[unique_ptr<ParsedExpression>] <- 'INTERVAL' Interval?
+IntervalType <- IntervalInterval / IntervalNumber
+IntervalInterval <- 'INTERVAL' Interval?
 IntervalNumber <- 'INTERVAL' Parens(NumberLiteral)
 
 YearKeyword         <- 'YEAR' / 'YEARS'
@@ -86,7 +86,7 @@ DecadeKeyword       <- 'DECADE' / 'DECADES'
 CenturyKeyword      <- 'CENTURY' / 'CENTURIES'
 MillenniumKeyword   <- 'MILLENNIUM' / 'MILLENNIA'
 
-Interval[DatePartSpecifier] <- IntervalToInterval /
+Interval <- IntervalToInterval /
     YearKeyword /
     MonthKeyword /
     DayKeyword /
@@ -101,7 +101,7 @@ Interval[DatePartSpecifier] <- IntervalToInterval /
     CenturyKeyword /
     MillenniumKeyword
 
-IntervalToInterval[DatePartSpecifier] <- (YearKeyword 'TO' MonthKeyword) /
+IntervalToInterval <- (YearKeyword 'TO' MonthKeyword) /
     (DayKeyword 'TO' HourKeyword) /
     (DayKeyword 'TO' MinuteKeyword) /
     (DayKeyword 'TO' SecondKeyword) /
@@ -109,14 +109,14 @@ IntervalToInterval[DatePartSpecifier] <- (YearKeyword 'TO' MonthKeyword) /
     (HourKeyword 'TO' SecondKeyword) /
     (MinuteKeyword 'TO' SecondKeyword)
 
-BitType[unique_ptr<ParsedExpression>] <- 'BIT' 'VARYING'? Parens(List(Expression))?
-GeometryType[unique_ptr<ParsedExpression>] <- 'GEOMETRY' Parens(Expression)?
-VariantType[unique_ptr<ParsedExpression>] <- 'VARIANT'
+BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
+GeometryType <- 'GEOMETRY' Parens(Expression)?
+VariantType <- 'VARIANT'
 
-NumericType[unique_ptr<ParsedExpression>] <- SimpleNumericType / DecimalNumericType
-SimpleNumericType[unique_ptr<ParsedExpression>] <- IntType / IntegerType / SmallintType /
+NumericType <- SimpleNumericType / DecimalNumericType
+SimpleNumericType <- IntType / IntegerType / SmallintType /
                 BigintType / RealType / BooleanType / DoubleType
-DecimalNumericType[unique_ptr<ParsedExpression>] <- FloatType / DecimalType / DecType / NumericModType
+DecimalNumericType <- FloatType / DecimalType / DecType / NumericModType
 
 IntType <- 'INT'
 IntegerType <- 'INTEGER'
@@ -126,27 +126,27 @@ RealType <- 'REAL'
 BooleanType <- 'BOOLEAN'
 DoubleType <- ('DOUBLE' 'PRECISION')
 
-FloatType[unique_ptr<ParsedExpression>] <- 'FLOAT' Parens(NumberLiteral)?
-DecimalType[unique_ptr<ParsedExpression>] <- 'DECIMAL' TypeModifiers?
+FloatType <- 'FLOAT' Parens(NumberLiteral)?
+DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName[QualifiedName] <- (Identifier '.')* TypeName
-TypeModifiers[vector<unique_ptr<ParsedExpression>>] <- Parens(List(Expression)?)
-RowType[unique_ptr<ParsedExpression>] <- RowOrStruct ColIdTypeList
-SetofType[unique_ptr<ParsedExpression>] <- 'SETOF' Type
-UnionType[unique_ptr<ParsedExpression>] <- 'UNION' ColIdTypeList
-ColIdTypeList[child_list_t<LogicalType>] <- Parens(List(ColIdType))
-MapType[unique_ptr<ParsedExpression>] <- 'MAP' Parens(List(Type))
-ColIdType[pair<string, LogicalType>] <- ColId Type
-ArrayBounds[int64_t] <- SquareBracketsArray / 'ARRAY'
-SquareBracketsArray[int64_t] <- '[' Expression? ']'
-TimeType[unique_ptr<ParsedExpression>] <- TimeOrTimestamp TypeModifiers? TimeZone?
-TimeOrTimestamp[LogicalTypeId] <- TimeTypeId / TimestampTypeId
+QualifiedTypeName <- (Identifier '.')* TypeName
+TypeModifiers <- Parens(List(Expression)?)
+RowType <- RowOrStruct ColIdTypeList
+SetofType <- 'SETOF' Type
+UnionType <- 'UNION' ColIdTypeList
+ColIdTypeList <- Parens(List(ColIdType))
+MapType <- 'MAP' Parens(List(Type))
+ColIdType <- ColId Type
+ArrayBounds <- SquareBracketsArray / 'ARRAY'
+SquareBracketsArray <- '[' Expression? ']'
+TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
+TimeOrTimestamp <- TimeTypeId / TimestampTypeId
 TimeTypeId <- 'TIME'
 TimestampTypeId <- 'TIMESTAMP'
-TimeZone[bool] <- WithOrWithout 'TIME' 'ZONE'
-WithOrWithout[bool] <- WithRule / WithoutRule
+TimeZone <- WithOrWithout 'TIME' 'ZONE'
+WithOrWithout <- WithRule / WithoutRule
 WithRule <- 'WITH'
 WithoutRule <- 'WITHOUT'
 

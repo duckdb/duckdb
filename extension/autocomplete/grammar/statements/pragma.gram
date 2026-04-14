@@ -1,5 +1,5 @@
-PragmaStatement[unique_ptr<SQLStatement>] <- 'PRAGMA' (PragmaAssign / PragmaFunction)
+PragmaStatement <- 'PRAGMA' (PragmaAssign / PragmaFunction)
 
-PragmaAssign[unique_ptr<SQLStatement>] <- SettingName '=' VariableList
-PragmaFunction[unique_ptr<SQLStatement>] <- PragmaName PragmaParameters?
-PragmaParameters[vector<unique_ptr<ParsedExpression>>] <- Parens(List(Expression))
+PragmaAssign <- SettingName '=' VariableList
+PragmaFunction <- PragmaName PragmaParameters?
+PragmaParameters <- Parens(List(Expression))

@@ -1,1 +1,1 @@
-CallStatement[unique_ptr<SQLStatement>] <- 'CALL' QualifiedTableFunction TableFunctionArguments
+CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments

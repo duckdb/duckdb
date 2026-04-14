@@ -1,6 +1,6 @@
-CommentStatement[unique_ptr<SQLStatement>] <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
+CommentStatement <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
 
-CommentOnType[CatalogType] <-    CommentTable / CommentSequence / CommentFunction / CommentMacroTable / CommentMacro /
+CommentOnType <-    CommentTable / CommentSequence / CommentFunction / CommentMacroTable / CommentMacro /
                     CommentView / CommentDatabase / CommentIndex / CommentSchema / CommentType / CommentColumn
 
 CommentTable <- 'TABLE'
@@ -15,4 +15,4 @@ CommentSchema <- 'SCHEMA'
 CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
-CommentValue[Value] <- 'NULL' / StringLiteral
+CommentValue <- 'NULL' / StringLiteral

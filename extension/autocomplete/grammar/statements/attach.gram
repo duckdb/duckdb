@@ -1,6 +1,6 @@
-AttachStatement[unique_ptr<SQLStatement>] <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
+AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'
-DatabasePath[unique_ptr<ParsedExpression>] <- Expression
-AttachAlias[string] <- 'AS' ColId
-AttachOptions[vector<GenericCopyOption>] <- GenericCopyOptionList
+DatabasePath <- Expression
+AttachAlias <- 'AS' ColId
+AttachOptions <- GenericCopyOptionList

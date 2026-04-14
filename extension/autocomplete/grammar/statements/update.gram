@@ -1,11 +1,11 @@
-UpdateStatement[unique_ptr<SQLStatement>] <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
+UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
 
-UpdateTarget[unique_ptr<TableRef>] <- BaseTableSet / BaseTableAliasSet
-BaseTableSet[unique_ptr<TableRef>] <- BaseTableName 'SET'
-BaseTableAliasSet[unique_ptr<TableRef>] <- BaseTableName UpdateAlias? 'SET'
-UpdateAlias[string] <- 'AS'? ColId
-UpdateSetClause[unique_ptr<UpdateSetInfo>] <- UpdateSetElementList / UpdateSetTuple
-UpdateSetTuple[unique_ptr<UpdateSetInfo>] <- Parens(List(ColumnName)) '=' Expression
-UpdateSetElementList[unique_ptr<UpdateSetInfo>] <- List(UpdateSetElement)
-UpdateSetElement[pair<string, unique_ptr<ParsedExpression>>] <- UpdateSetColumnTarget '=' Expression
-UpdateSetColumnTarget[string] <- ColumnName ('.' Identifier)*
+UpdateTarget <- BaseTableSet / BaseTableAliasSet
+BaseTableSet <- BaseTableName 'SET'
+BaseTableAliasSet <- BaseTableName UpdateAlias? 'SET'
+UpdateAlias <- 'AS'? ColId
+UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
+UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
+UpdateSetElementList <- List(UpdateSetElement)
+UpdateSetElement <- UpdateSetColumnTarget '=' Expression
+UpdateSetColumnTarget <- ColumnName ('.' Identifier)*

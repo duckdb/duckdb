@@ -1,20 +1,20 @@
-CreateTriggerStmt[unique_ptr<CreateStatement>] <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
 
-TriggerBody[unique_ptr<SQLStatement>] <- InsertStatement / UpdateStatement / DeleteStatement
+TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
 
-TriggerTiming[TriggerTiming] <- TriggerBefore / TriggerAfter / TriggerInsteadOf
+TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
 TriggerBefore <- 'BEFORE'
 TriggerAfter <- 'AFTER'
 TriggerInsteadOf <- 'INSTEAD' 'OF'
 
-TriggerEvent[TriggerEventInfo] <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
-TriggerEventInsert[TriggerEventInfo] <- 'INSERT'
-TriggerEventDelete[TriggerEventInfo] <- 'DELETE'
-TriggerEventUpdate[TriggerEventInfo] <- 'UPDATE'
-TriggerEventUpdateOf[TriggerEventInfo] <- 'UPDATE' 'OF' TriggerColumnList
+TriggerEvent <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
+TriggerEventInsert <- 'INSERT'
+TriggerEventDelete <- 'DELETE'
+TriggerEventUpdate <- 'UPDATE'
+TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
 
-TriggerColumnList[vector<string>] <- List(ColId)
+TriggerColumnList <- List(ColId)
 
-ForEachClause[TriggerForEach] <- ForEachRow / ForEachStatement
+ForEachClause <- ForEachRow / ForEachStatement
 ForEachRow <- 'FOR' 'EACH' 'ROW'
 ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'

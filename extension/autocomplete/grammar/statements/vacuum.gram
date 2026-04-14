@@ -1,13 +1,13 @@
-VacuumStatement[unique_ptr<SQLStatement>] <- 'VACUUM' VacuumOptions? AnalyzeTarget?
-VacuumOptions[VacuumOptions] <- VacuumParensOptions / VacuumLegacyOptions
+VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
+VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
 
-VacuumParensOptions[VacuumOptions] <- Parens(List(VacuumOption))
-VacuumLegacyOptions[VacuumOptions] <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
-VacuumOption[string] <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
+VacuumParensOptions <- Parens(List(VacuumOption))
+VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
+VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
 
 OptAnalyze <- 'ANALYZE'
 OptFull <- 'FULL'
 OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
-NameList[vector<string>] <- Parens(List(ColId))
+NameList <- Parens(List(ColId))
