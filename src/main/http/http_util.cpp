@@ -11,13 +11,13 @@
 #include "duckdb/main/settings.hpp"
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
-#define DUCKDB_DISABLE_HTTP_HTTPLIB
+#define DUCKDB_DISABLE_BOOTSTRAP_HTTPLIB
 #endif
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
-#define DUCKDB_DISABLE_HTTP_HTTPLIB
+#define DUCKDB_DISABLE_BOOTSTRAP_HTTPLIB
 #endif
 
-#ifndef DUCKDB_DISABLE_HTTP_HTTPLIB
+#ifndef DUCKDB_DISABLE_BOOTSTRAP_HTTPLIB
 #include "httplib.hpp"
 #endif
 
@@ -51,7 +51,7 @@ string HTTPHeaders::GetHeaderValue(const string &key) const {
 	return entry->second;
 }
 
-#ifndef DUCKDB_DISABLE_HTTP_HTTPLIB
+#ifndef DUCKDB_DISABLE_BOOTSTRAP_HTTPLIB
 unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
 	auto result = make_uniq<HTTPResponse>(status_code);
@@ -139,7 +139,7 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 	HTTPUtil::DecomposeURL(url, path, proto_host_port);
 }
 
-#ifndef DUCKDB_DISABLE_HTTP_HTTPLIB
+#ifndef DUCKDB_DISABLE_BOOTSTRAP_HTTPLIB
 class HTTPLibClient : public HTTPClient {
 public:
 	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) : HTTPClient(proto_host_port) {
@@ -232,7 +232,7 @@ private:
 #endif
 
 unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const string &proto_host_port) {
-#ifndef DUCKDB_DISABLE_HTTP_HTTPLIB
+#ifndef DUCKDB_DISABLE_BOOTSTRAP_HTTPLIB
 	return make_uniq<HTTPLibClient>(http_params, proto_host_port);
 #else
 	return nullptr;
