@@ -34,6 +34,9 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override {};
 
+	//! Flip the children of a join operator, inverting the join type and swapping conditions.
+	static void FlipChildren(LogicalOperator &op);
+
 private:
 	bool TryFlipJoinChildren(LogicalOperator &op) const;
 	static idx_t ChildHasJoins(LogicalOperator &op);

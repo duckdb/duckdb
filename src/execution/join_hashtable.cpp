@@ -39,7 +39,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
                              const idx_t initial_radix_bits, const vector<idx_t> &output_columns_p,
                              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr,
-                             const vector<idx_t> &output_in_probe)
+                             const vector<idx_t> &output_in_probe, bool dedup_build_side)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
@@ -126,6 +126,26 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	    (join_type == JoinType::SEMI || join_type == JoinType::ANTI || join_type == JoinType::MARK)) {
 		insert_duplicate_keys = false;
 	}
+	// DistinctOnHashJoinBuild fusion: when the optimizer fused a DISTINCT ON subquery
+	// into the build side, the join's invariant is that each distinct key has exactly
+	// one matching row. We drop duplicates at chain-insertion time during Finalize:
+	// rows whose keys match an existing chain head are skipped (no chain extension),
+	// so payload columns from dropped rows are never read at probe time.
+	//
+	// Restricted to INNER/LEFT because RIGHT/FULL/SEMI/ANTI rely on a full build-side
+	// scan (ScanFullOuter) to emit unmatched rows, which would visit the dropped rows
+	// in data_collection.
+	if (dedup_build_side && non_equality_predicates.empty() && !residual_predicate &&
+	    (join_type == JoinType::INNER || join_type == JoinType::LEFT)) {
+		insert_duplicate_keys = false;
+	}
+	// Trip an assertion if a future optimizer change ever sets dedup_build_side
+	// on an unsupported join type or alongside non-equality predicates. The flag
+	// would be silently ignored above (the chain-dedup path requires equality-only
+	// joins on INNER/LEFT) and the optimizer's assumption that fusion happened
+	// would be violated, producing wrong results from the spliced-out DISTINCT ON.
+	D_ASSERT(!dedup_build_side ||
+	         (insert_duplicate_keys == false && (join_type == JoinType::INNER || join_type == JoinType::LEFT)));
 
 	InitializePartitionMasks();
 }
@@ -565,7 +585,11 @@ static inline void InsertMatchesAndIncrementMisses(atomic<ht_entry_t> entries[],
                                                    idx_t ht_offsets[], const hash_t hash_salts[],
                                                    const idx_t capacity_mask, const idx_t key_match_count,
                                                    const idx_t key_no_match_count) {
-	if (key_match_count != 0) {
+	// Only mark chains_longer_than_one when we are actually going to extend a chain.
+	// In dedup_build_side mode (insert_duplicate_keys=false) we drop the matched rows
+	// instead of chaining them, so chains stay length 1 and the probe path can keep
+	// using the fast single-row shortcut.
+	if (key_match_count != 0 && ht.insert_duplicate_keys) {
 		ht.chains_longer_than_one = true;
 	}
 

@@ -12,6 +12,7 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/distinct_on_hash_join_build.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
@@ -263,6 +264,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
 		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan);
 		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
+	// Fuse a DISTINCT ON subquery on the build side of a hash join into the hash
+	// table build itself, eliminating the separate HASH_GROUP_BY pipeline breaker.
+	// Runs after BUILD_SIDE_PROBE_SIDE so we can assume children[1] is the build side.
+	RunOptimizer(OptimizerType::DISTINCT_ON_HASH_JOIN_BUILD, [&]() {
+		DistinctOnHashJoinBuildOptimizer distinct_on_hash_join_build;
+		plan = distinct_on_hash_join_build.Optimize(std::move(plan));
 	});
 
 	// convert common subplans into materialized CTEs

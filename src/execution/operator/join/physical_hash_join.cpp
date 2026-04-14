@@ -6,6 +6,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
@@ -42,10 +43,11 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                                    PhysicalOperator &right, vector<JoinCondition> conds, JoinType join_type,
                                    const vector<ProjectionIndex> &left_projection_map,
                                    const vector<ProjectionIndex> &right_projection_map, vector<LogicalType> delim_types,
-                                   idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+                                   idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info_p,
+                                   bool dedup_build_p)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(conds), join_type,
                              estimated_cardinality),
-      delim_types(std::move(delim_types)) {
+      delim_types(std::move(delim_types)), dedup_build(dedup_build_p) {
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -413,7 +415,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 	auto result =
 	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type, initial_radix_bits,
 	                             rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
-	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe);
+	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe, dedup_build);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -491,14 +493,14 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	lstate.join_keys.Reset();
 	lstate.join_key_executor.Execute(chunk, lstate.join_keys);
 
-	if (filter_pushdown && !gstate.skip_filter_pushdown) {
-		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
-	}
-
 	if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
 		lstate.payload_chunk.SetCardinality(chunk.size());
 	} else { // there are payload columns
 		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
+	}
+
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
 	}
 
 	// build the HT
@@ -1913,6 +1915,9 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 	}
 
 	result["Conditions"] = condition_info;
+	if (dedup_build) {
+		result["Dedup Build"] = "true";
+	}
 
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;

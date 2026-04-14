@@ -465,6 +465,12 @@
         "name": "predicate",
         "type": "Expression*",
         "status": "deleted"
+      },
+      {
+        "id": 209,
+        "name": "dedup_build",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": [
