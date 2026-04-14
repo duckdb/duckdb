@@ -97,3 +97,26 @@ def test_unterminated_quote(shell):
     )
     result = test.run()
     result.check_stderr('I\'m an error')
+
+def test_invalid_utf8_query_does_not_crash_box_rendering(shell):
+    test = ShellTest(shell)
+    query = (
+        b".mode duckbox\n"
+        b"create table t as from values (4), (null) t(t0);\n"
+        b"create table u as from values (null), (null) t(u0);\n"
+        b"select\n"
+        b"\tt0,\n"
+        b"\tt0 in (\n"
+        b"\t\tselect\n"
+        b"\t\t\tu0\n"
+        b"\t\tfrom u\n"
+        b"\x80\twhere\n"
+        b"\t\t\tt0 = 4\n"
+        b"\t)\n"
+        b"from t;\n"
+    )
+    result = test.run_raw(query)
+    assert result.status_code == 0
+    assert "INTERNAL Error" not in result.stderr
+    assert "Stack Trace:" not in result.stderr
+    result.check_stdout("│     4 │ NULL")

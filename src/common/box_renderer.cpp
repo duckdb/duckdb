@@ -891,7 +891,8 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	return result;
 }
 
-string BoxRendererImplementation::ConvertRenderValue(const string &input) {
+string BoxRendererImplementation::ConvertRenderValue(const string &raw_input) {
+	auto input = Utf8Proc::RemoveInvalid(raw_input.c_str(), raw_input.size());
 	string result;
 	result.reserve(input.size());
 	for (idx_t c = 0; c < input.size(); c++) {
