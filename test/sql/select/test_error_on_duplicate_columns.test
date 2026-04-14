@@ -34,6 +34,18 @@ SELECT * FROM (SELECT 1 AS a, 2 AS b) sub;
 ----
 1	2
 
+# explicit AS aliases inside the subquery are preserved
+query II
+SELECT foo, bar FROM (SELECT 1 AS foo, 2 AS bar) sub;
+----
+1	2
+
+# explicit AS aliases are preserved even when the underlying expressions would collide
+query II
+SELECT foo, bar FROM (SELECT 42 AS foo, 42 AS bar) sub;
+----
+42	42
+
 # cross join producing duplicates in subquery context
 statement error
 SELECT * FROM (SELECT * FROM (SELECT 1 AS x) a, (SELECT 2 AS x) b) sub;

@@ -723,12 +723,8 @@ void BindContext::AddView(TableIndex index, const string &alias, SubqueryRef &re
 }
 
 void BindContext::AddSubquery(TableIndex index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
-	if (Settings::Get<PreserveDuplicateColumnNamesSetting>(binder.context)) {
-		AddGenericBinding(index, alias, subquery.names, subquery.types);
-	} else {
-		auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-		AddGenericBinding(index, alias, names, subquery.types);
-	}
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddGenericBinding(index, alias, names, subquery.types);
 }
 
 void BindContext::AddGenericBinding(TableIndex index, const string &alias, const vector<string> &names,
