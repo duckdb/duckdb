@@ -463,16 +463,106 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, bool
 	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
 }
 
-			// recurse into right children, there may be more local correlations
-			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-			return PushDownResult(std::move(plan), left_result.state, parent_propagate_null_values);
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownAggregate(unique_ptr<LogicalOperator> plan,
+                                                                               bool parent_propagate_null_values,
+                                                                               idx_t lateral_depth,
+                                                                               PushDownState state) {
+	auto &aggr = plan->Cast<LogicalAggregate>();
+	for (auto &expr : plan->expressions) {
+		parent_propagate_null_values &= expr->PropagatesNullValues();
+	}
+	auto child_result =
+	    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth, state);
+	plan->children[0] = std::move(child_result.plan);
+	state = child_result.state;
+	parent_propagate_null_values = child_result.propagate_null_values;
+
+	RewriteCorrelatedExpressions rewriter(state.correlated_bindings, correlated_map, lateral_depth);
+	rewriter.VisitOperator(*plan);
+
+	TableIndex delim_table_index;
+	idx_t delim_column_offset;
+	auto new_group_count = perform_delim ? correlated_columns.size() : 1;
+	for (idx_t i = 0; i < new_group_count; i++) {
+		auto &col = correlated_columns[i];
+		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
+		auto new_group_index = ColumnBinding::PushExpression(aggr.groups, std::move(colref));
+		for (auto &set : aggr.grouping_sets) {
+			set.insert(new_group_index);
 		}
-		if (!left_has_correlation) {
-			// only right has correlation: push into right
-			auto right_result = PushDownDependentJoinInternal(std::move(plan->children[1]),
-			                                                  parent_propagate_null_values, lateral_depth, state);
-			plan->children[1] = std::move(right_result.plan);
-			parent_propagate_null_values = right_result.propagate_null_values;
+	}
+	if (!perform_delim) {
+		delim_table_index = aggr.aggregate_index;
+		delim_column_offset = aggr.expressions.size();
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			auto &col = correlated_columns[i];
+			auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
+			auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state.GetBinding(i));
+			vector<unique_ptr<Expression>> aggr_children;
+			aggr_children.push_back(std::move(colref));
+			auto first_fun = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
+			                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
+			aggr.expressions.push_back(std::move(first_fun));
+		}
+	} else {
+		delim_table_index = aggr.group_index;
+		delim_column_offset = aggr.groups.size() - correlated_columns.size();
+	}
+	bool ungrouped_join = false;
+	if (aggr.grouping_sets.empty()) {
+		ungrouped_join = aggr.groups.size() == new_group_count;
+	} else {
+		for (auto &grouping_set : aggr.grouping_sets) {
+			if (grouping_set.size() == new_group_count) {
+				ungrouped_join = true;
+			}
+		}
+	}
+	if (ungrouped_join) {
+		JoinType join_type = JoinType::INNER;
+		if (any_join || !parent_propagate_null_values) {
+			join_type = JoinType::LEFT;
+		}
+		for (auto &aggr_exp : aggr.expressions) {
+			auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
+			if (!b_aggr_exp.PropagatesNullValues()) {
+				join_type = JoinType::LEFT;
+				break;
+			}
+		}
+		unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
+		auto left_index = binder.GenerateTableIndex();
+		auto delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
+		join->children.push_back(std::move(delim_scan));
+		join->children.push_back(std::move(plan));
+		for (idx_t i = 0; i < new_group_count; i++) {
+			auto &col = correlated_columns[i];
+			JoinCondition cond(
+			    make_uniq<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, ProjectionIndex(i))),
+			    make_uniq<BoundColumnRefExpression>(
+			        correlated_columns[i].type,
+			        ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset + i))),
+			    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+			join->conditions.push_back(std::move(cond));
+		}
+		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+			D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
+			vector<LogicalType> arguments;
+			if (bound.function == CountFunctionBase::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+				replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
+			}
+		}
+		state = PushDownState::CreateContiguous(ColumnBinding(left_index, ProjectionIndex(0)), 0,
+		                                        correlated_columns.size());
+		return PushDownResult(std::move(join), state, parent_propagate_null_values);
+	}
+
+	state = PushDownState::CreateContiguous(ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset)),
+	                                        delim_column_offset, correlated_columns.size());
+	return PushDownResult(std::move(plan), state, parent_propagate_null_values);
+}
+
 
 			// recurse into left children
 			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
