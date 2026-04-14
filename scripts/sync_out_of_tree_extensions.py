@@ -17,6 +17,7 @@ SUBMODULES, and APPLY_PATCHES. The extension is then cloned (or updated) at
 extension/external/<name>.
 """
 
+import argparse
 import json
 import os
 import re
@@ -42,12 +43,26 @@ def parse_cmake_file(cmake_path):
     Parse a cmake file and return a list of out-of-tree extension descriptors,
     i.e. duckdb_extension_load() calls that contain GIT_URL.
 
+    Follows include("${EXTENSION_CONFIG_BASE_DIR}/foo.cmake") directives,
+    resolving them relative to the directory of cmake_path.
+
     Each descriptor is a dict with keys:
       name, git_url, git_tag, submodules (list, may be empty), apply_patches (bool)
     """
-    content = Path(cmake_path).read_text(encoding='utf-8')
+    cmake_path = Path(cmake_path)
+    content = cmake_path.read_text(encoding='utf-8')
 
     extensions = []
+
+    # Follow include("${EXTENSION_CONFIG_BASE_DIR}/foo.cmake") directives.
+    # EXTENSION_CONFIG_BASE_DIR resolves to the 'extensions/' subdirectory next to this file.
+    ext_config_base_dir = cmake_path.parent / 'extensions'
+    for inc_match in re.finditer(
+        r"include\s*\(\s*[\"']?\$\{EXTENSION_CONFIG_BASE_DIR\}/(\S+?\.cmake)[\"']?\s*\)", content
+    ):
+        included = ext_config_base_dir / inc_match.group(1)
+        if included.exists():
+            extensions.extend(parse_cmake_file(included))
 
     # Match duckdb_extension_load( NAME ... ) blocks (possibly multi-line).
     # The closing ) is found by scanning for the first unbalanced ')'.
@@ -346,12 +361,14 @@ def sync_extension(ext, external_dir, repo_root):
         print(f"  {'Force-reset' if force else 'Updated'} {name} @ {git_tag}")
 
 
-def collect_extensions(repo_root):
+def collect_extensions(repo_root, build_extensions_arg=None, extension_configs_arg=None):
     """Return a dict of name -> extension descriptor for all out-of-tree extensions to sync."""
     extensions_config_dir = repo_root / '.github' / 'config' / 'extensions'
 
-    raw_build_extensions = os.environ.get('BUILD_EXTENSIONS') or os.environ.get('DUCKDB_EXTENSIONS') or ''
-    raw_extension_configs = os.environ.get('EXTENSION_CONFIGS') or ''
+    raw_build_extensions = (
+        build_extensions_arg or os.environ.get('BUILD_EXTENSIONS') or os.environ.get('DUCKDB_EXTENSIONS') or ''
+    )
+    raw_extension_configs = extension_configs_arg or os.environ.get('EXTENSION_CONFIGS') or ''
 
     extensions = {}  # name -> descriptor (first seen wins)
 
@@ -485,10 +502,15 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--build-extensions', default=None, help='Semicolon-separated list of extension names')
+    parser.add_argument('--extension-configs', default=None, help='Semicolon-separated list of cmake config file paths')
+    args = parser.parse_args()
+
     repo_root = Path(__file__).resolve().parent.parent
     external_dir = repo_root / 'extension' / 'external'
 
-    extensions = collect_extensions(repo_root)
+    extensions = collect_extensions(repo_root, args.build_extensions, args.extension_configs)
 
     if not extensions:
         print("No out-of-tree extensions to sync.")
