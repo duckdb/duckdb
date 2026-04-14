@@ -359,9 +359,9 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJo
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
-		aggr.VisitOperator(*result);
+		aggr.VisitOperator(*result.plan);
 	}
-	return result;
+	return PushDownResult(std::move(result.plan), result.state, propagate_null_values);
 }
 
 bool SubqueryDependentFilter(Expression &expr) {
