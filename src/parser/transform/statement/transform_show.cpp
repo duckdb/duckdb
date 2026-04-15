@@ -1,4 +1,3 @@
-#include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -9,7 +8,6 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
-#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 
@@ -37,8 +35,9 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 			auto result = make_uniq<SelectNode>();
 			result->select_list.emplace_back(make_uniq<ColumnRefExpression>("name"));
 			result->select_list.emplace_back(make_uniq<ColumnRefExpression>("setting"));
-			result->select_list.emplace_back(
-			    make_uniq<ColumnRefExpression>("short_desc", BindingAlias {"description"}));
+			auto desc_col = make_uniq<ColumnRefExpression>("short_desc");
+			desc_col->alias = "description";
+			result->select_list.emplace_back(std::move(desc_col));
 			auto tableref = make_uniq<BaseTableRef>();
 			tableref->table_name = "pg_settings";
 			result->from_table = std::move(tableref);
