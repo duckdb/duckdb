@@ -131,6 +131,10 @@ public:
 	}
 	virtual ~ParseResult() = default;
 
+	ParseResult(const ParseResult &) = delete;
+	ParseResult &operator=(const ParseResult &) = delete;
+
+
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != ParseResultType::INVALID && type != TARGET::TYPE) {

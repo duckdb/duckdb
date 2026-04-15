@@ -426,8 +426,8 @@ PEGTransformerFactory::TransformCatalogReservedSchemaTable(PEGTransformer &trans
 }
 
 string PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &transformer,
-                                                           optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 

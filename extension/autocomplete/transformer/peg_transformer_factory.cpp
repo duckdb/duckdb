@@ -16,8 +16,8 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
 	if (!transformer.named_parameter_map.empty()) {
@@ -696,7 +696,7 @@ void PEGTransformerFactory::RegisterAlter() {
 // 	REGISTER_TRANSFORM(TransformBaseTableName);
 // 	REGISTER_TRANSFORM(TransformSchemaReservedTable);
 // 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTable);
-// 	REGISTER_TRANSFORM(TransformSchemaQualification);
+	// REGISTER_TRANSFORM(TransformSchemaQualification);
 // 	REGISTER_TRANSFORM(TransformCatalogQualification);
 // 	REGISTER_TRANSFORM(TransformQualifiedName);
 // 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifier);
@@ -874,7 +874,7 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
 	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
 	Register("SettingName", &TransformIdentifierOrKeyword);
-	Register("ReservedSchemaQualification", &TransformSchemaQualification);
+	// Register("ReservedSchemaQualification", &TransformSchemaQualification);
 }
 
 void PEGTransformerFactory::RegisterEnums() {
@@ -1070,14 +1070,14 @@ PEGTransformerFactory::PEGTransformerFactory() {
 }
 
 vector<reference<ParseResult>>
-PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result) {
+PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {
 	// List(D) <- D (',' D)* ','?
 	vector<reference<ParseResult>> result;
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	result.push_back(list_pr.GetChild(0));
-	auto opt_child = list_pr.Child<OptionalParseResult>(1);
+	auto &opt_child = list_pr.Child<OptionalParseResult>(1);
 	if (opt_child.HasResult()) {
-		auto repeat_result = opt_child.GetResult().Cast<RepeatParseResult>();
+		auto &repeat_result = opt_child.GetResult().Cast<RepeatParseResult>();
 		for (auto &child : repeat_result.GetChildren()) {
 			auto &list_child = child.get().Cast<ListParseResult>();
 			result.push_back(list_child.GetChild(1));
@@ -1086,9 +1086,9 @@ PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> par
 	return result;
 }
 
-ParseResult &PEGTransformerFactory::ExtractResultFromParens(optional_ptr<ParseResult> parse_result) {
+ParseResult &PEGTransformerFactory::ExtractResultFromParens(ParseResult &parse_result) {
 	// Parens(D) <- '(' D ')'
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.GetChild(1);
 }
 
