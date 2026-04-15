@@ -33,9 +33,9 @@ EXPLAIN ANALYZE SELECT val FROM t1 WHERE id = 5
 analyzed_plan	<REGEX>:.*Index Scan.*
 
 query I
-SELECT val FROM t1 WHERE id = 5
+SELECT val FROM t1 WHERE id = 499
 ----
-50
+4990
 
 query II
 EXPLAIN ANALYZE SELECT val FROM t1 WHERE id = 500
