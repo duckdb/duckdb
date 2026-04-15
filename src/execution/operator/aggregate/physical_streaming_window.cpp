@@ -428,7 +428,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// Check for COUNT(*)
 	if (wexpr.children.empty()) {
 		D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
-		auto data = FlatVector::GetDataMutable<int64_t>(result);
+		auto data = FlatVector::Writer<int64_t>(result, count);
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));
@@ -609,7 +609,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
 			int64_t start_row = gstate.row_number;
-			auto rdata = FlatVector::GetDataMutable<int64_t>(output.data[col_idx]);
+			auto rdata = FlatVector::Writer<int64_t>(output.data[col_idx], count);
 			for (idx_t i = 0; i < count; i++) {
 				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 			}

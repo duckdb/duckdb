@@ -23,12 +23,9 @@ struct StructKeysBindData : public FunctionData {
 		}
 		ListVector::SetListSize(keys_vector, count);
 
-		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(keys_vector);
+		auto list_entries = FlatVector::Writer<list_entry_t>(keys_vector, 2);
 		list_entries[0] = {0, count};
-
-		auto &validity = FlatVector::Validity(keys_vector);
-		validity.EnsureWritable();
-		validity.SetInvalid(1);
+		list_entries.SetInvalid(1);
 	}
 
 	bool Equals(const FunctionData &other) const override {

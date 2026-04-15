@@ -88,7 +88,7 @@ struct StringConstructArgument {
 };
 
 template <class T, class OP = StandardConstructArgument, class CTX>
-void ConvertArguments(const Vector &input, idx_t count, FlatVector::FlatStringWriter &writer,
+void ConvertArguments(const Vector &input, idx_t count, VectorWriter<string_t> &writer,
                       vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
 	auto result = input.Values<T>(count);
 	for (idx_t i = 0; i < count; i++) {
