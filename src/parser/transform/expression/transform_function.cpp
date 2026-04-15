@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -314,6 +315,18 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
+	} else if (lowercase_name == "normalize") {
+		// PostgreSQL normalize(text [, form]) treats NFC/NFD/NFKC/NFKD as keywords,
+		// but libpg_query parses them as column references. Convert to string constants.
+		if (children.size() == 2 && children[1]->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			auto &colref = children[1]->Cast<ColumnRefExpression>();
+			if (!colref.IsQualified()) {
+				auto form = StringUtil::Upper(colref.GetColumnName());
+				if (form == "NFC" || form == "NFD" || form == "NFKC" || form == "NFKD") {
+					children[1] = make_uniq<ConstantExpression>(Value(form));
+				}
+			}
+		}
 	} else if (lowercase_name == "date") {
 		if (children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to DATE function");
