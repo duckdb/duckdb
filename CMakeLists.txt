@@ -457,6 +457,7 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extensions" FALSE)
+option(DISABLE_BUILTIN_HTTPLIB "Disable support for built-in http-only httplib" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
@@ -489,6 +490,10 @@ option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library,
 
 if(DISABLE_EXTENSION_LOAD)
   add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+
+if(DISABLE_BUILTIN_HTTPLIB)
+  add_definitions(-DDUCKDB_DISABLE_BUILTIN_HTTPLIB)
 endif()
 
 if(${BUILD_RDTSC})
