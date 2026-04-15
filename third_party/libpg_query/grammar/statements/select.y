@@ -3122,6 +3122,18 @@ func_expr_common_subexpr:
 					 */
 					$$ = (PGNode *) makeFuncCall(SystemFuncName("substring"), $3, @1);
 				}
+			| SUBSTRING '(' a_expr SIMILAR a_expr ESCAPE a_expr ')'
+				{
+					/*
+					 * substring(text SIMILAR pattern ESCAPE escape)
+					 * SQL standard regex substring.
+					 * Convert to regexp_extract(text, similar_to_escape(pattern, escape)).
+					 */
+					PGFuncCall *escape_call = makeFuncCall(SystemFuncName("similar_to_escape"),
+					                                      list_make2($5, $7), @4);
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("regexp_extract"),
+					                             list_make2($3, (PGNode *) escape_call), @1);
+				}
 			| TREAT '(' a_expr AS Typename ')'
 				{
 					/* TREAT(expr AS target) converts expr of a particular type to target,
@@ -3822,17 +3834,8 @@ substr_list:
 									makeTypeCast($2,
 												 SystemTypeName("int4"), 0, -1));
 				}
-			| a_expr SIMILAR a_expr ESCAPE a_expr
-				{
-					/*
-					 * substring(text SIMILAR pattern ESCAPE escape)
-					 * PG SQL/XML regex substring form.
-					 * Convert to regexp_extract(text, pattern).
-					 */
-					PGFuncCall *n = makeFuncCall(SystemFuncName("regexp_extract"),
-												list_make2($1, $3), @2);
-					$$ = list_make1(n);
-				}
+			/* substring(text SIMILAR pattern ESCAPE escape) handled above
+			 * as a dedicated func_expr_common_subexpr production */
 			| expr_list
 				{
 					$$ = $1;

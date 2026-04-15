@@ -138,5 +138,73 @@ def main():
     print(f"\t;")
 
 
+def can_derive_bare(start_nt, target_token, rules, terminals, visited=None):
+    """Check if start_nt can derive to just target_token (possibly via opt_ rules
+    that reduce to empty)."""
+    if visited is None:
+        visited = set()
+    if start_nt in visited:
+        return False
+    visited.add(start_nt)
+    for alt in rules.get(start_nt, []):
+        if not alt:
+            continue
+        # Check if first symbol matches (directly or via nonterminal)
+        first = alt[0]
+        rest = alt[1:]
+        # Can rest all be empty?
+        def all_nullable(syms):
+            for s in syms:
+                if s in terminals:
+                    return False
+                if not any(len(a) == 0 for a in rules.get(s, [[1]])):
+                    return False
+            return True
+
+        if first == target_token and all_nullable(rest):
+            return True
+        if first not in terminals and first in rules:
+            if can_derive_bare(first, target_token, rules, terminals, set(visited)):
+                if all_nullable(rest):
+                    return True
+    return False
+
+
+def find_nonbare_typename_tokens():
+    """Find col_name_keywords in Typename FIRST that cannot reduce as bare Typename.
+    These need explicit listing in MacroParameter as valid param names.
+
+    Usage: merge_grammar_rules_xml.py <grammar.xml> --nonbare-typename <keywords.list>
+    """
+    xml_file = sys.argv[2]
+    kwfile = sys.argv[3]
+
+    rules, terminals, nt_set = parse_xml_grammar(xml_file)
+    cache = {}
+    typename_first = compute_first('Typename', rules, terminals, cache)
+    param_first = compute_first('param_name', rules, terminals, cache)
+
+    with open(kwfile) as f:
+        col_keywords = {line.strip() for line in f if line.strip() and not line.startswith('#')}
+
+    # Tokens in Typename FIRST that can't be bare Typename.
+    # Include tokens in param_name too — bison tries Typename first in PgFuncArg,
+    # so even if a token IS a valid param_name, Typename matching takes priority
+    # and fails when '(' is required but missing.
+    candidates = sorted(col_keywords & typename_first)
+    nonbare = []
+    for tok in candidates:
+        if not can_derive_bare('Typename', tok, rules, terminals):
+            nonbare.append(tok)
+
+    print(f"col_name_keywords in FIRST(Typename) that CANNOT be bare Typename:", file=sys.stderr)
+    print(f"(these need explicit MacroParameter alternatives)", file=sys.stderr)
+    for t in nonbare:
+        print(t)
+
+
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) >= 2 and sys.argv[1] == '--nonbare-typename':
+        find_nonbare_typename_tokens()
+    else:
+        main()

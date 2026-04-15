@@ -238,6 +238,14 @@ string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string 
 
 string CatalogSearchPath::GetDefaultCatalog(const string &schema) const {
 	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		// Check attached catalogs first -- they may override system schemas
+		// (e.g. SereneDB serves its own pg_catalog/information_schema)
+		for (auto &path : paths) {
+			if (path.catalog == TEMP_CATALOG || path.catalog == SYSTEM_CATALOG || path.catalog.empty()) {
+				continue;
+			}
+			return path.catalog;
+		}
 		return SYSTEM_CATALOG;
 	}
 	for (auto &path : paths) {
@@ -254,6 +262,15 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) const {
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) const {
 	vector<string> catalogs;
 	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		// Check attached catalogs first, system catalog as fallback.
+		// This lets attached catalogs (e.g. SereneDB) serve pg_catalog/information_schema
+		// while keeping DuckDB's versions accessible via explicit system.pg_catalog.*
+		for (auto &path : paths) {
+			if (path.catalog == TEMP_CATALOG || path.catalog == SYSTEM_CATALOG || path.catalog.empty()) {
+				continue;
+			}
+			catalogs.push_back(path.catalog);
+		}
 		catalogs.push_back(SYSTEM_CATALOG);
 	} else {
 		for (auto &path : paths) {
@@ -292,6 +309,7 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
+	paths.emplace_back(INVALID_CATALOG, "pg_catalog");
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
 }
 

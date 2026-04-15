@@ -421,8 +421,11 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);
 	}
 	if (from.GetAlias() != to.GetAlias()) {
-		// if aliases are different, an implicit cast is not possible
-		return -1;
+		// If the target has no alias, allow casting from an aliased type
+		// to its base type (e.g. pg_statistic -> STRUCT).
+		if (!to.GetAlias().empty()) {
+			return -1;
+		}
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
 		// Lists can be cast if their child types can be cast

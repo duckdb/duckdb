@@ -288,13 +288,37 @@ MacroParameterList:
 MacroParameter:
 		/* No default */
 		PgFuncArg                                     { $$ = $1; }
-		/* GENERATED: only token in param_name but not Typename (auto-detected) */
-		| GENERATED
-			{
-				PGFunctionParameter *n = makeNode(PGFunctionParameter);
-				n->name = pstrdup($1);
-				$$ = (PGNode *) n;
-			}
+		/*
+		 * col_name_keywords usable as bare parameter names.
+		 *
+		 * param_name (= type_function_name) covers IDENT, unreserved, and
+		 * type_func_name keywords. But some col_name_keywords are valid
+		 * identifiers in PG yet missing from param_name. Most of them still
+		 * work here because PgFuncArg falls through to the bare Typename rule
+		 * (with ambiguous=true), and the transformer reinterprets GenericType
+		 * as a name for DuckDB macros.
+		 *
+		 * The exceptions below are col_name_keywords that START a Typename
+		 * production requiring mandatory '(' — e.g. MAP '(' type_list ')'.
+		 * A bare MAP token begins the Typename match, the parser expects '(',
+		 * sees ',' or ')' instead, and fails. So we list them here as direct
+		 * name-only alternatives to bypass Typename matching.
+		 *
+		 * GENERATED is in param_name's FIRST set but not Typename's, so it
+		 * also needs an explicit alternative.
+		 *
+		 * To regenerate this list after grammar changes:
+		 *   bison --xml=/tmp/grammar.xml -o /dev/null grammar.y.tmp
+		 *   python3 scripts/merge_grammar_rules_xml.py \
+		 *       --nonbare-typename /tmp/grammar.xml \
+		 *       third_party/libpg_query/grammar/keywords/column_name_keywords.list
+		 */
+		| GENERATED  { PGFunctionParameter *n = makeNode(PGFunctionParameter); n->name = pstrdup($1); $$ = (PGNode *) n; }
+		| MAP        { PGFunctionParameter *n = makeNode(PGFunctionParameter); n->name = pstrdup($1); $$ = (PGNode *) n; }
+		| STRUCT     { PGFunctionParameter *n = makeNode(PGFunctionParameter); n->name = pstrdup($1); $$ = (PGNode *) n; }
+		| ROW        { PGFunctionParameter *n = makeNode(PGFunctionParameter); n->name = pstrdup($1); $$ = (PGNode *) n; }
+		| SETOF      { PGFunctionParameter *n = makeNode(PGFunctionParameter); n->name = pstrdup($1); $$ = (PGNode *) n; }
+		| NATIONAL   { PGFunctionParameter *n = makeNode(PGFunctionParameter); n->name = pstrdup($1); $$ = (PGNode *) n; }
 		/* DuckDB defaults: name [type] := expr  |  name [type] => expr */
 		| param_name opt_Typename COLON_EQUALS a_expr
 			{

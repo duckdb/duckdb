@@ -14,12 +14,6 @@
 namespace duckdb {
 class SchemaCatalogEntry;
 
-struct DefaultView {
-	const char *schema;
-	const char *name;
-	const char *sql;
-};
-
 class DefaultViewGenerator : public DefaultGenerator {
 public:
 	DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry &schema);

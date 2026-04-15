@@ -35,8 +35,8 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY_BASE_YY_SRC_BACKEND_PARSER_GRAM_HPP_INCLUDED
-# define YY_BASE_YY_SRC_BACKEND_PARSER_GRAM_HPP_INCLUDED
+#ifndef YY_BASE_YY_THIRD_PARTY_LIBPG_QUERY_GRAMMAR_GRAMMAR_OUT_HPP_INCLUDED
+# define YY_BASE_YY_THIRD_PARTY_LIBPG_QUERY_GRAMMAR_GRAMMAR_OUT_HPP_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -471,106 +471,106 @@ extern int base_yydebug;
     STDOUT = 672,                  /* STDOUT  */
     STORAGE = 673,                 /* STORAGE  */
     STORED = 674,                  /* STORED  */
-    STRICT = 675,                  /* STRICT  */
-    STRICT_P = 676,                /* STRICT_P  */
-    STRIP_P = 677,                 /* STRIP_P  */
-    STRUCT = 678,                  /* STRUCT  */
-    SUBSCRIPTION = 679,            /* SUBSCRIPTION  */
-    SUBSTRING = 680,               /* SUBSTRING  */
-    SUMMARIZE = 681,               /* SUMMARIZE  */
-    SYMMETRIC = 682,               /* SYMMETRIC  */
-    SYSID = 683,                   /* SYSID  */
-    SYSTEM_P = 684,                /* SYSTEM_P  */
-    TABLE = 685,                   /* TABLE  */
-    TABLES = 686,                  /* TABLES  */
-    TABLESAMPLE = 687,             /* TABLESAMPLE  */
-    TABLESPACE = 688,              /* TABLESPACE  */
-    TARGET_P = 689,                /* TARGET_P  */
-    TEMP = 690,                    /* TEMP  */
-    TEMPLATE = 691,                /* TEMPLATE  */
-    TEMPORARY = 692,               /* TEMPORARY  */
-    TEXT_P = 693,                  /* TEXT_P  */
-    THEN = 694,                    /* THEN  */
-    TIES = 695,                    /* TIES  */
-    TIME = 696,                    /* TIME  */
-    TIMESTAMP = 697,               /* TIMESTAMP  */
-    TO = 698,                      /* TO  */
-    TRAILING = 699,                /* TRAILING  */
-    TRANSACTION = 700,             /* TRANSACTION  */
-    TRANSFORM = 701,               /* TRANSFORM  */
-    TREAT = 702,                   /* TREAT  */
-    TRIGGER = 703,                 /* TRIGGER  */
-    TRIM = 704,                    /* TRIM  */
-    TRUE_P = 705,                  /* TRUE_P  */
-    TRUNCATE = 706,                /* TRUNCATE  */
-    TRUSTED = 707,                 /* TRUSTED  */
-    TRY_CAST = 708,                /* TRY_CAST  */
-    TYPE_P = 709,                  /* TYPE_P  */
-    TYPES_P = 710,                 /* TYPES_P  */
-    UNBOUNDED = 711,               /* UNBOUNDED  */
-    UNCOMMITTED = 712,             /* UNCOMMITTED  */
-    UNENCRYPTED = 713,             /* UNENCRYPTED  */
-    UNION = 714,                   /* UNION  */
-    UNIQUE = 715,                  /* UNIQUE  */
-    UNKNOWN = 716,                 /* UNKNOWN  */
-    UNLISTEN = 717,                /* UNLISTEN  */
-    UNLOGGED = 718,                /* UNLOGGED  */
-    UNPACK = 719,                  /* UNPACK  */
-    UNPIVOT = 720,                 /* UNPIVOT  */
-    UNTIL = 721,                   /* UNTIL  */
-    UPDATE = 722,                  /* UPDATE  */
-    USE_P = 723,                   /* USE_P  */
-    USER = 724,                    /* USER  */
-    USING = 725,                   /* USING  */
-    VACUUM = 726,                  /* VACUUM  */
-    VALID = 727,                   /* VALID  */
-    VALIDATE = 728,                /* VALIDATE  */
-    VALIDATOR = 729,               /* VALIDATOR  */
-    VALUE_P = 730,                 /* VALUE_P  */
-    VALUES = 731,                  /* VALUES  */
-    VARCHAR = 732,                 /* VARCHAR  */
-    VARIABLE_P = 733,              /* VARIABLE_P  */
-    VARIADIC = 734,                /* VARIADIC  */
-    VARYING = 735,                 /* VARYING  */
-    VERBOSE = 736,                 /* VERBOSE  */
-    VERSION_P = 737,               /* VERSION_P  */
-    VIEW = 738,                    /* VIEW  */
-    VIEWS = 739,                   /* VIEWS  */
-    VIRTUAL = 740,                 /* VIRTUAL  */
-    VOLATILE = 741,                /* VOLATILE  */
-    WEEK_P = 742,                  /* WEEK_P  */
-    WEEKS_P = 743,                 /* WEEKS_P  */
-    WHEN = 744,                    /* WHEN  */
-    WHERE = 745,                   /* WHERE  */
-    WHITESPACE_P = 746,            /* WHITESPACE_P  */
-    WINDOW = 747,                  /* WINDOW  */
-    WITH = 748,                    /* WITH  */
-    WITHIN = 749,                  /* WITHIN  */
-    WITHOUT = 750,                 /* WITHOUT  */
-    WORK = 751,                    /* WORK  */
-    WRAPPER = 752,                 /* WRAPPER  */
-    WRITE_P = 753,                 /* WRITE_P  */
-    XML_P = 754,                   /* XML_P  */
-    XMLATTRIBUTES = 755,           /* XMLATTRIBUTES  */
-    XMLCONCAT = 756,               /* XMLCONCAT  */
-    XMLELEMENT = 757,              /* XMLELEMENT  */
-    XMLEXISTS = 758,               /* XMLEXISTS  */
-    XMLFOREST = 759,               /* XMLFOREST  */
-    XMLNAMESPACES = 760,           /* XMLNAMESPACES  */
-    XMLPARSE = 761,                /* XMLPARSE  */
-    XMLPI = 762,                   /* XMLPI  */
-    XMLROOT = 763,                 /* XMLROOT  */
-    XMLSERIALIZE = 764,            /* XMLSERIALIZE  */
-    XMLTABLE = 765,                /* XMLTABLE  */
-    YEAR_P = 766,                  /* YEAR_P  */
-    YEARS_P = 767,                 /* YEARS_P  */
-    YES_P = 768,                   /* YES_P  */
-    ZONE = 769,                    /* ZONE  */
-    NOT_LA = 770,                  /* NOT_LA  */
-    NULLS_LA = 771,                /* NULLS_LA  */
-    WITH_LA = 772,                 /* WITH_LA  */
-    POSTFIXOP = 773,               /* POSTFIXOP  */
-    UMINUS = 774                   /* UMINUS  */
+    STRICT_P = 675,                /* STRICT_P  */
+    STRIP_P = 676,                 /* STRIP_P  */
+    STRUCT = 677,                  /* STRUCT  */
+    SUBSCRIPTION = 678,            /* SUBSCRIPTION  */
+    SUBSTRING = 679,               /* SUBSTRING  */
+    SUMMARIZE = 680,               /* SUMMARIZE  */
+    SYMMETRIC = 681,               /* SYMMETRIC  */
+    SYSID = 682,                   /* SYSID  */
+    SYSTEM_P = 683,                /* SYSTEM_P  */
+    TABLE = 684,                   /* TABLE  */
+    TABLES = 685,                  /* TABLES  */
+    TABLESAMPLE = 686,             /* TABLESAMPLE  */
+    TABLESPACE = 687,              /* TABLESPACE  */
+    TARGET_P = 688,                /* TARGET_P  */
+    TEMP = 689,                    /* TEMP  */
+    TEMPLATE = 690,                /* TEMPLATE  */
+    TEMPORARY = 691,               /* TEMPORARY  */
+    TEXT_P = 692,                  /* TEXT_P  */
+    THEN = 693,                    /* THEN  */
+    TIES = 694,                    /* TIES  */
+    TIME = 695,                    /* TIME  */
+    TIMESTAMP = 696,               /* TIMESTAMP  */
+    TO = 697,                      /* TO  */
+    TRAILING = 698,                /* TRAILING  */
+    TRANSACTION = 699,             /* TRANSACTION  */
+    TRANSFORM = 700,               /* TRANSFORM  */
+    TREAT = 701,                   /* TREAT  */
+    TRIGGER = 702,                 /* TRIGGER  */
+    TRIM = 703,                    /* TRIM  */
+    TRUE_P = 704,                  /* TRUE_P  */
+    TRUNCATE = 705,                /* TRUNCATE  */
+    TRUSTED = 706,                 /* TRUSTED  */
+    TRY_CAST = 707,                /* TRY_CAST  */
+    TYPE_P = 708,                  /* TYPE_P  */
+    TYPES_P = 709,                 /* TYPES_P  */
+    UNBOUNDED = 710,               /* UNBOUNDED  */
+    UNCOMMITTED = 711,             /* UNCOMMITTED  */
+    UNENCRYPTED = 712,             /* UNENCRYPTED  */
+    UNION = 713,                   /* UNION  */
+    UNIQUE = 714,                  /* UNIQUE  */
+    UNKNOWN = 715,                 /* UNKNOWN  */
+    UNLISTEN = 716,                /* UNLISTEN  */
+    UNLOGGED = 717,                /* UNLOGGED  */
+    UNPACK = 718,                  /* UNPACK  */
+    UNPIVOT = 719,                 /* UNPIVOT  */
+    UNTIL = 720,                   /* UNTIL  */
+    UPDATE = 721,                  /* UPDATE  */
+    USE_P = 722,                   /* USE_P  */
+    USER = 723,                    /* USER  */
+    USING = 724,                   /* USING  */
+    VACUUM = 725,                  /* VACUUM  */
+    VALID = 726,                   /* VALID  */
+    VALIDATE = 727,                /* VALIDATE  */
+    VALIDATOR = 728,               /* VALIDATOR  */
+    VALUE_P = 729,                 /* VALUE_P  */
+    VALUES = 730,                  /* VALUES  */
+    VARCHAR = 731,                 /* VARCHAR  */
+    VARIABLE_P = 732,              /* VARIABLE_P  */
+    VARIADIC = 733,                /* VARIADIC  */
+    VARYING = 734,                 /* VARYING  */
+    VERBOSE = 735,                 /* VERBOSE  */
+    VERSION_P = 736,               /* VERSION_P  */
+    VIEW = 737,                    /* VIEW  */
+    VIEWS = 738,                   /* VIEWS  */
+    VIRTUAL = 739,                 /* VIRTUAL  */
+    VOLATILE = 740,                /* VOLATILE  */
+    WEEK_P = 741,                  /* WEEK_P  */
+    WEEKS_P = 742,                 /* WEEKS_P  */
+    WHEN = 743,                    /* WHEN  */
+    WHERE = 744,                   /* WHERE  */
+    WHITESPACE_P = 745,            /* WHITESPACE_P  */
+    WINDOW = 746,                  /* WINDOW  */
+    WITH = 747,                    /* WITH  */
+    WITHIN = 748,                  /* WITHIN  */
+    WITHOUT = 749,                 /* WITHOUT  */
+    WORK = 750,                    /* WORK  */
+    WRAPPER = 751,                 /* WRAPPER  */
+    WRITE_P = 752,                 /* WRITE_P  */
+    XML_P = 753,                   /* XML_P  */
+    XMLATTRIBUTES = 754,           /* XMLATTRIBUTES  */
+    XMLCONCAT = 755,               /* XMLCONCAT  */
+    XMLELEMENT = 756,              /* XMLELEMENT  */
+    XMLEXISTS = 757,               /* XMLEXISTS  */
+    XMLFOREST = 758,               /* XMLFOREST  */
+    XMLNAMESPACES = 759,           /* XMLNAMESPACES  */
+    XMLPARSE = 760,                /* XMLPARSE  */
+    XMLPI = 761,                   /* XMLPI  */
+    XMLROOT = 762,                 /* XMLROOT  */
+    XMLSERIALIZE = 763,            /* XMLSERIALIZE  */
+    XMLTABLE = 764,                /* XMLTABLE  */
+    YEAR_P = 765,                  /* YEAR_P  */
+    YEARS_P = 766,                 /* YEARS_P  */
+    YES_P = 767,                   /* YES_P  */
+    ZONE = 768,                    /* ZONE  */
+    NOT_LA = 769,                  /* NOT_LA  */
+    NULLS_LA = 770,                /* NULLS_LA  */
+    WITH_LA = 771,                 /* WITH_LA  */
+    POSTFIXOP = 772,               /* POSTFIXOP  */
+    UMINUS = 773,                  /* UMINUS  */
+    CREATE_FUNC_BODY = 774         /* CREATE_FUNC_BODY  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -631,7 +631,7 @@ union YYSTYPE
 	PGTransactionStmtType transactiontype;
 	PGMergeAction mergeaction;
 
-#line 635 "src_backend_parser_gram.hpp"
+#line 635 "third_party/libpg_query/grammar/grammar_out.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -659,4 +659,4 @@ struct YYLTYPE
 int base_yyparse (core_yyscan_t yyscanner);
 
 
-#endif /* !YY_BASE_YY_SRC_BACKEND_PARSER_GRAM_HPP_INCLUDED  */
+#endif /* !YY_BASE_YY_THIRD_PARTY_LIBPG_QUERY_GRAMMAR_GRAMMAR_OUT_HPP_INCLUDED  */
