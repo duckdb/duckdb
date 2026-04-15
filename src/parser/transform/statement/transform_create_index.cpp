@@ -9,7 +9,8 @@
 namespace duckdb {
 
 vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList &list,
-                                                                           const string &relation_name) {
+                                                                           const string &relation_name,
+                                                                           vector<string> *opclasses) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto cell = list.head; cell != nullptr; cell = cell->next) {
 		auto index_element = PGPointerCast<duckdb_libpgquery::PGIndexElem>(cell->data.ptr_value);
@@ -17,7 +18,19 @@ vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckd
 			throw NotImplementedException("Index with collation not supported yet!");
 		}
 		if (index_element->opclass) {
-			throw NotImplementedException("Index with opclass not supported yet!");
+			if (opclasses) {
+				string opclass_name;
+				for (auto cls_cell = index_element->opclass->head; cls_cell != nullptr; cls_cell = cls_cell->next) {
+					auto val = PGPointerCast<duckdb_libpgquery::PGValue>(cls_cell->data.ptr_value);
+					if (!opclass_name.empty()) {
+						opclass_name += ".";
+					}
+					opclass_name += val->val.str;
+				}
+				opclasses->push_back(std::move(opclass_name));
+			}
+		} else if (opclasses) {
+			opclasses->push_back("");
 		}
 
 		if (index_element->name) {
@@ -42,7 +55,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	}
 
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
-	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
+	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname, &info->column_opclasses);
 
 	info->index_type = StringUtil::Upper(string(stmt.accessMethod));
 

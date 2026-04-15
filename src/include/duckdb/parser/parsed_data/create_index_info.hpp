@@ -39,6 +39,9 @@ struct CreateIndexInfo : public CreateInfo {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
+	//! The opclass (parameter name) per indexed column; empty string means no opclass was specified
+	vector<string> column_opclasses;
+
 	//! The types of the logical columns (necessary for scanning the table during CREATE INDEX)
 	vector<LogicalType> scan_types;
 	//! The names of the logical columns (necessary for scanning the table during CREATE INDEX)

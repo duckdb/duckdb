@@ -287,7 +287,8 @@ private:
 	// Index transform
 	//===--------------------------------------------------------------------===//
 	vector<unique_ptr<ParsedExpression>> TransformIndexParameters(duckdb_libpgquery::PGList &list,
-	                                                              const string &relation_name);
+	                                                              const string &relation_name,
+	                                                              vector<string> *opclasses = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Collation transform

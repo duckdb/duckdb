@@ -11,7 +11,8 @@ CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, INVALI
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
     : CreateInfo(CatalogType::INDEX_ENTRY, info.schema), table(info.table), index_name(info.index_name),
       options(info.options), index_type(info.index_type), constraint_type(info.constraint_type),
-      column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
+      column_ids(info.column_ids), column_opclasses(info.column_opclasses), scan_types(info.scan_types),
+      names(info.names) {
 }
 
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
@@ -43,11 +44,16 @@ vector<string> CreateIndexInfo::ExpressionsToList() const {
 			}
 		}
 
+		string entry;
 		if (add_parenthesis) {
-			list.push_back(StringUtil::Format("(%s)", copy->ToString()));
+			entry = StringUtil::Format("(%s)", copy->ToString());
 		} else {
-			list.push_back(StringUtil::Format("%s", copy->ToString()));
+			entry = copy->ToString();
 		}
+		if (i < column_opclasses.size() && !column_opclasses[i].empty()) {
+			entry += " " + column_opclasses[i];
+		}
+		list.push_back(std::move(entry));
 	}
 	return list;
 }
