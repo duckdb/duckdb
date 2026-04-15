@@ -100,6 +100,15 @@ if (DUCKDB_LINKER)
   message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
 endif()
 
+if(CMAKE_LTO)
+  if(DEFINED ENV{CI_BUILD_JOBS} AND NOT "$ENV{CI_BUILD_JOBS}" STREQUAL "")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--lto-jobs=$ENV{CI_BUILD_JOBS}")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--lto-jobs=$ENV{CI_BUILD_JOBS}")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--lto-jobs=$ENV{CI_BUILD_JOBS}")
+    message(STATUS "Using --lto-jobs from CI_BUILD_JOBS=$ENV{CI_BUILD_JOBS}")
+  endif()
+endif()
+
 
 # Determine install paths
 # default to gnu standard installation directories (lib, bin, include)
