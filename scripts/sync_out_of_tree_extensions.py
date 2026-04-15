@@ -444,7 +444,17 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
         for rel_path in config.get('overlay-triplets', []):
             overlay_triplets.append(str((ext_dir / rel_path).resolve()))
 
+    out_path = repo_root / 'build' / 'vcpkg.json'
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
     if not found_any:
+        # No extensions need vcpkg.  Write an empty manifest so that CMake can
+        # always find build/vcpkg.json when VCPKG_MANIFEST_DIR is set, but vcpkg
+        # will install nothing.
+        with open(out_path, 'w', encoding='utf-8') as f:
+            json.dump({'dependencies': []}, f, ensure_ascii=False, indent=4)
+            f.write('\n')
+        print("  Wrote build/vcpkg.json with no dependencies.")
         return
 
     if not os.environ.get('VCPKG_TOOLCHAIN_PATH'):
@@ -491,8 +501,6 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
     if overlay_triplets:
         manifest['vcpkg-configuration']['overlay-triplets'] = overlay_triplets
 
-    out_path = repo_root / 'build' / 'vcpkg.json'
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(manifest, f, ensure_ascii=False, indent=4)
         f.write('\n')
@@ -514,16 +522,18 @@ def main():
 
     if not extensions:
         print("No out-of-tree extensions to sync.")
-        return
+    else:
+        print(f"Syncing out-of-tree extensions into extension/external/: {', '.join(extensions)}")
+        for ext in extensions.values():
+            try:
+                sync_extension(ext, external_dir, repo_root)
+            except ExtensionNotCleanError as e:
+                print(f"\nERROR: {e}", file=sys.stderr)
+                sys.exit(1)
 
-    print(f"Syncing out-of-tree extensions into extension/external/: {', '.join(extensions)}")
-    for ext in extensions.values():
-        try:
-            sync_extension(ext, external_dir, repo_root)
-        except ExtensionNotCleanError as e:
-            print(f"\nERROR: {e}", file=sys.stderr)
-            sys.exit(1)
-
+    # Always write build/vcpkg.json so that VCPKG_MANIFEST_DIR can be set
+    # unconditionally in the Makefile.  When no extensions need vcpkg the file
+    # contains an empty dependency list; CMake/vcpkg will then install nothing.
     merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root)
 
     print("Sync complete.")
