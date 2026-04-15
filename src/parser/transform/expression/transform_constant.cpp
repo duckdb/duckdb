@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -82,6 +83,14 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			if (TryCast::Operation<string_t, uhugeint_t>(str_val, uhugeint_value)) {
 				// successfully cast to bigint: bigint value
 				return make_uniq<ConstantExpression>(Value::UHUGEINT(uhugeint_value));
+			}
+			// if that is not successful; try to cast as bignum for very large integers
+			// this preserves precision for integers that exceed uhugeint limits
+			try {
+				auto bignum_str = Bignum::VarcharToBignum(str_val);
+				return make_uniq<ConstantExpression>(Value::BIGNUM(bignum_str));
+			} catch (const ConversionException &) {
+				// if bignum parsing fails (e.g., invalid format), continue to decimal or double fallback
 			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
