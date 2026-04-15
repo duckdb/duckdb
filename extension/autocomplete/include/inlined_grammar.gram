@@ -1243,7 +1243,7 @@ FromSelectClause <- FromClause SelectClause?
 WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
 CTEBody <- Parens(CTEBodyContent)
 CTEBodyContent <- SelectStatementInternal / Statement
-UsingKey <- 'USING' 'KEY' ColumnIdList
+UsingKey <- 'USING' 'KEY' Parens(TargetList)
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'

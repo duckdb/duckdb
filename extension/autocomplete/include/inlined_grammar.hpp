@@ -1154,7 +1154,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody\n"
 	"CTEBody <- Parens(CTEBodyContent)\n"
 	"CTEBodyContent <- SelectStatementInternal / Statement\n"
-	"UsingKey <- 'USING' 'KEY' ColumnIdList\n"
+	"UsingKey <- 'USING' 'KEY' Parens(TargetList)\n"
 	"Materialized <- 'NOT'? 'MATERIALIZED'\n"
 	"WithClause <- 'WITH' Recursive? List(WithStatement)\n"
 	"Recursive <- 'RECURSIVE'\n"

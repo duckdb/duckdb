@@ -307,6 +307,9 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		}
 		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
 	}
+	if (has_ignore_nulls_result) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
+	}
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (within_group_opt.HasResult()) {
 		auto order_by_clause = transformer.Transform<vector<OrderByNode>>(within_group_opt.optional_result);
@@ -1679,7 +1682,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 	vector<OrderByNode> order_by;
 	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
 	bool ignore_nulls = false;
+	bool has_ignore_nulls_result = extract_parens.Child<OptionalParseResult>(3).HasResult();
 	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
+	if (has_ignore_nulls_result) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
+	}
 	auto result =
 	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, collabel, std::move(function_children));
 	result->distinct = distinct;
