@@ -43,6 +43,7 @@ class FuzzCorpusTest(unittest.TestCase):
                 target = Path(cmd[-1])
 
                 self.assertEqual(cmd[0], "fake-afl-cmin")
+                self.assertIn("-e", cmd)
                 self.assertEqual(target, fake_target)
 
                 output_group_dir.mkdir(parents=True, exist_ok=True)
@@ -61,7 +62,7 @@ class FuzzCorpusTest(unittest.TestCase):
                 glob_pattern=test_glob,
                 jobs=2,
                 target=fake_target,
-                afl_cmin_bin="fake-afl-cmin",
+                afl_cmin_cmd=("fake-afl-cmin", "-e"),
             )
 
             with (
