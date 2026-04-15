@@ -750,22 +750,57 @@ SELECT * FROM t1;
 1	10
 2	20
 
-# --- Same-table multi-DML: additional cases requested in review ---
+# --- Same-table multi-DML: sequential execution semantics ---
+# Pipeline dependencies enforce definition order: each CTE completes before the next starts.
+# This means later CTEs always see the effects of earlier ones on the same table.
 
-# Multiple deletes on the same rows of the same table.
-# The final state is deterministic: the rows are gone regardless of which DELETE
-# pipeline ran first.  (RETURNING is non-deterministic when both DELETEs race on
-# the same rows, so we only verify the final table state.)
+# Multiple UPDATEs on the same rows of the same table.
+# upd1 runs first (j += 1), upd2 sees upd1's result and doubles it.
+# RETURNING from each reflects the state at the time that CTE executed.
 statement ok
 TRUNCATE t1;
 
 statement ok
 INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (4, 40);
 
+query III rowsort
+WITH upd1 AS (UPDATE t1 SET j = j + 1  WHERE i <= 2 RETURNING i, j),
+     upd2 AS (UPDATE t1 SET j = j * 2  WHERE i <= 2 RETURNING i, j)
+SELECT 'upd1', i, j FROM upd1
+UNION ALL
+SELECT 'upd2', i, j FROM upd2;
+----
+upd1	1	11
+upd1	2	21
+upd2	1	22
+upd2	2	42
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	22
+2	42
+3	30
+4	40
+
+# Multiple DELETEs on the same rows of the same table.
+# del1 runs first and removes i<=2; del2 finds those rows already gone → 0 rows deleted.
+# RETURNING from del1 shows the deleted rows; del2 returns nothing.
 statement ok
-WITH del1 AS (DELETE FROM t1 WHERE i <= 2 RETURNING i),
-     del2 AS (DELETE FROM t1 WHERE i <= 2 RETURNING i)
-SELECT 1;
+TRUNCATE t1;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (4, 40);
+
+query III rowsort
+WITH del1 AS (DELETE FROM t1 WHERE i <= 2 RETURNING i, j),
+     del2 AS (DELETE FROM t1 WHERE i <= 2 RETURNING i, j)
+SELECT 'del1', i, j FROM del1
+UNION ALL
+SELECT 'del2', i, j FROM del2;
+----
+del1	1	10
+del1	2	20
 
 query II rowsort
 SELECT * FROM t1;
@@ -773,9 +808,8 @@ SELECT * FROM t1;
 3	30
 4	40
 
-# Multiple updates/deletes on different rows of the same table.
-# Disjoint row sets: each operation applies to its own rows with no interference.
-# This is fully deterministic regardless of execution order.
+# Multiple UPDATE/DELETE on different (disjoint) rows of the same table.
+# upd_even updates i%2=0 rows, del_odd deletes i%2=1 rows — no overlap.
 statement ok
 TRUNCATE t1;
 
@@ -798,9 +832,9 @@ SELECT * FROM t1;
 2	120
 4	140
 
-# Insert + update on the same table.
-# The UPDATE CTE runs after the INSERT CTE (enforced by pipeline dependencies), so it
-# sees the newly inserted rows in local (transaction-local) storage and updates them.
+# INSERT + UPDATE on the same table.
+# The UPDATE CTE runs after the INSERT CTE, so it sees the newly inserted rows
+# in local (transaction-local) storage and updates them too.
 statement ok
 TRUNCATE t1;
 
@@ -1049,6 +1083,11 @@ CREATE VIEW v_bad AS WITH del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
 statement ok
 CREATE TABLE cso_t (i INTEGER);
 
+# CommonSubplanOptimizer must not merge the two SEQ_SCAN(cso_t) nodes into one.
+# The INSERT's scan reads cso_t BEFORE the insert; the outer SELECT's scan reads
+# cso_t AFTER.  If the optimizer deduplicates them into a shared materialized CTE
+# both counts would reflect the same snapshot and the row count would never grow.
+#
 # First run: cso_t is empty → INSERT inserts COUNT(i)=0 → outer SELECT sees 1 row.
 query I
 WITH cte AS (
