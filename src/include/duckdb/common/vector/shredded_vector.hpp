@@ -12,6 +12,28 @@
 
 namespace duckdb {
 
+class ShreddedVectorBuffer : public VectorBuffer {
+public:
+	explicit ShreddedVectorBuffer(Vector &shredded_data);
+	~ShreddedVectorBuffer() override;
+
+public:
+	Vector &GetChild() {
+		return *shredded_data;
+	}
+
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	string ToString(const LogicalType &type, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+private:
+	unique_ptr<Vector> shredded_data;
+};
+
 struct ShreddedVector {
 	static void VerifyShreddedVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY

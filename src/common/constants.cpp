@@ -11,6 +11,7 @@ const row_t MAX_ROW_ID = 36028797018960000ULL;       // 2^55
 const row_t MAX_ROW_ID_LOCAL = 72057594037920000ULL; // 2^56
 const column_t COLUMN_IDENTIFIER_ROW_ID = UINT64_C(18446744073709551615);
 const column_t COLUMN_IDENTIFIER_EMPTY = UINT64_C(18446744073709551614);
+const column_t COLUMN_IDENTIFIER_ROW_NUMBER = UINT64_C(18446744073709551613);
 const column_t VIRTUAL_COLUMN_START = UINT64_C(9223372036854775808); // 2^63
 const double PI = 3.141592653589793;
 
@@ -56,6 +57,10 @@ bool IsInvalidCatalog(const string &str) {
 
 bool IsRowIdColumnId(column_t column_id) {
 	return column_id == COLUMN_IDENTIFIER_ROW_ID;
+}
+
+bool IsRowNumberColumnId(column_t column_id) {
+	return column_id == COLUMN_IDENTIFIER_ROW_NUMBER;
 }
 
 bool IsVirtualColumn(column_t column_id) {

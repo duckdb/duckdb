@@ -164,10 +164,12 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	}
 	//	We can only accept ORDER BY clauses if the frame is the entire partition
 	//	In that case, we will have to move the ordering clauses into the aggregate.
+	//	ROWS framing is excluded because the frame depends on physical row position even without ORDER BY.
 	switch (w_expr.start) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
 		if (!w_expr.orders.empty()) {
 			return false;
 		}
@@ -180,6 +182,7 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
 		if (!w_expr.orders.empty()) {
 			return false;
 		}
@@ -196,6 +199,7 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
 	}
+
 	return true;
 }
 

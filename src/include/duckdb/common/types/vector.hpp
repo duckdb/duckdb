@@ -15,7 +15,8 @@
 namespace duckdb {
 
 class VectorCache;
-class VectorChildBuffer;
+class DictionaryBuffer;
+class DictionaryEntry;
 class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
@@ -23,10 +24,12 @@ struct SelCache;
 enum class VectorConstructorAction;
 
 template <class T>
-class VectorValueIterator;
+class VectorIterator;
 template <class T>
 class VectorValidValueIterator;
 class VectorValidityIterator;
+
+enum class VectorDataInitialization { UNINITIALIZED, ZERO_INITIALIZE };
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
@@ -43,7 +46,10 @@ class Vector {
 	friend struct ShreddedVector;
 
 	friend class DataChunk;
-	friend class VectorCacheBuffer;
+	friend class VectorBuffer;
+	friend class DictionaryBuffer;
+	friend class VectorStructBuffer;
+	friend class VectorCacheEntry;
 
 public:
 	//! Create a vector that slices another vector
@@ -53,19 +59,14 @@ public:
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
 	//! Create a vector of size tuple_count (non-standard)
-	DUCKDB_API explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE,
+	                           VectorDataInitialization initialize = VectorDataInitialization::UNINITIALIZED);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	DUCKDB_API explicit Vector(const VectorCache &cache);
 	//! Create a non-owning vector that references the specified data
-	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr);
-	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
-	/*!
-	    Create a new vector
-	    If create_data is true, the vector will be an owning empty vector.
-	    If initialize_to_zero is true, the allocated data will be zero-initialized.
-	*/
-	DUCKDB_API Vector(LogicalType type, bool create_data, bool initialize_to_zero,
-	                  idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr, idx_t count);
+	//! Create a vector with an explicitly created vector buffer
+	DUCKDB_API Vector(LogicalType type, buffer_ptr<VectorBuffer> buffer);
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
@@ -102,13 +103,14 @@ public:
 	//! Turn this vector into a dictionary vector
 	DUCKDB_API void Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 	//! Creates a reference to a dictionary of the other vector
-	DUCKDB_API void Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 	//! Creates a dictionary on the reusable dict
-	DUCKDB_API void Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel);
+	DUCKDB_API void Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	DUCKDB_API void Initialize(bool initialize_to_zero = false, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(VectorDataInitialization data_initialize = VectorDataInitialization::UNINITIALIZED,
+	                           idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
 	DUCKDB_API string ToString(idx_t count) const;
@@ -140,23 +142,16 @@ public:
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API void Verify(idx_t count);
-	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
-	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
-	DUCKDB_API static void VerifyUnion(Vector &map, const SelectionVector &sel, idx_t count);
-	DUCKDB_API static void VerifyVariant(Vector &map, const SelectionVector &sel, idx_t count);
-	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
-	DUCKDB_API void UTFVerify(idx_t count);
-	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Verify(idx_t count) const;
+	DUCKDB_API void Verify(const SelectionVector &sel, idx_t count) const;
 
 	//! Returns the [index] element of the Vector as a Value.
 	DUCKDB_API Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value.
 	DUCKDB_API void SetValue(idx_t index, const Value &val);
 
-	inline void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
-		auxiliary = std::move(new_buffer);
-	};
+	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
+	void AddHeapReference(const Vector &other);
 
 	inline void CopyBuffer(Vector &other) {
 		buffer = other.buffer;
@@ -164,24 +159,22 @@ public:
 
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
-	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.
-	DUCKDB_API void FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
-	idx_t GetAllocationSize(idx_t cardinality) const;
+	//! Returns the uncompressed size of the data stored within this vector
+	idx_t GetDataSize(idx_t cardinality) const;
+	[[deprecated("This method is an alias for GetDataSize(cardinality) for legacy reasons - use either that or "
+	             "GetAllocationSize() instead")]] idx_t
+	GetAllocationSize(idx_t cardinality) const;
+	//! Returns the data allocated by the vector buffers
+	idx_t GetAllocationSize() const;
 
 	// Getters
-	inline VectorType GetVectorType() const {
-		return vector_type;
-	}
+	VectorType GetVectorType() const;
 	inline const LogicalType &GetType() const {
 		return type;
-	}
-
-	inline buffer_ptr<VectorBuffer> GetAuxiliary() {
-		return auxiliary;
 	}
 
 	inline buffer_ptr<VectorBuffer> GetBuffer() {
@@ -197,12 +190,16 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorValueIterator<T> Values(idx_t count) const;
+	VectorIterator<T> Values(idx_t count) const;
 
 	template <class T>
 	VectorValidValueIterator<T> ValidValues(idx_t count) const;
 
 	VectorValidityIterator Validity(idx_t count) const;
+
+protected:
+	VectorBuffer &Buffer();
+	const VectorBuffer &Buffer() const;
 
 private:
 	//! Returns the [index] element of the Vector as a Value.
@@ -219,35 +216,10 @@ private:
 	Vector(const Vector &other, VectorConstructorAction action);
 
 protected:
-	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
-	//! constant, if it is compressed)
-	mutable VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	LogicalType type;
-	//! The validity mask of the vector
-	mutable ValidityMask validity;
 	//! The main buffer holding the data of the vector
 	mutable buffer_ptr<VectorBuffer> buffer;
-	//! The buffer holding auxiliary data of the vector
-	//! e.g. a string vector uses this to store strings
-	mutable buffer_ptr<VectorBuffer> auxiliary;
-};
-
-//! The VectorChildBuffer holds a child Vector
-class VectorChildBuffer : public VectorBuffer {
-public:
-	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
-	}
-
-public:
-	Vector data;
-	//! Optional size/id to uniquely identify re-occurring dictionaries
-	optional_idx size;
-	string id;
-	//! For caching the hashes of a child buffer
-	mutex cached_hashes_lock;
-	unique_ptr<Vector> cached_hashes;
 };
 
 } // namespace duckdb

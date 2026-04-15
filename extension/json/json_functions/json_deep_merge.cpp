@@ -95,13 +95,12 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
-			result_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 		} else {
-			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
+			result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
 
@@ -110,7 +109,7 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
 	ScalarFunction fun("json_deep_merge", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   DeepMergeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::JSON();
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 

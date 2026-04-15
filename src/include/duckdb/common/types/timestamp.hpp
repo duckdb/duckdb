@@ -65,6 +65,8 @@ struct timestamp_t { // NOLINT
 	timestamp_t operator+(const double &value) const;
 	int64_t operator-(const timestamp_t &other) const;
 
+	bool TrySubtract(const timestamp_t &other, int64_t &result) const;
+
 	// in-place operators
 	timestamp_t &operator+=(const int64_t &delta);
 	timestamp_t &operator-=(const int64_t &delta);

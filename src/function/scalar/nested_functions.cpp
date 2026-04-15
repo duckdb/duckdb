@@ -8,32 +8,31 @@ namespace duckdb {
 void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	input.Flatten(count);
 
-	// Copy the list size
-	const auto list_size = ListVector::GetListSize(input);
-	ListVector::SetListSize(result, list_size);
+	auto &input_keys = MapVector::GetKeys(input);
+	auto &input_values = MapVector::GetValues(input);
 
-	// Copy the list validity
-	FlatVector::SetValidity(result, FlatVector::Validity(input));
+	// Copy the list offsets and top-level validity
+	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+	for (auto entry : input.Values<list_entry_t>(count)) {
+		if (!entry.IsValid()) {
+			result_validity.SetInvalid(entry.GetIndex());
+			continue;
+		}
+		result_data[entry.GetIndex()] = entry.GetValue();
+	}
+	ListVector::SetListSize(result, ListVector::GetListSize(input));
 
 	// Copy the struct validity
-	UnifiedVectorFormat input_struct_data;
-	ListVector::GetEntry(input).ToUnifiedFormat(list_size, input_struct_data);
 	auto &result_struct = ListVector::GetEntry(result);
-	FlatVector::SetValidity(result_struct, input_struct_data.validity);
+	FlatVector::SetValidity(result_struct, FlatVector::Validity(ListVector::GetEntry(input)));
 
-	// Copy the list buffer (the list_entry_t data)
-	result.CopyBuffer(input);
-
-	auto &input_keys = MapVector::GetKeys(input);
+	// reference the keys / values
 	auto &result_keys = MapVector::GetKeys(result);
 	result_keys.Reference(input_keys);
 
-	auto &input_values = MapVector::GetValues(input);
 	auto &result_values = MapVector::GetValues(result);
 	result_values.Reference(input_values);
-
-	// Set the right vector type
-	result.SetVectorType(input.GetVectorType());
 }
 
 } // namespace duckdb

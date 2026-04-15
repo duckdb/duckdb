@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "test_helpers.hpp"
 
@@ -65,7 +66,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
 	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
-	    {"allow_parser_override_extension", {"fallback"}},
+	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
@@ -157,6 +158,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
 	    "allowed_configs",
 	    "allowed_directories",
@@ -180,6 +182,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "password",
 	    "username",
 	    "user",
+	    "max_execution_time",
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",

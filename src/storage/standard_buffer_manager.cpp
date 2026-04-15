@@ -566,9 +566,6 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	// Delete the file and return the buffer.
 	DeleteTemporaryFile(block.GetMemory());
 
-	// Decrement evicted size.
-	evicted_data_per_tag[uint8_t(tag)] -= buffer->AllocSize();
-
 	return buffer;
 }
 

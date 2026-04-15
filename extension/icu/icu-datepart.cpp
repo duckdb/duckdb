@@ -387,9 +387,8 @@ struct ICUDatePart : public ICUDateFunc {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
-				ConstantVector::SetNull(result, false);
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
 				auto micros = SetTime(calendar, tdata[0]);
 				const auto is_finite = Timestamp::IsFinite(*tdata);
@@ -397,7 +396,6 @@ struct ICUDatePart : public ICUDateFunc {
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
-						ConstantVector::SetNull(child_entry, false);
 						if (IsBigintDatepart(info.part_codes[col])) {
 							auto pdata = ConstantVector::GetData<int64_t>(child_entry);
 							auto adapter = info.bigints[col];
@@ -408,7 +406,7 @@ struct ICUDatePart : public ICUDateFunc {
 							pdata[0] = adapter(calendar, micros);
 						}
 					} else {
-						ConstantVector::SetNull(child_entry, true);
+						ConstantVector::SetNull(child_entry);
 					}
 				}
 			}
@@ -426,18 +424,18 @@ struct ICUDatePart : public ICUDateFunc {
 				auto entry = entries[i];
 				if (entry.IsValid()) {
 					res_valid.SetValid(i);
-					auto micros = SetTime(calendar, entry.value);
-					const auto is_finite = Timestamp::IsFinite(entry.value);
+					auto micros = SetTime(calendar, entry.GetValue());
+					const auto is_finite = Timestamp::IsFinite(entry.GetValue());
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
 							FlatVector::Validity(child_entry).SetValid(i);
 							if (IsBigintDatepart(info.part_codes[col])) {
-								auto pdata = ConstantVector::GetData<int64_t>(child_entry);
+								auto pdata = FlatVector::GetDataMutable<int64_t>(child_entry);
 								auto adapter = info.bigints[col];
 								pdata[i] = adapter(calendar, micros);
 							} else {
-								auto pdata = ConstantVector::GetData<double>(child_entry);
+								auto pdata = FlatVector::GetDataMutable<double>(child_entry);
 								auto adapter = info.doubles[col];
 								pdata[i] = adapter(calendar, micros);
 							}
@@ -464,8 +462,11 @@ struct ICUDatePart : public ICUDateFunc {
 		return make_uniq<BIND_TYPE>(context, adapter);
 	}
 
-	static duckdb::unique_ptr<FunctionData> BindUnaryDatePart(ClientContext &context, ScalarFunction &bound_function,
-	                                                          vector<duckdb::unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindUnaryDatePart(BindScalarFunctionInput &input) {
+		auto &bound_function = input.GetBoundFunction();
+		auto &context = input.GetClientContext();
+		auto &arguments = input.GetArguments();
+
 		const auto part_code = GetDatePartSpecifier(bound_function.name);
 		if (IsBigintDatepart(part_code)) {
 			using data_t = BindAdapterData<int64_t>;
@@ -478,8 +479,11 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 	}
 
-	static duckdb::unique_ptr<FunctionData> BindBinaryDatePart(ClientContext &context, ScalarFunction &bound_function,
-	                                                           vector<duckdb::unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindBinaryDatePart(BindScalarFunctionInput &input) {
+		auto &bound_function = input.GetBoundFunction();
+		auto &context = input.GetClientContext();
+		auto &arguments = input.GetArguments();
+
 		//	If we are only looking for Julian Days, then patch in the unary function.
 		do {
 			if (arguments[0]->HasParameter() || !arguments[0]->IsFoldable()) {
@@ -503,15 +507,18 @@ struct ICUDatePart : public ICUDateFunc {
 			bound_function.SetReturnType(LogicalType::DOUBLE);
 			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_t, double>);
 
-			return BindUnaryDatePart(context, bound_function, arguments);
+			return BindUnaryDatePart(input);
 		} while (false);
 
 		using data_t = BindAdapterData<int64_t>;
 		return BindAdapter<data_t>(context, bound_function, arguments, nullptr);
 	}
 
-	static duckdb::unique_ptr<FunctionData> BindStruct(ClientContext &context, ScalarFunction &bound_function,
-	                                                   vector<duckdb::unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindStruct(BindScalarFunctionInput &input) {
+		auto &bound_function = input.GetBoundFunction();
+		auto &context = input.GetClientContext();
+		auto &arguments = input.GetArguments();
+
 		// collect names and deconflict, construct return type
 		if (arguments[0]->HasParameter()) {
 			throw ParameterNotResolvedException();
@@ -616,8 +623,11 @@ struct ICUDatePart : public ICUDateFunc {
 		loader.RegisterFunction(set);
 	}
 
-	static duckdb::unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
-	                                                     vector<duckdb::unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindLastDate(BindScalarFunctionInput &input) {
+		auto &bound_function = input.GetBoundFunction();
+		auto &context = input.GetClientContext();
+		auto &arguments = input.GetArguments();
+
 		using data_t = BindAdapterData<date_t>;
 		return BindAdapter<data_t>(context, bound_function, arguments, MakeLastDay);
 	}
@@ -633,8 +643,10 @@ struct ICUDatePart : public ICUDateFunc {
 		loader.RegisterFunction(set);
 	}
 
-	static unique_ptr<FunctionData> BindMonthName(ClientContext &context, ScalarFunction &bound_function,
-	                                              vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> BindMonthName(BindScalarFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &bound_function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		using data_t = BindAdapterData<string_t>;
 		return BindAdapter<data_t>(context, bound_function, arguments, MonthName);
 	}
@@ -650,8 +662,10 @@ struct ICUDatePart : public ICUDateFunc {
 		loader.RegisterFunction(set);
 	}
 
-	static unique_ptr<FunctionData> BindDayName(ClientContext &context, ScalarFunction &bound_function,
-	                                            vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> BindDayName(BindScalarFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &bound_function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		using data_t = BindAdapterData<string_t>;
 		return BindAdapter<data_t>(context, bound_function, arguments, DayName);
 	}

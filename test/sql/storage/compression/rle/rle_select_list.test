@@ -2,7 +2,7 @@
 # description: Test selecting from RLE compression with a list comparison pushed down
 # group: [rle]
 
-load __TEST_DIR__/rle_select_bug.db
+load {TEST_DIR}/rle_select_bug.db
 
 statement ok
 pragma force_compression='rle';

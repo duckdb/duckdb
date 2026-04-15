@@ -8,6 +8,7 @@ constexpr const char *CopyFunctionCatalogEntry::Name;
 CopyFunctionCatalogEntry::CopyFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                    CreateCopyFunctionInfo &info)
     : StandardEntry(CatalogType::COPY_FUNCTION_ENTRY, schema, catalog, info.name), function(info.function) {
+	this->extension_name = info.extension_name;
 }
 
 } // namespace duckdb

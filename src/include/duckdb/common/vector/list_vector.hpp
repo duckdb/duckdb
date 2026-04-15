@@ -14,14 +14,23 @@
 
 namespace duckdb {
 
-class VectorListBuffer : public VectorBuffer {
+class VectorListBuffer : public StandardVectorBuffer {
 public:
-	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
+	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
 	Vector &GetChild() {
+		return *child;
+	}
+	const Vector &GetChild() const {
 		return *child;
 	}
 	void Reserve(idx_t to_reserve);
@@ -31,38 +40,46 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() {
+	idx_t GetSize() const {
 		return size;
 	}
 
-	idx_t GetCapacity() {
-		return capacity;
-	}
+	idx_t GetChildCapacity() const;
 
-	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
+
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
 
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t capacity = 0;
 	idx_t size = 0;
 };
 
 struct ListVector {
-	static inline const list_entry_t *GetData(const Vector &v) {
+	[[deprecated("Use FlatVector::GetData<list_entry_t> instead")]] static inline const list_entry_t *
+	GetData(const Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			return GetData(child);
+			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
 		return FlatVector::GetData<const list_entry_t>(v);
 	}
-	static inline list_entry_t *GetData(Vector &v) {
+	[[deprecated("Use FlatVector::GetData<list_entry_t> instead")]] static inline list_entry_t *GetData(Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			return GetData(child);
+			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
-		return FlatVector::GetData<list_entry_t>(v);
+		return FlatVector::GetDataMutable<list_entry_t>(v);
 	}
 	//! Gets a reference to the underlying child-vector of a list
 	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
@@ -86,8 +103,6 @@ struct ListVector {
 	DUCKDB_API static ConsecutiveChildListInfo GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count);
 	//! Slice and flatten a child vector to only contain a consecutive subsection of the child entries
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
-	//! Share the entry of the other list vector
-	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
 	//! Returns the total number of entries in the list
 	DUCKDB_API static idx_t GetTotalEntryCount(Vector &list, idx_t count);
 

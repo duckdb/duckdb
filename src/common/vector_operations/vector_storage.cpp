@@ -13,9 +13,9 @@ void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
 	auto result_data = (T *)target;
 	for (auto entry : source.Values<T>(count)) {
 		if (!entry.IsValid()) {
-			result_data[entry.index] = NullValue<T>();
+			result_data[entry.GetIndex()] = NullValue<T>();
 		} else {
-			result_data[entry.index] = entry.value;
+			result_data[entry.GetIndex()] = entry.GetValue();
 		}
 	}
 }
@@ -23,7 +23,7 @@ void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
 template <class T>
 void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::Writer<T>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = ldata[i];
 	}

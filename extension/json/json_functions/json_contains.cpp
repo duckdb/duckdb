@@ -116,8 +116,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(needles)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
@@ -137,7 +136,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static void GetContainsFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
-	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 

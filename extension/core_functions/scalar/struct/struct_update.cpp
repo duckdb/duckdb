@@ -53,8 +53,9 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw InvalidInputException("Missing required arguments for struct_update function.");
 	}
@@ -147,7 +148,7 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 }
 
 ScalarFunction StructUpdateFun::GetFunction() {
-	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, nullptr, StructUpdateStats);
+	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.varargs = LogicalType::ANY;
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);

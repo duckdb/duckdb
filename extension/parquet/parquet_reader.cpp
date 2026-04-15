@@ -1,5 +1,9 @@
 #include "parquet_reader.hpp"
 
+#include <string.h>
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
@@ -10,23 +14,52 @@
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
-#include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "thrift_tools.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/setting_info.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/storage_index.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/transport/TTransport.h"
 
 namespace duckdb {
 
@@ -172,6 +205,11 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		                    aad_crypto_metadata);
 	} else {
 		metadata->read(file_proto.get());
+	}
+
+	if (metadata->num_rows < 0) {
+		throw InvalidInputException("Failed to read Parquet file \"%s\": has negative number of rows",
+		                            file_handle.GetPath());
 	}
 
 	// Try to read the GeoParquet metadata (if present)
@@ -523,6 +561,38 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 	return false;
 }
 
+static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnSchema> &children) {
+	if (children.size() < 2) {
+		return false;
+	}
+	//! Names have to be 'metadata' and 'value' respectively
+	//! But apparently some writers can mix the order, so we are more lenient
+	if (children[0].name != "metadata" && children[1].name != "metadata") {
+		return false;
+	}
+	if (children[0].name != "value" && children[1].name != "value") {
+		return false;
+	}
+
+	//! Verify types
+	if (children[0].parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+		return false;
+	}
+	if (children[1].parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+		return false;
+	}
+	if (children.size() == 3) {
+		auto &typed_value = children[2];
+		if (typed_value.name != "typed_value") {
+			return false;
+		}
+		throw NotImplementedException("Shredded Variants are not supported yet");
+	} else if (children.size() != 2) {
+		return false;
+	}
+	return true;
+}
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
@@ -592,7 +662,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		vector<ParquetColumnSchema> child_schemas;
 
 		idx_t c_idx = 0;
-		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
+		idx_t num_children = 0;
+		if (s_ele.__isset.num_children && !TryCast::Operation(s_ele.num_children, num_children)) {
+			throw InvalidInputException(
+			    "Failed to read Parquet file \"%s\": schema element has negative number of children", file.path);
+		}
 		while (c_idx < num_children) {
 			next_schema_idx++;
 
@@ -620,6 +694,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
+		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
+			is_variant = true;
+		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
@@ -789,6 +866,9 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
 	}
+	if (context.TryGetCurrentSetting("__delta_only_variant_encoding_enabled", lookup_value)) {
+		variant_legacy_encoding = lookup_value.GetValue<bool>();
+	}
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
@@ -880,7 +960,7 @@ optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
 		return reader->Cast<ParquetReader>().NumRows();
 	}
 	if (metadata) {
-		return metadata->metadata->num_rows;
+		return NumericCast<idx_t>(metadata->metadata->num_rows);
 	}
 	return optional_idx();
 }
@@ -1208,7 +1288,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 }
 
 idx_t ParquetReader::NumRows() const {
-	return GetFileMetadata()->num_rows;
+	return NumericCast<idx_t>(GetFileMetadata()->num_rows);
 }
 
 idx_t ParquetReader::NumRowGroups() const {

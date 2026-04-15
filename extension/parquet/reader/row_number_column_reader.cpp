@@ -1,8 +1,26 @@
 #include "reader/row_number_column_reader.hpp"
+
 #include "parquet_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_types.h"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
+class TableFilter;
+class Vector;
+struct ParquetColumnSchema;
+struct SelectionVector;
+struct TableFilterState;
 
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader
@@ -36,7 +54,7 @@ void RowNumberColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, d
 }
 
 idx_t RowNumberColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	auto data_ptr = FlatVector::GetData<int64_t>(result);
+	auto data_ptr = FlatVector::GetDataMutable<int64_t>(result);
 	for (idx_t i = 0; i < num_values; i++) {
 		data_ptr[i] = UnsafeNumericCast<int64_t>(row_group_offset++);
 	}

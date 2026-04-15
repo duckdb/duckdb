@@ -50,8 +50,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
-
-	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
+	auto alter_option_list = ExtractParseResultsFromList(list_pr.GetChild(3));
+	if (alter_option_list.size() > 1) {
+		throw ParserException("Only one ALTER command per statement is supported");
+	}
+	auto result = transformer.Transform<unique_ptr<AlterTableInfo>>(alter_option_list[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->catalog = table->catalog_name;
 	result->schema = table->schema_name;
@@ -85,6 +88,11 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 	result->name = base_table->table_name;
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Altering schemas is not yet supported");
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
@@ -128,15 +136,25 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTr
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto option_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	for (auto option : option_list) {
-		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(option);
+	auto &repeat_pr = list_pr.Child<RepeatParseResult>(0);
+	bool has_owned = false;
+	unique_ptr<AlterInfo> owned_info;
+	for (auto &seq_option_pr : repeat_pr.children) {
+		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option_pr);
 		if (seq_option.first == "owned") {
+			if (has_owned) {
+				throw ParserException("Owned by value should be passed at most once");
+			}
+			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
 			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
-			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
-			                                      owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
+			owned_info =
+			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
+			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
 		}
+	}
+	if (owned_info) {
+		return owned_info;
 	}
 	throw NotImplementedException("ALTER SEQUENCE option not yet supported");
 }
@@ -231,10 +249,15 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	AddColumnEntry new_column;
 	new_column.column_path = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<LogicalType>(list_pr, 1, new_column.type);
-	if (list_pr.Child<OptionalParseResult>(2).HasResult()) {
+	bool has_generated = list_pr.Child<OptionalParseResult>(2).HasResult();
+	bool has_type = list_pr.Child<OptionalParseResult>(1).HasResult();
+	if (!has_type && !has_generated) {
+		throw ParserException("Column definition requires a type or generated expression");
+	}
+	if (has_generated) {
 		throw ParserException("Adding generated columns after table creation is not supported yet");
 	}
+	transformer.TransformOptional<LogicalType>(list_pr, 1, new_column.type);
 	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
 	if (!constraints_opt.HasResult()) {
 		return new_column;

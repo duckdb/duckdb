@@ -11,29 +11,29 @@ foreach key UNIQUE CHECK(1)
 
 # inf as a constant
 query II
-SELECT 'INF'::${type}, '-INF'::${type}
+SELECT 'INF'::{type}, '-INF'::{type}
 ----
 inf	-inf
 
 # inf comparison
 query I
-select 'inf'::${type} == 'inf'::${type}
+select 'inf'::{type} == 'inf'::{type}
 ----
 true
 
 query I
-select 'inf'::${type} <> 'inf'::${type}
+select 'inf'::{type} <> 'inf'::{type}
 ----
 false
 
 query I
-select 'inf'::${type} <> 3.0::${type}
+select 'inf'::{type} <> 3.0::{type}
 ----
 true
 
 # storing inf in a table
 statement ok
-CREATE TABLE floats(f ${type} ${key});
+CREATE TABLE floats(f {type} {key});
 
 statement ok
 INSERT INTO floats VALUES ('INF'), (1), ('-INF')
@@ -53,12 +53,12 @@ SELECT f FROM floats WHERE f=1
 1
 
 query I
-SELECT f FROM floats WHERE f='inf'::${type}
+SELECT f FROM floats WHERE f='inf'::{type}
 ----
 inf
 
 query I
-SELECT f FROM floats WHERE f='-inf'::${type}
+SELECT f FROM floats WHERE f='-inf'::{type}
 ----
 -inf
 
@@ -70,13 +70,13 @@ SELECT f FROM floats WHERE f<>1 ORDER BY 1
 inf
 
 query I
-SELECT f FROM floats WHERE f<>'inf'::${type} ORDER BY 1
+SELECT f FROM floats WHERE f<>'inf'::{type} ORDER BY 1
 ----
 -inf
 1
 
 query I
-SELECT f FROM floats WHERE f<>'-inf'::${type} ORDER BY 1
+SELECT f FROM floats WHERE f<>'-inf'::{type} ORDER BY 1
 ----
 1
 inf
@@ -88,13 +88,13 @@ SELECT f FROM floats WHERE f>1 ORDER BY 1
 inf
 
 query I
-SELECT f FROM floats WHERE f>'-inf'::${type} ORDER BY 1
+SELECT f FROM floats WHERE f>'-inf'::{type} ORDER BY 1
 ----
 1
 inf
 
 query I
-SELECT f FROM floats WHERE f>'inf'::${type}
+SELECT f FROM floats WHERE f>'inf'::{type}
 ----
 
 # >=
@@ -105,14 +105,14 @@ SELECT f FROM floats WHERE f>=1 ORDER BY ALL
 inf
 
 query I
-SELECT f FROM floats WHERE f>='-inf'::${type} ORDER BY ALL
+SELECT f FROM floats WHERE f>='-inf'::{type} ORDER BY ALL
 ----
 -inf
 1
 inf
 
 query I
-SELECT f FROM floats WHERE f>='inf'::${type} ORDER BY ALL
+SELECT f FROM floats WHERE f>='inf'::{type} ORDER BY ALL
 ----
 inf
 
@@ -123,13 +123,13 @@ SELECT f FROM floats WHERE f<1
 -inf
 
 query I
-SELECT f FROM floats WHERE f<'inf'::${type} ORDER BY ALL
+SELECT f FROM floats WHERE f<'inf'::{type} ORDER BY ALL
 ----
 -inf
 1
 
 query I
-SELECT f FROM floats WHERE f<'-inf'::${type} ORDER BY ALL
+SELECT f FROM floats WHERE f<'-inf'::{type} ORDER BY ALL
 ----
 
 # <=
@@ -140,14 +140,14 @@ SELECT f FROM floats WHERE f<=1 ORDER BY ALL
 1
 
 query I
-SELECT f FROM floats WHERE f<='inf'::${type} ORDER BY ALL
+SELECT f FROM floats WHERE f<='inf'::{type} ORDER BY ALL
 ----
 -inf
 1
 inf
 
 query I
-SELECT f FROM floats WHERE f<='-inf'::${type} ORDER BY ALL
+SELECT f FROM floats WHERE f<='-inf'::{type} ORDER BY ALL
 ----
 -inf
 

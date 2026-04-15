@@ -56,17 +56,17 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				if (!entry.IsValid()) {
 					continue;
 				}
-				result_lengths[entry.index] += entry.value.GetSize();
+				result_lengths[entry.GetIndex()] += entry.GetValue().GetSize();
 			}
 		}
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		// allocate an empty string of the required size
 		idx_t str_length = constant_lengths + result_lengths[i];
-		result_data[i] = StringVector::EmptyString(result, str_length);
+		result_data[i].EmptyString(str_length);
 		// we reuse the result_lengths vector to store the currently appended size
 		result_lengths[i] = 0;
 	}
@@ -95,8 +95,8 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				if (!entry.IsValid()) {
 					continue;
 				}
-				auto &input_str = entry.value;
-				auto i = entry.index;
+				auto &input_str = entry.GetValue();
+				auto i = entry.GetIndex();
 				auto input_ptr = input_str.GetData();
 				auto input_len = input_str.GetSize();
 				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
@@ -142,7 +142,7 @@ struct ListConcatInputData {
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
@@ -315,13 +315,17 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
-unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindConcatFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return BindConcatFunctionInternal(context, bound_function, arguments, false);
 }
 
-unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindConcatOperator(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return BindConcatFunctionInternal(context, bound_function, arguments, true);
 }
 
@@ -338,8 +342,8 @@ unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStati
 
 ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr,
-	                          ListConcatStats);
+	auto fun =
+	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
 	fun.varargs = LogicalType::LIST(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;

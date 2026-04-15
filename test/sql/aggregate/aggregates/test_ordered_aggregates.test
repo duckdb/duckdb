@@ -184,12 +184,12 @@ SELECT percentile_cont(CASE 1 WHEN 2 THEN 3 END) WITHIN GROUP (ORDER BY 1 DESC);
 foreach sense ASC DESC
 
 statement error
-SELECT percentile_disc(-.5) WITHIN GROUP (order by col ${sense}) 
+SELECT percentile_disc(-.5) WITHIN GROUP (order by col {sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
 ----
 
 statement error
-SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col ${sense}) 
+SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col {sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
 ----
 

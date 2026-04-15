@@ -10,8 +10,17 @@ create table tbl(a varchar, b integer);
 statement ok
 create index idx on tbl(a);
 
-statement error
+statement ok
 alter table tbl alter a set default 'test';
+
+statement ok
+insert into tbl(b) values (1);
+
+query II
+select a, b from tbl;
 ----
-Dependency Error: Cannot alter entry "tbl" because there are entries that depend on it.
+test	1
+
+statement ok
+alter table tbl alter a drop default;
 

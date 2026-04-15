@@ -45,11 +45,10 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		case VectorType::CONSTANT_VECTOR: {
 			if (ConstantVector::IsNull(args.data[idx])) {
 				// input is constant null, return constant null
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
 				auto &result_mask = ConstantVector::Validity(result);
 				auto &input_mask = ConstantVector::Validity(args.data[idx]);
 				result_mask.Initialize(input_mask);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 				return;
 			}
 			break;
@@ -71,8 +70,11 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -81,7 +83,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 	}
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	bound_function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->return_type);
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 

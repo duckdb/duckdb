@@ -1,5 +1,25 @@
+#include <stdint.h>
+#include <string>
+#include <utility>
+
 #include "duckdb/common/vector/list_vector.hpp"
 #include "writer/list_column_writer.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
 

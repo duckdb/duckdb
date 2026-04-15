@@ -1,8 +1,39 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <algorithm>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/struct_column_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ParquetReader;
+class ThriftFileTransport;
+struct ParquetColumnSchema;
 
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
@@ -48,8 +79,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 		auto &target_vector = struct_entries[i];
 		if (!child) {
 			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector);
 			continue;
 		}
 		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector);

@@ -13,6 +13,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include "postgres_parser.hpp"
 
@@ -52,6 +53,19 @@ static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
 static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	// subsequent characters can also be between 0-9
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
+}
+
+static void ValidateUTF8Query(const string &query) {
+	UnicodeInvalidReason reason = UnicodeInvalidReason::INVALID_UNICODE;
+	size_t invalid_pos = 0;
+	auto unicode_type = Utf8Proc::Analyze(query.c_str(), query.size(), &reason, &invalid_pos);
+	if (unicode_type != UnicodeType::INVALID) {
+		return;
+	}
+	const char *reason_str =
+	    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte sequence mismatch" : "invalid unicode";
+	throw ParserException::SyntaxError(query, StringUtil::Format("Invalid UTF-8 in query (%s)", reason_str),
+	                                   optional_idx(NumericCast<idx_t>(invalid_pos)));
 }
 
 // This function strips unicode space characters from the query and replaces them with regular spaces
@@ -215,14 +229,6 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 		                      result.error.RawMessage());
 	}
 	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
-			throw NotImplementedException("Parser override has not yet implemented this "
-			                              "transformer rule.\nOriginal error: %s",
-			                              result.error.RawMessage());
-		}
-		if (result.error.Type() == ExceptionType::PARSER) {
-			result.error.Throw();
-		}
 		result.error.Throw();
 	}
 }
@@ -231,6 +237,7 @@ void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	ValidateUTF8Query(query);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -257,46 +264,6 @@ void Parser::ParseQuery(const string &query) {
 				}
 				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
 					ThrowParserOverrideError(result);
-				}
-				if (options.parser_override_setting == AllowParserOverride::STRICT_WHEN_SUPPORTED) {
-					auto statement = GetStatement(query);
-					if (!statement) {
-						break;
-					}
-					bool is_supported = false;
-					switch (statement->type) {
-					case StatementType::ANALYZE_STATEMENT:
-					case StatementType::VACUUM_STATEMENT:
-					case StatementType::CALL_STATEMENT:
-					case StatementType::MERGE_INTO_STATEMENT:
-					case StatementType::TRANSACTION_STATEMENT:
-					case StatementType::VARIABLE_SET_STATEMENT:
-					case StatementType::LOAD_STATEMENT:
-					case StatementType::EXPLAIN_STATEMENT:
-					case StatementType::PREPARE_STATEMENT:
-					case StatementType::ATTACH_STATEMENT:
-					case StatementType::SELECT_STATEMENT:
-					case StatementType::DETACH_STATEMENT:
-					case StatementType::DELETE_STATEMENT:
-					case StatementType::DROP_STATEMENT:
-					case StatementType::ALTER_STATEMENT:
-					case StatementType::PRAGMA_STATEMENT:
-					case StatementType::INSERT_STATEMENT:
-					case StatementType::UPDATE_STATEMENT:
-					case StatementType::COPY_DATABASE_STATEMENT:
-					case StatementType::CREATE_STATEMENT:
-					case StatementType::COPY_STATEMENT:
-					case StatementType::SET_STATEMENT: {
-						is_supported = true;
-						break;
-					}
-					default:
-						is_supported = false;
-						break;
-					}
-					if (is_supported) {
-						ThrowParserOverrideError(result);
-					}
 				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK_OVERRIDE) {
 					continue;
 				}

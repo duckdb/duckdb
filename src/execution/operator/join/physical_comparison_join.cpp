@@ -134,7 +134,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 		// has NULL for every input entry
 		if (!has_null) {
-			auto bool_result = FlatVector::GetData<bool>(result_vector);
+			auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
 			for (idx_t i = 0; i < result.size(); i++) {
 				bool_result[i] = false;
 			}
@@ -150,8 +150,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 		// for the RHS
 		for (idx_t k = input.ColumnCount(); k < result.ColumnCount(); k++) {
-			result.data[k].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[k], true);
+			ConstantVector::SetNull(result.data[k]);
 		}
 	}
 }

@@ -55,7 +55,7 @@ from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote.csv', strict_mode
 loop buffer_size 30 35
 
 query II
-from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false, escape = '', buffer_size = ${buffer_size}, header = 0)
+from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false, escape = '', buffer_size = {buffer_size}, header = 0)
 ----
 1	pedro "pdet" holanda
 2	pedro "pdet" holanda

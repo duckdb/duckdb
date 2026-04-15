@@ -175,7 +175,7 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 			if (pruned_stats->CanHaveNull()) {
 				// Offset pruning can only remove a contiguous prefix of row groups. Once the first unresolved
 				// row group might still contribute NULLs to the ordered prefix, we cannot prune past it.
-				return {new_row_offset, pruned_row_group_count};
+				return {new_row_offset, pruned_row_group_count, 0};
 			}
 			// This row group has exactly row_group.count valid values. We can exclude those.
 			pruned_row_group_count++;
@@ -194,7 +194,7 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 		}
 	}
 
-	return {new_row_offset, pruned_row_group_count};
+	return {new_row_offset, pruned_row_group_count, 0};
 }
 
 } // namespace
@@ -227,8 +227,8 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 	}
 	if (column_type == OrderByColumnType::STRING) {
-		if (!stats.CanHaveNoNull()) {
-			// No non-null values exist in this row group - stats are meaningless for ordering
+		if (!StringStats::HasMinMax(stats)) {
+			// Row group is all nulls or has incomplete stats - stats are meaningless for ordering
 			return Value();
 		}
 		switch (order_by) {

@@ -5,7 +5,7 @@
 foreach statement_type PRAGMA SET
 
 statement ok
-${statement_type} default_order='desc'
+{statement_type} default_order='desc'
 
 query I
 SELECT * FROM range(3) ORDER BY 1
@@ -15,7 +15,7 @@ SELECT * FROM range(3) ORDER BY 1
 0
 
 statement ok
-${statement_type} default_order='asc'
+{statement_type} default_order='asc'
 
 query I
 SELECT * FROM range(3) ORDER BY 1
@@ -25,7 +25,7 @@ SELECT * FROM range(3) ORDER BY 1
 2
 
 statement error
-${statement_type} default_order='unknown_order'
+{statement_type} default_order='unknown_order'
 ----
 <REGEX>:Invalid Input Error.*Unrecognized parameter.*
 

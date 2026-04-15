@@ -114,8 +114,7 @@ struct ICUStrptime : public ICUDateFunc {
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(fmt_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			UnaryExecutor::Execute<string_t, timestamp_t>(str_arg, result, args.size(), [&](string_t input) {
 				ParseResult parsed;
@@ -152,8 +151,7 @@ struct ICUStrptime : public ICUDateFunc {
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(fmt_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 		} else {
 			UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
@@ -179,8 +177,11 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static bind_scalar_function_t bind_strptime; // NOLINT
 
-	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(BindScalarFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &bound_function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
+
 		if (arguments[1]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -235,7 +236,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Fall back to faster, non-TZ parsing
 		bound_function.SetBindCallback(bind_strptime);
-		return bind_strptime(context, bound_function, arguments);
+		return bound_function.Bind(context, arguments);
 	}
 
 	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
@@ -427,8 +428,7 @@ struct ICUStrftime : public ICUDateFunc {
 		if (fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(fmt_arg)) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 			} else {
 				StrfTimeFormat format;
 				ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);

@@ -20,27 +20,27 @@ explicit cast is required
 foreach val 42 [1,2,3] {'a':42} {'a':[1,2,3],'b':'thisisalongstring'}
 
 query I
-SELECT ${val} = ALL(SELECT ${val})
+SELECT {val} = ALL(SELECT {val})
 ----
 1
 
 query I
-SELECT ${val} = ALL(SELECT ${val} UNION ALL SELECT NULL)
+SELECT {val} = ALL(SELECT {val} UNION ALL SELECT NULL)
 ----
 NULL
 
 query I
-SELECT ${val} = ALL(SELECT ${val} FROM range(3000))
+SELECT {val} = ALL(SELECT {val} FROM range(3000))
 ----
 1
 
 query I
-SELECT ${val} > ANY(SELECT ${val} FROM range(3000))
+SELECT {val} > ANY(SELECT {val} FROM range(3000))
 ----
 0
 
 query I
-SELECT ${val} >= ANY(SELECT ${val} FROM range(3000))
+SELECT {val} >= ANY(SELECT {val} FROM range(3000))
 ----
 1
 

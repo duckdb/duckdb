@@ -38,7 +38,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
-#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -325,6 +324,9 @@ void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEnt
 }
 
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+	if (info.type == CatalogType::TRIGGER_ENTRY) {
+		throw InternalException("Triggers should be dropped through their table, not through the schema");
+	}
 	auto &set = GetCatalogSet(info.type);
 
 	// first find the entry

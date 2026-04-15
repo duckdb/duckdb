@@ -5,7 +5,7 @@ statement ok
 SET wal_autocheckpoint='100GB'
 
 statement ok
-ATTACH '__TEST_DIR__/checkpoint_in_transaction.db' AS db
+ATTACH '{TEST_DIR}/checkpoint_in_transaction.db' AS db
 
 statement ok
 CREATE TABLE db.t(a INTEGER)

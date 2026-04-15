@@ -230,6 +230,31 @@ else()
   set(OS_NAME "unknown")
 endif()
 
+# Codesign a target with get-task-allow so lldb can attach to it on macOS.
+# Only applied for debug build types where you'd actually want to debug.
+function(duckdb_codesign_for_debugging target)
+  if(APPLE AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+    set(ENTITLEMENTS_FILE "${CMAKE_BINARY_DIR}/debug_entitlements.plist")
+    if(NOT EXISTS "${ENTITLEMENTS_FILE}")
+      file(WRITE "${ENTITLEMENTS_FILE}"
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"https://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+        "<plist version=\"1.0\"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>"
+      )
+    endif()
+    set(CODESIGN_SCRIPT "${CMAKE_BINARY_DIR}/codesign_debug.cmake")
+    if(NOT EXISTS "${CODESIGN_SCRIPT}")
+      file(WRITE "${CODESIGN_SCRIPT}"
+        "execute_process(COMMAND codesign -s - -f --entitlements \"\${ENTITLEMENTS_FILE}\" \"\${TARGET_FILE}\" ERROR_QUIET)\n"
+      )
+    endif()
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -DTARGET_FILE=$<TARGET_FILE:${target}> -DENTITLEMENTS_FILE=${ENTITLEMENTS_FILE} -P "${CODESIGN_SCRIPT}"
+      VERBATIM
+    )
+  endif()
+endfunction()
+
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
@@ -410,7 +435,11 @@ else()
           OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (GIT_RESULT)
-      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      if ("$ENV{GITHUB_EVENT_NAME}" STREQUAL "pull_request")
+        message(STATUS "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Continuing with dummy version v0.0.1 for pull_request CI")
+      else()
+        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      endif()
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
   else()
@@ -725,6 +754,8 @@ if(NOT DEFINED CMAKE_JOB_POOL_LINK)
     set(CMAKE_JOB_POOL_LINK debug_link_jobs)
   endif()
 endif()
+message(STATUS
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
 if(OS_NAME STREQUAL "windows")
   list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
@@ -947,4 +978,3 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
-

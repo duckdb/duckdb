@@ -12,7 +12,10 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/planner/planner_extension.hpp"
@@ -72,9 +75,9 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 			auto &child_entry = child_entries[col];
 			auto &left_child_entry = left_child_entries[col];
 			auto &right_child_entry = right_child_entries[col];
-			auto pdata = ConstantVector::GetData<int32_t>(child_entry);
-			auto left_pdata = ConstantVector::GetData<int32_t>(left_child_entry);
-			auto right_pdata = ConstantVector::GetData<int32_t>(right_child_entry);
+			auto pdata = FlatVector::GetDataMutable<int32_t>(child_entry);
+			auto left_pdata = FlatVector::GetData<int32_t>(left_child_entry);
+			auto right_pdata = FlatVector::GetData<int32_t>(right_child_entry);
 			pdata[base_idx] = left_pdata[lhs_list_index] + right_pdata[rhs_list_index];
 		}
 	}
@@ -112,9 +115,9 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 			auto &child_entry = child_entries[col];
 			auto &left_child_entry = left_child_entries[col];
 			auto &right_child_entry = right_child_entries[col];
-			auto pdata = ConstantVector::GetData<int32_t>(child_entry);
-			auto left_pdata = ConstantVector::GetData<int32_t>(left_child_entry);
-			auto right_pdata = ConstantVector::GetData<int32_t>(right_child_entry);
+			auto pdata = FlatVector::GetDataMutable<int32_t>(child_entry);
+			auto left_pdata = FlatVector::GetData<int32_t>(left_child_entry);
+			auto right_pdata = FlatVector::GetData<int32_t>(right_child_entry);
 			pdata[base_idx] = left_pdata[lhs_list_index] - right_pdata[rhs_list_index];
 		}
 	}
@@ -405,8 +408,9 @@ static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
 }
 
-static unique_ptr<FunctionData> BoundedMaxBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 	} else {
@@ -423,8 +427,9 @@ static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	                                                   [&](int32_t left, int32_t right) { return left + right; });
 }
 
-static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BoundedAddBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (BoundedType::GetDefault() == arguments[0]->return_type &&
 	    BoundedType::GetDefault() == arguments[1]->return_type) {
 		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
@@ -455,8 +460,9 @@ struct BoundedFunctionData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.SetReturnType(arguments[0]->return_type);
@@ -489,13 +495,14 @@ static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &
 	auto &source_vector = args.data[0];
 	const auto count = args.size();
 
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, count, [&](int32_t input) {
 		if (input < 0) {
 			throw NotImplementedException("Negative values not supported");
 		}
 		string s;
 		s.push_back(static_cast<char>(input));
-		return StringVector::AddString(result, s);
+		return heap.AddString(s);
 	});
 }
 
@@ -626,7 +633,7 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 //===--------------------------------------------------------------------===//
 
 // The bind callback is unused for most extensible table filters
-static unique_ptr<FunctionData> RowIdFilterBind(ClientContext &, ScalarFunction &, vector<unique_ptr<Expression>> &) {
+static unique_ptr<FunctionData> RowIdFilterBind(BindScalarFunctionInput &input) {
 	throw InternalException("rowid_filter: bind should never be called");
 }
 
@@ -669,7 +676,7 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto out = FlatVector::GetData<bool>(result);
+	auto out = FlatVector::GetDataMutable<bool>(result);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -804,6 +811,37 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	catalog.CreateTableFunction(client_context, quack_info);
 
 	con.Commit();
+
+	// Table with tagged columns
+	{
+		auto tagged_table_info = make_uniq<CreateTableInfo>();
+		tagged_table_info->schema = DEFAULT_SCHEMA;
+		tagged_table_info->table = "tagged_table";
+		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+		tagged_table_info->temporary = false;
+		tagged_table_info->internal = true;
+
+		ColumnDefinition col_a("a", LogicalType::INTEGER);
+		InsertionOrderPreservingMap<string> col_a_tags;
+		col_a_tags["ext:name"] = "loadable_extension_demo";
+		col_a_tags["ext:column_type"] = "primary";
+		col_a.SetTags(std::move(col_a_tags));
+		tagged_table_info->columns.AddColumn(std::move(col_a));
+
+		ColumnDefinition col_b("b", LogicalType::VARCHAR);
+		InsertionOrderPreservingMap<string> col_b_tags;
+		col_b_tags["ext:name"] = "loadable_extension_demo";
+		col_b_tags["ext:column_type"] = "dimension";
+		col_b.SetTags(std::move(col_b_tags));
+		tagged_table_info->columns.AddColumn(std::move(col_b));
+
+		con.BeginTransaction();
+		auto &default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
+		auto &default_catalog = Catalog::GetCatalog(client_context, default_db_name);
+		MetaTransaction::Get(client_context).ModifyDatabase(default_catalog.GetAttached(), DatabaseModificationType());
+		default_catalog.CreateTable(client_context, std::move(tagged_table_info));
+		con.Commit();
+	}
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);

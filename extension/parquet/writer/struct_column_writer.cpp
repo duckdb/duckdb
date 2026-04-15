@@ -1,6 +1,21 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/struct_column_writer.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
 
@@ -70,7 +85,9 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	if (parent) {
 		// propagate empty entries from the parent
 		if (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			state.is_empty.insert(state.is_empty.end(),
+			                      parent->is_empty.begin() +
+			                          NumericCast<duckdb::vector<bool>::difference_type>(state.is_empty.size()),
 			                      parent->is_empty.end());
 		}
 	}

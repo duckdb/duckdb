@@ -12,20 +12,23 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
                 MemoryTag::BASE_TABLE) {
 }
 
-idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
+idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
 	lock_guard<mutex> l(version_lock);
-	idx_t deleted_count = 0;
+	idx_t total_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
-		if (i >= vector_info.size() || !vector_info[i]) {
-			continue;
-		}
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
-		if (max_count == 0) {
+		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (segment_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(max_count);
+		if (i >= vector_info.size() || !vector_info[i]) {
+			// no version info - this means all rows are visible
+			total_count += segment_count;
+			continue;
+		}
+		idx_t row_count = vector_info[i]->GetRowCount(options, segment_count);
+		total_count += row_count;
 	}
-	return deleted_count;
+	return total_count;
 }
 
 optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
@@ -33,53 +36,6 @@ optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 		return nullptr;
 	}
 	return vector_info[vector_idx].get();
-}
-
-bool RowVersionManager::ShouldCheckpointRowGroup(transaction_t checkpoint_id, idx_t count) {
-	lock_guard<mutex> l(version_lock);
-	TransactionData checkpoint_transaction(checkpoint_id, checkpoint_id);
-
-	idx_t total_count = 0;
-	for (idx_t read_count = 0, vector_idx = 0; read_count < count; read_count += STANDARD_VECTOR_SIZE, vector_idx++) {
-		idx_t max_count = MinValue<idx_t>(count - read_count, STANDARD_VECTOR_SIZE);
-		idx_t checkpoint_count;
-		auto chunk_info = GetChunkInfo(vector_idx);
-		if (!chunk_info) {
-			checkpoint_count = max_count;
-		} else {
-			checkpoint_count = chunk_info->GetCheckpointRowCount(checkpoint_transaction, max_count);
-		}
-		if (checkpoint_count == 0) {
-			continue;
-		}
-		if (total_count != read_count) {
-			string chunk_info_text;
-			for (idx_t i = 0; i <= vector_idx; i++) {
-				auto current_info = GetChunkInfo(i);
-				chunk_info_text += "\n";
-				chunk_info_text += to_string(i) + ": ";
-				if (current_info) {
-					chunk_info_text += current_info->ToString(max_count);
-				} else {
-					chunk_info_text += "(empty)";
-				}
-			}
-			throw InternalException(
-			    "Error in RowGroup::GetCheckpointRowCount - insertions are not sequential - at vector idx %d found %d "
-			    "rows, where we have already obtained %d from the total %d, transaction start time %d%s",
-			    vector_idx, checkpoint_count, total_count, read_count, checkpoint_id, chunk_info_text);
-		}
-		total_count += checkpoint_count;
-	}
-	if (total_count == 0) {
-		return false;
-	}
-	if (total_count != count) {
-		throw InternalException("RowGroup::GetCheckpointRowCount returned a partially checkpointed entry (checkpoint "
-		                        "count %d, row group count %d)",
-		                        total_count, count);
-	}
-	return true;
 }
 
 idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector,

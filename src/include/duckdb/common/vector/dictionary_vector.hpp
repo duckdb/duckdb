@@ -12,18 +12,30 @@
 
 namespace duckdb {
 
-//! The DictionaryBuffer holds a selection vector
+//! The DictionaryEntry holds a child Vector for dictionary-encoded vectors
+class DictionaryEntry {
+public:
+	explicit DictionaryEntry(Vector vector) : data(std::move(vector)) {
+	}
+
+public:
+	Vector data;
+	//! Optional size/id to uniquely identify re-occurring dictionaries
+	optional_idx size;
+	string id;
+	//! For caching the hashes of a child buffer
+	mutex cached_hashes_lock;
+	unique_ptr<Vector> cached_hashes;
+};
+
+//! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
 class DictionaryBuffer : public VectorBuffer {
 public:
-	explicit DictionaryBuffer(const SelectionVector &sel)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
-	}
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
-	}
-	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
-	}
+	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(const SelectionVector &sel);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data);
+	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE);
 
 public:
 	const SelectionVector &GetSelVector() const {
@@ -48,8 +60,35 @@ public:
 		return dictionary_id;
 	}
 
+	DictionaryEntry &GetEntry() {
+		return *entry;
+	}
+	const DictionaryEntry &GetEntry() const {
+		return *entry;
+	}
+	buffer_ptr<DictionaryEntry> GetEntryPtr() {
+		return entry;
+	}
+	void SetEntry(buffer_ptr<DictionaryEntry> entry_p) {
+		entry = std::move(entry_p);
+	}
+
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
+	                                        idx_t count) override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
+
 private:
 	SelectionVector sel_vector;
+	buffer_ptr<DictionaryEntry> entry;
 	optional_idx dictionary_size;
 	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent
 	string dictionary_id;
@@ -76,27 +115,29 @@ struct DictionaryVector {
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.auxiliary->Cast<VectorChildBuffer>().data;
+		return vector.buffer->Cast<DictionaryBuffer>().GetEntry().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.auxiliary->Cast<VectorChildBuffer>().data;
+		return vector.buffer->Cast<DictionaryBuffer>().GetEntry().data;
 	}
 	static inline optional_idx DictionarySize(const Vector &vector) {
 		VerifyDictionary(vector);
-		const auto &child_buffer = vector.auxiliary->Cast<VectorChildBuffer>();
-		if (child_buffer.size.IsValid()) {
-			return child_buffer.size;
+		const auto &dict_buffer = vector.buffer->Cast<DictionaryBuffer>();
+		const auto &entry = dict_buffer.GetEntry();
+		if (entry.size.IsValid()) {
+			return entry.size;
 		}
-		return vector.buffer->Cast<DictionaryBuffer>().GetDictionarySize();
+		return dict_buffer.GetDictionarySize();
 	}
 	static inline const string &DictionaryId(const Vector &vector) {
 		VerifyDictionary(vector);
-		const auto &child_buffer = vector.auxiliary->Cast<VectorChildBuffer>();
-		if (!child_buffer.id.empty()) {
-			return child_buffer.id;
+		const auto &dict_buffer = vector.buffer->Cast<DictionaryBuffer>();
+		const auto &entry = dict_buffer.GetEntry();
+		if (!entry.id.empty()) {
+			return entry.id;
 		}
-		return vector.buffer->Cast<DictionaryBuffer>().GetDictionaryId();
+		return dict_buffer.GetDictionaryId();
 	}
 	static inline bool CanCacheHashes(const LogicalType &type) {
 		return type.InternalType() == PhysicalType::VARCHAR;
@@ -104,7 +145,7 @@ struct DictionaryVector {
 	static inline bool CanCacheHashes(const Vector &vector) {
 		return DictionarySize(vector).IsValid() && CanCacheHashes(vector.GetType());
 	}
-	static buffer_ptr<VectorChildBuffer> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
+	static buffer_ptr<DictionaryEntry> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
 	static const Vector &GetCachedHashes(Vector &input);
 };
 

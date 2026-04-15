@@ -12,12 +12,12 @@ CREATE TABLE all_types AS FROM test_all_types();
 foreach col <all_types_columns>
 
 query I
-SELECT MIN({'val': "${col}"}).val IS NOT DISTINCT FROM (SELECT "${col}" FROM all_types ORDER BY "${col}" LIMIT 1) FROM all_types WHERE bool IS NOT NULL
+SELECT MIN({'val': "{col}"}).val IS NOT DISTINCT FROM (SELECT "{col}" FROM all_types ORDER BY "{col}" LIMIT 1) FROM all_types WHERE bool IS NOT NULL
 ----
 true
 
 query I
-SELECT MAX({'val': "${col}"}).val IS NOT DISTINCT FROM (SELECT "${col}" FROM all_types ORDER BY "${col}" DESC LIMIT 1) FROM all_types WHERE bool IS NOT NULL
+SELECT MAX({'val': "{col}"}).val IS NOT DISTINCT FROM (SELECT "{col}" FROM all_types ORDER BY "{col}" DESC LIMIT 1) FROM all_types WHERE bool IS NOT NULL
 ----
 true
 

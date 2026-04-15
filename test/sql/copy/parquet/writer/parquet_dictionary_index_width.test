@@ -17,7 +17,7 @@ COPY (
 		ELSE 'B'
 	END AS s
 	FROM range(65536) t(i)
-) TO '__TEST_DIR__/dict-two-values.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER FALSE);
+) TO '{TEST_DIR}/dict-two-values.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER FALSE);
 
 statement ok
 COPY (
@@ -29,27 +29,27 @@ COPY (
 		ELSE 'C'
 	END AS s
 	FROM range(65536) t(i)
-) TO '__TEST_DIR__/dict-three-values.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER FALSE);
+) TO '{TEST_DIR}/dict-three-values.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER FALSE);
 
 query II
 SELECT encodings, stats_distinct_count
-FROM parquet_metadata('__TEST_DIR__/dict-two-values.parquet');
+FROM parquet_metadata('{TEST_DIR}/dict-two-values.parquet');
 ----
 PLAIN_DICTIONARY	2
 
 query II
 SELECT encodings, stats_distinct_count
-FROM parquet_metadata('__TEST_DIR__/dict-three-values.parquet');
+FROM parquet_metadata('{TEST_DIR}/dict-three-values.parquet');
 ----
 PLAIN_DICTIONARY	3
 
 query I
 WITH two AS (
 	SELECT total_uncompressed_size AS sz
-	FROM parquet_metadata('__TEST_DIR__/dict-two-values.parquet')
+	FROM parquet_metadata('{TEST_DIR}/dict-two-values.parquet')
 ), three AS (
 	SELECT total_uncompressed_size AS sz
-	FROM parquet_metadata('__TEST_DIR__/dict-three-values.parquet')
+	FROM parquet_metadata('{TEST_DIR}/dict-three-values.parquet')
 )
 SELECT CASE WHEN two.sz * 3 < three.sz * 2 THEN 1 ELSE 0 END
 FROM two, three;
@@ -66,7 +66,7 @@ COPY (
 		ELSE 'B'
 	END AS s
 	FROM range(65536) t(i)
-) TO '__TEST_DIR__/dict-two-values-v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, WRITE_BLOOM_FILTER FALSE);
+) TO '{TEST_DIR}/dict-two-values-v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, WRITE_BLOOM_FILTER FALSE);
 
 statement ok
 COPY (
@@ -78,27 +78,27 @@ COPY (
 		ELSE 'C'
 	END AS s
 	FROM range(65536) t(i)
-) TO '__TEST_DIR__/dict-three-values-v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, WRITE_BLOOM_FILTER FALSE);
+) TO '{TEST_DIR}/dict-three-values-v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2, WRITE_BLOOM_FILTER FALSE);
 
 query II
 SELECT encodings, stats_distinct_count
-FROM parquet_metadata('__TEST_DIR__/dict-two-values-v2.parquet');
+FROM parquet_metadata('{TEST_DIR}/dict-two-values-v2.parquet');
 ----
 RLE_DICTIONARY	2
 
 query II
 SELECT encodings, stats_distinct_count
-FROM parquet_metadata('__TEST_DIR__/dict-three-values-v2.parquet');
+FROM parquet_metadata('{TEST_DIR}/dict-three-values-v2.parquet');
 ----
 RLE_DICTIONARY	3
 
 query I
 WITH two AS (
 	SELECT total_uncompressed_size AS sz
-	FROM parquet_metadata('__TEST_DIR__/dict-two-values-v2.parquet')
+	FROM parquet_metadata('{TEST_DIR}/dict-two-values-v2.parquet')
 ), three AS (
 	SELECT total_uncompressed_size AS sz
-	FROM parquet_metadata('__TEST_DIR__/dict-three-values-v2.parquet')
+	FROM parquet_metadata('{TEST_DIR}/dict-three-values-v2.parquet')
 )
 SELECT CASE WHEN two.sz * 3 < three.sz * 2 THEN 1 ELSE 0 END
 FROM two, three;

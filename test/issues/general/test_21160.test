@@ -15,22 +15,22 @@ foreach null_order LAST FIRST
 
 # Original regression tests: single row, all-null sort columns
 query I
-SELECT id FROM t WHERE x IS NULL ORDER BY y NULLS ${null_order};
+SELECT id FROM t WHERE x IS NULL ORDER BY y NULLS {null_order};
 ----
 1
 
 query I
-SELECT id FROM t WHERE x IS NULL ORDER BY y NULLS ${null_order} LIMIT 10;
+SELECT id FROM t WHERE x IS NULL ORDER BY y NULLS {null_order} LIMIT 10;
 ----
 1
 
 query I
-SELECT id FROM t WHERE x IS NULL ORDER BY x NULLS ${null_order};
+SELECT id FROM t WHERE x IS NULL ORDER BY x NULLS {null_order};
 ----
 1
 
 query I
-SELECT id FROM t WHERE x IS NULL ORDER BY x NULLS ${null_order} LIMIT 10;
+SELECT id FROM t WHERE x IS NULL ORDER BY x NULLS {null_order} LIMIT 10;
 ----
 1
 

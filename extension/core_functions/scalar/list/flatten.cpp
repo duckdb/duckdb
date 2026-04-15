@@ -10,7 +10,7 @@ namespace duckdb {
 namespace {
 
 void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
-	const auto flat_list_data = FlatVector::GetData<list_entry_t>(result);
+	auto flat_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &flat_list_mask = FlatVector::Validity(result);
 
 	UnifiedVectorFormat outer_format;
@@ -146,7 +146,7 @@ unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStat
 
 ScalarFunction ListFlattenFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::LIST(LogicalType::TEMPLATE("T")))},
-	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListFlattenFunction, nullptr, nullptr,
+	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListFlattenFunction, nullptr,
 	                      ListFlattenStats);
 }
 

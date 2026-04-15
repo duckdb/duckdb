@@ -42,7 +42,11 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->name == "MaterializedViewEntry") {
+		throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
+	}
+	return transformer.TransformEnum<CatalogType>(choice_pr);
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
@@ -172,24 +176,33 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransf
 	return result;
 }
 
+string PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(0).identifier;
+}
+
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	throw NotImplementedException("Cannot drop collation yet");
+	/*
+	 *auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto collation_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	if (collation_list.size() > 1) {
-		throw NotImplementedException("Can only drop one object at a time");
+	    throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto collation = collation_list[0]->Cast<IdentifierParseResult>().identifier;
+	auto collation = transformer.Transform<string>(collation_list[0]);
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
 	info->name = collation;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	info->type = CatalogType::SEQUENCE_ENTRY;
+	info->type = CatalogType::COLLATION_ENTRY;
 	result->info = std::move(info);
 	return result;
+	*/
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransformer &transformer,
@@ -249,7 +262,7 @@ string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transfo
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,
                                                                       optional_ptr<ParseResult> parse_result) {
-	// DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
+	// DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -257,10 +270,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransfo
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
-	auto trigger_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
-	info->catalog = trigger_name.catalog;
-	info->schema = trigger_name.schema;
-	info->name = trigger_name.name;
+	info->name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
 
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
 	auto extra_info = make_uniq<ExtraDropTriggerInfo>();

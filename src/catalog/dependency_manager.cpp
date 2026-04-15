@@ -367,7 +367,7 @@ static string EntryToString(CatalogEntryInfo &info) {
 		return StringUtil::Format("index \"%s\"", info.name);
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		return StringUtil::Format("index \"%s\"", info.name);
+		return StringUtil::Format("sequence \"%s\"", info.name);
 	}
 	case CatalogType::COLLATION_ENTRY: {
 		return StringUtil::Format("collation \"%s\"", info.name);
@@ -407,6 +407,9 @@ static string EntryToString(CatalogEntryInfo &info) {
 	}
 	case CatalogType::SECRET_FUNCTION_ENTRY: {
 		return StringUtil::Format("secret function \"%s\"", info.name);
+	}
+	case CatalogType::TRIGGER_ENTRY: {
+		return StringUtil::Format("trigger \"%s\"", info.name);
 	}
 	default:
 		throw InternalException("CatalogType not handled in EntryToString (DependencyManager) for %s",
@@ -647,7 +650,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 				disallow_alter = false;
 				break;
 			}
-			case AlterTableType::ADD_COLUMN: {
+			case AlterTableType::ADD_COLUMN:
+			case AlterTableType::SET_DEFAULT: {
 				disallow_alter = false;
 				break;
 			}

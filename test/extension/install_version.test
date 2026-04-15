@@ -10,16 +10,16 @@ require notwindows
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/install_version'
+set extension_directory='{TEST_DIR}/install_version'
 
 statement ok
-set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+set custom_extension_repository='{LOCAL_EXTENSION_REPO}'
 
 # Confirm the version ends up in the url we search.
 # TODO: the script to create a local extension repo should be able to produce versioned extension paths then we can properly
 # test this
 statement error
-INSTALL quack FROM '${LOCAL_EXTENSION_REPO}' VERSION 'myversion';
+INSTALL quack FROM '{LOCAL_EXTENSION_REPO}' VERSION 'myversion';
 ----
 /quack/myversion/
 

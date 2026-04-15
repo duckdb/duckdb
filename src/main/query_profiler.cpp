@@ -284,7 +284,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_name.empty() && !root) {
+		if (query_metrics.query_name.empty() || !root) {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
@@ -391,7 +391,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
-			auto result_set_size = chunk->GetAllocationSize();
+			auto result_set_size = chunk->GetDataSize();
 			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {

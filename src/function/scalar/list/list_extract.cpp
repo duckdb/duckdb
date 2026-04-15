@@ -62,7 +62,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 			continue;
 		}
 
-		const auto child_offset = TryGetChildOffset(list_entry.value, offsets_entry.value);
+		const auto child_offset = TryGetChildOffset(list_entry.GetValue(), offsets_entry.GetValue());
 
 		if (!child_offset.IsValid()) {
 			invalid_offsets.push_back(i);
@@ -113,16 +113,17 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 		ExecuteStringExtract(result, base, subscript, count);
 		break;
 	case LogicalTypeId::SQLNULL:
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
 }
 
-static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	return nullptr;
@@ -142,7 +143,7 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
-	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 	lfun.SetFallible();
@@ -157,7 +158,7 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
-	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 

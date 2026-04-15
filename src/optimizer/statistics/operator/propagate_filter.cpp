@@ -235,8 +235,9 @@ FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> 
 		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
 	}
 
-	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
-	    ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false))) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	} else if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 
@@ -272,7 +273,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 				}
 				break;
 			}
-		} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		           prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);

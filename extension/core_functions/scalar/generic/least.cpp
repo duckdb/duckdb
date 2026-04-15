@@ -130,7 +130,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 	}
 
-	auto result_data = FlatVector::GetData<T>(result_vector);
+	auto result_data = FlatVector::GetDataMutable<T>(result_vector);
 	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -148,7 +148,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				auto entry = entries[i];
 				if (entry.IsValid()) {
 					// not a null entry: perform the operation and add to new set
-					auto ivalue = entry.value;
+					auto ivalue = entry.GetValue();
 					if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 						result_has_value[i] = true;
 						result_data[i] = ivalue;
@@ -171,8 +171,10 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 template <class LEAST_GREATER_OP>
-unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
@@ -235,8 +237,7 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
 	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, nullptr, nullptr,
-	                      nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
-	                      FunctionNullHandling::SPECIAL_HANDLING);
+	                      LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>
