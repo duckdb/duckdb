@@ -217,6 +217,100 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	    ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem_no_constraint] FROM lineitem_no_constraint;", true));
 }
 
+// Helper to run a union roundtrip test with setup queries creating a table with a union column
+static void TestUnionRoundtrip(const std::initializer_list<string> &setup_queries, const string &query,
+                               bool dense = false) {
+	DuckDB db;
+	Connection con(db);
+	if (dense) {
+		REQUIRE(!con.Query("SET arrow_output_dense_union = true")->HasError());
+	}
+	for (auto &setup : setup_queries) {
+		REQUIRE(!con.Query(setup)->HasError());
+	}
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
+}
+
+TEST_CASE("Test Arrow union roundtrip", "[arrow]") {
+	// Each case is tested with both sparse (default) and dense union layout
+	for (bool dense : {false, true}) {
+		// Basic union with two members and nulls
+		TestUnionRoundtrip({"CREATE TABLE t(u UNION(a INTEGER, b VARCHAR))",
+		                    "INSERT INTO t VALUES (1), ('hello'), (42), ('world'), (NULL)"},
+		                   "SELECT * FROM t", dense);
+		// Larger dataset with mixed types
+		TestUnionRoundtrip({"CREATE TABLE t(u UNION(a INTEGER, b VARCHAR))",
+		                    "INSERT INTO t SELECT i::INTEGER FROM range(50) tbl(i)",
+		                    "INSERT INTO t SELECT 'str' || i::VARCHAR FROM range(50) tbl(i)"},
+		                   "SELECT * FROM t", dense);
+		// Skewed distribution (most values in one variant)
+		TestUnionRoundtrip({"CREATE TABLE t(u UNION(a INTEGER, b VARCHAR))",
+		                    "INSERT INTO t SELECT i::INTEGER FROM range(95) tbl(i)",
+		                    "INSERT INTO t VALUES ('rare'), ('rare2'), ('rare3')"},
+		                   "SELECT * FROM t", dense);
+		// Dataset larger than STANDARD_VECTOR_SIZE to exercise chunked scanning
+		TestUnionRoundtrip({"CREATE TABLE t(u UNION(a INTEGER, b VARCHAR))",
+		                    "INSERT INTO t SELECT i::INTEGER FROM range(3000) tbl(i)",
+		                    "INSERT INTO t SELECT 'str' || i::VARCHAR FROM range(1000) tbl(i)"},
+		                   "SELECT * FROM t", dense);
+		// Three member union
+		TestUnionRoundtrip({"CREATE TABLE t(u UNION(a INTEGER, b VARCHAR, c DOUBLE))",
+		                    "INSERT INTO t VALUES (1), ('hello'), (3.14), (42), ('world'), (2.71)"},
+		                   "SELECT * FROM t", dense);
+		// Single member union
+		TestUnionRoundtrip({"CREATE TABLE t(u UNION(a INTEGER))", "INSERT INTO t VALUES (1), (2), (NULL), (42)"},
+		                   "SELECT * FROM t", dense);
+		// All-null union
+		TestUnionRoundtrip(
+		    {"CREATE TABLE t(u UNION(a INTEGER, b VARCHAR))", "INSERT INTO t VALUES (NULL), (NULL), (NULL)"},
+		    "SELECT * FROM t", dense);
+	}
+}
+
+TEST_CASE("Test Arrow dense union schema format", "[arrow]") {
+	// Verify that when arrow_output_dense_union is set, the exported schema uses +ud: format
+	DuckDB db;
+	Connection con(db);
+	REQUIRE(!con.Query("SET arrow_output_dense_union = true")->HasError());
+
+	auto client_properties = con.context->GetClientProperties();
+	ArrowSchema schema;
+	schema.Init();
+
+	child_list_t<LogicalType> members;
+	members.emplace_back("a", LogicalType::INTEGER);
+	members.emplace_back("b", LogicalType::VARCHAR);
+
+	vector<LogicalType> types = {LogicalType::UNION(std::move(members))};
+	vector<string> names = {"u"};
+	ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+
+	REQUIRE(schema.n_children == 1);
+	string format(schema.children[0]->format);
+	REQUIRE(format.substr(0, 3) == "+ud");
+
+	schema.release(&schema);
+
+	// Also verify sparse format when setting is off
+	REQUIRE(!con.Query("SET arrow_output_dense_union = false")->HasError());
+	client_properties = con.context->GetClientProperties();
+	ArrowSchema schema2;
+	schema2.Init();
+
+	child_list_t<LogicalType> members2;
+	members2.emplace_back("a", LogicalType::INTEGER);
+	members2.emplace_back("b", LogicalType::VARCHAR);
+	vector<LogicalType> types2 = {LogicalType::UNION(std::move(members2))};
+	ArrowConverter::ToArrowSchema(&schema2, types2, names, client_properties);
+
+	REQUIRE(schema2.n_children == 1);
+	string format2(schema2.children[0]->format);
+	REQUIRE(format2.substr(0, 3) == "+us");
+
+	schema2.release(&schema2);
+}
+
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	std::vector<std::string> data;
 	// data.emplace_back("data/parquet-testing/7-set.snappy.arrow2.parquet");

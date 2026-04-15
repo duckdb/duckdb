@@ -126,6 +126,14 @@
         "default_value": "false"
     },
     {
+        "name": "arrow_output_dense_union",
+        "description": "Whether Arrow UNION columns should be exported using dense union layout instead of sparse",
+        "type": "BOOLEAN",
+        "internal_setting": "arrow_output_dense_union",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "arrow_output_list_view",
         "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",

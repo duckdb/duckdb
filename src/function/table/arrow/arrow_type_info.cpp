@@ -128,6 +128,40 @@ ArrowType &ArrowListInfo::GetChild() const {
 }
 
 //===--------------------------------------------------------------------===//
+// ArrowUnionInfo
+//===--------------------------------------------------------------------===//
+
+ArrowUnionInfo::ArrowUnionInfo(vector<shared_ptr<ArrowType>> children, bool is_dense,
+                               unordered_map<int8_t, idx_t> type_id_to_child_idx)
+    : ArrowTypeInfo(ArrowTypeInfoType::UNION), children(std::move(children)), is_dense(is_dense),
+      type_id_to_child_idx(std::move(type_id_to_child_idx)) {
+}
+
+ArrowUnionInfo::~ArrowUnionInfo() {
+}
+
+idx_t ArrowUnionInfo::ChildCount() const {
+	return children.size();
+}
+
+const ArrowType &ArrowUnionInfo::GetChild(idx_t index) const {
+	D_ASSERT(index < children.size());
+	return *children[index];
+}
+
+bool ArrowUnionInfo::IsDense() const {
+	return is_dense;
+}
+
+idx_t ArrowUnionInfo::GetChildIndexForTypeId(int8_t type_id) const {
+	auto it = type_id_to_child_idx.find(type_id);
+	if (it == type_id_to_child_idx.end()) {
+		throw InvalidInputException("Arrow union type_id %d not found in union type mapping", type_id);
+	}
+	return it->second;
+}
+
+//===--------------------------------------------------------------------===//
 // ArrowArrayInfo
 //===--------------------------------------------------------------------===//
 

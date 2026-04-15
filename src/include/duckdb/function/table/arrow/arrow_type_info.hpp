@@ -144,6 +144,27 @@ private:
 	shared_ptr<ArrowType> child;
 };
 
+struct ArrowUnionInfo : public ArrowTypeInfo {
+public:
+	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::UNION;
+
+public:
+	ArrowUnionInfo(vector<shared_ptr<ArrowType>> children, bool is_dense,
+	               unordered_map<int8_t, idx_t> type_id_to_child_idx);
+	~ArrowUnionInfo() override;
+
+public:
+	idx_t ChildCount() const;
+	const ArrowType &GetChild(idx_t index) const;
+	bool IsDense() const;
+	idx_t GetChildIndexForTypeId(int8_t type_id) const;
+
+private:
+	vector<shared_ptr<ArrowType>> children;
+	bool is_dense;
+	unordered_map<int8_t, idx_t> type_id_to_child_idx;
+};
+
 struct ArrowArrayInfo : public ArrowTypeInfo {
 public:
 	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::ARRAY;

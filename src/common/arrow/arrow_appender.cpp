@@ -277,7 +277,11 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowScalarData<ArrowInterval, interval_t, ArrowIntervalConverter>>(append_data);
 		break;
 	case LogicalTypeId::UNION:
-		InitializeAppenderForType<ArrowUnionData>(append_data);
+		if (append_data.options.arrow_output_dense_union) {
+			InitializeAppenderForType<ArrowDenseUnionData>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowUnionData>(append_data);
+		}
 		break;
 	case LogicalTypeId::STRUCT:
 		InitializeAppenderForType<ArrowStructData>(append_data);

@@ -1538,12 +1538,14 @@ ClientProperties ClientContext::GetClientProperties() {
 	bool arrow_lossless_conversion = Settings::Get<ArrowLosslessConversionSetting>(*this);
 	bool arrow_use_string_view = Settings::Get<ProduceArrowStringViewSetting>(*this);
 	auto arrow_format_version = Settings::Get<ArrowOutputVersionSetting>(*this);
+	bool arrow_output_dense_union = Settings::Get<ArrowOutputDenseUnionSetting>(*this);
 	return {timezone,
 	        arrow_offset_size,
 	        arrow_use_list_view,
 	        arrow_use_string_view,
 	        arrow_lossless_conversion,
 	        arrow_format_version,
+	        arrow_output_dense_union,
 	        this};
 }
 
