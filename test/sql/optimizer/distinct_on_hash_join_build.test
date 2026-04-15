@@ -1,0 +1,513 @@
+# name: test/sql/optimizer/distinct_on_hash_join_build.test
+# description: Test the distinct_on_hash_join_build optimizer rule, which fuses a
+# group: [optimizer]
+
+#              DISTINCT ON subquery on the build side of a hash join into the hash
+#              table build itself, dropping duplicates at insert time.
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE probe(k INTEGER, p INTEGER);
+
+statement ok
+CREATE TABLE build_src(k INTEGER, v INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO probe VALUES (1, 100), (2, 200), (3, 300), (4, 400);
+
+# Three rows for k=1, three for k=2, one for k=3, none for k=4.
+statement ok
+INSERT INTO build_src VALUES
+    (1, 10, 'a'), (1, 11, 'b'), (1, 12, 'c'),
+    (2, 20, 'd'), (2, 21, 'e'), (2, 22, 'f'),
+    (3, 30, 'g');
+
+# ----------------------------------------------------------------------------
+# Positive case: INNER join with DISTINCT ON on the build side fires the rule.
+# We don't assert which payload value is returned (first-row-wins is acceptable),
+# only that we get exactly one row per matching key.
+# ----------------------------------------------------------------------------
+
+query I
+SELECT count(*) FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+3
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<REGEX>:.*Dedup Build: true.*
+
+# The DISTINCT node should be gone from the optimized plan.
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*DISTINCT.*
+
+statement ok
+PRAGMA explain_output='physical_only'
+
+# At the physical level, the HASH_GROUP_BY pipeline breaker should also be gone.
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+physical_plan	<!REGEX>:.*HASH_GROUP_BY.*
+
+# ----------------------------------------------------------------------------
+# Positive case: LEFT join. Unmatched left rows must be preserved with NULLs.
+# ----------------------------------------------------------------------------
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+LEFT JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<REGEX>:.*Dedup Build: true.*
+
+query II rowsort
+SELECT p.k, CASE WHEN b.v IS NULL THEN -1 ELSE 0 END AS matched
+FROM probe p
+LEFT JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+1	0
+2	0
+3	0
+4	-1
+
+# ----------------------------------------------------------------------------
+# Negative case: DISTINCT ON with ORDER BY uses an ordered first() aggregate.
+# Dedup-on-insert has no notion of ordering, so the rewrite must NOT fire.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src ORDER BY v DESC) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+# ----------------------------------------------------------------------------
+# Negative case: a join condition that references a column NOT in the dedup
+# target set is unsafe — dropping a duplicate row could discard the only row
+# carrying a matching value for the join condition.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT p.k, b.k FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.p = b.v;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+# ----------------------------------------------------------------------------
+# Negative case: plain DISTINCT (not DISTINCT ON) should NOT fire the rewrite.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+# ----------------------------------------------------------------------------
+# Negative case: GROUP BY with a non-first aggregate should NOT fire.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT p.k, b.maxv FROM probe p
+JOIN (SELECT k, MAX(v) AS maxv FROM build_src GROUP BY k) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+# ----------------------------------------------------------------------------
+# Negative case: FULL OUTER join must NOT fire the rewrite.
+# ----------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+FULL OUTER JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+# ----------------------------------------------------------------------------
+# Multi-column DISTINCT ON key.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE multi_probe(k1 INTEGER, k2 INTEGER);
+
+statement ok
+CREATE TABLE multi_build(k1 INTEGER, k2 INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO multi_probe VALUES (1, 10), (1, 20), (2, 10);
+
+statement ok
+INSERT INTO multi_build VALUES (1, 10, 100), (1, 10, 101), (1, 20, 200), (2, 10, 300);
+
+query II
+EXPLAIN SELECT p.k1, p.k2, b.v FROM multi_probe p
+JOIN (SELECT DISTINCT ON (k1, k2) k1, k2, v FROM multi_build) b
+  ON p.k1 = b.k1 AND p.k2 = b.k2;
+----
+logical_opt	<REGEX>:.*Dedup Build: true.*
+
+query III rowsort
+SELECT p.k1, p.k2, b.v FROM multi_probe p
+JOIN (SELECT DISTINCT ON (k1, k2) k1, k2, v FROM multi_build) b
+  ON p.k1 = b.k1 AND p.k2 = b.k2;
+----
+1	10	100
+1	20	200
+2	10	300
+
+# ----------------------------------------------------------------------------
+# Wide payload columns: confirm all payload columns are returned correctly.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE wide_build(k INTEGER, c1 INTEGER, c2 INTEGER, c3 INTEGER, c4 INTEGER, c5 VARCHAR, c6 VARCHAR);
+
+statement ok
+INSERT INTO wide_build VALUES
+    (1, 11, 12, 13, 14, 'a', 'b'),
+    (1, 21, 22, 23, 24, 'aa', 'bb'),
+    (2, 31, 32, 33, 34, 'c', 'd');
+
+query IIIIIIII rowsort
+SELECT p.k, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, p.p
+FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, c1, c2, c3, c4, c5, c6 FROM wide_build) b ON p.k = b.k;
+----
+1	11	12	13	14	a	b	100
+2	31	32	33	34	c	d	200
+
+# ----------------------------------------------------------------------------
+# Disable toggle: SET disabled_optimizers must turn the rewrite off.
+# ----------------------------------------------------------------------------
+
+statement ok
+SET disabled_optimizers = 'distinct_on_hash_join_build';
+
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+# DISTINCT node should be back when the rewrite is disabled.
+query II
+EXPLAIN SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+logical_opt	<REGEX>:.*DISTINCT.*
+
+statement ok
+RESET disabled_optimizers;
+
+# ----------------------------------------------------------------------------
+# NULL-key behavior: NULL keys on the build side are filtered out before insert
+# (PrepareKeys), the same way as a non-fused DISTINCT ON would behave for an
+# inner join. Verify the result is identical with and without the rewrite.
+# ----------------------------------------------------------------------------
+
+statement ok
+INSERT INTO build_src VALUES (NULL, 99, 'null_key');
+
+statement ok
+PRAGMA explain_output='all'
+
+query II rowsort
+SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+1	10
+2	20
+3	30
+
+statement ok
+SET disabled_optimizers = 'distinct_on_hash_join_build';
+
+query II rowsort
+SELECT p.k, b.v FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;
+----
+1	10
+2	20
+3	30
+
+statement ok
+RESET disabled_optimizers;
+
+# ============================================================================
+# Correctness regression tests for the safety check rewrite (C1, C2, C3 from
+# code review). Each pair compares fused vs disabled to confirm the optimizer
+# bails out cleanly on the unsafe shape rather than producing wrong results.
+# ============================================================================
+
+statement ok
+PRAGMA explain_output=optimized_only
+
+# ----------------------------------------------------------------------------
+# C1: DISTINCT ON columns are a strict superset of the join's equality keys.
+# Build has two rows that DISTINCT ON (k, w) keeps distinct, but the join
+# only equates on k. The fused HT keys on k alone, would collapse the rows,
+# and silently drop one of the matches. Optimizer must NOT fire.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE c1_p(k INTEGER);
+
+statement ok
+CREATE TABLE c1_b(k INTEGER, w INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO c1_p VALUES (1);
+
+statement ok
+INSERT INTO c1_b VALUES (1, 10, 100), (1, 20, 200);
+
+# Optimizer must not mark Dedup Build: true (dedup superset of join key).
+query II
+EXPLAIN SELECT p.k, b.v FROM c1_p p
+JOIN (SELECT DISTINCT ON (k, w) k, w, v FROM c1_b) b ON p.k = b.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+query I
+SELECT count(*) FROM c1_p p
+JOIN (SELECT DISTINCT ON (k, w) k, w, v FROM c1_b) b ON p.k = b.k;
+----
+2
+
+statement ok
+SET disabled_optimizers = 'distinct_on_hash_join_build';
+
+query I
+SELECT count(*) FROM c1_p p
+JOIN (SELECT DISTINCT ON (k, w) k, w, v FROM c1_b) b ON p.k = b.k;
+----
+2
+
+statement ok
+RESET disabled_optimizers;
+
+# ----------------------------------------------------------------------------
+# C2: join condition's RHS is wrapped in a non-injective expression (LOWER).
+# Two rows that DISTINCT ON (s) keeps distinct ('foo' and 'FOO') get hashed
+# to the same key by LOWER(d.s). The fused HT would collapse them and drop
+# one of the matches. Optimizer must NOT fire.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE c2_p(s VARCHAR);
+
+statement ok
+CREATE TABLE c2_b(s VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO c2_p VALUES ('foo');
+
+statement ok
+INSERT INTO c2_b VALUES ('foo', 100), ('FOO', 200);
+
+# Optimizer must not mark Dedup Build: true (RHS is a function call, not a column ref).
+query II
+EXPLAIN SELECT p.s, b.v FROM c2_p p
+JOIN (SELECT DISTINCT ON (s) s, v FROM c2_b) b ON p.s = LOWER(b.s);
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+query I
+SELECT count(*) FROM c2_p p
+JOIN (SELECT DISTINCT ON (s) s, v FROM c2_b) b ON p.s = LOWER(b.s);
+----
+2
+
+statement ok
+SET disabled_optimizers = 'distinct_on_hash_join_build';
+
+query I
+SELECT count(*) FROM c2_p p
+JOIN (SELECT DISTINCT ON (s) s, v FROM c2_b) b ON p.s = LOWER(b.s);
+----
+2
+
+statement ok
+RESET disabled_optimizers;
+
+# ----------------------------------------------------------------------------
+# C3: join contains a non-equality condition (NOT EQUAL) alongside an equality.
+# The fused HT keys only on the equality columns; the != is a residual that
+# the join evaluates against whichever row the HT happened to keep first —
+# non-deterministic and potentially different from the unfused query.
+# Optimizer must NOT fire.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE c3_p(k INTEGER, w INTEGER);
+
+statement ok
+CREATE TABLE c3_b(k INTEGER, w INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO c3_p VALUES (1, 10);
+
+statement ok
+INSERT INTO c3_b VALUES (1, 10, 100), (1, 20, 200);
+
+# Optimizer must not mark Dedup Build: true (cond contains a !=).
+query II
+EXPLAIN SELECT p.k, b.v FROM c3_p p
+JOIN (SELECT DISTINCT ON (k, w) k, w, v FROM c3_b) b ON p.k = b.k AND p.w != b.w;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+query II rowsort
+SELECT p.k, b.v FROM c3_p p
+JOIN (SELECT DISTINCT ON (k, w) k, w, v FROM c3_b) b ON p.k = b.k AND p.w != b.w;
+----
+1	200
+
+statement ok
+SET disabled_optimizers = 'distinct_on_hash_join_build';
+
+query II rowsort
+SELECT p.k, b.v FROM c3_p p
+JOIN (SELECT DISTINCT ON (k, w) k, w, v FROM c3_b) b ON p.k = b.k AND p.w != b.w;
+----
+1	200
+
+statement ok
+RESET disabled_optimizers;
+
+# ----------------------------------------------------------------------------
+# Positive case: dedup set equals join key set (the strict shape we now require).
+# Multi-column DISTINCT ON, multi-column join condition, all columns line up.
+# ----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE multi_p(k1 INTEGER, k2 INTEGER);
+
+statement ok
+CREATE TABLE multi_b(k1 INTEGER, k2 INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO multi_p VALUES (1, 10), (2, 20);
+
+statement ok
+INSERT INTO multi_b VALUES (1, 10, 100), (1, 10, 101), (2, 20, 200), (2, 20, 201);
+
+query II
+EXPLAIN SELECT p.k1, b.v FROM multi_p p
+JOIN (SELECT DISTINCT ON (k1, k2) k1, k2, v FROM multi_b) b ON p.k1 = b.k1 AND p.k2 = b.k2;
+----
+logical_opt	<REGEX>:.*Dedup Build: true.*
+
+query II rowsort
+SELECT p.k1, b.v FROM multi_p p
+JOIN (SELECT DISTINCT ON (k1, k2) k1, k2, v FROM multi_b) b ON p.k1 = b.k1 AND p.k2 = b.k2;
+----
+1	100
+2	200
+
+# ============================================================================
+# CTE reference: WITH d AS (SELECT DISTINCT ON ...) ... SELECT FROM probe JOIN d.
+# DuckDB inlines non-recursive CTEs by default, so by the time our pass runs the
+# CTE is just a subquery in the FROM clause and the optimizer fires normally.
+# This test pins the current behavior — if a future change disables CTE
+# inlining (or someone explicitly materializes with `WITH d AS MATERIALIZED ...`),
+# the walker will see a LogicalCTERef instead of the projection chain and the
+# rewrite will silently stop firing, which we'd want to know.
+#
+# Builds compiled with ALTERNATIVE_VERIFY=1 force-materialize every CTE (see
+# src/parser/transform/helpers/transform_cte.cpp) which inverts the inlined
+# positive assertion. Skip the remaining CTE tests under that mode — they
+# are the last tests in this file.
+# ============================================================================
+
+require no_alternative_verify
+
+statement ok
+PRAGMA explain_output=optimized_only
+
+statement ok
+CREATE TABLE cte_p(k INTEGER);
+
+statement ok
+CREATE TABLE cte_b(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO cte_p VALUES (1), (2), (3);
+
+statement ok
+INSERT INTO cte_b VALUES (1, 10), (1, 11), (2, 20), (3, 30);
+
+# Inlined CTE: the walker sees the unfused subquery and fires fusion.
+query II
+EXPLAIN
+WITH d AS (SELECT DISTINCT ON (k) k, v FROM cte_b)
+SELECT p.k, d.v FROM cte_p p JOIN d ON p.k = d.k;
+----
+logical_opt	<REGEX>:.*Dedup Build: true.*
+
+# Materialized CTE: the walker stops at LogicalCTERef (not a LogicalProjection),
+# so the rewrite must NOT fire. The query still has to produce the right answer.
+query II
+EXPLAIN
+WITH d AS MATERIALIZED (SELECT DISTINCT ON (k) k, v FROM cte_b)
+SELECT p.k, d.v FROM cte_p p JOIN d ON p.k = d.k;
+----
+logical_opt	<!REGEX>:.*Dedup Build: true.*
+
+statement ok
+PRAGMA explain_output='all'
+
+# Inlined CTE result count.
+query I
+SELECT count(*) FROM (
+  WITH d AS (SELECT DISTINCT ON (k) k, v FROM cte_b)
+  SELECT p.k, d.v FROM cte_p p JOIN d ON p.k = d.k
+);
+----
+3
+
+# Materialized CTE result count — same answer via the unfused path.
+query I
+SELECT count(*) FROM (
+  WITH d AS MATERIALIZED (SELECT DISTINCT ON (k) k, v FROM cte_b)
+  SELECT p.k, d.v FROM cte_p p JOIN d ON p.k = d.k
+);
+----
+3
+
+statement ok
+SET disabled_optimizers = 'distinct_on_hash_join_build';
+
+query I
+SELECT count(*) FROM (
+  WITH d AS (SELECT DISTINCT ON (k) k, v FROM cte_b)
+  SELECT p.k, d.v FROM cte_p p JOIN d ON p.k = d.k
+);
+----
+3
+
+query I
+SELECT count(*) FROM (
+  WITH d AS MATERIALIZED (SELECT DISTINCT ON (k) k, v FROM cte_b)
+  SELECT p.k, d.v FROM cte_p p JOIN d ON p.k = d.k
+);
+----
+3
+
+statement ok
+RESET disabled_optimizers;

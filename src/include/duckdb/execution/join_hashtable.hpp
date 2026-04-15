@@ -199,7 +199,8 @@ public:
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, idx_t initial_radix_bits,
 	              const vector<idx_t> &output_columns, unique_ptr<ResidualPredicateInfo> residual_p,
-	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
+	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {},
+	              bool dedup_build_side = false);
 	~JoinHashTable();
 
 	//! Add the given data to the HT

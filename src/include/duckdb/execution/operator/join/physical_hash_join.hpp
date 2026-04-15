@@ -45,7 +45,8 @@ public:
 	                 vector<JoinCondition> conds, JoinType join_type,
 	                 const vector<ProjectionIndex> &left_projection_map,
 	                 const vector<ProjectionIndex> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info,
+	                 bool dedup_build = false);
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
@@ -70,6 +71,10 @@ public:
 	JoinProjectionColumns lhs_probe_columns;
 	//! Mapping from lhs_output_columns positions to lhs_probe_columns positions
 	vector<idx_t> lhs_output_in_probe;
+
+	//! If true, the build-side hash table deduplicates on the join keys at insert time
+	//! (first row wins per key). Set by the DistinctOnHashJoinBuild optimizer.
+	bool dedup_build = false;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

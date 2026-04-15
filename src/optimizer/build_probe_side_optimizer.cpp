@@ -52,7 +52,7 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 	op.ResolveOperatorTypes();
 }
 
-static void FlipChildren(LogicalOperator &op) {
+void BuildProbeSideOptimizer::FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:

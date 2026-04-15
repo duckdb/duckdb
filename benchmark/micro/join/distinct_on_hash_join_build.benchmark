@@ -1,0 +1,17 @@
+# name: benchmark/micro/join/distinct_on_hash_join_build.benchmark
+# description: Inner hash join with a DISTINCT ON subquery on the build side. Exercises
+# group: [join]
+
+#              the DistinctOnHashJoinBuild optimizer fusion: dedup-on-insert into the
+#              hash table replaces the separate HASH_GROUP_BY pipeline breaker.
+
+name Distinct On Hash Join Build
+group join
+
+load
+CREATE TABLE probe AS SELECT range AS k FROM range(1000000);
+CREATE TABLE build_src AS SELECT range % 1000000 AS k, range AS v FROM range(10000000);
+
+run
+SELECT count(*), sum(b.v) FROM probe p
+JOIN (SELECT DISTINCT ON (k) k, v FROM build_src) b ON p.k = b.k;

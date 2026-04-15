@@ -36,6 +36,10 @@ public:
 	bool delim_flipped = false;
 	//! (If join_type == MARK) can this comparison join be converted from a mark join to semi
 	bool convert_mark_to_semi = true;
+	//! Set by the DistinctOnHashJoinBuild optimizer: instructs the build-side hash table to
+	//! deduplicate on the join keys at insert time (first row wins per key). Only valid for
+	//! INNER/LEFT hash joins where every join condition references only deduplicated columns.
+	bool dedup_build = false;
 	//! Scans where we should push generated filters into (if any)
 	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
 

@@ -27,6 +27,9 @@ InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() cons
 		}
 	}
 	result["Conditions"] = conditions_info;
+	if (dedup_build) {
+		result["Dedup Build"] = "true";
+	}
 	SetParamsEstimatedCardinality(result);
 
 	return result;
