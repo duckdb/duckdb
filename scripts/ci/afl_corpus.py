@@ -13,13 +13,13 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 
 DEFAULT_TARGET = Path("build/fuzzer/test/unittest")
@@ -41,7 +41,7 @@ class CorpusConfig:
     glob_pattern: str = DEFAULT_GLOB_PATTERN
     jobs: int = DEFAULT_JOBS
     target: Path = DEFAULT_TARGET
-    afl_cmin_cmd: tuple[str, ...] = (DEFAULT_AFL_CMIN_BIN,)
+    afl_cmin_cmd: str = DEFAULT_AFL_CMIN_BIN
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,9 +72,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--afl-cmin",
-        nargs="+",
-        default=[DEFAULT_AFL_CMIN_BIN],
-        help=f"afl-cmin executable and optional leading flags (default: {DEFAULT_AFL_CMIN_BIN})",
+        default=DEFAULT_AFL_CMIN_BIN,
+        help=f"afl-cmin executable and optional leading flags as one string (default: {DEFAULT_AFL_CMIN_BIN})",
     )
     return parser.parse_args()
 
@@ -115,17 +114,14 @@ def stage_grouped_raw_corpus(test_files: list[Path], raw_root: Path) -> dict[str
     return groups
 
 
-def normalize_afl_cmin_cmd(afl_cmin: str | Sequence[str]) -> list[str]:
-    if isinstance(afl_cmin, str):
-        cmd = [afl_cmin]
-    else:
-        cmd = list(afl_cmin)
+def normalize_afl_cmin_cmd(afl_cmin: str) -> list[str]:
+    cmd = shlex.split(afl_cmin)
     if not cmd:
         raise ValueError("afl-cmin command must include a binary")
     return cmd
 
 
-def run_afl_cmin(task: GroupTask, afl_cmin_cmd: Sequence[str], target: Path) -> tuple[str, int, str, str]:
+def run_afl_cmin(task: GroupTask, afl_cmin_cmd: list[str], target: Path) -> tuple[str, int, str, str]:
     cmd = [
         *afl_cmin_cmd,
         "-i",
@@ -162,7 +158,7 @@ def merge_minimized(min_root: Path, final_dir: Path) -> int:
     return copied
 
 
-def validate_environment(afl_cmin_cmd: Sequence[str], target: Path) -> None:
+def validate_environment(afl_cmin_cmd: list[str], target: Path) -> None:
     afl_cmin_bin = afl_cmin_cmd[0]
     if shutil.which(afl_cmin_bin) is None:
         raise RuntimeError(f"{afl_cmin_bin} not found in PATH")
@@ -249,7 +245,7 @@ def main() -> int:
         glob_pattern=args.glob,
         jobs=args.jobs,
         target=args.target,
-        afl_cmin_cmd=tuple(args.afl_cmin),
+        afl_cmin_cmd=args.afl_cmin,
     )
     return run(config)
 

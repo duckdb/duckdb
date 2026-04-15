@@ -62,7 +62,7 @@ class FuzzCorpusTest(unittest.TestCase):
                 glob_pattern=test_glob,
                 jobs=2,
                 target=fake_target,
-                afl_cmin_cmd=("fake-afl-cmin", "-e"),
+                afl_cmin_cmd="fake-afl-cmin -e",
             )
 
             with (
