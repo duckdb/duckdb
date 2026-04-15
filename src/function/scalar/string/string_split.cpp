@@ -9,6 +9,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -133,11 +134,39 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 		}
 		StringSplitInput split_input(result, child_entry, total_splits);
 		if (!delim_entry.IsValid()) {
-			// delim is NULL: copy the complete entry
-			split_input.AddSplit(input_entry.GetValue().GetData(), input_entry.GetValue().GetSize(), 0);
-			result_data[i].length = 1;
+			// PG compat: NULL delim splits the input into individual UTF-8
+			// characters (pg_mblen_range).  Empty input -> empty list.
+			auto input_data = input_entry.GetValue().GetData();
+			auto input_size = input_entry.GetValue().GetSize();
+			idx_t list_idx = 0;
+			idx_t pos = 0;
+			while (pos < input_size) {
+				int char_len = 0;
+				Utf8Proc::UTF8ToCodepoint(input_data + pos, char_len);
+				if (char_len <= 0 || pos + static_cast<idx_t>(char_len) > input_size) {
+					char_len = 1; // fallback for invalid UTF-8
+				}
+				split_input.AddSplit(input_data + pos, static_cast<idx_t>(char_len), list_idx);
+				list_idx++;
+				pos += static_cast<idx_t>(char_len);
+			}
+			result_data[i].length = list_idx;
 			result_data[i].offset = total_splits;
-			total_splits++;
+			total_splits += list_idx;
+			continue;
+		}
+		// PG compat: empty delimiter returns the input as a single-element list
+		// (or empty list if input is also empty), not a per-character split.
+		if (delim_entry.GetValue().GetSize() == 0) {
+			if (input_entry.GetValue().GetSize() > 0) {
+				split_input.AddSplit(input_entry.GetValue().GetData(), input_entry.GetValue().GetSize(), 0);
+				result_data[i].length = 1;
+				result_data[i].offset = total_splits;
+				total_splits++;
+			} else {
+				result_data[i].length = 0;
+				result_data[i].offset = total_splits;
+			}
 			continue;
 		}
 		auto list_length = StringSplitter::Split<OP>(input_entry.GetValue(), delim_entry.GetValue(), split_input, data);

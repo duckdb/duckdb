@@ -141,10 +141,15 @@ static int FigureColnameInternal(const BaseExpression &expr, string &name) {
 		case ExpressionType::ARRAY_CONSTRUCTOR:
 			name = "array";
 			return 2;
-		// PG: A_Indirection with integer subscript -> "array"
+		// PG: A_Indirection with only subscripts (no field names) -> recurse
+		// into the source expression.  Matches PG's FigureColnameInternal
+		// which uses the last string field name (if any) or falls back to
+		// the source expression's name.
 		case ExpressionType::ARRAY_EXTRACT:
-			name = "array";
-			return 2;
+			if (!op.children.empty()) {
+				return FigureColnameInternal(*op.children[0], name);
+			}
+			return 0;
 		// PG: T_A_Indirection -- find last field name
 		case ExpressionType::STRUCT_EXTRACT:
 			if (op.children.size() == 2 && op.children[1]->expression_class == ExpressionClass::CONSTANT) {
