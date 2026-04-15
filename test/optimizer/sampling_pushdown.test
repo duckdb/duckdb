@@ -57,6 +57,14 @@ EXPLAIN SELECT i FROM integers1 USING SAMPLE 2 ROWS (system)
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*System: 2 rows.*
 
+# Row-count system sampling: SamplingPushdown injects a LogicalLimit, but LogicalSample is
+# removed so plan_sample.cpp is not applied for that subtree. The physical plan must not
+# stack two LIMIT operators (would duplicate Limit: N in the rendered plan).
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE 2 ROWS (system)
+----
+physical_plan	<!REGEX>:.*Limit:.*Limit:.*
+
 # system sampling with row count using explicit method syntax: pushdown is supported
 query II
 EXPLAIN SELECT i FROM integers1 USING SAMPLE system(2 ROWS)

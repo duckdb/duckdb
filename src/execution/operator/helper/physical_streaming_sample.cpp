@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_streaming_sample.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -61,15 +62,10 @@ void PhysicalStreamingSample::SystemSampleRows(DataChunk &input, DataChunk &resu
 
 	// We take rows from the beginning of the chunk rather than randomly
 	// selecting positions to keep sampling fast and consistent.
-	idx_t rows_to_take = static_cast<idx_t>(std::ceil(rate * static_cast<double>(input.size())));
-	if (rows_to_take < 1) {
-		rows_to_take = 1;
-	}
-	if (rows_to_take > input.size()) {
-		rows_to_take = input.size();
-	}
-	SelectionVector sel(0, rows_to_take);
-	result.Slice(input, sel, rows_to_take);
+	const idx_t rows_to_take = ClampValue(LossyNumericCast<idx_t>(std::ceil(rate * static_cast<double>(input.size()))),
+	                                      idx_t(1), input.size());
+	result.Reference(input);
+	result.Slice(0, rows_to_take);
 }
 
 void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state_p) const {

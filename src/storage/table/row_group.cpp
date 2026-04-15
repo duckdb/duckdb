@@ -619,18 +619,10 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 
 				// To satisfy the distribution requirement while remaining deterministic,
 				// consistent across all paths, and fast (via early stopping), we take
-				// a fraction of rows from every chunk.
-				idx_t rows_to_take = static_cast<idx_t>(std::ceil(rate * STANDARD_VECTOR_SIZE));
-				if (rows_to_take < 1) {
-					rows_to_take = 1;
-				}
-				if (rows_to_take > max_count) {
-					rows_to_take = max_count;
-				}
-
-				// Adjust max_count to limit the number of rows scanned from this chunk.
-				// The actual count may be further reduced by filters or deletions.
-				max_count = rows_to_take;
+				// a fraction of rows from every chunk, clamped to [1, max_count].
+				max_count =
+				    ClampValue(LossyNumericCast<idx_t>(std::ceil(rate * static_cast<double>(STANDARD_VECTOR_SIZE))),
+				               idx_t(1), max_count);
 			} else {
 				// Percentage-based system sampling: original behavior
 				if (state.random.NextRandom() > sampling_info.sample_rate) {

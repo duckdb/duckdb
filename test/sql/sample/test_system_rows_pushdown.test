@@ -33,6 +33,13 @@ EXPLAIN SELECT COUNT(*) FROM (SELECT i FROM pushdown_test) USING SAMPLE 100 ROWS
 ----
 physical_plan	<REGEX>:.*STREAMING_SAMPLE.*100 rows.*
 
+# Non-pushdown path (sample above a subquery): plan_sample wraps SYSTEM row sampling with a
+# single LIMIT/STREAMING_LIMIT. There must not be two stacked limits for the same N.
+query II
+EXPLAIN SELECT COUNT(*) FROM (SELECT i FROM pushdown_test) USING SAMPLE 100 ROWS (system)
+----
+physical_plan	<!REGEX>:.*Limit:.*Limit:.*
+
 
 # Multiple system samples in same query
 query I

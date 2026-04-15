@@ -12,6 +12,9 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 	D_ASSERT(op.children.size() == 1);
+	// Only reached when a LogicalSample survives optimization. Sampling pushdown removes
+	// LogicalSample over a plain table GET, so that path uses LogicalLimit + scan instead
+	// and never hits the row-count LIMIT wrap below for the same sample.
 
 	// For SYSTEM_SAMPLE with row count, we need to get the child's estimated cardinality
 	// BEFORE calling CreatePlan (which consumes the child).
@@ -61,6 +64,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		sample.children.push_back(plan);
 
 		if (!is_percentage) {
+			// Mirror sampling_pushdown.cpp: cap row count when LogicalSample is still present.
 			// As the sampling operator uses a distributed chunk-based approach it may
 			// oversample, so we wrap it with a LIMIT to ensure we stop as soon as the target is reached
 			// This also happens when no estimated cardinality is available.
