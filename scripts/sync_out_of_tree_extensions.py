@@ -405,10 +405,10 @@ VCPKG_REGISTRY_BASELINE = 'd485389ad737bb05a5e8afd1fbde5672b559f19e'
 VCPKG_REGISTRY_PACKAGES = ['avro-c', 'vcpkg-cmake']
 
 
-def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
+def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, output_dir):
     """
     Collect vcpkg.json files from all synced extensions, merge their dependencies
-    and overlay configuration, and write the result to build/vcpkg.json.
+    and overlay configuration, and write the result to <output_dir>/vcpkg.json.
 
     Overlay paths are stored as absolute paths so the manifest is valid regardless
     of which directory cmake is invoked from.
@@ -444,7 +444,7 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
         for rel_path in config.get('overlay-triplets', []):
             overlay_triplets.append(str((ext_dir / rel_path).resolve()))
 
-    out_path = repo_root / 'build' / 'vcpkg.json'
+    out_path = output_dir / 'vcpkg.json'
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not found_any:
@@ -454,7 +454,7 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
         with open(out_path, 'w', encoding='utf-8') as f:
             json.dump({'dependencies': []}, f, ensure_ascii=False, indent=4)
             f.write('\n')
-        print("  Wrote build/vcpkg.json with no dependencies.")
+        print(f"  Wrote {out_path} with no dependencies.")
         return
 
     if not os.environ.get('VCPKG_TOOLCHAIN_PATH'):
@@ -506,17 +506,24 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
         f.write('\n')
 
     dep_names = [d if isinstance(d, str) else d['name'] for d in final_deps]
-    print(f"  Wrote build/vcpkg.json with dependencies: {dep_names}")
+    print(f"  Wrote {out_path} with dependencies: {dep_names}")
 
 
 def main():
+    repo_root = Path(__file__).resolve().parent.parent
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--build-extensions', default=None, help='Semicolon-separated list of extension names')
     parser.add_argument('--extension-configs', default=None, help='Semicolon-separated list of cmake config file paths')
+    parser.add_argument(
+        '--output-dir',
+        default=str(repo_root / 'build'),
+        help='Directory to write the merged vcpkg.json into (default: build/)',
+    )
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parent.parent
     external_dir = repo_root / 'extension' / 'external'
+    output_dir = Path(args.output_dir)
 
     extensions = collect_extensions(repo_root, args.build_extensions, args.extension_configs)
 
@@ -531,10 +538,11 @@ def main():
                 print(f"\nERROR: {e}", file=sys.stderr)
                 sys.exit(1)
 
-    # Always write build/vcpkg.json so that VCPKG_MANIFEST_DIR can be set
-    # unconditionally in the Makefile.  When no extensions need vcpkg the file
-    # contains an empty dependency list; CMake/vcpkg will then install nothing.
-    merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root)
+    # Always write vcpkg.json into the requested output directory so that
+    # VCPKG_MANIFEST_DIR can be set unconditionally in the Makefile.  When no
+    # extensions need vcpkg the file contains an empty dependency list and
+    # CMake/vcpkg will install nothing.
+    merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root, output_dir)
 
     print("Sync complete.")
 
