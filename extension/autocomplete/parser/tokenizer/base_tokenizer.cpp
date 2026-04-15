@@ -352,7 +352,13 @@ bool BaseTokenizer::TokenizeInput() {
 			if (CharacterIsScientific(c)) {
 				// (e.g., "1ee5" is invalid)
 				if (!CharacterIsScientific(sql[i - 1])) {
-					break; // Valid 'e' or 'E', continue
+					// Require at least one digit before 'e'/'E' (e.g., ".e100" is not a number)
+					if (StringUtil::CharacterIsDigit(sql[last_pos])) {
+						break; // Number starts with a digit (e.g., "1e5", "1.e5")
+					}
+					if (StringUtil::CharacterIsDigit(sql[i - 1])) {
+						break; // Digit immediately before 'e' (e.g., ".1e5")
+					}
 				}
 			}
 
