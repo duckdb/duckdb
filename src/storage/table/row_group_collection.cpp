@@ -69,8 +69,10 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
       types(std::move(types_p)), owned_row_groups(make_shared_ptr<RowGroupSegmentTree>(*this, row_start)),
       allocation_size(0), default_row_group_append_mode(RowGroupAppendMode::APPEND_TO_EXISTING) {
+	// If the table contains shredded types (variant / geometry) then we can't append to an existing row group
 	for (auto &type : types) {
-		if (TypeVisitor::Contains(type, LogicalTypeId::VARIANT)) {
+		if (TypeVisitor::Contains(type, LogicalTypeId::VARIANT) ||
+		    TypeVisitor::Contains(type, LogicalTypeId::GEOMETRY)) {
 			default_row_group_append_mode = RowGroupAppendMode::REQUIRE_NEW;
 			break;
 		}
