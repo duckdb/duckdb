@@ -660,6 +660,7 @@ bloaty: reldebug bloaty/bloaty
 # Generate compile commands without actually building
 clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
+	cp .cache/clangd/debug/compile_commands.json .cache/clangd/compile_commands.json
 
 coverage-check:
 	./scripts/coverage_check.sh

@@ -1,0 +1,24 @@
+# name: test/sql/copy/csv/afl/test_fuzz_4379.test
+# description: fuzzer issue 4379
+# group: [afl]
+
+require skip_reload
+
+statement ok
+COPY (SELECT * FROM (VALUES
+    ('date,datetime,time,timestamp,time_tz'),
+    ('not-a-date,not-a-datetime,not-a-time,not-a-timestamp')
+) AS t(col)) TO '{TEST_DIR}/fuzz_4379.csv' (HEADER false, QUOTE '');
+
+statement ok
+FROM read_csv(
+    '{TEST_DIR}/fuzz_4379.csv',
+    columns={
+        'date': 'DATE',
+        'datetime': 'TIMESTAMPTZ',
+        'time': 'TIME',
+        'timestamp': 'TIMESTAMP',
+        'time_tz': 'TIMETZ'
+    },
+    null_padding=true,
+    store_rejects=true);

@@ -148,3 +148,11 @@ select TRY('hello');
 
 statement ok
 select TRY(123);
+
+query I
+select if(a, try(b), null) x
+from values (0, null), (1, 1), (1, 1) t(a, b);
+----
+NULL
+1
+1
