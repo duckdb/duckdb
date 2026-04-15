@@ -195,8 +195,6 @@ private:
 	vector<MetaBlockPointer> metadata_pointers;
 	//! Controls whether the next append creates a new row group or reuses the existing one
 	RowGroupAppendMode row_group_append_mode;
-	//! The default append mode, determined by column types (e.g. REQUIRE_NEW for VARIANT columns)
-	RowGroupAppendMode default_row_group_append_mode;
 };
 
 class RowGroupIterationHelper {

@@ -68,16 +68,15 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
       types(std::move(types_p)), owned_row_groups(make_shared_ptr<RowGroupSegmentTree>(*this, row_start)),
-      allocation_size(0), default_row_group_append_mode(RowGroupAppendMode::APPEND_TO_EXISTING) {
+      allocation_size(0), row_group_append_mode(RowGroupAppendMode::APPEND_TO_EXISTING) {
 	// If the table contains shredded types (variant / geometry) then we can't append to an existing row group
 	for (auto &type : types) {
 		if (TypeVisitor::Contains(type, LogicalTypeId::VARIANT) ||
 		    TypeVisitor::Contains(type, LogicalTypeId::GEOMETRY)) {
-			default_row_group_append_mode = RowGroupAppendMode::REQUIRE_NEW;
+			row_group_append_mode = RowGroupAppendMode::REQUIRE_NEW;
 			break;
 		}
 	}
-	row_group_append_mode = default_row_group_append_mode;
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -170,7 +169,7 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
-	row_group_append_mode = default_row_group_append_mode;
+	row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
 }
 
 optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
