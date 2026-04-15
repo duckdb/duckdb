@@ -347,18 +347,16 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		break;
 	}
 
-	// PG compat: in a SELECT list, if the scalar lookup won but a table
-	// function with the same name exists, prefer the table function so it
-	// expands to rows via the unnest rewrite below. Only when we're in a
-	// SelectBinder (not FROM-clause args) and not inside an UNNEST argument
-	// (unnest_level == 0), otherwise the rewrite creates nested UNNESTs.
+	// PG compat: in a SELECT list, certain functions that DuckDB exposes as
+	// both scalar (returning LIST) and table function should be treated as
+	// table functions to match PG's set-returning behaviour.
+	// Hardcoded list — extend as needed.
 	auto *select_binder = dynamic_cast<SelectBinder *>(this);
-	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY && depth == 0 &&
-	    select_binder && select_binder->unnest_level == 0) {
+	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY && depth == 0 && select_binder &&
+	    select_binder->unnest_level == 0 && function.function_name == "generate_series") {
 		QueryErrorContext error_context(function.GetQueryLocation());
 		EntryLookupInfo tbl_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
-		auto tbl_func =
-		    GetCatalogEntry(function.catalog, function.schema, tbl_lookup, OnEntryNotFound::RETURN_NULL);
+		auto tbl_func = GetCatalogEntry(function.catalog, function.schema, tbl_lookup, OnEntryNotFound::RETURN_NULL);
 		if (tbl_func && tbl_func->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			func = tbl_func;
 		}
