@@ -240,8 +240,8 @@ public:
 
 	// Registration methods
 	void RegisterAlter();
-	void RegisterAttach();
 	void RegisterAnalyze();
+	void RegisterAttach();
 	void RegisterCall();
 	void RegisterCheckpoint();
 	void RegisterComment();
@@ -386,12 +386,12 @@ private:
 	//                                                     optional_ptr<ParseResult> parse_result);
 	// static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer,
 	//                                                           optional_ptr<ParseResult> parse_result);
-	//
-	// // analyze.gram
-	// static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
-	//                                                           optional_ptr<ParseResult> parse_result);
-	// static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	//
+
+	// analyze.gram
+	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
+	                                                          ParseResult &parse_result);
+	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, ParseResult &parse_result);
+
 	// // call.gram
 	// static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
 	//                                                        optional_ptr<ParseResult> parse_result);

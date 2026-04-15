@@ -305,8 +305,16 @@ struct OptionalParseResult : ParseResult {
 		return optional_result != nullptr;
 	}
 
-	ParseResult &GetResult() {
+	ParseResult &GetResultUnsafe() {
 		D_ASSERT(optional_result);
+		return *optional_result;
+	}
+
+
+	ParseResult &GetResult() {
+		if (!optional_result) {
+			throw InternalException("OptionalParseResult is null");
+		}
 		return *optional_result;
 	}
 
