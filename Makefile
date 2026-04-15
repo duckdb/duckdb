@@ -436,6 +436,7 @@ fuzzer: ${EXTENSION_CONFIG_STEP}
 		echo "Error: AFL++ compiler wrappers not found. Need afl-clang-lto/lto++ or afl-clang-fast/fast++ (run: brew install afl++)"; \
 		exit 1; \
 	fi; \
+	rm -rf ./build/fuzzer && \
 	mkdir -p ./build/fuzzer && \
 	cd build/fuzzer && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_C_COMPILER=$$AFL_CC -DCMAKE_CXX_COMPILER=$$AFL_CXX -DDUCKDB_FUZZER=1 -DFORCE_DEBUG=1 -DBUILD_EXTENSIONS="jemalloc" -DBUILD_UNITTESTS=1 -DENABLE_UNITTEST_CPP_TESTS=0 -DCMAKE_BUILD_TYPE=Release ../.. && \
