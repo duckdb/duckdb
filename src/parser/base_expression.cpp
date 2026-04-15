@@ -41,8 +41,6 @@ static int FigureColnameInternal(const BaseExpression &expr, string &name) {
 			name = "count";
 		} else if (name == "trim") {
 			name = "btrim";
-		} else if (name == "array_agg") {
-			name = "array";
 		}
 		return 2;
 	}

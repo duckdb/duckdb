@@ -148,6 +148,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		case_expr->case_checks.push_back(std::move(check));
 		case_expr->else_expr = std::move(aggr);
 
+		case_expr->alias = "array"; // behave like pg
 		select_node->select_list.push_back(std::move(case_expr));
 
 		// FROM (...) tbl
