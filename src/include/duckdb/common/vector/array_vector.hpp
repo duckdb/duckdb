@@ -22,6 +22,10 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	idx_t Capacity() const override {
+		return capacity;
+	}
+	void ResetCapacity(idx_t capacity) override;
 	const ValidityMask &GetValidityMask() const override {
 		return validity;
 	}
@@ -50,7 +54,7 @@ private:
 	idx_t array_size = 0;
 	// How many arrays are currently stored in this buffer
 	// The child vector has size (array_size * size)
-	idx_t size = 0;
+	idx_t capacity = 0;
 };
 
 struct ArrayVector {

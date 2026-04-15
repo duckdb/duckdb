@@ -44,8 +44,8 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 		for (idx_t i = 0; i < count; i++) {
 			auto left_entry = left_data[i];
 			auto right_entry = right_data[i];
-			bool is_null = OP::Operation(left_entry.GetValue() > 0, right_entry.GetValue() > 0, !left_entry.IsValid(),
-			                             !right_entry.IsValid(), result_data[i]);
+			bool is_null = OP::Operation(left_entry.GetValueUnsafe() > 0, right_entry.GetValueUnsafe() > 0,
+			                             !left_entry.IsValid(), !right_entry.IsValid(), result_data[i]);
 			if (is_null) {
 				result_data.SetInvalid(i);
 			}

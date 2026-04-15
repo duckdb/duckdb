@@ -175,7 +175,7 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 	auto source_data = data + start * sizeof(T);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, source_data);
+	FlatVector::SetData(result, source_data, scan_count);
 }
 
 //===--------------------------------------------------------------------===//

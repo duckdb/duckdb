@@ -13,6 +13,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include "postgres_parser.hpp"
 
@@ -52,6 +53,19 @@ static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
 static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	// subsequent characters can also be between 0-9
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
+}
+
+static void ValidateUTF8Query(const string &query) {
+	UnicodeInvalidReason reason = UnicodeInvalidReason::INVALID_UNICODE;
+	size_t invalid_pos = 0;
+	auto unicode_type = Utf8Proc::Analyze(query.c_str(), query.size(), &reason, &invalid_pos);
+	if (unicode_type != UnicodeType::INVALID) {
+		return;
+	}
+	const char *reason_str =
+	    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte sequence mismatch" : "invalid unicode";
+	throw ParserException::SyntaxError(query, StringUtil::Format("Invalid UTF-8 in query (%s)", reason_str),
+	                                   optional_idx(NumericCast<idx_t>(invalid_pos)));
 }
 
 // This function strips unicode space characters from the query and replaces them with regular spaces
@@ -223,6 +237,7 @@ void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	ValidateUTF8Query(query);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
