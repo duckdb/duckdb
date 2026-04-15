@@ -85,7 +85,6 @@
 #endif
 
 #include "duckdb.hpp"
-#include "shell_fuzzer.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
@@ -3356,13 +3355,6 @@ int RunShell(int argc, const char **argv) {
 	return rc;
 }
 
-#ifdef DUCKDB_FUZZER
-int main(int argc, const char **argv) {
-	UNUSED_PARAMETER(argc);
-	UNUSED_PARAMETER(argv);
-	return RunFuzzer();
-}
-#else
 #if !((defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER))
 int main(int argc, const char **argv) {
 #else
@@ -3400,4 +3392,3 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	return rc;
 }
-#endif

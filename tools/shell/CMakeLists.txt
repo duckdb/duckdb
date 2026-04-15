@@ -17,7 +17,6 @@ include_directories(../../third_party/utf8proc/include)
 
 set(SHELL_SOURCES
     ${SHELL_SOURCES}
-    fuzzer.cpp
     shell_command_line_option.cpp
     shell_extension.cpp
     shell.cpp

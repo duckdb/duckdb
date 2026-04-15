@@ -47,7 +47,12 @@ else()
   add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 endif()
 
-add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
+set(UNITTEST_SOURCES unittest.cpp)
+if(DUCKDB_FUZZER)
+  list(APPEND UNITTEST_SOURCES unittest_fuzz.cpp)
+endif()
+
+add_executable(unittest ${UNITTEST_SOURCES} ${ALL_OBJECT_FILES})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
