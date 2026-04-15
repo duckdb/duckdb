@@ -35,26 +35,36 @@ void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
 	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
 		auto begin_info = make_uniq<TransactionInfo>(
 		    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
-		result_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+		auto begin_stmt = make_uniq<TransactionStatement>(std::move(begin_info));
+		begin_stmt->query = begin_stmt->ToString();
+		result_statements.push_back(std::move(begin_stmt));
 	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
 		// Here we do a `SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION';`, for the
 		// current transaction, to make sure multistatements/pragmas are fully transactional, and invalidate even with
 		// minor errors such as binder, parser, etc.
-		result_statements.push_back(make_uniq<SetVariableStatement>(
+		auto set_stmt = make_uniq<SetVariableStatement>(
 		    "current_transaction_invalidation_policy",
-		    make_uniq<ConstantExpression>(Value("ALL_ERRORS_INVALIDATE_TRANSACTION")), SetScope::GLOBAL));
+		    make_uniq<ConstantExpression>(Value("ALL_ERRORS_INVALIDATE_TRANSACTION")), SetScope::GLOBAL);
+		set_stmt->query = set_stmt->ToString();
+		result_statements.push_back(std::move(set_stmt));
 	}
+
 	// insert body_statements into result_statements
 	result_statements.insert(result_statements.end(), std::make_move_iterator(body_statements.begin()),
 	                         std::make_move_iterator(body_statements.end()));
+
 	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
 		auto commit_info = make_uniq<TransactionInfo>(
 		    TransactionType::COMMIT, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
-		result_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+		auto commit_stmt = make_uniq<TransactionStatement>(std::move(commit_info));
+		commit_stmt->query = commit_stmt->ToString();
+		result_statements.push_back(std::move(commit_stmt));
 	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
-		result_statements.push_back(
+		auto set_stmt =
 		    make_uniq<SetVariableStatement>("current_transaction_invalidation_policy",
-		                                    make_uniq<ConstantExpression>(Value("STANDARD_POLICY")), SetScope::GLOBAL));
+		                                    make_uniq<ConstantExpression>(Value("STANDARD_POLICY")), SetScope::GLOBAL);
+		set_stmt->query = set_stmt->ToString();
+		result_statements.push_back(std::move(set_stmt));
 	}
 }
 
