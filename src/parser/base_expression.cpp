@@ -183,6 +183,18 @@ string BaseExpression::GetName() const {
 	if (!alias.empty()) {
 		return alias;
 	}
+	// For generic expression display (e.g. EXPLAIN) fall back to the
+	// expression text rather than PG's "?column?" target-list fallback.
+	// PG-style target-list naming is in GetColumnName() below.
+	return ToString();
+}
+
+// PG-compatible target-list column naming (FigureColname in parse_target.c).
+// Used only when computing SELECT result column headers.
+string BaseExpression::GetColumnName() const {
+	if (!alias.empty()) {
+		return alias;
+	}
 	string name;
 	if (FigureColnameInternal(*this, name) > 0) {
 		return name;

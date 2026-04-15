@@ -110,8 +110,13 @@ public:
 	//! Returns true if the expression has a parameter
 	virtual bool HasParameter() const = 0;
 
-	//! Get the name of the expression
+	//! Get the name of the expression (used for EXPLAIN/display).  Returns
+	//! the alias if set, otherwise the expression text.
 	virtual string GetName() const;
+	//! PG-compatible target-list column name (port of FigureColname).  Only
+	//! used when computing SELECT result column headers — falls back to
+	//! "?column?" when no name can be derived.
+	string GetColumnName() const;
 	//! Convert the Expression to a String
 	virtual string ToString() const = 0;
 	//! Print the expression to stdout

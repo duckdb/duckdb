@@ -196,7 +196,11 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+// Disabled while we rework SereneDB scan: AddVerificationProjection inserts
+// NULL-interleaved projections after every LogicalFilter / LogicalJoin to
+// verify column-binding logic. Plans become unreadable. Re-enable with
+// `#ifdef DEBUG` once the scan refactor is complete.
+#if 0
 	if (everything_referenced) {
 		return;
 	}

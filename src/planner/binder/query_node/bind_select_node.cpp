@@ -450,7 +450,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &bind_state = result.bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result.names.push_back(expr->GetName());
+		result.names.push_back(expr->GetColumnName());
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
