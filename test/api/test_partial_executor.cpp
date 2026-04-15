@@ -41,9 +41,7 @@ TEST_CASE("TaskExecutor can execute partial tasks without busy spinning forever"
 
 	// WorkOnTasks finds the producer queue empty (all tasks in worker hands),
 	// exits its first loop, and enters `while (completed_tasks != total_tasks) {}`.
-	auto finished = std::async(std::launch::async, [&] {
-		executor.WorkOnTasks();
-	});
+	auto finished = std::async(std::launch::async, [&] { executor.WorkOnTasks(); });
 
 	// Kill background workers. Their in-flight tasks get re-enqueued as
 	// TASK_NOT_FINISHED and stranded — WorkOnTasks is already busy-spinning
