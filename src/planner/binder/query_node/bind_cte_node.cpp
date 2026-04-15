@@ -36,7 +36,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 			if (parent) {
 				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
-			if (++dml_cte_count > 1) {
+			if (++dml_cte_count > 1 && !in_trigger_expansion) {
 				throw BinderException("Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
 			}
 		}

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -521,6 +522,11 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
+
+	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
+		return std::move(*expanded);
+	}
+
 	if (node.on_conflict_info) {
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(node, table);

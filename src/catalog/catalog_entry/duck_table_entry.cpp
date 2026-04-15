@@ -1383,6 +1383,20 @@ void DuckTableEntry::ScanTriggers(CatalogTransaction transaction, const std::fun
 	triggers->Scan(transaction, callback);
 }
 
+void DuckTableEntry::GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing,
+                                         TriggerEventType event_type, vector<unique_ptr<QueryNode>> &trigger_bodies,
+                                         vector<TriggerForEach> &trigger_for_each) {
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.timing != timing || trigger.event_type != event_type) {
+			return;
+		}
+		D_ASSERT(trigger.trigger_action);
+		trigger_bodies.push_back(trigger.trigger_action->Copy());
+		trigger_for_each.push_back(trigger.for_each);
+	});
+}
+
 void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback) {
 	triggers->Scan(callback);
 }

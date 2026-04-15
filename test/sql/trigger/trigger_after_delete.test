@@ -1,0 +1,162 @@
+# name: test/sql/trigger/trigger_after_delete.test
+# description: Test AFTER DELETE trigger firing via DML CTE expansion
+# group: [trigger]
+
+require autocomplete
+
+statement ok
+CALL enable_peg_parser();
+
+# Basic: FOR EACH STATEMENT trigger fires once after DELETE
+statement ok
+CREATE TABLE target (id INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic AFTER DELETE ON target FOR EACH STATEMENT
+    INSERT INTO audit VALUES ('deleted');
+
+statement ok
+DELETE FROM target WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+1
+
+# Second DELETE fires the trigger again
+statement ok
+DELETE FROM target WHERE id = 2;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+2
+
+# Multi-row DELETE fires FOR EACH STATEMENT once
+statement ok
+DELETE FROM target;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+3
+
+# FOR EACH ROW is not yet supported - blocked at CREATE TRIGGER time
+statement error
+CREATE TRIGGER trg_row AFTER DELETE ON target FOR EACH ROW
+    INSERT INTO audit VALUES ('row');
+----
+Not implemented Error: FOR EACH ROW triggers are not yet supported
+
+# Trigger body failure rolls back the entire statement
+statement ok
+CREATE TABLE strict_target (id INTEGER);
+
+statement ok
+INSERT INTO strict_target VALUES (1);
+
+statement ok
+CREATE TABLE strict_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO strict_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_fail AFTER DELETE ON strict_target FOR EACH STATEMENT
+    INSERT INTO strict_log VALUES (999);
+
+statement error
+DELETE FROM strict_target;
+----
+Constraint Error:
+
+query I
+SELECT COUNT(*) FROM strict_target;
+----
+1
+
+query I
+SELECT COUNT(*) FROM strict_log;
+----
+1
+
+# Multiple triggers on the same event are not yet supported
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+CREATE TABLE t_multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_a AFTER DELETE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('a');
+
+statement error
+CREATE TRIGGER trg_multi_b AFTER DELETE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('b');
+----
+Not implemented Error: Multiple triggers per table event are not yet supported
+
+# Trigger body can be an UPDATE statement
+statement ok
+CREATE TABLE t_del_target (id INTEGER);
+
+statement ok
+INSERT INTO t_del_target VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE t_counter (n INTEGER);
+
+statement ok
+INSERT INTO t_counter VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_upd_body AFTER DELETE ON t_del_target FOR EACH STATEMENT
+    UPDATE t_counter SET n = n + 1;
+
+statement ok
+DELETE FROM t_del_target WHERE id = 1;
+
+query I
+SELECT n FROM t_counter;
+----
+1
+
+statement ok
+DELETE FROM t_del_target WHERE id = 2;
+
+query I
+SELECT n FROM t_counter;
+----
+2
+
+# Trigger body can be a DELETE statement
+statement ok
+CREATE TABLE t_del2_target (id INTEGER);
+
+statement ok
+INSERT INTO t_del2_target VALUES (1);
+
+statement ok
+CREATE TABLE t_scratch (id INTEGER);
+
+statement ok
+INSERT INTO t_scratch VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER trg_del_body AFTER DELETE ON t_del2_target FOR EACH STATEMENT
+    DELETE FROM t_scratch;
+
+statement ok
+DELETE FROM t_del2_target;
+
+query I
+SELECT COUNT(*) FROM t_scratch;
+----
+0

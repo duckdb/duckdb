@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -15,9 +16,11 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
@@ -459,6 +462,37 @@ void Binder::BindLogicalType(LogicalType &type) {
 	});
 }
 
+static bool TriggerBodyContains(QueryNode &body, const string &tname) {
+	bool found = false;
+
+	auto ref_callback = [&](TableRef &ref) {
+		if (found || ref.type != TableReferenceType::BASE_TABLE) {
+			return;
+		}
+		found = StringUtil::CIEquals(ref.Cast<BaseTableRef>().table_name, tname);
+	};
+
+	std::function<void(unique_ptr<ParsedExpression> &)> expr_callback = [&](unique_ptr<ParsedExpression> &expr) {
+		if (found) {
+			return;
+		}
+		if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+			ParsedExpressionIterator::EnumerateQueryNodeChildren(*expr->Cast<SubqueryExpression>().subquery->node,
+			                                                     expr_callback, ref_callback);
+		}
+		ParsedExpressionIterator::EnumerateChildren(*expr, expr_callback);
+	};
+
+	// InsertQueryNode stores its target as a plain string which
+	// EnumerateQueryNodeChildren does not visit - check it explicitly.
+	if (body.type == QueryNodeType::INSERT_QUERY_NODE) {
+		found = StringUtil::CIEquals(body.Cast<InsertQueryNode>().table, tname);
+	}
+
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(body, expr_callback, ref_callback);
+	return found;
+}
+
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
 	TableDescription table_description(create_trigger_info.base_table->catalog_name,
@@ -466,6 +500,9 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	                                   create_trigger_info.base_table->table_name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("CREATE TRIGGER requires a base table, not a view or subquery");
+	}
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto table_ptr = get.GetTable();
 	if (!table_ptr) {
@@ -501,9 +538,45 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	}
 
-	// Bind a copy of the trigger body to validate it (keep original unbound for serialization)
+	if (table.IsDuckTable()) {
+		auto &duck_table = table.Cast<DuckTableEntry>();
+		duck_table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+			auto &t = entry.Cast<TriggerCatalogEntry>();
+			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
+				// Triggers-to-CTE Expansion creates exactly one trigger CTE.
+				// We will support multiple triggers it in the next PRs.
+				throw NotImplementedException("Multiple triggers per table event are not yet supported");
+			}
+		});
+	}
+
+	// Block trigger bodies that read from or write to the trigger table.
+	// Reads from the trigger table currently unsupported (stale snapshot).
+	// Writes risk non-deterministic constraint conflicts (CTE pipeline order not guaranteed [yet]).
+	D_ASSERT(create_trigger_info.trigger_action);
+	if (TriggerBodyContains(*create_trigger_info.trigger_action, table.name)) {
+		throw NotImplementedException("Trigger body cannot reference the trigger's own table");
+	}
+
+	// Bind a copy to validate (keep original unbound for serialization).
+	// we don't want to expand the trigger body,
+	// since it's also not expanded on the DML statement's binding that fires the trigger
+	// RAII guard so that the flag is restored even if Bind() throws
+	struct ScopedInTriggerExpansion {
+		explicit ScopedInTriggerExpansion(bool &flag) : flag(flag) {
+			flag = true;
+		}
+		~ScopedInTriggerExpansion() {
+			flag = false;
+		}
+		bool &flag;
+	};
 	auto body_copy = create_trigger_info.trigger_action->Copy();
+	ScopedInTriggerExpansion trigger_guard(in_trigger_expansion);
 	Bind(*body_copy);
 
 	// Add table dependency

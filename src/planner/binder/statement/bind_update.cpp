@@ -136,6 +136,10 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	}
 	auto &table = *table_ptr;
 
+	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::UPDATE_EVENT)) {
+		return std::move(*expanded);
+	}
+
 	optional_ptr<LogicalGet> get;
 	if (node.from_table) {
 		auto from_binder = Binder::CreateBinder(context, this);

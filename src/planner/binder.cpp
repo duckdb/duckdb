@@ -1,8 +1,13 @@
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
@@ -64,6 +69,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
+		in_trigger_expansion = parent->in_trigger_expansion;
 	}
 }
 
@@ -576,6 +582,64 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 	}
 	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
 	return new_binder;
+}
+
+static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
+
+unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
+                                                          vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                          TableCatalogEntry &table, TriggerEventType event_type) {
+	if (in_trigger_expansion || !table.IsDuckTable()) {
+		return nullptr;
+	}
+	vector<unique_ptr<QueryNode>> trigger_bodies;
+	vector<TriggerForEach> trigger_for_each;
+	table.Cast<DuckTableEntry>().GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                                 TriggerTiming::AFTER, event_type, trigger_bodies,
+	                                                 trigger_for_each);
+	if (trigger_bodies.empty()) {
+		return nullptr;
+	}
+	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, trigger_bodies, trigger_for_each));
+}
+
+BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+                                           vector<unique_ptr<QueryNode>> &trigger_bodies,
+                                           vector<TriggerForEach> &trigger_for_each) {
+	// multiple triggers per table are not yet supported
+	D_ASSERT(trigger_bodies.size() == 1);
+
+	// Prevent bind-time re-expansion: the base CTE body is a copy of this same DML node on the
+	// same table, so without the flag BindNode would expand it again and loop indefinitely.
+	in_trigger_expansion = true;
+
+	if (returning_list.empty()) {
+		returning_list.push_back(make_uniq<StarExpression>());
+	}
+
+	auto base_cte = make_uniq<CommonTableExpressionInfo>();
+	base_cte->query_node = node.Copy();
+	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+
+	// Unreferenced DML CTE
+	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+	trig_cte->query_node = std::move(trigger_bodies[0]);
+	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+
+	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
+	auto outer = make_uniq<SelectNode>();
+	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
+	auto from_ref = make_uniq<BaseTableRef>();
+	from_ref->table_name = TRIGGER_BASE_CTE_NAME;
+	outer->from_table = std::move(from_ref);
+	outer->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
+	outer->cte_map.map["__duckdb_trigger_1"] = std::move(trig_cte);
+
+	auto bound = Bind(*outer);
+	auto &properties = GetStatementProperties();
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	return bound;
 }
 
 } // namespace duckdb

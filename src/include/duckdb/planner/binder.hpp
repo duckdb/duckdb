@@ -28,6 +28,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 
 //! fwd declare
 namespace duckdb_re2 {
@@ -356,6 +357,8 @@ private:
 	bool is_outside_flattened = true;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
+	//! Set during trigger expansion so nested binds skip re-expansion
+	bool in_trigger_expansion = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -448,6 +451,12 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
+	unique_ptr<BoundStatement> TryExpandAfterTriggers(QueryNode &node,
+	                                                  vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                  TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                   vector<unique_ptr<QueryNode>> &trigger_bodies,
+	                                   vector<TriggerForEach> &trigger_for_each);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 
