@@ -27,8 +27,6 @@ struct WindowSourceTask {
 	idx_t group_idx = 0;
 	//! The thread index (for local state)
 	idx_t thread_idx = 0;
-	//! The total block index count
-	idx_t max_idx = 0;
 	//! The first block index count
 	idx_t begin_idx = 0;
 	//! The end block index count
@@ -140,8 +138,7 @@ public:
 			task.thread_idx = next_task % group_threads;
 			task.group_idx = hash_bin;
 			task.begin_idx = task.thread_idx * per_thread;
-			task.max_idx = ChunkCount();
-			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
+			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, ChunkCount());
 			++next_task;
 			return true;
 		}
@@ -181,17 +178,17 @@ public:
 	//! The next task to process
 	idx_t next_task = 0;
 	//! Count of sorted run blocks
-	std::atomic<idx_t> sorted;
+	atomic<idx_t> sorted;
 	//! Count of materialized run blocks
-	std::atomic<idx_t> materialized;
+	atomic<idx_t> materialized;
 	//! Count of masked blocks
-	std::atomic<idx_t> masked;
+	atomic<idx_t> masked;
 	//! Count of sunk rows
-	std::atomic<idx_t> sunk;
+	atomic<idx_t> sunk;
 	//! Count of finalized blocks
-	std::atomic<idx_t> finalized;
+	atomic<idx_t> finalized;
 	//! Count of completed tasks
-	std::atomic<idx_t> completed;
+	atomic<idx_t> completed;
 	//! The output ordering batch index this hash group starts at
 	idx_t batch_base;
 };
