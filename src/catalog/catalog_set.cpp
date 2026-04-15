@@ -1,6 +1,9 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -327,6 +330,18 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		if (!value) {
 			// alter failed, but did not result in an error
 			return true;
+		}
+	}
+
+	// If this ALTER produced a new DuckTableEntry, refresh the LocalTableStorage's table_entry
+	// pointer for this transaction so that a later commit-time LocalStorage::Flush pushes an
+	// AppendInfo referencing the current DuckTableEntry (not the pre-ALTER one).
+	if (transaction.context && value->type == CatalogType::TABLE_ENTRY) {
+		auto &tce = value->Cast<TableCatalogEntry>();
+		if (tce.IsDuckTable()) {
+			auto &new_entry = tce.Cast<DuckTableEntry>();
+			auto &new_storage = new_entry.GetStorage();
+			LocalStorage::Get(*transaction.context, new_storage.db).RegisterTableEntry(new_storage, new_entry);
 		}
 	}
 

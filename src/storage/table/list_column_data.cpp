@@ -258,12 +258,12 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void ListColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                             Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void ListColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                   const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                   idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("List Update Column is not supported");

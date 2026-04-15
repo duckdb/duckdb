@@ -1,0 +1,74 @@
+# name: test/sql/transactions/test_ddl_after_dml.test
+# description: Within the same transaction, DDL is allowed to be executed after DML
+# group: [transactions]
+
+load {TEST_DIR}/test_ddl_after_dml.db
+
+statement ok
+CREATE TABLE t1 (id INT)
+
+statement ok
+INSERT INTO t1 (id) VALUES (1)
+
+# Test 1: UPDATE followed by ADD COLUMN in the same transaction.
+statement ok
+BEGIN
+
+statement ok
+UPDATE t1 SET id = 2 WHERE id = 1
+
+statement ok
+ALTER TABLE t1 ADD COLUMN c0 INT DEFAULT 0
+
+statement ok
+COMMIT
+
+query II
+select * from t1
+----
+2	0
+
+# Test 2: Two ALTERs one transaction
+# The ADD COLUMN DEFAULT FUNCTION() is internally expanded into
+# ADD + UPDATE + SET DEFAULT (see PR #20224).
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE t1 ADD COLUMN c1 VARCHAR DEFAULT repeat('a', 5)
+
+statement ok
+ALTER TABLE t1 DROP COLUMN c0
+
+statement ok
+COMMIT
+
+query II
+select * from t1;
+----
+2	aaaaa
+
+# Test 3: INSERT followed by ADD COLUMN in the same transaction.
+# This test the LocalStorage Flush path: the new LocalTableStorage created
+# by ALTER must still be able to find the post-ALTER DuckTableEntry at commit.
+statement ok
+CREATE TABLE t2 (id INT)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO t2 (id) VALUES (10), (20), (30)
+
+statement ok
+ALTER TABLE t2 ADD COLUMN c0 INT DEFAULT 7
+
+statement ok
+COMMIT
+
+query II
+SELECT * FROM t2 ORDER BY id
+----
+10	7
+20	7
+30	7

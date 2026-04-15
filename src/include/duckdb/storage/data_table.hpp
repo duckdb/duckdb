@@ -134,7 +134,7 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(ClientContext &context, OptimisticWriteCollection &collection);
+	void LocalMerge(ClientContext &context, DuckTableEntry &table_entry, OptimisticWriteCollection &collection);
 	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
 	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<OptimisticWriteCollection> collection);
@@ -148,12 +148,13 @@ public:
 	unique_ptr<TableDeleteState> InitializeDelete(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Delete the entries with the specified row identifier from the table
-	idx_t Delete(TableDeleteState &state, ClientContext &context, Vector &row_ids, idx_t count);
+	idx_t Delete(TableDeleteState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
+	             idx_t count);
 
 	unique_ptr<TableUpdateState> InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Update the entries with the specified row identifier from the table
-	void Update(TableUpdateState &state, ClientContext &context, Vector &row_ids,
+	void Update(TableUpdateState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
 	            const vector<PhysicalIndex> &column_ids, DataChunk &data);
 	//! Update a single (sub-)column along a column path
 	//! The column_path vector is a *path* towards a column within the table

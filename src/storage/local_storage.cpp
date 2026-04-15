@@ -1,5 +1,6 @@
 #include "duckdb/transaction/local_storage.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
@@ -419,13 +420,25 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 	return storage->GetCollection().NextParallelScan(context, state, scan_state);
 }
 
-void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
+void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry) {
 	state.storage = &table_manager.GetOrCreateStorage(context, table);
+	state.storage->table_entry = &table_entry;
 	state.storage->GetCollection().InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
-void LocalStorage::InitializeStorage(LocalAppendState &state, DataTable &table) {
+void LocalStorage::InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry) {
 	state.storage = &table_manager.GetOrCreateStorage(context, table);
+	state.storage->table_entry = &table_entry;
+}
+
+void LocalStorage::RegisterTableEntry(DataTable &table, DuckTableEntry &table_entry) {
+	// If this transaction already has local storage for `table`, refresh its table_entry.
+	// No entry means this transaction has no local data for the table - nothing to update.
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return;
+	}
+	storage->table_entry = &table_entry;
 }
 
 void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk) {
@@ -484,8 +497,9 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 	state.storage->GetCollection().FinalizeAppend(state.append_state.transaction, state.append_state);
 }
 
-void LocalStorage::LocalMerge(DataTable &table, OptimisticWriteCollection &collection) {
+void LocalStorage::LocalMerge(DataTable &table, DuckTableEntry &table_entry, OptimisticWriteCollection &collection) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	storage.table_entry = &table_entry;
 	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetTotalRows());
@@ -533,7 +547,7 @@ idx_t LocalStorage::EstimatedSize() {
 	return table_manager.EstimatedSize();
 }
 
-idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
+idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector &row_ids, idx_t count) {
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
@@ -544,19 +558,19 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 	}
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	idx_t delete_count = storage->GetCollection().Delete(TransactionData(0, 0), table, ids, count);
+	idx_t delete_count = storage->GetCollection().Delete(TransactionData(0, 0), table_entry, ids, count);
 	storage->deleted_rows += delete_count;
 	return delete_count;
 }
 
-void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids,
-                          DataChunk &updates) {
+void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector &row_ids,
+                          const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	storage->GetCollection().Update(TransactionData(0, 0), table, ids, column_ids, updates);
+	storage->GetCollection().Update(TransactionData(0, 0), table_entry, ids, column_ids, updates);
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
@@ -594,7 +608,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// after that is successful - append to the table
 		storage.AppendToTable(transaction, append_state);
 	}
-	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
+	// table_entry is set by InitializeAppend/InitializeStorage and is refreshed by
+	// DuckTableEntry::AlterEntry -> LocalStorage::RegisterTableEntry whenever ALTER produces a new entry.
+	D_ASSERT(storage.table_entry);
+	transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.

@@ -737,7 +737,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count) {
+idx_t RowGroupCollection::Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count) {
 	idx_t delete_count = 0;
 	// delete is in the row groups
 	// we need to figure out for each id to which row group it belongs
@@ -764,7 +764,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 				break;
 			}
 		}
-		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start, row_start);
+		delete_count += current_row_group.Delete(transaction, table_entry, ids + start, pos - start, row_start);
 	} while (pos < count);
 
 	return delete_count;
@@ -798,7 +798,7 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupCollection::NextUpdateRowGroup(RowGr
 	return row_group;
 }
 
-void RowGroupCollection::Update(TransactionData transaction, DataTable &data_table, row_t *ids,
+void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids,
                                 const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
@@ -808,7 +808,7 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 		auto row_group = NextUpdateRowGroup(*row_groups, ids, pos, updates.size());
 
 		auto &current_row_group = row_group->GetNode();
-		current_row_group.Update(transaction, data_table, updates, ids, start, pos - start, column_ids,
+		current_row_group.Update(transaction, table_entry, updates, ids, start, pos - start, column_ids,
 		                         row_group->GetRowStart());
 
 		auto l = stats.GetLock();
@@ -1056,7 +1056,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 }
 
-void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
+void RowGroupCollection::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,
                                       const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
@@ -1066,7 +1066,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &da
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(*row_groups, ids, pos, updates.size());
 		auto &current_row_group = row_group->GetNode();
-		current_row_group.UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path,
+		current_row_group.UpdateColumn(transaction, table_entry, updates, row_ids, start, pos - start, column_path,
 		                               row_group->GetRowStart());
 
 		auto lock = stats.GetLock();

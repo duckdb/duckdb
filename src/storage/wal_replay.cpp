@@ -1206,7 +1206,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		}
 	}
 	TableDeleteState delete_state;
-	storage.Delete(delete_state, context, row_identifiers, chunk.size());
+	storage.Delete(delete_state, context, state.current_table->Cast<DuckTableEntry>(), row_identifiers, chunk.size());
 }
 
 void WriteAheadLogDeserializer::ReplayUpdate() {
