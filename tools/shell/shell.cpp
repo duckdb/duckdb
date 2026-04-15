@@ -85,11 +85,15 @@
 #endif
 
 #include "duckdb.hpp"
+#include "shell_context_impl.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/main/shell_extension.hpp"
 
 using namespace duckdb_shell;
 
@@ -2448,9 +2452,15 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	string error_msg;
 	auto metadata_command = FindMetadataCommand(args[0], error_msg);
 	if (!metadata_command) {
-		// command not found
-		PrintDatabaseError(error_msg);
-		rc = 1;
+		// Try extension-registered commands before giving up
+		int ext_rc = TryExtensionCommand(args);
+		if (ext_rc >= 0) {
+			rc = ext_rc;
+		} else {
+			// command not found
+			PrintDatabaseError(error_msg);
+			rc = 1;
+		}
 	} else {
 		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
@@ -2484,6 +2494,55 @@ int ShellState::DoMetaCommand(const string &zLine) {
 		}
 	}
 	return rc;
+}
+
+int ShellState::TryExtensionCommand(const vector<string> &args) {
+	if (!db || !db->instance) {
+		return -1;
+	}
+	auto &callback_mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+	for (auto &ext : callback_mgr.ShellExtensions()) {
+		for (auto &cmd : ext->commands) {
+			idx_t n = args[0].size();
+			idx_t match_size = cmd.match_size ? cmd.match_size : n;
+			if (n < match_size || strncmp(args[0].c_str(), cmd.command.c_str(), n) != 0) {
+				continue;
+			}
+			// Found a match
+			if (safe_mode) {
+				PrintF(PrintOutput::STDERR, ".%s cannot be used in -safe mode\n", cmd.command.c_str());
+				return int(MetadataResult::FAIL);
+			}
+			if (!cmd.callback) {
+				PrintF(PrintOutput::STDERR, "Command \".%s\" has no callback\n", cmd.command.c_str());
+				return int(MetadataResult::FAIL);
+			}
+			// Lazily create the shell context
+			if (!shell_context) {
+				shell_context = make_uniq<ShellContextImpl>(*this);
+			}
+			MetadataResult result = MetadataResult::PRINT_USAGE;
+			try {
+				if (cmd.argument_count == 0 || cmd.argument_count == args.size()) {
+					auto shell_result = cmd.callback(*shell_context, args);
+					result = static_cast<MetadataResult>(static_cast<uint8_t>(shell_result));
+				}
+				if (result == MetadataResult::PRINT_USAGE) {
+					string error =
+					    StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
+					error += StringUtil::Format("Usage: '.%s %s'", cmd.command.c_str(), cmd.usage.c_str());
+					PrintDatabaseError(error);
+					result = MetadataResult::FAIL;
+				}
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				PrintDatabaseError(error.Message());
+				result = MetadataResult::FAIL;
+			}
+			return int(result);
+		}
+	}
+	return -1; // no match
 }
 
 /*

@@ -130,6 +130,8 @@ public:
 	static void DisableMouseTracking();
 	static bool IsMultiline();
 	static void SetMultiLine(int ml);
+	static bool ForceSubmitOnEnter();
+	static void SetForceSubmitOnEnter(bool force);
 
 	static void ClearScreen();
 	static void Beep();

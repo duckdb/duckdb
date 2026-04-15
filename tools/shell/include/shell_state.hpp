@@ -42,6 +42,7 @@ struct ShellState;
 using duckdb::InternalException;
 using duckdb::InvalidInputException;
 using duckdb::to_string;
+class ShellContextImpl;
 struct Prompt;
 struct ShellProgressBar;
 struct PagerState;
@@ -282,6 +283,8 @@ public:
 	bool pager_is_active = false;
 	//! Shell highlighting mode
 	HighlightMode highlight_mode = HighlightMode::AUTOMATIC;
+	//! Shell context for extension commands (lazily created, persists for session)
+	unique_ptr<ShellContextImpl> shell_context;
 
 public:
 	ShellState();
@@ -411,6 +414,8 @@ public:
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;
+	//! Try to dispatch an extension-registered shell command. Returns -1 if no match, otherwise the MetadataResult.
+	int TryExtensionCommand(const vector<string> &args);
 	static vector<string> GetMetadataCompletions(const char *zLine, idx_t nLine);
 
 	//! Execute a SQL query

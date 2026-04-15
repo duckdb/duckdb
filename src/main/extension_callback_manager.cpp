@@ -1,4 +1,5 @@
 #include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/main/shell_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
@@ -21,6 +22,8 @@ struct ExtensionCallbackRegistry {
 	case_insensitive_map_t<shared_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
+	//! Shell-level extension commands (dot-commands for the CLI)
+	vector<shared_ptr<ShellExtensionRegistration>> shell_extensions;
 };
 
 ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
@@ -82,6 +85,13 @@ void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
+void ExtensionCallbackManager::Register(shared_ptr<ShellExtensionRegistration> extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->shell_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
 template <class T>
 ExtensionCallbackIteratorHelper<T>::ExtensionCallbackIteratorHelper(
     const vector<T> &vec, shared_ptr<ExtensionCallbackRegistry> callback_registry)
@@ -120,6 +130,14 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	auto registry = callback_registry.atomic_load();
 	auto &extension_callbacks = registry->extension_callbacks;
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
+}
+
+ExtensionCallbackIteratorHelper<shared_ptr<ShellExtensionRegistration>>
+ExtensionCallbackManager::ShellExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	auto &shell_extensions = registry->shell_extensions;
+	return ExtensionCallbackIteratorHelper<shared_ptr<ShellExtensionRegistration>>(shell_extensions,
+	                                                                               std::move(registry));
 }
 
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
@@ -165,8 +183,13 @@ void StorageExtension::Register(DBConfig &config, const string &extension_name,
 	config.GetCallbackManager().Register(extension_name, std::move(extension));
 }
 
+void ShellExtensionRegistration::Register(DBConfig &config, shared_ptr<ShellExtensionRegistration> extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
 template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
+template class ExtensionCallbackIteratorHelper<shared_ptr<ShellExtensionRegistration>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
 template class ExtensionCallbackIteratorHelper<PlannerExtension>;

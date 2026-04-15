@@ -23,6 +23,21 @@ void History::Free() {
 	}
 }
 
+void History::Clear() {
+	if (history) {
+		for (idx_t j = 0; j < history_len; j++) {
+			free(history[j]);
+		}
+		free(history);
+		history = nullptr;
+	}
+	history_len = 0;
+	if (history_file) {
+		free(history_file);
+		history_file = nullptr;
+	}
+}
+
 idx_t History::GetLength() {
 	return history_len;
 }
@@ -362,6 +377,22 @@ int History::Load(const char *filename) {
 		}
 		// the result does not contain a full SQL statement - add a newline deliminator and move on to the next line
 		result += "\r\n";
+	}
+	reader.Close();
+
+	history_file = strdup(filename);
+	return 0;
+}
+
+int History::LoadRaw(const char *filename) {
+	LineReader reader;
+	if (!reader.Init(filename)) {
+		return -1;
+	}
+
+	while (reader.NextLine()) {
+		auto buf = reader.GetLine();
+		History::Add(buf);
 	}
 	reader.Close();
 
