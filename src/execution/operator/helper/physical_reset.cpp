@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_reset.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 
 #include "duckdb/common/string_util.hpp"
@@ -9,8 +11,10 @@ namespace duckdb {
 
 void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &config,
                                            ExtensionOption &extension_option) const {
-	if (extension_option.set_function) {
-		extension_option.set_function(context.client, scope, name.ToStdString(), extension_option.default_value, true);
+	if (extension_option.reset_function) {
+		extension_option.reset_function(context.client, scope);
+	} else if (extension_option.set_function) {
+		extension_option.set_function(context.client, scope, extension_option.default_value);
 	}
 	if (scope == SetScope::GLOBAL) {
 		config.ResetOption(extension_option);
@@ -23,6 +27,12 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 
 SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                 OperatorSourceInput &input) const {
+	if (name.empty()) {
+		// RESET ALL: clear all user-set session variables
+		D_ASSERT(scope == SetScope::SESSION);
+		ClientConfig::GetConfig(context.client).user_settings = {};
+		return SourceResultType::FINISHED;
+	}
 	if (scope == SetScope::VARIABLE) {
 		auto &client_config = ClientConfig::GetConfig(context.client);
 		client_config.ResetUserVariable(name);

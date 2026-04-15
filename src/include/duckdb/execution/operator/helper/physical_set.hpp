@@ -45,6 +45,7 @@ public:
 
 	static void SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 	static SetScope GetSettingScope(const ConfigurationOption &option, SetScope variable_scope);
+	static void SetVariable(ClientContext &context, const String &name, SetScope scope, const Value &value);
 
 public:
 	String name;

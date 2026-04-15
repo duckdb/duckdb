@@ -77,6 +77,10 @@ unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::
 unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGVariableSetStmt &stmt) {
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGVariableSetStmt);
 
+	if (stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_RESET_ALL) {
+		return make_uniq<ResetVariableStatement>(string {}, SetScope::SESSION);
+	}
+
 	SetType set_type = ToSetType(stmt.kind);
 	switch (set_type) {
 	case SetType::SET:

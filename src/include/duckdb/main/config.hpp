@@ -206,6 +206,10 @@ public:
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
+	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
+	                                   const Value &default_value, set_option_callback_t function,
+	                                   reset_option_callback_t reset_function,
+	                                   SetScope default_scope = SetScope::SESSION);
 	DUCKDB_API bool HasExtensionOption(const string &name) const;
 	DUCKDB_API case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
 	DUCKDB_API bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
