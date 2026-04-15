@@ -97,13 +97,13 @@ public:
 	//! Get the TemporaryMemoryManager
 	static TemporaryMemoryManager &Get(ClientContext &context);
 	//! Register a TemporaryMemoryState
-	unique_ptr<TemporaryMemoryState> Register(ClientContext &context) DUCKDB_EXCLUDES(lock);
+	unique_ptr<TemporaryMemoryState> Register(ClientContext &context);
 
 private:
 	//! Get the default minimum reservation
-	idx_t DefaultMinimumReservation() const;
+	idx_t DefaultMinimumReservation() const DUCKDB_REQUIRES(lock);
 	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
-	void Unregister(TemporaryMemoryState &temporary_memory_state) DUCKDB_EXCLUDES(lock);
+	void Unregister(TemporaryMemoryState &temporary_memory_state);
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
 	void UpdateConfiguration(ClientContext &context) DUCKDB_REQUIRES(lock);
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)
@@ -122,22 +122,22 @@ private:
 	annotated_mutex lock;
 
 	//! Memory limit of the buffer pool
-	idx_t memory_limit = DConstants::INVALID_INDEX;
+	idx_t memory_limit DUCKDB_GUARDED_BY(lock) = DConstants::INVALID_INDEX;
 	//! Whether there is a temporary directory that we can offload blocks to
-	bool has_temporary_directory = false;
+	bool has_temporary_directory DUCKDB_GUARDED_BY(lock) = false;
 	//! Number of threads
-	idx_t num_threads = DConstants::INVALID_INDEX;
+	idx_t num_threads DUCKDB_GUARDED_BY(lock) = DConstants::INVALID_INDEX;
 	//! Number of active connections
-	idx_t num_connections = DConstants::INVALID_INDEX;
+	idx_t num_connections DUCKDB_GUARDED_BY(lock) = DConstants::INVALID_INDEX;
 	//! Max memory per query
-	idx_t query_max_memory = DConstants::INVALID_INDEX;
+	idx_t query_max_memory DUCKDB_GUARDED_BY(lock) = DConstants::INVALID_INDEX;
 
 	//! Currently active states
-	reference_set_t<TemporaryMemoryState> active_states;
+	reference_set_t<TemporaryMemoryState> active_states DUCKDB_GUARDED_BY(lock);
 	//! The sum of reservations of all active states
-	idx_t reservation;
+	idx_t reservation DUCKDB_GUARDED_BY(lock);
 	//! The sum of the remaining size of all active states
-	idx_t remaining_size;
+	idx_t remaining_size DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb

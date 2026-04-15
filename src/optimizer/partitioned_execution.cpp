@@ -24,9 +24,9 @@ struct PartitionedExecutionConfig {
 	//! Minimum number of row groups per thread per partition to split on
 	static constexpr idx_t MIN_ROW_GROUPS_PER_THREAD_PER_PARTITION = 16;
 	//! Maximum overlap (as fraction of partition size) that we allow for a split
-	static constexpr double MAX_OVERLAP_RATIO = 0.1;
-	//! Minimum input cardinality before we even consider splitting
-	static constexpr idx_t MINIMUM_INPUT_CARDINALITY = 4194304;
+	static constexpr double MAX_OVERLAP_RATIO = 0.05;
+	//! Minimum result cardinality before we even consider splitting
+	static constexpr idx_t MINIMUM_RESULT_CARDINALITY = 4194304;
 };
 
 struct PartitionedExecutionColumn {
@@ -180,8 +180,8 @@ static bool PartitionedExecutionMinMaxEqual(const BaseStatistics &stats) {
 		max = NumericStats::Max(stats);
 		break;
 	case StatisticsType::STRING_STATS:
-		min = StringStats::Min(stats);
-		max = StringStats::Max(stats);
+		min = Value::BLOB_RAW(StringStats::Min(stats));
+		max = Value::BLOB_RAW(StringStats::Max(stats));
 		break;
 	default:
 		throw NotImplementedException("PartitionedExecutionMinMaxEqual for %s",
@@ -526,6 +526,10 @@ void PartitionedExecution::Optimize(unique_ptr<LogicalOperator> &op) {
 		Optimize(child); // Depth-first
 	}
 
+	if (op->EstimateCardinality(optimizer.context) < PartitionedExecutionConfig::MINIMUM_RESULT_CARDINALITY) {
+		return; // Too small
+	}
+
 	vector<PartitionedExecutionColumn> columns;
 	if (!PartitionedExecutionGetColumns(*op, columns) || columns.empty()) {
 		return; // Unable to get partition columns from this operator
@@ -534,10 +538,6 @@ void PartitionedExecution::Optimize(unique_ptr<LogicalOperator> &op) {
 	optional_ptr<LogicalGet> get = PartitionedExecutionTraceColumns(*op, columns);
 	if (!get || columns.empty()) {
 		return; // Unable to trace any binding down to scan
-	}
-
-	if (get->EstimateCardinality(optimizer.context) < PartitionedExecutionConfig::MINIMUM_INPUT_CARDINALITY) {
-		return; // Too small
 	}
 
 	// Check global stats first before getting partition stats
@@ -559,12 +559,12 @@ void PartitionedExecution::Optimize(unique_ptr<LogicalOperator> &op) {
 		return; // Can't split 0 or 1 partitions
 	}
 
-	const auto ranges = PartitionedExecutionComputeRanges(*op, columns, partition_stats, num_threads);
-	if (ranges.second.size() < 2) {
+	const auto &[range_col_idx, ranges] = PartitionedExecutionComputeRanges(*op, columns, partition_stats, num_threads);
+	if (ranges.size() < 2) {
 		return; // Unable to compute useful ranges
 	}
 
-	PartitionedExecutionSplitPipeline(optimizer, root, op, columns, ranges.first, ranges.second); // Success!
+	PartitionedExecutionSplitPipeline(optimizer, root, op, columns, range_col_idx, ranges); // Success!
 }
 
 } // namespace duckdb
