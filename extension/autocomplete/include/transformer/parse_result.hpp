@@ -330,6 +330,8 @@ public:
 		name = parse_result_p.name;
 	}
 
+
+
 	ParseResult &GetResult() {
 		return result;
 	}

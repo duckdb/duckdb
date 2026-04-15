@@ -127,10 +127,10 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTransformer &transformer,
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	if (list_pr.Child<ChoiceParseResult>(0).result->name == "RenameAlter") {
-		return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+	if (list_pr.Child<ChoiceParseResult>(0).GetResult().name == "RenameAlter") {
+		return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 	}
-	return transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
@@ -139,7 +139,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTrans
 	auto &repeat_pr = list_pr.Child<RepeatParseResult>(0);
 	bool has_owned = false;
 	unique_ptr<AlterInfo> owned_info;
-	for (auto &seq_option_pr : repeat_pr.children) {
+	for (auto &seq_option_pr : repeat_pr.GetChildren()) {
 		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option_pr);
 		if (seq_option.first == "owned") {
 			if (has_owned) {
@@ -162,7 +162,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTrans
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterTableOptions(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 void PEGTransformerFactory::AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
@@ -262,11 +262,11 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 	if (!constraints_opt.HasResult()) {
 		return new_column;
 	}
-	auto constraints_repeat = constraints_opt.optional_result->Cast<RepeatParseResult>();
-	for (auto &constraint_entry : constraints_repeat.children) {
-		auto constraint_list = constraint_entry->Cast<ListParseResult>();
-		auto constraint = constraint_list.Child<ChoiceParseResult>(0).result;
-		if (constraint->name == "DefaultValue") {
+	auto constraints_repeat = constraints_opt.GetResult().Cast<RepeatParseResult>();
+	for (auto &constraint_entry : constraints_repeat.GetChildren()) {
+		auto constraint_list = constraint_entry.get().Cast<ListParseResult>();
+		auto constraint = constraint_list.Child<ChoiceParseResult>(0).GetResult();
+		if (constraint.name == "DefaultValue") {
 			if (new_column.default_value) {
 				throw ParserException("Cannot define a default value twice");
 			}
@@ -327,7 +327,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterColumn(PEGTransf
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterColumnEntry(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropDefault(PEGTransformer &transformer,
@@ -369,13 +369,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUsingExpression(PEG
 string PEGTransformerFactory::TransformDropOrSet(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice = list_pr.Child<ChoiceParseResult>(0);
-	return choice.result->Cast<KeywordParseResult>().keyword;
+	return choice.GetResult().Cast<KeywordParseResult>().keyword;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddOrDropDefault(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransformer &transformer,
