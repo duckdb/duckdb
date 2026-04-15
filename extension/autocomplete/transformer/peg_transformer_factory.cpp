@@ -116,27 +116,26 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
-// void PEGTransformerFactory::RegisterAttach() {
-// 	// attach.gram
-// 	REGISTER_TRANSFORM(TransformAttachStatement);
-// 	REGISTER_TRANSFORM(TransformAttachAlias);
-// 	REGISTER_TRANSFORM(TransformAttachOptions);
-// 	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
-// 	REGISTER_TRANSFORM(TransformGenericCopyOption);
-// 	REGISTER_TRANSFORM(TransformDatabasePath);
-// }
-
 void PEGTransformerFactory::RegisterAnalyze() {
 	// analyze.gram
 	REGISTER_TRANSFORM(TransformAnalyzeStatement);
 	REGISTER_TRANSFORM(TransformAnalyzeTarget);
 }
 
-// void PEGTransformerFactory::RegisterCall() {
-// 	// call.gram
-// 	REGISTER_TRANSFORM(TransformCallStatement);
-// 	REGISTER_TRANSFORM(TransformTableFunctionArguments);
-// }
+void PEGTransformerFactory::RegisterAttach() {
+	// attach.gram
+	REGISTER_TRANSFORM(TransformAttachStatement);
+	REGISTER_TRANSFORM(TransformAttachAlias);
+	REGISTER_TRANSFORM(TransformAttachOptions);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
+	REGISTER_TRANSFORM(TransformGenericCopyOption);
+	REGISTER_TRANSFORM(TransformDatabasePath);
+}
+
+void PEGTransformerFactory::RegisterCall() {
+	// call.gram
+	REGISTER_TRANSFORM(TransformCallStatement);
+}
 //
 // void PEGTransformerFactory::RegisterCheckpoint() {
 // 	// checkpoint.gram
@@ -696,13 +695,15 @@ void PEGTransformerFactory::RegisterAnalyze() {
 // 	REGISTER_TRANSFORM(TransformBaseTableName);
 // 	REGISTER_TRANSFORM(TransformSchemaReservedTable);
 // 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTable);
-	// REGISTER_TRANSFORM(TransformSchemaQualification);
+//  REGISTER_TRANSFORM(TransformSchemaQualification);
 // 	REGISTER_TRANSFORM(TransformCatalogQualification);
 // 	REGISTER_TRANSFORM(TransformQualifiedName);
 // 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifier);
 // 	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
 // 	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
 // 	REGISTER_TRANSFORM(TransformWhereClause);
+//  REGISTER_TRANSFORM(TransformTableFunctionArguments);
+
 //
 // 	REGISTER_TRANSFORM(TransformTargetList);
 // 	REGISTER_TRANSFORM(TransformAliasedExpression);

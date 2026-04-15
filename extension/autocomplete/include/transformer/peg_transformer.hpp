@@ -374,28 +374,29 @@ private:
 	static unique_ptr<AlterTableInfo> TransformResetOptions(PEGTransformer &transformer,
 	                                                        ParseResult &parse_result);
 
-	// attach.gram
-	// static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer,
-	//                                                          optional_ptr<ParseResult> parse_result);
-	// static string TransformAttachAlias(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	// static vector<GenericCopyOption> TransformAttachOptions(PEGTransformer &transformer,
-	//                                                         optional_ptr<ParseResult> parse_result);
-	// static vector<GenericCopyOption> TransformGenericCopyOptionList(PEGTransformer &transformer,
-	//                                                                 optional_ptr<ParseResult> parse_result);
-	// static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
-	//                                                     optional_ptr<ParseResult> parse_result);
-	// static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer,
-	//                                                           optional_ptr<ParseResult> parse_result);
 
 	// analyze.gram
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
 	                                                          ParseResult &parse_result);
 	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// // call.gram
-	// static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
-	//                                                        optional_ptr<ParseResult> parse_result);
-	//
+	// attach.gram
+	static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer,
+	                                                         ParseResult &parse_result);
+	static string TransformAttachAlias(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<GenericCopyOption> TransformAttachOptions(PEGTransformer &transformer,
+	                                                        ParseResult &parse_result);
+	static vector<GenericCopyOption> TransformGenericCopyOptionList(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
+	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
+	                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer,
+	                                                          ParseResult &parse_result);
+
+	// call.gram
+	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
+	                                                       ParseResult &parse_result);
+
 	// // checkpoint.gram
 	// static unique_ptr<SQLStatement> TransformCheckpointStatement(PEGTransformer &transformer,
 	//                                                              optional_ptr<ParseResult> parse_result);
