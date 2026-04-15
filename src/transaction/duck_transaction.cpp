@@ -264,7 +264,11 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
-	CommitDropAccumulator drop_accumulator(db.GetStorageManager().GetBlockManager());
+	optional_ptr<BlockManager> block_manager;
+	if (db.HasStorageManager()) {
+		block_manager = db.GetStorageManager().GetBlockManager();
+	}
+	CommitDropAccumulator drop_accumulator(block_manager);
 	try {
 		storage->Commit(commit_state.get());
 		undo_buffer.Commit(iterator_state, commit_info, drop_accumulator);

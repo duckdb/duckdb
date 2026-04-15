@@ -11,6 +11,7 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block.hpp"
@@ -37,15 +38,15 @@ struct CommitDropAccumulator {
 		string name;
 	};
 
-	explicit CommitDropAccumulator(BlockManager &block_manager) : block_manager(block_manager) {
+	explicit CommitDropAccumulator(optional_ptr<BlockManager> block_manager = nullptr) : block_manager(block_manager) {
 	}
 
-	reference<BlockManager> block_manager;
+	optional_ptr<BlockManager> block_manager;
 	vector<block_id_t> block_ids;
 	vector<IndexRemoval> pending_index_removals;
 
 	void AddBlock(BlockManager &bm, block_id_t id) {
-		D_ASSERT(&block_manager.get() == &bm);
+		D_ASSERT(block_manager.get() == &bm);
 		block_ids.push_back(id);
 	}
 	void AddPendingIndexRemoval(TableIndexList &indexes, string name) {

@@ -29,7 +29,11 @@ namespace duckdb {
 // CommitDropAccumulator
 //===--------------------------------------------------------------------===//
 void CommitDropAccumulator::Apply() {
-	auto &bm = block_manager.get();
+	if (!block_manager) {
+		D_ASSERT(Empty());
+		return;
+	}
+	auto &bm = *block_manager;
 	for (auto id : block_ids) {
 		bm.MarkBlockAsModified(id);
 	}

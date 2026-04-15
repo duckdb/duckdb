@@ -49,21 +49,13 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 		state.start = state.handle.Ptr();
 		state.end = state.start + state.current->position;
 		while (state.start < state.end) {
-			data_ptr_t entry_start = state.start;
-			UndoFlags type = Load<UndoFlags>(state.start);
-			state.start += sizeof(UndoFlags);
+			auto len_position = state.start + sizeof(UndoFlags);
+			auto payload_position = len_position + sizeof(uint32_t);
+			auto type = Load<UndoFlags>(state.start);
+			auto len = Load<uint32_t>(len_position);
 
-			uint32_t len = Load<uint32_t>(state.start);
-			state.start += sizeof(uint32_t);
-			try {
-				callback(type, state.start);
-			} catch (...) {
-				// Rewind to the start of the failed entry so RevertCommit's two-arg iteration
-				// (which uses this state as end_state) excludes the entry that did not execute.
-				state.start = entry_start;
-				throw;
-			}
-			state.start += len;
+			callback(type, payload_position);
+			state.start = payload_position + len;
 		}
 		state.current = state.current->prev;
 	}
@@ -213,7 +205,7 @@ void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &i
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitDropAccumulator revert_acc(transaction.GetTransactionManager().GetDB().GetStorageManager().GetBlockManager());
+	CommitDropAccumulator revert_acc;
 	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT, revert_acc);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
