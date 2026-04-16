@@ -20,6 +20,19 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index
 
 void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
                                        SetScope scope, const Value &value) {
+	if (extension_option.default_scope == SetScope::GLOBAL) {
+		if (scope == SetScope::LOCAL || scope == SetScope::SESSION) {
+			throw InvalidInputException("parameter \"%s\" cannot be set locally", name);
+		}
+		if (!context.transaction.IsAutoCommit()) {
+			throw InvalidInputException(
+			    "parameter \"%s\" is global and cannot be set inside a transaction", name);
+		}
+	} else if (extension_option.default_scope == SetScope::SESSION) {
+		if (scope == SetScope::LOCAL) {
+			throw InvalidInputException("parameter \"%s\" cannot be set locally", name);
+		}
+	}
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
 	if (extension_option.set_function) {

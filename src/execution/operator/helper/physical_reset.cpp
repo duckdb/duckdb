@@ -11,12 +11,29 @@ namespace duckdb {
 
 void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &config,
                                            ExtensionOption &extension_option) const {
-	if (extension_option.reset_function) {
-		extension_option.reset_function(context.client, scope);
-	} else if (extension_option.set_function) {
-		extension_option.set_function(context.client, scope, extension_option.default_value);
+	if (extension_option.default_scope == SetScope::GLOBAL) {
+		if (scope == SetScope::LOCAL || scope == SetScope::SESSION) {
+			throw InvalidInputException("parameter \"%s\" cannot be reset locally", name);
+		}
+		if (!context.client.transaction.IsAutoCommit()) {
+			throw InvalidInputException(
+			    "parameter \"%s\" is global and cannot be reset inside a transaction", name);
+		}
+	} else if (extension_option.default_scope == SetScope::SESSION) {
+		if (scope == SetScope::LOCAL) {
+			throw InvalidInputException("parameter \"%s\" cannot be reset locally", name);
+		}
 	}
-	if (scope == SetScope::GLOBAL) {
+	auto effective_scope = scope;
+	if (effective_scope == SetScope::AUTOMATIC) {
+		effective_scope = extension_option.default_scope;
+	}
+	if (extension_option.reset_function) {
+		extension_option.reset_function(context.client, effective_scope);
+	} else if (extension_option.set_function) {
+		extension_option.set_function(context.client, effective_scope, extension_option.default_value);
+	}
+	if (effective_scope == SetScope::GLOBAL) {
 		config.ResetOption(extension_option);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
