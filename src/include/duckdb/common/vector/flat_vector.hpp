@@ -111,11 +111,6 @@ struct FlatVector {
 		return GetDataUnsafe<T>(vector);
 	}
 	template <class T>
-	static inline const T *GetData(Vector &vector) {
-		ConstantVector::VerifyVectorType<T>(vector);
-		return GetDataUnsafe<T>(vector);
-	}
-	template <class T>
 	static inline T *GetDataMutable(Vector &vector) {
 		ConstantVector::VerifyVectorType<T>(vector);
 		return GetDataMutableUnsafe<T>(vector);
@@ -127,10 +122,6 @@ struct FlatVector {
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
 		return reinterpret_cast<const T *>(GetData(vector));
-	}
-	template <class T>
-	static inline const T *GetDataUnsafe(Vector &vector) {
-		return reinterpret_cast<const T *>(GetDataUnsafe(vector));
 	}
 	template <class T>
 	static inline T *GetDataMutableUnsafe(Vector &vector) {
@@ -146,7 +137,7 @@ struct FlatVector {
 		VerifyFlatVector(vector);
 		return vector.Buffer().GetValidityMask();
 	}
-	static inline ValidityMask &Validity(Vector &vector) {
+	static inline ValidityMask &ValidityMutable(Vector &vector) {
 		VerifyFlatVector(vector);
 		return vector.BufferMutable().GetValidityMask();
 	}

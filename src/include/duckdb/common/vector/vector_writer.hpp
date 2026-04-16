@@ -16,7 +16,7 @@ namespace duckdb {
 template <class T>
 struct VectorWriter {
 	VectorWriter(Vector &vector, idx_t count)
-	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::Validity(vector)), count(count) {
+	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)), count(count) {
 	}
 
 	void SetInvalid(idx_t idx) {

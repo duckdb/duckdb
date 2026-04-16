@@ -201,7 +201,7 @@ bool StructFunction(DataChunk &args, Vector &result) {
 
 	// Set the top level result validity
 	const auto unified_format = args.ToUnifiedFormat();
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);

@@ -701,7 +701,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 
 	// Write JSON values to string
 	auto objects = FlatVector::GetDataMutable<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
 	for (idx_t i = 0; i < count; i++) {
