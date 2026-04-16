@@ -51,6 +51,7 @@ static int InitializeEnvironment(int argc_in, char *argv[], int &new_argc, duckd
 
 	// delete the testing directory if it exists
 	dir = TestCreatePath("");
+#ifndef DUCKDB_FUZZER
 	try {
 		TestDeleteDirectory(dir);
 		// create the empty testing directory
@@ -59,6 +60,7 @@ static int InitializeEnvironment(int argc_in, char *argv[], int &new_argc, duckd
 		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
+#endif
 
 	// Override the home dir so the .duckdb dir is isolated per test process.
 #ifdef DUCKDB_WINDOWS
