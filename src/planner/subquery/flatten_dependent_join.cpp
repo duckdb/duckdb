@@ -16,22 +16,6 @@
 
 namespace duckdb {
 
-static bool CollectCTEAccessOperators(LogicalOperator &op, TableIndex table_index,
-                                      reference_set_t<LogicalOperator> &accessing_operators) {
-	bool accesses_target_cte = false;
-	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
-		auto &cteref = op.Cast<LogicalCTERef>();
-		accesses_target_cte = cteref.cte_index == table_index;
-	}
-	for (auto &child : op.children) {
-		accesses_target_cte |= CollectCTEAccessOperators(*child, table_index, accessing_operators);
-	}
-	if (accesses_target_cte) {
-		accessing_operators.insert(op);
-	}
-	return accesses_target_cte;
-}
-
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim,
                                              bool any_join, optional_ptr<FlattenDependentJoins> parent)
     : binder(binder), correlated_columns(correlated), perform_delim(perform_delim), any_join(any_join), parent(parent) {
@@ -974,10 +958,7 @@ FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownCon
 		}
 	}
 
-	reference_set_t<LogicalOperator> materialized_accessing_operators;
-	CollectCTEAccessOperators(*plan->children[1], table_index, materialized_accessing_operators);
-	RewriteCTEScan cte_rewriter(table_index, correlated_columns, materialized_accessing_operators);
-	cte_rewriter.VisitOperator(*plan->children[1]);
+	RewriteCTEScan::Rewrite(*plan->children[1], table_index, correlated_columns);
 	DetectCorrelatedExpressions(*plan->children[1], false, 0);
 
 	layout = PushDownChild(plan->children[1], context.WithPropagateNullValues(false), std::move(layout));
@@ -1030,11 +1011,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
 				if (op.correlated_columns == 0) {
-					reference_set_t<LogicalOperator> materialized_accessing_operators;
-					CollectCTEAccessOperators(*plan, op.cte_index, materialized_accessing_operators);
-					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
-					                            materialized_accessing_operators);
-					cte_rewriter.VisitOperator(*plan);
+					RewriteCTEScan::Rewrite(*plan, op.cte_index, rec_cte_op.correlated_columns);
 				}
 			}
 		}

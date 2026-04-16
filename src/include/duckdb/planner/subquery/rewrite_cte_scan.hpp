@@ -17,15 +17,16 @@ namespace duckdb {
 //! Helper class to rewrite correlated CTE scans and dependent joins within a single LogicalOperator
 class RewriteCTEScan : public LogicalOperatorVisitor {
 public:
-	RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-	               const reference_set_t<LogicalOperator> &accessing_operators);
-
-	void VisitOperator(LogicalOperator &op) override;
+	static void Rewrite(LogicalOperator &op, TableIndex table_index, const CorrelatedColumns &correlated_columns);
 
 private:
+	RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns);
+	bool CollectAccessingOperators(LogicalOperator &op);
+	void VisitOperator(LogicalOperator &op) override;
+
 	TableIndex table_index;
 	const CorrelatedColumns &correlated_columns;
-	const_reference<reference_set_t<LogicalOperator>> accessing_operators;
+	reference_set_t<LogicalOperator> accessing_operators;
 };
 
 } // namespace duckdb

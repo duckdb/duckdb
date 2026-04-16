@@ -15,9 +15,29 @@
 
 namespace duckdb {
 
-RewriteCTEScan::RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-                               const reference_set_t<LogicalOperator> &accessing_operators)
-    : table_index(table_index), correlated_columns(correlated_columns), accessing_operators(accessing_operators) {
+RewriteCTEScan::RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns)
+    : table_index(table_index), correlated_columns(correlated_columns) {
+}
+
+bool RewriteCTEScan::CollectAccessingOperators(LogicalOperator &op) {
+	bool accesses_target_cte = false;
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cteref = op.Cast<LogicalCTERef>();
+		accesses_target_cte = cteref.cte_index == table_index;
+	}
+	for (auto &child : op.children) {
+		accesses_target_cte |= CollectAccessingOperators(*child);
+	}
+	if (accesses_target_cte) {
+		accessing_operators.insert(op);
+	}
+	return accesses_target_cte;
+}
+
+void RewriteCTEScan::Rewrite(LogicalOperator &op, TableIndex table_index, const CorrelatedColumns &correlated_columns) {
+	RewriteCTEScan rewriter(table_index, correlated_columns);
+	rewriter.CollectAccessingOperators(op);
+	rewriter.VisitOperator(op);
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
@@ -38,7 +58,7 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 		auto &join = op.Cast<LogicalDependentJoin>();
 		bool has_cte_ref = false;
 		for (auto &child : join.children) {
-			if (accessing_operators.get().find(*child) != accessing_operators.get().end()) {
+			if (accessing_operators.find(*child) != accessing_operators.end()) {
 				has_cte_ref = true;
 				break;
 			}
