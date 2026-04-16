@@ -52,7 +52,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 		member_vector.Flatten(count);
 		union_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
-		if (FlatVector::Validity(member_vector).CannotHaveNull()) {
+		if (FlatVector::ValidityMutable(member_vector).CannotHaveNull()) {
 			// if the member vector is all valid, we can set the tag to constant
 			tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 			auto tag_data = ConstantVector::GetData<union_tag_t>(tag_vector);
@@ -60,12 +60,12 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 		} else {
 			tag_vector.SetVectorType(VectorType::FLAT_VECTOR);
 			if (keep_tags_for_null) {
-				FlatVector::Validity(tag_vector).SetAllValid(count);
-				FlatVector::Validity(union_vector).SetAllValid(count);
+				FlatVector::ValidityMutable(tag_vector).SetAllValid(count);
+				FlatVector::ValidityMutable(union_vector).SetAllValid(count);
 			} else {
 				// ensure the tags have the same validity as the member
-				FlatVector::Validity(union_vector) = FlatVector::Validity(member_vector);
-				FlatVector::Validity(tag_vector) = FlatVector::Validity(member_vector);
+				FlatVector::ValidityMutable(union_vector) = FlatVector::ValidityMutable(member_vector);
+				FlatVector::ValidityMutable(tag_vector) = FlatVector::ValidityMutable(member_vector);
 			}
 
 			auto tag_data = FlatVector::GetDataMutable<union_tag_t>(tag_vector);

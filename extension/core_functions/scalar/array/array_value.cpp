@@ -31,7 +31,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	if (num_columns > 1) {
 		// Ensure that the child has a validity mask of the correct size
 		// The SetValue call below expects the validity mask to be initialized
-		auto &child_validity = FlatVector::Validity(child);
+		auto &child_validity = FlatVector::ValidityMutable(child);
 		child_validity.Resize(num_rows * num_columns);
 	}
 

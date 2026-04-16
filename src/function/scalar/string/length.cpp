@@ -94,7 +94,7 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 	// otherwise we flatten and inherit the null values of the parent
 	result.Flatten(args.size());
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t r = 0; r < args.size(); r++) {
 		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);

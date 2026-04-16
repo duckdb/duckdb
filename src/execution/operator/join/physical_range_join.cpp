@@ -393,7 +393,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 	} else if (keys.ColumnCount() > 1) {
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
 		primary.Flatten(count);
-		auto &pvalidity = FlatVector::Validity(primary);
+		auto &pvalidity = FlatVector::ValidityMutable(primary);
 
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {

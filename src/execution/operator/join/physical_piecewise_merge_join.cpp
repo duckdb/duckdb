@@ -428,7 +428,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		// Since the payload is sorted, we can just set the tail end of the validity masks to invalid.
 		for (auto &key : lhs_keys.data) {
 			key.Flatten(lhs_keys.size());
-			auto &mask = FlatVector::Validity(key);
+			auto &mask = FlatVector::ValidityMutable(key);
 			if (mask.CannotHaveNull()) {
 				continue;
 			}

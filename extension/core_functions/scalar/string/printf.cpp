@@ -154,7 +154,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 
 	// now perform the actual formatting
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t idx = 0; idx < count; idx++) {
 		auto entry = format_data[idx];
 		if (!entry.IsValid()) {

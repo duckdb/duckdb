@@ -190,7 +190,7 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 		result_data[i] = false;
 	}
 
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity.SetAllValid(count);
 	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	for (auto &arg : args.data) {

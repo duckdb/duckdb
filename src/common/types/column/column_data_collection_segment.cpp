@@ -177,7 +177,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		if (TypeHasData(result.GetType())) {
 			FlatVector::SetData(result, base_ptr, vdata.count);
 		}
-		FlatVector::Validity(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
+		FlatVector::ValidityMutable(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
 	}
 
@@ -196,7 +196,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
 	auto target_data = FlatVector::GetDataMutable(result);
-	auto &target_validity = FlatVector::Validity(result);
+	auto &target_validity = FlatVector::ValidityMutable(result);
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);

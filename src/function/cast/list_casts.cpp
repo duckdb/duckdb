@@ -55,7 +55,7 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	} else {
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
+		FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
 
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 		auto tdata = FlatVector::Writer<list_entry_t>(result, count);
@@ -92,11 +92,11 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	varchar_list.Flatten(count);
 	auto &child = ListVector::GetEntry(varchar_list);
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
-	auto &validity = FlatVector::Validity(varchar_list);
+	auto &validity = FlatVector::ValidityMutable(varchar_list);
 
 	child.Flatten(ListVector::GetListSize(varchar_list));
 	auto child_data = FlatVector::GetData<string_t>(child);
-	auto &child_validity = FlatVector::Validity(child);
+	auto &child_validity = FlatVector::ValidityMutable(child);
 
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
@@ -238,7 +238,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		// Fast path: No lists are null
 		// We can just cast the child vector directly
 		// Note: Its worth doing a CheckAllValid here, the slow path is significantly more expensive
-		if (FlatVector::Validity(result).CheckAllValid(count)) {
+		if (FlatVector::ValidityMutable(result).CheckAllValid(count)) {
 			Vector payload_vector(result_cc.GetType(), child_count);
 
 			bool ok = cast_data.child_cast_info.function(source_cc, payload_vector, child_count, child_parameters);

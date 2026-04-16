@@ -408,7 +408,7 @@ struct MinMaxFixedValueOrNull {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::Validity(vector).Set(idx, value.is_valid);
+		FlatVector::ValidityMutable(vector).Set(idx, value.is_valid);
 		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 

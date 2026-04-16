@@ -2049,7 +2049,7 @@ struct StructDatePart {
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto &res_valid = FlatVector::Validity(result);
+			auto &res_valid = FlatVector::ValidityMutable(result);
 			if (res_valid.GetData()) {
 				res_valid.SetAllValid(count);
 			}
@@ -2058,7 +2058,7 @@ struct StructDatePart {
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
 				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
-				auto &child_validity = FlatVector::Validity(child_entry);
+				auto &child_validity = FlatVector::ValidityMutable(child_entry);
 				if (child_validity.GetData()) {
 					child_validity.SetAllValid(count);
 				}
@@ -2084,13 +2084,13 @@ struct StructDatePart {
 						                                    part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
-							FlatVector::Validity(child_entry).SetInvalid(i);
+							FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 						}
 					}
 				} else {
 					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(child_entry).SetInvalid(i);
+						FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 					}
 				}
 			}
