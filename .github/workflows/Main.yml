@@ -473,10 +473,35 @@ jobs:
       run: python3 scripts/ci/retry.py -- make format_tools
 
     - name: Check if extension_entries.hpp is up to date
+      id: check_extension_entries
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      continue-on-error: true
       env:
         EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
       run: make check-extension-entries
+
+    - name: Collect extension_entries.hpp diff
+      id: extension_entries_diff
+      if: ${{ steps.check_extension_entries.outcome == 'failure' }}
+      run: |
+        if git diff --quiet src/include/duckdb/main/extension_entries.hpp; then
+          echo "has_diff=false" >> "$GITHUB_OUTPUT"
+        else
+          git --no-pager diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
+          echo "has_diff=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Upload extension_entries.hpp diff
+      if: ${{ steps.extension_entries_diff.outputs.has_diff == 'true' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: extension-entries-hpp-diff
+        path: extension_entries.hpp.diff
+        if-no-files-found: error
+
+    - name: Fail when extension_entries.hpp is out of date
+      if: ${{ steps.check_extension_entries.outcome == 'failure' }}
+      run: exit 1
 
  linux-release-tests:
     name: Linux Release Tests
