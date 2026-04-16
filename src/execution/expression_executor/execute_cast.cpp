@@ -11,10 +11,10 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastE
 	result->AddChild(*expr.child);
 	result->Finalize();
 
-	if (expr.bound_cast.init_local_state) {
+	if (expr.bound_cast.HasInitLocalState()) {
 		auto context_ptr = root.executor->HasContext() ? &root.executor->GetContext() : nullptr;
-		CastLocalStateParameters parameters(context_ptr, expr.bound_cast.cast_data);
-		result->local_state = expr.bound_cast.init_local_state(parameters);
+		CastLocalStateParameters parameters(context_ptr, expr.bound_cast.GetCastData());
+		result->local_state = expr.bound_cast.InitLocalState(parameters);
 	}
 	return std::move(result);
 }
@@ -33,7 +33,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 
 	string error_message;
 	auto error_ref = expr.try_cast ? &error_message : nullptr;
-	CastParameters parameters(expr.bound_cast.cast_data.get(), false, error_ref, lstate);
+	CastParameters parameters(expr.bound_cast.GetCastData(), false, error_ref, lstate);
 	parameters.query_location = expr.GetQueryLocation();
 	parameters.cast_source = expr.child.get();
 	parameters.cast_target = expr;
@@ -42,7 +42,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		// if the input is constant we only need to cast one value
 		count = 1;
 	}
-	expr.bound_cast.function(child, result, count, parameters);
+	expr.bound_cast.Cast(child, result, count, parameters);
 	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
