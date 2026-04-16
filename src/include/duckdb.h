@@ -140,6 +140,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_NS = 39,
 	// GEOMETRY type, WKB blob
 	DUCKDB_TYPE_GEOMETRY = 40,
+	// VARIANT type
+	DUCKDB_TYPE_VARIANT = 41,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
@@ -6271,6 +6273,13 @@ Result must be freed with `duckdb_free`.
 * @return The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type.
 */
 DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Variant Helpers
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to operate on VARIANT types.
+//----------------------------------------------------------------------------------------------------------------------
 
 #endif
 
