@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 
-#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -93,46 +92,23 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	// If the CTE body contains DML (INSERT/UPDATE/DELETE/MERGE INTO), the query side must run
-	// after the DML completes so that it sees the modified table state.  The dependency on
-	// `current` is already established by CreateChildMetaPipeline above, but child
-	// MetaPipelines spawned while building children[1] (e.g. the scan pipeline under an
-	// aggregate) are in separate MetaPipelines and would otherwise race with the DML.
-	// Capture the DML base pipeline before building children[1] so we can add explicit
-	// dependencies to any new child MetaPipelines that are created during that build.
-	// cte_body_is_dml is set at plan time from the logical operator via HasSideEffects().
-	const bool cte_has_dml = cte_body_is_dml;
-	vector<shared_ptr<MetaPipeline>> child_meta_pipelines_before;
-	if (cte_has_dml) {
-		// Use recursive=true so that we capture grandchild (and deeper) MetaPipelines too.
-		// Without recursion, a scanner pipeline that feeds data INTO a sibling DML CTE's sink
-		// would not be captured — it is a child of the sibling's meta pipeline, not a direct
-		// child of the root — and would therefore race with the upstream DML instead of
-		// waiting for it to complete first.
-		meta_pipeline.GetMetaPipelines(child_meta_pipelines_before, true, true);
+	// If the CTE body is a DML statement (INSERT/UPDATE/DELETE/MERGE INTO), all MetaPipelines
+	// created while building children[1] (the query side) must run after the DML completes.
+	// We follow the same pattern as PhysicalJoin::BuildJoinPipelines: capture the DML pipelines
+	// and the current last child before building children[1], then call AddRecursiveDependencies
+	// with force=true so that ordering is always enforced (not just when pipelines exceed the
+	// thread count, as is the case for join build dependencies).
+	vector<shared_ptr<Pipeline>> dml_pipelines;
+	optional_ptr<MetaPipeline> last_child_ptr;
+	if (cte_body_is_dml) {
+		child_meta_pipeline.GetPipelines(dml_pipelines, false);
+		last_child_ptr = meta_pipeline.GetLastChild();
 	}
 
 	children[1].get().BuildPipelines(current, meta_pipeline);
 
-	if (cte_has_dml) {
-		// Collect ALL MetaPipelines (recursively) that were created while building children[1].
-		vector<shared_ptr<MetaPipeline>> child_meta_pipelines_after;
-		meta_pipeline.GetMetaPipelines(child_meta_pipelines_after, true, true);
-
-		reference_set_t<MetaPipeline> before_set;
-		for (auto &mp : child_meta_pipelines_before) {
-			before_set.insert(*mp);
-		}
-
-		auto &dml_base_pipeline = child_meta_pipeline.GetBasePipeline();
-		for (auto &mp : child_meta_pipelines_after) {
-			if (before_set.find(*mp) != before_set.end()) {
-				continue; // existed before, skip
-			}
-			// All new MetaPipelines (including nested scanner pipelines) must wait for
-			// the DML pipeline to complete so that they see the modified table state.
-			mp->GetBasePipeline()->AddDependency(dml_base_pipeline);
-		}
+	if (last_child_ptr) {
+		meta_pipeline.AddRecursiveDependencies(dml_pipelines, *last_child_ptr, true);
 	}
 }
 
