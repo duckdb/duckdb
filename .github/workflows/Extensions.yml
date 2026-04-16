@@ -297,28 +297,3 @@ jobs:
           tree build/release/repository
           find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
           tree build/release/repository
-
-      - name: Install format tools
-        if: ${{ !inputs.skip_tests }}
-        run: python3 scripts/ci/retry.py -- make format_tools
-
-      - name: Download linux release artifact
-        if: ${{ !inputs.skip_tests }}
-        id: linux_release_artifact
-        continue-on-error: true
-        uses: actions/download-artifact@v5
-        with:
-          name: linux-release-build
-          path: build
-
-      - name: Extract linux release artifact
-        if: ${{ !inputs.skip_tests && steps.linux_release_artifact.outcome == 'success' }}
-        run: |
-          rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
-
-      - name: Check if extension_entries.hpp is up to date
-        if: ${{ !inputs.skip_tests }}
-        env:
-          EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
-        run: make check-extension-entries

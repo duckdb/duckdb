@@ -380,7 +380,6 @@ jobs:
     needs:
       - prepare
       - linux-debug
-      - linux-release
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
@@ -408,9 +407,6 @@ jobs:
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
-
-    - name: Install format tools
-      run: python3 scripts/ci/retry.py -- make format_tools
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -471,6 +467,16 @@ jobs:
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
+
+    - name: Install format tools
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: python3 scripts/ci/retry.py -- make format_tools
+
+    - name: Check if extension_entries.hpp is up to date
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      env:
+        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
+      run: make check-extension-entries
 
  linux-release-tests:
     name: Linux Release Tests
