@@ -10,8 +10,7 @@
 
 namespace duckdb {
 
-string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer,
-                                                           ParseResult &parse_result) {
+string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	if (parse_result.type == ParseResultType::IDENTIFIER) {
 		return parse_result.Cast<IdentifierParseResult>().identifier;
 	}
@@ -25,11 +24,12 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
 		for (auto child : list_pr.GetChildren()) {
-			if (child.get().type == ParseResultType::LIST && child.get().Cast<ListParseResult>().GetChildren().empty()) {
+			if (child.get().type == ParseResultType::LIST &&
+			    child.get().Cast<ListParseResult>().GetChildren().empty()) {
 				continue;
 			}
 			if (child.get().type == ParseResultType::CHOICE) {
-				auto &choice_result= child.get().Cast<ChoiceParseResult>().GetResult();
+				auto &choice_result = child.get().Cast<ChoiceParseResult>().GetResult();
 				if (choice_result.type == ParseResultType::IDENTIFIER) {
 					return choice_result.Cast<IdentifierParseResult>().identifier;
 				}
@@ -72,8 +72,7 @@ LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer, Pa
 	return LogicalType::UNBOUND(std::move(type));
 }
 
-int64_t PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer,
-                                                    ParseResult &parse_result) {
+int64_t PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	if (choice_pr.name.empty()) {
@@ -82,15 +81,7 @@ int64_t PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer,
 	return transformer.Transform<int64_t>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer,
-                                                     optional_ptr<ParseResult> parse_result) {
-	// ArrayKeyword <- 'ARRAY'i
-	// Empty array so we return -1 to signify it's a list
-	return -1;
-}
-
-int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
-                                                            ParseResult &parse_result) {
+int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &opt_array_size = list_pr.Child<OptionalParseResult>(1);
 	if (!opt_array_size.HasResult()) {
@@ -122,8 +113,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransfo
 		modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_type_modifiers.GetResult());
 	}
 	auto &opt_timezone = list_pr.Child<OptionalParseResult>(2);
-	const bool with_timezone =
-	    opt_timezone.HasResult() ? transformer.Transform<bool>(opt_timezone.GetResult()) : false;
+	const bool with_timezone = opt_timezone.HasResult() ? transformer.Transform<bool>(opt_timezone.GetResult()) : false;
 	if (type == LogicalTypeId::TIME) {
 		if (!modifiers.empty()) {
 			throw ParserException("Type TIME does not allow any modifiers");
@@ -181,14 +171,12 @@ bool PEGTransformerFactory::TransformTimeZone(PEGTransformer &transformer, Parse
 	return transformer.Transform<bool>(list_pr.Child<ListParseResult>(0));
 }
 
-bool PEGTransformerFactory::TransformWithOrWithout(PEGTransformer &transformer,
-                                                   ParseResult &parse_result) {
+bool PEGTransformerFactory::TransformWithOrWithout(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0));
 }
 
-LogicalTypeId PEGTransformerFactory::TransformTimeOrTimestamp(PEGTransformer &transformer,
-                                                              ParseResult &parse_result) {
+LogicalTypeId PEGTransformerFactory::TransformTimeOrTimestamp(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &time_or_timestamp = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	return transformer.TransformEnum<LogicalTypeId>(time_or_timestamp);
@@ -207,15 +195,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleNumericType(P
 	return make_uniq<TypeExpression>(numeric, vector<unique_ptr<ParsedExpression>> {});
 }
 
-unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformDecimalNumericType(PEGTransformer &transformer,
-                                                   ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDecimalNumericType(PEGTransformer &transformer,
+                                                                                ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFloatType(PEGTransformer &,
-                                                                       ParseResult &) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFloatType(PEGTransformer &, ParseResult &) {
 	return make_uniq<TypeExpression>("FLOAT", vector<unique_ptr<ParsedExpression>> {});
 }
 
@@ -226,13 +212,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDecimalType(PEGTran
 	if (!opt_type_modifier.HasResult()) {
 		return make_uniq<TypeExpression>("DECIMAL", vector<unique_ptr<ParsedExpression>> {});
 	}
-	auto type_modifiers =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_type_modifier.GetResult());
+	auto type_modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_type_modifier.GetResult());
 	return make_uniq<TypeExpression>("DECIMAL", std::move(type_modifiers));
 }
 
-vector<unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformTypeModifiers(PEGTransformer &transformer, ParseResult &parse_result) {
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTypeModifiers(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> result;
 	auto &extract_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0)).Cast<OptionalParseResult>();
@@ -412,8 +397,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalInterval(PE
 	return make_uniq<TypeExpression>("INTERVAL", vector<unique_ptr<ParsedExpression>> {});
 }
 
-DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &transformer,
-                                                           ParseResult &parse_result) {
+DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (StringUtil::CIEquals(choice_pr.name, "IntervalToInterval")) {
@@ -577,8 +561,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSetofType(PEGTransf
 }
 
 // StringLiteral <- '\'' [^\']* '\''
-string PEGTransformerFactory::TransformStringLiteral(PEGTransformer &transformer,
-                                                     ParseResult &parse_result) {
+string PEGTransformerFactory::TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &string_literal_pr = parse_result.Cast<StringLiteralParseResult>();
 	return string_literal_pr.result;
 }

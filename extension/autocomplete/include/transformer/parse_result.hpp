@@ -134,7 +134,6 @@ public:
 	ParseResult(const ParseResult &) = delete;
 	ParseResult &operator=(const ParseResult &) = delete;
 
-
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != ParseResultType::INVALID && type != TARGET::TYPE) {
@@ -287,6 +286,7 @@ struct RepeatParseResult : ParseResult {
 			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
 		}
 	}
+
 private:
 	vector<reference<ParseResult>> children;
 };
@@ -310,7 +310,6 @@ struct OptionalParseResult : ParseResult {
 		return *optional_result;
 	}
 
-
 	ParseResult &GetResult() {
 		if (!optional_result) {
 			throw InternalException("OptionalParseResult is null");
@@ -329,6 +328,7 @@ struct OptionalParseResult : ParseResult {
 			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [empty]\n";
 		}
 	}
+
 private:
 	optional_ptr<ParseResult> optional_result;
 };
@@ -341,8 +341,6 @@ public:
 	    : ParseResult(TYPE, offset), result(parse_result_p), selected_idx(selected_idx_p) {
 		name = parse_result_p.name;
 	}
-
-
 
 	ParseResult &GetResult() {
 		return result;

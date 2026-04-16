@@ -244,8 +244,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	return result;
 }
 
-AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &transformer,
-                                                              ParseResult &parse_result) {
+AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	AddColumnEntry new_column;
 	new_column.column_path = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
@@ -431,8 +430,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddConstraint(PEGTran
 	return make_uniq<AddConstraintInfo>(AlterEntryData(), std::move(constraint));
 }
 
-string PEGTransformerFactory::TransformSequenceName(PEGTransformer &transformer,
-                                                    ParseResult &parse_result) {
+string PEGTransformerFactory::TransformSequenceName(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }

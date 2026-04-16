@@ -54,8 +54,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer,
-                                                   ParseResult &parse_result) {
+string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &col_id = list_pr.Child<ListParseResult>(1).Child<ChoiceParseResult>(0);
 	if (col_id.GetResult().type == ParseResultType::IDENTIFIER) {
@@ -70,9 +69,8 @@ vector<GenericCopyOption> PEGTransformerFactory::TransformAttachOptions(PEGTrans
 	return transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ListParseResult>(0));
 }
 
-vector<GenericCopyOption>
-PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
-                                                      ParseResult &parse_result) {
+vector<GenericCopyOption> PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
+                                                                                ParseResult &parse_result) {
 	vector<GenericCopyOption> result;
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
@@ -108,7 +106,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 				copy_option.children.push_back(Value(child->Cast<ColumnRefExpression>().GetColumnName()));
 			} else {
 				throw InternalException("Unexpected expression type %s encountered for GenericCopyOption",
-										ExpressionClassToString(child->GetExpressionClass()));
+				                        ExpressionClassToString(child->GetExpressionClass()));
 			}
 		}
 	} else if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
@@ -131,7 +129,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 		}
 	} else {
 		throw NotImplementedException("Unrecognized expression type %s",
-									  ExpressionTypeToString(expression->GetExpressionType()));
+		                              ExpressionTypeToString(expression->GetExpressionType()));
 	}
 	return copy_option;
 }

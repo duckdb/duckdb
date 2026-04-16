@@ -23,8 +23,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 	return std::move(result);
 }
 
-AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer,
-                                                            ParseResult &parse_result) {
+AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	AnalyzeTarget result;
 	result.ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
