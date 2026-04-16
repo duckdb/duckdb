@@ -186,18 +186,6 @@ void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &sour
 	    op, [&](unique_ptr<Expression> *child) { RewriteMergeBindings(*child, source_bindings, new_table_index); });
 }
 
-LogicalGet &ExtractLogicalGet(LogicalOperator &op) {
-	reference<LogicalOperator> current_op(op);
-	while (current_op.get().type == LogicalOperatorType::LOGICAL_FILTER) {
-		current_op = *current_op.get().children[0];
-	}
-	if (current_op.get().type != LogicalOperatorType::LOGICAL_GET) {
-		throw InvalidInputException("BindMerge - expected to find an operator of type LOGICAL_GET but got %s",
-		                            op.ToString());
-	}
-	return current_op.get().Cast<LogicalGet>();
-}
-
 void CheckMergeAction(MergeActionCondition condition, MergeActionType action_type) {
 	if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
 		switch (action_type) {
@@ -284,6 +272,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	} else {
 		join.type = JoinType::INNER;
 	}
+	auto &get = bound_table.plan->Cast<LogicalGet>();
 	join.left = make_uniq<BoundRefWrapper>(std::move(source_binding), std::move(source_binder));
 	join.right = make_uniq<BoundRefWrapper>(std::move(bound_table), std::move(target_binder));
 	if (stmt.join_condition) {
@@ -305,7 +294,6 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-	auto &get = ExtractLogicalGet(*join_ref.get().children[inverted ? 0 : 1]);
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
 	merge_into->table_index = GenerateTableIndex();

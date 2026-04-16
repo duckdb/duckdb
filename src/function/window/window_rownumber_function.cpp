@@ -132,8 +132,8 @@ unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocal(ExecutionContext &c
 void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                                Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (grstate.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
@@ -201,12 +201,12 @@ void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk 
 		partition_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
 		partition_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	}
-	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
+	auto rdata = FlatVector::Writer<int64_t>(result, count);
 	const auto ntile_idx = child_idx[0];
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {
-			FlatVector::SetNull(result, i, true);
+			rdata.SetInvalid(i);
 		} else {
 			auto n_param = ntile_col.GetCell<int64_t>(i);
 			if (n_param < 1) {

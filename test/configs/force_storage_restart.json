@@ -41,6 +41,13 @@
       "paths": [
         "test/sql/copy/parquet/parquet_glob_cache.test"
       ]
+    },
+    {
+      "reason": "Requires latest storage for restarting",
+      "paths": [
+        "test/sql/catalog/dependencies/test_drop_column_sequence_dependency.test",
+        "test/sql/catalog/dependencies/test_set_default_sequence_dependency.test"
+      ]
     }
   ]
 }
