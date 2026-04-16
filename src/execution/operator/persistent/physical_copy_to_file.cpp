@@ -258,7 +258,6 @@ public:
 	PartitionedCopyStage GetStage() const;
 	idx_t GetTaskCount() const;
 	idx_t InitTasks(idx_t per_thread_p);
-	bool HasCompleted() const DUCKDB_REQUIRES(lock);
 
 	template <typename T>
 	static T BinValue(T n, T val) {
@@ -328,9 +327,6 @@ public:
 	idx_t flush_partition_idx DUCKDB_GUARDED_BY(lock) = 0;
 	//! Count of flushed partitions
 	atomic<idx_t> flushed;
-
-	//! Count of completed tasks
-	atomic<idx_t> completed;
 };
 
 //! Manages a partitioned COPY flush
@@ -432,7 +428,7 @@ public:
 PartitionedCopyHashGroup::PartitionedCopyHashGroup(PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
                                                    idx_t group_idx_p)
     : partitioned_copy(partitioned_copy), count(chunk_row.count), blocks(chunk_row.chunks), group_idx(group_idx_p),
-      stage(PartitionedCopyStage::SORT), sorted(0), materialized(0), masked(0), batched(0), flushed(0), completed(0) {
+      stage(PartitionedCopyStage::SORT), sorted(0), materialized(0), masked(0), batched(0), flushed(0) {
 }
 
 PartitionedCopyStage PartitionedCopyHashGroup::GetStage() const {
@@ -447,10 +443,6 @@ idx_t PartitionedCopyHashGroup::InitTasks(idx_t per_thread_p) {
 	per_thread = per_thread_p;
 	group_threads = BinValue(blocks, per_thread);
 	return GetTaskCount();
-}
-
-bool PartitionedCopyHashGroup::HasCompleted() const {
-	return completed >= GetTaskCount() && batched >= count && flushed >= batch_states.size();
 }
 
 bool PartitionedCopyHashGroup::TryPrepareNextStage() {
@@ -751,8 +743,6 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, const 
 		annotated_lock_guard<annotated_mutex> guard(partitioned_copy.lock);
 		batch_state->write_info->active_writes--;
 	}
-
-	flushed++;
 }
 
 PartitionedCopyState::PartitionedCopyState(PartitionedCopy &partitioned_copy_p,
@@ -872,15 +862,18 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, cons
 }
 
 void PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
-	annotated_lock_guard<annotated_mutex> global_guard(lock);
-
 	const auto group_idx = task.group_idx;
 	auto &finished_hash_group = hash_groups[group_idx];
 	D_ASSERT(finished_hash_group);
-	++finished_hash_group->completed;
 
-	annotated_lock_guard<annotated_mutex> group_guard(finished_hash_group->lock);
-	if (finished_hash_group->HasCompleted()) {
+	bool hash_group_completed = false;
+	if (task.stage == PartitionedCopyStage::FLUSH) {
+		annotated_lock_guard<annotated_mutex> group_guard(finished_hash_group->lock);
+		hash_group_completed = ++finished_hash_group->flushed == finished_hash_group->batch_states.size();
+	}
+
+	if (hash_group_completed) {
+		annotated_lock_guard<annotated_mutex> global_guard(lock);
 		auto &v = active_groups;
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
 		finished_hash_group.reset();
