@@ -31,13 +31,16 @@ public:
 //! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
 class DictionaryBuffer : public VectorBuffer {
 public:
-	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p);
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p);
-	explicit DictionaryBuffer(const SelectionVector &sel);
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data);
+	explicit DictionaryBuffer(const SelectionVector &sel, idx_t sel_count, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(const SelectionVector &sel, idx_t sel_count);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count);
 	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE);
 
 public:
+	idx_t Capacity() const override {
+		return sel_count;
+	}
 	const SelectionVector &GetSelVector() const {
 		return sel_vector;
 	}
@@ -88,6 +91,7 @@ protected:
 
 private:
 	SelectionVector sel_vector;
+	idx_t sel_count;
 	buffer_ptr<DictionaryEntry> entry;
 	optional_idx dictionary_size;
 	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent

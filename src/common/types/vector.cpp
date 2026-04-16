@@ -152,7 +152,7 @@ void Vector::Reinterpret(const Vector &other) {
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
-		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), std::move(new_entry));
+		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), old_dict.Capacity(), std::move(new_entry));
 		auto dict_size = old_dict.GetDictionarySize();
 		if (dict_size.IsValid()) {
 			buffer->Cast<DictionaryBuffer>().SetDictionarySize(dict_size.GetIndex());
@@ -213,12 +213,12 @@ void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const Selecti
 	Dictionary(dictionary_size, sel, count);
 }
 
-void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel) {
+void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel, idx_t sel_count) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("Struct vectors cannot be dictionaries");
 	}
 	D_ASSERT(type == reusable_dict->data.GetType());
-	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
+	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
 void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
@@ -889,7 +889,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		// Reusable dictionary API does not work for STRUCT
 		vector.Dictionary(inverted_vector, verify_count, original_sel, count);
 	} else {
-		vector.Dictionary(reusable_dict, original_sel);
+		vector.Dictionary(reusable_dict, original_sel, count);
 	}
 	vector.Verify(count);
 }

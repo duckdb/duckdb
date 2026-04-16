@@ -135,7 +135,7 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 	dictionary_selection_vector.Verify(read_count, dictionary_size + can_have_nulls);
 #endif
 	if (result_offset == 0) {
-		result.Dictionary(dictionary, dictionary_selection_vector);
+		result.Dictionary(dictionary, dictionary_selection_vector, read_count);
 		D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
