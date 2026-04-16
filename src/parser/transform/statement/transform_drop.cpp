@@ -1,4 +1,6 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -35,6 +37,25 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	case duckdb_libpgquery::PG_OBJECT_TYPE:
 		info.type = CatalogType::TYPE_ENTRY;
 		break;
+	case duckdb_libpgquery::PG_OBJECT_TSDICTIONARY: {
+		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects->head->data.ptr_value);
+		string schema_name;
+		string dict_name;
+		if (view_list->length == 2) {
+			schema_name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
+			dict_name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->next->data.ptr_value)->val.str;
+		} else if (view_list->length == 1) {
+			dict_name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
+		} else {
+			throw ParserException("Expected \"schema.name\" or \"name\"");
+		}
+		auto pragma_result = make_uniq<PragmaStatement>();
+		pragma_result->info->name = "drop_text_search_dictionary";
+		string full_name = schema_name.empty() ? dict_name : schema_name + "." + dict_name;
+		pragma_result->info->parameters.push_back(make_uniq<ConstantExpression>(Value(full_name)));
+		pragma_result->info->parameters.push_back(make_uniq<ConstantExpression>(Value::BOOLEAN(stmt.missing_ok)));
+		return std::move(pragma_result);
+	}
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}

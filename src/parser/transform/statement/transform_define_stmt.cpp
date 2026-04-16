@@ -23,7 +23,7 @@ unique_ptr<SQLStatement> Transformer::TransformDefineStmt(duckdb_libpgquery::PGD
 		}
 	}
 
-	// Build a PRAGMA statement: PRAGMA create_text_search_dictionary('name', ...)
+	// Build a PRAGMA statement: PRAGMA create_text_search_dictionary('name', if_not_exists, key := value, ...)
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "create_text_search_dictionary";
 
@@ -33,31 +33,19 @@ unique_ptr<SQLStatement> Transformer::TransformDefineStmt(duckdb_libpgquery::PGD
 	// Second parameter: IF NOT EXISTS flag
 	result->info->parameters.push_back(make_uniq<ConstantExpression>(Value::BOOLEAN(stmt.if_not_exists)));
 
-	// Remaining parameters: each option as "key=value" strings
+	// Named parameters: tokenizer options
 	if (stmt.definition) {
 		for (auto cell = stmt.definition->head; cell != nullptr; cell = cell->next) {
 			auto def = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
-			string key = def->defname;
-			string value;
-			if (def->arg) {
-				switch (def->arg->type) {
-				case duckdb_libpgquery::T_PGString:
-					value = PGPointerCast<duckdb_libpgquery::PGValue>(def->arg)->val.str;
-					break;
-				case duckdb_libpgquery::T_PGInteger:
-					value = to_string(PGPointerCast<duckdb_libpgquery::PGValue>(def->arg)->val.ival);
-					break;
-				case duckdb_libpgquery::T_PGFloat:
-					value = PGPointerCast<duckdb_libpgquery::PGValue>(def->arg)->val.str;
-					break;
-				default:
-					value = "true";
-					break;
-				}
-			} else {
-				value = "true";
+
+			unique_ptr<ParsedExpression> param_expr = def->arg
+			    ? TransformValue(*PGPointerCast<duckdb_libpgquery::PGValue>(def->arg))
+			    : make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+
+			auto [_, inserted] = result->info->named_parameters.emplace(def->defname, std::move(param_expr));
+			if (!inserted) {
+				throw InvalidInputException("conflicting or redundant options: \"%s\" specified more than once", def->defname);
 			}
-			result->info->parameters.push_back(make_uniq<ConstantExpression>(Value(key + "=" + value)));
 		}
 	}
 

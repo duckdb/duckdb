@@ -56,7 +56,8 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	}
 	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx.GetIndex());
 	// bind and check named params
-	BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
+	// Turn off for tokenizer options
+	// BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
 	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
 }
 
