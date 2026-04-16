@@ -683,7 +683,7 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 		}
 	}
 
-	auto &base_mask = FlatVector::Validity(base_data);
+	auto &base_mask = FlatVector::ValidityMutable(base_data);
 	auto base_tuple_data = base_info.GetData<bool>();
 	auto base_tuples = base_info.GetTuples();
 	if (base_mask.CanHaveNull()) {
@@ -721,7 +721,7 @@ static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, Updat
 	}
 
 	auto base_array_data = FlatVector::GetData<T>(base_data);
-	auto &base_validity = FlatVector::Validity(base_data);
+	auto &base_validity = FlatVector::ValidityMutable(base_data);
 	auto base_tuple_data = base_info.GetData<T>();
 	auto base_tuples = base_info.GetTuples();
 	for (idx_t i = 0; i < base_info.N; i++) {
@@ -1123,7 +1123,7 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 //===--------------------------------------------------------------------===//
 idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t count, SelectionVector &sel,
                                   Vector &base_data, idx_t id_offset) {
-	auto &original_validity = FlatVector::Validity(base_data);
+	auto &original_validity = FlatVector::ValidityMutable(base_data);
 
 	SelectionVector new_sel;
 	new_sel.Initialize(STANDARD_VECTOR_SIZE);
@@ -1148,7 +1148,7 @@ idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, row_t *ids, idx_
 	auto data = UnifiedVectorFormat::GetData<T>(update);
 
 	auto original_data = FlatVector::GetData<T>(base_data);
-	auto &original_validity = FlatVector::Validity(base_data);
+	auto &original_validity = FlatVector::ValidityMutable(base_data);
 
 	SelectionVector new_sel;
 	new_sel.Initialize(STANDARD_VECTOR_SIZE);
@@ -1299,7 +1299,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		// for strings - we need to push all strings we are going to place here into the string heap of the segment
 		update_p.Flatten(count);
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
-		auto &validity = FlatVector::Validity(update_p);
+		auto &validity = FlatVector::ValidityMutable(update_p);
 		for (idx_t i = 0; i < count; i++) {
 			if (validity.RowIsValid(i)) {
 				update_data[i] = GetStringHeap().AddBlob(update_data[i]);

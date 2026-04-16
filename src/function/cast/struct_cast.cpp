@@ -151,7 +151,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	bool is_unnamed = StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
-	auto &validity = FlatVector::Validity(varchar_struct);
+	auto &validity = FlatVector::ValidityMutable(varchar_struct);
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 2;
@@ -176,7 +176,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			                                      : VectorCastHelpers::CalculateStringLength;
 
 			children[c].Flatten(count);
-			auto &child_validity = FlatVector::Validity(children[c]);
+			auto &child_validity = FlatVector::ValidityMutable(children[c]);
 			auto data = FlatVector::GetData<string_t>(children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
@@ -206,7 +206,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto write_string_func =
 			    add_escapes ? VectorCastHelpers::WriteEscapedString<false> : VectorCastHelpers::WriteString;
 
-			auto &child_validity = FlatVector::Validity(children[c]);
+			auto &child_validity = FlatVector::ValidityMutable(children[c]);
 			auto data = FlatVector::GetData<string_t>(children[c]);
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;

@@ -30,7 +30,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
 	varchar_map.Flatten(count);
-	auto &validity = FlatVector::Validity(varchar_map);
+	auto &validity = FlatVector::ValidityMutable(varchar_map);
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
 

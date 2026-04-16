@@ -42,7 +42,7 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 
 	// write definition levels and repeats
 	// the main difference between this and ListColumnWriter::Prepare is that we need to make sure to write out

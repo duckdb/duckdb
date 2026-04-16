@@ -169,7 +169,7 @@ struct ModeState {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
 			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
-			validity = &FlatVector::Validity(page.data[0]);
+			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}

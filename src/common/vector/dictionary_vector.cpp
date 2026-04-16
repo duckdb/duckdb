@@ -64,7 +64,7 @@ void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 		entry->data.Flatten(count);
 	}
 	format.data = FlatVector::GetData(entry->data);
-	format.validity = FlatVector::Validity(entry->data);
+	format.validity = FlatVector::ValidityMutable(entry->data);
 }
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,

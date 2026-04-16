@@ -320,7 +320,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	}
 
 	if (!vector_cast_data.all_converted) {
-		auto &key_validity = FlatVector::Validity(result_key_child);
+		auto &key_validity = FlatVector::ValidityMutable(result_key_child);
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			if (!result_mask.RowIsValid(row_idx)) {
 				continue;

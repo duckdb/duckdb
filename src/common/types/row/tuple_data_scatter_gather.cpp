@@ -1364,7 +1364,7 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
                                  const column_t column_id, Vector &result, const SelectionVector &target_sel,
                                  optional_ptr<Vector> cached_cast_vector) const {
 	D_ASSERT(!cached_cast_vector ||
-	         FlatVector::Validity(*cached_cast_vector).CannotHaveNull()); // ResetCachedCastVectors
+	         FlatVector::ValidityMutable(*cached_cast_vector).CannotHaveNull()); // ResetCachedCastVectors
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.function(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
 	                         cached_cast_vector, gather_function.child_functions);

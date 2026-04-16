@@ -1412,7 +1412,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			}
 			break;
 		case VectorType::FLAT_VECTOR:
-			mask.Copy(FlatVector::Validity(last_key), probe_data.size());
+			mask.Copy(FlatVector::ValidityMutable(last_key), probe_data.size());
 			break;
 		default: {
 			UnifiedVectorFormat kdata;

@@ -560,7 +560,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
                                                   optional_ptr<const SelectionVector> result_sel,
                                                   DuckDBVariantShreddingState &shredding_state, idx_t count) {
 	//
-	// auto &validity = FlatVector::Validity(value);
+	// auto &validity = FlatVector::ValidityMutable(value);
 	uint32_t *untyped_data = nullptr;
 	if (untyped_values) {
 		untyped_data = FlatVector::GetDataMutable<uint32_t>(*untyped_values);
