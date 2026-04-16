@@ -163,9 +163,11 @@ public:
 			temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 		}
 
-		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
+		             idx_t delayed_capacity) {
 			if (!curr_chunk.ColumnCount()) {
-				curr_chunk.Initialize(context.client, {result.GetType()}, delayed.GetCapacity());
+				curr_chunk.Initialize(context.client, {result.GetType()},
+				                      MaxValue<idx_t>(delayed_capacity, STANDARD_VECTOR_SIZE));
 			}
 
 			if (offset >= 0) {
@@ -318,17 +320,15 @@ public:
 			}
 		}
 		if (lead_count) {
-			delayed.Initialize(context, input.GetTypes(), lead_count + STANDARD_VECTOR_SIZE);
-			shifted.Initialize(context, input.GetTypes(), lead_count + STANDARD_VECTOR_SIZE);
+			delayed_capacity = lead_count = STANDARD_VECTOR_SIZE;
+			delayed.Initialize(context, input.GetTypes(), delayed_capacity);
+			shifted.Initialize(context, input.GetTypes(), delayed_capacity);
 		}
 		initialized = true;
 	}
 
 	static inline void Reset(DataChunk &chunk) {
-		//	Reset trashes the capacity...
-		const auto capacity = chunk.GetCapacity();
 		chunk.Reset();
-		chunk.SetCapacity(capacity);
 	}
 
 public:
@@ -343,6 +343,7 @@ public:
 	vector<unique_ptr<LeadLagState>> lead_lag_states;
 	//! The number of rows ahead to buffer for LEAD
 	idx_t lead_count = 0;
+	idx_t delayed_capacity = 0;
 	//! A buffer for delayed input
 	DataChunk delayed;
 	//! A buffer for shifting delayed input
@@ -617,7 +618,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		}
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_LEAD:
-			state.lead_lag_states[expr_idx]->Execute(context, output, delayed, result);
+			state.lead_lag_states[expr_idx]->Execute(context, output, delayed, result, state.delayed_capacity);
 			break;
 		default:
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
@@ -702,13 +703,25 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		state.Reset(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
-		//	If we don't have enough to produce a single row,
-		//	then just delay more rows, return nothing
-		//	and ask for more data.
-		delayed.Append(input);
-		output.SetCardinality(0);
-		return OperatorResultType::NEED_MORE_INPUT;
-	} else if (input.size() < delayed.size()) {
+		const idx_t need = state.lead_count - delayed.size();
+		if (input.size() <= need) {
+			//	If we don't have enough to produce a single row,
+			//	then just delay more rows, return nothing
+			//	and ask for more data.
+			delayed.Append(input);
+			output.SetCardinality(0);
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
+		// Append only the rows that fit; slice input down to the remaining rows
+		// and fall through to process the now-full delayed buffer.
+		SelectionVector partial_sel(need);
+		for (idx_t i = 0; i < need; i++) {
+			partial_sel.set_index(i, i);
+		}
+		delayed.Append(input, false, &partial_sel, need);
+		input.Slice(need, input.size() - need);
+	}
+	if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,
 		// we need to split them instead of referencing them all
 		output.SetCardinality(input.size());
@@ -740,9 +753,9 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &input = state.shifted;
 		state.Reset(input);
 
-		if (output.GetCapacity() < delayed.size()) {
+		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can
-			output.SetCardinality(output.GetCapacity());
+			output.SetCardinality(STANDARD_VECTOR_SIZE);
 			ExecuteShifted(context, delayed, input, output, gstate_p);
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}

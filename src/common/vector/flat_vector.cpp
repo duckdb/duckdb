@@ -72,7 +72,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
                                                              idx_t count) {
 	Vector child_vector(type, shared_from_this());
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
-	return make_buffer<DictionaryBuffer>(sel, std::move(entry));
+	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
@@ -191,6 +191,10 @@ void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const 
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
+	}
+	if (index >= capacity) {
+		throw InvalidInputException("Vector::SetValue index %d is out of range for vector with capacity %d", index,
+		                            capacity);
 	}
 	validity.Set(index, !val.IsNull());
 	if (val.IsNull()) {
