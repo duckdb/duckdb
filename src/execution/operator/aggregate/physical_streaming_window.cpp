@@ -166,7 +166,8 @@ public:
 		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
 		             idx_t delayed_capacity) {
 			if (!curr_chunk.ColumnCount()) {
-				curr_chunk.Initialize(context.client, {result.GetType()}, delayed_capacity);
+				curr_chunk.Initialize(context.client, {result.GetType()},
+				                      MaxValue<idx_t>(delayed_capacity, STANDARD_VECTOR_SIZE));
 			}
 
 			if (offset >= 0) {
@@ -702,13 +703,25 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		state.Reset(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
-		//	If we don't have enough to produce a single row,
-		//	then just delay more rows, return nothing
-		//	and ask for more data.
-		delayed.Append(input);
-		output.SetCardinality(0);
-		return OperatorResultType::NEED_MORE_INPUT;
-	} else if (input.size() < delayed.size()) {
+		const idx_t need = state.lead_count - delayed.size();
+		if (input.size() <= need) {
+			//	If we don't have enough to produce a single row,
+			//	then just delay more rows, return nothing
+			//	and ask for more data.
+			delayed.Append(input);
+			output.SetCardinality(0);
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
+		// Append only the rows that fit; slice input down to the remaining rows
+		// and fall through to process the now-full delayed buffer.
+		SelectionVector partial_sel(need);
+		for (idx_t i = 0; i < need; i++) {
+			partial_sel.set_index(i, i);
+		}
+		delayed.Append(input, false, &partial_sel, need);
+		input.Slice(need, input.size() - need);
+	}
+	if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,
 		// we need to split them instead of referencing them all
 		output.SetCardinality(input.size());
