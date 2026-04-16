@@ -37,6 +37,27 @@ DUCKDB_API void DuckDBAssertInternal(bool condition, const char *condition_name,
 #define D_ASSERT(condition) duckdb::DuckDBAssertInternal(bool(condition), #condition, __FILE__, __LINE__)
 #define D_ASSERT_IS_ENABLED
 
+// Runtime toggle for all debug Verify() calls (DataChunk, Vector,
+// ColumnBindingResolver, ColumnLifetimeAnalyzer, ...). When false,
+// Verify() methods guarded by DUCKDB_DEBUG_VERIFY_GUARD() become
+// no-ops. Settable via `SET debug_verification TO false;` so that
+// EXPLAIN plans stay readable and tests run faster in debug builds.
+
+#include <atomic>
+
+namespace duckdb {
+inline std::atomic<bool> g_debug_verify_enabled = false; // NOLINT: intentionally mutable global
+}
+
+// Place at the top of any Verify() method body
+// (inside #ifdef D_ASSERT_IS_ENABLED) to respect the global toggle.
+#define DUCKDB_DEBUG_VERIFY_GUARD()                                                                                    \
+	do {                                                                                                               \
+		if (!::duckdb::g_debug_verify_enabled.load(std::memory_order_relaxed)) {                                       \
+			return;                                                                                                    \
+		}                                                                                                              \
+	} while (0)
+
 #endif
 
 //! Force assertion implementation, which always asserts whatever build type is used.

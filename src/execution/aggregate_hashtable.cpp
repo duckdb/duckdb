@@ -228,7 +228,8 @@ idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
 }
 
 void GroupedAggregateHashTable::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	if (skip_lookups) {
 		return;
 	}

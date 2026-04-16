@@ -214,7 +214,7 @@ struct DuckDBAdbcDatabaseWrapper {
 	std::string uri_path;
 	bool uri_set = false;
 	//! Stores config options for round-tripping via GetOption (DuckDB does not have an API to get config options)
-	std::unordered_map<std::string, std::string> config_options;
+	duckdb::unordered_map<std::string, std::string> config_options;
 };
 
 // Helper for the ADBC GetOption buffer convention (two-pass pattern):
@@ -514,7 +514,7 @@ static AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, 
 	return ADBC_STATUS_OK;
 }
 
-static AdbcStatusCode InternalSetOption(duckdb::Connection &conn, std::unordered_map<std::string, std::string> &options,
+static AdbcStatusCode InternalSetOption(duckdb::Connection &conn, duckdb::unordered_map<std::string, std::string> &options,
                                         struct AdbcError *error) {
 	// If we got here, the options have already been validated and are acceptable
 	for (auto &option : options) {

@@ -423,7 +423,7 @@ void ExtractFromJSON(ClientConfig &config, profiler_settings_t &enabled_metrics,
 	config.profiler_settings_type = LogicalTypeId::VARCHAR;
 
 	// JSON string: parse, then accept entries with value == "true"
-	std::unordered_map<std::string, std::string> json;
+	unordered_map<std::string, std::string> json;
 	try {
 		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {

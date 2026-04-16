@@ -50,6 +50,7 @@ TupleDataChunkPart &TupleDataChunk::AddPart(TupleDataSegment &segment, unsafe_ar
 
 void TupleDataChunk::Verify(const TupleDataSegment &segment) const {
 #ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	idx_t total_count = 0;
 	for (auto part_id = part_ids.Start(); part_id < part_ids.End(); part_id++) {
 		total_count += segment.chunk_parts[part_id]->count;
@@ -128,6 +129,7 @@ void TupleDataSegment::Unpin() {
 
 void TupleDataSegment::Verify() const {
 #ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	const auto &allocator_layout = allocator->GetLayout();
 
 	idx_t total_count = 0;

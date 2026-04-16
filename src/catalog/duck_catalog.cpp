@@ -169,7 +169,8 @@ string DuckCatalog::GetEncryptionCipher() const {
 }
 
 void DuckCatalog::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	Catalog::Verify();
 	schemas->Verify(*this);
 #endif

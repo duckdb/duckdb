@@ -1263,7 +1263,8 @@ void ColumnDataCollection::FetchChunk(idx_t chunk_idx, DataChunk &result) const 
 // Helpers
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	// verify counts
 	idx_t total_segment_count = 0;
 	for (auto &segment : segments) {

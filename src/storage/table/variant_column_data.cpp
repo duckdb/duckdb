@@ -827,7 +827,8 @@ void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t 
 }
 
 void VariantColumnData::Verify(RowGroup &parent) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	ColumnData::Verify(parent);
 	validity->Verify(parent);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {

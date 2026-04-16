@@ -777,6 +777,7 @@ void TupleDataCollection::Print() {
 
 void TupleDataCollection::Verify() const {
 #ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (const auto &segment : segments) {

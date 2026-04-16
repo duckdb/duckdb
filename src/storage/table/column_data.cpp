@@ -1176,7 +1176,8 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 }
 
 void ColumnData::Verify(RowGroup &parent) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	data.Verify();
 
 	bool is_geometry_child_column = false;

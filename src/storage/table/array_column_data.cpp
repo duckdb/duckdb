@@ -384,7 +384,8 @@ void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t ro
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	ColumnData::Verify(parent);
 	validity->Verify(parent);
 	child_column->Verify(parent);

@@ -184,7 +184,8 @@ void RowGroupCollection::SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row
 }
 
 void RowGroupCollection::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	idx_t current_total_rows = 0;
 	auto row_groups = GetRowGroups();
 	row_groups->Verify();

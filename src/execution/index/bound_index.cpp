@@ -101,9 +101,12 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 }
 
 void BoundIndex::Verify() {
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	IndexLock l;
 	InitializeLock(l);
 	Verify(l);
+#endif
 }
 
 string BoundIndex::ToString(bool display_ascii) {

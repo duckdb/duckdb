@@ -273,7 +273,8 @@ void Executor::ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipel
 }
 
 void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	const idx_t count = event_data.events.size();
 	vector<reference<Event>> vertices;
 	vertices.reserve(count);

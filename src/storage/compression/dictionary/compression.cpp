@@ -43,12 +43,15 @@ void DictionaryCompressionCompressState::CreateEmptySegment() {
 }
 
 void DictionaryCompressionCompressState::Verify() {
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	current_dictionary.Verify(info.GetBlockSize());
 	D_ASSERT(current_segment->count == selection_buffer.size());
 	D_ASSERT(DictionaryCompression::HasEnoughSpace(current_segment->count.load(), index_buffer.size(),
 	                                               current_dictionary.size, current_width, info.GetBlockSize()));
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
 	D_ASSERT(index_buffer.size() == current_string_map.GetSize() + 1); // +1 is for null value
+#endif
 }
 
 bool DictionaryCompressionCompressState::LookupString(string_t str) {

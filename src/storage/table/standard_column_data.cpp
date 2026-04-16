@@ -330,7 +330,8 @@ void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckd
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	ColumnData::Verify(parent);
 	validity->Verify(parent);
 #endif

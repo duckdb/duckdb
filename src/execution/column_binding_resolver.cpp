@@ -245,7 +245,8 @@ unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator 
 }
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	op.ResolveOperatorTypes();
 	ColumnBindingResolver resolver(true);
 	resolver.VisitOperator(op);

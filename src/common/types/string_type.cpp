@@ -10,11 +10,11 @@ constexpr idx_t string_t::MAX_STRING_SIZE;
 constexpr idx_t string_t::INLINE_LENGTH;
 
 void string_t::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	VerifyUTF8();
-#endif
-
 	VerifyCharacters();
+#endif
 }
 
 void string_t::VerifyUTF8() const {

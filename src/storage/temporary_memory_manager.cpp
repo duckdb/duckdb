@@ -333,7 +333,8 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 }
 
 void TemporaryMemoryManager::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	idx_t total_reservation = 0;
 	idx_t total_remaining_size = 0;
 	for (auto &active_state : active_states) {

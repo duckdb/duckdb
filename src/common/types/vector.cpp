@@ -826,7 +826,8 @@ void Vector::Verify(idx_t count) const {
 }
 
 void Vector::Verify(const SelectionVector &sel, idx_t count) const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	if (!buffer) {
 		return;
 	}

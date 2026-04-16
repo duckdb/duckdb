@@ -17,6 +17,7 @@
 
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include <exception>
 #include <stdexcept>
 
@@ -488,7 +489,7 @@ struct hash {
 };
 
 template <typename T>
-using unordered_set = std::unordered_set<T, detail::case_ignore::hash,
+using unordered_set = duckdb::unordered_set<T, detail::case_ignore::hash,
                                          detail::case_ignore::equal_to>;
 
 } // namespace case_ignore
@@ -765,7 +766,7 @@ struct Request {
   MultipartFormData form;
   Ranges ranges;
   Match matches;
-  std::unordered_map<std::string, std::string> path_params;
+  duckdb::unordered_map<std::string, std::string> path_params;
   std::function<bool()> is_connection_closed = []() { return true; };
 
   // for client
@@ -7274,7 +7275,7 @@ inline PathParamsMatcher::PathParamsMatcher(const std::string &pattern)
   // construction
   // If exceptions are disabled, only last duplicate path
   // parameter will be set
-  std::unordered_set<std::string> param_name_set;
+  duckdb::unordered_set<std::string> param_name_set;
 #endif
 
   while (true) {

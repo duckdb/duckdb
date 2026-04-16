@@ -45,7 +45,7 @@ public:
 		WindowNaiveLocalState &state;
 	};
 
-	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
+	using RowSet = unordered_set<idx_t, HashRow, EqualRow>;
 
 	WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &aggregator);
 

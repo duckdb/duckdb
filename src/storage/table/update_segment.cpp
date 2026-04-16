@@ -114,7 +114,8 @@ void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction
 }
 
 void UpdateInfo::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	auto tuples = GetTuples();
 	for (idx_t i = 1; i < N; i++) {
 		D_ASSERT(tuples[i] > tuples[i - 1] && tuples[i] < STANDARD_VECTOR_SIZE);

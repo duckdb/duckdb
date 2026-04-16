@@ -497,7 +497,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	}
 
 	// if we over sampled, make sure we only keep the highest percentage samples
-	std::unordered_set<idx_t> selections_to_delete;
+	unordered_set<idx_t> selections_to_delete;
 
 	while (num_samples_to_keep < GetPriorityQueueSize()) {
 		auto top = PopFromWeightQueue();
@@ -620,7 +620,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 		ret.size = 0;
 		return ret;
 	}
-	std::unordered_map<idx_t, idx_t> replacement_indexes;
+	unordered_map<idx_t, idx_t> replacement_indexes;
 	SelectionVector chunk_sel(num_to_pop);
 
 	auto random_indexes_chunk = GetRandomizedVector(static_cast<uint32_t>(chunk_length), num_to_pop);
@@ -643,7 +643,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 SelectionVectorHelper ReservoirSample::GetReplacementIndexesSlow(const idx_t sample_chunk_offset,
                                                                  const idx_t chunk_length) {
 	idx_t remaining = chunk_length;
-	std::unordered_map<idx_t, idx_t> ret_map;
+	unordered_map<idx_t, idx_t> ret_map;
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
@@ -783,7 +783,8 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 }
 
 void ReservoirSample::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	if (destroyed) {
 		return;
 	}
@@ -800,7 +801,7 @@ void ReservoirSample::Verify() {
 		D_ASSERT(NumSamplesCollected() >= GetPriorityQueueSize());
 	}
 	auto base_reservoir_copy = base_reservoir_sample->Copy();
-	std::unordered_map<idx_t, idx_t> index_count;
+	unordered_map<idx_t, idx_t> index_count;
 	while (!base_reservoir_copy->reservoir_weights.empty()) {
 		auto &pair = base_reservoir_copy->reservoir_weights.top();
 		if (index_count.find(pair.second) == index_count.end()) {

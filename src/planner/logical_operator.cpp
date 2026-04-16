@@ -147,7 +147,8 @@ string LogicalOperator::ToString(ExplainFormat format) const {
 }
 
 void LogicalOperator::Verify(ClientContext &context) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	// verify expressions
 	for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 		auto str = expressions[expr_idx]->ToString();

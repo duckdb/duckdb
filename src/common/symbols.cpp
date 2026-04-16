@@ -43,8 +43,6 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace duckdb;
-
 namespace duckdb {
 
 template class unique_ptr<SQLStatement>;
@@ -160,68 +158,68 @@ template class weak_ptr<Pipeline>;
 } // namespace duckdb
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
-	template std::VECTOR_DEFINITION::size_type std::VECTOR_DEFINITION::size() const;                                   \
-	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::operator[](                               \
-	    std::VECTOR_DEFINITION::size_type n) const;                                                                    \
-	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::operator[](                                     \
-	    std::VECTOR_DEFINITION::size_type n);                                                                          \
-	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::back() const;                             \
-	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::back();                                         \
-	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::front() const;                            \
-	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::front();
+	template duckdb::VECTOR_DEFINITION::size_type duckdb::VECTOR_DEFINITION::size() const;                             \
+	template duckdb::VECTOR_DEFINITION::const_reference duckdb::VECTOR_DEFINITION::operator[](                         \
+	    duckdb::VECTOR_DEFINITION::size_type n) const;                                                                 \
+	template duckdb::VECTOR_DEFINITION::reference duckdb::VECTOR_DEFINITION::operator[](                               \
+	    duckdb::VECTOR_DEFINITION::size_type n);                                                                       \
+	template duckdb::VECTOR_DEFINITION::const_reference duckdb::VECTOR_DEFINITION::back() const;                       \
+	template duckdb::VECTOR_DEFINITION::reference duckdb::VECTOR_DEFINITION::back();                                   \
+	template duckdb::VECTOR_DEFINITION::const_reference duckdb::VECTOR_DEFINITION::front() const;                      \
+	template duckdb::VECTOR_DEFINITION::reference duckdb::VECTOR_DEFINITION::front();
 
-INSTANTIATE_VECTOR(vector<ColumnDefinition>)
-INSTANTIATE_VECTOR(vector<JoinCondition>)
-INSTANTIATE_VECTOR(vector<OrderByNode>)
-INSTANTIATE_VECTOR(vector<Expression *>)
-INSTANTIATE_VECTOR(vector<BoundParameterExpression *>)
-INSTANTIATE_VECTOR(vector<unique_ptr<Expression>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<DataChunk>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<SQLStatement>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<PhysicalOperator>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<LogicalOperator>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<Rule>>)
-INSTANTIATE_VECTOR(vector<shared_ptr<Event>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<shared_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<weak_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<shared_ptr<MetaPipeline>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<JoinHashTable>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<ColumnDataCollection>>)
-INSTANTIATE_VECTOR(vector<shared_ptr<ColumnDataAllocator>>)
+INSTANTIATE_VECTOR(vector<duckdb::ColumnDefinition>)
+INSTANTIATE_VECTOR(vector<duckdb::JoinCondition>)
+INSTANTIATE_VECTOR(vector<duckdb::OrderByNode>)
+INSTANTIATE_VECTOR(vector<duckdb::Expression *>)
+INSTANTIATE_VECTOR(vector<duckdb::BoundParameterExpression *>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::Expression>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::DataChunk>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::SQLStatement>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::PhysicalOperator>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::LogicalOperator>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::Transaction>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::Rule>>)
+INSTANTIATE_VECTOR(vector<duckdb::shared_ptr<duckdb::Event>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::Pipeline>>)
+INSTANTIATE_VECTOR(vector<duckdb::shared_ptr<duckdb::Pipeline>>)
+INSTANTIATE_VECTOR(vector<duckdb::weak_ptr<duckdb::Pipeline>>)
+INSTANTIATE_VECTOR(vector<duckdb::shared_ptr<duckdb::MetaPipeline>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::JoinHashTable>>)
+INSTANTIATE_VECTOR(vector<duckdb::unique_ptr<duckdb::ColumnDataCollection>>)
+INSTANTIATE_VECTOR(vector<duckdb::shared_ptr<duckdb::ColumnDataAllocator>>)
 
-template class duckdb::vector<ExpressionType>;
+template class duckdb::vector<duckdb::ExpressionType>;
 template class duckdb::vector<uint64_t>;
-template class duckdb::vector<string>;
-template class duckdb::vector<PhysicalType>;
-template class duckdb::vector<Value>;
+template class duckdb::vector<duckdb::string>;
+template class duckdb::vector<duckdb::PhysicalType>;
+template class duckdb::vector<duckdb::Value>;
 template class duckdb::vector<int>;
-template class duckdb::vector<duckdb::vector<Expression *>>;
-template class duckdb::vector<LogicalType>;
+template class duckdb::vector<duckdb::vector<duckdb::Expression *>>;
+template class duckdb::vector<duckdb::LogicalType>;
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;
 #endif
 
 template class std::bitset<STANDARD_VECTOR_SIZE>;
-template class std::unordered_map<PhysicalOperator *, ProfilingNode *>;
-template class std::stack<PhysicalOperator *>;
+template class duckdb::unordered_map<duckdb::PhysicalOperator *, duckdb::ProfilingNode *>;
+template class std::stack<duckdb::PhysicalOperator *>;
 
 /* -pedantic does not like this
 #define INSTANTIATE_UNORDERED_MAP(MAP_DEFINITION)                                                                      \
     template MAP_DEFINITION::mapped_type &MAP_DEFINITION::operator[](MAP_DEFINITION::key_type &&k);                    \
     template MAP_DEFINITION::mapped_type &MAP_DEFINITION::operator[](const MAP_DEFINITION::key_type &k);
 
-using catalog_map = std::unordered_map<string, unique_ptr<CatalogEntry>>;
+using catalog_map = duckdb::unordered_map<duckdb::string, duckdb::unique_ptr<duckdb::CatalogEntry>>;
 INSTANTIATE_UNORDERED_MAP(catalog_map)
 */
 
-template class std::unordered_map<string, uint64_t>;
-template class std::unordered_map<string, vector<string>>;
-template class std::unordered_map<string, std::pair<uint64_t, Expression *>>;
-// template class std::unordered_map<string, TableBinding>;
-template class std::unordered_map<string, SelectStatement *>;
-template class std::unordered_map<uint64_t, uint64_t>;
+template class duckdb::unordered_map<duckdb::string, uint64_t>;
+template class duckdb::unordered_map<duckdb::string, duckdb::vector<duckdb::string>>;
+template class duckdb::unordered_map<duckdb::string, std::pair<uint64_t, duckdb::Expression *>>;
+// template class duckdb::unordered_map<duckdb::string, duckdb::TableBinding>;
+template class duckdb::unordered_map<duckdb::string, duckdb::SelectStatement *>;
+template class duckdb::unordered_map<uint64_t, uint64_t>;
 
 #endif

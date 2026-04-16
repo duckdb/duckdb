@@ -512,7 +512,8 @@ void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t r
 }
 
 void StructColumnData::Verify(RowGroup &parent) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	ColumnData::Verify(parent);
 	validity->Verify(parent);
 	for (auto &sub_column : sub_columns) {

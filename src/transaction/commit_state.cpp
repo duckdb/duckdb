@@ -53,7 +53,8 @@ void IndexDataRemover::PushDelete(DeleteInfo &info) {
 }
 
 void IndexDataRemover::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	// Verify that our index memory is stable.
 	for (auto &table : verify_indexes) {
 		table.second->VerifyIndexBuffers();

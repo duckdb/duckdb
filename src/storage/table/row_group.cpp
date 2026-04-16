@@ -1516,7 +1516,8 @@ idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids
 }
 
 void RowGroup::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	for (auto &column : GetColumns()) {
 		column->Verify(*this);
 	}
