@@ -226,7 +226,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	D_ASSERT(result_offset == 0);
 
 	auto &selvec = GetSelVec(start, scan_count);
-	result.Dictionary(dictionary, selvec);
+	result.Dictionary(dictionary, selvec, scan_count);
 	result.Verify(result_offset + scan_count);
 }
 
