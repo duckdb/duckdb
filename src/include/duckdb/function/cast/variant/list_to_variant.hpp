@@ -51,7 +51,7 @@ bool ConvertListToVariant(ToVariantSourceData &source, ToVariantGlobalResultData
 		}
 	}
 	//! Now write the child vector of the list (for all rows)
-	auto &entry = ListVector::GetEntry(source.vec);
+	auto &entry = ListVector::GetChildMutable(source.vec);
 	auto child_size = ListVector::GetListSize(source.vec);
 	if (sel.count != list_size) {
 		Vector sliced_entry(entry.GetType(), nullptr);

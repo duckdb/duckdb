@@ -419,7 +419,7 @@ struct ICUDatePart : public ICUDateFunc {
 				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 			}
 
-			auto &res_valid = FlatVector::Validity(result);
+			auto &res_valid = FlatVector::ValidityMutable(result);
 			for (idx_t i = 0; i < count; ++i) {
 				auto entry = entries[i];
 				if (entry.IsValid()) {
@@ -429,7 +429,7 @@ struct ICUDatePart : public ICUDateFunc {
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
-							FlatVector::Validity(child_entry).SetValid(i);
+							FlatVector::ValidityMutable(child_entry).SetValid(i);
 							if (IsBigintDatepart(info.part_codes[col])) {
 								auto pdata = FlatVector::GetDataMutable<int64_t>(child_entry);
 								auto adapter = info.bigints[col];
@@ -440,13 +440,13 @@ struct ICUDatePart : public ICUDateFunc {
 								pdata[i] = adapter(calendar, micros);
 							}
 						} else {
-							FlatVector::Validity(child_entry).SetInvalid(i);
+							FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 						}
 					}
 				} else {
 					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(child_entry).SetInvalid(i);
+						FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 					}
 				}
 			}

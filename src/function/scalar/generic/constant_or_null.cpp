@@ -36,7 +36,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
 				result.Flatten(args.size());
-				auto &result_mask = FlatVector::Validity(result);
+				auto &result_mask = FlatVector::ValidityMutable(result);
 				result_mask.EnsureWritable();
 				result_mask.Combine(input_mask, args.size());
 			}
@@ -57,7 +57,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			auto entries = args.data[idx].Validity(args.size());
 			if (entries.CanHaveNull()) {
 				result.Flatten(args.size());
-				auto &result_mask = FlatVector::Validity(result);
+				auto &result_mask = FlatVector::ValidityMutable(result);
 				for (idx_t i = 0; i < args.size(); i++) {
 					if (!entries.IsValid(i)) {
 						result_mask.SetInvalid(i);

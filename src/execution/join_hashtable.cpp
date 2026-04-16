@@ -1333,7 +1333,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
-	auto &mask = FlatVector::Validity(mark_vector);
+	auto &mask = FlatVector::ValidityMutable(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
 		if (ht.null_values_are_equal[col_idx]) {
 			continue;
@@ -1402,7 +1402,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 		// first set the null mask based on whether there were NULL values in the join key
 		result_vector.SetVectorType(VectorType::FLAT_VECTOR);
 		auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-		auto &mask = FlatVector::Validity(result_vector);
+		auto &mask = FlatVector::ValidityMutable(result_vector);
 
 		// Set null mask based on NULL values in join key
 		switch (last_key.GetVectorType()) {

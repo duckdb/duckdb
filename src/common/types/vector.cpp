@@ -398,13 +398,13 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 	data.logical_type = input.GetType();
 
 	if (input.GetType().InternalType() == PhysicalType::LIST) {
-		auto &child = ListVector::GetEntry(input);
+		auto &child = ListVector::GetChild(input);
 		auto child_count = ListVector::GetListSize(input);
 		data.children.emplace_back();
 		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
 
 	} else if (input.GetType().InternalType() == PhysicalType::ARRAY) {
-		auto &child = ArrayVector::GetEntry(input);
+		auto &child = ArrayVector::GetChild(input);
 		auto array_size = ArrayType::GetSize(input.GetType());
 		auto child_count = count * array_size;
 		data.children.emplace_back();
@@ -598,7 +598,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto &child = ListVector::GetEntry(*this);
+			auto &child = ListVector::GetChildMutable(*this);
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
@@ -631,7 +631,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			Vector serialized_vector(Vector::Ref(*this));
 			serialized_vector.Flatten(count);
 
-			auto &child = ArrayVector::GetEntry(serialized_vector);
+			auto &child = ArrayVector::GetChildMutable(serialized_vector);
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
@@ -687,7 +687,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		    99, "geometry_format", GeometryStorageType::SPATIAL);
 	}
 
-	auto &validity = FlatVector::Validity(*this);
+	auto &validity = FlatVector::ValidityMutable(*this);
 	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 	validity.Reset(validity_count);
 	const auto has_validity_mask = deserializer.ReadProperty<bool>(100, "has_validity_mask");
@@ -785,7 +785,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 			// Read the child vector
 			deserializer.ReadObject(106, "child", [&](Deserializer &obj) {
-				auto &child = ListVector::GetEntry(*this);
+				auto &child = ListVector::GetChildMutable(*this);
 				child.Deserialize(obj, list_size);
 			});
 			break;
@@ -793,7 +793,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		case PhysicalType::ARRAY: {
 			auto array_size = deserializer.ReadProperty<uint64_t>(103, "array_size");
 			deserializer.ReadObject(104, "child", [&](Deserializer &obj) {
-				auto &child = ArrayVector::GetEntry(*this);
+				auto &child = ArrayVector::GetChildMutable(*this);
 				child.Deserialize(obj, array_size * count);
 			});
 			break;
@@ -919,7 +919,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		if (child_count == 0) {
 			break;
 		}
-		auto &child_vector = ListVector::GetEntry(vector);
+		auto &child_vector = ListVector::GetChildMutable(vector);
 		// reverse the order of all lists
 		SelectionVector child_sel(child_count);
 		idx_t position = child_count;

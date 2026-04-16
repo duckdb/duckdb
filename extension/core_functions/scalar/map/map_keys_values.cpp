@@ -24,7 +24,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 	auto &child = get_child_vector(map);
 
-	auto &entries = ListVector::GetEntry(result);
+	auto &entries = ListVector::GetChildMutable(result);
 	entries.Reference(child);
 
 	FlatVector::SetData(result, FlatVector::GetDataMutable(map), count);

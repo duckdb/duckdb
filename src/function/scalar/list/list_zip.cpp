@@ -70,7 +70,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	ListVector::SetListSize(result, result_size);
 	ListVector::Reserve(result, result_size);
-	auto &result_struct = ListVector::GetEntry(result);
+	auto &result_struct = ListVector::GetChildMutable(result);
 	auto &struct_entries = StructVector::GetEntries(result_struct);
 	vector<SelectionVector> selections;
 	vector<ValidityMask> masks;
@@ -96,7 +96,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 				auto copy_len = len < curr_len ? len : curr_len;
 				idx_t entry = offset;
 				for (idx_t k = 0; k < copy_len; k++) {
-					if (!FlatVector::Validity(ListVector::GetEntry(args.data[i])).RowIsValid(curr_off + k)) {
+					if (!FlatVector::Validity(ListVector::GetChild(args.data[i])).RowIsValid(curr_off + k)) {
 						masks[i].SetInvalid(entry + k);
 					}
 					selections[i].set_index(entry + k, curr_off + k);
@@ -118,7 +118,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	if (result_size > 0) {
 		for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
 			if (args.data[child_idx].GetType() != LogicalType::SQLNULL) {
-				struct_entries[child_idx].Slice(ListVector::GetEntry(args.data[child_idx]), selections[child_idx],
+				struct_entries[child_idx].Slice(ListVector::GetChild(args.data[child_idx]), selections[child_idx],
 				                                result_size);
 			}
 			struct_entries[child_idx].Flatten(result_size);

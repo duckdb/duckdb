@@ -49,7 +49,7 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 				ConstantVector::SetNull(entry, is_null);
 			}
 		} else if (internal_type == PhysicalType::ARRAY) {
-			auto &child = ArrayVector::GetEntry(vector);
+			auto &child = ArrayVector::GetChildMutable(vector);
 			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 			         child.GetVectorType() == VectorType::FLAT_VECTOR);
 			auto array_size = ArrayType::GetSize(type);
@@ -99,8 +99,8 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 		target_data[0] = list_entry;
 
 		// create a reference to the child list of the source vector
-		auto &child = ListVector::GetEntry(vector);
-		child.Reference(ListVector::GetEntry(source));
+		auto &child = ListVector::GetChildMutable(vector);
+		child.Reference(ListVector::GetChild(source));
 
 		ListVector::SetListSize(vector, ListVector::GetListSize(source));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -118,8 +118,8 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 		}
 
 		// Reference the child vector
-		auto &target_child = ArrayVector::GetEntry(vector);
-		auto &source_child = ArrayVector::GetEntry(source);
+		auto &target_child = ArrayVector::GetChildMutable(vector);
+		auto &source_child = ArrayVector::GetChild(source);
 		target_child.Reference(source_child);
 
 		// Only take the element at the given position

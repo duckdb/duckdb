@@ -25,7 +25,7 @@ unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, Colum
 void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
-		auto &mask = FlatVector::Validity(result);
+		auto &mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < count; i++) {
 			mask.SetInvalid(start_idx + i);
 		}

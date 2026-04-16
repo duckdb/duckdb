@@ -46,8 +46,9 @@ private:
 	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
 	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector &asel, const SelectionVector &bsel,
-	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
-	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
+	                               const SelectionVector &csel, const ValidityMask &avalidity,
+	                               const ValidityMask &bvalidity, const ValidityMask &cvalidity,
+	                               ValidityMask &result_validity, FUN fun) {
 		if (avalidity.CanHaveNull() || bvalidity.CanHaveNull() || cvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
@@ -100,7 +101,7 @@ public:
 			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
 			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetDataMutable<RESULT_TYPE>(result), count,
 			    *adata.sel, *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity,
-			    FlatVector::Validity(result), fun);
+			    FlatVector::ValidityMutable(result), fun);
 		}
 	}
 

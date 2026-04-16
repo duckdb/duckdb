@@ -91,7 +91,7 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
 		input.Flatten(count);
 		extra_state.Flatten(count);
-		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
+		FlatVector::ValidityMutable(extra_state).Initialize(FlatVector::Validity(input));
 		extra_state.ToUnifiedFormat(count, result);
 	}
 };

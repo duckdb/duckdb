@@ -158,7 +158,7 @@ struct BinaryExecutor {
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &result_validity = FlatVector::Validity(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
 		if (LEFT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
 				result_validity.Copy(FlatVector::Validity(right), count);
@@ -192,8 +192,8 @@ struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
-	                               const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
-	                               ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
+	                               const SelectionVector *__restrict rsel, idx_t count, const ValidityMask &lvalidity,
+	                               const ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
 		if (lvalidity.CanHaveNull() || rvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto lindex = lsel->get_index(i);
@@ -228,8 +228,8 @@ struct BinaryExecutor {
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
-		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result),
-		    fun);
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity,
+		    FlatVector::ValidityMutable(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
@@ -311,7 +311,7 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
 	static inline idx_t SelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                                   const SelectionVector *sel, idx_t count, ValidityMask &validity_mask,
+	                                   const SelectionVector *sel, idx_t count, const ValidityMask &validity_mask,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		idx_t base_idx = 0;
@@ -375,7 +375,7 @@ public:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static inline idx_t SelectFlatLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                                         const SelectionVector *sel, idx_t count, ValidityMask &mask,
+	                                         const SelectionVector *sel, idx_t count, const ValidityMask &mask,
 	                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, true, true>(

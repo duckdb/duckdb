@@ -25,8 +25,8 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	const auto lhs_count = ListVector::GetListSize(lhs_vec);
 	const auto rhs_count = ListVector::GetListSize(rhs_vec);
 
-	auto &lhs_child = ListVector::GetEntry(lhs_vec);
-	auto &rhs_child = ListVector::GetEntry(rhs_vec);
+	auto &lhs_child = ListVector::GetChildMutable(lhs_vec);
+	auto &rhs_child = ListVector::GetChildMutable(rhs_vec);
 
 	lhs_child.Flatten(lhs_count);
 	rhs_child.Flatten(rhs_count);

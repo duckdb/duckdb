@@ -152,7 +152,7 @@ struct DistinctFunctor {
 		}
 		// reserve space in the list vector
 		ListVector::Reserve(result, old_len + new_entries);
-		auto &child_elements = ListVector::GetEntry(result);
+		auto &child_elements = ListVector::GetChildMutable(result);
 		auto list_entries = FlatVector::Writer<list_entry_t>(result, count);
 
 		idx_t current_offset = old_len;
@@ -205,7 +205,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// set the result vector
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		ConstantVector::SetNull(result);
@@ -223,7 +223,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	D_ASSERT(aggr.function.HasStateUpdateCallback());
 
 	auto lists_size = ListVector::GetListSize(lists);
-	auto &child_vector = ListVector::GetEntry(lists);
+	auto &child_vector = ListVector::GetChildMutable(lists);
 	child_vector.Flatten(lists_size);
 
 	UnifiedVectorFormat child_data;

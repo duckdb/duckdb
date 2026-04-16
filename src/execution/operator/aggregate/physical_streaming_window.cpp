@@ -189,11 +189,11 @@ public:
 				//	Shift down incomplete buffers
 				//	Copy prev[count, buffered] => temp[0, buffered-count]
 				source_count = buffered - count;
-				FlatVector::Validity(temp).Reset();
+				FlatVector::ValidityMutable(temp).Reset();
 				VectorOperations::Copy(prev, temp, buffered, count, 0);
 
 				// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
-				FlatVector::Validity(prev).Reset();
+				FlatVector::ValidityMutable(prev).Reset();
 				VectorOperations::Copy(temp, prev, source_count, 0, 0);
 				// 	Copy curr[0, count] => prev[buffered-count, buffered]
 				VectorOperations::Copy(curr, prev, count, 0, source_count);
@@ -203,7 +203,7 @@ public:
 				//	Copy curr[0, count-buffered] => result[buffered, count]
 				VectorOperations::Copy(curr, result, source_count, 0, buffered);
 				// 	Copy curr[count-buffered, count] => prev[0, buffered]
-				FlatVector::Validity(prev).Reset();
+				FlatVector::ValidityMutable(prev).Reset();
 				VectorOperations::Copy(curr, prev, count, source_count, 0);
 			}
 		}

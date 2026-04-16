@@ -122,7 +122,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 
 static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant, Vector &typed_value, idx_t count,
                                               optional_ptr<SelectionVector> row_sel) {
-	auto &child_vector = ListVector::GetEntry(typed_value);
+	auto &child_vector = ListVector::GetChildMutable(typed_value);
 
 	D_ASSERT(typed_value.GetType().id() == LogicalTypeId::LIST);
 

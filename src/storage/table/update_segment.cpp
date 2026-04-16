@@ -135,7 +135,7 @@ static void MergeValidityInfo(UpdateInfo &current, ValidityMask &result_mask) {
 
 static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
                                 Vector &result) {
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
 	                                  [&](UpdateInfo &current) { MergeValidityInfo(current, result_mask); });
 }
@@ -233,7 +233,7 @@ UpdateNode::~UpdateNode() {
 // Fetch Committed
 //===--------------------------------------------------------------------===//
 static void FetchCommittedValidity(UpdateInfo &info, Vector &result) {
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	MergeValidityInfo(info, result_mask);
 }
 
@@ -313,7 +313,7 @@ static void MergeUpdateInfoRangeValidity(UpdateInfo &current, idx_t start, idx_t
 }
 
 static void FetchCommittedRangeValidity(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	MergeUpdateInfoRangeValidity(info, start, end, result_offset, result_mask);
 }
 
@@ -414,7 +414,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 //===--------------------------------------------------------------------===//
 static void FetchRowValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, idx_t row_idx,
                              Vector &result, idx_t result_idx) {
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<bool>();
 		auto tuples = current.GetTuples();
@@ -933,7 +933,7 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
                               UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
                               idx_t row_group_start) {
-	auto &base_validity = FlatVector::Validity(base_data);
+	auto &base_validity = FlatVector::ValidityMutable(base_data);
 	auto &update_validity = update.validity;
 	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(
 	    base_info, &base_validity, update_info, *update.sel, &update_validity, ids, count, sel, row_group_start);

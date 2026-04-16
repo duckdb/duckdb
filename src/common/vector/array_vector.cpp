@@ -202,7 +202,7 @@ T &ArrayVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
-		return ArrayVector::GetEntry(child);
+		return GetEntryInternal<T>(child);
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);

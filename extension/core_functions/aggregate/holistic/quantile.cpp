@@ -187,7 +187,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 
 		if (!n) {
 			rmask.Set(ridx, false);
@@ -250,7 +250,7 @@ struct QuantileListOperation : QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 
-		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto &result = ListVector::GetChildMutable(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
@@ -291,7 +291,7 @@ struct QuantileListOperation : QuantileOperation {
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		if (!n) {
-			auto &lmask = FlatVector::Validity(list);
+			auto &lmask = FlatVector::ValidityMutable(list);
 			lmask.Set(lidx, false);
 			return;
 		}
@@ -323,7 +323,7 @@ struct QuantileListFallback : QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 
-		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto &result = ListVector::GetChildMutable(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 

@@ -93,7 +93,7 @@ child_list_t<Value> ArrayStats::ToStruct(const BaseStatistics &stats) {
 
 void ArrayStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_stats = ArrayStats::GetChildStats(stats);
-	auto &child_entry = ArrayVector::GetEntry(vector);
+	auto &child_entry = ArrayVector::GetChildMutable(vector);
 	auto array_size = ArrayType::GetSize(vector.GetType());
 
 	UnifiedVectorFormat vdata;

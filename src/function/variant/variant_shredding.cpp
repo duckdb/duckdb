@@ -308,7 +308,7 @@ void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, 
 		}
 	}
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	WriteVariantValues(variant, child_vector, child_sel, child_value_index_sel, child_result_sel, total_offset);
 }
 

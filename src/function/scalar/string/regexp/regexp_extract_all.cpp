@@ -58,7 +58,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
                         Vector &result, idx_t row) {
 	auto input = CreateStringPiece(string);
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 
 	auto current_list_size = ListVector::GetListSize(result);
 	auto current_list_capacity = ListVector::GetListCapacity(result);
@@ -88,7 +88,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			current_list_capacity = ListVector::GetListCapacity(result);
 		}
 		auto list_content = FlatVector::GetDataMutable<string_t>(child_vector);
-		auto &child_validity = FlatVector::Validity(child_vector);
+		auto &child_validity = FlatVector::ValidityMutable(child_vector);
 
 		// Write the captured groups into the list-child vector
 		auto &match_group = args.group_buffer[group];
@@ -160,7 +160,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto &output_child = ListVector::GetEntry(result);
+	auto &output_child = ListVector::GetChildMutable(result);
 
 	auto strings_entries = strings.Values<string_t>(args.size());
 	auto pattern_entries = patterns.Values<string_t>(args.size());
@@ -211,7 +211,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			// If something is NULL, the result is NULL
 			// FIXME: do we even need 'SPECIAL_HANDLING'?
 			auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
-			auto &result_validity = FlatVector::Validity(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 			result_data[row].length = 0;
 			result_data[row].offset = ListVector::GetListSize(result);
 			result_validity.SetInvalid(row);
@@ -263,7 +263,7 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 			if (span.empty()) {
 				if (span.begin() == nullptr) {
 					// Unmatched optional group -> always NULL
-					FlatVector::Validity(child_vec).SetInvalid(current_list_size);
+					FlatVector::ValidityMutable(child_vec).SetInvalid(current_list_size);
 				}
 				cdata[current_list_size] = string_t(string_val.GetData(), 0);
 			} else {
@@ -293,7 +293,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 	auto &strings = args.data[0];
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto &struct_vector = ListVector::GetEntry(result);
+	auto &struct_vector = ListVector::GetChildMutable(result);
 	D_ASSERT(struct_vector.GetType().id() == LogicalTypeId::STRUCT);
 	auto &child_entries = StructVector::GetEntries(struct_vector);
 	const idx_t group_count = child_entries.size();

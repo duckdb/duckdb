@@ -28,7 +28,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	}
 
 	// Setup inner vec
-	auto &inner_vec = ListVector::GetEntry(outer_vec);
+	auto &inner_vec = ListVector::GetChildMutable(outer_vec);
 	const auto inner_count = ListVector::GetListSize(outer_vec);
 	inner_vec.ToUnifiedFormat(inner_count, inner_format);
 
@@ -47,7 +47,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	}
 
 	// Setup items vec
-	auto &items_vec = ListVector::GetEntry(inner_vec);
+	auto &items_vec = ListVector::GetChildMutable(inner_vec);
 	const auto items_count = ListVector::GetListSize(inner_vec);
 	items_vec.ToUnifiedFormat(items_count, items_format);
 
@@ -128,7 +128,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// Now assing the result
 	ListVector::SetListSize(result, sel_idx);
 
-	auto &result_child_vector = ListVector::GetEntry(result);
+	auto &result_child_vector = ListVector::GetChildMutable(result);
 	result_child_vector.Slice(items_vec, sel, sel_idx);
 	result_child_vector.Flatten(sel_idx);
 }

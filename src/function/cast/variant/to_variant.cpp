@@ -178,8 +178,8 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
 			source.Flatten(count);
 		}
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-		FlatVector::Validity(typed_value) = FlatVector::Validity(source);
+		FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
+		FlatVector::ValidityMutable(typed_value) = FlatVector::Validity(source);
 		// now recurse into the children of both
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(typed_value);
@@ -234,7 +234,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	                   count);
 	offsets.SetCardinality(count);
 	auto &keys = VariantVector::GetKeys(result);
-	auto &keys_entry = ListVector::GetEntry(keys);
+	auto &keys_entry = ListVector::GetChildMutable(keys);
 
 	//! Initialize the dictionary
 	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));

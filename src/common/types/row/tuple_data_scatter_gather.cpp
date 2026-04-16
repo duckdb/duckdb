@@ -232,7 +232,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 
 		// Recurse
 		D_ASSERT(source_format.children.size() == 1);
-		auto &child_source_v = ListVector::GetEntry(source_v);
+		auto &child_source_v = ListVector::GetChild(source_v);
 		auto &child_format = source_format.children[0];
 		WithinCollectionComputeHeapSizes(heap_sizes_v, child_source_v, child_format, append_sel, append_count,
 		                                 source_vector_data);
@@ -249,7 +249,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 
 		// Recurse
 		D_ASSERT(source_format.children.size() == 1);
-		auto &child_source_v = ArrayVector::GetEntry(source_v);
+		auto &child_source_v = ArrayVector::GetChild(source_v);
 		auto &child_format = source_format.children[0];
 		WithinCollectionComputeHeapSizes(heap_sizes_v, child_source_v, child_format, append_sel, append_count,
 		                                 source_vector_data);
@@ -588,8 +588,8 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 	}
 
 	// TODO: Template this?
-	auto &child_source = source_v.GetType().InternalType() == PhysicalType::LIST ? ListVector::GetEntry(source_v)
-	                                                                             : ArrayVector::GetEntry(source_v);
+	auto &child_source = source_v.GetType().InternalType() == PhysicalType::LIST ? ListVector::GetChild(source_v)
+	                                                                             : ArrayVector::GetChild(source_v);
 	ApplySliceRecursive(child_source, child_format, combined_sel, child_list_child_count);
 
 	// Create a combined child_list_data to be used as list_data in the recursion
@@ -962,7 +962,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
-	auto &child_source = ListVector::GetEntry(source);
+	auto &child_source = ListVector::GetChild(source);
 	auto &child_format = source_format.children[0];
 	const auto &child_function = child_functions[0];
 	child_function.function(child_source, child_format, append_sel, append_count, layout, row_locations, heap_locations,
@@ -1012,7 +1012,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
-	auto &child_source = ArrayVector::GetEntry(source);
+	auto &child_source = ArrayVector::GetChild(source);
 	auto &child_format = source_format.children[0];
 	const auto &child_function = child_functions[0];
 	child_function.function(child_source, child_format, append_sel, append_count, layout, row_locations, heap_locations,
@@ -1199,7 +1199,7 @@ TupleDataCollectionWithinCollectionScatter(const Vector &child_list, const Tuple
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
-	auto &child_vec = COLLECTION_VECTOR::GetEntry(child_list);
+	auto &child_vec = COLLECTION_VECTOR::GetChild(child_list);
 	auto &child_format = child_list_format.children[0];
 	auto &combined_child_list_data = child_format.combined_list_data->combined_data;
 	const auto &child_function = child_functions[0];
@@ -1390,7 +1390,7 @@ static void TupleDataTemplatedGatherInternal(const TupleDataLayout &layout, Vect
 
 	// Target
 	auto target_data = FlatVector::GetDataMutable<T>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1487,7 +1487,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1541,7 +1541,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 
 	// Target
 	const auto target_list_entries = FlatVector::GetDataMutableUnsafe<list_entry_t>(target);
-	auto &target_list_validity = FlatVector::Validity(target);
+	auto &target_list_validity = FlatVector::ValidityMutable(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1585,7 +1585,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count,
-	                        ListVector::GetEntry(target), target_sel, &target, child_function.child_functions);
+	                        ListVector::GetChildMutable(target), target_sel, &target, child_function.child_functions);
 }
 
 //------------------------------------------------------------------------------
@@ -1606,7 +1606,7 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
 
 	// Target
 	const auto target_data = FlatVector::GetDataMutable<T>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -1657,7 +1657,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	const auto source_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Target
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -1710,7 +1710,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 
 	// Target
 	const auto target_list_entries = FlatVector::GetDataMutableUnsafe<list_entry_t>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 	const auto child_list_size_before = ListVector::GetListSize(target);
 
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
@@ -1770,7 +1770,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, child_list_size_before, scan_sel, scan_count,
-	                        ListVector::GetEntry(target), target_sel, &combined_list_vector,
+	                        ListVector::GetChildMutable(target), target_sel, &combined_list_vector,
 	                        child_function.child_functions);
 }
 

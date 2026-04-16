@@ -373,7 +373,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 		auto &prevs = state.prevs;
 		if (prevs.empty()) {
 			prevs.resize(1);

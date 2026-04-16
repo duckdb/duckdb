@@ -127,7 +127,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	ListVector::Reserve(result, child_scan_count);
 
 	if (child_scan_count > 0) {
-		auto &child_entry = ListVector::GetEntry(result);
+		auto &child_entry = ListVector::GetChildMutable(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
 		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
 		    state.child_states[1].offset_in_column + child_scan_count > child_column->GetMaxEntry()) {
@@ -206,7 +206,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 		append_offsets[i] = start_offset + child_count + input_list.length;
 		child_count += input_list.length;
 	}
-	auto &list_child = ListVector::GetEntry(vector);
+	auto &list_child = ListVector::GetChild(vector);
 	Vector child_vector(Vector::Ref(list_child));
 	if (!child_contiguous) {
 		// if the child of the list vector is a non-contiguous vector (i.e. list elements are repeating or have gaps)

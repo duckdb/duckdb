@@ -23,8 +23,8 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	ListVector::SetListSize(result, ListVector::GetListSize(input));
 
 	// Copy the struct validity
-	auto &result_struct = ListVector::GetEntry(result);
-	FlatVector::SetValidity(result_struct, FlatVector::Validity(ListVector::GetEntry(input)));
+	auto &result_struct = ListVector::GetChildMutable(result);
+	FlatVector::SetValidity(result_struct, FlatVector::Validity(ListVector::GetChild(input)));
 
 	// reference the keys / values
 	auto &result_keys = MapVector::GetKeys(result);
