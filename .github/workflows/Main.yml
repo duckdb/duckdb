@@ -1012,6 +1012,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
 
+    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
+
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()
       shell: bash

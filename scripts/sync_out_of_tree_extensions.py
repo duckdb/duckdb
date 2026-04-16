@@ -17,6 +17,7 @@ SUBMODULES, and APPLY_PATCHES. The extension is then cloned (or updated) at
 extension/external/<name>.
 """
 
+import argparse
 import json
 import os
 import re
@@ -42,12 +43,26 @@ def parse_cmake_file(cmake_path):
     Parse a cmake file and return a list of out-of-tree extension descriptors,
     i.e. duckdb_extension_load() calls that contain GIT_URL.
 
+    Follows include("${EXTENSION_CONFIG_BASE_DIR}/foo.cmake") directives,
+    resolving them relative to the directory of cmake_path.
+
     Each descriptor is a dict with keys:
       name, git_url, git_tag, submodules (list, may be empty), apply_patches (bool)
     """
-    content = Path(cmake_path).read_text(encoding='utf-8')
+    cmake_path = Path(cmake_path)
+    content = cmake_path.read_text(encoding='utf-8')
 
     extensions = []
+
+    # Follow include("${EXTENSION_CONFIG_BASE_DIR}/foo.cmake") directives.
+    # EXTENSION_CONFIG_BASE_DIR resolves to the 'extensions/' subdirectory next to this file.
+    ext_config_base_dir = cmake_path.parent / 'extensions'
+    for inc_match in re.finditer(
+        r"include\s*\(\s*[\"']?\$\{EXTENSION_CONFIG_BASE_DIR\}/(\S+?\.cmake)[\"']?\s*\)", content
+    ):
+        included = ext_config_base_dir / inc_match.group(1)
+        if included.exists():
+            extensions.extend(parse_cmake_file(included))
 
     # Match duckdb_extension_load( NAME ... ) blocks (possibly multi-line).
     # The closing ) is found by scanning for the first unbalanced ')'.
@@ -346,12 +361,14 @@ def sync_extension(ext, external_dir, repo_root):
         print(f"  {'Force-reset' if force else 'Updated'} {name} @ {git_tag}")
 
 
-def collect_extensions(repo_root):
+def collect_extensions(repo_root, build_extensions_arg=None, extension_configs_arg=None):
     """Return a dict of name -> extension descriptor for all out-of-tree extensions to sync."""
     extensions_config_dir = repo_root / '.github' / 'config' / 'extensions'
 
-    raw_build_extensions = os.environ.get('BUILD_EXTENSIONS') or os.environ.get('DUCKDB_EXTENSIONS') or ''
-    raw_extension_configs = os.environ.get('EXTENSION_CONFIGS') or ''
+    raw_build_extensions = (
+        build_extensions_arg or os.environ.get('BUILD_EXTENSIONS') or os.environ.get('DUCKDB_EXTENSIONS') or ''
+    )
+    raw_extension_configs = extension_configs_arg or os.environ.get('EXTENSION_CONFIGS') or ''
 
     extensions = {}  # name -> descriptor (first seen wins)
 
@@ -388,10 +405,10 @@ VCPKG_REGISTRY_BASELINE = 'd485389ad737bb05a5e8afd1fbde5672b559f19e'
 VCPKG_REGISTRY_PACKAGES = ['avro-c', 'vcpkg-cmake']
 
 
-def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
+def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, output_dir):
     """
     Collect vcpkg.json files from all synced extensions, merge their dependencies
-    and overlay configuration, and write the result to build/vcpkg.json.
+    and overlay configuration, and write the result to <output_dir>/vcpkg.json.
 
     Overlay paths are stored as absolute paths so the manifest is valid regardless
     of which directory cmake is invoked from.
@@ -427,7 +444,17 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
         for rel_path in config.get('overlay-triplets', []):
             overlay_triplets.append(str((ext_dir / rel_path).resolve()))
 
+    out_path = output_dir / 'vcpkg.json'
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
     if not found_any:
+        # No extensions need vcpkg.  Write an empty manifest so that CMake can
+        # always find build/vcpkg.json when VCPKG_MANIFEST_DIR is set, but vcpkg
+        # will install nothing.
+        with open(out_path, 'w', encoding='utf-8') as f:
+            json.dump({'dependencies': []}, f, ensure_ascii=False, indent=4)
+            f.write('\n')
+        print(f"  Wrote {out_path} with no dependencies.")
         return
 
     if not os.environ.get('VCPKG_TOOLCHAIN_PATH'):
@@ -474,35 +501,48 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root):
     if overlay_triplets:
         manifest['vcpkg-configuration']['overlay-triplets'] = overlay_triplets
 
-    out_path = repo_root / 'build' / 'vcpkg.json'
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(manifest, f, ensure_ascii=False, indent=4)
         f.write('\n')
 
     dep_names = [d if isinstance(d, str) else d['name'] for d in final_deps]
-    print(f"  Wrote build/vcpkg.json with dependencies: {dep_names}")
+    print(f"  Wrote {out_path} with dependencies: {dep_names}")
 
 
 def main():
     repo_root = Path(__file__).resolve().parent.parent
-    external_dir = repo_root / 'extension' / 'external'
 
-    extensions = collect_extensions(repo_root)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--build-extensions', default=None, help='Semicolon-separated list of extension names')
+    parser.add_argument('--extension-configs', default=None, help='Semicolon-separated list of cmake config file paths')
+    parser.add_argument(
+        '--output-dir',
+        default=str(repo_root / 'build'),
+        help='Directory to write the merged vcpkg.json into (default: build/)',
+    )
+    args = parser.parse_args()
+
+    external_dir = repo_root / 'extension' / 'external'
+    output_dir = Path(args.output_dir)
+
+    extensions = collect_extensions(repo_root, args.build_extensions, args.extension_configs)
 
     if not extensions:
         print("No out-of-tree extensions to sync.")
-        return
+    else:
+        print(f"Syncing out-of-tree extensions into extension/external/: {', '.join(extensions)}")
+        for ext in extensions.values():
+            try:
+                sync_extension(ext, external_dir, repo_root)
+            except ExtensionNotCleanError as e:
+                print(f"\nERROR: {e}", file=sys.stderr)
+                sys.exit(1)
 
-    print(f"Syncing out-of-tree extensions into extension/external/: {', '.join(extensions)}")
-    for ext in extensions.values():
-        try:
-            sync_extension(ext, external_dir, repo_root)
-        except ExtensionNotCleanError as e:
-            print(f"\nERROR: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root)
+    # Always write vcpkg.json into the requested output directory so that
+    # VCPKG_MANIFEST_DIR can be set unconditionally in the Makefile.  When no
+    # extensions need vcpkg the file contains an empty dependency list and
+    # CMake/vcpkg will install nothing.
+    merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root, output_dir)
 
     print("Sync complete.")
 

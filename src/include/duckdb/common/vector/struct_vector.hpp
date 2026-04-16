@@ -15,8 +15,8 @@ namespace duckdb {
 
 class VectorStructBuffer : public VectorBuffer {
 public:
-	VectorStructBuffer();
 	explicit VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	VectorStructBuffer(vector<Vector> children, idx_t capacity);
 	VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
@@ -24,6 +24,13 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	idx_t Capacity() const override {
+		return capacity;
+	}
+	void SetCapacity(idx_t new_capacity) {
+		capacity = new_capacity;
+	}
+	void ResetCapacity(idx_t capacity) override;
 	const ValidityMask &GetValidityMask() const override {
 		return validity;
 	}
@@ -53,6 +60,8 @@ private:
 	ValidityMask validity;
 	//! child vectors used for nested data
 	vector<Vector> children;
+	//! The capacity of the struct
+	idx_t capacity;
 };
 
 struct StructVector {

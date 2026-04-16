@@ -171,8 +171,8 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
                                  idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
@@ -250,7 +250,7 @@ void WindowDenseRankExecutor::GetData(ExecutionContext &context, DataChunk &eval
 	auto &order_mask = gpeer.order_mask;
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
-	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
+	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	//	Reset to "previous" row
 	//	Resetting is slow because we have to rescan the mask.
@@ -360,8 +360,8 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
                                         Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetDataMutable<double>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
@@ -448,8 +448,8 @@ static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t pe
 void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
-	auto rdata = FlatVector::GetDataMutable<double>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);

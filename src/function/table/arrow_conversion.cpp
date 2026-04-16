@@ -380,12 +380,12 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 }
 
 static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
-                             uint64_t parent_offset) {
+                             uint64_t parent_offset, idx_t size) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) +
 	    internal_type * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-	FlatVector::SetData(vector, data_ptr);
+	FlatVector::SetData(vector, data_ptr, size);
 }
 
 template <class T>
@@ -738,7 +738,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 		FlattenRunEndsSwitch<int32_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	case PhysicalType::INT64:
-		FlattenRunEndsSwitch<int32_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
+		FlattenRunEndsSwitch<int64_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	default:
 		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToString(physical_type));
@@ -762,10 +762,10 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT32: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_32) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, size);
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -780,10 +780,10 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT64: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_64) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, size);
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -798,10 +798,10 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT128: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_128) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, size);
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -882,7 +882,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME_TZ: {
-		DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+		DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 		break;
 	}
 	case LogicalTypeId::UUID:
@@ -942,7 +942,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::DAYS: {
-			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
@@ -1038,7 +1038,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
-			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
@@ -1196,7 +1196,10 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	}
 	case LogicalTypeId::UNION: {
-		auto type_ids = ArrowBufferData<int8_t>(array, array.n_buffers == 1 ? 0 : 1);
+		idx_t type_ids_buffer_idx = array.n_buffers == 1 ? 0 : 1;
+		auto effective_offset =
+		    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+		auto type_ids = ArrowBufferData<int8_t>(array, type_ids_buffer_idx) + effective_offset;
 		D_ASSERT(type_ids);
 		auto members = UnionType::CopyMemberTypes(vector.GetType());
 

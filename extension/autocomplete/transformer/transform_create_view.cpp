@@ -90,14 +90,14 @@ void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &i
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer,
-                                                                           optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
-	auto insert_column_list_pr = list_pr.Child<OptionalParseResult>(4);
+	auto &insert_column_list_pr = list_pr.Child<OptionalParseResult>(4);
 	vector<string> column_list;
 	if (insert_column_list_pr.HasResult()) {
-		column_list = transformer.Transform<vector<string>>(insert_column_list_pr.optional_result);
+		column_list = transformer.Transform<vector<string>>(insert_column_list_pr.GetResult());
 	}
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();

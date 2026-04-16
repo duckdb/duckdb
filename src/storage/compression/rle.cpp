@@ -457,7 +457,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		memset(scan_state.matching_runs.get(), 0, sizeof(bool) * total_run_count);
 
 		// execute the filter over all runs at once
-		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer));
+		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer), total_run_count);
 
 		UnifiedVectorFormat run_format;
 		run_vector.ToUnifiedFormat(total_run_count, run_format);

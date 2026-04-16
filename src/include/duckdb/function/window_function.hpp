@@ -113,7 +113,7 @@ typedef void (*window_sink_function_t)(ExecutionContext &context, DataChunk &sin
 typedef void (*window_finalize_function_t)(ExecutionContext &context, optional_ptr<WindowCollection> collection,
                                            OperatorSinkInput &sink);
 
-//! Comultes the function for a single chunk
+//! Computes the function for a single chunk
 typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                            Vector &result, idx_t row_idx, OperatorSinkInput &sink);
 
