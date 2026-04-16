@@ -607,26 +607,26 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.connection_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 	if (context.context.transaction_id.IsValid()) {
 		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.transaction_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 	if (context.context.query_id.IsValid()) {
 		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.query_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
 	if (context.context.thread_id.IsValid()) {
 		auto thread_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		thread_data[size] = context.context.thread_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
 	chunk.SetCardinality(size + 1);

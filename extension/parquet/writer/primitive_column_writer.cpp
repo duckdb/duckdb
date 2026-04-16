@@ -66,7 +66,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 	HandleRepeatLevels(state, parent, count);
 	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 

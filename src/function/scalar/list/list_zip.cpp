@@ -96,7 +96,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 				auto copy_len = len < curr_len ? len : curr_len;
 				idx_t entry = offset;
 				for (idx_t k = 0; k < copy_len; k++) {
-					if (!FlatVector::Validity(ListVector::GetEntry(args.data[i])).RowIsValid(curr_off + k)) {
+					if (!FlatVector::ValidityMutable(ListVector::GetEntry(args.data[i])).RowIsValid(curr_off + k)) {
 						masks[i].SetInvalid(entry + k);
 					}
 					selections[i].set_index(entry + k, curr_off + k);

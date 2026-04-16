@@ -707,7 +707,8 @@ index 31cd743..5310f80 100644
 +		auto right_x = FlatVector::GetDataMutable<double>(right_entries[0]);
 +		auto right_y = FlatVector::GetDataMutable<double>(right_entries[1]);
  
- 		auto &result_mask = FlatVector::Validity(result);
+-		auto &result_mask = FlatVector::Validity(result);
++		auto &result_mask = FlatVector::ValidityMutable(result);
  
 -		auto out_data = FlatVector::GetData<double>(result);
 +		auto out_data = FlatVector::GetDataMutable<double>(result);
@@ -2153,3 +2154,27 @@ index 5bd4f95..d4c6e43 100644
  }
  
  void FunctionBuilder::AddTableFunctionDocs(ExtensionLoader &loader, const char *name, const char *desc,
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -2825,7 +2825,7 @@ struct GEOSCoverageAggFunction {
+ 
+ 		const auto state_ptr = UnifiedVectorFormat::GetData<State *>(state_format);
+ 
+-		auto &mask = FlatVector::Validity(result);
++		auto &mask = FlatVector::ValidityMutable(result);
+ 
+ 		for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+ 			auto &state = *state_ptr[state_format.sel->get_index(raw_idx)];
+diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
+--- a/src/spatial/modules/shapefile/shapefile_module.cpp
++++ b/src/spatial/modules/shapefile/shapefile_module.cpp
+@@ -661,7 +661,7 @@ class ShapefileReader {
+ 	                                  ArenaAllocator &arena, int geom_type) {
+ 		switch (geom_type) {
+ 		case SHPT_NULL:
+-			FlatVector::Validity(result).SetAllInvalid(count);
++			FlatVector::ValidityMutable(result).SetAllInvalid(count);
+ 			break;
+ 		case SHPT_POINT:
+ 			ConvertGeomLoop<ConvertPoint>(result, record_start, count, shp_handle, arena);

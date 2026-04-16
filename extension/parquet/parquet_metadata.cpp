@@ -923,13 +923,13 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 	result_data[output_idx].offset = 0;
 	result_data[output_idx].length = count;
 
-	FlatVector::Validity(output).SetValid(output_idx);
+	FlatVector::ValidityMutable(output).SetValid(output_idx);
 
 	vector<reference<Vector>> vectors;
 	for (auto &entry : result_struct_entries) {
 		vectors.push_back(std::ref(entry));
 		entry.SetVectorType(VectorType::FLAT_VECTOR);
-		auto &validity = FlatVector::Validity(entry);
+		auto &validity = FlatVector::ValidityMutable(entry);
 		validity.Initialize(count);
 	}
 	for (idx_t i = 0; i < count; i++) {

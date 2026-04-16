@@ -85,7 +85,7 @@ void WindowCollection::Combine(const ColumnSet &validity_cols) {
 	while (cursor.Scan()) {
 		const auto count = cursor.chunk.size();
 		for (idx_t i = 0; i < invalid_cols.size(); ++i) {
-			auto &other = FlatVector::Validity(cursor.chunk.data[i]);
+			auto &other = FlatVector::ValidityMutable(cursor.chunk.data[i]);
 			const auto col_idx = invalid_cols[i];
 			validities[col_idx].SliceInPlace(other, target_offset, 0, count);
 		}

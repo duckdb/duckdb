@@ -178,8 +178,8 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
 			source.Flatten(count);
 		}
-		FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
-		FlatVector::ValidityMutable(typed_value) = FlatVector::Validity(source);
+		FlatVector::ValidityMutable(result) = FlatVector::ValidityMutable(source);
+		FlatVector::ValidityMutable(typed_value) = FlatVector::ValidityMutable(source);
 		// now recurse into the children of both
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(typed_value);

@@ -48,7 +48,7 @@ struct QuantileCursor {
 		if (!RowIsVisible(row_idx)) {
 			inputs.Seek(row_idx, scan, page);
 			data = FlatVector::GetData<INPUT_TYPE>(page.data[0]);
-			validity = &FlatVector::Validity(page.data[0]);
+			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}
@@ -336,7 +336,7 @@ struct QuantileSortTree {
 			const auto row_idx = scan.current_row_index;
 			if (filter_mask.CanHaveNull() || !partition.all_valid[0]) {
 				auto &key = sort.data[0];
-				auto &validity = FlatVector::Validity(key);
+				auto &validity = FlatVector::ValidityMutable(key);
 				idx_t filtered = 0;
 				for (sel_t i = 0; i < sort.size(); ++i) {
 					if (filter_mask.RowIsValid(i + row_idx) && validity.RowIsValid(i)) {

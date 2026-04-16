@@ -81,7 +81,7 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
                                  bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 	if (parent) {
 		// propagate empty entries from the parent
 		if (state.is_empty.size() < parent->is_empty.size()) {

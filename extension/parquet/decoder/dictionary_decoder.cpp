@@ -43,7 +43,7 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	const auto duckdb_dictionary_size = dictionary_size + can_have_nulls;
 	dictionary = DictionaryVector::CreateReusableDictionary(reader.Type(), duckdb_dictionary_size);
 	auto &dictionary_data = dictionary->data;
-	auto &dict_validity = FlatVector::Validity(dictionary_data);
+	auto &dict_validity = FlatVector::ValidityMutable(dictionary_data);
 	dict_validity.Reset(duckdb_dictionary_size);
 	if (can_have_nulls) {
 		dict_validity.SetInvalid(dictionary_size);
