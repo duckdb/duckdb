@@ -43,12 +43,11 @@ struct TernaryLambdaWrapperWithNulls {
 struct TernaryExecutor {
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
-	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
-	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector &asel, const SelectionVector &bsel,
-	                               const SelectionVector &csel, const ValidityMask &avalidity,
-	                               const ValidityMask &bvalidity, const ValidityMask &cvalidity,
-	                               ValidityMask &result_validity, FUN fun) {
+	static inline void
+	ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata, const C_TYPE *__restrict cdata,
+	            RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
+	            const SelectionVector &bsel, const SelectionVector &csel, const ValidityMask &avalidity,
+	            const ValidityMask &bvalidity, const ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
 		if (avalidity.CanHaveNull() || bvalidity.CanHaveNull() || cvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);

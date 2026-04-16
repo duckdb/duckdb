@@ -584,8 +584,8 @@ struct UDFSum {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			for (idx_t i = 0; i < count; i++) {
-				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata,
-				                                          FlatVector::ValidityMutable(result), i + offset);
+				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::ValidityMutable(result),
+				                                          i + offset);
 			}
 		}
 	}

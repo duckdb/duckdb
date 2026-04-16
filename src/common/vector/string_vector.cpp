@@ -6,8 +6,8 @@
 namespace duckdb {
 
 VectorWriter<string_t>::VectorWriter(Vector &vector, idx_t count)
-    : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)),
-      validity(FlatVector::ValidityMutable(vector)), count(count) {
+    : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)), validity(FlatVector::ValidityMutable(vector)),
+      count(count) {
 }
 
 void VectorWriter<string_t>::InitializeHeap() {
