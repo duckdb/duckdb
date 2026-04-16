@@ -28,8 +28,8 @@ enum class CTEScanRewriteMode {
 class RewriteCTEScan : public LogicalOperatorVisitor {
 public:
 	RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-	               CTEScanRewriteMode mode = CTEScanRewriteMode::CTE_REF_ONLY,
-	               optional_ptr<const reference_set_t<LogicalOperator>> accessing_operators = nullptr);
+	               const reference_set_t<LogicalOperator> &accessing_operators,
+	               CTEScanRewriteMode mode = CTEScanRewriteMode::CTE_REF_ONLY);
 
 	void VisitOperator(LogicalOperator &op) override;
 
@@ -37,7 +37,7 @@ private:
 	TableIndex table_index;
 	const CorrelatedColumns &correlated_columns;
 	CTEScanRewriteMode mode;
-	optional_ptr<const reference_set_t<LogicalOperator>> accessing_operators;
+	const_reference<reference_set_t<LogicalOperator>> accessing_operators;
 };
 
 } // namespace duckdb

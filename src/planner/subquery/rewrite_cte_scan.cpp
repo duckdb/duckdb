@@ -15,24 +15,8 @@
 
 namespace duckdb {
 
-static bool ContainsCTERef(LogicalOperator &op, TableIndex table_index) {
-	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
-		auto &cteref = op.Cast<LogicalCTERef>();
-		if (cteref.cte_index == table_index) {
-			return true;
-		}
-	}
-	for (auto &child : op.children) {
-		if (ContainsCTERef(*child, table_index)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 RewriteCTEScan::RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-                               CTEScanRewriteMode mode,
-                               optional_ptr<const reference_set_t<LogicalOperator>> accessing_operators)
+                               const reference_set_t<LogicalOperator> &accessing_operators, CTEScanRewriteMode mode)
     : table_index(table_index), correlated_columns(correlated_columns), mode(mode),
       accessing_operators(accessing_operators) {
 }
@@ -55,30 +39,16 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.
 		auto &join = op.Cast<LogicalDependentJoin>();
-		if (accessing_operators) {
-			bool has_cte_ref = false;
-			for (auto &child : join.children) {
-				if (accessing_operators->find(*child) != accessing_operators->end()) {
-					has_cte_ref = true;
-					break;
-				}
+		bool has_cte_ref = false;
+		for (auto &child : join.children) {
+			if (accessing_operators.get().find(*child) != accessing_operators.get().end()) {
+				has_cte_ref = true;
+				break;
 			}
-			if (!has_cte_ref) {
-				VisitOperatorChildren(op);
-				return;
-			}
-		} else if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
-			bool has_cte_ref = false;
-			for (auto &child : join.children) {
-				if (ContainsCTERef(*child, table_index)) {
-					has_cte_ref = true;
-					break;
-				}
-			}
-			if (!has_cte_ref) {
-				VisitOperatorChildren(op);
-				return;
-			}
+		}
+		if (!has_cte_ref) {
+			VisitOperatorChildren(op);
+			return;
 		}
 
 		for (auto &c : correlated_columns) {
