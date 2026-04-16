@@ -14,6 +14,13 @@
 
 namespace duckdb {
 
+class ColumnDataCollection;
+
+//! Splits `text` on newlines (skipping empty lines) and appends each line as a
+//! Value in column 0 of `chunk`. When `collection` is provided and the chunk
+//! fills up, it is flushed to the collection and reset.
+void AppendExplainLines(const string &text, DataChunk &chunk, ColumnDataCollection *collection = nullptr);
+
 class PhysicalExplainAnalyze : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPLAIN_ANALYZE;

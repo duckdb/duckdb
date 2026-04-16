@@ -206,6 +206,12 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			result->info = make_uniq<DropNotNullInfo>(std::move(data), command->name);
 			break;
 		}
+		case duckdb_libpgquery::PG_AT_DropConstraint: {
+			auto cascade = command->behavior == duckdb_libpgquery::PG_DROP_CASCADE;
+			result->info =
+			    make_uniq<DropConstraintInfo>(std::move(data), command->name, command->missing_ok, cascade);
+			break;
+		}
 		case duckdb_libpgquery::PG_AT_AddConstraint: {
 			auto pg_constraint = PGCast<duckdb_libpgquery::PGConstraint>(*command->def);
 			if (pg_constraint.contype != duckdb_libpgquery::PGConstrType::PG_CONSTR_PRIMARY) {

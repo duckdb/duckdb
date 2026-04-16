@@ -143,6 +143,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::ALTER_COLUMN_TYPE:
 		result = ChangeColumnTypeInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::DROP_CONSTRAINT:
+		result = DropConstraintInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::DROP_NOT_NULL:
 		result = DropNotNullInfo::Deserialize(deserializer);
 		break;
@@ -245,6 +248,21 @@ void AddConstraintInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> AddConstraintInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<AddConstraintInfo>(new AddConstraintInfo());
 	deserializer.ReadPropertyWithDefault<unique_ptr<Constraint>>(400, "constraint", result->constraint);
+	return std::move(result);
+}
+
+void DropConstraintInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(400, "constraint_name", constraint_name);
+	serializer.WritePropertyWithDefault<bool>(401, "if_constraint_not_found", if_constraint_not_found);
+	serializer.WritePropertyWithDefault<bool>(402, "cascade", cascade);
+}
+
+unique_ptr<AlterTableInfo> DropConstraintInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<DropConstraintInfo>(new DropConstraintInfo());
+	deserializer.ReadPropertyWithDefault<string>(400, "constraint_name", result->constraint_name);
+	deserializer.ReadPropertyWithDefault<bool>(401, "if_constraint_not_found", result->if_constraint_not_found);
+	deserializer.ReadPropertyWithDefault<bool>(402, "cascade", result->cascade);
 	return std::move(result);
 }
 

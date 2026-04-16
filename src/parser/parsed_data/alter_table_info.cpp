@@ -594,6 +594,42 @@ string AddConstraintInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
+// DropConstraintInfo
+//===--------------------------------------------------------------------===//
+DropConstraintInfo::DropConstraintInfo() : AlterTableInfo(AlterTableType::DROP_CONSTRAINT) {
+}
+
+DropConstraintInfo::DropConstraintInfo(AlterEntryData data, string constraint_name_p, bool if_constraint_not_found_p,
+                                       bool cascade_p)
+    : AlterTableInfo(AlterTableType::DROP_CONSTRAINT, std::move(data)),
+      constraint_name(std::move(constraint_name_p)), if_constraint_not_found(if_constraint_not_found_p),
+      cascade(cascade_p) {
+}
+
+DropConstraintInfo::~DropConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> DropConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, DropConstraintInfo>(GetAlterEntryData(), constraint_name, if_constraint_not_found,
+	                                                     cascade);
+}
+
+string DropConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP CONSTRAINT ";
+	if (if_constraint_not_found) {
+		result += "IF EXISTS ";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(constraint_name);
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // SetPartitionedByInfo
 //===--------------------------------------------------------------------===//
 SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {

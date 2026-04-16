@@ -765,6 +765,28 @@
     ]
   },
   {
+    "class": "DropConstraintInfo",
+    "base": "AlterTableInfo",
+    "enum": "DROP_CONSTRAINT",
+    "members": [
+      {
+        "id": 400,
+        "name": "constraint_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "if_constraint_not_found",
+        "type": "bool"
+      },
+      {
+        "id": 402,
+        "name": "cascade",
+        "type": "bool"
+      }
+    ]
+  },
+  {
     "class": "SetPartitionedByInfo",
     "base": "AlterTableInfo",
     "enum": "SET_PARTITIONED_BY",

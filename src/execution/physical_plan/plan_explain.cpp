@@ -45,22 +45,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	DataChunk chunk;
 	chunk.Initialize(allocator, plan_types);
 	for (idx_t i = 0; i < values.size(); i++) {
-		auto &val = values[i];
-		idx_t pos = 0;
-		while (pos < val.size()) {
-			auto nl = val.find('\n', pos);
-			auto line = val.substr(pos, nl == string::npos ? string::npos : nl - pos);
-			pos = nl == string::npos ? val.size() : nl + 1;
-			if (line.empty()) {
-				continue;
-			}
-			chunk.SetValue(0, chunk.size(), Value(std::move(line)));
-			chunk.SetCardinality(chunk.size() + 1);
-			if (chunk.size() == STANDARD_VECTOR_SIZE) {
-				collection->Append(chunk);
-				chunk.Reset();
-			}
-		}
+		AppendExplainLines(values[i], chunk, collection.get());
 	}
 	collection->Append(chunk);
 
