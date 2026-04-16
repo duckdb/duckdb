@@ -432,15 +432,8 @@ fuzzer_tools:
 	if [ "$$uname_s" != "Linux" ]; then \
 		echo "Error: fuzzer_tools is Linux-only"; \
 		exit 1; \
-	fi; \
-	missing=0; \
-	for cmd in bwrap afl-fuzz afl-cmin afl-clang-fast afl-clang-fast++; do \
-		command -v $$cmd >/dev/null 2>&1 || missing=1; \
-	done; \
-	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq bubblewrap afl++; \
 	fi
+	$(call ensure_apt_commands,bwrap,bubblewrap)
 
 fuzzer: ${EXTENSION_CONFIG_STEP}
 	@eval "$$(./scripts/ci/afl_detect_cxx.sh)"; \
