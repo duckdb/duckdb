@@ -1030,8 +1030,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 	return expr;
 }
 
-string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
-                                                     ParseResult &parse_result) {
+string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &child = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
@@ -1387,9 +1386,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(
 	return std::move(expr);
 }
 
-unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
-                                                              ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
 	// QuestionMarkNumberedParameter <- '?' NumberLiteral
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));

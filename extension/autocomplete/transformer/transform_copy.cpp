@@ -197,8 +197,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileName(PEGTra
 	return make_uniq<ConstantExpression>(Value(file_name));
 }
 
-string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer,
-                                                       ParseResult &parse_result) {
+string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	string result;
 	result += list_pr.Child<IdentifierParseResult>(0).name;

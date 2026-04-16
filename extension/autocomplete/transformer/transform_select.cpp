@@ -469,9 +469,8 @@ string PEGTransformerFactory::TransformReservedIdentifierOrStringLiteral(PEGTran
 	return transformer.Transform<string>(choice_pr.GetResult());
 }
 
-QualifiedName
-PEGTransformerFactory::TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
+QualifiedName PEGTransformerFactory::TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
 	QualifiedName result;
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	result.catalog = INVALID_CATALOG;
