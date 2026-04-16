@@ -35,27 +35,37 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	}
 
-	// Create a ColumnDataCollection from the output.
+	// Create a ColumnDataCollection: single "QUERY PLAN" column, one row per line
+	// (PostgreSQL-compatible format).
 	auto &allocator = Allocator::Get(context);
-	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
+	vector<LogicalType> plan_types {LogicalType::VARCHAR};
 	auto collection =
 	    make_uniq<ColumnDataCollection>(context, plan_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 
 	DataChunk chunk;
-	chunk.Initialize(allocator, op.types);
-	for (idx_t i = 0; i < keys.size(); i++) {
-		chunk.SetValue(0, chunk.size(), Value(keys[i]));
-		chunk.SetValue(1, chunk.size(), Value(values[i]));
-		chunk.SetCardinality(chunk.size() + 1);
-		if (chunk.size() == STANDARD_VECTOR_SIZE) {
-			collection->Append(chunk);
-			chunk.Reset();
+	chunk.Initialize(allocator, plan_types);
+	for (idx_t i = 0; i < values.size(); i++) {
+		auto &val = values[i];
+		idx_t pos = 0;
+		while (pos < val.size()) {
+			auto nl = val.find('\n', pos);
+			auto line = val.substr(pos, nl == string::npos ? string::npos : nl - pos);
+			pos = nl == string::npos ? val.size() : nl + 1;
+			if (line.empty()) {
+				continue;
+			}
+			chunk.SetValue(0, chunk.size(), Value(std::move(line)));
+			chunk.SetCardinality(chunk.size() + 1);
+			if (chunk.size() == STANDARD_VECTOR_SIZE) {
+				collection->Append(chunk);
+				chunk.Reset();
+			}
 		}
 	}
 	collection->Append(chunk);
 
 	// Output the result via a chunk scan.
-	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
+	return Make<PhysicalColumnDataScan>(plan_types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
 	                                    std::move(collection));
 }
 

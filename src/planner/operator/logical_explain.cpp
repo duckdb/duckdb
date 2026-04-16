@@ -18,12 +18,12 @@ bool LogicalExplain::SupportSerialization() const {
 }
 
 void LogicalExplain::ResolveTypes() {
-	types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
+	types = {LogicalType::VARCHAR};
 }
 vector<ColumnBinding> LogicalExplain::GetColumnBindings() {
 	vector<ColumnBinding> result;
 	TableIndex explain_tbl_idx(0);
-	for (auto explain_col_idx : ProjectionIndex::GetIndexes(2)) {
+	for (auto explain_col_idx : ProjectionIndex::GetIndexes(1)) {
 		result.emplace_back(explain_tbl_idx, explain_col_idx);
 	}
 	return result;

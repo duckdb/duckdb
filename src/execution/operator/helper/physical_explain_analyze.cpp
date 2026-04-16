@@ -37,9 +37,21 @@ SourceResultType PhysicalExplainAnalyze::GetDataInternal(ExecutionContext &conte
                                                          OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
 
-	chunk.SetValue(0, 0, Value("analyzed_plan"));
-	chunk.SetValue(1, 0, Value(gstate.analyzed_plan));
-	chunk.SetCardinality(1);
+	// Split plan into individual lines (PostgreSQL-compatible single-column format).
+	auto &plan = gstate.analyzed_plan;
+	idx_t row = 0;
+	idx_t pos = 0;
+	while (pos < plan.size() && row < STANDARD_VECTOR_SIZE) {
+		auto nl = plan.find('\n', pos);
+		auto line = plan.substr(pos, nl == string::npos ? string::npos : nl - pos);
+		pos = nl == string::npos ? plan.size() : nl + 1;
+		if (line.empty()) {
+			continue;
+		}
+		chunk.SetValue(0, row, Value(std::move(line)));
+		row++;
+	}
+	chunk.SetCardinality(row);
 
 	return SourceResultType::FINISHED;
 }

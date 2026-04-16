@@ -15,8 +15,8 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	explain->logical_plan_unopt = logical_plan_unopt;
 
 	result.plan = std::move(explain);
-	result.names = {"explain_key", "explain_value"};
-	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
+	result.names = {"QUERY PLAN"};
+	result.types = {LogicalType::VARCHAR};
 
 	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::QUERY_RESULT;
