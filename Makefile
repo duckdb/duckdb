@@ -438,12 +438,10 @@ fuzzer: ${EXTENSION_CONFIG_STEP}
 FUZZ_SMOKE_SECS ?= 30
 fuzzer_smoke: fuzzer
 	@command -v afl-fuzz >/dev/null 2>&1 || { echo "Error: afl-fuzz is required (run: brew install afl++)"; exit 1; }
-	@export TMP_TEST_DIR="$$(mktemp -d 2>/dev/null || mktemp -d -t afltest)"
-	@trap 'rm -rf "$$TMP_TEST_DIR"' EXIT
 	@mkdir -p build/fuzzer/smoke/in && \
 	printf "statement ok\nSELECT 42;\n\nquery I\nSELECT 7;\n----\n7\n" > build/fuzzer/smoke/in/seed1.test && \
 	OUT_DIR=build/fuzzer/smoke/out-$$(date +%s) && \
-	AFL_SKIP_CPUFREQ=1 afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest --test-temp-dir "$$TMP_TEST_DIR"
+	AFL_SKIP_CPUFREQ=1 afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest
 
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
