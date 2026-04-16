@@ -1213,6 +1213,8 @@ jobs:
     env:
       FUZZ_SMOKE_SECS: 30
       FUZZ_SQL_DICT_SECS: 30
+      AFL_CC: afl-clang-fast
+      AFL_CXX: afl-clang-fast++
 
     steps:
     - name: "Checkout"
