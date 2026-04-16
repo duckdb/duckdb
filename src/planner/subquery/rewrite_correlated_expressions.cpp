@@ -13,24 +13,21 @@
 namespace duckdb {
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(
-    vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map, bool recursive_rewrite,
+    vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map,
     optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings)
     : correlated_bindings(std::move(correlated_bindings)), correlated_map(correlated_map),
-      recursive_rewrite(recursive_rewrite), equivalent_bindings(equivalent_bindings) {
+      equivalent_bindings(equivalent_bindings) {
 }
 
 void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, vector<ColumnBinding> correlated_bindings,
-                                           column_binding_map_t<idx_t> &correlated_map, bool recursive_rewrite,
+                                           column_binding_map_t<idx_t> &correlated_map,
                                            optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings) {
-	RewriteCorrelatedExpressions rewriter(std::move(correlated_bindings), correlated_map, recursive_rewrite,
-	                                      equivalent_bindings);
+	RewriteCorrelatedExpressions rewriter(std::move(correlated_bindings), correlated_map, equivalent_bindings);
 	rewriter.VisitOperator(op);
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
-	if (recursive_rewrite) {
-		VisitOperatorChildren(op);
-	}
+	VisitOperatorChildren(op);
 	// update the bindings in the correlated columns of the dependent join
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &plan = op.Cast<LogicalDependentJoin>();
@@ -64,91 +61,18 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	D_ASSERT(entry->second < correlated_bindings.size());
 
 	expr.binding = correlated_bindings[entry->second];
-	if (recursive_rewrite) {
-		expr.depth--;
-	} else {
-		expr.depth = 0;
-	}
+	D_ASSERT(expr.depth > 0);
+	expr.depth--;
 	return nullptr;
 }
-
-//! Helper class used to recursively rewrite correlated expressions within nested subqueries.
-class RewriteCorrelatedRecursive : public LogicalOperatorVisitor {
-public:
-	RewriteCorrelatedRecursive(vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map);
-
-	void VisitOperator(LogicalOperator &op) override;
-	void VisitExpression(unique_ptr<Expression> *expression) override;
-
-	void RewriteCorrelatedSubquery(Binder &binder, LogicalOperator &subquery);
-
-	vector<ColumnBinding> correlated_bindings;
-	column_binding_map_t<idx_t> &correlated_map;
-};
 
 unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr,
                                                                   unique_ptr<Expression> *expr_ptr) {
 	if (!expr.IsCorrelated()) {
 		return nullptr;
 	}
-	// subquery detected within this subquery
-	// recursively rewrite it using the RewriteCorrelatedRecursive class
-	RewriteCorrelatedRecursive rewrite(correlated_bindings, correlated_map);
-	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery.plan);
+	Rewrite(*expr.subquery.plan, correlated_bindings, correlated_map, equivalent_bindings);
 	return nullptr;
-}
-
-RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(vector<ColumnBinding> correlated_bindings,
-                                                       column_binding_map_t<idx_t> &correlated_map)
-    : correlated_bindings(std::move(correlated_bindings)), correlated_map(correlated_map) {
-}
-
-void RewriteCorrelatedRecursive::VisitOperator(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-		// rewrite correlated columns in child joins
-		auto &dep_join = op.Cast<LogicalDependentJoin>();
-		for (auto &corr : dep_join.correlated_columns) {
-			auto entry = correlated_map.find(corr.binding);
-			if (entry != correlated_map.end()) {
-				D_ASSERT(entry->second < correlated_bindings.size());
-				corr.binding = correlated_bindings[entry->second];
-			}
-		}
-	}
-	// visit the children of the table ref
-	LogicalOperatorVisitor::VisitOperator(op);
-}
-
-void RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(Binder &binder, LogicalOperator &op) {
-	VisitOperator(op);
-}
-
-void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> *expression) {
-	auto &expr = **expression;
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		// bound column reference
-		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-		if (bound_colref.depth == 0) {
-			// not a correlated column, ignore
-			return;
-		}
-		// correlated column
-		// check the correlated map
-		auto entry = correlated_map.find(bound_colref.binding);
-		if (entry != correlated_map.end()) {
-			// we found the column in the correlated map!
-			// update the binding and reduce the depth by 1
-			D_ASSERT(entry->second < correlated_bindings.size());
-			bound_colref.binding = correlated_bindings[entry->second];
-			bound_colref.depth--;
-		}
-	} else if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {
-		// we encountered another subquery: rewrite recursively
-		auto &bound_subquery = expr.Cast<BoundSubqueryExpression>();
-		RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery.plan);
-	}
-	// recurse into the children of this subquery
-	LogicalOperatorVisitor::VisitExpression(expression);
 }
 
 RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)
