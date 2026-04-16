@@ -53,23 +53,56 @@ private:
 	};
 
 	struct CorrelatedLayout {
-		CorrelatedLayout() {
-		}
-		CorrelatedLayout(vector<ColumnBinding> correlated_bindings_p, vector<idx_t> correlated_offsets_p)
-		    : correlated_bindings(std::move(correlated_bindings_p)),
-		      correlated_offsets(std::move(correlated_offsets_p)) {
-			D_ASSERT(correlated_bindings.size() == correlated_offsets.size());
+		static CorrelatedLayout Empty(const CorrelatedColumns &correlated_columns) {
+			return CorrelatedLayout(correlated_columns, {}, {});
 		}
 
-		static CorrelatedLayout CreateContiguous(ColumnBinding base_binding, idx_t correlated_offset, idx_t count) {
+		static CorrelatedLayout CreateContiguous(const CorrelatedColumns &correlated_columns,
+		                                         ColumnBinding base_binding, idx_t correlated_offset, idx_t count) {
 			vector<ColumnBinding> correlated_bindings;
 			vector<idx_t> correlated_offsets;
+			correlated_bindings.reserve(count);
+			correlated_offsets.reserve(count);
 			for (idx_t i = 0; i < count; i++) {
 				correlated_bindings.emplace_back(base_binding.table_index,
 				                                 ProjectionIndex(base_binding.column_index + i));
 				correlated_offsets.push_back(correlated_offset + i);
 			}
-			return CorrelatedLayout(std::move(correlated_bindings), std::move(correlated_offsets));
+			return CorrelatedLayout(correlated_columns, std::move(correlated_bindings), std::move(correlated_offsets));
+		}
+
+		static CorrelatedLayout CreateLeading(const CorrelatedColumns &correlated_columns,
+		                                      const vector<ColumnBinding> &bindings, idx_t count) {
+			D_ASSERT(bindings.size() >= count);
+			vector<ColumnBinding> correlated_bindings;
+			vector<idx_t> correlated_offsets;
+			correlated_bindings.reserve(count);
+			correlated_offsets.reserve(count);
+			for (idx_t i = 0; i < count; i++) {
+				correlated_bindings.push_back(bindings[i]);
+				correlated_offsets.push_back(i);
+			}
+			return CorrelatedLayout(correlated_columns, std::move(correlated_bindings), std::move(correlated_offsets));
+		}
+
+		idx_t size() const {
+			return correlated_bindings.size();
+		}
+
+		const vector<ColumnBinding> &GetBindings() const {
+			return correlated_bindings;
+		}
+
+		const CorrelatedColumnInfo &GetColumn(idx_t index) const {
+			return correlated_columns.get()[index];
+		}
+
+		idx_t GetDelimKeyCount(bool perform_delim) const {
+			return perform_delim ? size() : 1;
+		}
+
+		const CorrelatedColumnInfo &GetDelimKey(idx_t index, bool perform_delim) const {
+			return GetColumn(GetDelimKeyIndex(index, perform_delim));
 		}
 
 		const ColumnBinding &GetBinding(idx_t index) const {
@@ -77,9 +110,17 @@ private:
 			return correlated_bindings[index];
 		}
 
+		const ColumnBinding &GetDelimBinding(idx_t index, bool perform_delim) const {
+			return GetBinding(GetDelimKeyIndex(index, perform_delim));
+		}
+
 		idx_t GetOffset(idx_t index) const {
 			D_ASSERT(index < correlated_offsets.size());
 			return correlated_offsets[index];
+		}
+
+		idx_t GetDelimOffset(idx_t index, bool perform_delim) const {
+			return GetOffset(GetDelimKeyIndex(index, perform_delim));
 		}
 
 		void ShiftOffsets(idx_t offset) {
@@ -88,6 +129,32 @@ private:
 			}
 		}
 
+		void ResetContiguousOffsets(idx_t offset) {
+			D_ASSERT(correlated_offsets.size() == correlated_bindings.size());
+			for (idx_t i = 0; i < correlated_offsets.size(); i++) {
+				correlated_offsets[i] = offset + i;
+			}
+		}
+
+	private:
+		idx_t GetDelimKeyIndex(idx_t index, bool perform_delim) const {
+			D_ASSERT(index < GetDelimKeyCount(perform_delim));
+			if (perform_delim) {
+				return index;
+			}
+			auto delim_index = correlated_columns.get().GetDelimIndex();
+			D_ASSERT(delim_index < correlated_columns.get().size());
+			return delim_index;
+		}
+
+		CorrelatedLayout(const CorrelatedColumns &correlated_columns_p, vector<ColumnBinding> correlated_bindings_p,
+		                 vector<idx_t> correlated_offsets_p)
+		    : correlated_columns(correlated_columns_p), correlated_bindings(std::move(correlated_bindings_p)),
+		      correlated_offsets(std::move(correlated_offsets_p)) {
+			D_ASSERT(correlated_bindings.size() == correlated_offsets.size());
+		}
+
+		const_reference<CorrelatedColumns> correlated_columns;
 		vector<ColumnBinding> correlated_bindings;
 		vector<idx_t> correlated_offsets;
 	};
@@ -104,10 +171,11 @@ private:
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 
-	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
-	                           CorrelatedLayout layout = CorrelatedLayout());
-	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
-	                                      const CorrelatedColumns &correlated_columns, vector<ColumnBinding> bindings,
+	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan) {
+		return Decorrelate(std::move(plan), PushDownContext(), CorrelatedLayout::Empty(correlated_columns));
+	}
+	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
+	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, vector<ColumnBinding> bindings,
 	                                      const CorrelatedLayout &layout, bool perform_delim);
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
@@ -115,8 +183,12 @@ private:
 	                                 bool parent_is_dependent_join = false);
 
 	//! Push the dependent join down a LogicalOperator
-	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
-	                                     CorrelatedLayout layout = CorrelatedLayout());
+	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
+	                                     PushDownContext context = PushDownContext()) {
+		return PushDownDependentJoin(std::move(plan), context, CorrelatedLayout::Empty(correlated_columns));
+	}
+	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	                                     CorrelatedLayout layout);
 	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                        CorrelatedLayout layout);
 	Binder &binder;
@@ -131,13 +203,11 @@ private:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
-	CorrelatedLayout CreateCorrelatedLayout(TableIndex table_index, idx_t binding_offset,
-	                                        idx_t correlated_offset) const;
-	CorrelatedLayout CreateCorrelatedLayout(TableIndex table_index, idx_t correlated_offset) const;
-	CorrelatedLayout CreateLeadingCorrelatedLayout(const vector<ColumnBinding> &bindings) const;
+	void AppendDelimColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
+	                        bool include_names) const;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
 	                             idx_t count, bool include_names) const;
-	void AddCorrelatedGroupColumns(LogicalAggregate &aggr, const CorrelatedLayout &layout, idx_t group_count) const;
+	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
 	void AddAnyJoinConditions(LogicalDependentJoin &op, const vector<ColumnBinding> &plan_columns) const;
 	void AddComparisonJoinConditions(LogicalComparisonJoin &join, const CorrelatedLayout &left_layout,
