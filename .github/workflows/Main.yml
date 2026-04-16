@@ -99,6 +99,8 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            julia:
+              - tools/juliapkg/**
 
       - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -208,7 +210,8 @@ jobs:
             --event "${{ github.event_name }}" \
             --ref_name "${{ github.ref_name }}" \
             --repository "${{ github.repository }}" \
-            --skip-tests "$skip_tests"
+            --skip-tests "$skip_tests" \
+            --changed-keys "${{ steps.changed.outputs.changed_keys }}"
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"

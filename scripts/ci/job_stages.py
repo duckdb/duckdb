@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from typing import TextIO
@@ -70,6 +71,7 @@ class JobSelectionInput:
     ref_name: str
     repository: str
     skip_tests: bool
+    changed_keys: set[str]
 
 
 def should_save_cache(selection_input: JobSelectionInput) -> bool:
@@ -92,6 +94,9 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
 
+    if "julia" in selection_input.changed_keys:
+        selected_jobs.append("main_julia")
+
     return selected_jobs
 
 
@@ -113,6 +118,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ref_name", required=True)
     parser.add_argument("--repository", default="duckdb/duckdb")
     parser.add_argument("--skip-tests", default="false")
+    parser.add_argument("--changed-keys", default="")
     return parser.parse_args()
 
 
@@ -125,6 +131,12 @@ def parse_bool(value: str) -> bool:
     raise ValueError(f"invalid boolean value: {value!r}")
 
 
+def parse_changed_keys(value: str) -> set[str]:
+    # changed-files may emit keys separated by spaces/newlines, and can be configured
+    # to use commas. Support both delimiters defensively.
+    return {token.lower() for token in re.split(r"[\s,]+", value.strip()) if token}
+
+
 def main() -> int:
     args = parse_args()
     selection_input = JobSelectionInput(
@@ -132,6 +144,7 @@ def main() -> int:
         ref_name=args.ref_name,
         repository=args.repository,
         skip_tests=parse_bool(args.skip_tests),
+        changed_keys=parse_changed_keys(args.changed_keys),
     )
     selection = compute_job_selection(selection_input)
 

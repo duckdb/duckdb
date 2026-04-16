@@ -16,7 +16,12 @@ from scripts.ci import job_stages
 
 class JobStagesTest(unittest.TestCase):
     def _compute_job_selection(
-        self, event_name: str, ref_name: str, repository: str, skip_tests: bool = False
+        self,
+        event_name: str,
+        ref_name: str,
+        repository: str,
+        skip_tests: bool = False,
+        changed_keys: set[str] | None = None,
     ) -> job_stages.JobSelection:
         return job_stages.compute_job_selection(
             job_stages.JobSelectionInput(
@@ -24,6 +29,7 @@ class JobStagesTest(unittest.TestCase):
                 ref_name=ref_name,
                 repository=repository,
                 skip_tests=skip_tests,
+                changed_keys=changed_keys or set(),
             )
         )
 
@@ -76,6 +82,16 @@ class JobStagesTest(unittest.TestCase):
     def test_fork_saves_cache(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "somefork/duckdb")
         self.assertTrue(selection.save_cache)
+
+    def test_julia_changed_key_enables_main_julia_on_pr(self):
+        selection = self._compute_job_selection(
+            "pull_request", "feature/my-branch", "duckdb/duckdb", changed_keys={"julia"}
+        )
+        self.assertIn("main_julia", selection.enabled_jobs)
+
+    def test_parse_changed_keys(self):
+        parsed = job_stages.parse_changed_keys(" jUlia,tests_slow\nextensions julia ")
+        self.assertEqual(parsed, {"julia", "tests_slow", "extensions"})
 
     def test_writes_github_output(self):
         selection = job_stages.JobSelection(enabled_jobs=["linux-debug"], save_cache=False)
