@@ -443,6 +443,14 @@ fuzzer_smoke: fuzzer
 	OUT_DIR=build/fuzzer/smoke/out-$$(date +%s) && \
 	AFL_SKIP_CPUFREQ=1 afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest
 
+.PHONY: fuzz_sql_corpus
+fuzz_sql_corpus:
+	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && \
+	python3 scripts/ci/afl_corpus.py \
+	--target ./build/fuzzer/test/unittest \
+	--afl-cmin "afl-cmin -e -t 1000" \
+	--output-dir "$${CORPUS_SQL_CMIN}"
+
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}

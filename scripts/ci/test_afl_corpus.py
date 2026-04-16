@@ -20,8 +20,6 @@ class FuzzCorpusTest(unittest.TestCase):
         test_glob = "test/optimizer/**/*.test"
         test_files = corpus.list_test_files(test_glob)
         self.assertGreater(len(test_files), 0, f"expected files for glob {test_glob}")
-        expected_groups = {corpus.group_name_for(path) for path in test_files}
-        self.assertGreater(len(expected_groups), 0)
 
         with tempfile.TemporaryDirectory(prefix="fuzz_corpus_test_") as tmpdir:
             tmp_root = Path(tmpdir)
@@ -64,6 +62,8 @@ class FuzzCorpusTest(unittest.TestCase):
                 target=fake_target,
                 afl_cmin_cmd="fake-afl-cmin -e",
             )
+            expected_groups = {corpus.group_name_for(path, config) for path in test_files}
+            self.assertGreater(len(expected_groups), 0)
 
             with (
                 mock.patch("scripts.ci.afl_corpus.shutil.which", return_value="/usr/bin/fake-afl-cmin"),

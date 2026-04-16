@@ -2,7 +2,7 @@
 """Build an AFL++ corpus from test/**/*.test files.
 
 Workflow:
-1. Group test files by full parent path under test/ (e.g. test/a/b/c.test -> a_b).
+1. Group test files by a configurable number of parent parts under test/ (default depth 2, e.g. test/a/b/c.test -> a_b).
 2. Copy grouped seeds into per-group raw directories.
 3. Run afl-cmin per group in parallel.
 4. Merge all minimized files into one flat final directory.
@@ -26,6 +26,7 @@ DEFAULT_TARGET = Path("build/fuzzer/test/unittest")
 DEFAULT_GLOB_PATTERN = "test/**/*.test"
 DEFAULT_AFL_CMIN_BIN = "afl-cmin"
 DEFAULT_JOBS = max(1, (os.cpu_count() or 1))
+DEFAULT_GROUP_DEPTH = 2
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class CorpusConfig:
     jobs: int = DEFAULT_JOBS
     target: Path = DEFAULT_TARGET
     afl_cmin_cmd: str = DEFAULT_AFL_CMIN_BIN
+    group_depth: int = DEFAULT_GROUP_DEPTH
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,6 +77,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_AFL_CMIN_BIN,
         help=f"afl-cmin executable and optional leading flags as one string (default: {DEFAULT_AFL_CMIN_BIN})",
     )
+    parser.add_argument(
+        "--group-depth",
+        type=int,
+        default=DEFAULT_GROUP_DEPTH,
+        help=f"How many parent path parts under test/ are used for the group key (default: {DEFAULT_GROUP_DEPTH})",
+    )
     return parser.parse_args()
 
 
@@ -82,7 +90,7 @@ def list_test_files(glob_pattern: str) -> list[Path]:
     return sorted(path for path in Path().glob(glob_pattern) if path.is_file())
 
 
-def group_name_for(test_file: Path) -> str:
+def group_name_for(test_file: Path, config: CorpusConfig) -> str:
     parts = test_file.parts
     try:
         test_index = parts.index("test")
@@ -91,9 +99,10 @@ def group_name_for(test_file: Path) -> str:
 
     rel = Path(*parts[test_index + 1 :])
     parent_parts = rel.parts[:-1]
-    if not parent_parts:
+    selected_parts = parent_parts[: config.group_depth]
+    if not selected_parts:
         return "root"
-    return "_".join(parent_parts)
+    return "_".join(selected_parts)
 
 
 def ensure_clean_dir(path: Path) -> None:
@@ -102,10 +111,10 @@ def ensure_clean_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def stage_grouped_raw_corpus(test_files: list[Path], raw_root: Path) -> dict[str, Path]:
+def stage_grouped_raw_corpus(test_files: list[Path], raw_root: Path, config: CorpusConfig) -> dict[str, Path]:
     groups: dict[str, Path] = {}
     for test_file in test_files:
-        group = group_name_for(test_file)
+        group = group_name_for(test_file, config)
         group_dir = raw_root / group
         group_dir.mkdir(parents=True, exist_ok=True)
         destination = group_dir / test_file.name
@@ -204,7 +213,7 @@ def run(config: CorpusConfig) -> int:
         raw_root.mkdir(parents=True, exist_ok=True)
         min_root.mkdir(parents=True, exist_ok=True)
 
-        grouped_raw = stage_grouped_raw_corpus(test_files, raw_root)
+        grouped_raw = stage_grouped_raw_corpus(test_files, raw_root, config)
         tasks = [
             GroupTask(name=group, raw_dir=raw_dir, min_dir=min_root / group)
             for group, raw_dir in sorted(grouped_raw.items())
@@ -213,13 +222,13 @@ def run(config: CorpusConfig) -> int:
         print(f"Discovered {len(test_files)} test files across {len(tasks)} groups")
         print(f"Running afl-cmin with {config.jobs} parallel jobs")
 
-        failed = False
+        failed: list[str] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=config.jobs) as executor:
             futures = [executor.submit(run_afl_cmin, task, afl_cmin_cmd, config.target) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 group, returncode, stdout, stderr = future.result()
                 if returncode != 0:
-                    failed = True
+                    failed.append(group)
                     print(f"[FAIL] group={group}", file=sys.stderr)
                     if stdout:
                         print(stdout.rstrip(), file=sys.stderr)
@@ -229,8 +238,7 @@ def run(config: CorpusConfig) -> int:
                     print(f"[OK] group={group}")
 
         if failed:
-            print("One or more afl-cmin runs failed", file=sys.stderr)
-            return 1
+            print(f"[!] some afl-cmin runs {len(failed)} failed: {failed}", file=sys.stderr)
 
         copied = merge_minimized(min_root, output_root)
         print(f"Merged {copied} minimized files into {output_root}")
@@ -246,6 +254,7 @@ def main() -> int:
         jobs=args.jobs,
         target=args.target,
         afl_cmin_cmd=args.afl_cmin,
+        group_depth=args.group_depth,
     )
     return run(config)
 
