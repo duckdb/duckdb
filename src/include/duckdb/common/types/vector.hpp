@@ -71,6 +71,9 @@ public:
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
+	//! Checks if a vector has enough space for the given count - throws an internal error otherwise
+	DUCKDB_API void CheckCapacity(idx_t capacity) const;
+
 	//! Create a new vector that references the other vector
 	DUCKDB_API static Vector Ref(const Vector &other);
 

@@ -85,6 +85,21 @@ Vector::Vector(const Value &value) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
+void Vector::CheckCapacity(idx_t capacity) const {
+	if (!buffer) {
+		// no buffer - we accept any capacity
+		return;
+	}
+	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// constant vectors can fit any
+		return;
+	}
+	idx_t buffer_capacity = buffer->Capacity();
+	if (capacity > buffer_capacity) {
+		throw InternalException("Vector::CheckCapacity - capacity %d exceeds buffer capacity %d", capacity, buffer_capacity);
+	}
+}
+
 Vector Vector::Ref(const Vector &other) {
 	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }

@@ -325,10 +325,7 @@ public:
 	}
 
 	static inline void Reset(DataChunk &chunk) {
-		//	Reset trashes the capacity...
-		const auto capacity = chunk.GetCapacity();
 		chunk.Reset();
-		chunk.SetCapacity(capacity);
 	}
 
 public:

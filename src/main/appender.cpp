@@ -317,10 +317,6 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (col >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	if (row >= target.GetCapacity()) {
-		throw InvalidInputException("Too many rows for chunk!");
-	}
-
 	if (value.type() == target.GetTypes()[col]) {
 		target.SetValue(col, row, value);
 	} else {

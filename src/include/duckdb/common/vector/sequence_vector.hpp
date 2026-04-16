@@ -22,6 +22,9 @@ public:
 	int64_t count;
 
 public:
+	idx_t Capacity() const override {
+		return count;
+	}
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	string ToString(const LogicalType &type, idx_t count) const override;
