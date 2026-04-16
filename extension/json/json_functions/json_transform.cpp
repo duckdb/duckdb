@@ -326,6 +326,52 @@ static bool TransformStringWithFormat(Vector &string_vector, const StrpTimeForma
 	return success;
 }
 
+template <class OP, class T>
+static bool TryParseColumn(Vector &string_vector, StrpTimeFormat &format, const idx_t count) {
+	const auto strings = FlatVector::GetData<string_t>(string_vector);
+	const auto &validity = FlatVector::Validity(string_vector);
+
+	T result;
+	string error_message;
+	for (idx_t i = 0; i < count; i++) {
+		if (validity.RowIsValid(i)) {
+			if (!OP::template Operation<T>(format, strings[i], result, error_message)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static bool FindBestFormat(LogicalTypeId result_type, Vector &string_vector, idx_t count,
+                           const DateFormatMap &date_format_map, StrpTimeFormat &best_format) {
+	idx_t num_formats = date_format_map.NumberOfFormats(result_type);
+	for (idx_t i = num_formats; i > 0; i--) {
+		StrpTimeFormat candidate;
+		if (!date_format_map.GetFormatAtIndex(result_type, i - 1, candidate)) {
+			continue;
+		}
+
+		bool format_works;
+		switch (result_type) {
+		case LogicalTypeId::DATE:
+			format_works = TryParseColumn<TryParseDate, date_t>(string_vector, candidate, count);
+			break;
+		case LogicalTypeId::TIMESTAMP:
+			format_works = TryParseColumn<TryParseTimeStamp, timestamp_t>(string_vector, candidate, count);
+			break;
+		default:
+			return false;
+		}
+
+		if (format_works) {
+			best_format = candidate;
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, const idx_t count,
                                           JSONTransformOptions &options) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
@@ -335,7 +381,13 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 	}
 
 	const auto &result_type = result.GetType().id();
-	auto &format = options.date_format_map->GetFormat(result_type);
+
+	// Find the best matching format for this column by trying all candidates
+	StrpTimeFormat format;
+	if (!FindBestFormat(result_type, string_vector, count, *options.date_format_map, format)) {
+		// No format works for all values - fall back to the last format (will produce an error)
+		format = options.date_format_map->GetFormat(result_type);
+	}
 
 	switch (result_type) {
 	case LogicalTypeId::DATE:

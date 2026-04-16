@@ -336,7 +336,6 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		}
 
 		if (success) {
-			date_format_map.ShrinkFormatsToSize(type, i);
 			return true;
 		}
 	}

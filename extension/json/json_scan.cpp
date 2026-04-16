@@ -37,7 +37,7 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 		      "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"}},
 		};
 
-		// Populate possible date/timestamp formats, assume this is consistent across columns
+		// Populate possible date/timestamp formats — each column independently selects the best match
 		for (auto &kv : FORMAT_TEMPLATES) {
 			const auto &logical_type = kv.first;
 			if (DateFormatMap::HasFormats(candidate_formats, logical_type)) {
