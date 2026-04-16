@@ -180,16 +180,16 @@ public:
 
 	VectorValidityIterator Validity(idx_t count) const;
 
+	//! This allows a vector to reference another vector while const
+	//! This is only used internally in `Flatten` - since referencing
+	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
+	void ConstReference(const Vector &other) const;
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
-
-	//! This allows a vector to reference another vector while const
-	//! This is only used internally in `Flatten` - since referencing
-	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
-	void ConstReference(const Vector &other) const;
 
 	//! Create a vector that references the other vector
 	Vector(const Vector &other, VectorConstructorAction action);

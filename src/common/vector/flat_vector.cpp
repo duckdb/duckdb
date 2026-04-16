@@ -379,22 +379,22 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	}
 	// Preserve the validity mask from the old buffer before replacing it.
 	// FIXME: this can maybe be removed in the future - it seems only the Arrow conversion code relies on this behavior
-	auto old_validity = std::move(vector.buffer->GetValidityMask());
+	auto old_validity = std::move(vector.BufferMutable().GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
-		auto &current_buffer = vector.buffer->Cast<VectorListBuffer>();
-		vector.buffer =
-		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetSize());
+		auto &current_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
+		vector.SetBuffer(
+		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetSize()));
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-		vector.buffer = make_buffer<VectorStringBuffer>(data, capacity);
+		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, capacity));
 	} else {
-		vector.buffer = make_buffer<StandardVectorBuffer>(data, capacity);
+		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, capacity));
 	}
-	vector.buffer->GetValidityMask() = std::move(old_validity);
+	vector.BufferMutable().GetValidityMask() = std::move(old_validity);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-	vector.buffer->GetValidityMask().Set(idx, !is_null);
+	vector.BufferMutable().GetValidityMask().Set(idx, !is_null);
 	if (!is_null) {
 		return;
 	}

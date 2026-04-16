@@ -817,7 +817,7 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 	if (buffer) {
 		// FIXME: should we allow vectors without a buffer?
-		Buffer().SetVectorType(new_vector_type);
+		BufferMutable().SetVectorType(new_vector_type);
 	}
 }
 

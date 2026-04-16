@@ -132,7 +132,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, cons
 	auto &sel = sel_ref.get();
 
 	// flatten the child using the selection vector
-	return entry->data.buffer->Flatten(type, sel, count);
+	return entry->data.BufferMutable().Flatten(type, sel, count);
 }
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
@@ -145,7 +145,7 @@ buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const Log
 const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 
-	auto &entry = input.buffer->Cast<DictionaryBuffer>().GetEntry();
+	auto &entry = input.BufferMutable().Cast<DictionaryBuffer>().GetEntry();
 	lock_guard<mutex> guard(entry.cached_hashes_lock);
 
 	if (!entry.cached_hashes) {

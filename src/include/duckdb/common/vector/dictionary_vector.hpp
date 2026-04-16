@@ -107,23 +107,23 @@ struct DictionaryVector {
 	}
 	static inline const SelectionVector &SelVector(const Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
+		return vector.Buffer().Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
+		return vector.BufferMutable().Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.buffer->Cast<DictionaryBuffer>().GetEntry().data;
+		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.buffer->Cast<DictionaryBuffer>().GetEntry().data;
+		return vector.BufferMutable().Cast<DictionaryBuffer>().GetEntry().data;
 	}
 	static inline optional_idx DictionarySize(const Vector &vector) {
 		VerifyDictionary(vector);
-		const auto &dict_buffer = vector.buffer->Cast<DictionaryBuffer>();
+		const auto &dict_buffer = vector.Buffer().Cast<DictionaryBuffer>();
 		const auto &entry = dict_buffer.GetEntry();
 		if (entry.size.IsValid()) {
 			return entry.size;
@@ -132,7 +132,7 @@ struct DictionaryVector {
 	}
 	static inline const string &DictionaryId(const Vector &vector) {
 		VerifyDictionary(vector);
-		const auto &dict_buffer = vector.buffer->Cast<DictionaryBuffer>();
+		const auto &dict_buffer = vector.Buffer().Cast<DictionaryBuffer>();
 		const auto &entry = dict_buffer.GetEntry();
 		if (!entry.id.empty()) {
 			return entry.id;
