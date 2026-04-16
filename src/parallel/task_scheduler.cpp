@@ -30,98 +30,8 @@
 
 namespace duckdb {
 
-ProducerToken::~ProducerToken() {
-}
-
-TaskScheduler::TaskScheduler(DatabaseInstance &db_p) : db(db_p) {
-}
-
-TaskScheduler::~TaskScheduler() {
-}
-
-TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
-	return TaskScheduler::GetScheduler(DatabaseInstance::GetDatabase(context));
-}
-
-TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
-	return db.GetScheduler();
-}
-
-DatabaseInstance &TaskScheduler::GetDatabase() const {
-	return db;
-}
-
-TaskExecutionMode TaskScheduler::GetWorkerExecutionMode() const {
-	auto &config = DBConfig::GetConfig(GetDatabase());
-	return Settings::Get<SchedulerProcessPartialSetting>(config) ? TaskExecutionMode::PROCESS_PARTIAL
-	                                                            : TaskExecutionMode::PROCESS_ALL;
-}
-
-void TaskScheduler::YieldThread() {
-#ifndef DUCKDB_NO_THREADS
-	std::this_thread::yield();
-#endif
-}
-
-idx_t TaskScheduler::GetEstimatedCPUId() {
-#if defined(__EMSCRIPTEN__)
-	// FIXME: Wasm + multithreads can likely be implemented as
-	//   return return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
-	return 0;
-#else
-	// this code comes from jemalloc
-#if defined(_WIN32)
-	return (idx_t)GetCurrentProcessorNumber();
-#elif defined(_GNU_SOURCE)
-	auto cpu = sched_getcpu();
-	if (cpu < 0) {
-#ifndef DUCKDB_NO_THREADS
-		// fallback to thread id
-		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
-#else
-
-		return 0;
-#endif
-	}
-	return (idx_t)cpu;
-#elif defined(__aarch64__) && defined(__APPLE__)
-	/* Other oses most likely use tpidr_el0 instead */
-	uintptr_t c;
-	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
-	return (idx_t)(c & ((1 << 3) - 1));
-#else
-#ifndef DUCKDB_NO_THREADS
-	// fallback to thread id
-	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
-#else
-	return 0;
-#endif
-#endif
-#endif
-}
-
-namespace {
-
-struct QueueProducerToken;
-
-class BuiltinProducerToken : public ProducerToken {
-public:
-	explicit BuiltinProducerToken(unique_ptr<QueueProducerToken> token_p) : token(std::move(token_p)) {
-	}
-
-	~BuiltinProducerToken() override;
-
-	mutex producer_lock;
-	unique_ptr<QueueProducerToken> token;
-};
-
-static BuiltinProducerToken &CastProducerToken(ProducerToken &token) {
-	auto *builtin_token = dynamic_cast<BuiltinProducerToken *>(&token);
-	if (!builtin_token) {
-		throw InternalException("Mismatching producer token for builtin task scheduler");
-	}
-	return *builtin_token;
-}
+class BuiltinProducerToken;
+class BuiltinTaskScheduler;
 
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
@@ -166,8 +76,96 @@ struct QueueProducerToken {
 	duckdb_moodycamel::ProducerToken queue_token;
 };
 
+#else
+struct ConcurrentQueue {
+	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
+	mutable mutex qlock;
+
+	void Enqueue(BuiltinProducerToken &token, shared_ptr<Task> task);
+	void EnqueueBulk(BuiltinProducerToken &token, vector<shared_ptr<Task>> &tasks);
+	bool DequeueFromProducer(BuiltinProducerToken &token, shared_ptr<Task> &task);
+	bool Dequeue(shared_ptr<Task> &task);
+	idx_t GetTasksInQueue() const;
+	idx_t GetApproxSize() const;
+	idx_t GetProducerCount() const;
+	idx_t GetTaskCountForProducer(BuiltinProducerToken &token) const;
+};
+
+struct QueueProducerToken {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue(&queue) {
+	}
+
+	~QueueProducerToken() {
+		lock_guard<mutex> lock(queue->qlock);
+		queue->q.erase(*this);
+	}
+
+private:
+	ConcurrentQueue *queue;
+};
+#endif
+
+class BuiltinProducerToken : public ProducerToken {
+public:
+	explicit BuiltinProducerToken(unique_ptr<QueueProducerToken> token_p) : token(std::move(token_p)) {
+	}
+
+	~BuiltinProducerToken() override;
+
+	mutex producer_lock;
+	unique_ptr<QueueProducerToken> token;
+};
+
+static BuiltinProducerToken &CastProducerToken(ProducerToken &token) {
+	auto *builtin_token = dynamic_cast<BuiltinProducerToken *>(&token);
+	if (!builtin_token) {
+		throw InternalException("Mismatching producer token for builtin task scheduler");
+	}
+	return *builtin_token;
+}
+
+class BuiltinTaskScheduler : public TaskScheduler {
+	// timeout for semaphore wait, default 5ms
+	constexpr static int64_t TASK_TIMEOUT_USECS = 5000;
+
+public:
+	explicit BuiltinTaskScheduler(DatabaseInstance &db);
+	~BuiltinTaskScheduler() override;
+
+	unique_ptr<ProducerToken> CreateProducer() override;
+	void ScheduleTask(ProducerToken &token, shared_ptr<Task> task) override;
+	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) override;
+	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) override;
+	void ExecuteForever(atomic<bool> *marker) override;
+	idx_t ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) override;
+	void ExecuteTasks(idx_t max_tasks) override;
+	int32_t NumberOfThreads() override;
+	idx_t GetNumberOfTasks() const override;
+	idx_t GetProducerCount() const override;
+	idx_t GetTaskCountForProducer(ProducerToken &token) const override;
+	void SetThreads(idx_t total_threads, idx_t external_threads) override;
+	void SetAllocatorFlushTreshold(idx_t threshold) override;
+	void SetAllocatorBackgroundThreads(bool enable) override;
+	void Signal(idx_t n) override;
+	void RelaunchThreads() override;
+
+private:
+	void RelaunchThreadsInternal(int32_t n, bool destroy);
+
+private:
+	unique_ptr<ConcurrentQueue> queue;
+	mutex thread_lock;
+	vector<unique_ptr<SchedulerThread>> threads;
+	vector<unique_ptr<atomic<bool>>> markers;
+	atomic<idx_t> allocator_flush_threshold;
+	atomic<bool> allocator_background_threads;
+	atomic<int32_t> requested_thread_count;
+	atomic<int32_t> current_thread_count;
+};
+
 BuiltinProducerToken::~BuiltinProducerToken() = default;
 
+#ifndef DUCKDB_NO_THREADS
 void ConcurrentQueue::Enqueue(BuiltinProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	task->token = token;
@@ -213,9 +211,11 @@ bool ConcurrentQueue::Dequeue(shared_ptr<Task> &task) {
 idx_t ConcurrentQueue::GetTasksInQueue() const {
 	return tasks_in_queue;
 }
+
 idx_t ConcurrentQueue::GetApproxSize() const {
 	return q.size_approx();
 }
+
 idx_t ConcurrentQueue::GetProducerCount() const {
 	return q.size_producers_approx();
 }
@@ -226,20 +226,6 @@ idx_t ConcurrentQueue::GetTaskCountForProducer(BuiltinProducerToken &token) cons
 }
 
 #else
-struct ConcurrentQueue {
-	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
-	mutable mutex qlock;
-
-	void Enqueue(BuiltinProducerToken &token, shared_ptr<Task> task);
-	void EnqueueBulk(BuiltinProducerToken &token, vector<shared_ptr<Task>> &tasks);
-	bool DequeueFromProducer(BuiltinProducerToken &token, shared_ptr<Task> &task);
-	bool Dequeue(shared_ptr<Task> &task);
-	idx_t GetTasksInQueue() const;
-	idx_t GetApproxSize() const;
-	idx_t GetProducerCount() const;
-	idx_t GetTaskCountForProducer(BuiltinProducerToken &token) const;
-};
-
 void ConcurrentQueue::Enqueue(BuiltinProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
 	task->token = token;
@@ -299,143 +285,180 @@ idx_t ConcurrentQueue::GetTaskCountForProducer(BuiltinProducerToken &token) cons
 	}
 	return it->second.size();
 }
-
-struct QueueProducerToken {
-	explicit QueueProducerToken(ConcurrentQueue &queue) : queue(&queue) {
-	}
-
-	~QueueProducerToken() {
-		lock_guard<mutex> lock(queue->qlock);
-		queue->q.erase(*this);
-	}
-
-private:
-	ConcurrentQueue *queue;
-};
-
-BuiltinProducerToken::~BuiltinProducerToken() = default;
 #endif
 
-class BuiltinTaskScheduler : public TaskScheduler {
-	// timeout for semaphore wait, default 5ms
-	constexpr static int64_t TASK_TIMEOUT_USECS = 5000;
+ProducerToken::~ProducerToken() {
+}
 
-public:
-	explicit BuiltinTaskScheduler(DatabaseInstance &db)
-	    : TaskScheduler(db), queue(make_uniq<ConcurrentQueue>()),
-	      allocator_flush_threshold(db.config.options.allocator_flush_threshold),
-	      allocator_background_threads(Settings::Get<AllocatorBackgroundThreadsSetting>(db)), requested_thread_count(0),
-	      current_thread_count(1) {
-		SetAllocatorBackgroundThreads(allocator_background_threads);
-	}
+TaskScheduler::TaskScheduler(DatabaseInstance &db_p) : db(db_p) {
+}
 
-	~BuiltinTaskScheduler() override {
+TaskScheduler::~TaskScheduler() {
+}
+
+TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
+	return TaskScheduler::GetScheduler(DatabaseInstance::GetDatabase(context));
+}
+
+TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
+	return db.GetScheduler();
+}
+
+DatabaseInstance &TaskScheduler::GetDatabase() const {
+	return db;
+}
+
+TaskExecutionMode TaskScheduler::GetWorkerExecutionMode() const {
+	auto &config = DBConfig::GetConfig(GetDatabase());
+	return Settings::Get<SchedulerProcessPartialSetting>(config) ? TaskExecutionMode::PROCESS_PARTIAL
+	                                                             : TaskExecutionMode::PROCESS_ALL;
+}
+
+BuiltinTaskScheduler::BuiltinTaskScheduler(DatabaseInstance &db)
+    : TaskScheduler(db), queue(make_uniq<ConcurrentQueue>()),
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold),
+      allocator_background_threads(Settings::Get<AllocatorBackgroundThreadsSetting>(db)), requested_thread_count(0),
+      current_thread_count(1) {
+	SetAllocatorBackgroundThreads(allocator_background_threads);
+}
+
+BuiltinTaskScheduler::~BuiltinTaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-		try {
-			RelaunchThreadsInternal(0, true);
-		} catch (...) {
-			// nothing we can do in the destructor if this fails
-		}
+	try {
+		RelaunchThreadsInternal(0, true);
+	} catch (...) {
+		// nothing we can do in the destructor if this fails
+	}
 #endif
-	}
+}
 
-	unique_ptr<ProducerToken> CreateProducer() override {
-		auto token = make_uniq<QueueProducerToken>(*queue);
-		return make_uniq<BuiltinProducerToken>(std::move(token));
-	}
+unique_ptr<ProducerToken> BuiltinTaskScheduler::CreateProducer() {
+	auto token = make_uniq<QueueProducerToken>(*queue);
+	return make_uniq<BuiltinProducerToken>(std::move(token));
+}
 
-	void ScheduleTask(ProducerToken &token, shared_ptr<Task> task) override {
-		// Enqueue a task for the given producer token and signal any sleeping threads
-		queue->Enqueue(CastProducerToken(token), std::move(task));
-	}
+void BuiltinTaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
+	// Enqueue a task for the given producer token and signal any sleeping threads
+	queue->Enqueue(CastProducerToken(token), std::move(task));
+}
 
-	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) override {
-		queue->EnqueueBulk(CastProducerToken(producer), tasks);
-	}
+void BuiltinTaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) {
+	queue->EnqueueBulk(CastProducerToken(producer), tasks);
+}
 
-	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) override {
-		return queue->DequeueFromProducer(CastProducerToken(token), task);
-	}
+bool BuiltinTaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
+	return queue->DequeueFromProducer(CastProducerToken(token), task);
+}
 
-	void ExecuteForever(atomic<bool> *marker) override {
+void BuiltinTaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
-		static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
+	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
 
-		const auto &block_allocator = BlockAllocator::Get(GetDatabase());
-		shared_ptr<Task> task;
-		// loop until the marker is set to false
-		while (*marker) {
-			if (!block_allocator.SupportsFlush()) {
-				// allocator can't flush, just start an untimed wait
+	const auto &block_allocator = BlockAllocator::Get(GetDatabase());
+
+	shared_ptr<Task> task;
+	// loop until the marker is set to false
+	while (*marker) {
+		if (!block_allocator.SupportsFlush()) {
+			// allocator can't flush, just start an untimed wait
+			queue->semaphore.wait();
+		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
+			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
+			block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                            NumericCast<idx_t>(requested_thread_count.load()));
+			auto decay_delay = Allocator::DecayDelay();
+			if (!decay_delay.IsValid()) {
+				// no decay delay specified - just wait
 				queue->semaphore.wait();
-			} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
-				// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
-				block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
-				                            NumericCast<idx_t>(requested_thread_count.load()));
-				auto decay_delay = Allocator::DecayDelay();
-				if (!decay_delay.IsValid()) {
-					// no decay delay specified - just wait
+			} else {
+				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+				                           INITIAL_FLUSH_WAIT)) {
+					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+					// mark it as idle and start an untimed wait
+					Allocator::ThreadIdle();
 					queue->semaphore.wait();
-				} else {
-					if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
-					                           INITIAL_FLUSH_WAIT)) {
-						// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-						// mark it as idle and start an untimed wait
-						Allocator::ThreadIdle();
-						queue->semaphore.wait();
-					}
 				}
-			}
-			if (queue->Dequeue(task)) {
-				auto execute_result = task->Execute(GetWorkerExecutionMode());
-
-				switch (execute_result) {
-				case TaskExecutionResult::TASK_FINISHED:
-				case TaskExecutionResult::TASK_ERROR:
-					task.reset();
-					break;
-				case TaskExecutionResult::TASK_NOT_FINISHED: {
-					// task is not finished - reschedule immediately
-					auto &token = *task->token;
-					queue->Enqueue(CastProducerToken(token), std::move(task));
-					break;
-				}
-				case TaskExecutionResult::TASK_BLOCKED:
-					task->Deschedule();
-					task.reset();
-					break;
-				}
-			} else if (queue->GetTasksInQueue() > 0) {
-				// failed to dequeue but there are still tasks remaining - signal again to retry
-				queue->semaphore.signal(1);
 			}
 		}
-		// this thread will exit, flush all of its outstanding allocations
-		if (block_allocator.SupportsFlush()) {
-			block_allocator.ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
-			Allocator::ThreadIdle();
-		}
-#else
-		throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
-#endif
-	}
-
-	idx_t ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) override {
-#ifndef DUCKDB_NO_THREADS
-		idx_t completed_tasks = 0;
-		// loop until the marker is set to false
-		while (*marker && completed_tasks < max_tasks) {
-			shared_ptr<Task> task;
-			if (!queue->Dequeue(task)) {
-				return completed_tasks;
-			}
-			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+		if (queue->Dequeue(task)) {
+			auto execute_result = task->Execute(GetWorkerExecutionMode());
 
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
 			case TaskExecutionResult::TASK_ERROR:
 				task.reset();
-				completed_tasks++;
+				break;
+			case TaskExecutionResult::TASK_NOT_FINISHED: {
+				// task is not finished - reschedule immediately
+				auto &token = *task->token;
+				queue->Enqueue(CastProducerToken(token), std::move(task));
+				break;
+			}
+			case TaskExecutionResult::TASK_BLOCKED:
+				task->Deschedule();
+				task.reset();
+				break;
+			}
+		} else if (queue->GetTasksInQueue() > 0) {
+			// failed to dequeue but there are still tasks remaining - signal again to retry
+			queue->semaphore.signal(1);
+		}
+	}
+	// this thread will exit, flush all of its outstanding allocations
+	if (block_allocator.SupportsFlush()) {
+		block_allocator.ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
+		Allocator::ThreadIdle();
+	}
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+#endif
+}
+
+idx_t BuiltinTaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
+#ifndef DUCKDB_NO_THREADS
+	idx_t completed_tasks = 0;
+	// loop until the marker is set to false
+	while (*marker && completed_tasks < max_tasks) {
+		shared_ptr<Task> task;
+		if (!queue->Dequeue(task)) {
+			return completed_tasks;
+		}
+		auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+
+		switch (execute_result) {
+		case TaskExecutionResult::TASK_FINISHED:
+		case TaskExecutionResult::TASK_ERROR:
+			task.reset();
+			completed_tasks++;
+			break;
+		case TaskExecutionResult::TASK_NOT_FINISHED:
+			throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+		case TaskExecutionResult::TASK_BLOCKED:
+			task->Deschedule();
+			task.reset();
+			break;
+		}
+	}
+	return completed_tasks;
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+#endif
+}
+
+void BuiltinTaskScheduler::ExecuteTasks(idx_t max_tasks) {
+#ifndef DUCKDB_NO_THREADS
+	shared_ptr<Task> task;
+	for (idx_t i = 0; i < max_tasks; i++) {
+		queue->semaphore.wait(TASK_TIMEOUT_USECS);
+		if (!queue->Dequeue(task)) {
+			return;
+		}
+		try {
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+			switch (execute_result) {
+			case TaskExecutionResult::TASK_FINISHED:
+			case TaskExecutionResult::TASK_ERROR:
+				task.reset();
 				break;
 			case TaskExecutionResult::TASK_NOT_FINISHED:
 				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
@@ -444,118 +467,118 @@ public:
 				task.reset();
 				break;
 			}
+		} catch (...) {
+			return;
 		}
-		return completed_tasks;
+	}
 #else
-		throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
 #endif
-	}
-
-	void ExecuteTasks(idx_t max_tasks) override {
-#ifndef DUCKDB_NO_THREADS
-		shared_ptr<Task> task;
-		for (idx_t i = 0; i < max_tasks; i++) {
-			queue->semaphore.wait(TASK_TIMEOUT_USECS);
-			if (!queue->Dequeue(task)) {
-				return;
-			}
-			try {
-				auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
-				switch (execute_result) {
-				case TaskExecutionResult::TASK_FINISHED:
-				case TaskExecutionResult::TASK_ERROR:
-					task.reset();
-					break;
-				case TaskExecutionResult::TASK_NOT_FINISHED:
-					throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
-				case TaskExecutionResult::TASK_BLOCKED:
-					task->Deschedule();
-					task.reset();
-					break;
-				}
-			} catch (...) {
-				return;
-			}
-		}
-#else
-		throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
-#endif
-	}
-
-	int32_t NumberOfThreads() override {
-		return current_thread_count.load();
-	}
-
-	idx_t GetNumberOfTasks() const override {
-		return queue->GetTasksInQueue();
-	}
-
-	idx_t GetProducerCount() const override {
-		return queue->GetProducerCount();
-	}
-
-	idx_t GetTaskCountForProducer(ProducerToken &token) const override {
-		return queue->GetTaskCountForProducer(CastProducerToken(token));
-	}
-
-	void SetThreads(idx_t total_threads, idx_t external_threads) override {
-		if (total_threads == 0) {
-			throw SyntaxException("Number of threads must be positive!");
-		}
-#ifndef DUCKDB_NO_THREADS
-		if (total_threads < external_threads) {
-			throw SyntaxException("Number of threads can't be smaller than number of external threads!");
-		}
-#else
-		if (total_threads != external_threads) {
-			throw NotImplementedException(
-			    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
-		}
-#endif
-		requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
-	}
-
-	void SetAllocatorFlushTreshold(idx_t threshold) override {
-		allocator_flush_threshold = threshold;
-	}
-
-	void SetAllocatorBackgroundThreads(bool enable) override {
-		allocator_background_threads = enable;
-		Allocator::SetBackgroundThreads(enable);
-	}
-
-	void Signal(idx_t n) override {
-#ifndef DUCKDB_NO_THREADS
-		typedef std::make_signed<std::size_t>::type ssize_t;
-		queue->semaphore.signal(NumericCast<ssize_t>(n));
-#endif
-	}
-
-	void RelaunchThreads() override {
-		lock_guard<mutex> t(thread_lock);
-		auto n = requested_thread_count.load();
-		RelaunchThreadsInternal(n, false);
-	}
-
-private:
-	void RelaunchThreadsInternal(int32_t n, bool destroy);
-
-private:
-	unique_ptr<ConcurrentQueue> queue;
-	mutex thread_lock;
-	vector<unique_ptr<SchedulerThread>> threads;
-	vector<unique_ptr<atomic<bool>>> markers;
-	atomic<idx_t> allocator_flush_threshold;
-	atomic<bool> allocator_background_threads;
-	atomic<int32_t> requested_thread_count;
-	atomic<int32_t> current_thread_count;
-};
+}
 
 #ifndef DUCKDB_NO_THREADS
 static void ThreadExecuteTasks(BuiltinTaskScheduler *scheduler, atomic<bool> *marker) {
 	scheduler->ExecuteForever(marker);
 }
 #endif
+
+int32_t BuiltinTaskScheduler::NumberOfThreads() {
+	return current_thread_count.load();
+}
+
+idx_t BuiltinTaskScheduler::GetNumberOfTasks() const {
+	return queue->GetTasksInQueue();
+}
+
+idx_t BuiltinTaskScheduler::GetProducerCount() const {
+	return queue->GetProducerCount();
+}
+
+idx_t BuiltinTaskScheduler::GetTaskCountForProducer(ProducerToken &token) const {
+	return queue->GetTaskCountForProducer(CastProducerToken(token));
+}
+
+void BuiltinTaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
+	if (total_threads == 0) {
+		throw SyntaxException("Number of threads must be positive!");
+	}
+#ifndef DUCKDB_NO_THREADS
+	if (total_threads < external_threads) {
+		throw SyntaxException("Number of threads can't be smaller than number of external threads!");
+	}
+#else
+	if (total_threads != external_threads) {
+		throw NotImplementedException(
+		    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
+	}
+#endif
+	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
+}
+
+void BuiltinTaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
+	allocator_flush_threshold = threshold;
+}
+
+void BuiltinTaskScheduler::SetAllocatorBackgroundThreads(bool enable) {
+	allocator_background_threads = enable;
+	Allocator::SetBackgroundThreads(enable);
+}
+
+void BuiltinTaskScheduler::Signal(idx_t n) {
+#ifndef DUCKDB_NO_THREADS
+	typedef std::make_signed<std::size_t>::type ssize_t;
+	queue->semaphore.signal(NumericCast<ssize_t>(n));
+#endif
+}
+
+void TaskScheduler::YieldThread() {
+#ifndef DUCKDB_NO_THREADS
+	std::this_thread::yield();
+#endif
+}
+
+idx_t TaskScheduler::GetEstimatedCPUId() {
+#if defined(__EMSCRIPTEN__)
+	// FIXME: Wasm + multithreads can likely be implemented as
+	//   return return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	return 0;
+#else
+	// this code comes from jemalloc
+#if defined(_WIN32)
+	return (idx_t)GetCurrentProcessorNumber();
+#elif defined(_GNU_SOURCE)
+	auto cpu = sched_getcpu();
+	if (cpu < 0) {
+#ifndef DUCKDB_NO_THREADS
+		// fallback to thread id
+		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+
+		return 0;
+#endif
+	}
+	return (idx_t)cpu;
+#elif defined(__aarch64__) && defined(__APPLE__)
+	/* Other oses most likely use tpidr_el0 instead */
+	uintptr_t c;
+	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
+	return (idx_t)(c & ((1 << 3) - 1));
+#else
+#ifndef DUCKDB_NO_THREADS
+	// fallback to thread id
+	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+	return 0;
+#endif
+#endif
+#endif
+}
+
+void BuiltinTaskScheduler::RelaunchThreads() {
+	lock_guard<mutex> t(thread_lock);
+	auto n = requested_thread_count.load();
+	RelaunchThreadsInternal(n, false);
+}
 
 #ifndef DUCKDB_NO_THREADS
 static vector<int> GetProcessCPUMask() {
@@ -662,8 +685,6 @@ void BuiltinTaskScheduler::RelaunchThreadsInternal(int32_t n, bool destroy) {
 	BlockAllocator::Get(GetDatabase()).FlushAll();
 #endif
 }
-
-} // namespace
 
 unique_ptr<TaskScheduler> CreateBuiltinTaskScheduler(DatabaseInstance &db) {
 	return make_uniq<BuiltinTaskScheduler>(db);
