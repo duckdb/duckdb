@@ -76,11 +76,9 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
                                                               bool has_language) {
 	auto saved_named_param_map = std::exchange(named_param_map, {});
 	auto saved_last_param_type = std::exchange(last_param_type, PreparedParamType::INVALID);
-	auto saved_in_macro_definition = std::exchange(in_macro_definition, true);
 	Finally restore([&] noexcept {
 		named_param_map = std::move(saved_named_param_map);
 		last_param_type = saved_last_param_type;
-		saved_in_macro_definition = in_macro_definition;
 	});
 	unique_ptr<MacroFunction> macro_func;
 	if (def.function) {
