@@ -293,7 +293,14 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
 
-	scheduler = make_uniq<TaskScheduler>(*this);
+	if (config.task_scheduler_create) {
+		scheduler = config.task_scheduler_create(*this);
+		if (!scheduler) {
+			throw InternalException("Custom task scheduler factory returned null");
+		}
+	} else {
+		scheduler = CreateBuiltinTaskScheduler(*this);
+	}
 	object_cache = make_uniq<ObjectCache>(*config.buffer_pool);
 	config.buffer_pool->SetObjectCache(object_cache.get());
 	connection_manager = make_uniq<ConnectionManager>();
@@ -495,6 +502,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
 	config.path_manager = std::move(new_config.path_manager);
+	config.task_scheduler_create = std::move(new_config.task_scheduler_create);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

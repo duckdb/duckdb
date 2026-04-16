@@ -38,6 +38,8 @@
 #include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/common/serialization_compatibility.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 class BlockAllocator;
@@ -56,9 +58,11 @@ class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
+class DatabaseInstance;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
 class TypeManager;
+class TaskScheduler;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -189,6 +193,8 @@ public:
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! Database configuration variables as controlled by SET
 	GlobalUserSettings user_settings;
+	//! Optional factory for overriding the default task scheduler. Must return a non-null scheduler.
+	std::function<unique_ptr<TaskScheduler>(DatabaseInstance &)> task_scheduler_create;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
