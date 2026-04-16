@@ -32,9 +32,7 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			}
 			cteref.correlated_columns += correlated_columns.size();
 		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN &&
-	           (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS ||
-	            mode == CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS)) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		// There is another DependentJoin below the correlated recursive CTE.
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.
@@ -75,8 +73,6 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 				}
 			}
 		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && mode != CTEScanRewriteMode::CTE_REF_ONLY) {
-		throw InternalException("Unsupported CTEScanRewriteMode in RewriteCTEScan");
 	}
 	VisitOperatorChildren(op);
 }
