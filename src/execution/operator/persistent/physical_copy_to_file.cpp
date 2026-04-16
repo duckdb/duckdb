@@ -1127,18 +1127,20 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		}
 	}
 
-	if (flushing_state_copy->HasCompleted()) {
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!flushing || !RefersToSameObject(*flushing_state, *flushing_state_copy)) {
-			return;
-		}
-		flushing_state.reset();
-		flushing = false;
-		if (finalized && !sinking_state) {
-			for (auto &entry : active_writes) {
-				auto &file_state = *entry.second->file_state;
-				op.function.copy_to_finalize(context, *op.bind_data, *file_state.data);
-			}
+	if (!flushing_state_copy->HasCompleted()) {
+		return;
+	}
+
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	if (!flushing || !RefersToSameObject(*flushing_state, *flushing_state_copy)) {
+		return;
+	}
+	flushing_state.reset();
+	flushing = false;
+	if (finalized && !sinking_state) {
+		for (auto &entry : active_writes) {
+			auto &file_state = *entry.second->file_state;
+			op.function.copy_to_finalize(context, *op.bind_data, *file_state.data);
 		}
 	}
 }
