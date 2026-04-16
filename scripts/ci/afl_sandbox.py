@@ -81,10 +81,12 @@ def run_darwin(command: list[str], writable_dirs: list[Path]) -> int:
         "(version 1)",
         "(deny default)",
         "(allow process*)",
-        "(allow signal (target self))",
+        "(allow ipc*)",
+        "(allow signal)",
         "(allow sysctl-read)",
         "(allow mach-lookup)",
         "(allow file-read*)",
+        '(allow file-write* (literal "/dev/null"))',
     ]
     for path in writable_dirs:
         escaped = str(path).replace("\\", "\\\\").replace('"', '\\"')
