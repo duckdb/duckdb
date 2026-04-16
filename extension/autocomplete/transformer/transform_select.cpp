@@ -1727,6 +1727,9 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryCount(PEGTr
 		auto properties = transformer.Transform<pair<SampleMethod, optional_idx>>(extract_parens);
 		sample_count->method = properties.first;
 		sample_count->seed = properties.second;
+		if (sample_count->seed.IsValid()) {
+			sample_count->repeatable = true;
+		}
 	}
 	return sample_count;
 }
