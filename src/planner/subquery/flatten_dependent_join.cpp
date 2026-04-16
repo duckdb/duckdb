@@ -373,10 +373,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
                                                                                    PushDownContext context,
                                                                                    CorrelatedLayout layout) {
-	return FinalizePushDownResult(PushDownDependentJoinInternal(std::move(plan), context, std::move(layout)));
-}
-
-FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizePushDownResult(PushDownResult result) {
+	auto result = PushDownDependentJoinInternal(std::move(plan), context, std::move(layout));
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
@@ -438,16 +435,6 @@ void FlattenDependentJoins::AppendCorrelatedColumns(vector<unique_ptr<Expression
 		} else {
 			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.type, layout.GetBinding(i)));
 		}
-	}
-}
-
-void FlattenDependentJoins::AppendCorrelatedColumnsToExpressionGet(LogicalExpressionGet &expr_get,
-                                                                   const CorrelatedLayout &layout) const {
-	for (auto &expr_list : expr_get.expressions) {
-		AppendCorrelatedColumns(expr_list, layout, correlated_columns.size(), false);
-	}
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		expr_get.expr_types.push_back(correlated_columns[i].type);
 	}
 }
 
@@ -887,7 +874,12 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionG
 	RewriteCorrelatedOperator(*plan, layout, context.lateral_depth);
 
 	auto &expr_get = plan->Cast<LogicalExpressionGet>();
-	AppendCorrelatedColumnsToExpressionGet(expr_get, layout);
+	for (auto &expr_list : expr_get.expressions) {
+		AppendCorrelatedColumns(expr_list, layout, correlated_columns.size(), false);
+	}
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		expr_get.expr_types.push_back(correlated_columns[i].type);
+	}
 	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
 	layout = CreateCorrelatedLayout(expr_get.table_index, correlated_offset);
 	return PushDownResult(std::move(plan), std::move(layout));

@@ -117,7 +117,6 @@ private:
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
 	                                     CorrelatedLayout layout = CorrelatedLayout());
-	PushDownResult FinalizePushDownResult(PushDownResult result);
 	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                        CorrelatedLayout layout);
 	Binder &binder;
@@ -138,7 +137,6 @@ private:
 	CorrelatedLayout CreateLeadingCorrelatedLayout(const vector<ColumnBinding> &bindings) const;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
 	                             idx_t count, bool include_names) const;
-	void AppendCorrelatedColumnsToExpressionGet(LogicalExpressionGet &expr_get, const CorrelatedLayout &layout) const;
 	void AddCorrelatedGroupColumns(LogicalAggregate &aggr, const CorrelatedLayout &layout, idx_t group_count) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
 	void AddAnyJoinConditions(LogicalDependentJoin &op, const vector<ColumnBinding> &plan_columns) const;
