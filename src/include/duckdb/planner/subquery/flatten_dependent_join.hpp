@@ -58,7 +58,8 @@ private:
 		}
 
 		static CorrelatedLayout CreateContiguous(const CorrelatedColumns &correlated_columns,
-		                                         ColumnBinding base_binding, idx_t correlated_offset, idx_t count) {
+		                                         ColumnBinding base_binding, idx_t correlated_offset) {
+			auto count = correlated_columns.size();
 			vector<ColumnBinding> correlated_bindings;
 			vector<idx_t> correlated_offsets;
 			correlated_bindings.reserve(count);
@@ -72,7 +73,8 @@ private:
 		}
 
 		static CorrelatedLayout CreateLeading(const CorrelatedColumns &correlated_columns,
-		                                      const vector<ColumnBinding> &bindings, idx_t count) {
+		                                      const vector<ColumnBinding> &bindings) {
+			auto count = correlated_columns.size();
 			D_ASSERT(bindings.size() >= count);
 			vector<ColumnBinding> correlated_bindings;
 			vector<idx_t> correlated_offsets;

@@ -495,8 +495,7 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, Push
 		auto decorrelated = Decorrelate(std::move(plan->children[0]), child_context.WithFreshTraversal(), layout);
 		auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 		if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings(),
-			                                         correlated_columns.size());
+			layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
 		}
 		plan->children[0] = std::move(cross_product);
 	} else {
@@ -508,9 +507,8 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, Push
 	AppendCorrelatedColumns(plan->expressions, layout, correlated_columns.size(), true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-	layout = CorrelatedLayout::CreateContiguous(correlated_columns,
-	                                            ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)),
-	                                            correlated_offset, correlated_columns.size());
+	layout = CorrelatedLayout::CreateContiguous(
+	    correlated_columns, ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)), correlated_offset);
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
@@ -583,14 +581,14 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownAggregate(u
 				replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 			}
 		}
-		layout = CorrelatedLayout::CreateContiguous(correlated_columns, ColumnBinding(left_index, ProjectionIndex(0)),
-		                                            0, correlated_columns.size());
+		layout =
+		    CorrelatedLayout::CreateContiguous(correlated_columns, ColumnBinding(left_index, ProjectionIndex(0)), 0);
 		return PushDownResult(std::move(join), std::move(layout));
 	}
 
 	layout = CorrelatedLayout::CreateContiguous(correlated_columns,
 	                                            ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset)),
-	                                            delim_column_offset, correlated_columns.size());
+	                                            delim_column_offset);
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
@@ -830,9 +828,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownSetOperatio
 		D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
 	}
 #endif
-	layout = CorrelatedLayout::CreateContiguous(correlated_columns,
-	                                            ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-	                                            setop.column_count, correlated_columns.size());
+	layout = CorrelatedLayout::CreateContiguous(
+	    correlated_columns, ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)), setop.column_count);
 	setop.column_count += correlated_columns.size();
 	return PushDownResult(std::move(plan), std::move(layout));
 }
@@ -862,9 +859,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionG
 		expr_get.expr_types.push_back(correlated_columns[i].type);
 	}
 	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
-	layout = CorrelatedLayout::CreateContiguous(correlated_columns,
-	                                            ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)),
-	                                            correlated_offset, correlated_columns.size());
+	layout = CorrelatedLayout::CreateContiguous(
+	    correlated_columns, ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)), correlated_offset);
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
@@ -918,9 +914,8 @@ FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownCon
 	auto table_index = setop.table_index;
 	setop.correlated_columns = correlated_columns;
 	binder.recursive_ctes[setop.table_index] = &setop;
-	layout = CorrelatedLayout::CreateContiguous(correlated_columns,
-	                                            ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-	                                            setop.column_count, correlated_columns.size());
+	layout = CorrelatedLayout::CreateContiguous(
+	    correlated_columns, ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)), setop.column_count);
 
 	if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		auto &rec_cte = plan->Cast<LogicalRecursiveCTE>();
@@ -953,7 +948,7 @@ FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownCon
 	if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		layout = CorrelatedLayout::CreateContiguous(
 		    correlated_columns, ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)),
-		    setop.column_count, correlated_columns.size());
+		    setop.column_count);
 	}
 
 	setop.column_count += correlated_columns.size();
@@ -965,9 +960,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCTERef(uniq
                                                                             CorrelatedLayout layout) {
 	auto &cteref = plan->Cast<LogicalCTERef>();
 	auto correlated_offset = cteref.chunk_types.size() - cteref.correlated_columns;
-	layout = CorrelatedLayout::CreateContiguous(correlated_columns,
-	                                            ColumnBinding(cteref.table_index, ProjectionIndex(correlated_offset)),
-	                                            correlated_offset, correlated_columns.size());
+	layout = CorrelatedLayout::CreateContiguous(
+	    correlated_columns, ColumnBinding(cteref.table_index, ProjectionIndex(correlated_offset)), correlated_offset);
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
@@ -1002,7 +996,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 		auto delim_index = binder.GenerateTableIndex();
 		auto left_columns = plan->GetColumnBindings().size();
 		layout = CorrelatedLayout::CreateContiguous(correlated_columns, ColumnBinding(delim_index, ProjectionIndex(0)),
-		                                            left_columns, correlated_columns.size());
+		                                            left_columns);
 		delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			// we want to keep the logical projection for positionality.
@@ -1025,8 +1019,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 			auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 			auto result_layout = layout;
 			if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-				result_layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings(),
-				                                                correlated_columns.size());
+				result_layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
 			}
 			return PushDownResult(std::move(cross_product), std::move(result_layout));
 		} else {
@@ -1034,8 +1027,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 			auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 			auto result_layout = layout;
 			if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-				result_layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings(),
-				                                                correlated_columns.size());
+				result_layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
 			}
 			return PushDownResult(std::move(cross_product), std::move(result_layout));
 		}
