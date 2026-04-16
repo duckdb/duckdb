@@ -175,7 +175,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		if (TypeHasData(result.GetType())) {
-			FlatVector::SetData(result, base_ptr);
+			FlatVector::SetData(result, base_ptr, vdata.count);
 		}
 		FlatVector::Validity(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
@@ -195,7 +195,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	result.Resize(0, vector_count);
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
-	auto target_data = FlatVector::GetData(result);
+	auto target_data = FlatVector::GetDataMutable(result);
 	auto &target_validity = FlatVector::Validity(result);
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {

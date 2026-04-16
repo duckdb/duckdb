@@ -4,6 +4,73 @@
 
 namespace duckdb {
 
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
+    : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER),
+      shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
+}
+
+ShreddedVectorBuffer::~ShreddedVectorBuffer() {
+}
+
+idx_t ShreddedVectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	return shredded_data->GetDataSize(count);
+}
+
+idx_t ShreddedVectorBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += shredded_data->GetAllocationSize();
+	return size;
+}
+
+void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(vector_type == VectorType::SHREDDED_VECTOR);
+	shredded_data->Verify(sel, count);
+}
+
+string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {
+	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
+	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
+	return "Shredded: " + shredded.ToString(count) + ", Unshredded: " + unshredded.ToString(count);
+}
+
+Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	// FIXME: this is extremely inefficient
+	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
+	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
+
+	auto shredded_val = shredded.GetValue(index);
+	auto unshredded_val = unshredded.GetValue(index);
+
+	child_list_t<LogicalType> shredded_subtypes;
+	shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
+	shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+	Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
+	StructVector::GetEntries(new_shredded)[0].Reference(unshredded_val);
+	StructVector::GetEntries(new_shredded)[1].Reference(shredded_val);
+
+	Vector result_vec(LogicalType::VARIANT(), 1);
+	VariantUtils::UnshredVariantData(new_shredded, result_vec, 1);
+	return result_vec.GetValue(0);
+}
+
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                       idx_t count) const {
+	Vector *source = shredded_data.get();
+	// if a selection vector is provided, slice the shredded data first
+	unique_ptr<Vector> sliced;
+	if (sel.IsSet()) {
+		sliced = make_uniq<Vector>(*shredded_data, sel, count);
+		source = sliced.get();
+	}
+	// unshred the (optionally sliced) vector
+	Vector unshredded_vector(LogicalType::VARIANT(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+	VariantUtils::UnshredVariantData(*source, unshredded_vector, count);
+	// now flatten the unshredded vector
+	unshredded_vector.Flatten(count);
+	return unshredded_vector.GetBuffer();
+}
+
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
 	VerifyShreddedVector(vec);
 	return StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];

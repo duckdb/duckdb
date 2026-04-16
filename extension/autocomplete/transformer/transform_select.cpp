@@ -14,6 +14,12 @@
 #include "duckdb/parser/tableref/at_clause.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
 
@@ -1346,8 +1352,9 @@ LimitPercentResult PEGTransformerFactory::TransformLimitValue(PEGTransformer &tr
 
 LimitPercentResult PEGTransformerFactory::TransformLimitAll(PEGTransformer &transformer,
                                                             optional_ptr<ParseResult> parse_result) {
+	// LIMIT ALL is represented as a NULL constant, matching PostgreSQL behavior (makeNullAConst)
 	LimitPercentResult result;
-	result.expression = make_uniq<StarExpression>();
+	result.expression = make_uniq<ConstantExpression>(Value());
 	result.is_percent = false;
 	return result;
 }
@@ -1597,17 +1604,14 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
 
 		if (is_recursive) {
-			auto &query_node = with_entry.second->query->node;
-			if (!query_node->modifiers.empty()) {
-				for (auto &modifier : query_node->modifiers) {
-					if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
-					    modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-						throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
-					}
-					if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-						throw ParserException("ORDER BY in a recursive query is not allowed");
-					}
-				}
+			auto &query_node = with_entry.second->query_node;
+			if (!query_node) {
+				throw ParserException("Recursive CTEs with DML statements are not supported");
+			}
+			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
+			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
+			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
+				throw ParserException("Recursive CTEs with DML statements are not supported");
 			}
 			// Now safe to call on SELECT, VALUES, etc.
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
@@ -1645,7 +1649,7 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, optio
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(5));
 	D_ASSERT(table_ref->type == TableReferenceType::SUBQUERY);
 	auto subquery_ref = unique_ptr_cast<TableRef, SubqueryRef>(std::move(table_ref));
-	result->query = std::move(subquery_ref->subquery);
+	result->query_node = std::move(subquery_ref->subquery->node);
 	return make_pair(cte_name, std::move(result));
 }
 
@@ -1657,10 +1661,28 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformCTEBody(PEGTransformer &tra
 	// CTEBodyContent <- SelectStatementInternal / Statement
 	auto &content_list = inner->Cast<ListParseResult>();
 	auto &body_choice = content_list.Child<ChoiceParseResult>(0);
-	if (body_choice.result->name != "SelectStatementInternal") {
-		throw ParserException("A CTE needs a SELECT");
+	if (body_choice.result->name == "SelectStatementInternal") {
+		auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(body_choice.result);
+		return make_uniq<SubqueryRef>(std::move(select_statement));
 	}
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(body_choice.result);
+	// DML body (INSERT / UPDATE / DELETE) - transform as a Statement and extract its QueryNode
+	auto sql_stmt = transformer.Transform<unique_ptr<SQLStatement>>(body_choice.result);
+	unique_ptr<QueryNode> query_node;
+	switch (sql_stmt->type) {
+	case StatementType::INSERT_STATEMENT:
+		query_node = unique_ptr_cast<InsertQueryNode, QueryNode>(std::move(sql_stmt->Cast<InsertStatement>().node));
+		break;
+	case StatementType::UPDATE_STATEMENT:
+		query_node = unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(sql_stmt->Cast<UpdateStatement>().node));
+		break;
+	case StatementType::DELETE_STATEMENT:
+		query_node = unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(sql_stmt->Cast<DeleteStatement>().node));
+		break;
+	default:
+		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement");
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	select_statement->node = std::move(query_node);
 	return make_uniq<SubqueryRef>(std::move(select_statement));
 }
 
@@ -1673,12 +1695,8 @@ bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, o
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformUsingKey(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto col_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
-	vector<unique_ptr<ParsedExpression>> results;
-	for (auto col : col_list) {
-		results.push_back(make_uniq<ColumnRefExpression>(std::move(col)));
-	}
-	return results;
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
+	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_parens);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformHavingClause(PEGTransformer &transformer,

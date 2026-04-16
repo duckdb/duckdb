@@ -33,8 +33,9 @@ void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = 0;
 }
 
-unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
 		throw BinderException("union_value takes exactly one argument");
 	}

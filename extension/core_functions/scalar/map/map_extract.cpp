@@ -77,32 +77,30 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	map_vec.ToUnifiedFormat(count, lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
-	const auto inc_list_data = ListVector::GetData(map_vec);
-	const auto out_list_data = ListVector::GetData(result);
+	const auto inc_list_data = UnifiedVectorFormat::GetData<list_entry_t>(lst_format);
+	auto out_list_data = FlatVector::Writer<list_entry_t>(result, count);
 
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		const auto lst_idx = lst_format.sel->get_index(row_idx);
 		if (!lst_format.validity.RowIsValid(lst_idx)) {
-			FlatVector::SetNull(result, row_idx, true);
+			out_list_data.SetInvalid(row_idx);
 			continue;
 		}
-
-		auto &inc_list = inc_list_data[lst_idx];
-		auto &out_list = out_list_data[row_idx];
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
 			// We didnt find the key in the map, so return empty list
-			out_list.offset = offset;
-			out_list.length = 0;
+			out_list_data[row_idx].offset = offset;
+			out_list_data[row_idx].length = 0;
 			continue;
 		}
 
+		auto &inc_list = inc_list_data[lst_idx];
 		// Compute the actual position of the value in the map value vector
 		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
-		out_list.offset = offset;
-		out_list.length = 1;
+		out_list_data[row_idx].offset = offset;
+		out_list_data[row_idx].length = 1;
 		ListVector::Append(result, val_vec, pos + 1, pos);
 		offset++;
 	}

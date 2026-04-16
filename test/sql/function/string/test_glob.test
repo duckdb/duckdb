@@ -229,6 +229,46 @@ SELECT '4' GLOB '['
 ----
 0
 
+# star backtracking against bracket with end of string constraint
+query T
+SELECT 'abac' GLOB '*a[bc]'
+----
+1
+
+query T
+SELECT 'abad' GLOB '*a[bc]'
+----
+0
+
+# star backtracking against escaped literal
+query T
+SELECT 'xx*' GLOB '*\*'
+----
+1
+
+query T
+SELECT 'xxa' GLOB '*\*'
+----
+0
+
+# star backtracking against question mark with end of string constraint
+query T
+SELECT 'ab' GLOB '*?'
+----
+1
+
+# invalid bracket after star
+query T
+SELECT 'abc' GLOB '*['
+----
+0
+
+# many-star glob should complete quickly and return false
+query T
+SELECT repeat('a', 35) || 'c' GLOB '*a*a*a*a*a*a*a*a*a*a*a*a*a*a*b'
+----
+0
+
 # like with table
 statement ok
 CREATE TABLE strings(s STRING, pat STRING);

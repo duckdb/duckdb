@@ -372,7 +372,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		state.InitializePage(partition);
 		const auto &fmask = partition.filter_mask;
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;
 		if (prevs.empty()) {
@@ -500,8 +500,9 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 	}
 }
 
-unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	function = GetModeAggregate(arguments[0]->return_type);
 	function.name = "mode";
 	return nullptr;
@@ -601,8 +602,9 @@ AggregateFunction GetEntropyFunction(const LogicalType &type) {
 	}
 }
 
-unique_ptr<FunctionData> BindEntropyAggregate(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	function = GetEntropyFunction(arguments[0]->return_type);
 	function.name = "entropy";
 	return nullptr;

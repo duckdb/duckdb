@@ -575,13 +575,10 @@ static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bo
 }
 
 static idx_t GetTupleWidth(const vector<LogicalType> &types, bool &all_constant) {
-	idx_t tuple_width = 0;
-	all_constant = true;
-	for (auto &type : types) {
-		tuple_width += GetTypeIdSize(type.InternalType());
-		all_constant &= TypeIsConstantSize(type.InternalType());
-	}
-	return tuple_width + AlignValue(types.size()) / 8 + GetTypeIdSize(PhysicalType::UINT64);
+	TupleDataLayout layout;
+	layout.Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	all_constant = layout.AllConstant();
+	return layout.GetRowWidth();
 }
 
 static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vector<LogicalType> &types,
@@ -590,7 +587,11 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width + 1;
+	if (tuple_width == 0) {
+		throw InternalException("GetPartitioningSpaceRequirement: tuple width should not be 0");
+	}
+
+	auto tuples_per_block = MaxValue<idx_t>(buffer_manager.GetBlockSize() / tuple_width, 1);
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;
@@ -909,7 +910,8 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	for (idx_t k = 0; k < key_count; k++) {
 		// Cast to storage type, only insert if it succeeds
 		auto value = build_vector.GetValue(k);
-		if (!value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
+		if (info.columns[filter_idx].storage_type.IsValid() &&
+		    !value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
 			return; // it's all or nothing sadly
 		}
 		unique_ht_values.insert(value);
@@ -994,6 +996,10 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 
 	uhugeint_t span;
 	if (PrefixRangeFilter::TryComputeSpan(min, max, span)) {
+		if (span == 0) {
+			// Filter will not be more expressive than min/max, bail
+			return false;
+		}
 		static const auto SPAN_THRESHOLD = Uhugeint::Convert(1048576);
 		span_is_small = span <= SPAN_THRESHOLD;
 	} else {
@@ -1004,7 +1010,8 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 		return false;
 	}
 
-	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
+	const auto &key_type = ht->conditions[0].GetLHS().return_type;
+	return PrefixRangeTableFilter::SupportedType(key_type);
 }
 
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
@@ -1091,15 +1098,17 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			auto min_val_before_cast = final_min_max->data[min_idx].GetValue(0);
 			auto max_val_before_cast = final_min_max->data[max_idx].GetValue(0);
 
-			// Cast to storage type, skip if fails
-			D_ASSERT(pushdown_column.storage_type.IsValid());
 			auto min_val = min_val_before_cast;
 			auto max_val = max_val_before_cast;
-			if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-				continue;
-			}
-			if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-				continue;
+
+			// Cast to storage type, skip if fails
+			if (pushdown_column.storage_type.IsValid()) {
+				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
 			}
 
 			if (min_val.IsNull() || max_val.IsNull()) {

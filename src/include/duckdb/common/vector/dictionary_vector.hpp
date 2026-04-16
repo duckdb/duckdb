@@ -31,21 +31,11 @@ public:
 //! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
 class DictionaryBuffer : public VectorBuffer {
 public:
-	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel), entry(std::move(entry_p)) {
-	}
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)), entry(std::move(entry_p)) {
-	}
-	explicit DictionaryBuffer(const SelectionVector &sel)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
-	}
-	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
-	}
-	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
-	}
+	explicit DictionaryBuffer(const SelectionVector &sel, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data, buffer_ptr<DictionaryEntry> entry_p);
+	explicit DictionaryBuffer(const SelectionVector &sel);
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data);
+	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE);
 
 public:
 	const SelectionVector &GetSelVector() const {
@@ -82,6 +72,19 @@ public:
 	void SetEntry(buffer_ptr<DictionaryEntry> entry_p) {
 		entry = std::move(entry_p);
 	}
+
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
+	                                        idx_t count) override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 private:
 	SelectionVector sel_vector;

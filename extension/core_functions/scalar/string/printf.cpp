@@ -22,8 +22,9 @@ struct FMTFormat {
 	}
 };
 
-unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
@@ -71,113 +72,106 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 	return nullptr;
 }
 
+struct StandardConstructArgument {
+	template <class T, class CTX>
+	static void ConstructArgument(const T &input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
+		result.emplace_back(duckdb_fmt::internal::make_arg<CTX>(input));
+	}
+};
+
+struct StringConstructArgument {
+	template <class T, class CTX>
+	static void ConstructArgument(const T &input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
+		auto string_view = duckdb_fmt::basic_string_view<char>(input.GetData(), input.GetSize());
+		result.emplace_back(duckdb_fmt::internal::make_arg<CTX>(string_view));
+	}
+};
+
+template <class T, class OP = StandardConstructArgument, class CTX>
+void ConvertArguments(const Vector &input, idx_t count, VectorWriter<string_t> &writer,
+                      vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
+	auto result = input.Values<T>(count);
+	for (idx_t i = 0; i < count; i++) {
+		auto entry = result[i];
+		if (!entry.IsValid()) {
+			writer.SetInvalid(i);
+			continue;
+		}
+		OP::ConstructArgument(entry.GetValue(), result_args[i]);
+	}
+}
+
 template <class FORMAT_FUN, class CTX>
 static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &format_string_vec = args.data[0];
-	auto &result_validity = FlatVector::Validity(result);
-	result_validity.Initialize(args.size());
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		switch (args.data[i].GetVectorType()) {
-		case VectorType::CONSTANT_VECTOR:
-			if (ConstantVector::IsNull(args.data[i])) {
-				// constant null! result is always NULL regardless of other input
-				ConstantVector::SetNull(result);
-				return;
-			}
-			break;
-		default:
-			// FLAT VECTOR, we can directly OR the nullmask
-			args.data[i].Flatten(args.size());
-			result_validity.Combine(FlatVector::Validity(args.data[i]), args.size());
-			break;
-		}
-	}
 	idx_t count = args.size();
 
-	auto format_data = FlatVector::GetData<string_t>(format_string_vec);
+	// convert all format arguments
+	vector<vector<duckdb_fmt::basic_format_arg<CTX>>> format_args;
+	format_args.resize(count);
+
+	auto format_data = args.data[0].Values<string_t>(count);
 	auto result_data = FlatVector::Writer<string_t>(result, count);
+
+	for (idx_t i = 1; i < args.ColumnCount(); i++) {
+		auto &col = args.data[i];
+		switch (col.GetType().id()) {
+		case LogicalTypeId::BOOLEAN:
+			ConvertArguments<bool>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::TINYINT:
+			ConvertArguments<int8_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::SMALLINT:
+			ConvertArguments<int16_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::INTEGER:
+			ConvertArguments<int32_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::BIGINT:
+			ConvertArguments<int64_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::UBIGINT:
+			ConvertArguments<uint64_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::FLOAT:
+			ConvertArguments<float>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::HUGEINT:
+			ConvertArguments<hugeint_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::UHUGEINT:
+			ConvertArguments<uhugeint_t>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::DOUBLE:
+			ConvertArguments<double>(col, count, result_data, format_args);
+			break;
+		case LogicalTypeId::VARCHAR:
+			ConvertArguments<string_t, StringConstructArgument>(col, count, result_data, format_args);
+			break;
+		default:
+			throw InternalException("Unexpected type for printf format");
+		}
+	}
+
+	// now perform the actual formatting
+	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t idx = 0; idx < count; idx++) {
-		if (result.GetVectorType() == VectorType::FLAT_VECTOR && FlatVector::IsNull(result, idx)) {
+		auto entry = format_data[idx];
+		if (!entry.IsValid()) {
+			result_validity.SetInvalid(idx);
+			continue;
+		}
+		if (!result_validity.RowIsValid(idx)) {
 			// this entry is NULL: skip it
 			continue;
 		}
 
-		// first fetch the format string
-		auto fmt_idx = format_string_vec.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
-		auto format_string = format_data[fmt_idx].GetString();
+		auto format_string = entry.GetValue().GetString();
+		auto &current_args = format_args[idx];
 
-		// now gather all the format arguments
-		vector<duckdb_fmt::basic_format_arg<CTX>> format_args;
-		vector<unsafe_unique_array<data_t>> string_args;
-
-		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-			auto &col = args.data[col_idx];
-			idx_t arg_idx = col.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
-			switch (col.GetType().id()) {
-			case LogicalTypeId::BOOLEAN: {
-				auto arg_data = FlatVector::GetData<bool>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::TINYINT: {
-				auto arg_data = FlatVector::GetData<int8_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::SMALLINT: {
-				auto arg_data = FlatVector::GetData<int16_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::INTEGER: {
-				auto arg_data = FlatVector::GetData<int32_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::BIGINT: {
-				auto arg_data = FlatVector::GetData<int64_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::UBIGINT: {
-				auto arg_data = FlatVector::GetData<uint64_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::FLOAT: {
-				auto arg_data = FlatVector::GetData<float>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::HUGEINT: {
-				auto arg_data = FlatVector::GetData<hugeint_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::UHUGEINT: {
-				auto arg_data = FlatVector::GetData<uhugeint_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::DOUBLE: {
-				auto arg_data = FlatVector::GetData<double>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
-				break;
-			}
-			case LogicalTypeId::VARCHAR: {
-				auto arg_data = FlatVector::GetData<string_t>(col);
-				auto string_view =
-				    duckdb_fmt::basic_string_view<char>(arg_data[arg_idx].GetData(), arg_data[arg_idx].GetSize());
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(string_view));
-				break;
-			}
-			default:
-				throw InternalException("Unexpected type for printf format");
-			}
-		}
 		// finally actually perform the format
-		string dynamic_result = FORMAT_FUN::template OP<CTX>(format_string.c_str(), format_args);
-		result_data[idx] = StringVector::AddString(result, dynamic_result);
+		string dynamic_result = FORMAT_FUN::template OP<CTX>(format_string.c_str(), current_args);
+		result_data[idx] = dynamic_result;
 	}
 }
 

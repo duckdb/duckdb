@@ -642,7 +642,8 @@ private:
 	static string TransformSetNullKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformSetDefaultKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	static LogicalType TransformColumnCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformColumnCollation(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	static bool TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformCommitAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformPreserveOrDelete(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -739,6 +740,7 @@ private:
 	                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
+	static string TransformCollationName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer,
@@ -865,6 +867,8 @@ private:
 	                                                  optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformParameter(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+	                                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAnonymousParameter(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformNumberedParameter(PEGTransformer &transformer,
@@ -1445,6 +1449,12 @@ private:
 	static unique_ptr<SetStatement> TransformSetTimeZone(PEGTransformer &transformer,
 	                                                     optional_ptr<ParseResult> parse_result);
 	static SettingInfo TransformSetVariable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneValue(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIntervalWithInterval(PEGTransformer &transformer,
+	                                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
+	                                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,

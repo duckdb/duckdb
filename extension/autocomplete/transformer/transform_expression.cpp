@@ -96,20 +96,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	}
 
 	auto indirection_repeat = indirection_opt.optional_result->Cast<RepeatParseResult>();
+	bool prev_indirection_was_cast = false;
 	for (auto child : indirection_repeat.children) {
 		auto indirection_expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
 		if (indirection_expr->GetExpressionClass() == ExpressionClass::CAST) {
 			auto cast_expr = unique_ptr_cast<ParsedExpression, CastExpression>(std::move(indirection_expr));
 			cast_expr->child = std::move(expr);
 			expr = std::move(cast_expr);
+			prev_indirection_was_cast = true;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+			if (prev_indirection_was_cast) {
+				throw ParserException(
+				    "Subscript/slice cannot be applied directly after a cast operator (e.g. x::TYPE[1:3] is not "
+				    "allowed). Wrap the cast in parentheses: (x::TYPE)[1:3]");
+			}
 			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(indirection_expr));
 			operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
 			expr = std::move(operator_expr);
+			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
 			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
 			expr = std::move(function_expr);
+			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			vector<unique_ptr<ParsedExpression>> struct_children;
 			struct_children.push_back(std::move(expr));
@@ -117,6 +126,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			auto struct_expr =
 			    make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(struct_children));
 			expr = std::move(struct_expr);
+			prev_indirection_was_cast = false;
 		} else {
 			throw NotImplementedException("Unhandled case for Base Expression with indirection");
 		}
@@ -296,28 +306,9 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("Wrong number of arguments provided to DATE function");
 		}
 		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
-	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1) {
-		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments to LIST.");
-		}
-		auto arg_expr = function_children[0].get();
-		auto &order_by = order_modifier->orders[0];
-		if (arg_expr->Equals(*order_by.expression)) {
-			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
-			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
-			auto unordered = make_uniq<FunctionExpression>(
-			    qualified_function.catalog, qualified_function.schema, lowercase_name, std::move(function_children),
-			    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
-			lowercase_name = "list_sort";
-			order_modifier = make_uniq<OrderModifier>(); // NOLINT
-			filter_expr.reset();                         // NOLINT
-			function_children.clear();                   // NOLINT
-			distinct = false;
-			function_children.emplace_back(std::move(unordered));
-			function_children.emplace_back(std::move(sense));
-			function_children.emplace_back(std::move(nulls));
-		}
+	}
+	if (has_ignore_nulls_result) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
 	}
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (within_group_opt.HasResult()) {
@@ -606,10 +597,11 @@ PEGTransformerFactory::TransformLambdaArrowExpression(PEGTransformer &transforme
 	if (!lambda_opt.HasResult()) {
 		return expr;
 	}
+	// Each child is a SingleArrowPair ListParseResult: ['->', LogicalOrExpression]
 	auto inner_lambda_list = lambda_opt.optional_result->Cast<RepeatParseResult>();
-	for (auto lambda_expr : inner_lambda_list.children) {
-		auto &inner_list_pr = lambda_expr->Cast<ListParseResult>();
-		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+	for (auto &pair_node : inner_lambda_list.children) {
+		auto &pair_list = pair_node->Cast<ListParseResult>(); // SingleArrowPair
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(pair_list.Child<ListParseResult>(1));
 		expr = make_uniq<LambdaExpression>(std::move(expr), std::move(right_expr));
 	}
 	return expr;
@@ -1057,7 +1049,12 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto child = list_pr.Child<ChoiceParseResult>(0).result;
+	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
+	if (child->type == ParseResultType::OPERATOR) {
+		return child->Cast<OperatorParseResult>().operator_token;
+	}
+	return transformer.Transform<string>(child);
 }
 
 // QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
@@ -1419,6 +1416,36 @@ PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer,
 	return std::move(expr);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
+	// QuestionMarkNumberedParameter <- '?' NumberLiteral
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+
+	auto &const_expr = number->Cast<ConstantExpression>();
+	int32_t param_number = const_expr.value.GetValue<int32_t>();
+
+	if (param_number <= 0) {
+		throw ParserException("Parameter numbers must be greater than 0");
+	}
+
+	auto expr = make_uniq<ParameterExpression>();
+	string identifier = const_expr.value.ToString();
+	idx_t known_param_index = DConstants::INVALID_INDEX;
+
+	transformer.GetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+
+	if (known_param_index == DConstants::INVALID_INDEX) {
+		known_param_index = NumericCast<idx_t>(param_number);
+		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+	}
+
+	expr->identifier = identifier;
+	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+	return std::move(expr);
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	// NumberedParameter <- '$' NumberLiteral
@@ -1655,7 +1682,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 	vector<OrderByNode> order_by;
 	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
 	bool ignore_nulls = false;
+	bool has_ignore_nulls_result = extract_parens.Child<OptionalParseResult>(3).HasResult();
 	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
+	if (has_ignore_nulls_result) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
+	}
 	auto result =
 	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, collabel, std::move(function_children));
 	result->distinct = distinct;

@@ -187,7 +187,7 @@ struct TestVectorSequence {
 		}
 		case PhysicalType::LIST: {
 			D_ASSERT(type.id() != LogicalTypeId::MAP);
-			auto data = FlatVector::GetData<list_entry_t>(result);
+			auto data = FlatVector::Writer<list_entry_t>(result, 3);
 			data[0].offset = 0;
 			data[0].length = 2;
 			data[1].offset = 2;

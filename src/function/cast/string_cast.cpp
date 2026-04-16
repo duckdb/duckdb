@@ -17,24 +17,21 @@
 namespace duckdb {
 
 template <class T>
-static bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
-                               T *result_data, ValidityMask &result_mask, const LogicalType &result_type, idx_t count,
-                               VectorTryCastData &vector_cast_data, const SelectionVector *sel) {
+static bool StringEnumCastLoop(const VectorIterator<string_t> &source_data, VectorWriter<T> &result_data,
+                               const LogicalType &result_type, idx_t count, VectorTryCastData &vector_cast_data) {
 	for (idx_t i = 0; i < count; i++) {
-		idx_t source_idx = i;
-		if (sel) {
-			source_idx = sel->get_index(i);
+		auto source_entry = source_data[i];
+		if (!source_entry.IsValid()) {
+			result_data.SetInvalid(i);
+			continue;
 		}
-		if (source_mask.RowIsValid(source_idx)) {
-			auto pos = EnumType::GetPos(result_type, source_data[source_idx]);
-			if (pos == -1) {
-				result_data[i] = HandleVectorCastError::Operation<T>(
-				    CastExceptionText<string_t, T>(source_data[source_idx]), result_mask, i, vector_cast_data);
-			} else {
-				result_data[i] = UnsafeNumericCast<T>(pos);
-			}
+		auto &source_val = source_entry.GetValue();
+		auto pos = EnumType::GetPos(result_type, source_val);
+		if (pos == -1) {
+			result_data[i] = HandleVectorCastError::Operation<T>(CastExceptionText<string_t, T>(source_val),
+			                                                     result_data, i, vector_cast_data);
 		} else {
-			result_mask.SetInvalid(i);
+			result_data[i] = UnsafeNumericCast<T>(pos);
 		}
 	}
 	return vector_cast_data.all_converted;
@@ -42,37 +39,16 @@ static bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source
 
 template <class T>
 static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-	switch (source.GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR: {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto result_vector_type =
+	    source.GetVectorType() == VectorType::CONSTANT_VECTOR ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 
-		auto source_data = ConstantVector::GetData<string_t>(source);
-		auto source_mask = ConstantVector::Validity(source);
-		auto result_data = ConstantVector::GetData<T>(result);
-		auto &result_mask = ConstantVector::Validity(result);
+	auto source_data = source.Values<string_t>(count);
+	auto result_data = FlatVector::Writer<T>(result, count);
 
-		VectorTryCastData vector_cast_data(result, parameters);
-		return StringEnumCastLoop(source_data, source_mask, source.GetType(), result_data, result_mask,
-		                          result.GetType(), 1, vector_cast_data, nullptr);
-	}
-	default: {
-		UnifiedVectorFormat vdata;
-		source.ToUnifiedFormat(count, vdata);
-
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-
-		auto source_data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		auto source_sel = vdata.sel;
-		auto source_mask = vdata.validity;
-		auto result_data = FlatVector::GetData<T>(result);
-		auto &result_mask = FlatVector::Validity(result);
-
-		VectorTryCastData vector_cast_data(result, parameters);
-		return StringEnumCastLoop(source_data, source_mask, source.GetType(), result_data, result_mask,
-		                          result.GetType(), count, vector_cast_data, source_sel);
-	}
-	}
+	VectorTryCastData vector_cast_data(result, parameters);
+	auto cast_result = StringEnumCastLoop(source_data, result_data, result.GetType(), count, vector_cast_data);
+	result.SetVectorType(result_vector_type);
+	return cast_result;
 }
 
 static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const LogicalType &source,
@@ -149,8 +125,8 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	ListVector::Reserve(result, total_list_size);
 	ListVector::SetListSize(result, total_list_size);
 
-	auto list_data = ListVector::GetData(result);
-	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto child_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
@@ -298,12 +274,12 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 
 	Vector varchar_key_vector(LogicalType::VARCHAR, total_elements);
 	Vector varchar_val_vector(LogicalType::VARCHAR, total_elements);
-	auto child_key_data = FlatVector::GetData<string_t>(varchar_key_vector);
-	auto child_val_data = FlatVector::GetData<string_t>(varchar_val_vector);
+	auto child_key_data = FlatVector::GetDataMutable<string_t>(varchar_key_vector);
+	auto child_val_data = FlatVector::GetDataMutable<string_t>(varchar_val_vector);
 
 	ListVector::Reserve(result, total_elements);
 	ListVector::SetListSize(result, total_elements);
-	auto list_data = ListVector::GetData(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
@@ -397,7 +373,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 
 	auto child_count = array_size * count;
 	Vector varchar_vector(LogicalType::VARCHAR, child_count);
-	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+	auto child_data = FlatVector::GetDataMutable<string_t>(varchar_vector);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;

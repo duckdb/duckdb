@@ -56,7 +56,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				if (!entry.IsValid()) {
 					continue;
 				}
-				result_lengths[entry.index] += entry.value.GetSize();
+				result_lengths[entry.GetIndex()] += entry.GetValue().GetSize();
 			}
 		}
 	}
@@ -95,8 +95,8 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				if (!entry.IsValid()) {
 					continue;
 				}
-				auto &input_str = entry.value;
-				auto i = entry.index;
+				auto &input_str = entry.GetValue();
+				auto i = entry.GetIndex();
 				auto input_ptr = input_str.GetData();
 				auto input_len = input_str.GetSize();
 				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
@@ -142,7 +142,7 @@ struct ListConcatInputData {
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
@@ -162,27 +162,25 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 		input_data.push_back(std::move(data));
 	}
 
-	auto &result_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		auto &result_entry = result_entries[i];
-		result_entry.offset = offset;
-		result_entry.length = 0;
+		result_data[i].offset = offset;
+		result_data[i].length = 0;
 		for (auto &data : input_data) {
 			auto list_index = data.vdata.sel->get_index(i);
 			if (!data.vdata.validity.RowIsValid(list_index)) {
 				// LIST_CONCAT ignores NULL values, but || does not
 				if (is_operator) {
-					result_validity.SetInvalid(i);
+					result_data.SetInvalid(i);
 				}
 				continue;
 			}
 			const auto &list_entry = data.input_entries[list_index];
-			result_entry.length += list_entry.length;
+			result_data[i].length += list_entry.length;
 			ListVector::Append(result, data.child_vec, *data.child_vdata.sel, list_entry.offset + list_entry.length,
 			                   list_entry.offset);
 		}
-		offset += result_entry.length;
+		offset += result_data[i].length;
 	}
 	ListVector::SetListSize(result, offset);
 }
@@ -315,13 +313,17 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
-unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindConcatFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return BindConcatFunctionInternal(context, bound_function, arguments, false);
 }
 
-unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindConcatOperator(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	return BindConcatFunctionInternal(context, bound_function, arguments, true);
 }
 
@@ -338,8 +340,8 @@ unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStati
 
 ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr,
-	                          ListConcatStats);
+	auto fun =
+	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
 	fun.varargs = LogicalType::LIST(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;

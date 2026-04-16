@@ -278,8 +278,8 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 			auto entry = source_tag_entries[row_idx];
 			if (entry.IsValid()) {
 				// map the tag
-				auto target_tag = cast_data.tag_map[entry.value];
-				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
+				auto target_tag = cast_data.tag_map[entry.GetValue()];
+				FlatVector::GetDataMutable<union_tag_t>(result_tag_vector)[row_idx] =
 				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
 				// Issue: The members of the result is not always flatvectors
@@ -315,12 +315,12 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			continue;
 		}
 
-		auto tag = tag_entry.value;
+		auto tag = tag_entry.GetValue();
 		auto &member = UnionVector::GetMember(varchar_union, tag);
 		auto member_entries = member.Values<string_t>(count);
 		auto member_entry = member_entries[i];
 		if (member_entry.IsValid()) {
-			result_data[i] = member_entry.value;
+			result_data[i] = member_entry.GetValue();
 		} else {
 			result_data[i] = "NULL";
 		}

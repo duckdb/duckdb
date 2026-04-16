@@ -578,7 +578,8 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
 		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
-		auto bind_info = bind_callback(context, function, arguments);
+		BindScalarFunctionInput input(context, function, arguments);
+		auto bind_info = bind_callback(input);
 		auto return_type = function.GetReturnType();
 		target = make_uniq<BoundFunctionExpression>(return_type, std::move(function), std::move(arguments),
 		                                            std::move(bind_info));

@@ -232,6 +232,10 @@ bool BoundCastExpression::CanThrow() const {
 	    LogicalType::ForceMaxLogicalType(return_type, child_type) == child_type.id()) {
 		return true;
 	}
+	// Casting VARCHAR to JSON involves parsing and validation that can throw on malformed input
+	if (return_type.IsJSONType() && !child_type.IsJSONType()) {
+		return true;
+	}
 	bool changes_type = false;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { changes_type |= child.CanThrow(); });
 	return changes_type;

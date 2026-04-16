@@ -59,6 +59,9 @@ public:
 		return true;
 	}
 
+	//! Returns the virtual columns for this table
+	virtual_column_map_t GetVirtualColumns() const override;
+
 	//! Create a trigger on this table
 	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info);
 	//! Scan all triggers on this table

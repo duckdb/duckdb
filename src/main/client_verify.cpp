@@ -4,6 +4,7 @@
 #include "duckdb/verification/statement_verifier.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/box_renderer_context.hpp"
 
 namespace duckdb {
 
@@ -172,7 +173,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		config.max_width = random.NextRandomInteger() % 500;
 		BoxRenderer renderer(config);
 		auto pinned_result_set = original->materialized_result->Pin();
-		renderer.ToString(*this, original->materialized_result->names, pinned_result_set->collection);
+		ClientBoxRendererContext render_context(*this);
+		renderer.ToString(render_context, original->materialized_result->names, pinned_result_set->collection);
 #endif
 	}
 

@@ -99,7 +99,7 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 
 	for (auto entry : input.data[0].Values<string_t>(input.size())) {
 		if (entry.IsValid()) {
-			auto &blob = entry.value;
+			auto &blob = entry.GetValue();
 			auto blob_len = blob.GetSize();
 			auto blob_ptr = blob.GetDataWriteable();
 			auto blob_end = blob_ptr + blob_len;

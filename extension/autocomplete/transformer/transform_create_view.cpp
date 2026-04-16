@@ -28,6 +28,18 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 
 	auto owned_set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(node));
 	recursive_node->union_all = owned_set_node->setop_all;
+
+	if (!owned_set_node->modifiers.empty()) {
+		for (auto &modifier : owned_set_node->modifiers) {
+			if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
+			    modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+				throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
+			}
+			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+				throw ParserException("ORDER BY in a recursive query is not allowed");
+			}
+		}
+	}
 	if (owned_set_node->children.size() == 2) {
 		recursive_node->left = std::move(owned_set_node->children[0]);
 		recursive_node->right = std::move(owned_set_node->children[1]);
@@ -55,9 +67,7 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 	auto cte_info = make_uniq<CommonTableExpressionInfo>();
 	cte_info->aliases = info->aliases;
 
-	auto cte_select = make_uniq<SelectStatement>();
-	cte_select->node = std::move(inner_node);
-	cte_info->query = std::move(cte_select);
+	cte_info->query_node = std::move(inner_node);
 
 	outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
 

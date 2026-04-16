@@ -15,88 +15,89 @@ namespace duckdb {
 // Base class for non-aggregate functions that have a payload
 class WindowValueExecutor : public WindowExecutor {
 public:
-	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
+	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared) : WindowExecutor(wexpr, shared) {
+	}
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
-
-	//! The column index of the value column
-	column_t child_idx = DConstants::INVALID_INDEX;
-	//! The column index of the Nth column
-	column_t nth_idx = DConstants::INVALID_INDEX;
-	//! The column index of the offset column
-	column_t offset_idx = DConstants::INVALID_INDEX;
-	//! The column index of the default value column
-	column_t default_idx = DConstants::INVALID_INDEX;
-	//! The column indices of any ORDER BY argument expressions
-	vector<column_t> arg_order_idx;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 };
 
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
-	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowFirstValueExecutor : public WindowValueExecutor {
 public:
-	WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowLastValueExecutor : public WindowValueExecutor {
 public:
-	WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowLastValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowNthValueExecutor : public WindowValueExecutor {
 public:
-	WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
+	}
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowFillExecutor : public WindowValueExecutor {
 public:
-	WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
+	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
+	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
-	//! Never ignore nulls (that's the point!)
-	bool IgnoreNulls() const override {
-		return false;
+	WindowFillExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowValueExecutor(wexpr, shared) {
 	}
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
-
-	//! Secondary order collection index
-	idx_t order_idx = DConstants::INVALID_INDEX;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb
