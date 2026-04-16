@@ -428,15 +428,7 @@ release: ${EXTENSION_CONFIG_STEP}
 
 .PHONY: fuzzer fuzzer_smoke
 fuzzer: ${EXTENSION_CONFIG_STEP}
-	@AFL_CC=; AFL_CXX=; AFL_LTO_CMAKE_VAR=; \
-	if command -v afl-clang-lto >/dev/null 2>&1 && command -v afl-clang-lto++ >/dev/null 2>&1; then \
-		AFL_CC=afl-clang-lto; AFL_CXX=afl-clang-lto++; AFL_LTO_CMAKE_VAR=-DCMAKE_LTO=full; \
-	elif command -v afl-clang-fast >/dev/null 2>&1 && command -v afl-clang-fast++ >/dev/null 2>&1; then \
-		AFL_CC=afl-clang-fast; AFL_CXX=afl-clang-fast++; \
-	else \
-		echo "Error: AFL++ compiler wrappers not found. Need afl-clang-lto/lto++ or afl-clang-fast/fast++ (run: brew install afl++)"; \
-		exit 1; \
-	fi; \
+	@eval "$$(./scripts/ci/afl_detect_cxx.sh)"; \
 	rm -rf ./build/fuzzer && \
 	mkdir -p ./build/fuzzer && \
 	cd build/fuzzer && \
