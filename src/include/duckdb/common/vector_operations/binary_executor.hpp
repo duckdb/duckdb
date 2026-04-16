@@ -228,8 +228,8 @@ struct BinaryExecutor {
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
-		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::ValidityMutable(result),
-		    fun);
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity,
+		    FlatVector::ValidityMutable(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>

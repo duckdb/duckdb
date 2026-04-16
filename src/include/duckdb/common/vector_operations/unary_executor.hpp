@@ -164,7 +164,8 @@ private:
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
-			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::ValidityMutable(input),
+			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count,
+			                                                    FlatVector::ValidityMutable(input),
 			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
