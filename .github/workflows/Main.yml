@@ -380,6 +380,7 @@ jobs:
     needs:
       - prepare
       - linux-debug
+      - linux-release
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
@@ -407,6 +408,9 @@ jobs:
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Install format tools
+      run: python3 scripts/ci/retry.py -- make format_tools
 
     - uses: ./.github/actions/ccache-action
       with:

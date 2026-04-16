@@ -302,19 +302,23 @@ jobs:
         if: ${{ !inputs.skip_tests }}
         run: python3 scripts/ci/retry.py -- make format_tools
 
+      - name: Download linux release artifact
+        if: ${{ !inputs.skip_tests }}
+        id: linux_release_artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v5
+        with:
+          name: linux-release-build
+          path: build
+
+      - name: Extract linux release artifact
+        if: ${{ !inputs.skip_tests && steps.linux_release_artifact.outcome == 'success' }}
+        run: |
+          rm -rf build/release
+          tar -xzf build/release-artifact.tar.gz -C build
+
       - name: Check if extension_entries.hpp is up to date
         if: ${{ !inputs.skip_tests }}
         env:
           EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
-        run: |
-          make extension_configuration
-          python scripts/generate_extensions_function.py
-          make format-fix
-
-          if git diff --exit-code src/include/duckdb/main/extension_entries.hpp; then
-            echo "No differences found"
-          else
-            git --no-pager diff -- src/include/duckdb/main/extension_entries.hpp
-            echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"
-            exit 1
-          fi
+        run: make check-extension-entries

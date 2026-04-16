@@ -619,6 +619,17 @@ format-fix:
 	rm -rf src/amalgamation/*
 	$(PYTHON) scripts/format.py --all --fix --noconfirm
 
+.PHONY: check-extension-entries
+check-extension-entries: extension_configuration
+	$(PYTHON) scripts/generate_extensions_function.py
+	$(PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
+	@if git diff --exit-code src/include/duckdb/main/extension_entries.hpp; then \
+		echo "No differences found"; \
+	else \
+		echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"; \
+		exit 1; \
+	fi
+
 format-head:
 	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
 
