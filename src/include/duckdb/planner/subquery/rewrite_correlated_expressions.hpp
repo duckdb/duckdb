@@ -18,7 +18,8 @@ namespace duckdb {
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
 	RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map,
-	                             idx_t lateral_depth, bool recursive_rewrite = false);
+	                             idx_t lateral_depth, bool recursive_rewrite = false,
+	                             optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings = nullptr);
 
 	void VisitOperator(LogicalOperator &op) override;
 
@@ -29,6 +30,7 @@ protected:
 private:
 	vector<ColumnBinding> correlated_bindings;
 	column_binding_map_t<idx_t> &correlated_map;
+	optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings;
 	// To keep track of the number of dependent joins encountered
 	idx_t lateral_depth;
 	// This flag is used to determine if the rewrite should recursively update the bindings for all

@@ -31,8 +31,10 @@ static bool ContainsCTERef(LogicalOperator &op, TableIndex table_index) {
 }
 
 RewriteCTEScan::RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-                               CTEScanRewriteMode mode)
-    : table_index(table_index), correlated_columns(correlated_columns), mode(mode) {
+                               CTEScanRewriteMode mode,
+                               optional_ptr<const reference_set_t<LogicalOperator>> accessing_operators)
+    : table_index(table_index), correlated_columns(correlated_columns), mode(mode),
+      accessing_operators(accessing_operators) {
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
@@ -53,7 +55,19 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.
 		auto &join = op.Cast<LogicalDependentJoin>();
-		if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
+		if (accessing_operators) {
+			bool has_cte_ref = false;
+			for (auto &child : join.children) {
+				if (accessing_operators->find(*child) != accessing_operators->end()) {
+					has_cte_ref = true;
+					break;
+				}
+			}
+			if (!has_cte_ref) {
+				VisitOperatorChildren(op);
+				return;
+			}
+		} else if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
 			bool has_cte_ref = false;
 			for (auto &child : join.children) {
 				if (ContainsCTERef(*child, table_index)) {

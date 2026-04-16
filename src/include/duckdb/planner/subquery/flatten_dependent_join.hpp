@@ -17,6 +17,7 @@ namespace duckdb {
 
 class LogicalAggregate;
 class LogicalComparisonJoin;
+class LogicalCTERef;
 class LogicalDependentJoin;
 class LogicalExpressionGet;
 class LogicalJoin;
@@ -112,9 +113,7 @@ private:
 	//! has_correlated_expressions map.
 	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0,
 	                                 bool parent_is_dependent_join = false);
-
-	//! Mark entire subtree of Logical Operators as correlated by adding them to the has_correlated_expressions map.
-	bool MarkSubtreeCorrelated(LogicalOperator &op, TableIndex cte_index);
+	void FreshDetect(LogicalOperator &op);
 
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
@@ -125,6 +124,8 @@ private:
 	Binder &binder;
 	reference_map_t<LogicalOperator, bool> has_correlated_expressions;
 	column_binding_map_t<idx_t> correlated_map;
+	column_binding_map_t<ColumnBinding> equivalent_bindings;
+	column_binding_map_t<idx_t> canonical_correlated_map;
 	column_binding_map_t<idx_t> replacement_map;
 	const CorrelatedColumns &correlated_columns;
 	vector<LogicalType> delim_types;
@@ -144,8 +145,11 @@ private:
 	void AddAnyJoinConditions(LogicalDependentJoin &op, const vector<ColumnBinding> &plan_columns) const;
 	void AddComparisonJoinConditions(LogicalComparisonJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
+	void AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
+	                             const CorrelatedLayout &layout) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
+	ColumnBinding GetCanonicalBinding(ColumnBinding binding) const;
 	void RewriteCorrelatedOperator(LogicalOperator &op, const CorrelatedLayout &layout, idx_t lateral_depth,
 	                               bool recursive = false);
 	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,

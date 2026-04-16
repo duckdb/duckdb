@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings,
-                                                           column_binding_map_t<idx_t> &correlated_map,
-                                                           idx_t lateral_depth, bool recursive_rewrite)
+RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(
+    vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map, idx_t lateral_depth,
+    bool recursive_rewrite, optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings)
     : correlated_bindings(std::move(correlated_bindings)), correlated_map(correlated_map), lateral_depth(lateral_depth),
-      recursive_rewrite(recursive_rewrite) {
+      recursive_rewrite(recursive_rewrite), equivalent_bindings(equivalent_bindings) {
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
@@ -36,10 +36,17 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &plan = op.Cast<LogicalDependentJoin>();
 		for (auto &corr : plan.correlated_columns) {
+			auto original_binding = corr.binding;
 			auto entry = correlated_map.find(corr.binding);
 			if (entry != correlated_map.end()) {
 				D_ASSERT(entry->second < correlated_bindings.size());
 				corr.binding = correlated_bindings[entry->second];
+				if (equivalent_bindings && original_binding != corr.binding) {
+					auto canonical_entry = equivalent_bindings->find(original_binding);
+					auto canonical_binding =
+					    canonical_entry == equivalent_bindings->end() ? original_binding : canonical_entry->second;
+					(*equivalent_bindings)[corr.binding] = canonical_binding;
+				}
 			}
 		}
 	}
