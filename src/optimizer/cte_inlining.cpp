@@ -87,23 +87,6 @@ bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
 	return false;
 }
 
-static bool HasSideEffects(const LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
-	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_DELETE:
-	case LogicalOperatorType::LOGICAL_MERGE_INTO:
-		return true;
-	default:
-		break;
-	}
-	for (auto &child : op.children) {
-		if (HasSideEffects(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
 
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
@@ -122,7 +105,7 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 		auto &cte = op->Cast<LogicalMaterializedCTE>();
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
 		if (ref_count == 0) {
-			if (HasSideEffects(*cte.children[0])) {
+			if (cte.children[0]->HasSideEffects()) {
 				// DML CTEs must always execute for side effects even when unreferenced
 				return;
 			}
@@ -130,7 +113,7 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			op = std::move(op->children[1]);
 			return;
 		}
-		if (HasSideEffects(*cte.children[0])) {
+		if (cte.children[0]->HasSideEffects()) {
 			// Never inline a DML CTE: inlining removes the LOGICAL_MATERIALIZED_CTE
 			// node that guarantees the DML executes exactly once and before the query
 			// side reads the modified table.  With ref_count==1, inlining would merge

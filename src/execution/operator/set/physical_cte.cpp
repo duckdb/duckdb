@@ -79,25 +79,6 @@ SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSi
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-static bool ContainsDML(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::INSERT:
-	case PhysicalOperatorType::BATCH_INSERT:
-	case PhysicalOperatorType::DELETE_OPERATOR:
-	case PhysicalOperatorType::UPDATE:
-	case PhysicalOperatorType::MERGE_INTO:
-		return true;
-	default:
-		break;
-	}
-	for (auto &child : op.children) {
-		if (ContainsDML(child.get())) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	D_ASSERT(children.size() == 2);
 	op_state.reset();
@@ -112,14 +93,15 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	// If the CTE body contains DML (INSERT/UPDATE/DELETE), the query side must run after
-	// the DML completes so that it sees the modified table state.  The dependency on
+	// If the CTE body contains DML (INSERT/UPDATE/DELETE/MERGE INTO), the query side must run
+	// after the DML completes so that it sees the modified table state.  The dependency on
 	// `current` is already established by CreateChildMetaPipeline above, but child
 	// MetaPipelines spawned while building children[1] (e.g. the scan pipeline under an
 	// aggregate) are in separate MetaPipelines and would otherwise race with the DML.
 	// Capture the DML base pipeline before building children[1] so we can add explicit
 	// dependencies to any new child MetaPipelines that are created during that build.
-	const bool cte_has_dml = ContainsDML(children[0].get());
+	// cte_body_is_dml is set at plan time from the logical operator via HasSideEffects().
+	const bool cte_has_dml = cte_body_is_dml;
 	vector<shared_ptr<MetaPipeline>> child_meta_pipelines_before;
 	if (cte_has_dml) {
 		// Use recursive=true so that we capture grandchild (and deeper) MetaPipelines too.

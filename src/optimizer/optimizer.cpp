@@ -117,24 +117,13 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
 }
 
-// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE) as a
-// non-root node — i.e. inside a CTE body.  When that is the case, several
+// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
+// as a non-root node — i.e. inside a CTE body.  When that is the case, several
 // optimizations are unsafe because they use table statistics captured at plan
 // time, which do not reflect the table state after the DML has executed.
-static bool PlanContainsNonRootDML(const LogicalOperator &op, bool is_root = true) {
-	if (!is_root) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_INSERT:
-		case LogicalOperatorType::LOGICAL_DELETE:
-		case LogicalOperatorType::LOGICAL_UPDATE:
-		case LogicalOperatorType::LOGICAL_MERGE_INTO:
-			return true;
-		default:
-			break;
-		}
-	}
+static bool PlanContainsNonRootDML(const LogicalOperator &op) {
 	for (auto &child : op.children) {
-		if (PlanContainsNonRootDML(*child, false)) {
+		if (child->HasSideEffects()) {
 			return true;
 		}
 	}
