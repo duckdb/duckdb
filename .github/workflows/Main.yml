@@ -446,8 +446,7 @@ jobs:
         DISABLE_SANITIZER: 1
       with:
         build: python3 scripts/ci/retry.py -- make release
-        # Run all (slow) tests for the release build.
-        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make allunit' }}
+        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke' }}
         bundle: make release-artifact
         upload-name: linux-release-build
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -463,6 +462,38 @@ jobs:
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
+
+ linux-release-tests:
+    name: Linux Release Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Download linux release artifact
+      uses: actions/download-artifact@v5
+      with:
+        name: linux-release-build
+        path: build
+
+    - name: Extract linux release artifact
+      run: |
+        rm -rf build/release
+        tar -xzf build/release-artifact.tar.gz -C build
+
+    - name: Run all release unit tests
+      run: make allunit
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
@@ -1148,6 +1179,7 @@ jobs:
       - extensions
       - wasm-eh
       - linux-release
+      - linux-release-tests
       - linux-release-cli
       - linux-musl-release-cli
       - main_julia

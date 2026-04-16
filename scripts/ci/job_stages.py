@@ -16,6 +16,7 @@ PULL_REQUEST_JOBS = [
     "extensions",
     "wasm-eh",
     "linux-release",
+    "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
     "upload-libduckdb-src",
@@ -38,6 +39,7 @@ NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
 MERGE_GROUP_JOBS = [
     "linux-debug",
     "linux-release",
+    "linux-release-tests",
     "tidy-check",
 ]
 
@@ -46,6 +48,7 @@ SKIP_TESTS_JOBS = {
     "regression",
     "swift",
     "linux-configs",
+    "linux-release-tests",
 }
 
 PREPARE_JOBS = [

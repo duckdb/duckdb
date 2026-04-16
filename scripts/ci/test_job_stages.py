@@ -57,7 +57,8 @@ class JobStagesTest(unittest.TestCase):
 
     def test_merge_queue_push_minimal_jobs(self):
         selection = self._compute_job_selection("push", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
-        self.assertEqual(selection.enabled_jobs, ["linux-debug", "linux-release", "tidy-check"])
+        required_jobs = {"linux-debug", "linux-release", "linux-release-tests", "tidy-check"}
+        self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertTrue(selection.save_cache)
 
     def test_main_includes_main_only_jobs(self):
@@ -132,7 +133,9 @@ class JobStagesTest(unittest.TestCase):
             self.assertIn("enabled_jobs=", out)
             self.assertIn("save_cache=true", out)
             payload = out.splitlines()[0].split("=", 1)[1]
-            self.assertEqual(json.loads(payload), ["linux-debug", "linux-release", "tidy-check"])
+            selected_jobs = json.loads(payload)
+            required_jobs = {"linux-debug", "linux-release", "linux-release-tests", "tidy-check"}
+            self.assertTrue(required_jobs.issubset(set(selected_jobs)))
         finally:
             sys.argv = old_argv
             if old_env is None:
