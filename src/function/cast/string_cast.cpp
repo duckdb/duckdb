@@ -420,7 +420,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 	case VectorType::CONSTANT_VECTOR: {
 		auto source_data = ConstantVector::GetData<string_t>(source);
 		auto &source_mask = ConstantVector::Validity(source);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		auto ret = T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return ret;
@@ -432,7 +432,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 		auto source_sel = unified_source.sel;
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(unified_source);
 		auto &source_mask = unified_source.validity;
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 
 		return T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, count, parameters,
 		                                     source_sel);

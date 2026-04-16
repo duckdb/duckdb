@@ -132,7 +132,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	}
 
 	source.Flatten(count);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity = FlatVector::Validity(source);
 	result.Verify(count);
 	return all_converted;

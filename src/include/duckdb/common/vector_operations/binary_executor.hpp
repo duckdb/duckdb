@@ -158,7 +158,7 @@ struct BinaryExecutor {
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &result_validity = FlatVector::Validity(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
 		if (LEFT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
 				result_validity.Copy(FlatVector::Validity(right), count);
@@ -228,7 +228,7 @@ struct BinaryExecutor {
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
-		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result),
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::ValidityMutable(result),
 		    fun);
 	}
 
