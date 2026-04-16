@@ -386,7 +386,7 @@ public:
 	          InterruptState &interrupt_state);
 	void Combine(ExecutionContext &execution_context, PartitionedCopyLocalState &lstate,
 	             InterruptState &interrupt_state);
-	void Finalize(Pipeline &pipeline, Event &event);
+	void Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state);
 	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
 
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
@@ -878,9 +878,9 @@ void PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
 
 	annotated_lock_guard<annotated_mutex> group_guard(finished_hash_group->lock);
 	if (finished_hash_group->HasCompleted()) {
-		finished_hash_group.reset();
 		auto &v = active_groups;
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
+		finished_hash_group.reset();
 	}
 }
 
@@ -921,9 +921,10 @@ void PartitionedCopy::InitializeFlush() {
 		return;
 	}
 
-	// Move current sink state to combine state, update task to FLUSH, and create a new sink state
+	// Move current sink state to combine state, update flushing to true, and create task list
 	flushing_state = std::move(sinking_state);
 	flushing = true;
+	flushing_state->CreateTaskList();
 }
 
 void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk, PartitionedCopyLocalState &lstate,
@@ -988,29 +989,13 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 	                                                      *lstate.sort_strategy_local_state, interrupt_state};
 	sort_strategy->Combine(execution_context, sort_strategy_combine_input);
 
-	// Update state, last combining thread finalizes
-	bool finalize;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lstate.current_state->lock);
-		finalize = ++lstate.current_state->combined == lstate.current_state->locals;
-	}
-
-	if (finalize) {
-		OperatorSinkFinalizeInput sort_strategy_finalize_input {*lstate.current_state->global_sink_state,
-		                                                        interrupt_state};
-		sort_strategy->Finalize(context, sort_strategy_finalize_input);
-		lstate.current_state->global_source_state =
-		    sort_strategy->GetGlobalSourceState(context, *lstate.current_state->global_sink_state);
-		lstate.current_state->CreateTaskList();
+		lstate.current_state->combined++;
 	}
 
 	lstate.sort_strategy_local_state.reset();
 	lstate.current_state.reset();
-
-	// Participate if we are flushing
-	if (flushing.load(std::memory_order_relaxed)) {
-		Flush(execution_context, interrupt_state);
-	}
 }
 
 class PartitionedCopyFinalizeTask : public ExecutorTask {
@@ -1067,7 +1052,9 @@ public:
 	void FinishEvent() override {
 		annotated_lock_guard<annotated_mutex> global_guard(partitioned_copy.lock);
 		if (partitioned_copy.sinking_state) {
-			partitioned_copy.Finalize(*pipeline, *this);
+			auto partitioned_copy_finalize_event =
+			    make_shared_ptr<PartitionedCopyFinalizeEvent>(*pipeline, partitioned_copy);
+			InsertEvent(std::move(partitioned_copy_finalize_event));
 		}
 	}
 
@@ -1075,12 +1062,20 @@ private:
 	PartitionedCopy &partitioned_copy;
 };
 
-void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event) {
-	finalized = true;
+void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
+	finalized = true;
 	if (!sinking_state && !flushing_state) {
 		return;
 	}
+
+	if (sinking_state) {
+		OperatorSinkFinalizeInput sort_strategy_finalize_input {*sinking_state->global_sink_state, interrupt_state};
+		sort_strategy->Finalize(context, sort_strategy_finalize_input);
+		sinking_state->global_source_state =
+		    sort_strategy->GetGlobalSourceState(context, *sinking_state->global_sink_state);
+	}
+
 	auto partitioned_copy_finalize_event = make_shared_ptr<PartitionedCopyFinalizeEvent>(pipeline, *this);
 	event.InsertEvent(std::move(partitioned_copy_finalize_event));
 }
@@ -1099,7 +1094,7 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 	while (auto task = flushing_state_copy->TryAssignTask()) {
 		flushing_state_copy->ExecuteTask(execution_context, *task, interrupt_state);
 		if (!finalized.load(std::memory_order_relaxed) && any_combined.load(std::memory_order_relaxed)) {
-			break; // Avoid straggling threads
+			break; // Avoid straggling threads during Combine
 		}
 	}
 
@@ -1579,7 +1574,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	auto &gstate = input.global_state.Cast<CopyToFileGlobalState>();
 
 	if (partition_output) {
-		gstate.partitioned_copy->Finalize(pipeline, event);
+		gstate.partitioned_copy->Finalize(pipeline, event, input.interrupt_state);
 		return SinkFinalizeType::READY;
 	}
 
