@@ -534,12 +534,38 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 	const auto &segments = collection->GetSegments();
 	while (batch_row_idx < count) {
 		// Look for the next partition boundary within the current chunk
+		// Uses entry-level validity mask iteration to skip 64 rows at a time (see ExecuteFlat in unary_executor.hpp)
 		D_ASSERT(batch_row_idx <= batch_scan_state.next_row_index);
-		for (; batch_row_idx < batch_scan_state.next_row_index; batch_row_idx++) {
-			if (batch_row_idx > task.begin_idx && partition_mask.RowIsValidUnsafe(batch_row_idx)) {
-				found_next_partition = true;
-				break;
+		const idx_t chunk_end = batch_scan_state.next_row_index;
+		// Skip batch_row_idx itself if it's the start of the current partition
+		const idx_t search_start = batch_row_idx + (batch_row_idx == task.begin_idx ? 1 : 0);
+		if (search_start < chunk_end) {
+			const idx_t begin_entry = search_start / ValidityMask::BITS_PER_VALUE;
+			const idx_t end_entry = ValidityMask::EntryCount(chunk_end);
+			for (idx_t entry_idx = begin_entry; entry_idx < end_entry; entry_idx++) {
+				auto validity_entry = partition_mask.GetValidityEntry(entry_idx);
+				if (ValidityMask::NoneValid(validity_entry)) {
+					continue; // no partition boundaries in this 64-row block
+				}
+				const idx_t entry_start = entry_idx * ValidityMask::BITS_PER_VALUE;
+				const idx_t row_start = MaxValue(search_start, entry_start);
+				const idx_t row_end = MinValue(chunk_end, entry_start + ValidityMask::BITS_PER_VALUE);
+				for (idx_t row = row_start; row < row_end; row++) {
+					if (ValidityMask::RowIsValid(validity_entry, row - entry_start)) {
+						batch_row_idx = row;
+						found_next_partition = true;
+						break;
+					}
+				}
+				if (found_next_partition) {
+					break;
+				}
 			}
+			if (!found_next_partition) {
+				batch_row_idx = chunk_end;
+			}
+		} else {
+			batch_row_idx = chunk_end;
 		}
 
 		// Did not find the next partition boundary, add chunk
