@@ -389,9 +389,9 @@ void duckdb_bind_set_cardinality(duckdb_bind_info info, idx_t cardinality, bool 
 	}
 	auto &bind_info = GetCTableFunctionBindInfo(info);
 	if (is_exact) {
-		bind_info.bind_data.stats = duckdb::make_uniq<duckdb::NodeStatistics>(cardinality);
-	} else {
 		bind_info.bind_data.stats = duckdb::make_uniq<duckdb::NodeStatistics>(cardinality, cardinality);
+	} else {
+		bind_info.bind_data.stats = duckdb::make_uniq<duckdb::NodeStatistics>(cardinality);
 	}
 }
 

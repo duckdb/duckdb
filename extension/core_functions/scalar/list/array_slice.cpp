@@ -158,76 +158,6 @@ bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
-void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vector, Vector &end_vector,
-                          optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
-                          optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
-	// check all this nullness early
-	auto str_valid = !ConstantVector::IsNull(str_vector);
-	auto begin_valid = !ConstantVector::IsNull(begin_vector);
-	auto end_valid = !ConstantVector::IsNull(end_vector);
-	auto step_valid = step_vector && !ConstantVector::IsNull(*step_vector);
-
-	if (!str_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-		ConstantVector::SetNull(result);
-		return;
-	}
-
-	auto result_data = ConstantVector::GetData<INPUT_TYPE>(result);
-	auto str_data = ConstantVector::GetData<INPUT_TYPE>(str_vector);
-	auto step_data = step_vector ? ConstantVector::GetData<INDEX_TYPE>(*step_vector) : nullptr;
-
-	auto str = str_data[0];
-	INDEX_TYPE begin, end;
-	if (begin_is_empty) {
-		begin = 0;
-	} else {
-		begin = *ConstantVector::GetData<INDEX_TYPE>(begin_vector);
-	}
-	if (end_is_empty) {
-		end = OP::ValueLength(str);
-	} else {
-		end = *ConstantVector::GetData<INDEX_TYPE>(end_vector);
-	}
-	auto step = step_data ? step_data[0] : 1;
-
-	if (step < 0) {
-		swap(begin, end);
-		begin = end_is_empty ? 0 : begin;
-		end = begin_is_empty ? OP::ValueLength(str) : end;
-	}
-
-	// Clamp offsets
-	bool clamp_result = false;
-	if (step_valid || step == 1) {
-		clamp_result = ClampSlice<INPUT_TYPE, INDEX_TYPE, OP>(str, begin, end);
-	}
-
-	idx_t sel_length = 0;
-	bool sel_valid = false;
-	if (step_valid && step != 1 && end - begin > 0) {
-		sel_length =
-		    CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, step_valid);
-		sel.Initialize(sel_length);
-		sel_valid = true;
-	}
-
-	// Try to slice
-	if (!clamp_result) {
-		ConstantVector::SetNull(result);
-	} else if (step == 1) {
-		result_data[0] = OP::SliceValue(result, str, begin, end);
-	} else {
-		result_data[0] = OP::SliceValueWithSteps(result, sel, str, begin, end, step, sel_idx);
-	}
-
-	if (sel_valid) {
-		result_child_vector->Slice(sel, sel_length);
-		result_child_vector->Flatten(sel_length);
-		ListVector::SetListSize(result, sel_length);
-	}
-}
-
-template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
 void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector, Vector &end_vector,
                       optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
                       optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
@@ -312,15 +242,9 @@ void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vect
 	SelectionVector sel;
 	idx_t sel_idx = 0;
 
-	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		ExecuteConstantSlice<INPUT_TYPE, INDEX_TYPE, OP>(result, list_or_str_vector, begin_vector, end_vector,
-		                                                 step_vector, count, sel, sel_idx, result_child_vector,
-		                                                 begin_is_empty, end_is_empty);
-	} else {
-		ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE, OP>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
-		                                             count, sel, sel_idx, result_child_vector, begin_is_empty,
-		                                             end_is_empty);
-	}
+	ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE, OP>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
+	                                             count, sel, sel_idx, result_child_vector, begin_is_empty,
+	                                             end_is_empty);
 	result.Verify(count);
 }
 

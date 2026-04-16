@@ -100,10 +100,10 @@ struct FlatVector {
 		return GetDataMutableUnsafe(vector);
 	}
 	static inline const_data_ptr_t GetDataUnsafe(const Vector &vector) {
-		return vector.buffer ? vector.buffer->GetData() : nullptr;
+		return vector.GetBufferRef() ? vector.GetBufferRef()->GetData() : nullptr;
 	}
 	static inline data_ptr_t GetDataMutableUnsafe(Vector &vector) {
-		return vector.buffer ? vector.buffer->GetData() : nullptr;
+		return vector.GetBufferRef() ? vector.BufferMutable().GetData() : nullptr;
 	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
@@ -117,7 +117,7 @@ struct FlatVector {
 	}
 	static inline idx_t GetCapacity(const Vector &vector) {
 		VerifyFlatVector(vector);
-		return vector.buffer ? vector.buffer->Capacity() : 0;
+		return vector.GetBufferRef() ? vector.Buffer().Capacity() : 0;
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
@@ -135,21 +135,21 @@ struct FlatVector {
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
 		VerifyFlatVector(vector);
-		return vector.buffer->GetValidityMask();
+		return vector.Buffer().GetValidityMask();
 	}
 	static inline ValidityMask &ValidityMutable(Vector &vector) {
 		VerifyFlatVector(vector);
-		return vector.buffer->GetValidityMask();
+		return vector.BufferMutable().GetValidityMask();
 	}
 	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
 		VerifyFlatVector(vector);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Initialize(new_validity);
 	}
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.Buffer().GetValidityMask();
 		return !validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();

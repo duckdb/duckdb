@@ -169,7 +169,7 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
 		MatchState list_state(state);
-		vector<optional_ptr<ParseResult>> results;
+		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
 		if (list_state.token_index < list_state.tokens.size()) {
@@ -180,7 +180,7 @@ public:
 			if (!child_result) {
 				return nullptr;
 			}
-			results.push_back(child_result);
+			results.push_back(*child_result);
 		}
 		state.token_index = list_state.token_index;
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
@@ -302,7 +302,7 @@ public:
 			if (child_result != nullptr) {
 				// we matched this child - propagate upwards
 				state.token_index = choice_state.token_index;
-				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i, start_offset));
+				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(*child_result, i, start_offset));
 				return result;
 			}
 		}
@@ -372,7 +372,7 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
 		MatchState repeat_state(state);
-		vector<optional_ptr<ParseResult>> results;
+		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
 		if (repeat_state.token_index < state.tokens.size()) {
@@ -385,7 +385,7 @@ public:
 			// The first match failed, so the whole repeat fails.
 			return nullptr;
 		}
-		results.push_back(first_result);
+		results.push_back(*first_result);
 
 		// After the first success, the overall result is a success.
 		// Now, we continue matching the element as many times as possible.
@@ -403,7 +403,7 @@ public:
 			if (!next_result) {
 				break;
 			}
-			results.push_back(next_result);
+			results.push_back(*next_result);
 		}
 
 		// Return all collected results in a RepeatParseResult.
