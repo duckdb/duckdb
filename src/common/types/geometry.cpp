@@ -2549,7 +2549,7 @@ void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t
 	auto entries = source_vec.Values<string_t>(count);
 	auto target_data = FlatVector::GetDataMutable<string_t>(target_vec);
 
-	auto &target_mask = FlatVector::Validity(target_vec);
+	auto &target_mask = FlatVector::ValidityMutable(target_vec);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto entry = entries[row_idx];

@@ -687,7 +687,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		    99, "geometry_format", GeometryStorageType::SPATIAL);
 	}
 
-	auto &validity = FlatVector::Validity(*this);
+	auto &validity = FlatVector::ValidityMutable(*this);
 	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 	validity.Reset(validity_count);
 	const auto has_validity_mask = deserializer.ReadProperty<bool>(100, "has_validity_mask");

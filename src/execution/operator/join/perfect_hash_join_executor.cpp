@@ -179,7 +179,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable() {
 		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-		auto &col_mask = FlatVector::Validity(vector);
+		auto &col_mask = FlatVector::ValidityMutable(vector);
 		col_mask.Reset(build_size);
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
 		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense

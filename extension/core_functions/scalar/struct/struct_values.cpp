@@ -41,7 +41,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 		auto validity_entries = input.Validity(count);
 
 		if (validity_entries.CanHaveNull()) {
-			auto &validity = FlatVector::Validity(result);
+			auto &validity = FlatVector::ValidityMutable(result);
 
 			for (idx_t i = 0; i < count; i++) {
 				if (!validity_entries.IsValid(i)) {

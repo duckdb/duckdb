@@ -45,7 +45,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// - key names are unique
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 	if (MapIsNull(args)) {
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
@@ -156,7 +156,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	result_key_vector.Flatten(offset);
 	result_value_vector.Slice(values_child_vector, sel_values, offset);
 	result_value_vector.Flatten(offset);
-	FlatVector::Validity(ListVector::GetEntry(result)).Resize(result_child_size);
+	FlatVector::ValidityMutable(ListVector::GetEntry(result)).Resize(result_child_size);
 	result.Verify(row_count);
 }
 

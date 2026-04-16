@@ -51,7 +51,7 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 
 static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
 	// returns a consecutive child list that fully flattens and repeats all required elements
-	auto &validity = FlatVector::Validity(list);
+	auto &validity = FlatVector::ValidityMutable(list);
 	auto list_entries = FlatVector::GetData<list_entry_t>(list);
 	bool is_consecutive = true;
 	idx_t total_length = 0;
@@ -88,7 +88,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 
 	// write definition levels and repeats
 	idx_t start = 0;
