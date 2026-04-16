@@ -87,7 +87,6 @@ bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
 	return false;
 }
 
-
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
 		// we are in a prepare statement, if we have to copy an operator during inlining,
