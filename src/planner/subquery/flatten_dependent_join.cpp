@@ -386,10 +386,6 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	return has_correlation;
 }
 
-void FlattenDependentJoins::FreshDetect(LogicalOperator &op) {
-	DetectCorrelatedExpressions(op, false, 0);
-}
-
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
                                                                                    PushDownContext context,
                                                                                    CorrelatedLayout layout) {
@@ -991,7 +987,7 @@ FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownCon
 	}
 	RewriteCTEScan cte_rewriter(table_index, correlated_columns, materialized_accessing_operators, rewrite_mode);
 	cte_rewriter.VisitOperator(*plan->children[1]);
-	FreshDetect(*plan->children[1]);
+	DetectCorrelatedExpressions(*plan->children[1], false, 0);
 
 	layout = PushDownChild(plan->children[1], context.WithPropagateNullValues(false), std::move(layout));
 

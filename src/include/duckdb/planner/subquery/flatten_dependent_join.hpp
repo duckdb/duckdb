@@ -113,7 +113,6 @@ private:
 	//! has_correlated_expressions map.
 	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0,
 	                                 bool parent_is_dependent_join = false);
-	void FreshDetect(LogicalOperator &op);
 
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context = PushDownContext(),
