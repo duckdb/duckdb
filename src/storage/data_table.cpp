@@ -68,9 +68,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
-		// We require a new row group after loading from disk because we don't know whether the row group size given on
-		// ATTACH matches that of the loaded file
-		row_groups->SetRowGroupAppendMode(RowGroupAppendMode::REQUIRE_NEW);
+		row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	} else {
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);

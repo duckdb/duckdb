@@ -484,9 +484,17 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	auto l = state.row_groups->Lock();
 	// We need a new row group if there are none yet or the append mode forces us to create a new row group
 	bool needs_new_row_group = state.row_groups->IsEmpty(l) || row_group_append_mode == RowGroupAppendMode::REQUIRE_NEW;
-	// We honor SUGGEST_NEW iff the table has no indexes (because indexed tables aren't vacuumed so row groups might
-	// not be filled if we create a new one on append).
-	needs_new_row_group |= row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW && info->GetIndexes().Empty();
+	// Otherwise we evaluate the row_group_append_mode
+	if (!needs_new_row_group) {
+		if (info->GetIndexes().Empty()) {
+			// We honor SUGGEST_NEW unless the table has indexes because there is no vacuuming for indexed tables...
+			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
+		} else {
+			// ... and if it has indexes we will ignore row_group_append_mode and try to append, unless the last row
+			// group is full already.
+			needs_new_row_group = row_group_size < state.row_groups->GetLastSegment(l)->GetNode().count;
+		}
+	}
 	if (needs_new_row_group) {
 		AppendRowGroup(l, state.row_groups->GetBaseRowId() + total_rows);
 	}
