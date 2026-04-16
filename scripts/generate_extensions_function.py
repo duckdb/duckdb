@@ -53,6 +53,62 @@ EXTENSION_DEPENDENCIES = {
     ]
 }
 
+
+def _resolve_config_include(include_path: str, parent_config_path: str) -> str:
+    include_path = include_path.strip().strip('"').strip("'")
+    if "${EXTENSION_CONFIG_BASE_DIR}" in include_path:
+        config_dir = os.path.dirname(parent_config_path)
+        include_path = include_path.replace("${EXTENSION_CONFIG_BASE_DIR}", os.path.join(config_dir, "extensions"))
+    if not os.path.isabs(include_path):
+        include_path = os.path.normpath(os.path.join(os.path.dirname(parent_config_path), include_path))
+    return include_path
+
+
+def _extract_dont_link_extensions(config_path: str, seen: Set[str]) -> Set[str]:
+    if config_path in seen:
+        return set()
+    seen.add(config_path)
+    if not os.path.isfile(config_path):
+        return set()
+
+    with open(config_path) as f:
+        blob = f.read()
+
+    # Strip comments to avoid matching commented-out extension declarations.
+    blob = re.sub(r'#.*', '', blob)
+
+    dont_link_extensions: Set[str] = set()
+
+    for match in re.findall(r'duckdb_extension_load\((.*?)\)', blob, re.DOTALL):
+        tokens = [token for token in re.split(r'[\s\n\r\t]+', match.strip()) if token]
+        if not tokens:
+            continue
+        extension_name = tokens[0].strip('"').strip("'")
+        if "DONT_LINK" in tokens:
+            dont_link_extensions.add(extension_name.lower())
+
+    for include_target in re.findall(r'include\((.*?)\)', blob, re.DOTALL):
+        include_path = _resolve_config_include(include_target, config_path)
+        dont_link_extensions.update(_extract_dont_link_extensions(include_path, seen))
+
+    return dont_link_extensions
+
+
+def get_dont_link_extensions() -> Set[str]:
+    extension_configs = os.environ.get("EXTENSION_CONFIGS", "")
+    if not extension_configs:
+        return set()
+
+    configs = [cfg.strip() for cfg in extension_configs.split(';') if cfg.strip()]
+    dont_link_extensions: Set[str] = set()
+    seen: Set[str] = set()
+    for config in configs:
+        dont_link_extensions.update(_extract_dont_link_extensions(config, seen))
+    return dont_link_extensions
+
+
+DONT_LINK_EXTENSIONS = get_dont_link_extensions()
+
 from enum import Enum
 
 
@@ -536,6 +592,10 @@ class ExtensionData:
             self.add_secret_types(extension_name, extension_secret_types)
             self.add_functions(extension_name, extension_functions)
         else:
+            if extension_name.lower() in DONT_LINK_EXTENSIONS:
+                log(f"Skipping missing DONT_LINK extension '{extension_name}'")
+                self.added_extensions.add(extension_name)
+                return
             error = f"""Missing extension {extension_name} and not found in stored_functions/stored_settings/stored_secret_types
 Please double check if '{args.extension_repository}' is the right location to look for ./**/*.duckdb_extension files"""
             log(error)
