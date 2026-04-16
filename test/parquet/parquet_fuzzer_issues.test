@@ -15,3 +15,9 @@ statement error
 from 'data/parquet-testing/broken/internal_6165.parquet';
 ----
 row group does not have enough columns
+
+# duckdb fuzzer issue 4384
+statement error
+from 'data/parquet-testing/broken/duckdb_fuzzer_4384.parquet';
+----
+schema element has no children

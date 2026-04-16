@@ -704,6 +704,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			    is_variant ? ParquetColumnSchemaType::VARIANT : ParquetColumnSchemaType::COLUMN;
 			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
 			                                               next_file_idx, std::move(child_schemas), schema_type);
+		} else if (child_schemas.empty()) {
+			throw InvalidInputException("Failed to read Parquet file \"%s\": schema element has no children",
+			                            file.path);
 		} else {
 			// if we have a struct with only a single type, pull up
 			result = std::move(child_schemas[0]);
