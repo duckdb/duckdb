@@ -211,12 +211,20 @@ T &ArrayVector::GetEntryInternal(T &vector) {
 	return vector.buffer->template Cast<VectorArrayBuffer>().GetChild();
 }
 
-const Vector &ArrayVector::GetEntry(const Vector &vector) {
+const Vector &ArrayVector::GetChild(const Vector &vector) {
 	return GetEntryInternal<const Vector>(vector);
 }
 
-Vector &ArrayVector::GetEntry(Vector &vector) {
+Vector &ArrayVector::GetChildMutable(Vector &vector) {
 	return GetEntryInternal<Vector>(vector);
+}
+
+const Vector &ArrayVector::GetEntry(const Vector &vector) {
+	return GetChild(vector);
+}
+
+Vector &ArrayVector::GetEntry(Vector &vector) {
+	return GetChildMutable(vector);
 }
 
 idx_t ArrayVector::GetTotalSize(const Vector &vector) {

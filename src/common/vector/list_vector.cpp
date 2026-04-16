@@ -235,12 +235,20 @@ T &ListVector::GetEntryInternal(T &vector) {
 	return vector.buffer->template Cast<VectorListBuffer>().GetChild();
 }
 
-const Vector &ListVector::GetEntry(const Vector &vector) {
+const Vector &ListVector::GetChild(const Vector &vector) {
 	return GetEntryInternal<const Vector>(vector);
 }
 
-Vector &ListVector::GetEntry(Vector &vector) {
+Vector &ListVector::GetChildMutable(Vector &vector) {
 	return GetEntryInternal<Vector>(vector);
+}
+
+const Vector &ListVector::GetEntry(const Vector &vector) {
+	return GetChild(vector);
+}
+
+Vector &ListVector::GetEntry(Vector &vector) {
+	return GetChildMutable(vector);
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {

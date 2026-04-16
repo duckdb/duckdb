@@ -82,9 +82,14 @@ struct ListVector {
 		return FlatVector::GetDataMutable<list_entry_t>(v);
 	}
 	//! Gets a reference to the underlying child-vector of a list
-	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	[[deprecated("Use ListVector::GetChild instead")]] DUCKDB_API static const Vector &GetEntry(const Vector &vector);
 	//! Gets a reference to the underlying child-vector of a list
-	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	[[deprecated("Use ListVector::GetChild or ListVector::GetChildMutable instead")]] DUCKDB_API static Vector &
+	GetEntry(Vector &vector);
+	//! Gets a reference to the underlying child-vector of a list
+	DUCKDB_API static const Vector &GetChild(const Vector &vector);
+	//! Gets a mutable reference to the underlying child-vector of a list
+	DUCKDB_API static Vector &GetChildMutable(Vector &vector);
 	//! Gets the total size of the underlying child-vector of a list
 	DUCKDB_API static idx_t GetListSize(const Vector &vector);
 	//! Sets the total size of the underlying child-vector of a list
