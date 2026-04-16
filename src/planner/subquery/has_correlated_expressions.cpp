@@ -13,6 +13,13 @@ HasCorrelatedExpressions::HasCorrelatedExpressions(const CorrelatedColumns &corr
       lateral_depth(lateral_depth) {
 }
 
+bool HasCorrelatedExpressions::Detect(LogicalOperator &op, const CorrelatedColumns &correlated, bool lateral,
+                                      idx_t lateral_depth) {
+	HasCorrelatedExpressions visitor(correlated, lateral, lateral_depth);
+	visitor.VisitOperator(op);
+	return visitor.has_correlated_expressions;
+}
+
 void HasCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 }

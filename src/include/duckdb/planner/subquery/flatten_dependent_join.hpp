@@ -147,8 +147,6 @@ private:
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
 	ColumnBinding GetCanonicalBinding(ColumnBinding binding) const;
-	void RewriteCorrelatedOperator(LogicalOperator &op, const CorrelatedLayout &layout, idx_t lateral_depth,
-	                               bool recursive = false);
 	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,
 	                                          CorrelatedLayout layout);
 	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,

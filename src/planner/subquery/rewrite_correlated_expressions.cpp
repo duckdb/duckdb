@@ -19,6 +19,15 @@ RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(
       recursive_rewrite(recursive_rewrite), equivalent_bindings(equivalent_bindings) {
 }
 
+void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, vector<ColumnBinding> correlated_bindings,
+                                           column_binding_map_t<idx_t> &correlated_map, idx_t lateral_depth,
+                                           bool recursive_rewrite,
+                                           optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings) {
+	RewriteCorrelatedExpressions rewriter(std::move(correlated_bindings), correlated_map, lateral_depth,
+	                                      recursive_rewrite, equivalent_bindings);
+	rewriter.VisitOperator(op);
+}
+
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	if (recursive_rewrite) {
 		// Update column bindings from left child of lateral to right child
@@ -159,6 +168,11 @@ void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> *express
 
 RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)
     : replacement_map(replacement_map) {
+}
+
+void RewriteCountAggregates::Rewrite(LogicalOperator &op, column_binding_map_t<idx_t> &replacement_map) {
+	RewriteCountAggregates rewriter(replacement_map);
+	rewriter.VisitOperator(op);
 }
 
 unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpression &expr,
