@@ -554,15 +554,6 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 				info.options["quote"] = {Value("")};
 				info.options["escape"] = {Value("")};
 				info.options["null"] = {Value("\\N")};
-			} else if (info.format == "jsonl" || info.format == "ndjson" || info.format == "json") {
-				info.format = "csv";
-				info.options["delimiter"] = {Value(string("\0", 1))};
-				info.options["quote"] = {Value("")};
-				info.options["escape"] = {Value("")};
-				info.options["header"] = {Value::BOOLEAN(false)};
-				if (info.is_from) {
-					info.options["auto_detect"] = {Value::BOOLEAN(false)};
-				}
 			}
 			info.is_format_auto_detected = false;
 			continue;
@@ -603,15 +594,6 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 		info.options.insert({"quote", {Value("")}});
 		info.options.insert({"escape", {Value("")}});
 		info.options.insert({"null", {Value("\\N")}});
-	} else if (info.format == "jsonl" || info.format == "ndjson" || info.format == "json") {
-		info.format = "csv";
-		info.options.insert({"delimiter", {Value(string("\0", 1))}});
-		info.options.insert({"quote", {Value("")}});
-		info.options.insert({"escape", {Value("")}});
-		info.options.insert({"header", {Value::BOOLEAN(false)}});
-		if (info.is_from) {
-			info.options.insert({"auto_detect", {Value::BOOLEAN(false)}});
-		}
 	}
 	info.parsed_options.clear();
 }
