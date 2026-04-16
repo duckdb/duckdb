@@ -304,7 +304,7 @@ Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
 }
 
-VectorBuffer &Vector::Buffer() {
+VectorBuffer &Vector::BufferMutable() {
 	return *buffer;
 }
 

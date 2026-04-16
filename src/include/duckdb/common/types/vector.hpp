@@ -155,7 +155,9 @@ public:
 		return type;
 	}
 
-	inline const buffer_ptr<VectorBuffer> &GetBuffer() const {
+	VectorBuffer &BufferMutable();
+	const VectorBuffer &Buffer() const;
+	inline const buffer_ptr<VectorBuffer> &GetBufferRef() const {
 		return buffer;
 	}
 	void SetBuffer(buffer_ptr<VectorBuffer> buffer_p) {
@@ -177,10 +179,6 @@ public:
 	VectorValidValueIterator<T> ValidValues(idx_t count) const;
 
 	VectorValidityIterator Validity(idx_t count) const;
-
-protected:
-	VectorBuffer &Buffer();
-	const VectorBuffer &Buffer() const;
 
 private:
 	//! Returns the [index] element of the Vector as a Value.
