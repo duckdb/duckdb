@@ -116,8 +116,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(needles)) {
-			ConstantVector::SetNull(result);
-			return;
+			throw InternalException("JSON Contains called with constant NULL needles");
 		}
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
 		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
