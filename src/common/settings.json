@@ -389,6 +389,23 @@
         "custom_implementation": true
     },
     {
+        "name": "default_transaction_isolation",
+        "description": "Sets the transaction isolation level of each new transaction.",
+        "type": "ENUM<TransactionIsolationLevel>",
+        "default_scope": "local",
+        "default_value": "repeatable read",
+        "custom_implementation": [
+            "set"
+        ]
+    },
+    {
+        "name": "default_transaction_read_only",
+        "description": "Sets the default read-only status of new transactions.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
@@ -1078,6 +1095,13 @@
         "aliases": [
             "worker_threads"
         ]
+    },
+    {
+        "name": "transaction_isolation",
+        "description": "Sets the current transaction's isolation level.",
+        "type": "ENUM<TransactionIsolationLevel>",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "username",

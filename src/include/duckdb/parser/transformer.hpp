@@ -202,8 +202,9 @@ private:
 	//===--------------------------------------------------------------------===//
 	// SetStatement Transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<SetStatement> TransformSet(duckdb_libpgquery::PGVariableSetStmt &set);
+	unique_ptr<SQLStatement> TransformSet(duckdb_libpgquery::PGVariableSetStmt &set);
 	unique_ptr<SetStatement> TransformSetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt);
+	unique_ptr<SQLStatement> TransformSetTransaction(duckdb_libpgquery::PGVariableSetStmt &stmt);
 	unique_ptr<SetStatement> TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt);
 
 	unique_ptr<SQLStatement> TransformCheckpoint(duckdb_libpgquery::PGCheckPointStmt &stmt);

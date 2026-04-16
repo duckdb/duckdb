@@ -5280,6 +5280,27 @@ TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy
 	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTransactionIsolationLevelValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION), "TRANSACTION_DEFAULT_ISOLATION" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_UNCOMMITTED), "read uncommitted" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_COMMITTED), "read committed" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::REPEATABLE_READ), "repeatable read" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::SERIALIZABLE), "serializable" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionIsolationLevel>(TransactionIsolationLevel value) {
+	return StringUtil::EnumToString(GetTransactionIsolationLevelValues(), 5, "TransactionIsolationLevel", static_cast<uint32_t>(value));
+}
+
+template<>
+TransactionIsolationLevel EnumUtil::FromString<TransactionIsolationLevel>(const char *value) {
+	return static_cast<TransactionIsolationLevel>(StringUtil::StringToEnum(GetTransactionIsolationLevelValues(), 5, "TransactionIsolationLevel", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER), "TRANSACTION_DEFAULT_MODIFIER" },

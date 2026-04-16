@@ -23,15 +23,32 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 	switch (type) {
 	case TransactionType::BEGIN_TRANSACTION: {
 		if (client.transaction.IsAutoCommit()) {
+			// Resolve effective isolation level and read-only mode from defaults,
+			// then override with explicit BEGIN options if specified.
+			auto isolation = info->isolation_level != TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION
+			                     ? info->isolation_level
+			                     : Settings::Get<DefaultTransactionIsolationSetting>(client);
+			bool read_only = Settings::Get<DefaultTransactionReadOnlySetting>(client);
+			if (info->modifier == TransactionModifierType::TRANSACTION_READ_ONLY) {
+				read_only = true;
+			} else if (info->modifier == TransactionModifierType::TRANSACTION_READ_WRITE) {
+				read_only = false;
+			}
+
+			// Set isolation level before starting the transaction
+			client.transaction.SetIsolationLevel(isolation);
+
 			// start the active transaction
 			// if autocommit is active, we have already called
 			// BeginTransaction by setting autocommit to false we
 			// prevent it from being closed after this query, hence
 			// preserving the transaction context for the next query
 			client.transaction.SetAutoCommit(false);
-			if (info->modifier == TransactionModifierType::TRANSACTION_READ_ONLY) {
+
+			if (read_only) {
 				client.transaction.SetReadOnly();
 			}
+
 			client.transaction.SetInvalidationPolicy(info->invalidation_policy);
 			client.transaction.SetAutoRollback(info->auto_rollback);
 			if (Settings::Get<ImmediateTransactionModeSetting>(context.client)) {

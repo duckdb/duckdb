@@ -61,6 +61,22 @@ set_rest:	/* Generic SET syntaxes: */
 						n->kind = VAR_SET_DEFAULT;
 					$$ = n;
 				}
+			| TRANSACTION transaction_mode_list
+				{
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
+					n->kind = VAR_SET_MULTI;
+					n->name = (char*) "TRANSACTION";
+					n->args = $2;
+					$$ = n;
+				}
+			| SESSION CHARACTERISTICS AS TRANSACTION transaction_mode_list
+				{
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
+					n->kind = VAR_SET_MULTI;
+					n->name = (char*) "SESSION CHARACTERISTICS";
+					n->args = $5;
+					$$ = n;
+				}
 			| SCHEMA Sconst
 				{
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);

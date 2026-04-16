@@ -30,11 +30,43 @@ TransactionModifierType TransformTransactionModifier(duckdb_libpgquery::PGTransa
 	}
 }
 
+TransactionIsolationLevel TransformIsolationLevel(const char *str) {
+	if (strcmp(str, "read uncommitted") == 0) {
+		return TransactionIsolationLevel::READ_UNCOMMITTED;
+	} else if (strcmp(str, "read committed") == 0) {
+		return TransactionIsolationLevel::READ_COMMITTED;
+	} else if (strcmp(str, "repeatable read") == 0) {
+		return TransactionIsolationLevel::REPEATABLE_READ;
+	} else if (strcmp(str, "serializable") == 0) {
+		return TransactionIsolationLevel::SERIALIZABLE;
+	}
+	throw NotImplementedException("Isolation level \"%s\" is not supported", str);
+}
+
 unique_ptr<TransactionStatement> Transformer::TransformTransaction(duckdb_libpgquery::PGTransactionStmt &stmt) {
-	//	stmt.transaction_type
 	auto type = TransformTransactionType(stmt.kind);
 	auto info = make_uniq<TransactionInfo>(type);
 	info->modifier = TransformTransactionModifier(stmt.transaction_type);
+
+	if (stmt.options) {
+		for (auto cell = stmt.options->head; cell; cell = cell->next) {
+			auto def = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
+			string opt_name(def->defname);
+			if (opt_name == "transaction_isolation") {
+				auto val = PGPointerCast<duckdb_libpgquery::PGAConst>(def->arg);
+				info->isolation_level = TransformIsolationLevel(val->val.val.str);
+			} else if (opt_name == "transaction_read_only") {
+				auto val = PGPointerCast<duckdb_libpgquery::PGAConst>(def->arg);
+				info->modifier = TransformTransactionModifier(
+				    val->val.val.ival ? duckdb_libpgquery::PG_TRANS_TYPE_READ_ONLY
+				                     : duckdb_libpgquery::PG_TRANS_TYPE_READ_WRITE);
+			} else {
+				D_ASSERT(opt_name == "transaction_deferrable");
+				throw NotImplementedException("DEFERRABLE transactions are not supported");
+			}
+		}
+	}
+
 	return make_uniq<TransactionStatement>(std::move(info));
 }
 

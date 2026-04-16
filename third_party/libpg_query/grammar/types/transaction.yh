@@ -1,1 +1,3 @@
-%type <transactiontype> opt_transaction_type
+%type <defelt> transaction_mode_item
+%type <list> transaction_mode_list transaction_mode_list_or_empty
+%type <conststr> iso_level

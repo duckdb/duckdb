@@ -74,11 +74,47 @@ unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::
 	return make_uniq<ResetVariableStatement>(name, ToSetScope(stmt.scope));
 }
 
-unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGVariableSetStmt &stmt) {
+unique_ptr<SQLStatement> Transformer::TransformSetTransaction(duckdb_libpgquery::PGVariableSetStmt &stmt) {
+	D_ASSERT(stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_SET_MULTI);
+	string stmt_name(stmt.name);
+	bool is_session = (stmt_name == "SESSION CHARACTERISTICS");
+	string setting_name = is_session ? "default_transaction_isolation" : "transaction_isolation";
+
+	for (auto cell = stmt.args->head; cell; cell = cell->next) {
+		auto def = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
+		string opt_name(def->defname);
+		if (opt_name == "transaction_isolation") {
+			auto val = PGPointerCast<duckdb_libpgquery::PGAConst>(def->arg);
+			string iso_level(val->val.val.str);
+			return make_uniq<SetVariableStatement>(
+			    std::move(setting_name),
+			    make_uniq<ConstantExpression>(Value(std::move(iso_level))),
+			    SetScope::AUTOMATIC);
+		}
+		if (opt_name == "transaction_read_only") {
+			auto val = PGPointerCast<duckdb_libpgquery::PGAConst>(def->arg);
+			string read_only_setting = is_session ? "default_transaction_read_only" : "transaction_read_only";
+			return make_uniq<SetVariableStatement>(
+			    std::move(read_only_setting),
+			    make_uniq<ConstantExpression>(Value::BOOLEAN(val->val.val.ival)),
+			    SetScope::AUTOMATIC);
+		}
+		if (opt_name == "transaction_deferrable") {
+			throw NotImplementedException("DEFERRABLE transactions are not supported");
+		}
+	}
+	throw ParserException("SET TRANSACTION requires at least one option");
+}
+
+unique_ptr<SQLStatement> Transformer::TransformSet(duckdb_libpgquery::PGVariableSetStmt &stmt) {
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGVariableSetStmt);
 
 	if (stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_RESET_ALL) {
 		return make_uniq<ResetVariableStatement>(string {}, SetScope::SESSION);
+	}
+
+	if (stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_SET_MULTI) {
+		return TransformSetTransaction(stmt);
 	}
 
 	SetType set_type = ToSetType(stmt.kind);

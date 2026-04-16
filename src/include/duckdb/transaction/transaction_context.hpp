@@ -68,12 +68,17 @@ public:
 	bool GetAutoRollback() {
 		return auto_rollback;
 	};
+	void SetIsolationLevel(TransactionIsolationLevel new_isolation_level);
+	TransactionIsolationLevel GetIsolationLevel() const {
+		return isolation_level;
+	};
 
 private:
 	ClientContext &context;
 	bool auto_commit;
 	TransactionInvalidationPolicy invalidation_policy;
 	bool auto_rollback;
+	TransactionIsolationLevel isolation_level = TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION;
 
 	unique_ptr<MetaTransaction> current_transaction;
 

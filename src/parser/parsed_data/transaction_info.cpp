@@ -51,6 +51,7 @@ unique_ptr<TransactionInfo> TransactionInfo::Copy() const {
 	result->modifier = modifier;
 	result->invalidation_policy = invalidation_policy;
 	result->auto_rollback = auto_rollback;
+	result->isolation_level = isolation_level;
 	return result;
 }
 

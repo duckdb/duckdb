@@ -615,6 +615,27 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DefaultTransactionIsolationSetting {
+	using RETURN_TYPE = TransactionIsolationLevel;
+	static constexpr const char *Name = "default_transaction_isolation";
+	static constexpr const char *Description = "Sets the transaction isolation level of each new transaction.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "repeatable read";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DefaultTransactionReadOnlySetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "default_transaction_read_only";
+	static constexpr const char *Description = "Sets the default read-only status of new transactions.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DeprecatedUsingKeySyntaxSetting {
 	using RETURN_TYPE = DeprecatedUsingKeySyntax;
 	static constexpr const char *Name = "deprecated_using_key_syntax";
@@ -1572,6 +1593,16 @@ struct ThreadsSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct TransactionIsolationSetting {
+	using RETURN_TYPE = TransactionIsolationLevel;
+	static constexpr const char *Name = "transaction_isolation";
+	static constexpr const char *Description = "Sets the current transaction's isolation level.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

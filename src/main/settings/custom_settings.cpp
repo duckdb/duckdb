@@ -1720,4 +1720,31 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
+//===----------------------------------------------------------------------===//
+// Default Transaction Isolation
+//===----------------------------------------------------------------------===//
+void DefaultTransactionIsolationSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	auto level = EnumUtil::FromString<TransactionIsolationLevel>(StringValue::Get(parameter));
+	if (info.context && info.context->transaction.IsAutoCommit()) {
+		info.context->transaction.SetIsolationLevel(level);
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Transaction Isolation
+//===----------------------------------------------------------------------===//
+void TransactionIsolationSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto level = EnumUtil::FromString<TransactionIsolationLevel>(StringValue::Get(input));
+	context.transaction.SetIsolationLevel(level);
+}
+
+void TransactionIsolationSetting::ResetLocal(ClientContext &context) {
+	context.transaction.SetIsolationLevel(
+	    Settings::Get<DefaultTransactionIsolationSetting>(context));
+}
+
+Value TransactionIsolationSetting::GetSetting(const ClientContext &context) {
+	return Value(EnumUtil::ToChars(context.transaction.GetIsolationLevel()));
+}
+
 } // namespace duckdb
