@@ -40,6 +40,12 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	if (all_constant) {
 		// if the input is constant we only need to cast one value
+		if (ConstantVector::IsNull(child) && result.GetType().id() != LogicalTypeId::UNION) {
+			// if the input is constant NULL the output is always constant NULL
+			// ... except for unions, that are special
+			ConstantVector::SetNull(result);
+			return;
+		}
 		count = 1;
 	}
 	expr.bound_cast.function(child, result, count, parameters);
