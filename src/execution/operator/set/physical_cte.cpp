@@ -85,6 +85,7 @@ static bool ContainsDML(const PhysicalOperator &op) {
 	case PhysicalOperatorType::BATCH_INSERT:
 	case PhysicalOperatorType::DELETE_OPERATOR:
 	case PhysicalOperatorType::UPDATE:
+	case PhysicalOperatorType::MERGE_INTO:
 		return true;
 	default:
 		break;

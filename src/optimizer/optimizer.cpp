@@ -127,6 +127,7 @@ static bool PlanContainsNonRootDML(const LogicalOperator &op, bool is_root = tru
 		case LogicalOperatorType::LOGICAL_INSERT:
 		case LogicalOperatorType::LOGICAL_DELETE:
 		case LogicalOperatorType::LOGICAL_UPDATE:
+		case LogicalOperatorType::LOGICAL_MERGE_INTO:
 			return true;
 		default:
 			break;

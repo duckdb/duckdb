@@ -910,6 +910,79 @@ SELECT count(*) FROM t1;
 ----
 0
 
+# --- INSERT ON CONFLICT (upsert) as a CTE body ---
+# INSERT ON CONFLICT is internally rewritten to MERGE INTO at the binder level.
+# HasSideEffects / ContainsDML must recognise LOGICAL_MERGE_INTO / MERGE_INTO so
+# that upsert CTEs are treated as DML CTEs: never inlined, never silently dropped.
+
+statement ok
+CREATE TABLE upsert_t (i INTEGER PRIMARY KEY, j INTEGER);
+
+statement ok
+INSERT INTO upsert_t VALUES (1, 10), (2, 20);
+
+# Referenced upsert CTE: updates existing row and inserts new one.
+query II rowsort
+WITH ups AS (
+    INSERT INTO upsert_t VALUES (2, 99), (3, 30)
+    ON CONFLICT (i) DO UPDATE SET j = excluded.j
+    RETURNING i, j
+)
+SELECT * FROM ups;
+----
+2	99
+3	30
+
+query II rowsort
+SELECT * FROM upsert_t;
+----
+1	10
+2	99
+3	30
+
+# Unreferenced upsert CTE: side effect must still execute even though the CTE
+# is not used in the outer SELECT.  Previously LOGICAL_MERGE_INTO was missing
+# from HasSideEffects, causing the CTE to be silently dropped.
+statement ok
+TRUNCATE upsert_t;
+
+statement ok
+INSERT INTO upsert_t VALUES (1, 10);
+
+statement ok
+WITH ups AS (
+    INSERT INTO upsert_t VALUES (2, 20) ON CONFLICT (i) DO NOTHING
+)
+SELECT 1;
+
+query II rowsort
+SELECT * FROM upsert_t;
+----
+1	10
+2	20
+
+# Upsert CTE followed by scan of the same table: the scan runs after the upsert
+# completes (pipeline dependency via MERGE_INTO in ContainsDML).
+statement ok
+TRUNCATE upsert_t;
+
+statement ok
+INSERT INTO upsert_t VALUES (1, 10);
+
+query II rowsort
+WITH ups AS (
+    INSERT INTO upsert_t VALUES (1, 99), (2, 20)
+    ON CONFLICT (i) DO UPDATE SET j = excluded.j
+    RETURNING i, j
+)
+SELECT * FROM upsert_t;
+----
+1	99
+2	20
+
+statement ok
+DROP TABLE upsert_t;
+
 # --- Cleanup multi-DML tables ---
 
 statement ok
