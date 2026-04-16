@@ -33,24 +33,6 @@ enum class VectorDataInitialization { UNINITIALIZED, ZERO_INITIALIZE };
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
-	friend struct ConstantVector;
-	friend struct DictionaryVector;
-	friend struct FlatVector;
-	friend struct ListVector;
-	friend struct StringVector;
-	friend struct FSSTVector;
-	friend struct StructVector;
-	friend struct UnionVector;
-	friend struct SequenceVector;
-	friend struct ArrayVector;
-	friend struct ShreddedVector;
-
-	friend class DataChunk;
-	friend class VectorBuffer;
-	friend class DictionaryBuffer;
-	friend class VectorStructBuffer;
-	friend class VectorCacheEntry;
-
 public:
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
@@ -156,10 +138,6 @@ public:
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);
 
-	inline void CopyBuffer(Vector &other) {
-		buffer = other.buffer;
-	}
-
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
@@ -180,8 +158,13 @@ public:
 		return type;
 	}
 
-	inline buffer_ptr<VectorBuffer> GetBuffer() {
+	VectorBuffer &BufferMutable();
+	const VectorBuffer &Buffer() const;
+	inline const buffer_ptr<VectorBuffer> &GetBufferRef() const {
 		return buffer;
+	}
+	void SetBuffer(buffer_ptr<VectorBuffer> buffer_p) {
+		buffer = std::move(buffer_p);
 	}
 
 	// Setters
@@ -200,20 +183,16 @@ public:
 
 	VectorValidityIterator Validity(idx_t count) const;
 
-protected:
-	VectorBuffer &Buffer();
-	const VectorBuffer &Buffer() const;
+	//! This allows a vector to reference another vector while const
+	//! This is only used internally in `Flatten` - since referencing
+	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
+	void ConstReference(const Vector &other) const;
 
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
-
-	//! This allows a vector to reference another vector while const
-	//! This is only used internally in `Flatten` - since referencing
-	// an arbitrary other vector could change the logical data contained in the vector (and not be const)
-	void ConstReference(const Vector &other) const;
 
 	//! Create a vector that references the other vector
 	Vector(const Vector &other, VectorConstructorAction action);

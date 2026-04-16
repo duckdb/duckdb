@@ -48,11 +48,12 @@ buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const 
 	}
 	Vector flattened_vector(type, count);
 	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
-	return flattened_vector.GetBuffer();
+	return flattened_vector.GetBufferRef();
 }
 
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {
-	auto &data = vector.buffer->Cast<SequenceBuffer>();
+	D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
+	auto &data = vector.Buffer().Cast<SequenceBuffer>();
 	start = data.start;
 	increment = data.increment;
 }

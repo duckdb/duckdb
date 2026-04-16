@@ -382,72 +382,42 @@ struct ICUDatePart : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 1);
 		const auto count = args.size();
 		Vector &input = args.data[0];
+		auto entries = input.Values<INPUT_TYPE>(count);
 
-		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &child_entries = StructVector::GetEntries(result);
+		for (auto &child_entry : child_entries) {
+			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
+		}
 
-			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
-			} else {
-				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				auto micros = SetTime(calendar, tdata[0]);
-				const auto is_finite = Timestamp::IsFinite(*tdata);
-				auto &child_entries = StructVector::GetEntries(result);
+		auto &res_valid = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < count; ++i) {
+			auto entry = entries[i];
+			if (entry.IsValid()) {
+				res_valid.SetValid(i);
+				auto micros = SetTime(calendar, entry.GetValue());
+				const auto is_finite = Timestamp::IsFinite(entry.GetValue());
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
+						FlatVector::ValidityMutable(child_entry).SetValid(i);
 						if (IsBigintDatepart(info.part_codes[col])) {
-							auto pdata = ConstantVector::GetData<int64_t>(child_entry);
+							auto pdata = FlatVector::GetDataMutable<int64_t>(child_entry);
 							auto adapter = info.bigints[col];
-							pdata[0] = adapter(calendar, micros);
+							pdata[i] = adapter(calendar, micros);
 						} else {
-							auto pdata = ConstantVector::GetData<double>(child_entry);
+							auto pdata = FlatVector::GetDataMutable<double>(child_entry);
 							auto adapter = info.doubles[col];
-							pdata[0] = adapter(calendar, micros);
+							pdata[i] = adapter(calendar, micros);
 						}
 					} else {
-						ConstantVector::SetNull(child_entry);
-					}
-				}
-			}
-		} else {
-			auto entries = input.template Values<INPUT_TYPE>(count);
-
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto &child_entries = StructVector::GetEntries(result);
-			for (auto &child_entry : child_entries) {
-				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
-			}
-
-			auto &res_valid = FlatVector::ValidityMutable(result);
-			for (idx_t i = 0; i < count; ++i) {
-				auto entry = entries[i];
-				if (entry.IsValid()) {
-					res_valid.SetValid(i);
-					auto micros = SetTime(calendar, entry.GetValue());
-					const auto is_finite = Timestamp::IsFinite(entry.GetValue());
-					for (size_t col = 0; col < child_entries.size(); ++col) {
-						auto &child_entry = child_entries[col];
-						if (is_finite) {
-							FlatVector::ValidityMutable(child_entry).SetValid(i);
-							if (IsBigintDatepart(info.part_codes[col])) {
-								auto pdata = FlatVector::GetDataMutable<int64_t>(child_entry);
-								auto adapter = info.bigints[col];
-								pdata[i] = adapter(calendar, micros);
-							} else {
-								auto pdata = FlatVector::GetDataMutable<double>(child_entry);
-								auto adapter = info.doubles[col];
-								pdata[i] = adapter(calendar, micros);
-							}
-						} else {
-							FlatVector::ValidityMutable(child_entry).SetInvalid(i);
-						}
-					}
-				} else {
-					res_valid.SetInvalid(i);
-					for (auto &child_entry : child_entries) {
 						FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 					}
+				}
+			} else {
+				res_valid.SetInvalid(i);
+				for (auto &child_entry : child_entries) {
+					FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 				}
 			}
 		}

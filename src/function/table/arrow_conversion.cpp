@@ -705,8 +705,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 	auto &values_type = struct_info.GetChild(1);
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	if (vector.GetBufferRef()) {
+		vector.BufferMutable().AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
@@ -1253,8 +1253,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	default:
 		throw NotImplementedException("Unsupported type for arrow conversion: %s", vector.GetType().ToString());
 	}
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	if (vector.GetBufferRef()) {
+		vector.BufferMutable().AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 }
 
@@ -1394,8 +1394,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
                                                             ArrowArrayScanState &array_state, idx_t size,
                                                             const ArrowType &arrow_type, int64_t nested_offset,
                                                             const ValidityMask *parent_mask, uint64_t parent_offset) {
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	if (vector.GetBufferRef()) {
+		vector.BufferMutable().AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	D_ASSERT(arrow_type.HasDictionary());
 	const bool has_nulls = CanContainNull(array, parent_mask);

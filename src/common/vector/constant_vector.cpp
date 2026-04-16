@@ -11,9 +11,9 @@ void ConstantVector::SetNull(Vector &vector) {
 	auto internal_type = type.InternalType();
 	// ensure the buffer supports validity masks
 	// buffers like SequenceBuffer/DictionaryBuffer do not have validity masks
-	bool needs_new_buffer = !vector.buffer;
+	bool needs_new_buffer = !vector.GetBufferRef();
 	if (!needs_new_buffer) {
-		auto buffer_type = vector.buffer->GetBufferType();
+		auto buffer_type = vector.Buffer().GetBufferType();
 		needs_new_buffer =
 		    (buffer_type != VectorBufferType::STANDARD_BUFFER && buffer_type != VectorBufferType::STRUCT_BUFFER &&
 		     buffer_type != VectorBufferType::ARRAY_BUFFER && buffer_type != VectorBufferType::LIST_BUFFER &&
@@ -21,13 +21,13 @@ void ConstantVector::SetNull(Vector &vector) {
 	}
 	if (needs_new_buffer) {
 		if (internal_type == PhysicalType::STRUCT) {
-			vector.buffer = make_buffer<VectorStructBuffer>(type, 1);
+			vector.SetBuffer(make_buffer<VectorStructBuffer>(type, 1));
 		} else if (internal_type == PhysicalType::ARRAY) {
-			vector.buffer = make_buffer<VectorArrayBuffer>(type, 1);
+			vector.SetBuffer(make_buffer<VectorArrayBuffer>(type, 1));
 		} else if (internal_type == PhysicalType::LIST) {
-			vector.buffer = VectorBuffer::CreateConstantVector(type);
+			vector.SetBuffer(VectorBuffer::CreateConstantVector(type));
 		} else {
-			vector.buffer = VectorBuffer::CreateConstantVector(internal_type);
+			vector.SetBuffer(VectorBuffer::CreateConstantVector(internal_type));
 		}
 	}
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -36,7 +36,7 @@ void ConstantVector::SetNull(Vector &vector) {
 
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	auto &validity = vector.buffer->GetValidityMask();
+	auto &validity = vector.BufferMutable().GetValidityMask();
 	validity.Set(0, !is_null);
 	if (is_null) {
 		auto &type = vector.GetType();
@@ -132,7 +132,7 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
 
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Set(0, true);
 		break;
 	}
@@ -155,7 +155,7 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 			ConstantVector::Reference(target_entries[i], source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Set(0, true);
 		break;
 	}

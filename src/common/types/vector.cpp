@@ -320,7 +320,7 @@ Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
 }
 
-VectorBuffer &Vector::Buffer() {
+VectorBuffer &Vector::BufferMutable() {
 	return *buffer;
 }
 
@@ -833,7 +833,7 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 	if (buffer) {
 		// FIXME: should we allow vectors without a buffer?
-		Buffer().SetVectorType(new_vector_type);
+		BufferMutable().SetVectorType(new_vector_type);
 	}
 }
 

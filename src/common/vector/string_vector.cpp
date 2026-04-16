@@ -163,14 +163,14 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	// check if the main buffer is a VectorStringBuffer
-	if (!vector.buffer) {
-		vector.buffer = make_buffer<VectorStringBuffer>(nullptr, 0);
+	if (!vector.GetBufferRef()) {
+		vector.SetBuffer(make_buffer<VectorStringBuffer>(nullptr, 0));
 	}
-	if (vector.buffer->GetBufferType() != VectorBufferType::STRING_BUFFER) {
+	if (vector.Buffer().GetBufferType() != VectorBufferType::STRING_BUFFER) {
 		throw InternalException(
 		    "StringVector::GetStringBuffer called on a vector - but that vector does NOT have a string buffer");
 	}
-	return vector.buffer->Cast<VectorStringBuffer>();
+	return vector.BufferMutable().Cast<VectorStringBuffer>();
 }
 
 ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {

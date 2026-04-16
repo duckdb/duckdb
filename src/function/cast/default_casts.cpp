@@ -99,17 +99,21 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 	return true;
 }
 
+bool BoundCastInfo::IsNopCast() const {
+	return function == DefaultCasts::NopCast;
+}
+
 static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(source.IsAggregateStateStructType());
 
 	LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
 	auto cast_info = input.GetCastFunction(dummy_struct, target);
-	if (cast_info.function == DefaultCasts::NopCast) {
+	if (cast_info.IsNopCast()) {
 		// 1. `NopCast` cannot be used since it expects the types to be the same.
 		// 2. `ReinterpretCast` cannot be used since it's blocked for nested types.
 		// 3. We don't want to use `StructToStructCast` in this case as it introduces more complexity while we know
 		// that we don't have casting to perform
-		cast_info.function = AggregateStateToStructReinterpret;
+		cast_info.SetFunction(AggregateStateToStructReinterpret);
 	}
 	return cast_info;
 }
