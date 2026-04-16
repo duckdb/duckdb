@@ -441,14 +441,16 @@ fuzzer_smoke: fuzzer
 	@mkdir -p build/fuzzer/smoke/in && \
 	printf "statement ok\nSELECT 42;\n\nquery I\nSELECT 7;\n----\n7\n" > build/fuzzer/smoke/in/seed1.test && \
 	OUT_DIR=build/fuzzer/smoke/out-$$(date +%s) && \
-	AFL_SKIP_CPUFREQ=1 afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest
+	AFL_SKIP_CPUFREQ=1 python3 ./scripts/ci/afl_sandbox.py --writable-dir "$$OUT_DIR" -- \
+	afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest
 
 .PHONY: fuzz_sql_corpus
 fuzz_sql_corpus:
+	: "$${CORPUS_SQL_CMIN:?Error: CORPUS_SQL_CMIN is required}" && \
 	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && \
 	python3 scripts/ci/afl_corpus.py \
 	--target ./build/fuzzer/test/unittest \
-	--afl-cmin "afl-cmin -e -t 1000" \
+	--afl-cmin "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$${CORPUS_SQL_CMIN}\" -- afl-cmin -e -t 1000" \
 	--output-dir "$${CORPUS_SQL_CMIN}"
 
 WINDOWS_GENERATOR_PLATFORM ?= x64
