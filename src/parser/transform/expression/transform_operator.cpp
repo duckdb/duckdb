@@ -36,7 +36,15 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	if (options.integer_division && op == "/") {
 		op = "//";
 	}
-	if (op == "~" || op == "!~" || op == "~*" || op == "!~*") {
+	if (op == "#>" || op == "#>>") {
+		// TODO: this looks bad to be honest because we register pg_json_extract_path / pg_json_extract_path_text
+		// in sdb
+		// PG json path operators: json #> text[] / json #>> text[]
+		auto func_name = (op == "#>") ? "pg_json_extract_path" : "pg_json_extract_path_text";
+		auto result = make_uniq<FunctionExpression>(func_name, std::move(children));
+		result->is_operator = true;
+		return std::move(result);
+	} else if (op == "~" || op == "!~" || op == "~*" || op == "!~*") {
 		// rewrite regex operators into regexp_full_match
 		// ~* / !~* are case-insensitive variants
 		bool invert = (op == "!~" || op == "!~*");
