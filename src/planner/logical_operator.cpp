@@ -101,7 +101,7 @@ bool LogicalOperator::HasSideEffects() const {
 		break;
 	}
 	for (auto &child : children) {
-		if (child->HasSideEffects()) {
+		if (child && child->HasSideEffects()) {
 			return true;
 		}
 	}
