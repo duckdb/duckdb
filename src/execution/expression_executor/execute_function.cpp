@@ -111,7 +111,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 
 	// Result references the dictionary
-	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input));
+	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input), args.size());
 
 	return true;
 }
