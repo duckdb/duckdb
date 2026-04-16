@@ -1233,24 +1233,6 @@ jobs:
     - name: Install fuzzer tools
       run: python3 scripts/ci/retry.py -- make fuzzer_tools
 
-    - name: Install AFL++ v4.32c
-      run: |
-        AFLPP_DIR="$RUNNER_TEMP/AFLplusplus"
-        rm -rf "$AFLPP_DIR"
-        git clone --depth 1 --branch v4.32c https://github.com/AFLplusplus/AFLplusplus.git "$AFLPP_DIR"
-
-        cd "$AFLPP_DIR"
-
-        echo "::group::Build afl++"
-        CC="ccache clang" CXX="ccache clang++" make source-only
-        sudo make install
-        echo "::endgroup::"
-
-        rm -rf "$AFLPP_DIR"
-
-        afl-fuzz --version
-        afl-clang-fast --version
-
     - name: Build fuzzer
       run: make fuzzer
 

@@ -434,11 +434,12 @@ fuzzer_tools:
 		exit 1; \
 	fi
 	$(call ensure_apt_commands,bwrap,bubblewrap)
-	@if ! test -f "$$(gcc -print-file-name=plugin)/include/gcc-plugin.h"; then \
-		gcc_major="$$(gcc -dumpversion | cut -d. -f1)"; \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq "gcc-$${gcc_major}-plugin-dev"; \
-	fi
+	sudo apt-get update -y -qq
+	sudo apt-get install -y -qq build-essential python3-dev automake cmake git flex bison libglib2.0-dev libpixman-1-dev python3-setuptools cargo libgtk-3-dev
+	sudo apt-get install -y -qq lld-18 llvm-18 llvm-18-dev clang-18 || sudo apt-get install -y -qq lld llvm llvm-dev clang
+	gcc_major="$$(gcc --version | head -n1 | sed 's/\..*//' | sed 's/.* //')"; \
+	sudo apt-get install -y -qq "gcc-$${gcc_major}-plugin-dev" "libstdc++-$${gcc_major}-dev"
+	./scripts/ci/afl_build.sh
 
 fuzzer: ${EXTENSION_CONFIG_STEP}
 	@eval "$$(./scripts/ci/afl_detect_cxx.sh)"; \
