@@ -16,9 +16,8 @@
 namespace duckdb {
 
 RewriteCTEScan::RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-                               const reference_set_t<LogicalOperator> &accessing_operators, CTEScanRewriteMode mode)
-    : table_index(table_index), correlated_columns(correlated_columns), mode(mode),
-      accessing_operators(accessing_operators) {
+                               const reference_set_t<LogicalOperator> &accessing_operators)
+    : table_index(table_index), correlated_columns(correlated_columns), accessing_operators(accessing_operators) {
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
@@ -33,9 +32,9 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			cteref.correlated_columns += correlated_columns.size();
 		}
 	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-		// There is another DependentJoin below the correlated recursive CTE.
-		// We have to add the correlated columns of the recursive CTE to the
-		// set of columns of this operator.
+		// There is another dependent join below the rewritten CTE. Add the
+		// CTE's correlated columns to this operator if one of its children
+		// accesses the rewritten CTE.
 		auto &join = op.Cast<LogicalDependentJoin>();
 		bool has_cte_ref = false;
 		for (auto &child : join.children) {
@@ -59,18 +58,7 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			}
 			// We only add new columns
 			if (!contains_binding) {
-				CorrelatedColumnInfo corr = c;
-				// NOTE: correlated_map uses positional indices from correlated_columns.
-				// For recursive CTEs we must prepend to preserve the expected ordering
-				// during recursive rewrites. For non-recursive CTEs we append to keep
-				// existing indices stable.
-				if (mode == CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS) {
-					join.correlated_columns.AddColumn(std::move(corr));
-				} else if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
-					join.correlated_columns.AddColumnToBack(std::move(corr));
-				} else {
-					throw InternalException("Unsupported CTEScanRewriteMode in RewriteCTEScan");
-				}
+				join.correlated_columns.AddColumnToBack(c);
 			}
 		}
 	}

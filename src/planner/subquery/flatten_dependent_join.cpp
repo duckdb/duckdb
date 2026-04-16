@@ -976,16 +976,7 @@ FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownCon
 
 	reference_set_t<LogicalOperator> materialized_accessing_operators;
 	CollectCTEAccessOperators(*plan->children[1], table_index, materialized_accessing_operators);
-
-	CTEScanRewriteMode rewrite_mode;
-	if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		rewrite_mode = CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS;
-	} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		rewrite_mode = CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS;
-	} else {
-		throw InternalException("Unsupported CTE operator type for CTEScanRewriteMode selection");
-	}
-	RewriteCTEScan cte_rewriter(table_index, correlated_columns, materialized_accessing_operators, rewrite_mode);
+	RewriteCTEScan cte_rewriter(table_index, correlated_columns, materialized_accessing_operators);
 	cte_rewriter.VisitOperator(*plan->children[1]);
 	DetectCorrelatedExpressions(*plan->children[1], false, 0);
 
@@ -1039,13 +1030,10 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
 				if (op.correlated_columns == 0) {
-					auto rewrite_mode = rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE
-					                        ? CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS
-					                        : CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS;
 					reference_set_t<LogicalOperator> materialized_accessing_operators;
 					CollectCTEAccessOperators(*plan, op.cte_index, materialized_accessing_operators);
 					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
-					                            materialized_accessing_operators, rewrite_mode);
+					                            materialized_accessing_operators);
 					cte_rewriter.VisitOperator(*plan);
 				}
 			}
