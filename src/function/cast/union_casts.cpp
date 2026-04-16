@@ -83,11 +83,11 @@ static unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const Log
 
 static unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<UnionBoundCastData>();
-	if (!cast_data.member_cast_info.init_local_state) {
+	if (!cast_data.member_cast_info.HasInitLocalState()) {
 		return nullptr;
 	}
-	CastLocalStateParameters child_parameters(parameters, cast_data.member_cast_info.cast_data);
-	return cast_data.member_cast_info.init_local_state(child_parameters);
+	CastLocalStateParameters child_parameters(parameters, cast_data.member_cast_info.GetCastData());
+	return cast_data.member_cast_info.InitLocalState(child_parameters);
 }
 
 static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -95,8 +95,8 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 	auto &cast_data = parameters.cast_data->Cast<UnionBoundCastData>();
 	auto &selected_member_vector = UnionVector::GetMember(result, cast_data.tag);
 
-	CastParameters child_parameters(parameters, cast_data.member_cast_info.cast_data, parameters.local_state);
-	if (!cast_data.member_cast_info.function(source, selected_member_vector, count, child_parameters)) {
+	CastParameters child_parameters(parameters, cast_data.member_cast_info.GetCastData(), parameters.local_state);
+	if (!cast_data.member_cast_info.Cast(source, selected_member_vector, count, child_parameters)) {
 		return false;
 	}
 
@@ -199,9 +199,9 @@ static unique_ptr<FunctionLocalState> InitUnionToUnionLocalState(CastLocalStateP
 
 	for (auto &entry : cast_data.member_casts) {
 		unique_ptr<FunctionLocalState> child_state;
-		if (entry.init_local_state) {
-			CastLocalStateParameters child_params(parameters, entry.cast_data);
-			child_state = entry.init_local_state(child_params);
+		if (entry.HasInitLocalState()) {
+			CastLocalStateParameters child_params(parameters, entry.GetCastData());
+			child_state = entry.InitLocalState(child_params);
 		}
 		result->local_states.push_back(std::move(child_state));
 	}
@@ -225,8 +225,8 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
 		auto &member_cast = cast_data.member_casts[member_idx];
 
-		CastParameters child_parameters(parameters, member_cast.cast_data, lstate.local_states[member_idx]);
-		if (!member_cast.function(source_member_vector, target_member_vector, count, child_parameters)) {
+		CastParameters child_parameters(parameters, member_cast.GetCastData(), lstate.local_states[member_idx]);
+		if (!member_cast.Cast(source_member_vector, target_member_vector, count, child_parameters)) {
 			return false;
 		}
 
