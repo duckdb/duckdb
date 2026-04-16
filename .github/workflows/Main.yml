@@ -437,6 +437,10 @@ jobs:
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
@@ -446,7 +450,7 @@ jobs:
         DISABLE_SANITIZER: 1
       with:
         build: python3 scripts/ci/retry.py -- make release
-        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke' }}
+        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
         bundle: make release-artifact
         upload-name: linux-release-build
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
