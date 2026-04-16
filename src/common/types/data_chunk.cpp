@@ -124,23 +124,19 @@ bool DataChunk::AllConstant() const {
 	return true;
 }
 
-idx_t DataChunk::GetCapacity() const {
-	return FlatVector::GetCapacity(data[0]);
-}
-
 void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
-	for(auto &vec : data) {
-		vec.CheckCapacity(count);
-	}
+	// for(auto &vec : data) {
+	// 	vec.CheckCapacity(count);
+	// }
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
-	SetCardinality(chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
+	SetCardinality(chunk);
 }
 
 void DataChunk::Move(DataChunk &chunk) {

@@ -192,6 +192,10 @@ void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const 
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
 	}
+	if (index >= capacity) {
+		throw InvalidInputException("Vector::SetValue index %d is out of range for vector with capacity %d", index,
+		                            capacity);
+	}
 	validity.Set(index, !val.IsNull());
 	if (val.IsNull()) {
 		return;

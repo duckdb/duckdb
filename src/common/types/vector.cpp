@@ -96,7 +96,8 @@ void Vector::CheckCapacity(idx_t capacity) const {
 	}
 	idx_t buffer_capacity = buffer->Capacity();
 	if (capacity > buffer_capacity) {
-		throw InternalException("Vector::CheckCapacity - capacity %d exceeds buffer capacity %d", capacity, buffer_capacity);
+		throw InternalException("Vector::CheckCapacity - capacity %d exceeds buffer capacity %d", capacity,
+		                        buffer_capacity);
 	}
 }
 
@@ -440,7 +441,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 }
 
-void Vector::Shred(Vector &shredded_data) {
+void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (GetType().id() != LogicalTypeId::VARIANT) {
 		throw InternalException("Vector::Shred can only be used on variant vectors");
 	}
@@ -448,7 +449,7 @@ void Vector::Shred(Vector &shredded_data) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
 }
 
 // FIXME: This should ideally be const

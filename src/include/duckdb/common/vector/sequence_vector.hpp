@@ -14,16 +14,16 @@ namespace duckdb {
 
 class SequenceBuffer : public VectorBuffer {
 public:
-	explicit SequenceBuffer(int64_t start, int64_t increment, int64_t count);
+	explicit SequenceBuffer(int64_t start, int64_t increment, idx_t seq_count);
 
 	int64_t start;
 	int64_t increment;
 	//! FIXME: should not be necessary once vector has count
-	int64_t count;
+	idx_t seq_count;
 
 public:
 	idx_t Capacity() const override {
-		return count;
+		return seq_count;
 	}
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
@@ -34,7 +34,6 @@ public:
 };
 
 struct SequenceVector {
-	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count);
 	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment);
 };
 
