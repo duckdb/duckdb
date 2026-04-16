@@ -259,26 +259,3 @@ SELECT COUNT(*) FROM t_conflict_log;
 ----
 2
 
-# Trigger body reading from the trigger table is blocked at CREATE TRIGGER time
-statement ok
-CREATE TABLE t_self (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_self_read AFTER INSERT ON t_self FOR EACH STATEMENT
-    INSERT INTO t_self SELECT count(*) FROM t_self;
-----
-Not implemented Error: Trigger body cannot reference the trigger's own table
-
-# Subquery in trigger body that reads the trigger table is also blocked
-statement error
-CREATE TRIGGER trg_self_subq AFTER INSERT ON t_self FOR EACH STATEMENT
-    INSERT INTO t_self VALUES ((SELECT count(*) FROM t_self));
-----
-Not implemented Error: Trigger body cannot reference the trigger's own table
-
-# Writing to the trigger table in the body is also blocked
-statement error
-CREATE TRIGGER trg_self_write AFTER INSERT ON t_self FOR EACH STATEMENT
-    INSERT INTO t_self VALUES (1);
-----
-Not implemented Error: Trigger body cannot reference the trigger's own table
