@@ -101,11 +101,11 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::DecorrelateDependen
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	layout = PrepareDependentJoinLeft(op, context, std::move(layout));
 
-	auto flatten_context = PushDownContext(op.propagate_null_values, 0);
+	auto flatten_context = PushDownContext(op.propagate_null_values);
 	FlattenDependentJoins flatten(binder, op.correlated_columns, op.perform_delim, op.any_join, this);
 
 	// first we check which logical operators have correlated expressions in the first place
-	flatten.DetectCorrelatedExpressions(*delim_join->children[1], op.is_lateral_join, flatten_context.lateral_depth);
+	flatten.DetectCorrelatedExpressions(*delim_join->children[1]);
 
 	if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		auto &cte_ref = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
@@ -115,8 +115,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::DecorrelateDependen
 			// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
 			auto cte = std::move(delim_join->children[1]);
 			delim_join->children[1] = std::move(cte->children[1]);
-			auto decorrelated =
-			    Decorrelate(std::move(delim_join), context.WithLateralDepth(flatten_context.lateral_depth), layout);
+			auto decorrelated = Decorrelate(std::move(delim_join), context, layout);
 			cte->children[1] = std::move(decorrelated.plan);
 			return PushDownResult(std::move(cte), std::move(decorrelated.layout));
 		}
@@ -129,8 +128,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::DecorrelateDependen
 		layout = flatten_result.layout;
 		layout.ShiftOffsets(delim_join->children[0]->GetColumnBindings().size());
 	}
-	return FinalizeDependentJoin(std::move(plan), std::move(layout), flatten_result.layout,
-	                             flatten_context.lateral_depth);
+	return FinalizeDependentJoin(std::move(plan), std::move(layout), flatten_result.layout);
 }
 
 FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDependentJoin &op,
@@ -154,8 +152,8 @@ FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PrepareDependentJ
 		// we are now done with the left side, mark it as uncorrelated
 		entry->second = false;
 
-		RewriteCorrelatedExpressions::Rewrite(op, layout.GetBindings(), correlated_map, 0, false, &equivalent_bindings);
-		RewriteCorrelatedExpressions::Rewrite(op, layout.GetBindings(), correlated_map, 0, true, &equivalent_bindings);
+		RewriteCorrelatedExpressions::Rewrite(op, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
+		RewriteCorrelatedExpressions::Rewrite(op, layout.GetBindings(), correlated_map, true, &equivalent_bindings);
 	} else {
 		auto left_result = Decorrelate(std::move(op.children[0]), context.WithFreshTraversal(), std::move(layout));
 		op.children[0] = std::move(left_result.plan);
@@ -257,13 +255,11 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 	}
 }
 
-FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> plan,
-                                                                                   CorrelatedLayout layout,
-                                                                                   const CorrelatedLayout &right_layout,
-                                                                                   idx_t lateral_depth) {
+FlattenDependentJoins::PushDownResult
+FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
+                                             const CorrelatedLayout &right_layout) {
 	auto &op = plan->Cast<LogicalDependentJoin>();
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 	PopulateDuplicateEliminatedColumns(op);
 
 	// We are done using the operator as a DEPENDENT JOIN, it is now fully decorrelated,
@@ -308,8 +304,7 @@ FlattenDependentJoins::PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator>
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
-bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool lateral, idx_t lateral_depth,
-                                                        bool parent_is_dependent_join) {
+bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool parent_is_dependent_join) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op.Cast<LogicalCTERef>();
 		bool correlated = cteref.correlated_columns > 0 && cteref.correlated_columns == correlated_columns.size();
@@ -323,19 +318,15 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		is_lateral_join = true;
 	}
-	bool has_correlation = HasCorrelatedExpressions::Detect(op, correlated_columns, lateral, lateral_depth);
+	bool has_correlation = HasCorrelatedExpressions::Detect(op, correlated_columns);
 	int child_idx = 0;
 	// now visit the children of this entry and check if they have correlated expressions
 	for (auto &child : op.children) {
-		auto new_lateral_depth = lateral_depth;
-		if (is_lateral_join && child_idx == 1) {
-			new_lateral_depth = lateral_depth + 1;
-		}
 		// we OR the property with its children such that has_correlation is true if either
 		// (1) this node has a correlated expression or
 		// (2) one of its children has a correlated expression
 		bool condition = (parent_is_dependent_join || is_lateral_join) && child_idx == 0;
-		if (DetectCorrelatedExpressions(*child, lateral, new_lateral_depth, condition)) {
+		if (DetectCorrelatedExpressions(*child, condition)) {
 			has_correlation = true;
 		}
 
@@ -474,8 +465,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(uniq
 	}
 	layout = PushDownChild(plan->children[0], context, std::move(layout));
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 	return PushDownResult(std::move(plan), std::move(layout));
 }
 
@@ -502,8 +492,7 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, Push
 		layout = PushDownChild(plan->children[0], child_context, std::move(layout));
 	}
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 	AppendCorrelatedColumns(plan->expressions, layout, correlated_columns.size(), true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
@@ -522,8 +511,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownAggregate(u
 	}
 	layout = PushDownChild(plan->children[0], child_context, std::move(layout));
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 
 	TableIndex delim_table_index;
 	idx_t delim_column_offset;
@@ -656,8 +644,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique
 		auto left_result = PushDownDependentJoinInternal(std::move(plan->children[0]), context, layout);
 		plan->children[0] = std::move(left_result.plan);
 		plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-		RewriteCorrelatedExpressions::Rewrite(*plan, left_result.layout.GetBindings(), correlated_map,
-		                                      context.lateral_depth, false, &equivalent_bindings);
+		RewriteCorrelatedExpressions::Rewrite(*plan, left_result.layout.GetBindings(), correlated_map, false,
+		                                      &equivalent_bindings);
 		return PushDownResult(std::move(plan), std::move(left_result.layout));
 	} else {
 		throw NotImplementedException("Unsupported join type for flattening correlated subquery");
@@ -674,8 +662,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownJoin(unique
 		result_layout.ShiftOffsets(plan->children[0]->GetColumnBindings().size());
 	}
 	AddCorrelatedJoinConditions(join, left_result.layout, right_result.layout);
-	RewriteCorrelatedExpressions::Rewrite(*plan, right_result.layout.GetBindings(), correlated_map,
-	                                      context.lateral_depth, false, &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, right_result.layout.GetBindings(), correlated_map, false,
+	                                      &equivalent_bindings);
 	return PushDownResult(std::move(plan), std::move(result_layout));
 }
 
@@ -772,8 +760,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownWindow(uniq
 	auto &window = plan->Cast<LogicalWindow>();
 	layout = PushDownChild(plan->children[0], context, std::move(layout));
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
@@ -848,8 +835,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownExpressionG
                                                                                    CorrelatedLayout layout) {
 	layout = PushDownChild(plan->children[0], context, std::move(layout));
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 
 	auto &expr_get = plan->Cast<LogicalExpressionGet>();
 	for (auto &expr_list : expr_get.expressions) {
@@ -883,8 +869,7 @@ FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOperator> plan, PushDownCon
 		get.projected_input.push_back(layout.GetOffset(i));
 	}
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
-	                                      &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
 	layout.ResetContiguousOffsets(correlated_offset);
 	return PushDownResult(std::move(plan), std::move(layout));
 }
@@ -929,16 +914,15 @@ FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownCon
 	}
 
 	RewriteCTEScan::Rewrite(*plan->children[1], table_index, correlated_columns);
-	DetectCorrelatedExpressions(*plan->children[1], false, 0);
+	DetectCorrelatedExpressions(*plan->children[1]);
 
 	layout = PushDownChild(plan->children[1], context.WithPropagateNullValues(false), std::move(layout));
 
-	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, context.lateral_depth, false,
+	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map, false, &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan->children[0], layout.GetBindings(), correlated_map, true,
 	                                      &equivalent_bindings);
-	RewriteCorrelatedExpressions::Rewrite(*plan->children[0], layout.GetBindings(), correlated_map,
-	                                      context.lateral_depth + 1, true, &equivalent_bindings);
-	RewriteCorrelatedExpressions::Rewrite(*plan->children[1], layout.GetBindings(), correlated_map,
-	                                      context.lateral_depth + 1, true, &equivalent_bindings);
+	RewriteCorrelatedExpressions::Rewrite(*plan->children[1], layout.GetBindings(), correlated_map, true,
+	                                      &equivalent_bindings);
 
 #ifdef DEBUG
 	plan->children[0]->ResolveOperatorTypes();

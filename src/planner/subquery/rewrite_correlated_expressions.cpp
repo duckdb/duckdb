@@ -13,33 +13,23 @@
 namespace duckdb {
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(
-    vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map, idx_t lateral_depth,
-    bool recursive_rewrite, optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings)
-    : correlated_bindings(std::move(correlated_bindings)), correlated_map(correlated_map), lateral_depth(lateral_depth),
+    vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map, bool recursive_rewrite,
+    optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings)
+    : correlated_bindings(std::move(correlated_bindings)), correlated_map(correlated_map),
       recursive_rewrite(recursive_rewrite), equivalent_bindings(equivalent_bindings) {
 }
 
 void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, vector<ColumnBinding> correlated_bindings,
-                                           column_binding_map_t<idx_t> &correlated_map, idx_t lateral_depth,
-                                           bool recursive_rewrite,
+                                           column_binding_map_t<idx_t> &correlated_map, bool recursive_rewrite,
                                            optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings) {
-	RewriteCorrelatedExpressions rewriter(std::move(correlated_bindings), correlated_map, lateral_depth,
-	                                      recursive_rewrite, equivalent_bindings);
+	RewriteCorrelatedExpressions rewriter(std::move(correlated_bindings), correlated_map, recursive_rewrite,
+	                                      equivalent_bindings);
 	rewriter.VisitOperator(op);
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	if (recursive_rewrite) {
-		// Update column bindings from left child of lateral to right child
-		if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-			D_ASSERT(op.children.size() == 2);
-			VisitOperator(*op.children[0]);
-			lateral_depth++;
-			VisitOperator(*op.children[1]);
-			lateral_depth--;
-		} else {
-			VisitOperatorChildren(op);
-		}
+		VisitOperatorChildren(op);
 	}
 	// update the bindings in the correlated columns of the dependent join
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
@@ -64,22 +54,17 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr,
                                                                   unique_ptr<Expression> *expr_ptr) {
-	if (expr.depth <= lateral_depth) {
-		// Indicates local correlations not relevant for the current the rewrite
+	if (expr.depth == 0) {
 		return nullptr;
 	}
-	// correlated column reference
-	// replace with the entry referring to the duplicate eliminated scan
-	// if this assertion occurs it generally means the bindings are inappropriate set in the binder or
-	// we either missed to account for lateral binder or over-counted for the lateral binder
-	D_ASSERT(expr.depth == 1 + lateral_depth);
 	auto entry = correlated_map.find(expr.binding);
-	D_ASSERT(entry != correlated_map.end());
+	if (entry == correlated_map.end()) {
+		return nullptr;
+	}
 	D_ASSERT(entry->second < correlated_bindings.size());
 
 	expr.binding = correlated_bindings[entry->second];
 	if (recursive_rewrite) {
-		D_ASSERT(expr.depth > 1);
 		expr.depth--;
 	} else {
 		expr.depth = 0;

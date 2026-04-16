@@ -32,16 +32,11 @@ private:
 	struct PushDownContext {
 		PushDownContext() {
 		}
-		PushDownContext(bool propagate_null_values_p, idx_t lateral_depth_p)
-		    : propagate_null_values(propagate_null_values_p), lateral_depth(lateral_depth_p) {
+		explicit PushDownContext(bool propagate_null_values_p) : propagate_null_values(propagate_null_values_p) {
 		}
 
 		PushDownContext WithPropagateNullValues(bool propagate_null_values_p) const {
-			return PushDownContext(propagate_null_values_p, lateral_depth);
-		}
-
-		PushDownContext WithLateralDepth(idx_t lateral_depth_p) const {
-			return PushDownContext(propagate_null_values, lateral_depth_p);
+			return PushDownContext(propagate_null_values_p);
 		}
 
 		PushDownContext WithFreshTraversal() const {
@@ -49,7 +44,6 @@ private:
 		}
 
 		bool propagate_null_values = true;
-		idx_t lateral_depth = 0;
 	};
 
 	struct CorrelatedLayout {
@@ -181,8 +175,7 @@ private:
 	                                      const CorrelatedLayout &layout, bool perform_delim);
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
-	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0,
-	                                 bool parent_is_dependent_join = false);
+	bool DetectCorrelatedExpressions(LogicalOperator &op, bool parent_is_dependent_join = false);
 
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
@@ -222,7 +215,7 @@ private:
 	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,
 	                                          CorrelatedLayout layout);
 	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
-	                                     const CorrelatedLayout &right_layout, idx_t lateral_depth);
+	                                     const CorrelatedLayout &right_layout);
 	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                             CorrelatedLayout layout, bool correlated_left);
 	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
