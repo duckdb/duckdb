@@ -471,9 +471,9 @@ string PEGTransformerFactory::TransformReservedIdentifierOrStringLiteral(PEGTran
 
 QualifiedName
 PEGTransformerFactory::TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                   ParseResult &parse_result) {
 	QualifiedName result;
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	result.catalog = INVALID_CATALOG;
 	result.schema = INVALID_SCHEMA;
 	result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));

@@ -417,6 +417,8 @@ private:
 	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformFromOrTo(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCopyFileName(PEGTransformer &transformer, ParseResult &parse_result);
+	string TransformIdentifierColId(PEGTransformer &transformer,
+                                                       ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformSpecializedOptionList(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
@@ -548,7 +550,7 @@ private:
 	static string TransformCascadeKeyAction(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformSetNullKeyAction(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformSetDefaultKeyAction(PEGTransformer &transformer, ParseResult &parse_result);
-	static LogicalType TransformColumnCollation(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformColumnCollation(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformWithData(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformCommitAction(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformPreserveOrDelete(PEGTransformer &transformer, ParseResult &parse_result);
@@ -719,6 +721,8 @@ private:
 	static unique_ptr<ParsedExpression> TransformParameter(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformAnonymousParameter(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
+                                                              ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformNumberedParameter(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformColLabelParameter(PEGTransformer &transformer,
@@ -1019,11 +1023,14 @@ private:
 	static string TransformSchemaQualification(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformCatalogQualification(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedName(PEGTransformer &transformer, ParseResult &parse_result);
+	QualifiedName TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 
 	static QualifiedName TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
+	static QualifiedName TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformReservedIdentifierOrStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformWhereClause(PEGTransformer &transformer, ParseResult &parse_result);
 

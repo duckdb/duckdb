@@ -468,6 +468,7 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformParameter);
 	REGISTER_TRANSFORM(TransformAnonymousParameter);
+	REGISTER_TRANSFORM(TransformQuestionMarkNumberedParameter);
 	REGISTER_TRANSFORM(TransformColLabelParameter);
 	REGISTER_TRANSFORM(TransformNumberedParameter);
 	REGISTER_TRANSFORM(TransformPositionalExpression);
