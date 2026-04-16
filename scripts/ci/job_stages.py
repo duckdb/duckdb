@@ -27,6 +27,7 @@ PULL_REQUEST_JOBS = [
     "threadsan",
     "amalgamation-tests",
     "linux-configs",
+    "fuzzer",
 ]
 
 NIGHTLY_ONLY_JOBS = [

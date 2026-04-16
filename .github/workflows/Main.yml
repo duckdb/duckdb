@@ -1203,6 +1203,46 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser_strict.json ./build/release/test/unittest
 
+ fuzzer:
+    name: Fuzzer
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'fuzzer') }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    needs:
+      - prepare
+      - linux-release
+    env:
+      FUZZ_SMOKE_SECS: 30
+      FUZZ_SQL_DICT_SECS: 30
+
+    steps:
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Install fuzzer tools
+      run: python3 scripts/ci/retry.py -- make fuzzer_tools
+
+    - name: Build fuzzer
+      run: make fuzzer
+
+    - name: Fuzzer smoke
+      run: make fuzzer_smoke
+
+    - name: Build SQL corpus
+      run: CORPUS_SQL_CMIN="$RUNNER_TEMP/fuzz_sql_cmin" make fuzz_sql_corpus
+
+    - name: Build SQL dictionary
+      run: CORPUS_SQL_CMIN="$RUNNER_TEMP/fuzz_sql_cmin" CORPUS_SQL_DICT="$RUNNER_TEMP/fuzz_sql_dict.txt" make fuzz_sql_dict
+
  summary:
     name: Summary
     if: ${{ always() }}
@@ -1230,6 +1270,7 @@ jobs:
       - threadsan
       - amalgamation-tests
       - linux-configs
+      - fuzzer
     steps:
       - name: Check CI status
         shell: bash

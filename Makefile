@@ -426,7 +426,22 @@ debug: ${EXTENSION_CONFIG_STEP}
 release: ${EXTENSION_CONFIG_STEP}
 	$(call cmake_build,build/release,Release,${FORCE_WARN_UNUSED_FLAG})
 
-.PHONY: fuzzer fuzzer_smoke
+.PHONY: fuzzer_tools fuzzer fuzzer_smoke
+fuzzer_tools:
+	@uname_s="$$(uname -s)"; \
+	if [ "$$uname_s" != "Linux" ]; then \
+		echo "Error: fuzzer_tools is Linux-only"; \
+		exit 1; \
+	fi; \
+	missing=0; \
+	for cmd in bwrap afl-fuzz afl-cmin afl-clang-fast afl-clang-fast++; do \
+		command -v $$cmd >/dev/null 2>&1 || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq bubblewrap afl++; \
+	fi
+
 fuzzer: ${EXTENSION_CONFIG_STEP}
 	@eval "$$(./scripts/ci/afl_detect_cxx.sh)"; \
 	rm -rf ./build/fuzzer && \
@@ -436,7 +451,7 @@ fuzzer: ${EXTENSION_CONFIG_STEP}
 	cmake --build . --config Release --target unittest
 
 FUZZ_SMOKE_SECS ?= 30
-fuzzer_smoke: fuzzer
+fuzzer_smoke:
 	@command -v afl-fuzz >/dev/null 2>&1 || { echo "Error: afl-fuzz is required (run: brew install afl++)"; exit 1; }
 	@mkdir -p build/fuzzer/smoke/in && \
 	printf "statement ok\nSELECT 42;\n\nquery I\nSELECT 7;\n----\n7\n" > build/fuzzer/smoke/in/seed1.test && \
@@ -444,7 +459,7 @@ fuzzer_smoke: fuzzer
 	AFL_SKIP_CPUFREQ=1 python3 ./scripts/ci/afl_sandbox.py --writable-dir "$$OUT_DIR" -- \
 	afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest
 
-.PHONY: fuzz_sql_corpus
+.PHONY: fuzz_sql_corpus fuzz_sql_dict
 fuzz_sql_corpus:
 	: "$${CORPUS_SQL_CMIN:?Error: CORPUS_SQL_CMIN is required}" && \
 	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && \
@@ -452,6 +467,18 @@ fuzz_sql_corpus:
 	--target ./build/fuzzer/test/unittest \
 	--afl-cmin "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$${CORPUS_SQL_CMIN}\" -- afl-cmin -e -t 1000" \
 	--output-dir "$${CORPUS_SQL_CMIN}"
+
+FUZZ_SQL_DICT_SECS ?= 60
+fuzz_sql_dict:
+	: "$${CORPUS_SQL_CMIN:?Error: CORPUS_SQL_CMIN is required}" && \
+	: "$${CORPUS_SQL_DICT:?Error: CORPUS_SQL_DICT is required}" && \
+	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" AFL_SKIP_CPUFREQ=1 \
+	python3 scripts/ci/afl_dict.py \
+	--target ./build/fuzzer/test/unittest \
+	--input-dir "$${CORPUS_SQL_CMIN}" \
+	--output-file "$${CORPUS_SQL_DICT}" \
+	--fuzz-secs "${FUZZ_SQL_DICT_SECS}" \
+	--afl-fuzz "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$$(dirname "$${CORPUS_SQL_DICT}")\" -- afl-fuzz"
 
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
