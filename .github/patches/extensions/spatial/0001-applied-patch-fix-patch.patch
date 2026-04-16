@@ -2178,3 +2178,16 @@ diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/mo
  			break;
  		case SHPT_POINT:
  			ConvertGeomLoop<ConvertPoint>(result, record_start, count, shp_handle, arena);
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index 83d4905..bd8b172 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -878,7 +878,7 @@ OperatorResultType PhysicalSpatialJoin::ExecuteInternal(ExecutionContext &contex
+ 	auto &lstate = lstate_p.Cast<SpatialJoinLocalOperatorState>();
+ 
+ 	idx_t output_index = 0;
+-	idx_t output_count = chunk.GetCapacity();
++	idx_t output_count = STANDARD_VECTOR_SIZE;
+ 
+ 	while (true) {
+ 		switch (lstate.state) {
