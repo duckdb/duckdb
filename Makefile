@@ -434,6 +434,11 @@ fuzzer_tools:
 		exit 1; \
 	fi
 	$(call ensure_apt_commands,bwrap,bubblewrap)
+	@if ! test -f "$$(gcc -print-file-name=plugin)/include/gcc-plugin.h"; then \
+		gcc_major="$$(gcc -dumpversion | cut -d. -f1)"; \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq "gcc-$${gcc_major}-plugin-dev"; \
+	fi
 
 fuzzer: ${EXTENSION_CONFIG_STEP}
 	@eval "$$(./scripts/ci/afl_detect_cxx.sh)"; \
