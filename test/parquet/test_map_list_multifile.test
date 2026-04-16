@@ -1,0 +1,151 @@
+# name: test/parquet/test_map_list_multifile.test
+# description: Test MAP and LIST filtering in multi-file scenarios
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# Test 1: Multi-file read with MAP filters
+# Create multiple files with different MAP value ranges
+
+statement ok
+CREATE TABLE map_file1 AS SELECT 
+    i as id,
+    map(['key1', 'key2'], [i, i*10]) as data
+FROM range(0, 50) t(i);
+
+statement ok
+CREATE TABLE map_file2 AS SELECT 
+    i as id,
+    map(['key1', 'key2'], [i, i*10]) as data
+FROM range(50, 100) t(i);
+
+statement ok
+COPY (FROM map_file1) TO '__TEST_DIR__/map_file1.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (FROM map_file2) TO '__TEST_DIR__/map_file2.parquet' (FORMAT PARQUET);
+
+# Filter should skip file1 entirely (all values < 60)
+query I
+SELECT COUNT(*) FROM read_parquet(['__TEST_DIR__/map_file1.parquet', '__TEST_DIR__/map_file2.parquet']) WHERE data['key1'] > 60;
+----
+39
+
+# Filter should read both files
+query I
+SELECT COUNT(*) FROM read_parquet(['__TEST_DIR__/map_file1.parquet', '__TEST_DIR__/map_file2.parquet']) WHERE data['key1'] > 25;
+----
+74
+
+# Test 2: Multi-file read with LIST filters
+
+statement ok
+CREATE TABLE list_file1 AS SELECT 
+    i as id,
+    [i, i+10, i+20] as numbers
+FROM range(0, 50) t(i);
+
+statement ok
+CREATE TABLE list_file2 AS SELECT 
+    i as id,
+    [i, i+10, i+20] as numbers
+FROM range(50, 100) t(i);
+
+statement ok
+COPY (FROM list_file1) TO '__TEST_DIR__/list_file1.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (FROM list_file2) TO '__TEST_DIR__/list_file2.parquet' (FORMAT PARQUET);
+
+# Filter should skip file1 entirely
+query I
+SELECT COUNT(*) FROM read_parquet(['__TEST_DIR__/list_file1.parquet', '__TEST_DIR__/list_file2.parquet']) WHERE numbers[1] > 60;
+----
+39
+
+# Filter should read both files
+query I
+SELECT COUNT(*) FROM read_parquet(['__TEST_DIR__/list_file1.parquet', '__TEST_DIR__/list_file2.parquet']) WHERE numbers[1] > 25;
+----
+74
+
+# Test 3: Hive partitioning with MAP columns
+# i ranges from 0-29, m['x'] = i*100, so values are 0, 100, 200, ..., 2900
+statement ok
+CREATE TABLE map_partitioned AS SELECT 
+    i as id,
+    map(['x'], [i*100]) as m,
+    (i % 3)::VARCHAR as partition_col
+FROM range(30) t(i);
+
+statement ok
+COPY map_partitioned TO '__TEST_DIR__/map_hive' (FORMAT PARQUET, PARTITION_BY partition_col);
+
+# Filter on MAP: m['x'] > 1000 matches 1100, 1200, ..., 2900 = rows 11-29 = 19 rows
+query I
+SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/map_hive/*/*.parquet', HIVE_PARTITIONING=1) WHERE m['x'] > 1000;
+----
+19
+
+# Combined filter on MAP and partition column
+# partition_col = '0' has rows 0, 3, 6, 9, 12, 15, 18, 21, 24, 27
+# Of these, m['x'] > 1000 matches rows 12, 15, 18, 21, 24, 27 = 6 rows
+query I
+SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/map_hive/*/*.parquet', HIVE_PARTITIONING=1) WHERE m['x'] > 1000 AND partition_col = '0';
+----
+6
+
+# Test 4: Verify filter appears in EXPLAIN for multi-file
+query II
+EXPLAIN SELECT COUNT(*) FROM read_parquet(['__TEST_DIR__/map_file1.parquet', '__TEST_DIR__/map_file2.parquet']) WHERE data['key1'] > 60;
+----
+physical_plan	<REGEX>:.*element_at.*
+
+# Test 5: Column pruning with MAP/LIST filters
+# This exercises ToExpression in remove_unused_columns optimizer
+query I
+SELECT id FROM read_parquet(['__TEST_DIR__/map_file1.parquet', '__TEST_DIR__/map_file2.parquet']) WHERE data['key1'] > 75 ORDER BY id;
+----
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+
+# Cleanup
+statement ok
+DROP TABLE map_file1;
+
+statement ok
+DROP TABLE map_file2;
+
+statement ok
+DROP TABLE list_file1;
+
+statement ok
+DROP TABLE list_file2;
+
+statement ok
+DROP TABLE map_partitioned;

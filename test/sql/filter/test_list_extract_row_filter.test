@@ -1,0 +1,194 @@
+# name: test/sql/filter/test_list_extract_row_filter.test
+# description: Test LIST_EXTRACT filter for row-level filtering in native storage
+# group: [filter]
+
+# Test MAP element row-level filtering
+statement ok
+CREATE TABLE map_data (id INTEGER, m MAP(VARCHAR, INTEGER));
+
+statement ok
+INSERT INTO map_data VALUES
+    (1, MAP(['a', 'b'], [10, 20])),
+    (2, MAP(['a', 'b'], [100, 200])),
+    (3, MAP(['a', 'b'], [1000, 2000])),
+    (4, MAP(['c', 'd'], [50, 60])),
+    (5, NULL);
+
+query II
+SELECT id, m FROM map_data WHERE m['a'] > 50 ORDER BY id;
+----
+2	{a=100, b=200}
+3	{a=1000, b=2000}
+
+query II
+SELECT id, m FROM map_data WHERE m['a'] <= 50 ORDER BY id;
+----
+1	{a=10, b=20}
+
+query II
+SELECT id, m FROM map_data WHERE m['b'] = 200 ORDER BY id;
+----
+2	{a=100, b=200}
+
+# Test non-existent key (returns NULL, which doesn't match predicate)
+query II
+SELECT id, m FROM map_data WHERE m['x'] > 0 ORDER BY id;
+----
+
+# Test NULL map
+query II
+SELECT id, m FROM map_data WHERE m['a'] IS NULL ORDER BY id;
+----
+4	{c=50, d=60}
+5	NULL
+
+# Test LIST element row-level filtering
+statement ok
+CREATE TABLE list_data (id INTEGER, nums INT[]);
+
+statement ok
+INSERT INTO list_data VALUES
+    (1, [10, 20, 30]),
+    (2, [100, 200, 300]),
+    (3, [1000, 2000, 3000]),
+    (4, [5, 15, 25]),
+    (5, NULL);
+
+query II
+SELECT id, nums FROM list_data WHERE nums[1] > 50 ORDER BY id;
+----
+2	[100, 200, 300]
+3	[1000, 2000, 3000]
+
+query II
+SELECT id, nums FROM list_data WHERE nums[2] <= 50 ORDER BY id;
+----
+1	[10, 20, 30]
+4	[5, 15, 25]
+
+query II
+SELECT id, nums FROM list_data WHERE nums[3] = 3000 ORDER BY id;
+----
+3	[1000, 2000, 3000]
+
+# Test out-of-bounds index (returns NULL, doesn't match predicate)
+query II
+SELECT id, nums FROM list_data WHERE nums[10] > 0 ORDER BY id;
+----
+
+# Test index 0 (invalid in 1-based indexing, returns NULL)
+query II
+SELECT id, nums FROM list_data WHERE nums[0] > 0 ORDER BY id;
+----
+
+# Test NULL list
+query II
+SELECT id, nums FROM list_data WHERE nums[1] IS NULL ORDER BY id;
+----
+5	NULL
+
+# Test negative indexing
+query II
+SELECT id, nums FROM list_data WHERE nums[-1] > 50 ORDER BY id;
+----
+2	[100, 200, 300]
+3	[1000, 2000, 3000]
+
+query II
+SELECT id, nums FROM list_data WHERE nums[-2] = 200 ORDER BY id;
+----
+2	[100, 200, 300]
+
+# Test negative index out of bounds (returns NULL)
+query II
+SELECT id, nums FROM list_data WHERE nums[-100] > 0 ORDER BY id;
+----
+
+# Test combined filters (MAP + regular column)
+query II
+SELECT id, m FROM map_data WHERE id > 2 AND m['a'] < 500 ORDER BY id;
+----
+
+query II
+SELECT id, m FROM map_data WHERE id > 2 AND m['a'] > 500 ORDER BY id;
+----
+3	{a=1000, b=2000}
+
+# Test combined filters (LIST + regular column)
+query II
+SELECT id, nums FROM list_data WHERE id <= 3 AND nums[1] >= 100 ORDER BY id;
+----
+2	[100, 200, 300]
+3	[1000, 2000, 3000]
+
+# Test multiple LIST_EXTRACT filters
+query II
+SELECT id, nums FROM list_data WHERE nums[1] > 5 AND nums[2] < 100 ORDER BY id;
+----
+1	[10, 20, 30]
+
+# Test multiple MAP_EXTRACT filters
+query II
+SELECT id, m FROM map_data WHERE m['a'] > 5 AND m['b'] < 100 ORDER BY id;
+----
+1	{a=10, b=20}
+
+# Test with empty list
+statement ok
+INSERT INTO list_data VALUES (6, []);
+
+query II
+SELECT id, nums FROM list_data WHERE nums[1] > 0 ORDER BY id;
+----
+1	[10, 20, 30]
+2	[100, 200, 300]
+3	[1000, 2000, 3000]
+4	[5, 15, 25]
+
+# Test with nested structures - MAP containing LISTS
+statement ok
+CREATE TABLE nested_map (id INTEGER, m MAP(VARCHAR, INT[]));
+
+statement ok
+INSERT INTO nested_map VALUES
+    (1, MAP(['x', 'y'], [[1, 2, 3], [4, 5, 6]])),
+    (2, MAP(['x', 'y'], [[10, 20, 30], [40, 50, 60]])),
+    (3, MAP(['x', 'y'], [[100, 200, 300], [400, 500, 600]]));
+
+# Note: We can filter on the extracted LIST, but to filter on LIST elements
+# we'd need nested extraction which requires chaining filters
+query II
+SELECT id, m FROM nested_map WHERE m['x'] IS NOT NULL ORDER BY id;
+----
+1	{x=[1, 2, 3], y=[4, 5, 6]}
+2	{x=[10, 20, 30], y=[40, 50, 60]}
+3	{x=[100, 200, 300], y=[400, 500, 600]}
+
+# Test with LIST of STRUCTs
+statement ok
+CREATE TABLE list_struct (id INTEGER, data STRUCT(a INTEGER, b VARCHAR)[]);
+
+statement ok
+INSERT INTO list_struct VALUES
+    (1, [{'a': 10, 'b': 'foo'}, {'a': 20, 'b': 'bar'}]),
+    (2, [{'a': 100, 'b': 'baz'}, {'a': 200, 'b': 'qux'}]),
+    (3, NULL);
+
+query II
+SELECT id, data FROM list_struct WHERE data[1] IS NOT NULL ORDER BY id;
+----
+1	[{'a': 10, 'b': foo}, {'a': 20, 'b': bar}]
+2	[{'a': 100, 'b': baz}, {'a': 200, 'b': qux}]
+
+# Cleanup
+statement ok
+DROP TABLE map_data;
+
+statement ok
+DROP TABLE list_data;
+
+statement ok
+DROP TABLE nested_map;
+
+statement ok
+DROP TABLE list_struct;

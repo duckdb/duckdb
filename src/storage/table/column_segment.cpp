@@ -8,6 +8,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/list_extract_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/function/scalar/list/contains_or_position.hpp"
 
 #include <cstring>
 
@@ -574,6 +576,102 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
 		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
 		return prefix_range_filter.Filter(vector, sel, approved_tuple_count, state);
+	}
+	case TableFilterType::LIST_EXTRACT: {
+		auto &list_filter = filter.Cast<ListExtractFilter>();
+		auto type_id = vector.GetType().id();
+
+		if (type_id == LogicalTypeId::MAP) {
+			// MAP case: extract value for the specified key
+			auto &keys = MapVector::GetKeys(vector);
+			auto &values = MapVector::GetValues(vector);
+
+			// Create a constant vector with the key we're searching for
+			Vector key_selector(list_filter.child_selector.type());
+			key_selector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			key_selector.SetValue(0, list_filter.child_selector);
+
+			Vector pos_vec(LogicalType::INTEGER, scan_count);
+			ListSearchOp<int32_t>(vector, keys, key_selector, pos_vec, scan_count);
+
+			// Extract values at matching positions
+			Vector extracted(MapType::ValueType(vector.GetType()), scan_count);
+			UnifiedVectorFormat pos_format, map_format;
+			pos_vec.ToUnifiedFormat(scan_count, pos_format);
+			vector.ToUnifiedFormat(scan_count, map_format);
+
+			auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
+			auto map_data = UnifiedVectorFormat::GetData<list_entry_t>(map_format);
+
+			for (idx_t i = 0; i < scan_count; i++) {
+				auto map_idx = map_format.sel->get_index(i);
+				auto pos_idx = pos_format.sel->get_index(i);
+
+				if (!map_format.validity.RowIsValid(map_idx) || !pos_format.validity.RowIsValid(pos_idx)) {
+					FlatVector::SetNull(extracted, i, true);
+					continue;
+				}
+
+				auto pos = map_data[map_idx].offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
+				VectorOperations::Copy(values, extracted, pos + 1, pos, i);
+			}
+
+			UnifiedVectorFormat extracted_format;
+			extracted.ToUnifiedFormat(scan_count, extracted_format);
+			return FilterSelection(sel, extracted, extracted_format, *list_filter.child_filter, filter_state,
+			                       scan_count, approved_tuple_count);
+
+		} else if (type_id == LogicalTypeId::LIST) {
+			// LIST case: extract element at specified index
+			auto &child_vec = ListVector::GetEntry(vector);
+			auto offset = BigIntValue::Get(list_filter.child_selector);
+
+			Vector extracted(ListType::GetChildType(vector.GetType()), scan_count);
+			UnifiedVectorFormat list_format, child_format;
+			vector.ToUnifiedFormat(scan_count, list_format);
+			child_vec.ToUnifiedFormat(ListVector::GetListSize(vector), child_format);
+
+			auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(list_format);
+
+			for (idx_t i = 0; i < scan_count; i++) {
+				auto list_idx = list_format.sel->get_index(i);
+
+				if (!list_format.validity.RowIsValid(list_idx) || offset == 0) {
+					FlatVector::SetNull(extracted, i, true);
+					continue;
+				}
+
+				auto &entry = list_data[list_idx];
+				auto index_offset = (offset > 0) ? offset - 1 : offset;
+				idx_t child_offset;
+
+				if (index_offset < 0) {
+					auto signed_len = UnsafeNumericCast<int64_t>(entry.length);
+					if (signed_len + index_offset < 0) {
+						FlatVector::SetNull(extracted, i, true);
+						continue;
+					}
+					child_offset = entry.offset + UnsafeNumericCast<idx_t>(signed_len + index_offset);
+				} else {
+					auto unsigned_offset = UnsafeNumericCast<idx_t>(index_offset);
+					if (unsigned_offset >= entry.length) {
+						FlatVector::SetNull(extracted, i, true);
+						continue;
+					}
+					child_offset = entry.offset + unsigned_offset;
+				}
+
+				auto child_idx = child_format.sel->get_index(child_offset);
+				VectorOperations::Copy(child_vec, extracted, child_idx + 1, child_idx, i);
+			}
+
+			UnifiedVectorFormat extracted_format;
+			extracted.ToUnifiedFormat(scan_count, extracted_format);
+			return FilterSelection(sel, extracted, extracted_format, *list_filter.child_filter, filter_state,
+			                       scan_count, approved_tuple_count);
+		}
+
+		throw InternalException("LIST_EXTRACT filter applied to non-LIST/MAP type");
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

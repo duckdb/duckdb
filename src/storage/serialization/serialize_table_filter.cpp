@@ -10,6 +10,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/list_extract_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
@@ -54,6 +55,9 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 		break;
 	case TableFilterType::STRUCT_EXTRACT:
 		result = StructFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::LIST_EXTRACT:
+		result = ListExtractFilter::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of TableFilter!");

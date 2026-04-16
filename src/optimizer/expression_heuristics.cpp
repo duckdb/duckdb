@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/list_extract_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
@@ -254,6 +255,10 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		return Cost(*struct_filter.child_filter);
+	}
+	case TableFilterType::LIST_EXTRACT: {
+		auto &list_filter = filter.Cast<ListExtractFilter>();
+		return Cost(*list_filter.child_filter);
 	}
 	default:
 		return 1000;
