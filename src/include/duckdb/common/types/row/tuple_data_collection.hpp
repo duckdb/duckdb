@@ -38,7 +38,7 @@ typedef void (*tuple_data_gather_function_t)(const TupleDataLayout &layout, Vect
 
 struct TupleDataGatherFunction {
 public:
-	TupleDataGatherFunction(tuple_data_gather_function_t function);
+	explicit TupleDataGatherFunction(tuple_data_gather_function_t function);
 	TupleDataGatherFunction(tuple_data_gather_function_t function, vector<TupleDataGatherFunction> child_functions);
 
 	void Gather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
