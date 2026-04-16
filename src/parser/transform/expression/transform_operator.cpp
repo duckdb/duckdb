@@ -36,12 +36,18 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	if (options.integer_division && op == "/") {
 		op = "//";
 	}
-	if (op == "~" || op == "!~") {
-		// rewrite 'asdf' SIMILAR TO '.*sd.*' into regexp_full_match('asdf', '.*sd.*')
-		bool invert_similar = op == "!~";
+	if (op == "~" || op == "!~" || op == "~*" || op == "!~*") {
+		// rewrite regex operators into regexp_full_match
+		// ~* / !~* are case-insensitive variants
+		bool invert = (op == "!~" || op == "!~*");
+		bool case_insensitive = (op == "~*" || op == "!~*");
 
+		if (case_insensitive) {
+			children.push_back(make_uniq<ConstantExpression>(Value("i")));
+		}
 		auto result = make_uniq<FunctionExpression>("regexp_full_match", std::move(children));
-		if (invert_similar) {
+		result->is_operator = true; // PG: these are operators, column name should be ?column?
+		if (invert) {
 			return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(result));
 		} else {
 			return std::move(result);
@@ -280,15 +286,19 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		auto &similar_func = right_expr->Cast<FunctionExpression>();
 		D_ASSERT(similar_func.function_name == "similar_escape");
 		D_ASSERT(similar_func.children.size() == 2);
-		if (similar_func.children[1]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Custom escape in SIMILAR TO");
+		// wrap the pattern with similar_to_escape so %->.*  _->. conversion happens
+		vector<unique_ptr<ParsedExpression>> escape_args;
+		escape_args.push_back(std::move(similar_func.children[0]));
+		// pass escape char through if provided (non-NULL constant)
+		if (similar_func.children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &constant = similar_func.children[1]->Cast<ConstantExpression>();
+			if (!constant.value.IsNull()) {
+				escape_args.push_back(std::move(similar_func.children[1]));
+			}
+		} else {
+			escape_args.push_back(std::move(similar_func.children[1]));
 		}
-		auto &constant = similar_func.children[1]->Cast<ConstantExpression>();
-		if (!constant.value.IsNull()) {
-			throw NotImplementedException("Custom escape in SIMILAR TO");
-		}
-		// take the child of the similar_func
-		children.push_back(std::move(similar_func.children[0]));
+		children.push_back(make_uniq<FunctionExpression>("similar_to_escape", std::move(escape_args)));
 
 		// this looks very odd, but seems to be the way to find out its NOT IN
 		bool invert_similar = false;
@@ -298,6 +308,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		}
 		const auto regex_function = "regexp_full_match";
 		auto result = make_uniq<FunctionExpression>(regex_function, std::move(children));
+		result->is_operator = true; // PG: SIMILAR TO is an operator, column name should be ?column?
 
 		if (invert_similar) {
 			return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(result));
