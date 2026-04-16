@@ -34,7 +34,7 @@ public:
 	public:
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
 		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
-		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)), hashes(LogicalType::HASH),
+		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), hashes(LogicalType::HASH),
 		      addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
@@ -220,7 +220,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// Check for COUNT(*)
 	if (wexpr.children.empty()) {
 		D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
-		auto data = FlatVector::GetDataMutable<int64_t>(result);
+		auto data = FlatVector::Writer<int64_t>(result, count);
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));

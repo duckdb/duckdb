@@ -1090,6 +1090,16 @@
         ]
     },
     {
+        "name": "vacuum_rebuild_indexes",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "validate_external_file_cache",
         "description": "Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only remote cache entries), or NO_VALIDATION (disable cache validation).",
         "type": "ENUM<CacheValidationMode>",

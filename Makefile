@@ -8,9 +8,6 @@ EXTENSION_CONFIG_STEP ?=
 ifdef USE_MERGED_VCPKG_MANIFEST
 	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
 endif
-ifdef DUCKDB_NEW_EXTENSION_BUILD
-	EXTENSION_CONFIG_STEP = sync_out_of_tree_extensions
-endif
 
 GENERATOR ?=
 FORCE_COLOR ?=
@@ -193,11 +190,11 @@ ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/in_tree_extensions.cmake
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/out_of_tree_extensions.cmake
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
@@ -355,9 +352,12 @@ endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
+sync_extensions_into =
+vcpkg_cmake_flag =
 ifdef DUCKDB_NEW_EXTENSION_BUILD
+sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '$(1)' &&
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build'
+vcpkg_cmake_flag = -DVCPKG_MANIFEST_DIR='$(1)'
 endif
 endif
 
@@ -389,26 +389,30 @@ EXTENSION_BUCKET ?= duckdb-core-extensions
 upload-extensions:
 	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
 
+define cmake_build
+	mkdir -p ./$(1) && \
+	$(call sync_extensions_into,${PROJ_DIR}$(1)) \
+	cd $(1) && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) ../.. && \
+	cmake --build . --config $(2)
+endef
+
 debug: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/debug && \
-	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	$(call cmake_build,build/debug,Debug,-DDEBUG_MOVE=1)
 
 release: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/release && \
-	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(call cmake_build,build/release,Release,${FORCE_WARN_UNUSED_FLAG})
 
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	$(call sync_extensions_into,${PROJ_DIR}) \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	$(call sync_extensions_into,${PROJ_DIR}) \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	cmake --build . --config Release
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
@@ -429,10 +433,7 @@ wasm_threads: ${EXTENSION_CONFIG_STEP}
 	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/cldebug && \
-	cd build/cldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	$(call cmake_build,build/cldebug,Debug,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0)
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
@@ -440,8 +441,9 @@ clreldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
+SYNC_OUTPUT_DIR ?= build
 sync_out_of_tree_extensions:
-	$(PYTHON) scripts/sync_out_of_tree_extensions.py
+	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '${PROJ_DIR}$(SYNC_OUTPUT_DIR)'
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
@@ -506,16 +508,10 @@ doxygen: docs
 	open build/docs/html/index.html
 
 reldebug: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/reldebug && \
-	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(call cmake_build,build/reldebug,RelWithDebInfo,)
 
 relassert: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/relassert && \
-	cd build/relassert && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(call cmake_build,build/relassert,RelWithDebInfo,-DFORCE_ASSERT=1)
 
 .PHONY: relassert-artifact
 
@@ -664,6 +660,7 @@ bloaty: reldebug bloaty/bloaty
 # Generate compile commands without actually building
 clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
+	cp .cache/clangd/debug/compile_commands.json .cache/clangd/compile_commands.json
 
 coverage-check:
 	./scripts/coverage_check.sh

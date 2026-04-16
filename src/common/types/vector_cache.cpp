@@ -20,7 +20,7 @@ public:
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, nullptr);
-			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector), capacity);
+			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector));
 			break;
 		}
 		case PhysicalType::ARRAY: {
@@ -53,7 +53,7 @@ public:
 		auto internal_type = type.InternalType();
 		buffer->ClearAuxiliaryData();
 		AssignSharedPointer(result.buffer, buffer);
-		result.buffer->GetValidityMask().Reset(capacity);
+		result.buffer->ResetCapacity(capacity);
 		// use SetVectorTypeOnly to avoid propagating to children
 		// for nested types (struct/array/list) children may have stale incompatible buffers
 		// from a previous execution - they will be reset individually below
@@ -64,7 +64,6 @@ public:
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &list_buffer = result.buffer->Cast<VectorListBuffer>();
-			list_buffer.SetCapacity(child_cache.capacity);
 			list_buffer.SetSize(0);
 
 			auto &list_child = list_buffer.GetChild();

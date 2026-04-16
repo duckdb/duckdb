@@ -82,9 +82,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	values_child_vector.ToUnifiedFormat(ListVector::GetListSize(values), values_child_data);
 
 	// a LIST vector, where each row contains a MAP (LIST of STRUCTs)
-	auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
-
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
 
 	// get the resulting size of the key/value child lists
 	idx_t result_child_size = 0;
@@ -109,7 +107,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 		// NULL MAP
 		if (!keys_data.validity.RowIsValid(keys_idx) || !values_data.validity.RowIsValid(values_idx)) {
-			result_validity.SetInvalid(row_idx);
+			result_entries.SetInvalid(row_idx);
 			continue;
 		}
 

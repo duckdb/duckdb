@@ -130,7 +130,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 	}
 
-	auto result_data = FlatVector::GetDataMutable<T>(result_vector);
+	auto result_data = FlatVector::Writer<T>(result_vector, input.size());
 	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {

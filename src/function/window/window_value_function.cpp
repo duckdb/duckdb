@@ -1413,11 +1413,12 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	//	We need the sort values for interpolation, so either use the range or the secondary ordering expression
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
-		if (!executor.range_expr) {
+		if (executor.range_idx == DConstants::INVALID_INDEX) {
 			D_ASSERT(wexpr.orders.size() == 1);
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
 			executor.range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
 		}
+		executor.aux_idx.emplace_back(executor.range_idx);
 	} else {
 		//	For secondary sorts, we need the entire collection so we can interpolate using the values
 		D_ASSERT(arg_order_idx.size() == 1);
@@ -1515,6 +1516,7 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
 	const auto count = eval_chunk.size();
 	auto &cursor = *lfstate.cursor;
+	auto &order_cursor = *lfstate.order_cursor;
 
 	//	Assume the best and just batch copy all the values
 	WindowFillCopy(cursor, result, count, row_idx, 0);
@@ -1541,7 +1543,6 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	if (gfstate.value_tree) {
 		//	Roughly what we need to do is find the previous and next non-null values
 		//	with non-null ordering values. This is essentially LEAD/LAG(IGNORE NULLS)
-		auto &order_cursor = *lfstate.order_cursor;
 		auto slope_func = GetFillSlopeFunction(wexpr.arg_orders[0].expression->return_type);
 		auto order_value_func = GetFillValueFunction(wexpr.arg_orders[0].expression->return_type);
 		auto &frames = lfstate.frames;
@@ -1653,7 +1654,6 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 
 	auto valid_begin = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
-	auto &order_cursor = *lfstate.state.range;
 	idx_t prev_partition = DConstants::INVALID_INDEX;
 	auto slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
 	auto order_value_func = GetFillValueFunction(wexpr.orders[0].expression->return_type);

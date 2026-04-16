@@ -1,14 +1,3 @@
-From 07270be76eaa3f764a74462b947a20623c115232 Mon Sep 17 00:00:00 2001
-From: Max Gabrielsson <max@gabrielsson.com>
-Date: Mon, 13 Apr 2026 13:16:42 +0200
-Subject: [PATCH] applied patch: fix.patch
-
----
- src/inet_functions.cpp               | 6 +++---
- test/sql/test_inet_storage.test      | 2 +-
- test/sql/test_ipv6_inet_storage.test | 3 +--
- 3 files changed, 5 insertions(+), 6 deletions(-)
-
 diff --git a/src/inet_functions.cpp b/src/inet_functions.cpp
 index afa7446..f0466e1 100644
 --- a/src/inet_functions.cpp
@@ -53,6 +42,3 @@ index 7dc1930..c49c259 100644
  
  statement ok
  PRAGMA enable_verification
--- 
-2.39.5 (Apple Git-154)
-

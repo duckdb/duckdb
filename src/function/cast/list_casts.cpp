@@ -31,11 +31,11 @@ static unique_ptr<BoundCastData> BindListToArrayCast(BindCastInput &input, const
 
 unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
-	if (!cast_data.child_cast_info.init_local_state) {
+	if (!cast_data.child_cast_info.HasInitLocalState()) {
 		return nullptr;
 	}
-	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.cast_data);
-	return cast_data.child_cast_info.init_local_state(child_parameters);
+	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData());
+	return cast_data.child_cast_info.InitLocalState(child_parameters);
 }
 
 bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -58,7 +58,7 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 		FlatVector::SetValidity(result, FlatVector::Validity(source));
 
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
-		auto tdata = FlatVector::GetDataMutable<list_entry_t>(result);
+		auto tdata = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
 			tdata[i] = ldata[i];
 		}
@@ -69,8 +69,8 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	ListVector::Reserve(result, source_size);
 	auto &append_vector = ListVector::GetEntry(result);
 
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	bool all_succeeded = cast_data.child_cast_info.function(source_cc, append_vector, source_size, child_parameters);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+	bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
 	ListVector::SetListSize(result, source_size);
 	D_ASSERT(ListVector::GetListSize(result) == source_size);
 	return all_succeeded;
@@ -176,12 +176,12 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		auto &source_cc = ListVector::GetEntry(source);
 		auto &result_cc = ArrayVector::GetEntry(result);
 
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 
 		if (ldata.offset == 0) {
 			// Fast path: offset is zero, we can just cast `array_size` elements of the child vectors directly
 			// Since the list was constant, there can only be one sequence of data in the child vector
-			return cast_data.child_cast_info.function(source_cc, result_cc, array_size, child_parameters);
+			return cast_data.child_cast_info.Cast(source_cc, result_cc, array_size, child_parameters);
 		}
 
 		// Else, we need to copy the range we want to cast to a new vector and cast that
@@ -191,7 +191,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 
 		Vector payload_vector(source_cc.GetType(), array_size);
 		VectorOperations::Copy(source_cc, payload_vector, ldata.offset + array_size, ldata.offset, 0);
-		return cast_data.child_cast_info.function(payload_vector, result_cc, array_size, child_parameters);
+		return cast_data.child_cast_info.Cast(payload_vector, result_cc, array_size, child_parameters);
 
 	} else {
 		source.Flatten(count);
@@ -233,7 +233,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			}
 		}
 
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 
 		// Fast path: No lists are null
 		// We can just cast the child vector directly
@@ -241,7 +241,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		if (FlatVector::Validity(result).CheckAllValid(count)) {
 			Vector payload_vector(result_cc.GetType(), child_count);
 
-			bool ok = cast_data.child_cast_info.function(source_cc, payload_vector, child_count, child_parameters);
+			bool ok = cast_data.child_cast_info.Cast(source_cc, payload_vector, child_count, child_parameters);
 			if (all_ok && !ok) {
 				all_ok = false;
 				HandleCastError::AssignError(*child_parameters.error_message, parameters);
@@ -270,7 +270,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 				                       0);
 
 				bool ok =
-				    cast_data.child_cast_info.function(list_cast_input, list_cast_output, array_size, child_parameters);
+				    cast_data.child_cast_info.Cast(list_cast_input, list_cast_output, array_size, child_parameters);
 				if (all_ok && !ok) {
 					all_ok = false;
 					HandleCastError::AssignError(*child_parameters.error_message, parameters);

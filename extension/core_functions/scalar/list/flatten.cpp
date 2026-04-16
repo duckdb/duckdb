@@ -10,8 +10,7 @@ namespace duckdb {
 namespace {
 
 void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
-	auto flat_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &flat_list_mask = FlatVector::Validity(result);
+	auto flat_list_data = FlatVector::Writer<list_entry_t>(result, args.size());
 
 	UnifiedVectorFormat outer_format;
 	UnifiedVectorFormat inner_format;
@@ -38,7 +37,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		for (idx_t outer_raw_idx = 0; outer_raw_idx < outer_count; outer_raw_idx++) {
 			const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
 			if (!outer_format.validity.RowIsValid(outer_idx)) {
-				flat_list_mask.SetInvalid(outer_raw_idx);
+				flat_list_data.SetInvalid(outer_raw_idx);
 				continue;
 			}
 			flat_list_data[outer_raw_idx].offset = 0;
@@ -93,7 +92,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
 
 		if (!outer_format.validity.RowIsValid(outer_idx)) {
-			flat_list_mask.SetInvalid(outer_raw_idx);
+			flat_list_data.SetInvalid(outer_raw_idx);
 			continue;
 		}
 

@@ -45,7 +45,7 @@ Vector::Vector(LogicalType type_p, idx_t capacity, VectorDataInitialization init
 	Initialize(initialize, capacity);
 }
 
-Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : type(std::move(type_p)) {
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::move(type_p)) {
 	if (!dataptr) {
 		return;
 	}
@@ -56,9 +56,9 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : type(std::move(type_p))
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		buffer = make_buffer<VectorStringBuffer>(dataptr);
+		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
 	} else {
-		buffer = make_buffer<StandardVectorBuffer>(dataptr);
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count);
 	}
 }
 
@@ -93,13 +93,13 @@ void Vector::Reference(const Value &value) {
 	D_ASSERT(GetType().id() == value.type().id());
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_buffer<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
-		auto &child_vectors = struct_buffer->GetChildren();
+		vector<Vector> child_vectors;
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
 			                                          : StructValue::GetChildren(value)[i]);
 		}
+		auto struct_buffer = make_buffer<VectorStructBuffer>(std::move(child_vectors), 1ULL);
 		buffer = std::move(struct_buffer);
 		if (value.IsNull()) {
 			SetValue(0, value);
