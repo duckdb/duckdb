@@ -73,14 +73,14 @@ StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(c
 
 PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
                                                         CurrentTransactionState full_transaction_state,
-                                                        bool can_wrap = true) {
+                                                        bool can_wrap = true, const string &original_query = "") {
 	if (body_statements.size() <= 1) {
 		return PreprocessingTransactionHandling::NONE;
 	}
 	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION && can_wrap) {
 		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
 	}
-	if (full_transaction_state == IN_ACTIVE_TRANSACTION) {
+	if (full_transaction_state == IN_ACTIVE_TRANSACTION && original_query.rfind("PIVOT", 0) != 0) {
 		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
 	}
 	return PreprocessingTransactionHandling::NONE;
@@ -101,8 +101,8 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransact
 		}
 	}
 	bool can_wrap_in_transaction = !has_select;
-	auto handling =
-	    GetTransactionHandling(multi_statement.statements, current_transaction_state, can_wrap_in_transaction);
+	auto handling = GetTransactionHandling(multi_statement.statements, current_transaction_state,
+	                                       can_wrap_in_transaction, multi_statement.ToString());
 	AddStatements(multi_statement.statements, handling, new_statements);
 }
 

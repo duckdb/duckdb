@@ -1,0 +1,24 @@
+# name: test/sql/pivot/test_pivot_transaction.test
+# description: Test SQL pivot with transaction
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+# query III
+# PIVOT VALUES(1,2),(1,3) x(y,z) ON x USING FIRST(y) ORDER BY 1
+# ----
+# 2	1	NULL
+# 3	NULL	1
+
+statement ok
+BEGIN TRANSACTION
+
+query III
+PIVOT VALUES(1,2),(1,3) x(y,z) ON x USING FIRST(y) ORDER BY 1
+----
+2	1	NULL
+3	NULL	1
+
+statement ok
+ROLLBACK
