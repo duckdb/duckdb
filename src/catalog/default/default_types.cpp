@@ -550,12 +550,7 @@ return BUILTIN_TYPES;
 }
 
 optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
-	auto &internal_types = GetBuiltinTypes();
-	for (auto &type : internal_types) {
-		if (StringUtil::CIEquals(name, type.name)) {
-			return &type;
-		}
-	}
+	// Check external types first so they can override builtins (e.g. oid with alias).
 	if (duckdb_external_types) {
 		idx_t count = 0;
 		const auto *external_types = duckdb_external_types(&count);
@@ -563,6 +558,12 @@ optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
 			if (StringUtil::CIEquals(name, external_types[i].name)) {
 				return &external_types[i];
 			}
+		}
+	}
+	auto &internal_types = GetBuiltinTypes();
+	for (auto &type : internal_types) {
+		if (StringUtil::CIEquals(name, type.name)) {
+			return &type;
 		}
 	}
 	return nullptr;
