@@ -12,6 +12,7 @@ export CC="ccache clang"
 export CXX="ccache clang++"
 
 if [ -n "${CI:-}" ]; then
+	set -x
 	export PREFIX="${AFLPP_ROOT:-/usr/local}"
 fi
 make source-only PERFORMANCE=1
@@ -27,5 +28,9 @@ popd
 
 rm -rf "${AFLPP_DIR}"
 
-afl-fuzz --version
-afl-clang-fast --version
+if [ -n "${CI:-}" ]; then
+	echo "PATH: $PATH"
+	which afl-fuzz afl-clang-fast
+	afl-fuzz --version
+	afl-clang-fast --version
+fi
