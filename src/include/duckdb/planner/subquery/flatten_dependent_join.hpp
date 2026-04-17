@@ -168,7 +168,8 @@ private:
 
 	struct DecorrelationState {
 		reference_map_t<LogicalOperator, vector<ColumnBinding>> subtree_dependencies;
-		reference_map_t<LogicalOperator, unordered_map<TableIndex, vector<reference<LogicalOperator>>>> subtree_accessors;
+		reference_map_t<LogicalOperator, unordered_map<TableIndex, vector<reference<LogicalOperator>>>>
+		    subtree_accessors;
 	};
 
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
@@ -224,8 +225,9 @@ private:
 	                                 const CorrelatedLayout &right_layout) const;
 	ColumnBinding GetCanonicalBinding(ColumnBinding binding) const;
 	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
-	                            const CorrelatedColumns &correlated_columns);
-	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context, CorrelatedLayout layout);
+	                             const CorrelatedColumns &correlated_columns);
+	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,
+	                                          CorrelatedLayout layout);
 	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
 	                                     const CorrelatedLayout &right_layout);
 	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,

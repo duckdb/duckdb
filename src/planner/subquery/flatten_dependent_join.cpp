@@ -88,9 +88,8 @@ static void RemapLocalBindings(LogicalOperator &op, const vector<ColumnBinding> 
 	for (idx_t i = 0; i < unmatched_old_bindings.size(); i++) {
 		replacer.replacement_bindings.emplace_back(unmatched_old_bindings[i], unmatched_new_bindings[i]);
 	}
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
-		replacer.VisitExpression(expression);
-	});
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [&](unique_ptr<Expression> *expression) { replacer.VisitExpression(expression); });
 }
 
 class DecorrelationStateCollector : public LogicalOperatorVisitor {
