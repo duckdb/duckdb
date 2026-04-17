@@ -630,6 +630,35 @@ string DropConstraintInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
+// RenameConstraintInfo
+//===--------------------------------------------------------------------===//
+RenameConstraintInfo::RenameConstraintInfo() : AlterTableInfo(AlterTableType::RENAME_CONSTRAINT) {
+}
+
+RenameConstraintInfo::RenameConstraintInfo(AlterEntryData data, string old_name_p, string new_name_p)
+    : AlterTableInfo(AlterTableType::RENAME_CONSTRAINT, std::move(data)), old_name(std::move(old_name_p)),
+      new_name(std::move(new_name_p)) {
+}
+
+RenameConstraintInfo::~RenameConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> RenameConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RenameConstraintInfo>(GetAlterEntryData(), old_name, new_name);
+}
+
+string RenameConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME CONSTRAINT ";
+	result += KeywordHelper::WriteOptionallyQuoted(old_name);
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // SetPartitionedByInfo
 //===--------------------------------------------------------------------===//
 SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {

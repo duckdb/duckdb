@@ -134,6 +134,26 @@ RenameStmt: ALTER SCHEMA name RENAME TO name
 					n->missing_ok = true;
 					$$ = (PGNode *)n;
 				}
+			| ALTER FUNCTION qualified_name RENAME TO name
+				{
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_FUNCTION;
+					n->relation = $3;
+					n->subname = NULL;
+					n->newname = $6;
+					n->missing_ok = false;
+					$$ = (PGNode *)n;
+				}
+			| ALTER FUNCTION IF_P EXISTS qualified_name RENAME TO name
+				{
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_FUNCTION;
+					n->relation = $5;
+					n->subname = NULL;
+					n->newname = $8;
+					n->missing_ok = true;
+					$$ = (PGNode *)n;
+				}
 		;
 
 

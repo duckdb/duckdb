@@ -442,19 +442,20 @@ AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value)
 const StringUtil::EnumStringLiteral *GetAlterScalarFunctionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AlterScalarFunctionType::INVALID), "INVALID" },
-		{ static_cast<uint32_t>(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" }
+		{ static_cast<uint32_t>(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" },
+		{ static_cast<uint32_t>(AlterScalarFunctionType::RENAME_SCALAR_FUNCTION), "RENAME_SCALAR_FUNCTION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value) {
-	return StringUtil::EnumToString(GetAlterScalarFunctionTypeValues(), 2, "AlterScalarFunctionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterScalarFunctionTypeValues(), 3, "AlterScalarFunctionType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value) {
-	return static_cast<AlterScalarFunctionType>(StringUtil::StringToEnum(GetAlterScalarFunctionTypeValues(), 2, "AlterScalarFunctionType", value));
+	return static_cast<AlterScalarFunctionType>(StringUtil::StringToEnum(GetAlterScalarFunctionTypeValues(), 3, "AlterScalarFunctionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTableFunctionTypeValues() {
@@ -496,19 +497,20 @@ const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 		{ static_cast<uint32_t>(AlterTableType::RENAME_FIELD), "RENAME_FIELD" },
 		{ static_cast<uint32_t>(AlterTableType::SET_TABLE_OPTIONS), "SET_TABLE_OPTIONS" },
 		{ static_cast<uint32_t>(AlterTableType::RESET_TABLE_OPTIONS), "RESET_TABLE_OPTIONS" },
-		{ static_cast<uint32_t>(AlterTableType::DROP_CONSTRAINT), "DROP_CONSTRAINT" }
+		{ static_cast<uint32_t>(AlterTableType::DROP_CONSTRAINT), "DROP_CONSTRAINT" },
+		{ static_cast<uint32_t>(AlterTableType::RENAME_CONSTRAINT), "RENAME_CONSTRAINT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 20, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 21, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 20, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 21, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {

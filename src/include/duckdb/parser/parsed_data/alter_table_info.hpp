@@ -88,6 +88,7 @@ enum class AlterTableType : uint8_t {
 	SET_TABLE_OPTIONS = 17,
 	RESET_TABLE_OPTIONS = 18,
 	DROP_CONSTRAINT = 19,
+	RENAME_CONSTRAINT = 20,
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -478,6 +479,26 @@ public:
 
 private:
 	DropConstraintInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// RenameConstraintInfo
+//===--------------------------------------------------------------------===//
+struct RenameConstraintInfo : public AlterTableInfo {
+	RenameConstraintInfo(AlterEntryData data, string old_name, string new_name);
+	~RenameConstraintInfo() override;
+
+	//! Constraint old name
+	string old_name;
+	//! Constraint new name
+	string new_name;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+private:
+	RenameConstraintInfo();
 };
 
 //===--------------------------------------------------------------------===//
