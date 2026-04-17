@@ -13,6 +13,7 @@ PULL_REQUEST_JOBS = [
     "linux-debug-tests",
     "regression",
     "tidy-check",
+    "check-clangd-tidy",
     "extensions",
     "wasm-eh",
     "linux-release",
