@@ -154,7 +154,11 @@ public:
 
 	// Getters
 	inline VectorType GetVectorType() const {
-		return Buffer().GetVectorType();
+		auto &buffer_ref = GetBufferRef();
+		if (!buffer_ref) {
+			return VectorType::FLAT_VECTOR;
+		}
+		return buffer_ref->GetVectorType();
 	}
 	inline const LogicalType &GetType() const {
 		return type;
