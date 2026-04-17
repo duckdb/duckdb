@@ -205,7 +205,7 @@ The arguments are:
 * `ExecutionContext &context` - The thread-local context for the evaluation;
 * `DataChunk &input` - The input chunk from the previous operator, plus the output columns being generated
 * `DataChunk &delayed` - The leading rows _after_ the current chunk;
-* `idx_t &delayed_capacity` - The leading rows _after_ the current chunk;
+* `idx_t &delayed_capacity` - The maximum row capacity of the delayed chunk;
 * `Vector &result` - The output values to generate;
 * `LocalSourceState &lstate` - The thread-local state for the function.
 
@@ -232,3 +232,12 @@ Because the script requires "subclassifications" the window functions have been 
 * `value` - Functions that return argument values.
 
 Extensions can now use these mechanisms to add new window functions to the catalog.
+
+## Extension Example
+
+There is an example of a simple "fill down" window function extension called "duckweed"
+in `loadable_extension_demo.cpp`.
+The function fills in `NULL`s using the most recent non-`NULL` value.
+This operation is streamable, so it demonstrates the full API set.
+
+(The name is the answer to "What fills up a duck?")

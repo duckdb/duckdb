@@ -291,12 +291,18 @@ public:
 	class StreamingState : public WindowExecutorStreamingState {
 	public:
 		StreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), filler(Value(wexpr.children[0]->return_type)) {
+		    : wexpr(wexpr), filler(Value(wexpr.children[0]->return_type)), executor(client),
+		      arg(wexpr.children[0]->return_type) {
+			executor.AddExpression(*wexpr.children[0]);
 		}
 		//! The window expression
 		const BoundWindowExpression &wexpr;
 		//! A constant vector holding the repeated value. Starts NULL.
 		Vector filler;
+		//! A reusable executor for evaluating the argument
+		ExpressionExecutor executor;
+		//! A reusable output for the argument
+		Vector arg;
 	};
 
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
@@ -307,18 +313,16 @@ public:
 	                                                      const BoundWindowExpression &wexpr) {
 		return make_uniq<StreamingState>(client, input, wexpr);
 	}
-	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
-	                       LocalSourceState &state) {
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
 		auto &sstate = state.Cast<StreamingState>();
 		auto &wexpr = sstate.wexpr;
 		auto &filler = sstate.filler;
+		auto &arg = sstate.arg;
 		const auto count = input.size();
 
 		//	Evaluate the argument
-		ExpressionExecutor executor(context.client);
-		executor.AddExpression(*wexpr.children[0]);
-		Vector arg(wexpr.children[0]->return_type);
-		executor.ExecuteExpression(input, arg);
+		sstate.executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(count, unified);
 		const auto &validity = unified.validity;
