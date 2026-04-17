@@ -70,7 +70,7 @@ static int FigureColnameInternal(const BaseExpression &expr, string &name) {
 				name = "float8";
 			} else if (name == "boolean") {
 				name = "bool";
-			} else if (name.starts_with("decimal(")) {
+			} else if (name.starts_with("decimal")) {
 				name = "numeric";
 			} else if (name == "blob") {
 				name = "bytea";
