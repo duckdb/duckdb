@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class DecorrelationStateCollector;
+
 class LogicalAggregate;
 class LogicalComparisonJoin;
 class LogicalCTERef;
@@ -164,6 +166,11 @@ private:
 		CorrelatedLayout layout;
 	};
 
+	struct DecorrelationState {
+		reference_map_t<LogicalOperator, vector<ColumnBinding>> subtree_dependencies;
+		reference_map_t<LogicalOperator, unordered_map<TableIndex, vector<reference<LogicalOperator>>>> subtree_accessors;
+	};
+
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 
@@ -174,8 +181,9 @@ private:
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, vector<ColumnBinding> bindings,
 	                                      const CorrelatedLayout &layout, bool perform_delim);
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
-	//! has_correlated_expressions map.
-	bool DetectCorrelatedExpressions(LogicalOperator &op, bool parent_is_dependent_join = false);
+	//! decorrelation state.
+	void CollectDecorrelationState(LogicalOperator &op);
+	bool DependsOnCorrelated(LogicalOperator &op) const;
 
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
@@ -186,8 +194,8 @@ private:
 	                                     CorrelatedLayout layout);
 	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                        CorrelatedLayout layout);
+	DecorrelationState &GetDecorrelationState(LogicalOperator &op);
 	Binder &binder;
-	reference_map_t<LogicalOperator, bool> has_correlated_expressions;
 	column_binding_map_t<idx_t> correlated_map;
 	column_binding_map_t<ColumnBinding> equivalent_bindings;
 	column_binding_map_t<idx_t> canonical_correlated_map;
@@ -198,6 +206,9 @@ private:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
+	optional_ptr<DecorrelationState> decorrelation_state;
+	unique_ptr<DecorrelationState> owned_decorrelation_state;
+	friend class DecorrelationStateCollector;
 	void AppendDelimColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
 	                        bool include_names) const;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
@@ -212,8 +223,9 @@ private:
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
 	ColumnBinding GetCanonicalBinding(ColumnBinding binding) const;
-	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,
-	                                          CorrelatedLayout layout);
+	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
+	                            const CorrelatedColumns &correlated_columns);
+	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context, CorrelatedLayout layout);
 	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
 	                                     const CorrelatedLayout &right_layout);
 	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,
