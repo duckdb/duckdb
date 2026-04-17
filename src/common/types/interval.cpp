@@ -29,9 +29,7 @@ void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, double fr
 		throw OutOfRangeException("interval value is out of range");
 	}
 	if (std::abs(fraction) > 1e-10) {
-		//	Add in (fraction * multiplier) / MICROS_PER_SEC
-		//	This is always in range
-		addition = static_cast<int64_t>(round(fraction * multiplier));
+		addition = static_cast<int64_t>(round(fraction * static_cast<double>(multiplier)));
 		addition_base = Cast::Operation<int64_t, T>(addition);
 		if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
 			throw OutOfRangeException("interval fraction is out of range");
