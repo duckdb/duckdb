@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
 AFLPP_DIR="./AFLplusplus"
@@ -9,8 +8,20 @@ git clone --depth 1 --branch v4.32c https://github.com/AFLplusplus/AFLplusplus.g
 
 pushd "${AFLPP_DIR}"
 echo "::group::Build afl++"
-CC="ccache clang" CXX="ccache clang++" make source-only PERFORMANCE=1
-sudo make install
+export CC="ccache clang"
+export CXX="ccache clang++"
+
+if [ -n "${CI:-}" ]; then
+	export PREFIX="${AFLPP_ROOT:-/usr/local}"
+fi
+make source-only PERFORMANCE=1
+
+if [ -n "${CI:-}" ]; then
+	sudo make install
+else
+	make install
+fi
+
 echo "::endgroup::"
 popd
 
