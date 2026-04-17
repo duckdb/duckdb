@@ -8,6 +8,12 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -98,8 +104,19 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 				if (raw.stmt->type == duckdb_libpgquery::T_PGSelectStmt) {
 					auto query_node = TransformSelectNode(*raw.stmt);
 					macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
+				} else if (raw.stmt->type == duckdb_libpgquery::T_PGInsertStmt) {
+					auto insert = TransformInsert(PGCast<duckdb_libpgquery::PGInsertStmt>(*raw.stmt));
+					macro_func = make_uniq<TableMacroFunction>(std::move(insert->Cast<InsertStatement>().node));
+				} else if (raw.stmt->type == duckdb_libpgquery::T_PGDeleteStmt) {
+					auto del = TransformDelete(PGCast<duckdb_libpgquery::PGDeleteStmt>(*raw.stmt));
+					macro_func = make_uniq<TableMacroFunction>(std::move(del->Cast<DeleteStatement>().node));
+				} else if (raw.stmt->type == duckdb_libpgquery::T_PGUpdateStmt) {
+					auto upd = TransformUpdate(PGCast<duckdb_libpgquery::PGUpdateStmt>(*raw.stmt));
+					macro_func = make_uniq<TableMacroFunction>(std::move(upd->Cast<UpdateStatement>().node));
 				} else {
-					throw ParserException("Only SELECT statements are supported in SQL function/procedure bodies");
+					throw ParserException(
+					    "Unsupported statement type in SQL function/procedure body: %s",
+					    constant.val.val.str);
 				}
 			}
 		}
