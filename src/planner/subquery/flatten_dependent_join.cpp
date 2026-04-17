@@ -414,7 +414,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::Decorrelate(unique_
 	default: {
 		for (auto &child : plan->children) {
 			auto old_child_bindings = child->GetColumnBindings();
-			auto child_result = Decorrelate(std::move(child), true, layout);
+			auto child_result = Decorrelate(std::move(child), propagate_null_values, layout);
 			child = std::move(child_result.plan);
 			RemapLocalBindings(*plan, old_child_bindings, child->GetColumnBindings());
 			layout = std::move(child_result.layout);
@@ -1304,7 +1304,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 				}
 				bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
 				child_propagate_null_values &= !child_is_dependent_join;
-				auto decorrelated = Decorrelate(std::move(plan->children[0]), true, layout);
+				auto decorrelated = Decorrelate(std::move(plan->children[0]), child_propagate_null_values, layout);
 				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 				auto result_layout = std::move(decorrelated.layout);
 				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
@@ -1327,7 +1327,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 					return PushDownResult(std::move(join), std::move(layout));
 				}
 
-				auto decorrelated = Decorrelate(std::move(plan), true, layout);
+				auto decorrelated = Decorrelate(std::move(plan), propagate_null_values, layout);
 				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 				auto result_layout = layout;
 				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
@@ -1336,7 +1336,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 				}
 				return PushDownResult(std::move(cross_product), std::move(result_layout));
 			} else {
-				auto decorrelated = Decorrelate(std::move(plan), true, layout);
+				auto decorrelated = Decorrelate(std::move(plan), propagate_null_values, layout);
 				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
 				auto result_layout = layout;
 				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
