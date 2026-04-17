@@ -27,30 +27,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-static optional_ptr<ParseResult> UnwrapOptional(optional_ptr<ParseResult> parse_result) {
-	if (parse_result && parse_result->type == ParseResultType::OPTIONAL) {
-		auto &opt = parse_result->Cast<OptionalParseResult>();
-		return opt.HasResult() ? opt.optional_result : nullptr;
-	}
-	return parse_result;
-}
-
-static optional_ptr<RepeatParseResult> UnwrapRepeat(optional_ptr<ParseResult> parse_result) {
-	auto unwrapped = UnwrapOptional(parse_result);
-	if (!unwrapped) {
-		return nullptr;
-	}
-	if (unwrapped->type != ParseResultType::REPEAT) {
-		throw InternalException("Expected repeat parse result in Program rule, got %s",
-		                        ParseResultToString(unwrapped->type));
-	}
-	// Safely wrap the reference into an optional_ptr
-	return &unwrapped->Cast<RepeatParseResult>();
-}
-
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
-                                                             const vector<MatcherToken> &tokens,
-                                                             optional_ptr<ParseResult> stmt_pr,
+                                                             const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
                                                              optional_ptr<ParseResult> terminator_pr) {
 	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
 
@@ -63,8 +41,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	transformer.Clear();
 
 	// Calculate location and length cleanly
-	if (stmt_pr->offset.IsValid()) {
-		stmt->stmt_location = stmt_pr->offset.GetIndex();
+	if (stmt_pr.offset.IsValid()) {
+		stmt->stmt_location = stmt_pr.offset.GetIndex();
 
 		idx_t end_index = (terminator_pr && terminator_pr->offset.IsValid())
 		                      ? terminator_pr->offset.GetIndex()
@@ -132,27 +110,38 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 	                           factory.parser.rules, factory.enum_mappings, options);
 
 	vector<unique_ptr<SQLStatement>> result;
-	auto current_stmt = UnwrapOptional(prog.GetChild(0));
-	auto repeat = UnwrapRepeat(prog.GetChild(1));
-	if (repeat) {
-		for (auto &child : repeat->children) {
-			auto &child_list = child->Cast<ListParseResult>();
+	optional_ptr<ParseResult> current_stmt;
+	auto &first_stmt = prog.Child<OptionalParseResult>(0);
+	if (first_stmt.HasResult()) {
+		current_stmt = first_stmt.GetResult();
+	}
+
+	auto &statement_repeat = prog.Child<OptionalParseResult>(1);
+	if (statement_repeat.HasResult()) {
+		auto &repeat = statement_repeat.GetResult().Cast<RepeatParseResult>();
+		for (auto &child : repeat.GetChildren()) {
+			auto &child_list = child.get().Cast<ListParseResult>();
 			auto &separators = child_list.Child<RepeatParseResult>(0);
-			auto next_stmt = child_list.GetChild(1);
+			auto &next_stmt = child_list.GetChild(1);
 			if (current_stmt) {
+				auto separator_children = separators.GetChildren();
+				auto &separator_terminator = separator_children[0].get();
 				result.push_back(
-				    ExtractAndTransformStatement(transformer, tokens, current_stmt, separators.children[0]));
+				    ExtractAndTransformStatement(transformer, tokens, *current_stmt, separator_terminator));
 			}
 			current_stmt = next_stmt;
 		}
 	}
 	if (current_stmt) {
-		auto trailing_repeat = UnwrapRepeat(prog.GetChild(2));
 		optional_ptr<ParseResult> trailing_terminator = nullptr;
-		if (trailing_repeat && !trailing_repeat->children.empty()) {
-			trailing_terminator = trailing_repeat->children[0];
+		auto &trailing_repeat = prog.Child<OptionalParseResult>(2);
+		if (trailing_repeat.HasResult()) {
+			auto trailing_children = trailing_repeat.GetResult().Cast<RepeatParseResult>().GetChildren();
+			if (!trailing_children.empty()) {
+				trailing_terminator = trailing_children[0].get();
+			}
 		}
-		result.push_back(ExtractAndTransformStatement(transformer, tokens, current_stmt, trailing_terminator));
+		result.push_back(ExtractAndTransformStatement(transformer, tokens, *current_stmt, trailing_terminator));
 	}
 	return result;
 }
