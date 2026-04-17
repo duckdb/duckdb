@@ -1,6 +1,6 @@
-# name: test/sql/pivot/test_pivot_transaction.test
+# name: test/sql/transactions/statement-preprocessor/pivot_is_handled_correctly.test
 # description: Test SQL pivot with transaction
-# group: [pivot]
+# group: [statement-preprocessor]
 
 statement ok
 PRAGMA enable_verification
