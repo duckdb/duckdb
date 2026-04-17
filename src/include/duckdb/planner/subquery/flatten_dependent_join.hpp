@@ -166,12 +166,26 @@ private:
 		CorrelatedLayout layout;
 	};
 
-	struct DecorrelationState {
+public:
+	class DecorrelationState {
+	public:
+		void Collect(Binder &binder, LogicalOperator &op);
+		bool IsCollected(LogicalOperator &op) const;
+		bool DependsOnCorrelated(LogicalOperator &op, const column_binding_map_t<idx_t> &correlated_map) const;
+		vector<ColumnBinding> &DependenciesFor(LogicalOperator &op);
+		optional_ptr<const vector<reference<LogicalOperator>>> AccessorsFor(LogicalOperator &op,
+		                                                                    TableIndex table_index) const;
+		bool HasAccessorsFor(LogicalOperator &op, TableIndex table_index) const;
+
+	private:
 		reference_map_t<LogicalOperator, vector<ColumnBinding>> subtree_dependencies;
 		reference_map_t<LogicalOperator, unordered_map<TableIndex, vector<reference<LogicalOperator>>>>
 		    subtree_accessors;
+
+		friend class DecorrelationStateCollector;
 	};
 
+private:
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 
@@ -205,9 +219,7 @@ private:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
-	optional_ptr<DecorrelationState> decorrelation_state;
-	unique_ptr<DecorrelationState> owned_decorrelation_state;
-	friend class DecorrelationStateCollector;
+	shared_ptr<DecorrelationState> decorrelation_state;
 	void AppendDelimColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
 	                        bool include_names) const;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedLayout &layout,
@@ -229,14 +241,13 @@ private:
 	                                     const CorrelatedLayout &right_layout);
 	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                             CorrelatedLayout layout, bool correlated_left);
-	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
-	                               CorrelatedLayout layout);
-	CorrelatedLayout PushDownChildFresh(unique_ptr<LogicalOperator> &child, const PushDownContext &context,
-	                                    CorrelatedLayout layout);
+	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, PushDownContext context, CorrelatedLayout layout,
+	                               bool fresh = false);
 	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
 	PushDownResult PushDownProjection(unique_ptr<LogicalOperator> plan, PushDownContext context,
-	                                  CorrelatedLayout layout, bool exit_projection,
-	                                  unique_ptr<LogicalOperator> delim_scan);
+	                                  CorrelatedLayout layout);
+	PushDownResult FinalizeProjection(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
+	                                  const vector<ColumnBinding> &old_child_bindings);
 	PushDownResult PushDownAggregate(unique_ptr<LogicalOperator> plan, PushDownContext context,
 	                                 CorrelatedLayout layout);
 	PushDownResult PushDownCrossProduct(unique_ptr<LogicalOperator> plan, PushDownContext context,

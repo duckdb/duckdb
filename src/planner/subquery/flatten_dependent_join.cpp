@@ -246,6 +246,51 @@ private:
 	vector<reference<LogicalOperator>> visited_operators;
 };
 
+void FlattenDependentJoins::DecorrelationState::Collect(Binder &binder, LogicalOperator &op) {
+	DecorrelationStateCollector collector(*this, binder);
+	collector.Collect(op);
+}
+
+bool FlattenDependentJoins::DecorrelationState::IsCollected(LogicalOperator &op) const {
+	return subtree_dependencies.find(op) != subtree_dependencies.end() &&
+	       subtree_accessors.find(op) != subtree_accessors.end();
+}
+
+bool FlattenDependentJoins::DecorrelationState::DependsOnCorrelated(
+    LogicalOperator &op, const column_binding_map_t<idx_t> &correlated_map) const {
+	auto entry = subtree_dependencies.find(op);
+	if (entry == subtree_dependencies.end()) {
+		return false;
+	}
+	for (auto &binding : entry->second) {
+		if (correlated_map.find(binding) != correlated_map.end()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+vector<ColumnBinding> &FlattenDependentJoins::DecorrelationState::DependenciesFor(LogicalOperator &op) {
+	return subtree_dependencies[op];
+}
+
+optional_ptr<const vector<reference<LogicalOperator>>>
+FlattenDependentJoins::DecorrelationState::AccessorsFor(LogicalOperator &op, TableIndex table_index) const {
+	auto subtree_entry = subtree_accessors.find(op);
+	if (subtree_entry == subtree_accessors.end()) {
+		return nullptr;
+	}
+	auto accessor_entry = subtree_entry->second.find(table_index);
+	if (accessor_entry == subtree_entry->second.end()) {
+		return nullptr;
+	}
+	return accessor_entry->second;
+}
+
+bool FlattenDependentJoins::DecorrelationState::HasAccessorsFor(LogicalOperator &op, TableIndex table_index) const {
+	return AccessorsFor(op, table_index);
+}
+
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim,
                                              bool any_join, optional_ptr<FlattenDependentJoins> parent)
     : binder(binder), correlated_columns(correlated), perform_delim(perform_delim), any_join(any_join), parent(parent) {
@@ -273,11 +318,9 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedCol
 
 FlattenDependentJoins::DecorrelationState &FlattenDependentJoins::GetDecorrelationState(LogicalOperator &op) {
 	if (!decorrelation_state) {
-		owned_decorrelation_state = make_uniq<DecorrelationState>();
-		decorrelation_state = owned_decorrelation_state.get();
+		decorrelation_state = make_shared_ptr<DecorrelationState>();
 	}
-	if (decorrelation_state->subtree_dependencies.find(op) == decorrelation_state->subtree_dependencies.end() ||
-	    decorrelation_state->subtree_accessors.find(op) == decorrelation_state->subtree_accessors.end()) {
+	if (!decorrelation_state->IsCollected(op)) {
 		CollectDecorrelationState(op);
 	}
 	return *decorrelation_state;
@@ -285,38 +328,24 @@ FlattenDependentJoins::DecorrelationState &FlattenDependentJoins::GetDecorrelati
 
 void FlattenDependentJoins::CollectDecorrelationState(LogicalOperator &op) {
 	D_ASSERT(decorrelation_state);
-	DecorrelationStateCollector collector(*decorrelation_state, binder);
-	collector.Collect(op);
+	decorrelation_state->Collect(binder, op);
 }
 
 bool FlattenDependentJoins::DependsOnCorrelated(LogicalOperator &op) const {
 	D_ASSERT(decorrelation_state);
-	auto entry = decorrelation_state->subtree_dependencies.find(op);
-	if (entry == decorrelation_state->subtree_dependencies.end()) {
-		return false;
-	}
-	for (auto &binding : entry->second) {
-		if (correlated_map.find(binding) != correlated_map.end()) {
-			return true;
-		}
-	}
-	return false;
+	return decorrelation_state->DependsOnCorrelated(op, correlated_map);
 }
 
 void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
                                                     const CorrelatedColumns &correlated_columns) {
 	D_ASSERT(decorrelation_state);
-	auto subtree_entry = decorrelation_state->subtree_accessors.find(subtree_root);
-	if (subtree_entry == decorrelation_state->subtree_accessors.end()) {
+	auto accessors = decorrelation_state->AccessorsFor(subtree_root, table_index);
+	if (!accessors) {
 		return;
 	}
-	auto accessor_entry = subtree_entry->second.find(table_index);
-	if (accessor_entry == subtree_entry->second.end()) {
-		return;
-	}
-	for (auto &op_ref : accessor_entry->second) {
+	for (auto &op_ref : *accessors.get()) {
 		auto &op = op_ref.get();
-		auto &dependencies = decorrelation_state->subtree_dependencies[op];
+		auto &dependencies = decorrelation_state->DependenciesFor(op);
 		for (auto &column : correlated_columns) {
 			AddUniqueBinding(dependencies, column.binding);
 		}
@@ -337,11 +366,7 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 		auto &join = op.Cast<LogicalDependentJoin>();
 		bool has_cte_ref_child = false;
 		for (auto &child : join.children) {
-			auto child_entry = decorrelation_state->subtree_accessors.find(*child);
-			if (child_entry == decorrelation_state->subtree_accessors.end()) {
-				continue;
-			}
-			if (child_entry->second.find(table_index) != child_entry->second.end()) {
+			if (decorrelation_state->HasAccessorsFor(*child, table_index)) {
 				has_cte_ref_child = true;
 				break;
 			}
@@ -722,17 +747,13 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 }
 
 FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOperator> &child,
-                                                                             const PushDownContext &context,
-                                                                             CorrelatedLayout layout) {
-	auto result = PushDownDependentJoinInternal(std::move(child), context, std::move(layout));
-	child = std::move(result.plan);
-	return std::move(result.layout);
-}
-
-FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PushDownChildFresh(unique_ptr<LogicalOperator> &child,
-                                                                                  const PushDownContext &context,
-                                                                                  CorrelatedLayout layout) {
-	auto result = PushDownDependentJoin(std::move(child), context.WithFreshTraversal(), std::move(layout));
+                                                                             PushDownContext context,
+                                                                             CorrelatedLayout layout, bool fresh) {
+	if (fresh) {
+		context = context.WithFreshTraversal();
+	}
+	auto result = fresh ? PushDownDependentJoin(std::move(child), context, std::move(layout))
+	                    : PushDownDependentJoinInternal(std::move(child), context, std::move(layout));
 	child = std::move(result.plan);
 	return std::move(result.layout);
 }
@@ -752,29 +773,8 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(uniq
 }
 
 FlattenDependentJoins::PushDownResult
-FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, PushDownContext context,
-                                          CorrelatedLayout layout, bool exit_projection,
-                                          unique_ptr<LogicalOperator> delim_scan) {
-	auto old_child_bindings = plan->children[0]->GetColumnBindings();
-	auto child_context = context;
-	for (auto &expr : plan->expressions) {
-		child_context.propagate_null_values &= expr->PropagatesNullValues();
-	}
-
-	bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
-	child_context.propagate_null_values &= !child_is_dependent_join;
-
-	if (exit_projection) {
-		auto decorrelated = Decorrelate(std::move(plan->children[0]), child_context.WithFreshTraversal(), layout);
-		auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
-		if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
-		}
-		plan->children[0] = std::move(cross_product);
-	} else {
-		layout = PushDownChild(plan->children[0], child_context, std::move(layout));
-	}
-
+FlattenDependentJoins::FinalizeProjection(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
+                                          const vector<ColumnBinding> &old_child_bindings) {
 	RemapLocalBindings(*plan, old_child_bindings, plan->children[0]->GetColumnBindings());
 
 	RewriteCorrelatedExpressions::Rewrite(*plan, layout.GetBindings(), correlated_map);
@@ -785,6 +785,21 @@ FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan, Push
 	    correlated_columns, ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)), correlated_offset);
 	ColumnBindingResolver::Verify(*plan);
 	return PushDownResult(std::move(plan), std::move(layout));
+}
+
+FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> plan,
+                                                                                PushDownContext context,
+                                                                                CorrelatedLayout layout) {
+	auto old_child_bindings = plan->children[0]->GetColumnBindings();
+	auto child_context = context;
+	for (auto &expr : plan->expressions) {
+		child_context.propagate_null_values &= expr->PropagatesNullValues();
+	}
+
+	bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
+	child_context.propagate_null_values &= !child_is_dependent_join;
+	layout = PushDownChild(plan->children[0], child_context, std::move(layout));
+	return FinalizeProjection(std::move(plan), std::move(layout), old_child_bindings);
 }
 
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownAggregate(unique_ptr<LogicalOperator> plan,
@@ -1077,7 +1092,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownSetOperatio
 	}
 #endif
 	for (auto &child : plan->children) {
-		layout = PushDownChildFresh(child, context, std::move(layout));
+		layout = PushDownChild(child, context, std::move(layout), true);
 	}
 	for (idx_t i = 0; i < plan->children.size(); i++) {
 		if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
@@ -1120,7 +1135,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDistinct(un
                                                                               CorrelatedLayout layout) {
 	auto &distinct = plan->Cast<LogicalDistinct>();
 	auto old_child_bindings = distinct.children[0]->GetColumnBindings();
-	layout = PushDownChildFresh(distinct.children[0], context, std::move(layout));
+	layout = PushDownChild(distinct.children[0], context, std::move(layout), true);
 	RemapLocalBindings(*plan, old_child_bindings, distinct.children[0]->GetColumnBindings());
 	AppendCorrelatedColumns(distinct.distinct_targets, layout, correlated_columns.size(), false);
 	return PushDownResult(std::move(plan), std::move(layout));
@@ -1152,7 +1167,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownOrderBy(uni
                                                                              PushDownContext context,
                                                                              CorrelatedLayout layout) {
 	auto old_child_bindings = plan->children[0]->GetColumnBindings();
-	layout = PushDownChildFresh(plan->children[0], context, std::move(layout));
+	layout = PushDownChild(plan->children[0], context, std::move(layout), true);
 	RemapLocalBindings(*plan, old_child_bindings, plan->children[0]->GetColumnBindings());
 	return PushDownResult(std::move(plan), std::move(layout));
 }
@@ -1163,7 +1178,7 @@ FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOperator> plan, PushDownCon
 	if (get.children.size() != 1) {
 		throw InternalException("Flatten dependent joins - logical get encountered without children");
 	}
-	layout = PushDownChildFresh(plan->children[0], context, std::move(layout));
+	layout = PushDownChild(plan->children[0], context, std::move(layout), true);
 	auto correlated_offset = get.GetColumnBindings().size();
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		get.projected_input.push_back(layout.GetOffset(i));
@@ -1268,7 +1283,6 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
                                                      CorrelatedLayout layout) {
 	// first check if the logical operator has correlated expressions
 	bool has_correlation = DependsOnCorrelated(*plan);
-	bool exit_projection = false;
 	unique_ptr<LogicalOperator> delim_scan;
 	if (!has_correlation) {
 		// we reached a node without correlated expressions
@@ -1299,8 +1313,23 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 			                                            ColumnBinding(delim_index, ProjectionIndex(0)), left_columns);
 			delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 			if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				// we want to keep the logical projection for positionality.
-				exit_projection = true;
+				auto old_child_bindings = plan->children[0]->GetColumnBindings();
+				auto child_context = context;
+				for (auto &expr : plan->expressions) {
+					child_context.propagate_null_values &= expr->PropagatesNullValues();
+				}
+				bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
+				child_context.propagate_null_values &= !child_is_dependent_join;
+				auto decorrelated =
+				    Decorrelate(std::move(plan->children[0]), child_context.WithFreshTraversal(), layout);
+				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
+				auto result_layout = std::move(decorrelated.layout);
+				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+					result_layout =
+					    CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
+				}
+				plan->children[0] = std::move(cross_product);
+				return FinalizeProjection(std::move(plan), std::move(result_layout), old_child_bindings);
 			} else if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 				// Should a reference to a CTE be the final non-recursive operator,
 				// we have to add a filter predicate to ensure column equality between
@@ -1341,7 +1370,7 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 		return PushDownFilter(std::move(plan), context, std::move(layout));
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		return PushDownProjection(std::move(plan), context, std::move(layout), exit_projection, std::move(delim_scan));
+		return PushDownProjection(std::move(plan), context, std::move(layout));
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		return PushDownAggregate(std::move(plan), context, std::move(layout));
