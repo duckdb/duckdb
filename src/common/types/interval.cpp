@@ -19,7 +19,7 @@ bool Interval::FromString(const string &str, interval_t &result) {
 }
 
 template <class T>
-void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, int64_t fraction = 0) {
+void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, double fraction = 0) {
 	int64_t addition;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
 		throw OutOfRangeException("interval value is out of range");
@@ -28,10 +28,10 @@ void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, int64_t f
 	if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
 		throw OutOfRangeException("interval value is out of range");
 	}
-	if (fraction) {
+	if (std::abs(fraction) > 1e-10) {
 		//	Add in (fraction * multiplier) / MICROS_PER_SEC
 		//	This is always in range
-		addition = (fraction * multiplier) / Interval::MICROS_PER_SEC;
+		addition = static_cast<int64_t>(round(fraction * multiplier));
 		addition_base = Cast::Operation<int64_t, T>(addition);
 		if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
 			throw OutOfRangeException("interval fraction is out of range");
@@ -45,7 +45,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result, strin
 	bool negative;
 	bool found_any = false;
 	int64_t number;
-	int64_t fraction;
+	double fraction;
 	DatePartSpecifier specifier;
 	string specifier_str;
 
@@ -112,12 +112,16 @@ interval_parse_number:
 			number = Cast::Operation<string_t, int64_t>(nr_string);
 			fraction = 0;
 			if (c == '.') {
-				// we expect some microseconds
-				int32_t mult = 100000;
-				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
-					if (mult > 0) {
-						fraction += int64_t(str[pos] - '0') * mult;
+				idx_t frac_start = 0;
+				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos) {
+					if (frac_start == 0) {
+						frac_start = pos;
 					}
+				}
+
+				if (frac_start != 0) {
+					string_t frac_string(str + frac_start - 1, UnsafeNumericCast<uint32_t>(pos - frac_start + 1));
+					fraction = Cast::Operation<string_t, double>(frac_string);
 				}
 			}
 			if (negative) {
@@ -168,7 +172,7 @@ interval_parse_identifier:
 	// Special case SS[.FFFFFF] - implied SECONDS/MICROSECONDS
 	if (specifier_str.empty() && !found_any) {
 		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
-		IntervalTryAddition<int64_t>(result.micros, fraction, 1);
+		IntervalTryAddition<int64_t>(result.micros, 0, 1, fraction);
 		found_any = true;
 		// parse any trailing whitespace
 		for (; pos < len; pos++) {
@@ -201,31 +205,37 @@ interval_parse_identifier:
 	case DatePartSpecifier::YEAR:
 		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_YEAR, fraction);
 		break;
-	case DatePartSpecifier::QUARTER:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER, fraction);
+	case DatePartSpecifier::QUARTER: {
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER);
 		// Reduce to fraction of a month
-		fraction *= MONTHS_PER_QUARTER;
-		fraction %= MICROS_PER_SEC;
+		int32_t month = static_cast<int32_t>(fraction * MONTHS_PER_QUARTER);
+		IntervalTryAddition<int32_t>(result.months, month, 1);
+		fraction = fraction * MONTHS_PER_QUARTER - month;
 		IntervalTryAddition<int32_t>(result.days, 0, DAYS_PER_MONTH, fraction);
 		break;
-	case DatePartSpecifier::MONTH:
+	}
+	case DatePartSpecifier::MONTH: {
 		IntervalTryAddition<int32_t>(result.months, number, 1);
-		IntervalTryAddition<int32_t>(result.days, 0, DAYS_PER_MONTH, fraction);
+		int32_t day = static_cast<int32_t>(fraction * DAYS_PER_MONTH);
+		IntervalTryAddition<int32_t>(result.days, day, 1);
+		fraction = fraction * DAYS_PER_MONTH - day;
+		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
 		break;
+	}
 	case DatePartSpecifier::DAY:
 		IntervalTryAddition<int32_t>(result.days, number, 1);
 		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
 		break;
-	case DatePartSpecifier::WEEK:
-		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK, fraction);
+	case DatePartSpecifier::WEEK: {
+		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK);
 		// Reduce to fraction of a day
-		fraction *= DAYS_PER_WEEK;
-		fraction %= MICROS_PER_SEC;
+		int32_t day = static_cast<int32_t>(fraction * DAYS_PER_WEEK);
+		IntervalTryAddition<int32_t>(result.days, day, 1);
+		fraction = fraction * DAYS_PER_WEEK - day;
 		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
 		break;
+	}
 	case DatePartSpecifier::MICROSECONDS:
-		// Round the fraction
-		number += (fraction * 2) / MICROS_PER_SEC;
 		IntervalTryAddition<int64_t>(result.micros, number, 1);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
