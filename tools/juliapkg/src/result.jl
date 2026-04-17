@@ -87,7 +87,11 @@ function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::U
     return unsafe_wrap(Array, data_ptr, len; own = false) |> copy
 end
 
-function convert_geometry(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Base.CodeUnits{UInt8, String}
+function convert_geometry(
+    column_data::ColumnConversionData,
+    val::Ptr{Cvoid},
+    idx::UInt64
+)::Base.CodeUnits{UInt8, String}
     data_ptr, len = _string_data_ptr(val, idx)
     return codeunits(unsafe_string(data_ptr, len))
 end
