@@ -320,14 +320,6 @@ Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
 }
 
-VectorBuffer &Vector::BufferMutable() {
-	return *buffer;
-}
-
-const VectorBuffer &Vector::Buffer() const {
-	return *buffer;
-}
-
 // LCOV_EXCL_START
 string VectorTypeToString(VectorType type) {
 	switch (type) {
@@ -818,13 +810,6 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
 		}
 	}
-}
-
-VectorType Vector::GetVectorType() const {
-	if (!buffer) {
-		return VectorType::FLAT_VECTOR;
-	}
-	return Buffer().GetVectorType();
 }
 
 void Vector::SetVectorType(VectorType new_vector_type) {

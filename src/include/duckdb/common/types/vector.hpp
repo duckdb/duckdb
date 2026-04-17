@@ -153,13 +153,18 @@ public:
 	idx_t GetAllocationSize() const;
 
 	// Getters
-	VectorType GetVectorType() const;
+	inline VectorType GetVectorType() const {
+		return Buffer().GetVectorType();
+	}
 	inline const LogicalType &GetType() const {
 		return type;
 	}
-
-	VectorBuffer &BufferMutable();
-	const VectorBuffer &Buffer() const;
+	inline VectorBuffer &BufferMutable() {
+		return *buffer;
+	}
+	inline const VectorBuffer &Buffer() const {
+		return *buffer;
+	}
 	inline const buffer_ptr<VectorBuffer> &GetBufferRef() const {
 		return buffer;
 	}
