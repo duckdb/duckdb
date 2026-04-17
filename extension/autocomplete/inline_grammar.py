@@ -1,5 +1,7 @@
 import os
 import argparse
+from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description='Inline the auto-complete PEG grammar files')
@@ -112,6 +114,171 @@ def filename_to_upper_camel(file):
     parts = name.split('_')  # ['column', 'name', 'keywords']
     return ''.join(p.capitalize() for p in parts)
 
+class PEGGrammarRule:
+    def __init__(self):
+        self.rule_name = None
+        self.tokens = []
+        self.parameters = {}
+    def has_tokens(self):
+        return self.tokens != []
+
+    def clear(self):
+        self.tokens = []
+        self.parameters = {}
+
+class ParseState(Enum):
+    RULE_NAME = auto()
+    RULE_SEPARATOR = auto()
+    RULE_DEFINITION = auto()
+
+class PEGTokenType(Enum):
+    LITERAL = auto()
+    REFERENCE = auto()
+    FUNCTION_CALL = auto()
+    REGEX = auto()
+    OPERATOR = auto()
+
+@dataclass
+class PEGToken:
+    text: str
+    type: PEGTokenType
+
+
+def character_is_newline(c):
+    return c == "\n" or c == "\r"
+
+def character_is_space(c):
+    return c == ' ' or c == '\t' or c == '\n' or c == '\v' or c == '\f' or c == '\r'
+
+def parse_peg_grammar(contents):
+    rules = {}
+
+    current_rule = PEGGrammarRule()
+    current_rule_name = None
+    c = 0
+    in_or_clause = False
+    bracket_count = 0
+    parse_state = ParseState.RULE_NAME
+
+    while c < len(contents):
+        if contents[c] == "#":
+            while c < len(contents) and not character_is_newline(contents[c]):
+                c = c + 1
+            continue
+        if parse_state == ParseState.RULE_DEFINITION and character_is_newline(contents[c]) and bracket_count == 0 and not in_or_clause and current_rule.has_tokens():
+            current_rule.rule_name = current_rule_name
+            rules[current_rule.rule_name] = current_rule
+            current_rule = PEGGrammarRule()
+            current_rule_name = None
+            parse_state = ParseState.RULE_NAME
+            c = c + 1
+            continue
+        if character_is_space(contents[c]):
+            c = c + 1
+            continue
+        if parse_state == ParseState.RULE_NAME:
+            start_pos = c
+            if contents[c] == "%":
+                c = c + 1
+            while contents[c] and contents[c].isalnum():
+                c = c + 1
+            if c == start_pos:
+                raise Exception(f"Failed to parse grammar - expected an alpha-numeric rule name (pos {start_pos})")
+            current_rule_name = contents[start_pos:c]
+            current_rule.clear()
+            parse_state = ParseState.RULE_SEPARATOR
+            continue
+        elif parse_state == ParseState.RULE_SEPARATOR:
+            if contents[c] == "(":
+                if current_rule.parameters:
+                    raise Exception(f"Failed to parse grammar - multiple parameters at position {c}")
+                # parameter
+                c = c + 1
+                parameter_start = c
+                while contents[c] and contents[c].isalnum():
+                    c = c + 1
+                if parameter_start == c:
+                   raise Exception(f"Failed to parse grammar - expected a parameter at position {c}")
+                param_name = contents[parameter_start:c]
+                current_rule.parameters[param_name] = len(current_rule.parameters)
+                if contents[c] != ")":
+                    raise Exception(f"Failed to parse grammar - expected closing bracket at position {c}")
+                c = c + 1
+            else:
+                if contents[c] != "<" or contents[c+1] != "-":
+                    raise Exception(f"Failed to parse grammar - expected a rule definition (<-) (pos {c})")
+                c = c + 2
+                parse_state = ParseState.RULE_DEFINITION
+        elif parse_state == ParseState.RULE_DEFINITION:
+            in_or_clause = False
+            if contents[c] == "'":
+                # literal
+                c += 1
+                literal_start = c
+                while c < len(contents) and contents[c] != "'":
+                    if contents[c] == '\\':
+                        c += 1
+                    c += 1
+                if c >= len(contents):
+                    raise Exception(f"Failed to parse grammar - did not find closing ' (pos {c})")
+                current_rule.tokens.append(PEGToken(contents[literal_start:c], PEGTokenType.LITERAL))
+                c += 1
+                if c < len(contents) and contents[c] == 'i':
+                    raise Exception(f"Failed to parse grammar - unexpected \"i\" found in grammar near rule {current_rule_name}")
+            elif c < len(contents) and contents[c].isalnum():
+                # rule reference or function call
+                rule_start = c
+                while c < len(contents) and contents[c].isalnum():
+                    c += 1
+                text = contents[rule_start:c]
+                if c < len(contents) and contents[c] == '(':
+                    c += 1
+                    bracket_count += 1
+                    current_rule.tokens.append(PEGToken(text, PEGTokenType.FUNCTION_CALL))
+                else:
+                    current_rule.tokens.append(PEGToken(text, PEGTokenType.REFERENCE))
+            elif contents[c] in ('[', '<'):
+                # regex
+                rule_start = c
+                final_char = ']' if contents[c] == '[' else '>'
+                while c < len(contents) and contents[c] != final_char:
+                    if contents[c] == '\\':
+                        c += 1
+                    if c < len(contents):
+                        c += 1
+                c += 1
+                current_rule.tokens.append(PEGToken(contents[rule_start:c], PEGTokenType.REGEX))
+            elif contents[c] in ('/', '?', '(', ')', '*', '+', '!'):
+                if contents[c] == '(':
+                    bracket_count += 1
+                elif contents[c] == ')':
+                    if bracket_count == 0:
+                        raise Exception(f"Failed to parse grammar - unclosed bracket at position {c} in rule {current_rule_name}")
+                    bracket_count -= 1
+                elif contents[c] == '/':
+                    in_or_clause = True
+                current_rule.tokens.append(PEGToken(contents[c], PEGTokenType.OPERATOR))
+                c += 1
+            else:
+                raise Exception(f"Unrecognized rule contents in rule {current_rule_name} (character {contents[c]!r})")
+
+    if parse_state == ParseState.RULE_SEPARATOR:
+        raise Exception(f"Failed to parse grammar - rule {current_rule_name} does not have a definition")
+    if parse_state == ParseState.RULE_DEFINITION:
+        if not current_rule.has_tokens():
+            raise Exception(f"Failed to parse grammar - rule {current_rule_name} is empty")
+        rules[current_rule.rule_name] = current_rule
+
+    print(f"Found {len(rules)} rules")
+    return rules
+
+def check_unused_rules(rules):
+    pass
+
+def verify_grammar(contents):
+    rules = parse_peg_grammar(contents)
+
+    check_unused_rules(rules)
 
 with open(os.path.join(statements_dir, "common.gram"), 'r') as f:
     contents += f.read() + "\n"
@@ -132,6 +299,8 @@ for file in os.listdir(statements_dir):
     if not file == "common.gram":
         with open(os.path.join(statements_dir, file), 'r') as f:
             contents += f.read() + "\n"
+
+verify_grammar(contents)
 
 if args.print:
     print(contents)
