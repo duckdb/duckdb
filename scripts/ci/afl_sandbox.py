@@ -18,7 +18,7 @@ def fail(message: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run a command in a write-restricted sandbox (macOS: sandbox-exec, Linux: bwrap)"
+        description="Run command with sandbox-exec on macOS; Linux relies on in-harness Landlock"
     )
     parser.add_argument(
         "--writable-dir",
@@ -112,27 +112,8 @@ def run_darwin(command: list[str], writable_dirs: list[Path]) -> int:
 
 
 def run_linux(command: list[str], writable_dirs: list[Path]) -> int:
-    if shutil.which("bwrap") is None:
-        fail("bwrap is required on Linux")
-
-    args = [
-        "bwrap",
-        "--die-with-parent",
-        "--new-session",
-        "--ro-bind",
-        "/",
-        "/",
-        "--proc",
-        "/proc",
-        "--dev",
-        "/dev",
-    ]
-    for path in writable_dirs:
-        path_str = str(path)
-        args.extend(["--bind", path_str, path_str])
-    args.extend(["--", *command])
-
-    proc = subprocess.run(args, check=False)
+    del writable_dirs
+    proc = subprocess.run(command, check=False)
     return proc.returncode
 
 

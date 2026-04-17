@@ -24,6 +24,7 @@ class DictConfig:
     input_dir: Path
     output_file: Path
     target: Path = DEFAULT_TARGET
+    target_args: tuple[str, ...] = ()
     afl_fuzz_cmd: str = DEFAULT_AFL_FUZZ_BIN
     fuzz_secs: int = DEFAULT_FUZZ_SECS
     min_token_len: int = DEFAULT_MIN_TOKEN_LEN
@@ -50,6 +51,13 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_TARGET,
         help=f"Fuzzer target binary (default: {DEFAULT_TARGET})",
+    )
+    parser.add_argument(
+        "--target-arg",
+        action="append",
+        dest="target_args",
+        default=[],
+        help="Argument to pass to the fuzzer target binary (repeatable)",
     )
     parser.add_argument(
         "--afl-fuzz",
@@ -153,6 +161,7 @@ def run(config: DictConfig) -> int:
             str(config.fuzz_secs),
             "--",
             str(config.target),
+            *config.target_args,
         ]
         proc = subprocess.run(cmd, text=True, capture_output=True, check=False, env=os.environ.copy())
         if proc.returncode != 0:
@@ -182,6 +191,7 @@ def main() -> int:
         input_dir=args.input_dir,
         output_file=args.output_file,
         target=args.target,
+        target_args=tuple(args.target_args),
         afl_fuzz_cmd=args.afl_fuzz,
         fuzz_secs=args.fuzz_secs,
         min_token_len=args.min_token_len,

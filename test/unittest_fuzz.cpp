@@ -1,4 +1,8 @@
 #include <stdint.h>
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
 #include <unistd.h>
@@ -9,6 +13,12 @@
 #include "test_helpers.hpp"
 
 namespace duckdb {
+
+#ifdef DUCKDB_FUZZER
+#if defined(__linux__)
+bool ApplyLinuxLandlockSandbox(const vector<string> &raw_writable_dirs);
+#endif
+#endif
 
 static bool IsEmptyOrComment(const string &line) {
 	auto trimmed = line;
@@ -110,6 +120,35 @@ static void ExecuteSQLBlocks(Connection &con, const string &script) {
 }
 
 #ifdef DUCKDB_FUZZER
+struct FuzzerSandboxConfig {
+	vector<string> writable_dirs;
+};
+
+static bool ParseFuzzerSandboxConfig(int argc, char *argv[], FuzzerSandboxConfig &config) {
+	for (int i = 1; i < argc; i++) {
+		string arg = argv[i];
+		if (arg == "--writable-dir") {
+			if (i + 1 >= argc) {
+				fprintf(stderr, "Error: --writable-dir requires a directory path\n");
+				return false;
+			}
+			config.writable_dirs.emplace_back(argv[++i]);
+		} else if (StringUtil::StartsWith(arg, "--writable-dir=")) {
+			config.writable_dirs.push_back(arg.substr(strlen("--writable-dir=")));
+		}
+	}
+#if defined(__linux__)
+	if (config.writable_dirs.empty()) {
+		fprintf(stderr, "Error: at least one --writable-dir is required for Linux fuzzer sandboxing\n");
+		return false;
+	}
+#endif
+	return true;
+}
+
+#if defined(__linux__)
+#endif
+
 static string BuildFuzzScript(const uint8_t *data, size_t size) {
 	constexpr size_t MAX_SCRIPT_SIZE = 1 << 20;
 	if (size > MAX_SCRIPT_SIZE) {
@@ -171,8 +210,17 @@ static int RunAFLFuzzerLoopInternal() {
 
 namespace duckdb {
 
-int RunAFLFuzzerLoop() {
+int RunAFLFuzzerLoop(int argc, char *argv[]) {
 #ifdef DUCKDB_FUZZER
+	FuzzerSandboxConfig sandbox_config;
+	if (!ParseFuzzerSandboxConfig(argc, argv, sandbox_config)) {
+		return 1;
+	}
+#if defined(__linux__)
+	if (!ApplyLinuxLandlockSandbox(sandbox_config.writable_dirs)) {
+		return 1;
+	}
+#endif
 	return RunAFLFuzzerLoopInternal();
 #endif
 	return 0;

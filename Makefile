@@ -433,7 +433,6 @@ fuzzer_tools:
 		echo "Error: fuzzer_tools is Linux-only"; \
 		exit 1; \
 	fi
-	$(call ensure_apt_commands,bwrap,bubblewrap)
 	sudo apt-get update -y -qq
 	sudo apt-get install -y -qq build-essential python3-dev automake cmake git flex bison libglib2.0-dev libpixman-1-dev python3-setuptools cargo libgtk-3-dev
 	sudo apt-get install -y -qq lld-18 llvm-18 llvm-18-dev clang-18 || sudo apt-get install -y -qq lld llvm llvm-dev clang
@@ -456,7 +455,7 @@ fuzzer_smoke:
 	printf "statement ok\nSELECT 42;\n\nquery I\nSELECT 7;\n----\n7\n" > build/fuzzer/smoke/in/seed1.test && \
 	OUT_DIR=build/fuzzer/smoke/out-$$(date +%s) && \
 	AFL_SKIP_CPUFREQ=1 python3 ./scripts/ci/afl_sandbox.py --writable-dir "$$OUT_DIR" -- \
-	afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest
+	afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest --writable-dir "$$OUT_DIR"
 
 .PHONY: fuzz_sql_corpus fuzz_sql_dict
 fuzz_sql_corpus:
@@ -464,6 +463,8 @@ fuzz_sql_corpus:
 	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && \
 	python3 scripts/ci/afl_corpus.py \
 	--target ./build/fuzzer/test/unittest \
+	--target-arg --writable-dir \
+	--target-arg "$${CORPUS_SQL_CMIN}" \
 	--afl-cmin "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$${CORPUS_SQL_CMIN}\" -- afl-cmin -e -t 1000" \
 	--output-dir "$${CORPUS_SQL_CMIN}"
 
@@ -474,6 +475,8 @@ fuzz_sql_dict:
 	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" AFL_SKIP_CPUFREQ=1 \
 	python3 scripts/ci/afl_dict.py \
 	--target ./build/fuzzer/test/unittest \
+	--target-arg --writable-dir \
+	--target-arg "$$(dirname "$${CORPUS_SQL_DICT}")" \
 	--input-dir "$${CORPUS_SQL_CMIN}" \
 	--output-file "$${CORPUS_SQL_DICT}" \
 	--fuzz-secs "${FUZZ_SQL_DICT_SECS}" \

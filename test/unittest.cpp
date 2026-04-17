@@ -12,7 +12,7 @@ using namespace duckdb;
 
 #ifdef DUCKDB_FUZZER
 namespace duckdb {
-int RunAFLFuzzerLoop();
+int RunAFLFuzzerLoop(int argc, char *argv[]);
 }
 #endif
 
@@ -88,7 +88,7 @@ int main(int argc_in, char *argv[]) {
 	}
 
 #ifdef DUCKDB_FUZZER
-	return duckdb::RunAFLFuzzerLoop();
+	return duckdb::RunAFLFuzzerLoop(argc_in, argv);
 #else
 	auto &test_config = TestConfiguration::Get();
 

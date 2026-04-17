@@ -50,6 +50,7 @@ endif()
 set(UNITTEST_SOURCES unittest.cpp)
 if(DUCKDB_FUZZER)
   list(APPEND UNITTEST_SOURCES unittest_fuzz.cpp)
+  list(APPEND UNITTEST_SOURCES unittest_landlock.cpp)
 endif()
 
 add_executable(unittest ${UNITTEST_SOURCES} ${ALL_OBJECT_FILES})

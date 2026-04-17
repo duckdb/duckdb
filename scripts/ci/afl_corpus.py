@@ -42,6 +42,7 @@ class CorpusConfig:
     glob_pattern: str = DEFAULT_GLOB_PATTERN
     jobs: int = DEFAULT_JOBS
     target: Path = DEFAULT_TARGET
+    target_args: tuple[str, ...] = ()
     afl_cmin_cmd: str = DEFAULT_AFL_CMIN_BIN
     group_depth: int = DEFAULT_GROUP_DEPTH
 
@@ -71,6 +72,13 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_TARGET,
         help=f"Fuzzer target binary (default: {DEFAULT_TARGET})",
+    )
+    parser.add_argument(
+        "--target-arg",
+        action="append",
+        dest="target_args",
+        default=[],
+        help="Argument to pass to the fuzzer target binary (repeatable)",
     )
     parser.add_argument(
         "--afl-cmin",
@@ -130,7 +138,7 @@ def normalize_afl_cmin_cmd(afl_cmin: str) -> list[str]:
     return cmd
 
 
-def run_afl_cmin(task: GroupTask, afl_cmin_cmd: list[str], target: Path) -> tuple[str, int, str, str]:
+def run_afl_cmin(task: GroupTask, afl_cmin_cmd: list[str], config: CorpusConfig) -> tuple[str, int, str, str]:
     cmd = [
         *afl_cmin_cmd,
         "-i",
@@ -138,7 +146,8 @@ def run_afl_cmin(task: GroupTask, afl_cmin_cmd: list[str], target: Path) -> tupl
         "-o",
         str(task.min_dir),
         "--",
-        str(target),
+        str(config.target),
+        *config.target_args,
     ]
     proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
     return task.name, proc.returncode, proc.stdout, proc.stderr
@@ -224,7 +233,7 @@ def run(config: CorpusConfig) -> int:
 
         failed: list[str] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=config.jobs) as executor:
-            futures = [executor.submit(run_afl_cmin, task, afl_cmin_cmd, config.target) for task in tasks]
+            futures = [executor.submit(run_afl_cmin, task, afl_cmin_cmd, config) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 group, returncode, stdout, stderr = future.result()
                 if returncode != 0:
@@ -253,6 +262,7 @@ def main() -> int:
         glob_pattern=args.glob,
         jobs=args.jobs,
         target=args.target,
+        target_args=tuple(args.target_args),
         afl_cmin_cmd=args.afl_cmin,
         group_depth=args.group_depth,
     )

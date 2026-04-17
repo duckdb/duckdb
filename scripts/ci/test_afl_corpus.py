@@ -34,14 +34,16 @@ class FuzzCorpusTest(unittest.TestCase):
                 self.assertTrue(text)
                 self.assertTrue(capture_output)
                 self.assertFalse(check)
-                self.assertGreaterEqual(len(cmd), 7)
+                self.assertGreaterEqual(len(cmd), 9)
 
                 input_dir = Path(cmd[cmd.index("-i") + 1])
                 output_group_dir = Path(cmd[cmd.index("-o") + 1])
-                target = Path(cmd[-1])
+                target = Path(cmd[cmd.index("--") + 1])
+                target_arg = cmd[-1]
 
                 self.assertEqual(cmd[0], "fake-afl-cmin")
                 self.assertIn("-e", cmd)
+                self.assertEqual(target_arg, "--writable-dir=/tmp/fuzz_out")
                 self.assertEqual(target, fake_target)
 
                 output_group_dir.mkdir(parents=True, exist_ok=True)
@@ -60,6 +62,7 @@ class FuzzCorpusTest(unittest.TestCase):
                 glob_pattern=test_glob,
                 jobs=2,
                 target=fake_target,
+                target_args=("--writable-dir=/tmp/fuzz_out",),
                 afl_cmin_cmd="fake-afl-cmin -e",
             )
             expected_groups = {corpus.group_name_for(path, config) for path in test_files}
