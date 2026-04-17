@@ -35,6 +35,14 @@ VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacit
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
+VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, VectorListBuffer &parent)
+    : StandardVectorBuffer(std::move(allocated_data_p), capacity), size(parent.size) {
+	buffer_type = VectorBufferType::LIST_BUFFER;
+	auto &parent_child = parent.GetChildMutable();
+	child = std::move(parent_child);
+	parent_child = make_uniq<Vector>(Vector::Ref(*child));
+}
+
 void VectorListBuffer::Reserve(idx_t to_reserve) {
 	idx_t child_capacity = GetChildCapacity();
 	if (to_reserve > child_capacity) {
@@ -162,6 +170,10 @@ void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
+	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
+}
+
+buffer_ptr<VectorBuffer> VectorListBuffer::CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) {
 	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
 }
 
