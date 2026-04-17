@@ -298,8 +298,10 @@ jobs:
           find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
           tree build/release/repository
 
+      # Disable downloading release because extension_entries.hpp check fails
+      # in CI because some extensions are not available.
       - name: Download linux release artifact
-        if: ${{ !inputs.skip_tests }}
+        if: ${{ false && !inputs.skip_tests }}
         id: linux_release_artifact
         continue-on-error: true
         uses: actions/download-artifact@v5
@@ -308,7 +310,7 @@ jobs:
           path: build
 
       - name: Extract linux release artifact
-        if: ${{ !inputs.skip_tests && steps.linux_release_artifact.outcome == 'success' }}
+        if: ${{ steps.linux_release_artifact.outcome == 'success' }}
         run: |
           rm -rf build/release
           tar -xzf build/release-artifact.tar.gz -C build
@@ -318,19 +320,18 @@ jobs:
         run: python3 scripts/ci/retry.py -- make format_tools
 
       - name: Check if extension_entries.hpp is up to date
-        id: check_extension_entries
         if: ${{ !inputs.skip_tests }}
+        id: check_extension_entries
         env:
           EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
-        run: make check-extension-entries
-
-      - name: Verify extension entries
-        if: ${{ always() && steps.check_extension_entries.outcome == 'failure' }}
         run: |
+          make check-extension-entries
+
           git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
           if [ -s extension_entries.hpp.diff ]; then
             cat extension_entries.hpp.diff
             echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"
+            exit 1
           else
             echo "No differences found"
           fi
