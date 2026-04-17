@@ -1232,9 +1232,6 @@ jobs:
       run: python3 scripts/ci/retry.py -- make fuzzer_tools
 
     - name: Build fuzzer
-      env:
-        AFL_CC: afl-clang-fast
-        AFL_CXX: afl-clang-fast++
       run: make fuzzer
 
     - name: Fuzzer smoke

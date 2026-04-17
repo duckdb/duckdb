@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+if [[ -n "${CI:-}" ]]; then
+	printf 'AFL_CC=%q\nAFL_CXX=%q\nAFL_LTO_CMAKE_VAR=%q\n' "afl-clang-fast" "afl-clang-fast++" ""
+	exit 0
+fi
+
 if [[ -n "${AFL_CC:-}" && -n "${AFL_CXX:-}" ]]; then
 	AFL_LTO_CMAKE_VAR="${AFL_LTO_CMAKE_VAR:-}"
 	if [[ "${AFL_CC}" == "afl-clang-lto" && "${AFL_CXX}" == "afl-clang-lto++" && -z "${AFL_LTO_CMAKE_VAR}" ]]; then
