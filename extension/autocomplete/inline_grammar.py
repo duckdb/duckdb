@@ -24,6 +24,8 @@ target_file = os.path.join(autocomplete_dir, 'include', 'inlined_grammar.hpp')
 
 contents = ""
 
+IMPLICIT_RULES = {'%whitespace'}
+
 # Maps filenames to string categories
 FILENAME_TO_CATEGORY = {
     "reserved_keyword.list": "RESERVED_KEYWORD",
@@ -125,6 +127,10 @@ class PEGGrammarRule:
     def clear(self):
         self.tokens = []
         self.parameters = {}
+
+    def references(self):
+        return [t.text for t in self.tokens
+                if t.type in (PEGTokenType.REFERENCE, PEGTokenType.FUNCTION_CALL)]
 
 class ParseState(Enum):
     RULE_NAME = auto()
@@ -285,18 +291,29 @@ def parse_peg_grammar(contents):
 
     return rules
 
-# def check_unused_rules(rules):
-#     pass
-#
-# def verify_grammar(contents):
-#     rules = parse_peg_grammar(contents)
-#
-#     check_unused_rules(rules)
+def check_unused_rules(all_rules):
+    reachable = set()
+    stack = ['Statement']
+
+    while stack:
+        rule_name = stack.pop()
+        if rule_name in reachable or rule_name not in all_rules:
+            continue
+        reachable.add(rule_name)
+        stack.extend(all_rules[rule_name].references())
+
+    unused = sorted(set(all_rules.keys()) - reachable - IMPLICIT_RULES)
+    if not unused:
+        print("No unused rules found")
+    for rule_name in unused:
+        print(f"Warning: unused rule '{rule_name}'")
+
+rules = {}
 
 with open(os.path.join(statements_dir, "common.gram"), 'r') as f:
     file_content = f.read()
     try:
-        parse_peg_grammar(file_content)
+        rules.update(parse_peg_grammar(file_content))
     except Exception as e:
         raise Exception(f"common.gram: {e}") from None
     contents += file_content + "\n"
@@ -319,12 +336,12 @@ for file in os.listdir(statements_dir):
         with open(os.path.join(statements_dir, file), 'r') as f:
             file_content = f.read()
             try:
-                parse_peg_grammar(file_content)
+                rules.update(parse_peg_grammar(file_content))
             except Exception as e:
                 raise Exception(f"{file}: {e}") from None
             contents += file_content + "\n"
 
-print()
+check_unused_rules(rules)
 
 if args.print:
     print(contents)
