@@ -198,8 +198,6 @@ private:
 	DecorrelationState &GetDecorrelationState(LogicalOperator &op);
 	Binder &binder;
 	column_binding_map_t<idx_t> correlated_map;
-	column_binding_map_t<ColumnBinding> equivalent_bindings;
-	column_binding_map_t<idx_t> canonical_correlated_map;
 	column_binding_map_t<idx_t> replacement_map;
 	const CorrelatedColumns &correlated_columns;
 	vector<LogicalType> delim_types;
@@ -223,7 +221,6 @@ private:
 	                             const CorrelatedLayout &layout) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
-	ColumnBinding GetCanonicalBinding(ColumnBinding binding) const;
 	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
 	                             const CorrelatedColumns &correlated_columns);
 	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,

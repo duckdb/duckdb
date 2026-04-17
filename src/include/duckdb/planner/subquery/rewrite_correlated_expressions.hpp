@@ -18,19 +18,17 @@ namespace duckdb {
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
 	static void Rewrite(LogicalOperator &op, vector<ColumnBinding> correlated_bindings,
-	                    column_binding_map_t<idx_t> &correlated_map,
-	                    optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings = nullptr);
+	                    column_binding_map_t<idx_t> &correlated_map);
 
 private:
-	RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings, column_binding_map_t<idx_t> &correlated_map,
-	                             optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings = nullptr);
+	RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings,
+	                             column_binding_map_t<idx_t> &correlated_map);
 	void VisitOperator(LogicalOperator &op) override;
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 	vector<ColumnBinding> correlated_bindings;
 	column_binding_map_t<idx_t> &correlated_map;
-	optional_ptr<column_binding_map_t<ColumnBinding>> equivalent_bindings;
 };
 
 //! Helper class that rewrites COUNT aggregates into a CASE expression turning NULL into 0 after a LEFT OUTER JOIN
