@@ -143,12 +143,28 @@ class PEGToken:
     text: str
     type: PEGTokenType
 
+@dataclass
+class ParseLocation:
+    line: int
+    col: int
+    line_text: str
+    def raise_error(self, message):
+        pointer = ' ' * (self.col - 1) + '^'
+        raise Exception(f"{self.line}:{self.col}: {message}\n  {self.line_text}\n  {pointer}")
+
 
 def character_is_newline(c):
     return c == "\n" or c == "\r"
 
 def character_is_space(c):
     return c == ' ' or c == '\t' or c == '\n' or c == '\v' or c == '\f' or c == '\r'
+
+def get_parse_location(contents, pos):
+    lines = contents[:pos].split('\n')
+    line_num = len(lines)
+    col = len(lines[-1]) + 1
+    line_text = contents.split('\n')[line_num - 1]
+    return ParseLocation(line=line_num, col=col, line_text=line_text)
 
 def parse_peg_grammar(contents):
     rules = {}
@@ -180,10 +196,10 @@ def parse_peg_grammar(contents):
             start_pos = c
             if contents[c] == "%":
                 c = c + 1
-            while contents[c] and contents[c].isalnum():
+            while c < len(contents) and contents[c].isalnum():
                 c = c + 1
             if c == start_pos:
-                raise Exception(f"Failed to parse grammar - expected an alpha-numeric rule name (pos {start_pos})")
+                get_parse_location(contents, c).raise_error("Expected an alpha-numeric rule name")
             current_rule_name = contents[start_pos:c]
             current_rule.clear()
             parse_state = ParseState.RULE_SEPARATOR
@@ -191,22 +207,22 @@ def parse_peg_grammar(contents):
         elif parse_state == ParseState.RULE_SEPARATOR:
             if contents[c] == "(":
                 if current_rule.parameters:
-                    raise Exception(f"Failed to parse grammar - multiple parameters at position {c}")
+                    get_parse_location(contents, c).raise_error("Multiple parameters")
                 # parameter
                 c = c + 1
                 parameter_start = c
                 while contents[c] and contents[c].isalnum():
                     c = c + 1
                 if parameter_start == c:
-                   raise Exception(f"Failed to parse grammar - expected a parameter at position {c}")
+                    get_parse_location(contents, c).raise_error("Expected a parameter")
                 param_name = contents[parameter_start:c]
                 current_rule.parameters[param_name] = len(current_rule.parameters)
                 if contents[c] != ")":
-                    raise Exception(f"Failed to parse grammar - expected closing bracket at position {c}")
+                    get_parse_location(contents, c).raise_error("Expected a closing bracket")
                 c = c + 1
             else:
                 if contents[c] != "<" or contents[c+1] != "-":
-                    raise Exception(f"Failed to parse grammar - expected a rule definition (<-) (pos {c})")
+                    get_parse_location(contents, c).raise_error("Expected a rule definition (<-)")
                 c = c + 2
                 parse_state = ParseState.RULE_DEFINITION
         elif parse_state == ParseState.RULE_DEFINITION:
@@ -220,11 +236,11 @@ def parse_peg_grammar(contents):
                         c += 1
                     c += 1
                 if c >= len(contents):
-                    raise Exception(f"Failed to parse grammar - did not find closing ' (pos {c})")
+                    get_parse_location(contents, c).raise_error("Did not find closing '")
                 current_rule.tokens.append(PEGToken(contents[literal_start:c], PEGTokenType.LITERAL))
                 c += 1
                 if c < len(contents) and contents[c] == 'i':
-                    raise Exception(f"Failed to parse grammar - unexpected \"i\" found in grammar near rule {current_rule_name}")
+                    get_parse_location(contents, c).raise_error(f"Unexpected \"i\" found in grammar near rule {current_rule_name}")
             elif c < len(contents) and contents[c].isalnum():
                 # rule reference or function call
                 rule_start = c
@@ -253,35 +269,41 @@ def parse_peg_grammar(contents):
                     bracket_count += 1
                 elif contents[c] == ')':
                     if bracket_count == 0:
-                        raise Exception(f"Failed to parse grammar - unclosed bracket at position {c} in rule {current_rule_name}")
+                        get_parse_location(contents, c).raise_error(f"Unclosed bracket in rule {current_rule_name}")
                     bracket_count -= 1
                 elif contents[c] == '/':
                     in_or_clause = True
                 current_rule.tokens.append(PEGToken(contents[c], PEGTokenType.OPERATOR))
                 c += 1
             else:
-                raise Exception(f"Unrecognized rule contents in rule {current_rule_name} (character {contents[c]!r})")
+                get_parse_location(contents, c).raise_error(f"Unrecognized rule contents in {current_rule_name}")
 
     if parse_state == ParseState.RULE_SEPARATOR:
-        raise Exception(f"Failed to parse grammar - rule {current_rule_name} does not have a definition")
+        get_parse_location(contents, c).raise_error(f"Rule {current_rule_name} does not have a definition")
     if parse_state == ParseState.RULE_DEFINITION:
         if not current_rule.has_tokens():
-            raise Exception(f"Failed to parse grammar - rule {current_rule_name} is empty")
-        rules[current_rule.rule_name] = current_rule
+            get_parse_location(contents, c).raise_error(f"Rule {current_rule_name} is empty")
+        current_rule.rule_name = current_rule_name
+        rules[current_rule_name] = current_rule
 
-    print(f"Found {len(rules)} rules")
     return rules
 
-def check_unused_rules(rules):
-    pass
-
-def verify_grammar(contents):
-    rules = parse_peg_grammar(contents)
-
-    check_unused_rules(rules)
+# def check_unused_rules(rules):
+#     pass
+#
+# def verify_grammar(contents):
+#     rules = parse_peg_grammar(contents)
+#
+#     check_unused_rules(rules)
 
 with open(os.path.join(statements_dir, "common.gram"), 'r') as f:
-    contents += f.read() + "\n"
+    file_content = f.read()
+    try:
+        parse_peg_grammar(file_content)
+    except Exception as e:
+        raise Exception(f"common.gram: {e}") from None
+    contents += file_content + "\n"
+
 
 for file in os.listdir(keywords_dir):
     if not file.endswith('.list'):
@@ -298,9 +320,14 @@ for file in os.listdir(statements_dir):
         raise Exception(f"File {file} does not end with .gram")
     if not file == "common.gram":
         with open(os.path.join(statements_dir, file), 'r') as f:
-            contents += f.read() + "\n"
+            file_content = f.read()
+            try:
+                parse_peg_grammar(file_content)
+            except Exception as e:
+                raise Exception(f"{file}: {e}") from None
+            contents += file_content + "\n"
 
-verify_grammar(contents)
+print()
 
 if args.print:
     print(contents)
