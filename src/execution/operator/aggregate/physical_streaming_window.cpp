@@ -166,7 +166,8 @@ public:
 		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
 		             idx_t delayed_capacity) {
 			if (!curr_chunk.ColumnCount()) {
-				curr_chunk.Initialize(context.client, {result.GetType()}, delayed_capacity);
+				curr_chunk.Initialize(context.client, {result.GetType()},
+				                      MaxValue<idx_t>(STANDARD_VECTOR_SIZE, delayed_capacity));
 			}
 
 			if (offset >= 0) {
