@@ -29,7 +29,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
-                                                             optional_ptr<ParseResult> terminator_pr) {
+                                                             optional_idx terminator_offset) {
 	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
 
 	if (!transformer.named_parameter_map.empty()) {
@@ -44,9 +44,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	if (stmt_pr.offset.IsValid()) {
 		stmt->stmt_location = stmt_pr.offset.GetIndex();
 
-		idx_t end_index = (terminator_pr && terminator_pr->offset.IsValid())
-		                      ? terminator_pr->offset.GetIndex()
-		                      : (tokens.back().offset + tokens.back().length);
+		idx_t end_index =
+		    terminator_offset.IsValid() ? terminator_offset.GetIndex() : (tokens.back().offset + tokens.back().length);
 
 		stmt->stmt_length = end_index - stmt->stmt_location;
 	}
@@ -127,18 +126,18 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 				auto separator_children = separators.GetChildren();
 				auto &separator_terminator = separator_children[0].get();
 				result.push_back(
-				    ExtractAndTransformStatement(transformer, tokens, *current_stmt, separator_terminator));
+				    ExtractAndTransformStatement(transformer, tokens, *current_stmt, separator_terminator.offset));
 			}
 			current_stmt = next_stmt;
 		}
 	}
 	if (current_stmt) {
-		optional_ptr<ParseResult> trailing_terminator = nullptr;
+		optional_idx trailing_terminator;
 		auto &trailing_repeat = prog.Child<OptionalParseResult>(2);
 		if (trailing_repeat.HasResult()) {
 			auto trailing_children = trailing_repeat.GetResult().Cast<RepeatParseResult>().GetChildren();
 			if (!trailing_children.empty()) {
-				trailing_terminator = trailing_children[0].get();
+				trailing_terminator = trailing_children[0].get().offset;
 			}
 		}
 		result.push_back(ExtractAndTransformStatement(transformer, tokens, *current_stmt, trailing_terminator));
