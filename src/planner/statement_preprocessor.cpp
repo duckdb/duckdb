@@ -74,13 +74,15 @@ StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(c
 PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
                                                         CurrentTransactionState full_transaction_state,
                                                         bool can_wrap = true, const string &original_query = "") {
-	if (body_statements.size() <= 1) {
+	bool is_pivot_statement = original_query.rfind("PIVOT", 0) == 0;
+
+	if (body_statements.size() <= 1 || is_pivot_statement) {
 		return PreprocessingTransactionHandling::NONE;
 	}
 	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION && can_wrap) {
 		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
 	}
-	if (full_transaction_state == IN_ACTIVE_TRANSACTION && original_query.rfind("PIVOT", 0) != 0) {
+	if (full_transaction_state == IN_ACTIVE_TRANSACTION) {
 		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
 	}
 	return PreprocessingTransactionHandling::NONE;
