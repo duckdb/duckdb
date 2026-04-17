@@ -206,12 +206,9 @@ def parse_peg_grammar(contents):
             continue
         elif parse_state == ParseState.RULE_SEPARATOR:
             if contents[c] == "(":
-                if current_rule.parameters:
-                    get_parse_location(contents, c).raise_error("Multiple parameters")
-                # parameter
                 c = c + 1
                 parameter_start = c
-                while contents[c] and contents[c].isalnum():
+                while c < len(contents) and contents[c].isalnum():
                     c = c + 1
                 if parameter_start == c:
                     get_parse_location(contents, c).raise_error("Expected a parameter")
