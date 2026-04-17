@@ -1235,7 +1235,38 @@ jobs:
       env:
         AFL_CC: afl-clang-fast
         AFL_CXX: afl-clang-fast++
-      run: make fuzzer
+      run: |
+        cat >/tmp/afl-clang-fast-wrap <<'EOF'
+        #!/usr/bin/env bash
+        {
+          echo "argc=$#"
+          printf 'cmd:'
+          printf ' %q' "$0" "$@"
+          echo
+        } >>/tmp/afl-argv.log
+        exec /usr/local/bin/afl-clang-fast "$@"
+        EOF
+        chmod +x /tmp/afl-clang-fast-wrap
+
+        cat >/tmp/afl-clang-fastpp-wrap <<'EOF'
+        #!/usr/bin/env bash
+        {
+          echo "argc=$#"
+          printf 'cmd:'
+          printf ' %q' "$0" "$@"
+          echo
+        } >>/tmp/afl-argv.log
+        exec /usr/local/bin/afl-clang-fast++ "$@"
+        EOF
+        chmod +x /tmp/afl-clang-fastpp-wrap
+
+        AFL_CC=/tmp/afl-clang-fast-wrap AFL_CXX=/tmp/afl-clang-fastpp-wrap make fuzzer || {
+          echo "---- afl argv log ----"
+          tail -n 200 /tmp/afl-argv.log
+          exit 1
+        }
+
+        make fuzzer
 
     - name: Fuzzer smoke
       run: make fuzzer_smoke
