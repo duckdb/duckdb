@@ -527,6 +527,30 @@ TEST_CASE("Test prepared statements that require rebind", "[api]") {
 	REQUIRE_NO_FAIL(prepared->Execute());
 }
 
+TEST_CASE("Prepared statements rebind after snapshot-pruned statistics rewrite", "[api]") {
+	DuckDB db(nullptr);
+	Connection prepare_con(db);
+	Connection writer_con(db);
+	Connection fresh_con(db);
+
+	REQUIRE_NO_FAIL(writer_con.Query("CREATE TABLE t_rebind_stats(id BIGINT, worker_id BIGINT, v BIGINT)"));
+	REQUIRE_NO_FAIL(
+	    writer_con.Query("INSERT INTO t_rebind_stats SELECT i, 14, 1 FROM range(1, 251) tbl(i)"));
+
+	auto prepared =
+	    prepare_con.Prepare("SELECT CAST(COUNT(*) AS BIGINT) FROM t_rebind_stats WHERE worker_id = 14");
+	REQUIRE(prepared->success);
+
+	REQUIRE_NO_FAIL(
+	    writer_con.Query("INSERT INTO t_rebind_stats SELECT i, 15, 1 FROM range(251, 501) tbl(i)"));
+
+	auto prepared_result = prepared->Execute();
+	auto fresh_result =
+	    fresh_con.Query("SELECT CAST(COUNT(*) AS BIGINT) FROM t_rebind_stats WHERE worker_id = 14");
+	REQUIRE(CHECK_COLUMN(prepared_result, 0, {250}));
+	REQUIRE(CHECK_COLUMN(fresh_result, 0, {250}));
+}
+
 class TestExtensionState : public ClientContextState {
 public:
 	bool CanRequestRebind() override {

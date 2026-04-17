@@ -474,6 +474,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		logical_plan->Verify(*this);
 #endif
 	}
+	result->properties.always_require_rebind = logical_planner.binder->GetStatementProperties().always_require_rebind;
 
 	// Convert the logical query plan into a physical query plan.
 	profiler.StartPhase(MetricType::PHYSICAL_PLANNER);
