@@ -66,17 +66,17 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *) n;
 				}
-/* DROP FUNCTION with optional parameter-type list for overload selection.
- * Follows PG's approach: FUNCTION is NOT in drop_type_any_name, so it gets
+/* DROP FUNCTION/PROCEDURE with optional parameter-type list for overload selection.
+ * Follows PG's approach: FUNCTION/PROCEDURE is NOT in drop_type_any_name, so it gets
  * its own dedicated productions here (no shift/reduce conflict with the
  * generic DropStmt path). Supports:
- *   DROP FUNCTION name              — drops all overloads
- *   DROP FUNCTION name(type, ...)   — drops specific overload
- *   DROP FUNCTION name()            — drops zero-arg overload  */
-			| DROP FUNCTION any_name '(' type_name_list ')' opt_drop_behavior
+ *   DROP FUNCTION|PROCEDURE name              — drops all overloads
+ *   DROP FUNCTION|PROCEDURE name(type, ...)   — drops specific overload
+ *   DROP FUNCTION|PROCEDURE name()            — drops zero-arg overload  */
+			| DROP drop_func_or_proc any_name '(' type_name_list ')' opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_FUNCTION;
+					n->removeType = $2;
 					n->missing_ok = false;
 					n->objects = list_make1($3);
 					n->func_args = $5;
@@ -85,10 +85,10 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *)n;
 				}
-			| DROP FUNCTION IF_P EXISTS any_name '(' type_name_list ')' opt_drop_behavior
+			| DROP drop_func_or_proc IF_P EXISTS any_name '(' type_name_list ')' opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_FUNCTION;
+					n->removeType = $2;
 					n->missing_ok = true;
 					n->objects = list_make1($5);
 					n->func_args = $7;
@@ -97,10 +97,10 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *)n;
 				}
-			| DROP FUNCTION any_name '(' ')' opt_drop_behavior
+			| DROP drop_func_or_proc any_name '(' ')' opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_FUNCTION;
+					n->removeType = $2;
 					n->missing_ok = false;
 					n->objects = list_make1($3);
 					n->func_args = NIL;
@@ -109,10 +109,10 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *)n;
 				}
-			| DROP FUNCTION IF_P EXISTS any_name '(' ')' opt_drop_behavior
+			| DROP drop_func_or_proc IF_P EXISTS any_name '(' ')' opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_FUNCTION;
+					n->removeType = $2;
 					n->missing_ok = true;
 					n->objects = list_make1($5);
 					n->func_args = NIL;
@@ -121,10 +121,10 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *)n;
 				}
-			| DROP FUNCTION any_name_list opt_drop_behavior
+			| DROP drop_func_or_proc any_name_list opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_FUNCTION;
+					n->removeType = $2;
 					n->missing_ok = false;
 					n->objects = $3;
 					n->func_args = NIL;
@@ -133,10 +133,10 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *)n;
 				}
-			| DROP FUNCTION IF_P EXISTS any_name_list opt_drop_behavior
+			| DROP drop_func_or_proc IF_P EXISTS any_name_list opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_FUNCTION;
+					n->removeType = $2;
 					n->missing_ok = true;
 					n->objects = $5;
 					n->func_args = NIL;
@@ -200,4 +200,8 @@ drop_type_name_on_any_name:
 type_name_list:
 			Typename								{ $$ = list_make1($1); }
 			| type_name_list ',' Typename			{ $$ = lappend($1, $3); }
+			;
+drop_func_or_proc:
+			FUNCTION								{ $$ = PG_OBJECT_FUNCTION; }
+			| PROCEDURE								{ $$ = PG_OBJECT_PROCEDURE; }
 			;

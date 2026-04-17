@@ -15,6 +15,7 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -366,6 +367,15 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 		// bind it to verify the function was defined correctly
 		ErrorData error;
+		auto types_compatible = [&](const LogicalType &actual, const LogicalType &expected) -> bool {
+			if (expected.id() == LogicalTypeId::ANY) {
+				return true;
+			}
+			if (actual == expected) {
+				return true;
+			}
+			return CastFunctionSet::ImplicitCastCost(context, actual, expected) >= 0;
+		};
 		if (info.type == CatalogType::MACRO_ENTRY) {
 			BoundSelectNode sel_node;
 			BoundGroupInformation group_info;
@@ -381,6 +391,25 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				error = binder.Bind(expression, 0, false);
 				if (error.HasError()) {
 					error.Throw();
+				}
+				// Validate declared return type for scalar RETURN expr
+				auto &ret_types = function->return_types;
+				if (!ret_types.empty() && expression->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+					auto resolved = ret_types[0];
+					BindLogicalType(resolved);
+					auto &actual = expression->Cast<BoundExpression>().expr->return_type;
+					// PG order: check type compatibility first, then column count
+					if (!types_compatible(actual, resolved)) {
+						throw BinderException("return type mismatch in function declared to return %s\n"
+						                      "DETAIL: Actual return type is %s.",
+						                      StringUtil::Lower(resolved.ToString()),
+						                      StringUtil::Lower(actual.ToString()));
+					}
+					if (ret_types.size() != 1) {
+						throw BinderException("return type mismatch in function declared to return %s\n"
+						                      "DETAIL: Final statement must return exactly one column.",
+						                      StringUtil::Lower(resolved.ToString()));
+					}
 				}
 			} catch (const std::exception &ex) {
 				error = ErrorData(ex);
@@ -399,7 +428,54 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				    ExpressionBinder::QualifyColumnNames(*dummy_binder, child);
 			    });
 			try {
-				dummy_binder->Bind(*query_node);
+				auto bound = dummy_binder->Bind(*query_node);
+
+				// Validate declared return types against actual query output.
+				auto &declared = function->return_types;
+				if (!declared.empty() && bound.types.size() > 0) {
+					// is_scalar: RETURNS <type> (single scalar return, stored as TABLE_MACRO)
+					bool is_scalar = declared.size() == 1 && info.type == CatalogType::TABLE_MACRO_ENTRY;
+					bool is_table = declared.size() > 1 || (declared.size() == 1 && !is_scalar);
+
+					// Resolve unbound types (grammar produces UNBOUND type ids)
+					for (auto &dt : declared) {
+						dummy_binder->BindLogicalType(dt);
+					}
+
+					// PG checks per-column types first (up to min columns),
+					// then reports column count mismatch.
+					const auto check_count = MinValue(bound.types.size(), declared.size());
+					if (is_scalar) {
+						if (check_count >= 1 && !types_compatible(bound.types[0], declared[0])) {
+							throw BinderException("return type mismatch in function declared to return %s\n"
+							                      "DETAIL: Actual return type is %s.",
+							                      StringUtil::Lower(declared[0].ToString()),
+							                      StringUtil::Lower(bound.types[0].ToString()));
+						}
+						if (bound.types.size() != 1) {
+							throw BinderException("return type mismatch in function declared to return %s\n"
+							                      "DETAIL: Final statement must return exactly one column.",
+							                      StringUtil::Lower(declared[0].ToString()));
+						}
+					} else if (is_table) {
+						for (idx_t i = 0; i < check_count; i++) {
+							if (!types_compatible(bound.types[i], declared[i])) {
+								throw BinderException("return type mismatch in function declared to return record\n"
+								                      "DETAIL: Final statement returns %s instead of %s at column %d.",
+								                      StringUtil::Lower(bound.types[i].ToString()),
+								                      StringUtil::Lower(declared[i].ToString()), i + 1);
+							}
+						}
+						if (bound.types.size() > declared.size()) {
+							throw BinderException("return type mismatch in function declared to return record\n"
+							                      "DETAIL: Final statement returns too many columns.");
+						}
+						if (bound.types.size() < declared.size()) {
+							throw BinderException("return type mismatch in function declared to return record\n"
+							                      "DETAIL: Final statement returns too few columns.");
+						}
+					}
+				}
 			} catch (const std::exception &ex) {
 				error = ErrorData(ex);
 			}

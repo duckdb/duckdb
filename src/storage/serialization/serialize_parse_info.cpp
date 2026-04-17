@@ -425,6 +425,9 @@ void DropInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
 	serializer.WritePropertyWithDefault<bool>(206, "allow_drop_internal", allow_drop_internal);
 	serializer.WritePropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", extra_drop_info);
+	serializer.WritePropertyWithDefault<bool>(208, "has_func_args", has_func_args, false);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(209, "func_parameters", func_parameters, vector<LogicalType>());
+	serializer.WritePropertyWithDefault<bool>(210, "is_procedure", is_procedure, false);
 }
 
 unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
@@ -437,6 +440,9 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
 	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", result->extra_drop_info);
+	deserializer.ReadPropertyWithDefault<bool>(208, "has_func_args", result->has_func_args);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(209, "func_parameters", result->func_parameters);
+	deserializer.ReadPropertyWithDefault<bool>(210, "is_procedure", result->is_procedure);
 	return std::move(result);
 }
 

@@ -218,7 +218,15 @@ pg_function_decorator_list:
 	;
 
 pg_function_decorator:
-		RETURNS Typename                                     { $$ = NIL; }
+		RETURNS Typename
+			{
+				/* Wrap scalar RETURNS type as a single unnamed PGColumnDef
+				   so it propagates through returns_table_columns */
+				PGColumnDef *c = makeNode(PGColumnDef);
+				c->colname = NULL;
+				c->typeName = $2;
+				$$ = list_make1(c);
+			}
 		| RETURNS TABLE '(' TableFuncElementList ')'         { $$ = $4; }
 		| RETURNS NULL_P ON NULL_P INPUT_P                   { $$ = NIL; }
 		| CALLED ON NULL_P INPUT_P                           { $$ = NIL; }

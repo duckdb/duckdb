@@ -44,6 +44,8 @@ public:
 	//! Empty + has_func_args=true means drop the zero-arg overload.
 	vector<LogicalType> func_parameters;
 	bool has_func_args = false;
+	//! Whether this is DROP PROCEDURE (vs DROP FUNCTION)
+	bool is_procedure = false;
 
 	//! Extra info related to this drop
 	unique_ptr<ExtraDropInfo> extra_drop_info;

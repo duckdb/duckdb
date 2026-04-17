@@ -9,6 +9,8 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
 
@@ -206,11 +208,78 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	for (auto c = stmt.functions->head; c != nullptr; c = lnext(c)) {
 		auto &function_def = *PGPointerCast<duckdb_libpgquery::PGFunctionDefinition>(c->data.ptr_value);
 		bool has_language = stmt.has_language || function_def.has_language;
-		macros.push_back(TransformMacroFunction(function_def, has_language));
-		// For scalar RETURNS (no returns_table_columns), alias the single output column
+		auto &macro = macros.emplace_back(TransformMacroFunction(function_def, has_language));
+
+		// Detect scalar RETURNS vs RETURNS TABLE.
+		// Scalar RETURNS comes through as a single unnamed PGColumnDef in returns_table_columns.
+		bool is_scalar_returns = false;
+		bool is_void_returns = false;
+		if (function_def.returns_table_columns && function_def.returns_table_columns->length == 1) {
+			auto &first_col = PGCast<duckdb_libpgquery::PGColumnDef>(
+			    *static_cast<duckdb_libpgquery::PGNode *>(function_def.returns_table_columns->head->data.ptr_value));
+			if (!first_col.colname) {
+				// Check for RETURNS VOID — skip type validation entirely
+				if (first_col.typeName && first_col.typeName->names && first_col.typeName->names->length == 1) {
+					auto name_val =
+					    PGPointerCast<duckdb_libpgquery::PGValue>(first_col.typeName->names->head->data.ptr_value);
+					if (name_val && name_val->val.str && strcasecmp(name_val->val.str, "void") == 0) {
+						is_void_returns = true;
+					}
+				}
+				if (!is_void_returns) {
+					is_scalar_returns = true;
+				}
+			}
+		}
+
+		// Populate declared return types for binder validation.
+		if (function_def.returns_table_columns && !is_scalar_returns && !is_void_returns) {
+			// RETURNS TABLE(col type, ...)
+			for (auto cell = function_def.returns_table_columns->head; cell; cell = cell->next) {
+				auto &col_def = PGCast<duckdb_libpgquery::PGColumnDef>(
+				    *static_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
+				if (col_def.typeName) {
+					macro->return_types.push_back(TransformTypeName(*col_def.typeName));
+				} else {
+					macro->return_types.push_back(LogicalType::ANY);
+				}
+			}
+		} else if (is_scalar_returns) {
+			auto &col_def = PGCast<duckdb_libpgquery::PGColumnDef>(
+			    *static_cast<duckdb_libpgquery::PGNode *>(function_def.returns_table_columns->head->data.ptr_value));
+			macro->return_types.push_back(TransformTypeName(*col_def.typeName));
+		} else if (function_def.returns_type) {
+			// Scalar RETURNS <type> (legacy path)
+			macro->return_types.push_back(
+			    TransformTypeName(PGCast<duckdb_libpgquery::PGTypeName>(*function_def.returns_type)));
+		}
+
+		// RETURNS VOID: wrap body as SELECT NULL FROM (<body>) LIMIT 1.
+		// The body still executes (for side effects) but result is discarded.
+		if (is_void_returns && macro && macro->type == MacroType::TABLE_MACRO) {
+			auto &table_macro = macro->Cast<TableMacroFunction>();
+			if (table_macro.query_node) {
+				auto inner_stmt = make_uniq<SelectStatement>();
+				inner_stmt->node = std::move(table_macro.query_node);
+				auto subquery_ref = make_uniq<SubqueryRef>(std::move(inner_stmt), "__void_body");
+
+				auto outer = make_uniq<SelectNode>();
+				outer->select_list.push_back(make_uniq<ConstantExpression>(Value()));
+				outer->select_list[0]->alias = TransformQualifiedName(*stmt.name).name;
+				outer->from_table = std::move(subquery_ref);
+
+				auto limit_mod = make_uniq<LimitModifier>();
+				limit_mod->limit = make_uniq<ConstantExpression>(Value::BIGINT(1));
+				outer->modifiers.push_back(std::move(limit_mod));
+
+				table_macro.query_node = std::move(outer);
+			}
+		}
+
+		// For scalar RETURNS (not RETURNS TABLE), alias the single output column
 		// to the function name (PG convention)
-		auto &macro = macros.back();
-		if (!function_def.returns_table_columns && macro && macro->type == MacroType::TABLE_MACRO) {
+		if ((!function_def.returns_table_columns || is_scalar_returns) && macro &&
+		    macro->type == MacroType::TABLE_MACRO) {
 			auto &table_macro = macro->Cast<TableMacroFunction>();
 			if (table_macro.query_node && table_macro.query_node->type == QueryNodeType::SELECT_NODE) {
 				auto &select = table_macro.query_node->Cast<SelectNode>();
@@ -218,9 +287,34 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 					select.select_list[0]->alias = TransformQualifiedName(*stmt.name).name;
 				}
 			}
+			// PG semantics: RETURNS <scalar_type> (not TABLE / SETOF) means the
+			// function produces exactly one row. Force LIMIT 1 on the query body
+			// so `SELECT * FROM f()` returns at most one row, even if the body
+			// query produces multiple rows (e.g. VALUES, generate_series, ...).
+			// If the body already has a LIMIT, replace it with 1 (a scalar
+			// function can't return more than one row regardless of what the
+			// body says).
+			if (table_macro.query_node) {
+				auto &modifiers = table_macro.query_node->modifiers;
+				// Remove any existing LIMIT (replace with 1).
+				std::erase_if(modifiers, [](const unique_ptr<ResultModifier> &mod) {
+					return mod->type == ResultModifierType::LIMIT_MODIFIER ||
+					       mod->type == ResultModifierType::LIMIT_PERCENT_MODIFIER;
+				});
+				auto limit_mod = make_uniq<LimitModifier>();
+				limit_mod->limit = make_uniq<ConstantExpression>(Value::BIGINT(1));
+				modifiers.push_back(std::move(limit_mod));
+			}
 		}
 	}
-	PivotEntryCheck("macro");
+	PivotEntryCheck(stmt.has_language ? "function" : "macro");
+
+	// Mark each overload as procedure
+	if (stmt.is_procedure) {
+		for (auto &m : macros) {
+			m->is_procedure = true;
+		}
+	}
 
 	auto catalog_type =
 	    macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY;

@@ -18,6 +18,8 @@ void MacroFunction::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(6)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "types", types, vector<LogicalType>());
 	}
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(104, "return_types", return_types, vector<LogicalType>());
+	serializer.WritePropertyWithDefault<bool>(105, "is_procedure", is_procedure, false);
 }
 
 unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer) {
@@ -39,6 +41,8 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	result->parameters = std::move(parameters);
 	result->default_parameters = std::move(default_parameters);
 	result->types = std::move(types);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(104, "return_types", result->return_types);
+	deserializer.ReadPropertyWithDefault<bool>(105, "is_procedure", result->is_procedure);
 	result->FinalizeDeserialization();
 	return result;
 }
