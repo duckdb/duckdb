@@ -114,7 +114,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 		}
 	}
 
-	result.Dictionary(dictionary, *sel_vec);
+	result.Dictionary(dictionary, *sel_vec, scan_count);
 }
 
 } // namespace duckdb

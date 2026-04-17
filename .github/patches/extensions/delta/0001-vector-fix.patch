@@ -271,3 +271,134 @@ index de50268..c2bae88 100644
  	physical_copy_ref.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
  	physical_copy_ref.write_partition_columns = true;
  	physical_copy_ref.children.push_back(*plan);
+diff --git a/src/storage/delta_transaction.cpp b/src/storage/delta_transaction.cpp
+index 9af9de9..1ff75bc 100644
+--- a/src/storage/delta_transaction.cpp
++++ b/src/storage/delta_transaction.cpp
+@@ -34,12 +34,6 @@ static void *allocate_string(const struct ffi::KernelStringSlice slice) {
+ }
+ 
+ struct DeltaCommitInfo {
+-public:
+-	DeltaCommitInfo() {
+-		buffer.Initialize(Allocator::DefaultAllocator(), GetTypes());
+-		buffer.SetCardinality(0);
+-	}
+-
+ public:
+ 	static vector<LogicalType> GetTypes() {
+ 		return {LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)};
+@@ -50,15 +44,7 @@ public:
+ 
+ public:
+ 	void Append(Value commit_info_map) {
+-		idx_t current_size = buffer.size();
+-		idx_t current_capacity = buffer.GetCapacity();
+-
+-		if (current_size == current_capacity) {
+-			buffer.SetCapacity(2 * current_capacity);
+-		}
+-
+-		buffer.SetValue(0, current_size, commit_info_map);
+-		buffer.SetCardinality(current_size + 1);
++		values.push_back(std::move(commit_info_map));
+ 	}
+ 
+ 	void (*release)();
+@@ -70,6 +56,14 @@ public:
+ 	ffi::ArrowFFIData ToArrow(optional_ptr<ClientContext> context) {
+ 		LoggerCallback::TryLog("delta", LogLevel::LOG_TRACE, "Delta ToArrow debug: created CommitInfo");
+ 
++		DataChunk buffer;
++		idx_t capacity = MaxValue<idx_t>(values.size(), STANDARD_VECTOR_SIZE);
++		buffer.Initialize(Allocator::DefaultAllocator(), GetTypes(), capacity);
++		for (idx_t i = 0; i < values.size(); i++) {
++			buffer.SetValue(0, i, values[i]);
++		}
++		buffer.SetCardinality(values.size());
++
+ 		ffi::ArrowFFIData ffi_data;
+ 		unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
+ 		ClientProperties props("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, context);
+@@ -81,7 +75,7 @@ public:
+ 	}
+ 
+ private:
+-	DataChunk buffer;
++	vector<Value> values;
+ };
+ 
+ struct WriteMetaData {
+@@ -117,8 +111,6 @@ struct WriteMetaData {
+ 	};
+ 
+ 	WriteMetaData() {
+-		buffer = make_uniq<DataChunk>();
+-		buffer->Initialize(Allocator::DefaultAllocator(), GetTypes());
+ 	}
+ 
+ 	WriteMetaData(DeltaMultiFileList &snapshot, vector<DeltaDataFile> &outstanding_appends) : WriteMetaData() {
+@@ -146,19 +138,11 @@ struct WriteMetaData {
+ 	}
+ 
+ 	void Append(const string &path, Value partition_values, idx_t size, idx_t modification_time, bool data_change) {
+-		idx_t current_size = buffer->size();
+-		idx_t current_capacity = buffer->GetCapacity();
+-
+-		if (current_size == current_capacity) {
+-			buffer->SetCapacity(2 * current_capacity);
+-		}
+-
+-		buffer->SetValue(0, current_size, path);
+-		buffer->SetValue(1, current_size, partition_values);
+-		buffer->SetValue(2, current_size, Value::BIGINT(size));
+-		buffer->SetValue(3, current_size, Value::BIGINT(modification_time));
+-		buffer->SetValue(4, current_size, CreateStatsValue(size, true));
+-		buffer->SetCardinality(current_size + 1);
++		paths.push_back(Value(path));
++		partition_values_list.push_back(std::move(partition_values));
++		sizes.push_back(Value::BIGINT(size));
++		modification_times.push_back(Value::BIGINT(modification_time));
++		stats.push_back(CreateStatsValue(size, true));
+ 	}
+ 
+ 	void (*release)();
+@@ -170,10 +154,23 @@ struct WriteMetaData {
+ 	ffi::ArrowFFIData ToArrow(ClientContext &context) {
+ 		LoggerCallback::TryLog("delta", LogLevel::LOG_TRACE, "Delta ToArrow debug: created WriteMetaData");
+ 
++		DataChunk buffer;
++		idx_t n = paths.size();
++		idx_t capacity = MaxValue<idx_t>(n, STANDARD_VECTOR_SIZE);
++		buffer.Initialize(Allocator::DefaultAllocator(), GetTypes(), capacity);
++		for (idx_t i = 0; i < n; i++) {
++			buffer.SetValue(0, i, paths[i]);
++			buffer.SetValue(1, i, partition_values_list[i]);
++			buffer.SetValue(2, i, sizes[i]);
++			buffer.SetValue(3, i, modification_times[i]);
++			buffer.SetValue(4, i, stats[i]);
++		}
++		buffer.SetCardinality(n);
++
+ 		ffi::ArrowFFIData ffi_data;
+ 		unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
+ 		ClientProperties props("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, context);
+-		ArrowConverter::ToArrowArray(*buffer, (ArrowArray *)(&ffi_data.array), props, extension_types);
++		ArrowConverter::ToArrowArray(buffer, (ArrowArray *)(&ffi_data.array), props, extension_types);
+ 		ArrowConverter::ToArrowSchema((ArrowSchema *)(&ffi_data.schema), GetTypes(), GetNames(), props);
+ 
+ 		ffi_data.array.release = reinterpret_cast<void (*)(ffi::FFI_ArrowArray *)>(InstrumentedRelease);
+@@ -181,7 +178,12 @@ struct WriteMetaData {
+ 		return ffi_data;
+ 	}
+ 
+-	unique_ptr<DataChunk> buffer;
++private:
++	vector<Value> paths;
++	vector<Value> partition_values_list;
++	vector<Value> sizes;
++	vector<Value> modification_times;
++	vector<Value> stats;
+ };
+ 
+ vector<DeltaMultiFileColumnDefinition> DeltaTransaction::GetWriteSchema(ClientContext &context) {

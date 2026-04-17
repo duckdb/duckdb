@@ -85,6 +85,22 @@ Vector::Vector(const Value &value) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
+void Vector::CheckCapacity(idx_t capacity) const {
+	if (!buffer) {
+		// no buffer - we accept any capacity
+		return;
+	}
+	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// constant vectors can fit any
+		return;
+	}
+	idx_t buffer_capacity = buffer->Capacity();
+	if (capacity > buffer_capacity) {
+		throw InternalException("Vector::CheckCapacity - capacity %d exceeds buffer capacity %d", capacity,
+		                        buffer_capacity);
+	}
+}
+
 Vector Vector::Ref(const Vector &other) {
 	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }
@@ -152,7 +168,7 @@ void Vector::Reinterpret(const Vector &other) {
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
-		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), std::move(new_entry));
+		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), old_dict.Capacity(), std::move(new_entry));
 		auto dict_size = old_dict.GetDictionarySize();
 		if (dict_size.IsValid()) {
 			buffer->Cast<DictionaryBuffer>().SetDictionarySize(dict_size.GetIndex());
@@ -213,12 +229,12 @@ void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const Selecti
 	Dictionary(dictionary_size, sel, count);
 }
 
-void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel) {
+void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel, idx_t sel_count) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("Struct vectors cannot be dictionaries");
 	}
 	D_ASSERT(type == reusable_dict->data.GetType());
-	buffer = make_buffer<DictionaryBuffer>(sel, std::move(reusable_dict));
+	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
 void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
@@ -302,14 +318,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 
 Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
-}
-
-VectorBuffer &Vector::Buffer() {
-	return *buffer;
-}
-
-const VectorBuffer &Vector::Buffer() const {
-	return *buffer;
 }
 
 // LCOV_EXCL_START
@@ -425,7 +433,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 }
 
-void Vector::Shred(Vector &shredded_data) {
+void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (GetType().id() != LogicalTypeId::VARIANT) {
 		throw InternalException("Vector::Shred can only be used on variant vectors");
 	}
@@ -433,7 +441,7 @@ void Vector::Shred(Vector &shredded_data) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
 }
 
 // FIXME: This should ideally be const
@@ -687,7 +695,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		    99, "geometry_format", GeometryStorageType::SPATIAL);
 	}
 
-	auto &validity = FlatVector::Validity(*this);
+	auto &validity = FlatVector::ValidityMutable(*this);
 	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 	validity.Reset(validity_count);
 	const auto has_validity_mask = deserializer.ReadProperty<bool>(100, "has_validity_mask");
@@ -804,20 +812,13 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	}
 }
 
-VectorType Vector::GetVectorType() const {
-	if (!buffer) {
-		return VectorType::FLAT_VECTOR;
-	}
-	return Buffer().GetVectorType();
-}
-
 void Vector::SetVectorType(VectorType new_vector_type) {
 	if (new_vector_type != VectorType::FLAT_VECTOR && new_vector_type != VectorType::CONSTANT_VECTOR) {
 		throw InternalException("SetVectorType can only be used with FLAT / CONSTANT vectors");
 	}
 	if (buffer) {
 		// FIXME: should we allow vectors without a buffer?
-		Buffer().SetVectorType(new_vector_type);
+		BufferMutable().SetVectorType(new_vector_type);
 	}
 }
 
@@ -889,7 +890,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		// Reusable dictionary API does not work for STRUCT
 		vector.Dictionary(inverted_vector, verify_count, original_sel, count);
 	} else {
-		vector.Dictionary(reusable_dict, original_sel);
+		vector.Dictionary(reusable_dict, original_sel, count);
 	}
 	vector.Verify(count);
 }

@@ -24,24 +24,12 @@ public:
 	WindowValueGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      ignore_nulls(&all_valid), value_idx(executor.child_idx[0]) {
+	      value_idx(executor.child_idx[0]) {
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
 			    make_uniq<WindowIndexTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx, payload_count);
 		}
 	}
-
-	void Finalize(CollectionPtr collection) {
-		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
-			ignore_nulls = &collection->validities[value_idx];
-		}
-	}
-
-	// IGNORE NULLS
-	mutex lock;
-	ValidityMask all_valid;
-	optional_ptr<ValidityMask> ignore_nulls;
 
 	//! The index of the value collection
 	const column_t value_idx;
@@ -58,7 +46,7 @@ public:
 class WindowValueLocalState : public WindowExecutorLocalState {
 public:
 	WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
-	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate) {
+	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate), ignore_nulls(&all_valid) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 
 		if (gvstate.value_tree) {
@@ -86,6 +74,10 @@ public:
 
 	//! The state used for reading the collection
 	unique_ptr<WindowCursor> cursor;
+
+	// IGNORE NULLS
+	ValidityMask all_valid;
+	optional_ptr<ValidityMask> ignore_nulls;
 };
 
 void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
@@ -119,9 +111,14 @@ void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_ch
 
 void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
-	gvstate.Finalize(collection);
+	auto &executor = gvstate.executor;
+	const auto &value_idx = gvstate.value_idx;
 
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
+	if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+		lvstate.ignore_nulls = &collection->validities[value_idx];
+	}
+
 	auto &local_value = lvstate.local_value;
 	if (local_value) {
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
@@ -382,13 +379,6 @@ public:
 		return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
 	}
 
-	static inline void Reset(DataChunk &chunk) {
-		//	Reset trashes the capacity...
-		const auto capacity = chunk.GetCapacity();
-		chunk.Reset();
-		chunk.SetCapacity(capacity);
-	}
-
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
 	    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.return_type), temp(wexpr.return_type),
 	      sel(STANDARD_VECTOR_SIZE) {
@@ -401,9 +391,11 @@ public:
 		temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 	}
 
-	void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+	void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	             Vector &result) {
 		if (!curr_chunk.ColumnCount()) {
-			curr_chunk.Initialize(context.client, {result.GetType()}, delayed.GetCapacity());
+			curr_chunk.Initialize(context.client, {result.GetType()},
+			                      MaxValue<idx_t>(STANDARD_VECTOR_SIZE, delayed_capacity));
 		}
 
 		if (offset >= 0) {
@@ -427,11 +419,11 @@ public:
 			//	Shift down incomplete buffers
 			//	Copy prev[count, buffered] => temp[0, buffered-count]
 			source_count = buffered - count;
-			FlatVector::Validity(temp).Reset();
+			FlatVector::ValidityMutable(temp).Reset();
 			VectorOperations::Copy(prev, temp, buffered, count, 0);
 
 			// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
-			FlatVector::Validity(prev).Reset();
+			FlatVector::ValidityMutable(prev).Reset();
 			VectorOperations::Copy(temp, prev, source_count, 0, 0);
 			// 	Copy curr[0, count] => prev[buffered-count, buffered]
 			VectorOperations::Copy(curr, prev, count, 0, source_count);
@@ -441,7 +433,7 @@ public:
 			//	Copy curr[0, count-buffered] => result[buffered, count]
 			VectorOperations::Copy(curr, result, source_count, 0, buffered);
 			// 	Copy curr[count-buffered, count] => prev[0, buffered]
-			FlatVector::Validity(prev).Reset();
+			FlatVector::ValidityMutable(prev).Reset();
 			VectorOperations::Copy(curr, prev, count, source_count, 0);
 		}
 	}
@@ -456,7 +448,7 @@ public:
 		idx_t pos = 0;
 		idx_t unified_offset = buffered;
 		if (unified_offset < count) {
-			Reset(curr_chunk);
+			curr_chunk.Reset();
 			executor.Execute(input, curr_chunk);
 			VectorOperations::Copy(curr, result, count, unified_offset, pos);
 			pos += count - unified_offset;
@@ -465,7 +457,7 @@ public:
 		// Copy unified[unified_offset:] => result[pos:]
 		idx_t unified_count = count + delayed.size();
 		if (unified_offset < unified_count) {
-			Reset(curr_chunk);
+			curr_chunk.Reset();
 			executor.Execute(delayed, curr_chunk);
 			idx_t delayed_offset = unified_offset - count;
 			// Only copy as many values as we need
@@ -535,9 +527,9 @@ public:
 	                                                      const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowLeadLagStreamingState>(client, wexpr);
 	}
-	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
-	                       LocalSourceState &state) {
-		state.Cast<WindowLeadLagStreamingState>().Execute(context, input, delayed, result);
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowLeadLagStreamingState>().Execute(context, input, delayed, delayed_capacity, result);
 	}
 };
 
@@ -698,7 +690,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 
 	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
 	// or if we are using framing (the frame may change on each row)
-	auto &ignore_nulls = glstate.ignore_nulls;
+	auto &ignore_nulls = llstate.ignore_nulls;
 	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
 	if (has_offset) {
 		can_shift = can_shift && wexpr.children[1]->IsFoldable();
@@ -797,12 +789,12 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 		}
 		return true;
 	}
-	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
-	                       LocalSourceState &state);
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state);
 };
 
 void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                          Vector &result, LocalSourceState &state) {
+                                          idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
 	const auto count = input.size();
@@ -863,7 +855,7 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 	auto &cursor = *lvstate.cursor;
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
@@ -918,12 +910,12 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 		// We can stream last values if they are "running totals"
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
 	}
-	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
-	                       LocalSourceState &state);
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state);
 };
 
 void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         Vector &result, LocalSourceState &state) {
+                                         idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
 	//	Evaluate the argument and copy the values
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
@@ -984,7 +976,7 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 	auto &cursor = *lvstate.cursor;
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
@@ -1056,7 +1048,7 @@ void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 	auto &cursor = *lvstate.cursor;
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
 	const auto &child_idx = gvstate.executor.child_idx;

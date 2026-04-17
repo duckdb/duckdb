@@ -1364,7 +1364,7 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
                                  const column_t column_id, Vector &result, const SelectionVector &target_sel,
                                  optional_ptr<Vector> cached_cast_vector) const {
 	D_ASSERT(!cached_cast_vector ||
-	         FlatVector::Validity(*cached_cast_vector).CannotHaveNull()); // ResetCachedCastVectors
+	         FlatVector::ValidityMutable(*cached_cast_vector).CannotHaveNull()); // ResetCachedCastVectors
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.Gather(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
 	                       cached_cast_vector);
@@ -1404,7 +1404,7 @@ static void TupleDataTemplatedGatherInternal(const TupleDataLayout &layout, Vect
 
 	// Target
 	auto target_data = FlatVector::GetDataMutable<T>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1501,7 +1501,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1554,7 +1554,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 
 	// Target
 	const auto target_list_entries = FlatVector::GetDataMutableUnsafe<list_entry_t>(target);
-	auto &target_list_validity = FlatVector::Validity(target);
+	auto &target_list_validity = FlatVector::ValidityMutable(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1619,7 +1619,7 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
 
 	// Target
 	const auto target_data = FlatVector::GetDataMutable<T>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -1670,7 +1670,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	const auto source_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(heap_locations);
 
 	// Target
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -1723,7 +1723,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 
 	// Target
 	const auto target_list_entries = FlatVector::GetDataMutableUnsafe<list_entry_t>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_validity = FlatVector::ValidityMutable(target);
 	const auto child_list_size_before = ListVector::GetListSize(target);
 
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)

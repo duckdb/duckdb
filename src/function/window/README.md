@@ -205,6 +205,7 @@ The arguments are:
 * `ExecutionContext &context` - The thread-local context for the evaluation;
 * `DataChunk &input` - The input chunk from the previous operator, plus the output columns being generated
 * `DataChunk &delayed` - The leading rows _after_ the current chunk;
+* `idx_t &delayed_capacity` - The leading rows _after_ the current chunk;
 * `Vector &result` - The output values to generate;
 * `LocalSourceState &lstate` - The thread-local state for the function.
 

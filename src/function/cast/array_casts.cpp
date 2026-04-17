@@ -80,7 +80,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
+		FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
 		auto &source_cc = ArrayVector::GetEntry(source);
 		auto &result_cc = ArrayVector::GetEntry(result);
 
@@ -101,9 +101,9 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
 	varchar_list.Flatten(count);
-	auto &validity = FlatVector::Validity(varchar_list);
+	auto &validity = FlatVector::ValidityMutable(varchar_list);
 	auto &child = ArrayVector::GetEntry(varchar_list);
-	auto &child_validity = FlatVector::Validity(child);
+	auto &child_validity = FlatVector::ValidityMutable(child);
 
 	auto in_data = FlatVector::GetData<string_t>(child);
 	auto result_data = FlatVector::Writer<string_t>(result, count);

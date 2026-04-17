@@ -170,7 +170,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	auto &type = result.GetType();
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 	(void)validity;
 
 	//! Collect the nested data for the objects

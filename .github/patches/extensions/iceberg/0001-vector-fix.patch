@@ -74,9 +74,10 @@ index 52f39468..e56f558b 100644
 @@ -445,8 +447,8 @@ void IcebergAvroMultiFileReader::FinalizeChunk(ClientContext &context, const Mul
  	auto &sequence_number_column = output_chunk.data[2];
  	sequence_number_column.Flatten(count);
- 	auto &sequence_number_validity = FlatVector::Validity(sequence_number_column);
+-	auto &sequence_number_validity = FlatVector::Validity(sequence_number_column);
 -	auto sequence_number_data = FlatVector::GetData<int64_t>(sequence_number_column);
 -	auto status_column_data = FlatVector::GetData<int32_t>(status_column);
++	auto &sequence_number_validity = FlatVector::ValidityMutable(sequence_number_column);
 +	auto sequence_number_data = FlatVector::GetDataMutable<int64_t>(sequence_number_column);
 +	auto status_column_data = FlatVector::GetDataMutable<int32_t>(status_column);
  	for (idx_t i = 0; i < count; i++) {
@@ -94,9 +95,10 @@ index 52f39468..e56f558b 100644
 +	auto &record_count_column = data_struct_children[4];
  	record_count_column.Flatten(count);
  
- 	auto &first_row_id_validity = FlatVector::Validity(first_row_id_column);
+-	auto &first_row_id_validity = FlatVector::Validity(first_row_id_column);
 -	auto first_row_id_data = FlatVector::GetData<int64_t>(first_row_id_column);
 -	auto record_count_data = FlatVector::GetData<int64_t>(record_count_column);
++	auto &first_row_id_validity = FlatVector::ValidityMutable(first_row_id_column);
 +	auto first_row_id_data = FlatVector::GetDataMutable<int64_t>(first_row_id_column);
 +	auto record_count_data = FlatVector::GetDataMutable<int64_t>(record_count_column);
  	for (idx_t i = 0; i < count; i++) {
@@ -643,9 +645,10 @@ index 020f0050..b14000ca 100644
  
 -	int32_t *content_data = nullptr;
 -	int64_t *first_row_id_data = nullptr;
+-	optional_ptr<ValidityMask> first_row_id_validity;
 +	const int32_t *content_data = nullptr;
 +	const int64_t *first_row_id_data = nullptr;
- 	optional_ptr<ValidityMask> first_row_id_validity;
++	optional_ptr<const ValidityMask> first_row_id_validity;
  	if (iceberg_version >= 2) {
  		content_data = FlatVector::GetData<int32_t>(*content);
 @@ -197,7 +200,7 @@ idx_t ManifestReader::ReadChunk(idx_t offset, idx_t count, vector<IcebergManifes

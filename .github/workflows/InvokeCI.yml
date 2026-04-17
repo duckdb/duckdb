@@ -8,9 +8,9 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
       run_all:
-        type: string
+        type: boolean
       twine_upload:
         type: string
 

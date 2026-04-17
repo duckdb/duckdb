@@ -126,7 +126,7 @@ typedef unique_ptr<LocalSourceState> (*window_streaming_state_function_t)(Client
 
 //! Evaluates the next chunk of the streaming function
 typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         Vector &result, LocalSourceState &lstate);
+                                         idx_t delayed_capacity, Vector &result, LocalSourceState &lstate);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -217,9 +217,9 @@ public:
 	bool HasStreamingDataCallback() const { return stream != nullptr; }
 	window_stream_function_t GetStreamingDataCallback() const { return stream; }
 	void SetStreamingDataCallback(window_stream_function_t callback) { stream = callback; }
-	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result, LocalSourceState &lstate) const {
+	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity, Vector &result, LocalSourceState &lstate) const {
 		D_ASSERT(streaming_state);
-		GetStreamingDataCallback()(context, input, delayed, result, lstate);
+		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
 
 	bool HasSerializationCallbacks() const { return false; }

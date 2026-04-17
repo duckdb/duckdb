@@ -106,7 +106,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	for (auto &col : parse_chunk.data) {
 		vector_ptr.push_back(FlatVector::GetDataMutable(col));
-		validity_mask.push_back(&FlatVector::Validity(col));
+		validity_mask.push_back(&FlatVector::ValidityMutable(col));
 	}
 
 	// Setup the NullStr information

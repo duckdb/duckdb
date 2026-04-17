@@ -123,8 +123,8 @@ struct WindowRowNumberExecutor {
 	                                                      const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowRowNumberStreamingState>();
 	}
-	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
-	                       LocalSourceState &state) {
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
 		state.Cast<WindowRowNumberStreamingState>().Evaluate(input.size(), result);
 	}
 };

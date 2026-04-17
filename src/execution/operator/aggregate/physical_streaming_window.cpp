@@ -140,17 +140,15 @@ public:
 			}
 		}
 		if (lead_count) {
-			delayed.Initialize(client, input.GetTypes(), lead_count + STANDARD_VECTOR_SIZE);
-			shifted.Initialize(client, input.GetTypes(), lead_count + STANDARD_VECTOR_SIZE);
+			delayed_capacity = lead_count + STANDARD_VECTOR_SIZE;
+			delayed.Initialize(client, input.GetTypes(), delayed_capacity);
+			shifted.Initialize(client, input.GetTypes(), delayed_capacity);
 		}
 		initialized = true;
 	}
 
 	static inline void Reset(DataChunk &chunk) {
-		//	Reset trashes the capacity...
-		const auto capacity = chunk.GetCapacity();
 		chunk.Reset();
-		chunk.SetCapacity(capacity);
 	}
 
 public:
@@ -161,6 +159,8 @@ public:
 	Allocator &allocator;
 	//! The number of rows ahead to buffer for LEAD
 	idx_t lead_count = 0;
+	//! The full capacity of the delayed chunk
+	idx_t delayed_capacity = 0;
 	//! A buffer for delayed input
 	DataChunk delayed;
 	//! A buffer for shifting delayed input
@@ -315,7 +315,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		if (expr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 			fstate.Cast<StreamingWindowState::AggregateState>().Execute(context, output, result);
 		} else if (wexpr.window && wexpr.window->HasStreamingDataCallback()) {
-			wexpr.window->GetStreamingData(context, output, delayed, result, fstate);
+			wexpr.window->GetStreamingData(context, output, delayed, state.delayed_capacity, result, fstate);
 		} else {
 			throw NotImplementedException("GetStreamingData for %s", ExpressionTypeToString(expr.GetExpressionType()));
 		}
@@ -436,9 +436,9 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &input = state.shifted;
 		state.Reset(input);
 
-		if (output.GetCapacity() < delayed.size()) {
+		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can
-			output.SetCardinality(output.GetCapacity());
+			output.SetCardinality(STANDARD_VECTOR_SIZE);
 			ExecuteShifted(context, delayed, input, output, gstate_p);
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}
