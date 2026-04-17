@@ -50,6 +50,10 @@ CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t 
 	string entry;
 	bool finished = false;
 normal:
+	// PG-compliant: skip leading whitespace (e.g. after a comma in a list).
+	while (idx < input.size() && entry.empty() && StringUtil::CharacterIsSpace(input[idx])) {
+		idx++;
+	}
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
 			idx++;
@@ -81,6 +85,10 @@ quoted:
 	}
 	throw ParserException("Unterminated quote in qualified name!");
 separator:
+	// Trim trailing whitespace for unquoted identifiers.
+	while (!entry.empty() && StringUtil::CharacterIsSpace(entry.back())) {
+		entry.pop_back();
+	}
 	if (entry.empty()) {
 		throw ParserException("Unexpected dot - empty CatalogSearchEntry");
 	}
@@ -180,6 +188,10 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 					continue;
 				}
 			}
+		}
+		if (path.catalog.empty()) {
+			throw CatalogException("%s: No schema or catalog named \"%s\" found.", GetSetName(set_type),
+			                       path.schema);
 		}
 		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
 	}

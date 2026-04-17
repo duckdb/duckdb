@@ -1568,7 +1568,17 @@ void SearchPathSetting::ResetLocal(ClientContext &context) {
 Value SearchPathSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	auto &set_paths = client_data.catalog_search_path->GetSetPaths();
-	return Value(CatalogSearchEntry::ListToString(set_paths));
+	// PG-compliant: only show schemas from the current database, without catalog prefix.
+	auto &current_catalog = DatabaseManager::GetDefaultDatabase(const_cast<ClientContext &>(context));
+	vector<CatalogSearchEntry> filtered;
+	filtered.reserve(set_paths.size());
+	for (auto &entry : set_paths) {
+		if (entry.catalog != current_catalog) {
+			continue;
+		}
+		filtered.emplace_back(string(), entry.schema);
+	}
+	return Value(CatalogSearchEntry::ListToString(filtered));
 }
 
 //===----------------------------------------------------------------------===//
