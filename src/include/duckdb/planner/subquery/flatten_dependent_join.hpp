@@ -167,15 +167,14 @@ public:
 		void Collect(Binder &binder, LogicalOperator &op);
 		bool IsCollected(LogicalOperator &op) const;
 		bool DependsOnCorrelated(LogicalOperator &op, const column_binding_map_t<idx_t> &correlated_map) const;
-		vector<ColumnBinding> &DependenciesFor(LogicalOperator &op);
-		optional_ptr<const vector<reference<LogicalOperator>>> AccessorsFor(LogicalOperator &op,
-		                                                                    TableIndex table_index) const;
+		column_binding_set_t &DependenciesFor(LogicalOperator &op);
+		optional_ptr<const reference_set_t<LogicalOperator>> AccessorsFor(LogicalOperator &op,
+		                                                                  TableIndex table_index) const;
 		bool HasAccessorsFor(LogicalOperator &op, TableIndex table_index) const;
 
 	private:
-		reference_map_t<LogicalOperator, vector<ColumnBinding>> subtree_dependencies;
-		reference_map_t<LogicalOperator, unordered_map<TableIndex, vector<reference<LogicalOperator>>>>
-		    subtree_accessors;
+		reference_map_t<LogicalOperator, column_binding_set_t> subtree_dependencies;
+		reference_map_t<LogicalOperator, unordered_map<TableIndex, reference_set_t<LogicalOperator>>> subtree_accessors;
 
 		friend class DecorrelationStateCollector;
 	};
@@ -196,8 +195,7 @@ private:
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 
 	//! Push the dependent join down a LogicalOperator
-	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
-	                                     bool propagate_null_values = true) {
+	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, bool propagate_null_values = true) {
 		return PushDownDependentJoin(std::move(plan), propagate_null_values,
 		                             CorrelatedLayout::Initial(correlated_columns));
 	}
@@ -239,9 +237,10 @@ private:
 	                                     CorrelatedLayout right_layout);
 	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                             CorrelatedLayout layout, bool correlated_left);
-	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, bool propagate_null_values, CorrelatedLayout layout,
-	                               bool fresh = false);
-	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, bool propagate_null_values,
+	                               CorrelatedLayout layout, bool fresh = false);
+	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
+	                              CorrelatedLayout layout);
 	PushDownResult PushDownProjection(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                  CorrelatedLayout layout);
 	PushDownResult FinalizeProjection(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
@@ -252,16 +251,20 @@ private:
 	                                    CorrelatedLayout layout);
 	PushDownResult PushDownJoin(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
 	PushDownResult PushDownLimit(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
-	PushDownResult PushDownWindow(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownWindow(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
+	                              CorrelatedLayout layout);
 	PushDownResult PushDownSetOperation(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                    CorrelatedLayout layout);
-	PushDownResult PushDownDistinct(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownDistinct(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
+	                                CorrelatedLayout layout);
 	PushDownResult PushDownExpressionGet(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                     CorrelatedLayout layout);
-	PushDownResult PushDownOrderBy(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownOrderBy(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
+	                               CorrelatedLayout layout);
 	PushDownResult PushDownGet(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
 	PushDownResult PushDownCTE(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
-	PushDownResult PushDownCTERef(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownCTERef(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
+	                              CorrelatedLayout layout);
 	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                             CorrelatedLayout layout);
 };
