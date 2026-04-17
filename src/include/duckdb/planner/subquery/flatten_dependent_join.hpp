@@ -31,26 +31,9 @@ public:
 	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
 
 private:
-	struct PushDownContext {
-		PushDownContext() {
-		}
-		explicit PushDownContext(bool propagate_null_values_p) : propagate_null_values(propagate_null_values_p) {
-		}
-
-		PushDownContext WithPropagateNullValues(bool propagate_null_values_p) const {
-			return PushDownContext(propagate_null_values_p);
-		}
-
-		PushDownContext WithFreshTraversal() const {
-			return PushDownContext();
-		}
-
-		bool propagate_null_values = true;
-	};
-
 	struct CorrelatedLayout {
-		static CorrelatedLayout Empty(const CorrelatedColumns &correlated_columns) {
-			return CorrelatedLayout(correlated_columns, {}, {});
+		static CorrelatedLayout Initial(const CorrelatedColumns &correlated_columns) {
+			return CorrelatedLayout(correlated_columns, {}, {}, true);
 		}
 
 		static CorrelatedLayout CreateContiguous(const CorrelatedColumns &correlated_columns,
@@ -84,14 +67,17 @@ private:
 		}
 
 		idx_t size() const {
+			AssertUsable();
 			return correlated_bindings.size();
 		}
 
 		const vector<ColumnBinding> &GetBindings() const {
+			AssertUsable();
 			return correlated_bindings;
 		}
 
 		const CorrelatedColumnInfo &GetColumn(idx_t index) const {
+			AssertUsable();
 			return correlated_columns.get()[index];
 		}
 
@@ -104,6 +90,7 @@ private:
 		}
 
 		const ColumnBinding &GetBinding(idx_t index) const {
+			AssertUsable();
 			D_ASSERT(index < correlated_bindings.size());
 			return correlated_bindings[index];
 		}
@@ -113,6 +100,7 @@ private:
 		}
 
 		idx_t GetOffset(idx_t index) const {
+			AssertUsable();
 			D_ASSERT(index < correlated_offsets.size());
 			return correlated_offsets[index];
 		}
@@ -122,12 +110,14 @@ private:
 		}
 
 		void ShiftOffsets(idx_t offset) {
+			AssertUsable();
 			for (auto &entry : correlated_offsets) {
 				entry += offset;
 			}
 		}
 
 		void ResetContiguousOffsets(idx_t offset) {
+			AssertUsable();
 			D_ASSERT(correlated_offsets.size() == correlated_bindings.size());
 			for (idx_t i = 0; i < correlated_offsets.size(); i++) {
 				correlated_offsets[i] = offset + i;
@@ -135,6 +125,10 @@ private:
 		}
 
 	private:
+		void AssertUsable() const {
+			D_ASSERT(!is_initial);
+		}
+
 		idx_t GetDelimKeyIndex(idx_t index, bool perform_delim) const {
 			D_ASSERT(index < GetDelimKeyCount(perform_delim));
 			if (perform_delim) {
@@ -146,15 +140,16 @@ private:
 		}
 
 		CorrelatedLayout(const CorrelatedColumns &correlated_columns_p, vector<ColumnBinding> correlated_bindings_p,
-		                 vector<idx_t> correlated_offsets_p)
+		                 vector<idx_t> correlated_offsets_p, bool is_initial_p = false)
 		    : correlated_columns(correlated_columns_p), correlated_bindings(std::move(correlated_bindings_p)),
-		      correlated_offsets(std::move(correlated_offsets_p)) {
+		      correlated_offsets(std::move(correlated_offsets_p)), is_initial(is_initial_p) {
 			D_ASSERT(correlated_bindings.size() == correlated_offsets.size());
 		}
 
 		const_reference<CorrelatedColumns> correlated_columns;
 		vector<ColumnBinding> correlated_bindings;
 		vector<idx_t> correlated_offsets;
+		bool is_initial;
 	};
 
 	struct PushDownResult {
@@ -190,9 +185,9 @@ private:
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 
 	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan) {
-		return Decorrelate(std::move(plan), PushDownContext(), CorrelatedLayout::Empty(correlated_columns));
+		return Decorrelate(std::move(plan), true, CorrelatedLayout::Initial(correlated_columns));
 	}
-	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
+	PushDownResult Decorrelate(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, vector<ColumnBinding> bindings,
 	                                      const CorrelatedLayout &layout, bool perform_delim);
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
@@ -202,12 +197,13 @@ private:
 
 	//! Push the dependent join down a LogicalOperator
 	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
-	                                     PushDownContext context = PushDownContext()) {
-		return PushDownDependentJoin(std::move(plan), context, CorrelatedLayout::Empty(correlated_columns));
+	                                     bool propagate_null_values = true) {
+		return PushDownDependentJoin(std::move(plan), propagate_null_values,
+		                             CorrelatedLayout::Initial(correlated_columns));
 	}
-	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownDependentJoin(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                     CorrelatedLayout layout);
-	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                        CorrelatedLayout layout);
 	DecorrelationState &GetDecorrelationState(LogicalOperator &op);
 	Binder &binder;
@@ -227,6 +223,8 @@ private:
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const CorrelatedLayout &layout) const;
 	void AddAnyJoinConditions(LogicalDependentJoin &op, const vector<ColumnBinding> &plan_columns) const;
+	static vector<ColumnBinding> GetDependentJoinPlanColumns(LogicalOperator &op);
+	static void PopulateDuplicateEliminatedColumns(LogicalDependentJoin &op);
 	void AddComparisonJoinConditions(LogicalComparisonJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
 	void AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
@@ -235,36 +233,36 @@ private:
 	                                 const CorrelatedLayout &right_layout) const;
 	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
 	                             const CorrelatedColumns &correlated_columns);
-	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, PushDownContext context,
+	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, bool propagate_null_values,
 	                                          CorrelatedLayout layout);
-	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
-	                                     const CorrelatedLayout &right_layout);
-	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedLayout outer_layout,
+	                                     CorrelatedLayout right_layout);
+	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                             CorrelatedLayout layout, bool correlated_left);
-	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, PushDownContext context, CorrelatedLayout layout,
+	CorrelatedLayout PushDownChild(unique_ptr<LogicalOperator> &child, bool propagate_null_values, CorrelatedLayout layout,
 	                               bool fresh = false);
-	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownProjection(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownFilter(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownProjection(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                  CorrelatedLayout layout);
 	PushDownResult FinalizeProjection(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout,
 	                                  const vector<ColumnBinding> &old_child_bindings);
-	PushDownResult PushDownAggregate(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownAggregate(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                 CorrelatedLayout layout);
-	PushDownResult PushDownCrossProduct(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownCrossProduct(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                    CorrelatedLayout layout);
-	PushDownResult PushDownJoin(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownLimit(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownWindow(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownSetOperation(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownJoin(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownLimit(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownWindow(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownSetOperation(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                    CorrelatedLayout layout);
-	PushDownResult PushDownDistinct(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownExpressionGet(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownDistinct(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownExpressionGet(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                     CorrelatedLayout layout);
-	PushDownResult PushDownOrderBy(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownGet(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownCTE(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownCTERef(unique_ptr<LogicalOperator> plan, PushDownContext context, CorrelatedLayout layout);
-	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, PushDownContext context,
+	PushDownResult PushDownOrderBy(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownGet(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownCTE(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownCTERef(unique_ptr<LogicalOperator> plan, bool propagate_null_values, CorrelatedLayout layout);
+	PushDownResult PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                             CorrelatedLayout layout);
 };
 
