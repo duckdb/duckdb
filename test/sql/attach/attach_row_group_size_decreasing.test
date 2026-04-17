@@ -31,7 +31,7 @@ statement ok
 INSERT INTO test.data VALUES(8190), (8191);
 
 query II
-SELECT row_group_id, count FROM pragma_storage_info('test.data') where segment_type != 'VALIDITY' ORDER BY row_group_id;
+SELECT row_group_id, SUM(count) FROM pragma_storage_info('test.data') where segment_type != 'VALIDITY' GROUP BY (row_group_id) ORDER BY row_group_id;
 ----
 0	4096
 1	4094
