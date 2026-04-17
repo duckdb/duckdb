@@ -327,15 +327,6 @@ jobs:
         run: |
           make check-extension-entries
 
-          git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
-          if [ -s extension_entries.hpp.diff ]; then
-            cat extension_entries.hpp.diff
-            echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"
-            exit 1
-          else
-            echo "No differences found"
-          fi
-
       - name: Upload extension entries diff
         if: ${{ always() && steps.check_extension_entries.outcome == 'failure' }}
         uses: actions/upload-artifact@v7

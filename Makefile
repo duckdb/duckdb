@@ -623,11 +623,14 @@ format-fix:
 check-extension-entries: extension_configuration
 	$(PYTHON) scripts/generate_extensions_function.py
 	$(PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
-	@if git diff --exit-code src/include/duckdb/main/extension_entries.hpp; then \
-		echo "No differences found"; \
-	else \
+	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
+	@if [ -s extension_entries.hpp.diff ]; then \
+		cat extension_entries.hpp.diff; \
 		echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"; \
 		exit 1; \
+	else \
+		rm -f extension_entries.hpp.diff; \
+		echo "No differences found"; \
 	fi
 
 format-head:
