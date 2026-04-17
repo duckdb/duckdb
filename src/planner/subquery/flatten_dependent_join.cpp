@@ -355,16 +355,14 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 		if (!has_cte_ref_child) {
 			continue;
 		}
+		column_binding_set_t existing_bindings;
+		for (auto &existing : join.correlated_columns) {
+			existing_bindings.insert(existing.binding);
+		}
 		for (auto &column : correlated_columns) {
-			bool contains_binding = false;
-			for (auto &existing : join.correlated_columns) {
-				if (existing.binding == column.binding) {
-					contains_binding = true;
-					break;
-				}
-			}
-			if (!contains_binding) {
+			if (!existing_bindings.count(column.binding)) {
 				join.correlated_columns.AddColumnToBack(column);
+				existing_bindings.insert(column.binding);
 			}
 		}
 	}
@@ -599,6 +597,16 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 	}
 }
 
+FlattenDependentJoins::PushDownResult
+FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<LogicalOperator> plan, unique_ptr<LogicalOperator> delim_scan,
+                                               CorrelatedLayout layout) const {
+	auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
+	if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
+	}
+	return PushDownResult(std::move(cross_product), std::move(layout));
+}
+
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> plan,
                                                                                    CorrelatedLayout outer_layout,
                                                                                    CorrelatedLayout right_layout) {
@@ -736,8 +744,8 @@ FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PushDownChild(uni
 	return std::move(result.layout);
 }
 
-FlattenDependentJoins::CorrelatedLayout FlattenDependentJoins::PushDownFinalizingChild(unique_ptr<LogicalOperator> &child,
-                                                                                        CorrelatedLayout layout) {
+FlattenDependentJoins::CorrelatedLayout
+FlattenDependentJoins::PushDownFinalizingChild(unique_ptr<LogicalOperator> &child, CorrelatedLayout layout) {
 	auto result = PushDownDependentJoin(std::move(child), std::move(layout));
 	child = std::move(result.plan);
 	return std::move(result.layout);
@@ -1258,12 +1266,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownCTERef(uniq
 			join->children.push_back(std::move(delim_scan));
 			return PushDownResult(std::move(join), std::move(delim_layout));
 		}
-		auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
-		auto result_layout = delim_layout;
-		if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			result_layout = CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
-		}
-		return PushDownResult(std::move(cross_product), std::move(result_layout));
+		return CreateDelimCrossProduct(std::move(plan), std::move(delim_scan), std::move(delim_layout));
 	}
 	auto correlated_offset = cteref.chunk_types.size() - cteref.correlated_columns;
 	layout = CorrelatedLayout::CreateContiguous(
@@ -1275,7 +1278,6 @@ FlattenDependentJoins::PushDownResult
 FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan, CorrelatedLayout layout) {
 	// first check if the logical operator has correlated expressions
 	bool has_correlation = DependsOnCorrelated(*plan);
-	unique_ptr<LogicalOperator> delim_scan;
 	if (!has_correlation) {
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
@@ -1303,8 +1305,8 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 			auto left_columns = plan->GetColumnBindings().size();
 			layout = CorrelatedLayout::CreateContiguous(correlated_columns,
 			                                            ColumnBinding(delim_index, ProjectionIndex(0)), left_columns);
-			delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 			if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 				auto old_child_bindings = plan->children[0]->GetColumnBindings();
 				auto child_propagate_null_values = propagate_null_values;
 				for (auto &expr : plan->expressions) {
@@ -1316,15 +1318,12 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 				propagate_null_values = child_propagate_null_values;
 				auto decorrelated = Decorrelate(std::move(plan->children[0]), layout);
 				propagate_null_values = old_propagate_null_values;
-				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
-				auto result_layout = std::move(decorrelated.layout);
-				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-					result_layout =
-					    CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
-				}
-				plan->children[0] = std::move(cross_product);
-				return FinalizeProjection(std::move(plan), std::move(result_layout), old_child_bindings);
+				auto cross_product_result = CreateDelimCrossProduct(std::move(decorrelated.plan), std::move(delim_scan),
+				                                                    std::move(decorrelated.layout));
+				plan->children[0] = std::move(cross_product_result.plan);
+				return FinalizeProjection(std::move(plan), std::move(cross_product_result.layout), old_child_bindings);
 			} else if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
+				auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 				// Should a reference to a CTE be the final non-recursive operator,
 				// we have to add a filter predicate to ensure column equality between
 				// the left and right side of the join. A simple cross product does not
@@ -1339,22 +1338,13 @@ FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator>
 				}
 
 				auto decorrelated = Decorrelate(std::move(plan), layout);
-				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
-				auto result_layout = layout;
-				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-					result_layout =
-					    CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
-				}
-				return PushDownResult(std::move(cross_product), std::move(result_layout));
+				return CreateDelimCrossProduct(std::move(decorrelated.plan), std::move(delim_scan),
+				                               std::move(decorrelated.layout));
 			} else {
+				auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 				auto decorrelated = Decorrelate(std::move(plan), layout);
-				auto cross_product = LogicalCrossProduct::Create(std::move(decorrelated.plan), std::move(delim_scan));
-				auto result_layout = layout;
-				if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-					result_layout =
-					    CorrelatedLayout::CreateLeading(correlated_columns, cross_product->GetColumnBindings());
-				}
-				return PushDownResult(std::move(cross_product), std::move(result_layout));
+				return CreateDelimCrossProduct(std::move(decorrelated.plan), std::move(delim_scan),
+				                               std::move(decorrelated.layout));
 			}
 		}
 	}

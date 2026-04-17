@@ -227,6 +227,8 @@ private:
 	                             const CorrelatedLayout &layout) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const CorrelatedLayout &left_layout,
 	                                 const CorrelatedLayout &right_layout) const;
+	PushDownResult CreateDelimCrossProduct(unique_ptr<LogicalOperator> plan, unique_ptr<LogicalOperator> delim_scan,
+	                                       CorrelatedLayout layout) const;
 	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
 	                             const CorrelatedColumns &correlated_columns);
 	CorrelatedLayout PrepareDependentJoinLeft(LogicalDependentJoin &op, CorrelatedLayout layout);
