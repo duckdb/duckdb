@@ -89,9 +89,9 @@ typedef void (*aggregate_window_t)(AggregateInputData &aggr_input_data, const Wi
 //! callback, letting implementations issue a single batched call (e.g., one
 //! RPC for the whole Evaluate chunk instead of count separate calls).
 typedef void (*aggregate_window_batch_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-                                          const_data_ptr_t g_state, data_ptr_t l_state,
-                                          const SubFrames *subframes_per_row, idx_t count,
-                                          Vector &result, idx_t row_idx);
+                                         const_data_ptr_t g_state, data_ptr_t l_state,
+                                         const SubFrames *subframes_per_row, idx_t count, Vector &result,
+                                         idx_t row_idx);
 
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,

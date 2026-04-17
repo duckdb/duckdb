@@ -159,12 +159,10 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 	if (aggr.function.HasWindowBatchCallback()) {
 		vector<SubFrames> all_frames;
 		all_frames.reserve(count);
-		EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
-			all_frames.push_back(frames);
-		});
+		EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) { all_frames.push_back(frames); });
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);
 		aggr.function.GetWindowBatchCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(),
-		                                        all_frames.data(), count, result, row_idx);
+		                                       all_frames.data(), count, result, row_idx);
 		return;
 	}
 
