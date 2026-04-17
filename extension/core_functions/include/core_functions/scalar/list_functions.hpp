@@ -285,12 +285,6 @@ struct ListCosineDistanceFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct ListCosineDistanceFunAlias {
-	using ALIAS = ListCosineDistanceFun;
-
-	static constexpr const char *Name = "<=>";
-};
-
 struct ListCosineSimilarityFun {
 	static constexpr const char *Name = "list_cosine_similarity";
 	static constexpr const char *Parameters = "list1,list2";
@@ -309,12 +303,6 @@ struct ListDistanceFun {
 	static constexpr const char *Categories = "list";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct ListDistanceFunAlias {
-	using ALIAS = ListDistanceFun;
-
-	static constexpr const char *Name = "<->";
 };
 
 struct ListInnerProductFun {
