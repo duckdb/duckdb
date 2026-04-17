@@ -53,6 +53,9 @@ public:
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
+	//! Checks if a vector has enough space for the given count - throws an internal error otherwise
+	DUCKDB_API void CheckCapacity(idx_t capacity) const;
+
 	//! Create a new vector that references the other vector
 	DUCKDB_API static Vector Ref(const Vector &other);
 
@@ -120,7 +123,7 @@ public:
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
 
 	//! Turn the vector into a shredded variant vector
-	DUCKDB_API void Shred(Vector &shredded_data);
+	DUCKDB_API void Shred(Vector &shredded_data, idx_t capacity);
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
@@ -150,13 +153,22 @@ public:
 	idx_t GetAllocationSize() const;
 
 	// Getters
-	VectorType GetVectorType() const;
+	inline VectorType GetVectorType() const {
+		auto &buffer_ref = GetBufferRef();
+		if (!buffer_ref) {
+			return VectorType::FLAT_VECTOR;
+		}
+		return buffer_ref->GetVectorType();
+	}
 	inline const LogicalType &GetType() const {
 		return type;
 	}
-
-	VectorBuffer &BufferMutable();
-	const VectorBuffer &Buffer() const;
+	inline VectorBuffer &BufferMutable() {
+		return *buffer;
+	}
+	inline const VectorBuffer &Buffer() const {
+		return *buffer;
+	}
 	inline const buffer_ptr<VectorBuffer> &GetBufferRef() const {
 		return buffer;
 	}

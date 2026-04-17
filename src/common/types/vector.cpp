@@ -85,6 +85,22 @@ Vector::Vector(const Value &value) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
+void Vector::CheckCapacity(idx_t capacity) const {
+	if (!buffer) {
+		// no buffer - we accept any capacity
+		return;
+	}
+	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// constant vectors can fit any
+		return;
+	}
+	idx_t buffer_capacity = buffer->Capacity();
+	if (capacity > buffer_capacity) {
+		throw InternalException("Vector::CheckCapacity - capacity %d exceeds buffer capacity %d", capacity,
+		                        buffer_capacity);
+	}
+}
+
 Vector Vector::Ref(const Vector &other) {
 	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }
@@ -304,14 +320,6 @@ Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
 }
 
-VectorBuffer &Vector::BufferMutable() {
-	return *buffer;
-}
-
-const VectorBuffer &Vector::Buffer() const {
-	return *buffer;
-}
-
 // LCOV_EXCL_START
 string VectorTypeToString(VectorType type) {
 	switch (type) {
@@ -425,7 +433,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 }
 
-void Vector::Shred(Vector &shredded_data) {
+void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (GetType().id() != LogicalTypeId::VARIANT) {
 		throw InternalException("Vector::Shred can only be used on variant vectors");
 	}
@@ -433,7 +441,7 @@ void Vector::Shred(Vector &shredded_data) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
 }
 
 // FIXME: This should ideally be const
@@ -802,13 +810,6 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
 		}
 	}
-}
-
-VectorType Vector::GetVectorType() const {
-	if (!buffer) {
-		return VectorType::FLAT_VECTOR;
-	}
-	return Buffer().GetVectorType();
 }
 
 void Vector::SetVectorType(VectorType new_vector_type) {
