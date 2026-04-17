@@ -24,24 +24,12 @@ public:
 	WindowValueGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      ignore_nulls(&all_valid), value_idx(executor.child_idx[0]) {
+	      value_idx(executor.child_idx[0]) {
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
 			    make_uniq<WindowIndexTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx, payload_count);
 		}
 	}
-
-	void Finalize(CollectionPtr collection) {
-		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
-			ignore_nulls = &collection->validities[value_idx];
-		}
-	}
-
-	// IGNORE NULLS
-	mutex lock;
-	ValidityMask all_valid;
-	optional_ptr<ValidityMask> ignore_nulls;
 
 	//! The index of the value collection
 	const column_t value_idx;
@@ -58,7 +46,7 @@ public:
 class WindowValueLocalState : public WindowExecutorLocalState {
 public:
 	WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
-	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate) {
+	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate), ignore_nulls(&all_valid) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 
 		if (gvstate.value_tree) {
@@ -86,6 +74,10 @@ public:
 
 	//! The state used for reading the collection
 	unique_ptr<WindowCursor> cursor;
+
+	// IGNORE NULLS
+	ValidityMask all_valid;
+	optional_ptr<ValidityMask> ignore_nulls;
 };
 
 void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
@@ -119,9 +111,14 @@ void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_ch
 
 void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
-	gvstate.Finalize(collection);
+	auto &executor = gvstate.executor;
+	const auto &value_idx = gvstate.value_idx;
 
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
+	if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+		lvstate.ignore_nulls = &collection->validities[value_idx];
+	}
+
 	auto &local_value = lvstate.local_value;
 	if (local_value) {
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
@@ -471,7 +468,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 
 	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
 	// or if we are using framing (the frame may change on each row)
-	auto &ignore_nulls = glstate.ignore_nulls;
+	auto &ignore_nulls = llstate.ignore_nulls;
 	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
 	if (has_offset) {
 		can_shift = can_shift && wexpr.children[1]->IsFoldable();
@@ -578,7 +575,7 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 	auto &cursor = *lvstate.cursor;
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
@@ -644,7 +641,7 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 	auto &cursor = *lvstate.cursor;
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
@@ -716,7 +713,7 @@ void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 	auto &cursor = *lvstate.cursor;
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
 	const auto &child_idx = gvstate.executor.child_idx;

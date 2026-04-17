@@ -130,7 +130,7 @@ void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector
 	auto target = (DST *)column->deprecated_data;
 	for (auto &input : source.Chunks(column_ids)) {
 		auto source = FlatVector::GetData<SRC>(input.data[0]);
-		auto &mask = FlatVector::Validity(input.data[0]);
+		auto &mask = FlatVector::ValidityMutable(input.data[0]);
 
 		for (idx_t k = 0; k < input.size(); k++, row++) {
 			if (!mask.RowIsValid(k)) {

@@ -35,13 +35,13 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	} else {
 		// set only the struct buffer's type - do not propagate to children
 		// since children reference external vectors (input children) that may have incompatible buffer types
-		result.GetBuffer()->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
 		auto validity_entries = input.Validity(count);
 
 		if (validity_entries.CanHaveNull()) {
-			auto &validity = FlatVector::Validity(result);
+			auto &validity = FlatVector::ValidityMutable(result);
 
 			for (idx_t i = 0; i < count; i++) {
 				if (!validity_entries.IsValid(i)) {

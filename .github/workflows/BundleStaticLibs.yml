@@ -7,7 +7,7 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -15,7 +15,7 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
   push:
     branches-ignore:
       - 'main'

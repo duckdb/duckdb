@@ -44,7 +44,7 @@ unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
 template <class T>
 void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start,
                                          idx_t chunk_end, EnumWriterPageState &page_state) {
-	auto &mask = FlatVector::Validity(input_column);
+	auto &mask = FlatVector::ValidityMutable(input_column);
 	auto *ptr = FlatVector::GetData<T>(input_column);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {

@@ -187,7 +187,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 
 		if (!n) {
 			rmask.Set(ridx, false);
@@ -291,7 +291,7 @@ struct QuantileListOperation : QuantileOperation {
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		if (!n) {
-			auto &lmask = FlatVector::Validity(list);
+			auto &lmask = FlatVector::ValidityMutable(list);
 			lmask.Set(lidx, false);
 			return;
 		}
