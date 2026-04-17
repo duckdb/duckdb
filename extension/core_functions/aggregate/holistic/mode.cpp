@@ -169,7 +169,7 @@ struct ModeState {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
 			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
-			validity = &FlatVector::Validity(page.data[0]);
+			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}
@@ -373,7 +373,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 		auto &prevs = state.prevs;
 		if (prevs.empty()) {
 			prevs.resize(1);

@@ -96,7 +96,7 @@ template <class T>
 void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto res = FlatVector::GetDataMutable<T>(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);
 		if (ConstantVector::IsNull(vector)) {
@@ -124,7 +124,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 
 void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(vector)) {
 			for (idx_t i = 0; i < count; i++) {

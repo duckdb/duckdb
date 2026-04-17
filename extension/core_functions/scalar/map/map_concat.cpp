@@ -37,7 +37,7 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		// All inputs are NULL, just return NULL
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;

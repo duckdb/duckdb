@@ -708,7 +708,7 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	case PhysicalType::ARRAY: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		auto &sel = *FlatVector::IncrementalSelectionVector();
 		auto physical_type = left.GetType().InternalType();
 		if (physical_type == PhysicalType::STRUCT && left.GetType().id() == LogicalTypeId::VARIANT) {

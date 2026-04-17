@@ -88,7 +88,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			current_list_capacity = ListVector::GetListCapacity(result);
 		}
 		auto list_content = FlatVector::GetDataMutable<string_t>(child_vector);
-		auto &child_validity = FlatVector::Validity(child_vector);
+		auto &child_validity = FlatVector::ValidityMutable(child_vector);
 
 		// Write the captured groups into the list-child vector
 		auto &match_group = args.group_buffer[group];
@@ -211,7 +211,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			// If something is NULL, the result is NULL
 			// FIXME: do we even need 'SPECIAL_HANDLING'?
 			auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
-			auto &result_validity = FlatVector::Validity(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 			result_data[row].length = 0;
 			result_data[row].offset = ListVector::GetListSize(result);
 			result_validity.SetInvalid(row);
@@ -263,7 +263,7 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 			if (span.empty()) {
 				if (span.begin() == nullptr) {
 					// Unmatched optional group -> always NULL
-					FlatVector::Validity(child_vec).SetInvalid(current_list_size);
+					FlatVector::ValidityMutable(child_vec).SetInvalid(current_list_size);
 				}
 				cdata[current_list_size] = string_t(string_val.GetData(), 0);
 			} else {

@@ -158,7 +158,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 
 	auto &target_type = result.GetType();
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	bool all_valid = true;
 	for (idx_t i = 0; i < count; i++) {
@@ -221,7 +221,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -296,7 +296,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -363,7 +363,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {

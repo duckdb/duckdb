@@ -93,7 +93,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 		read_count = num_values;
 	}
 	// set the validity mask for this level
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
 		if (define_out[i] < MaxDefine()) {
 			validity.SetInvalid(i);

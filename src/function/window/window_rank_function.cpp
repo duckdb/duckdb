@@ -130,8 +130,8 @@ struct WindowPeerExecutor : public WindowExecutor {
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
 		return true;
 	}
-	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
-	                       LocalSourceState &state) {
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
 		state.Cast<WindowPeerStreamingState>().Evaluate(result);
 	}
 };

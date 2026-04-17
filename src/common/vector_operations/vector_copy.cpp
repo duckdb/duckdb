@@ -110,7 +110,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	// first copy the nullmask
-	auto &tmask = FlatVector::Validity(target);
+	auto &tmask = FlatVector::ValidityMutable(target);
 	if (source->GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		const bool valid = !ConstantVector::IsNull(*source);
 		for (idx_t i = 0; i < copy_count; i++) {
