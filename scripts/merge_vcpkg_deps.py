@@ -6,10 +6,6 @@ import sys
 # combined & deduplicated dependencies. Note that this script is very dumb and some manual merging may be required
 # to combine extensions from multiple builds in the case of colliding dependencies.
 
-# Also: note that due to the fact that the httpfs extension currently can not use the latest openssl version (3.1),
-# we need to pin the openssl version requiring us to also pin the vcpkg version here. When updating the vcpkg git hash
-# we probably want to change it here and in ('.github/actions/build_extensions/action.yml') at the same time
-
 dependencies_str = []
 dependencies_dict = []
 merged_overlay_ports = []
@@ -78,7 +74,7 @@ if merged_overlay_ports:
 if merged_overlay_triplets:
     data['vcpkg-configuration']['overlay-triplets'] = merged_overlay_triplets
 
-REGISTRY_BASELINE = '869bddccca976e0abe25894356e7f49e77765169'
+REGISTRY_BASELINE = 'c4e1e0969823572af6904413a7e838a61ac0f2ff'
 # NOTE: use 'scripts/list_vcpkg_registry_packages.py --baseline <baseline>' to generate the list of packages
 data['vcpkg-configuration']['registries'] = [
     {

@@ -16,7 +16,7 @@ foreach base_type TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S TIMESTAMPTZ
 foreach target_type TIMESTAMPTZ TIMESTAMP
 
 query I
-select '${infinity_string}'::${base_type}::${target_type} == '${infinity_string}'
+select '{infinity_string}'::{base_type}::{target_type} == '{infinity_string}'
 ----
 true
 

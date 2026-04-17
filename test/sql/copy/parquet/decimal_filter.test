@@ -16,12 +16,12 @@ select * from '{DATA_DIR}/parquet-testing/decimals.parquet'
 loop i 1 5
 
 query IIII
-select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l${i}=0.1
+select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l{i}=0.1
 ----
 0.1	0.1	0.1	0.1
 
 query IIII
-select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l${i}=-0.1
+select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l{i}=-0.1
 ----
 -0.1	-0.1	-0.1	-0.1
 

@@ -1,0 +1,21 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0004.test
+# description: PEG should reject (currently accepts): Not implemented Error: Cannot drop this type yet
+# group: [fuzzer]
+
+require autocomplete
+
+statement ok
+CALL enable_peg_parser();
+
+statement error
+DROP MATERIALIZED VIEW IF EXISTS t
+----
+Not implemented Error: Cannot drop MATERIALIZED VIEW yet
+
+statement ok
+CALL disable_peg_parser();
+
+statement error
+DROP MATERIALIZED VIEW IF EXISTS t
+----
+Not implemented Error: Cannot drop this type yet

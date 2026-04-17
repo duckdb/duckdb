@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -188,7 +191,7 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);
 	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+	auto keys_entry_data = FlatVector::GetDataMutable<string_t>(keys_entry);
 
 	bool already_sorted = true;
 
@@ -228,7 +231,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! keys_entry
 	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(format);
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
-	D_ASSERT(keys_entry.validity.AllValid());
+	D_ASSERT(keys_entry.validity.CannotHaveNull());
 
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(format);

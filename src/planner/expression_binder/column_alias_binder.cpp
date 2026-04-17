@@ -45,7 +45,7 @@ bool ColumnAliasBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) 
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;
 	}
-	return bind_state.alias_map.find(colref.column_names[0]) != bind_state.alias_map.end();
+	return bind_state.alias_map.find(colref.column_names.back()) != bind_state.alias_map.end();
 }
 
 } // namespace duckdb

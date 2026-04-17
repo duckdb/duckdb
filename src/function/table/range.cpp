@@ -355,7 +355,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 		idx_t size = 0;
-		auto data = FlatVector::GetData<timestamp_t>(output.data[0]);
+		auto result_data = FlatVector::Writer<timestamp_t>(output.data[0], STANDARD_VECTOR_SIZE);
 		while (true) {
 			if (state.Finished(state.current_state)) {
 				break;
@@ -363,7 +363,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			if (size >= STANDARD_VECTOR_SIZE) {
 				break;
 			}
-			data[size++] = state.current_state;
+			result_data[size++] = state.current_state;
 			state.current_state =
 			    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment);
 		}

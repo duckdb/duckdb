@@ -1,37 +1,55 @@
 #include "column_reader.hpp"
 
+#include <algorithm>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
+
 #include "reader/boolean_column_reader.hpp"
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
-#include "reader/decimal_column_reader.hpp"
-#include "duckdb.hpp"
-#include "reader/expression_column_reader.hpp"
 #include "reader/interval_column_reader.hpp"
-#include "reader/list_column_reader.hpp"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "reader/null_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
-
-#include "reader/row_number_column_reader.hpp"
 #include "snappy.h"
 #include "reader/string_column_reader.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "reader/uuid_column_reader.hpp"
-
 #include "zstd.h"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-
 #include "parquet_crypto.hpp"
+#include "decode_utils.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "parquet_decimal_utils.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_rle_bp_decoder.hpp"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift_tools.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
+class Allocator;
+struct hugeint_t;
 
 using duckdb_parquet::CompressionCodec;
 using duckdb_parquet::ConvertedType;
@@ -109,7 +127,7 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS_SIZE = sizeof(ParquetDecodeUtil
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
-ColumnReader::ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p)
+ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
       delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
@@ -122,7 +140,7 @@ Allocator &ColumnReader::GetAllocator() {
 	return reader.allocator;
 }
 
-ParquetReader &ColumnReader::Reader() {
+const ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
 
@@ -154,12 +172,27 @@ idx_t ColumnReader::FileOffset() const {
 	}
 	auto min_offset = NumericLimits<idx_t>::Maximum();
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
-		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.dictionary_page_offset);
+		if (chunk->meta_data.dictionary_page_offset < 0) {
+			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                            "dictionary page offset (%lld)",
+			                            reader.GetFileName(), chunk->meta_data.dictionary_page_offset);
+		}
+		min_offset = MinValue<idx_t>(min_offset, NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset));
 	}
 	if (chunk->meta_data.__isset.index_page_offset) {
-		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.index_page_offset);
+		if (chunk->meta_data.index_page_offset < 0) {
+			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                            "index page offset (%lld)",
+			                            reader.GetFileName(), chunk->meta_data.index_page_offset);
+		}
+		min_offset = MinValue<idx_t>(min_offset, NumericCast<idx_t>(chunk->meta_data.index_page_offset));
 	}
-	min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.data_page_offset);
+	if (chunk->meta_data.data_page_offset < 0) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+		                            "data page offset (%lld)",
+		                            reader.GetFileName(), chunk->meta_data.data_page_offset);
+	}
+	min_offset = MinValue<idx_t>(min_offset, NumericCast<idx_t>(chunk->meta_data.data_page_offset));
 
 	return min_offset;
 }
@@ -199,11 +232,16 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 		                            Reader().GetFileName());
 	}
 
+	if (chunk->meta_data.data_page_offset < 0) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+		                            "data page offset (%lld)",
+		                            Reader().GetFileName(), chunk->meta_data.data_page_offset);
+	}
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
-	chunk_read_offset = chunk->meta_data.data_page_offset;
+	chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.data_page_offset);
 	if (chunk->meta_data.__isset.dictionary_page_offset && chunk->meta_data.dictionary_page_offset >= 4) {
 		// this assumes the data pages follow the dict pages directly.
-		chunk_read_offset = chunk->meta_data.dictionary_page_offset;
+		chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset);
 	}
 	group_rows_available = chunk->meta_data.num_values;
 }
@@ -502,7 +540,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasRepeats()) {
 		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
-		repeated_decoder = make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidth(MaxRepeat()));
+		repeated_decoder =
+		    make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidthFromMaxValue(MaxRepeat()));
 		block->inc(rep_length);
 	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
 		block->inc(v2_header.repetition_levels_byte_length);
@@ -511,7 +550,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasDefines()) {
 		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
-		defined_decoder = make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidth(MaxDefine()));
+		defined_decoder =
+		    make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidthFromMaxValue(MaxDefine()));
 		block->inc(def_length);
 	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
 		block->inc(v2_header.definition_levels_byte_length);
@@ -616,7 +656,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < read_now; i++) {
 			validity.SetInvalid(result_offset + i);
 		}
@@ -774,6 +814,10 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	pending_skips = 0;
 
 	auto to_skip = num_values;
+	data_t skip_defines[STANDARD_VECTOR_SIZE] = {};
+	data_t skip_repeats[STANDARD_VECTOR_SIZE];
+	data_ptr_t skip_define_out = HasDefines() ? skip_defines : define_out;
+	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : repeat_out;
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);
 
@@ -785,9 +829,9 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 			to_skip -= skip_now;
 			continue;
 		}
-		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
+		const auto all_valid = PrepareRead(skip_now, skip_define_out, skip_repeat_out, 0);
 
-		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(skip_define_out);
 		switch (encoding) {
 		case ColumnEncoding::DICTIONARY:
 			dictionary_decoder.Skip(define_ptr, skip_now);
@@ -821,7 +865,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(reader, schema);
@@ -836,7 +880,7 @@ static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const
 	}
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<BooleanColumnReader>(reader, schema);

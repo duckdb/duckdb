@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -23,15 +25,18 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 			all_const = false;
 		}
 		// same holds for this
-		child_entries[i]->Reference(args.data[i]);
+		child_entries[i].Reference(args.data[i]);
 	}
-	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+	// set only the struct buffer's type - do not propagate to children
+	// since children reference external vectors (args) that may have incompatible buffer types
+	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.Verify(args.size());
 }
 
 template <bool IS_STRUCT_PACK>
-static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	case_insensitive_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
@@ -73,7 +78,7 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
-	                   StructPackBind<IS_STRUCT_PACK>, nullptr, StructPackStats);
+	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.varargs = LogicalType::ANY;
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);

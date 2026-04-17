@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
@@ -69,8 +76,10 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	return VariantStats::WrapExtractedFieldAsVariant(variant_stats, *found_stats);
 }
 
-static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
@@ -94,8 +103,72 @@ static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, Scala
 	}
 }
 
+static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
+                                        idx_t count, idx_t path_index = 0) {
+	if (path_index >= components.size()) {
+		// reached the end of the path - shred
+		if (input.GetType().IsNested()) {
+			// we only support this for non-nested types for now
+			return false;
+		}
+		// create the shredded vector with an empty unshredded part
+		auto shredded_type = VariantUtils::ShreddedType(input.GetType());
+		Vector shredded_vector(shredded_type, count);
+		auto &top_shredded = StructVector::GetEntries(shredded_vector);
+		// NULL out everything in the unshredded part
+		auto &unshredded_child = top_shredded[0];
+		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
+			ConstantVector::SetNull(unshredded_entry);
+		}
+		ConstantVector::SetNull(unshredded_child);
+		auto &shredded_child = top_shredded[1];
+		shredded_child.Reference(input);
+
+		result.Shred(shredded_vector);
+		return true;
+	}
+	auto &component = components[path_index];
+	if (component.lookup_mode != VariantChildLookupMode::BY_KEY) {
+		// only by key supported
+		return false;
+	}
+	// first entry is "typed_value"
+	auto &typed_entries = StructVector::GetEntries(input);
+	auto &typed_value = typed_entries[0];
+
+	// find the type in the struct type
+	auto &child_types = StructType::GetChildTypes(typed_value.GetType());
+	auto &child_entries = StructVector::GetEntries(typed_value);
+	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+		auto &entry = child_types[child_idx];
+		if (StringUtil::CIEquals(entry.first, component.key)) {
+			// key found - move onto next component
+			return TryShreddedExtractRecursive(child_entries[child_idx], components, result, count, path_index + 1);
+		}
+	}
+	// key not found - bail (FIXME: could we emit constant NULL here?)
+	return false;
+}
+
+static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
+                                   idx_t count) {
+	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		// input vector is not shredded
+		return false;
+	}
+	if (!ShreddedVector::IsFullyShredded(variant_vec)) {
+		// input vector is not fully shredded
+		return false;
+	}
+	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant_vec);
+	return TryShreddedExtractRecursive(shredded_vec, components, result, count);
+}
+
 void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
                                   idx_t count) {
+	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
+		return;
+	}
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
@@ -138,7 +211,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			if (!validity.RowIsValid(j)) {
 				continue;
 			}
-			if (!lookup_validity.AllValid() && !lookup_validity.RowIsValid(j)) {
+			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
 				//! No child could be extracted, set to NULL
 				validity.SetInvalid(j);
 				continue;
@@ -161,24 +234,23 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto values_list_size = ListVector::GetListSize(raw_values);
 
 	//! Create a new Variant that references the existing data of the input Variant
-	result.Initialize(false, count);
+	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	VariantVector::GetKeys(result).Reference(VariantVector::GetKeys(variant_vec));
 	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant_vec));
 	VariantVector::GetData(result).Reference(VariantVector::GetData(variant_vec));
 
 	//! Copy the existing 'values' list entry data
 	auto &result_values = VariantVector::GetValues(result);
-	result_values.Initialize(false, count);
+	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_values_data = FlatVector::GetData<list_entry_t>(result_values);
-	auto &result_values_validity = FlatVector::Validity(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_values_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 			continue;
 		}
-		result_values_data[i] = values_data[values.sel->get_index(i)];
+		result_data[i] = values_data[values.sel->get_index(i)];
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
@@ -200,7 +272,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
 	                              values_list_size);
 
-	if (!validity.AllValid()) {
+	if (validity.CanHaveNull()) {
 		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data
 		//! Which is a problem if we're still sharing the memory with 'input'
 		Vector other(result.GetType(), count);
@@ -213,11 +285,6 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
-
-	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
@@ -243,7 +310,7 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 
 	ScalarFunctionSet fun_set;
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
-	                               nullptr, VariantExtractPropagateStats);
+	                               VariantExtractPropagateStats);
 
 	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
 	fun_set.AddFunction(variant_extract);

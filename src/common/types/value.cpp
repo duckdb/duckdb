@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -1639,8 +1642,10 @@ hash_t Value::Hash() const {
 	Vector result(LogicalType::HASH, 1);
 	VectorOperations::Hash(input, result, 1);
 
-	auto data = FlatVector::GetData<hash_t>(result);
-	return data[0];
+	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		return *ConstantVector::GetData<hash_t>(result);
+	}
+	return FlatVector::GetData<hash_t>(result)[0];
 }
 
 string Value::ToString() const {

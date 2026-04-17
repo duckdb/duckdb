@@ -1,5 +1,14 @@
 #include "parquet_column_schema.hpp"
+
+#include <utility>
+
 #include "parquet_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "parquet_statistics.hpp"
 
 namespace duckdb {
 
@@ -53,7 +62,7 @@ ParquetColumnSchema ParquetColumnSchema::FromParentSchema(ParquetColumnSchema pa
 	res.schema_index = parent.schema_index;
 	res.column_index = parent.column_index;
 	res.schema_type = schema_type;
-	res.type = result_type;
+	res.type = std::move(result_type);
 	res.children.push_back(std::move(parent));
 	return res;
 }

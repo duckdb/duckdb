@@ -291,9 +291,8 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		timestamp_t now;
 	};
 
-	static duckdb::unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
-	                                                vector<duckdb::unique_ptr<Expression>> &arguments) {
-		return make_uniq<BindDataNow>(context);
+	static duckdb::unique_ptr<FunctionData> BindNow(BindScalarFunctionInput &input) {
+		return make_uniq<BindDataNow>(input.GetClientContext());
 	}
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
@@ -423,13 +422,11 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		auto &ts_vec = input.data[1];
 		if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(tz_vec)) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
-			} else {
-				SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-				UnaryExecutor::Execute<T, T>(ts_vec, result, input.size(),
-				                             [&](T ts) { return OP::Operation(calendar, ts); });
+				throw InternalException("ICUTimeZone called with constant NULL tz");
 			}
+			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
+			UnaryExecutor::Execute<T, T>(ts_vec, result, input.size(),
+			                             [&](T ts) { return OP::Operation(calendar, ts); });
 		} else {
 			BinaryExecutor::Execute<string_t, T, T>(tz_vec, ts_vec, result, input.size(), [&](string_t tz_id, T ts) {
 				if (ICUIsFinite(ts)) {

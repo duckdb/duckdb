@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
+#include <type_traits>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -62,6 +63,7 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #endif
 
 namespace duckdb {
+
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
@@ -165,16 +167,12 @@ public:
 	};
 };
 
-static FileMetadata StatsInternal(int fd, const string &path) {
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s", path,
-		                  strerror(errno));
-	}
-
+static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
 	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+	file_metadata.device_id = static_cast<idx_t>(s.st_dev);
+	file_metadata.file_id = static_cast<idx_t>(s.st_ino);
 
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
@@ -204,6 +202,15 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	}
 
 	return file_metadata;
+}
+
+static FileMetadata StatsInternal(int fd, const string &path) {
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s", path,
+		                  strerror(errno));
+	}
+	return StatsFromStruct(s);
 } // LCOV_EXCL_STOP
 
 #if __APPLE__ && !TARGET_OS_IPHONE
@@ -447,7 +454,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 				if (rc == -1) {
 					extended_error += ". Also, failed closing file";
 				}
-				extended_error += ". See also https://duckdb.org/docs/stable/connect/concurrency";
+				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
 				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
 			}
@@ -571,19 +578,24 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 }
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	bool trimmed = false;
+#if defined(DUCKDB_RUN_SLOW_VERIFIERS) || defined(DUCKDB_ALTERNATIVE_VERIFY)
+	std::vector<char> zeros(length_bytes, '\0');
+	Write(handle, zeros.data(), length_bytes, offset_bytes);
+	trimmed = true;
+#endif
 #if defined(__linux__)
 	// FALLOC_FL_PUNCH_HOLE requires glibc 2.18 or up
 #if __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 18)
-	return false;
+	// Nothing
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
 	                    UnsafeNumericCast<int64_t>(length_bytes));
-	return res == 0;
+	trimmed = (res == 0);
 #endif
-#else
-	return false;
 #endif
+	return trimmed;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
@@ -736,11 +748,10 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		auto &options = info.extended_info->options;
 		// file type
 		Value file_type(S_ISDIR(status.st_mode) ? "directory" : "file");
+		auto file_metadata = StatsFromStruct(status);
 		options.emplace("type", std::move(file_type));
-		// file size
-		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
-		// last modified time
-		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(status.st_mtime)));
+
+		FillFileOptions(file_metadata, options);
 
 		// invoke callback
 		callback(info);
@@ -811,18 +822,15 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 }
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
-	auto path = ExpandPath(path_p, opener);
-	if (!IsPathAbsolute(path)) {
-		// path is not absolute - join with working directory
-		return JoinPath(GetWorkingDirectory(), path);
-	} else {
-		// already absolute
-		return path;
-	}
+	auto parsed = Path::FromString(ExpandPath(path_p, opener));
+	return (parsed.IsAbsolute() ? parsed : Path::FromString(GetWorkingDirectory()).Join(parsed)).ToString();
 }
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
+
+static const std::wstring WINDOWS_LOCAL_LONG_PATH_PREFIX = L"\\\\?\\";
+static const std::wstring WINDOWS_UNC_LONG_PATH_PREFIX = L"\\\\?\\UNC\\";
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string LocalFileSystem::GetLastErrorAsString() {
@@ -893,6 +901,9 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	// Get file size from high and low parts.
 	file_metadata.file_size =
 	    (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | static_cast<int64_t>(file_info.nFileSizeLow);
+	file_metadata.device_id = static_cast<uint64_t>(file_info.dwVolumeSerialNumber);
+	file_metadata.file_id =
+	    (static_cast<uint64_t>(file_info.nFileIndexHigh) << 32) | static_cast<uint64_t>(file_info.nFileIndexLow);
 
 	// Get last modification time
 	file_metadata.last_modification_time = FiletimeToTimeStamp(file_info.ftLastWriteTime);
@@ -914,6 +925,19 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	}
 
 	return file_metadata;
+}
+
+static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
+	FileMetadata result;
+	result.file_size = static_cast<idx_t>(entry.EndOfFile.QuadPart);
+
+	FILETIME ft;
+	ft.dwLowDateTime = entry.LastWriteTime.LowPart;
+	ft.dwHighDateTime = entry.LastWriteTime.HighPart;
+	result.last_modification_time = FiletimeToTimeStamp(ft);
+
+	result.file_id = entry.FileId.QuadPart;
+	return result;
 }
 
 struct WindowsFileHandle : public FileHandle {
@@ -1275,46 +1299,69 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
-	string search_dir = JoinPath(directory, "*");
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, search_dir, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
 
-	WIN32_FIND_DATAW ffd;
-	HANDLE hFind = FindFirstFileW(unicode_path.c_str(), &ffd);
-	if (hFind == INVALID_HANDLE_VALUE) {
+	// Open a handle to the directory itself so we can use GetFileInformationByHandleEx,
+	// which returns FILE_ID_BOTH_DIR_INFO entries that include the per-file FileId
+	// (equivalent to inode number) without requiring a separate handle per file.
+	HANDLE hDir =
+	    CreateFileW(unicode_path.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (hDir == INVALID_HANDLE_VALUE) {
 		return false;
 	}
-	do {
-		OpenFileInfo info(WindowsUtil::UnicodeToUTF8(ffd.cFileName));
-		auto &name = info.path;
-		if (name == "." || name == "..") {
-			continue;
+
+	DWORD volume_serial_number = 0;
+	if (!GetVolumeInformationByHandleW(hDir, NULL, 0, &volume_serial_number, NULL, NULL, NULL, 0)) {
+		CloseHandle(hDir);
+		throw IOException("Failed to get volume serial number from directory \"%s\": %s", directory,
+		                  GetLastErrorAsString());
+	}
+
+	static constexpr DWORD BUFFER_SIZE = 65536;
+	auto buffer = unique_ptr<char[]>(new char[BUFFER_SIZE]);
+
+	FILE_INFO_BY_HANDLE_CLASS info_class = FileIdBothDirectoryRestartInfo;
+	while (true) {
+		if (!GetFileInformationByHandleEx(hDir, info_class, buffer.get(), BUFFER_SIZE)) {
+			CloseHandle(hDir);
+			if (GetLastError() == ERROR_NO_MORE_FILES) {
+				// success - listed all files in the directory
+				return true;
+			}
+			auto error = LocalFileSystem::GetLastErrorAsString();
+			throw IOException("Failed to list directory \"%s\": %s", directory, error);
 		}
-		// create extended info
-		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-		auto &options = info.extended_info->options;
-		// file type
-		Value file_type(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
-		options.emplace("type", std::move(file_type));
-		// file size
-		int64_t file_size_bytes =
-		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
-		options.emplace("file_size", Value::BIGINT(file_size_bytes));
-		// last modified time
-		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
-		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
 
-		// callback
-		callback(info);
-	} while (FindNextFileW(hFind, &ffd) != 0);
+		auto *entry = reinterpret_cast<FILE_ID_BOTH_DIR_INFO *>(buffer.get());
+		while (true) {
+			// FileName is not null-terminated; use FileNameLength (in bytes) to construct the string.
+			std::wstring wname(entry->FileName, entry->FileNameLength / sizeof(WCHAR));
+			string name = WindowsUtil::UnicodeToUTF8(wname.c_str());
 
-	DWORD dwError = GetLastError();
-	if (dwError != ERROR_NO_MORE_FILES) {
-		FindClose(hFind);
-		return false;
+			if (name != "." && name != "..") {
+				OpenFileInfo info(name);
+				info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+				auto &options = info.extended_info->options;
+				// file type
+				Value file_type(entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
+				options.emplace("type", std::move(file_type));
+
+				auto metadata = StatsFromDirInfo(*entry);
+				metadata.device_id = volume_serial_number;
+				FillFileOptions(metadata, options);
+
+				callback(info);
+			}
+
+			if (entry->NextEntryOffset == 0) {
+				break;
+			}
+			entry = reinterpret_cast<FILE_ID_BOTH_DIR_INFO *>(reinterpret_cast<char *>(entry) + entry->NextEntryOffset);
+		}
+		// next iteration -
+		info_class = FileIdBothDirectoryInfo;
 	}
-
-	FindClose(hFind);
-	return true;
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
@@ -1360,10 +1407,19 @@ bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	DWORD len = GetFinalPathNameByHandleW(handle, resolved, MAX_PATH, FILE_NAME_NORMALIZED);
 	CloseHandle(handle);
 
-	if (len < 0 && len >= MAX_PATH) {
+	if (len == 0 || len >= MAX_PATH) {
 		return false;
 	}
-	input = WindowsUtil::UnicodeToUTF8(resolved);
+
+	std::wstring resolved_wstr(resolved, static_cast<size_t>(len));
+
+	if (resolved_wstr.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
+		resolved_wstr = L"\\\\" + resolved_wstr.substr(WINDOWS_UNC_LONG_PATH_PREFIX.length());
+	} else if (resolved_wstr.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0) {
+		resolved_wstr = resolved_wstr.substr(WINDOWS_LOCAL_LONG_PATH_PREFIX.length());
+	}
+
+	input = WindowsUtil::UnicodeToUTF8(resolved_wstr.c_str());
 	return true;
 }
 
@@ -1384,33 +1440,21 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
 	auto path = ExpandPath(path_p, opener);
-	if (FileSystem::IsPathAbsolute(path)) {
+	auto parsed = Path::FromString(path);
+	if (parsed.IsAbsolute()) {
 		// already absolute - nothing to do
-		return path;
-	}
-	// check if this is a drive letter (e.g. C:)
-	if (PathStartsWithDrive(path)) {
-		// this starts with a drive letter
-		// we now have two options - either this is "C:" or this is "C:\"
-		// "C:" is the current working directory, C:\ is an absolute path
-		if (path.size() >= 3 && (path[2] == '\\' || path[2] == '/')) {
-			// C:\\ - this is already an absolute path
-			return path;
-		}
-		// this is "C:" - expand to current working directory if this is the current drive
-		auto working_directory = GetWorkingDirectory();
-		if (working_directory[0] != path[0]) {
-			// this is not the drive we are on right now (e.g. referencing D: while in C:)
-			// default to root of drive
-			working_directory = string(1, path[0]) + ":\\";
-		}
-		if (path.size() == 2) {
-			return working_directory;
-		}
-		return JoinPath(working_directory, path.substr(2));
+		return parsed.ToString();
 	}
 
-	return JoinPath(GetWorkingDirectory(), path);
+	auto parsed_wd = Path::FromString(GetWorkingDirectory());
+	if (parsed.HasDrive() && parsed_wd.GetDriveChar() != parsed.GetDriveChar()) {
+		// this is relative path "C:", and this is not the drive we are on right now
+		// (referencing D: while in $PWD in C:); In this case, default as if PWD is
+		// root of drive, e.g. "C:\"
+		// NOTE: should this error? pushdir("c:") && getcwd() && popdir()?
+		parsed_wd = Path::FromString(parsed.GetBase() + parsed.GetSeparator());
+	}
+	return parsed_wd.Join(parsed.GetPath()).ToString();
 }
 
 #endif
@@ -1500,26 +1544,27 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 	return FileSystem::CanonicalizePath(path);
 }
 
-string LocalFileSystem::GetVersionTag(FileHandle &handle) {
-	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
-#ifdef _WIN32
-	return "";
-#else
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
-	}
-
-	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
+string LocalFileSystem::VersionTagFromMetadata(const FileMetadata &stats) {
 	uint64_t version_tag[4];
-	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
-	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
-	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
-	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
-
+	Store(stats.device_id.IsValid() ? stats.device_id.GetIndex() : 0, data_ptr_cast(&version_tag[0]));
+	Store(stats.file_id.IsValid() ? stats.file_id.GetIndex() : 0, data_ptr_cast(&version_tag[1]));
+	Store(stats.file_size, data_ptr_cast(&version_tag[2]));
+	Store(stats.last_modification_time.value, data_ptr_cast(&version_tag[3]));
 	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
-#endif
+}
+
+void LocalFileSystem::FillFileOptions(const FileMetadata &file_metadata, unordered_map<string, Value> &options) {
+	// file size
+	options.emplace("file_size", Value::BIGINT(file_metadata.file_size));
+	// last modified time
+	options.emplace("last_modified", Value::TIMESTAMP(file_metadata.last_modification_time));
+	// version tag
+	options.emplace("etag", Value::BLOB_RAW(VersionTagFromMetadata(file_metadata)));
+}
+
+string LocalFileSystem::GetVersionTag(FileHandle &handle) {
+	auto stats = handle.Stats();
+	return VersionTagFromMetadata(stats);
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {
@@ -1663,34 +1708,23 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 		finished = true;
 		return;
 	}
-	// split up the path into separate chunks
-	idx_t last_pos = 0;
-	for (idx_t i = 0; i < path.size(); i++) {
-		if (path[i] == '\\' || path[i] == '/') {
-			if (i == last_pos) {
-				// empty: skip this position
-				last_pos = i + 1;
-				continue;
-			}
-			if (splits.empty()) {
-				splits.emplace_back(fs, path.substr(0, i));
-			} else {
-				splits.emplace_back(fs, path.substr(last_pos, i - last_pos));
-			}
-			last_pos = i + 1;
-		}
+	// Split path into base (= scheme+authority+anchor) + individual segments.
+	auto parsed = Path::FromString(path);
+	string base = parsed.GetBase();
+	if (!base.empty()) {
+		splits.emplace_back(fs, base);
 	}
-	splits.emplace_back(fs, path.substr(last_pos, path.size() - last_pos));
-	// handle absolute paths
-	absolute_path = false;
-	if (fs.IsPathAbsolute(path)) {
-		// first character is a slash -  unix absolute path
-		absolute_path = true;
-	} else if (StringUtil::Contains(splits[0].path,
-	                                ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
-		// first split has a colon -  windows absolute path
-		absolute_path = true;
-	} else if (splits[0].path == "~") {
+	for (auto &seg : parsed.GetPathSegments()) {
+		splits.emplace_back(fs, seg);
+	}
+	absolute_path = parsed.IsAbsolute();
+	// Preserve trailing separator semantics: glob("dir/*/") matches directories,
+	// not files. Add empty trailing split to enforce this and make preceding splits
+	// non-final.
+	if (parsed.HasTrailingSeparator()) {
+		splits.emplace_back(fs, string());
+	}
+	if (!splits.empty() && splits[0].path == "~") {
 		// starts with home directory
 		auto home_directory = fs.GetHomeDirectory(opener);
 		if (!home_directory.empty()) {

@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -198,6 +199,10 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
     : BaseFileReader(std::move(file_p)), context(context_p), finished(false) {
 	auto &attached = GetAttachedDatabase();
 	auto &catalog = attached.GetCatalog();
+	if (!catalog.IsDuckCatalog()) {
+		throw NotImplementedException("read_duckdb can only be used to read DuckDB files - \"%s\" is of type \"%s\"",
+		                              catalog.GetDBPath(), catalog.GetCatalogType());
+	}
 	vector<reference<TableCatalogEntry>> tables;
 	vector<reference<TableCatalogEntry>> candidate_tables;
 	catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
@@ -364,7 +369,7 @@ double DuckDBReader::GetProgressInFile(ClientContext &context) {
 }
 
 void DuckDBReader::AddVirtualColumn(column_t virtual_column_id) {
-	if (virtual_column_id != COLUMN_IDENTIFIER_ROW_ID) {
+	if (virtual_column_id != COLUMN_IDENTIFIER_ROW_ID && virtual_column_id != COLUMN_IDENTIFIER_ROW_NUMBER) {
 		throw InternalException("Unsupported virtual column id %d for duckdb reader", virtual_column_id);
 	}
 }
@@ -499,6 +504,7 @@ FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 
 void DuckDBMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::BIGINT)));
+	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("row_number", LogicalType::BIGINT)));
 }
 
 void ReadDuckDBAddNamedParameters(TableFunction &table_function) {

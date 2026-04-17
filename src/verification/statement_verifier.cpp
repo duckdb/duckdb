@@ -132,7 +132,7 @@ bool StatementVerifier::Run(
                                                 optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
 	bool failed = false;
 
-	context.interrupted = false;
+	context.interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.enable_caching_operators = !DisableOperatorCaching();
 	context.config.force_external = ForceExternal();
@@ -147,7 +147,7 @@ bool StatementVerifier::Run(
 		failed = true;
 		materialized_result = make_uniq<MaterializedQueryResult>(ErrorData(ex));
 	}
-	context.interrupted = false;
+	context.interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 
 	return failed;
 }

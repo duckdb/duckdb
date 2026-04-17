@@ -10,7 +10,7 @@ namespace duckdb {
 namespace {
 struct SwitchFunctionBindData : FunctionData {
 	explicit SwitchFunctionBindData(const LogicalType &return_type_p, idx_t map_index_p)
-	    : return_type(std::move(return_type_p)), map_index(std::move(map_index_p)) {
+	    : return_type(return_type_p), map_index(map_index_p) {
 	}
 
 	LogicalType return_type;
@@ -41,8 +41,9 @@ idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
 	return DConstants::INVALID_INDEX;
 }
 
-unique_ptr<FunctionData> SwitchBindReturnType(ClientContext &context, ScalarFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
 	auto map_index = FindMapArgumentIndex(arguments);
 	if (map_index == DConstants::INVALID_INDEX) {
 		throw BinderException("Switch: No map argument found");
@@ -115,8 +116,8 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 	ExtractConstantExprFromList(cases_func.children[1], values_unpacked);
 
 	result->case_checks.reserve(keys_unpacked.size());
-	BoundCaseCheck case_check;
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
+		BoundCaseCheck case_check;
 		if (base_expr) {
 			auto max_type =
 			    LogicalType::MaxLogicalType(input.context, base_expr->return_type, keys_unpacked[i]->return_type);
@@ -158,7 +159,7 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	                                                   {LogicalType::MAP(key_type, val_type), val_type},
 	                                                   {LogicalType::MAP(key_type, val_type)}};
 
-	for (auto variation : function_variations) {
+	for (const auto &variation : function_variations) {
 		auto switch_expression = ScalarFunction(variation, val_type, nullptr, SwitchBindReturnType, nullptr);
 		switch_expression.SetBindExpressionCallback(SwitchBindExpression);
 		func_set.AddFunction(std::move(switch_expression));

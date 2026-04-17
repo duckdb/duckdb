@@ -1,8 +1,13 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -39,7 +44,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -117,7 +122,7 @@ struct AggregateStateLayout {
 	// Works only on a legacy state format where the entire state is stored as a blob
 	void Store(Vector &result, idx_t row, data_ptr_t src) const {
 		D_ASSERT(!is_struct);
-		auto result_ptr = FlatVector::GetData<string_t>(result);
+		auto result_ptr = FlatVector::GetDataMutable<string_t>(result);
 		result_ptr[row] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(src), state_size);
 	}
 
@@ -138,7 +143,7 @@ struct LoadFieldOp {
 	template <class T>
 	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data,
 	                      idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
 		for (idx_t row = 0; row < count; row++) {
@@ -155,9 +160,10 @@ struct LoadFieldOp {
 
 struct StoreFieldOp {
 	template <class T>
-	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
+	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, const data_ptr_t *sources,
+	                      idx_t field_offset) {
+		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
+		auto child_data = FlatVector::Writer<T>(child, count);
 
 		for (idx_t row = 0; row < count; row++) {
 			auto src = sources[row] + field_offset;
@@ -166,33 +172,15 @@ struct StoreFieldOp {
 	}
 };
 
-// Specialization for string_t to handle big strings correctly
-// For big strings (>12 bytes), string_t contains a pointer to the actual data.
-// We need to copy the actual string data to the result vector's string heap,
-// not just copy the pointer (which would point to aggregate allocator memory).
-template <>
-void StoreFieldOp::Operation<string_t>(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources,
-                                       idx_t field_offset) {
-	auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
-
-	for (idx_t row = 0; row < count; row++) {
-		auto src = sources[row] + field_offset;
-		string_t source_str = *reinterpret_cast<string_t *>(src);
-		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
-	}
-}
-
 struct CopyFromInputFieldOp {
 	template <class T>
 	static void Operation(Vector &input_vec, Vector &result_vec, idx_t field_idx, const SelectionVector &sel,
 	                      idx_t count, const UnifiedVectorFormat &input_data) {
-		auto &input_child = *StructVector::GetEntries(input_vec)[field_idx];
+		auto &input_child = StructVector::GetEntries(input_vec)[field_idx];
 		auto input_child_data = FlatVector::GetData<T>(input_child);
 
-		auto &result_child = *StructVector::GetEntries(result_vec)[field_idx];
-		auto result_child_data = FlatVector::GetData<T>(result_child);
+		auto &result_child = StructVector::GetEntries(result_vec)[field_idx];
+		auto result_child_data = FlatVector::GetDataMutable<T>(result_child);
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
@@ -207,7 +195,7 @@ struct LoadFieldForSelectedRowsOp {
 	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, const UnifiedVectorFormat &state_data,
 	                      data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -223,8 +211,8 @@ struct StoreFieldForSelectedRowsOp {
 	template <class T>
 	static void Operation(const AggregateStateLayout &layout, Vector &result, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = *StructVector::GetEntries(result)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
+		auto &child = StructVector::GetEntries(result)[field_idx];
+		auto child_data = FlatVector::Writer<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
@@ -233,24 +221,6 @@ struct StoreFieldForSelectedRowsOp {
 		}
 	}
 };
-
-// Specialization for string_t to handle big strings correctly
-// Same fix as StoreFieldOp - copy actual string data, not just pointers
-template <>
-void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout &layout, Vector &result,
-                                                      idx_t field_idx, const SelectionVector &sel, idx_t count,
-                                                      data_ptr_t base_ptr, idx_t field_offset) {
-	auto &child = *StructVector::GetEntries(result)[field_idx];
-	auto child_data = FlatVector::GetData<string_t>(child);
-
-	for (idx_t i = 0; i < count; i++) {
-		idx_t row = sel.get_index(i);
-		auto src = base_ptr + i * layout.aligned_state_size + field_offset;
-		string_t source_str = *reinterpret_cast<string_t *>(src);
-		// AddStringOrBlob handles both inlined and non-inlined strings correctly
-		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
-	}
-}
 
 idx_t GetRecursivePhysicalSize(const LogicalType &type) {
 	if (type.id() != LogicalTypeId::STRUCT) {
@@ -280,7 +250,7 @@ void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stri
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
 			auto &struct_entries = StructVector::GetEntries(struct_vec);
-			DeserializeStructFields(child_layout, root_stride, *struct_entries[field_idx], state_data, count,
+			DeserializeStructFields(child_layout, root_stride, struct_entries[field_idx], state_data, count,
 			                        dest_buffer + offset_in_state);
 		} else {
 			TemplateDispatch<LoadFieldOp>(physical, root_stride, struct_vec, field_idx, state_data, count, dest_buffer,
@@ -294,7 +264,7 @@ void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stri
 // Serialize packed binary states into a struct result vector.
 // Uses StoreFieldOp for tight SIMD-friendly loops
 void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, idx_t count,
-                           data_ptr_t *addresses_ptrs) {
+                           const data_ptr_t *addresses_ptrs) {
 	idx_t offset_in_state = 0;
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
 		auto &field_type = layout.child_types->at(field_idx).second;
@@ -308,13 +278,13 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 
 			// we need to write to the buffers with the current offset the child is pointing to in the state
 			Vector child_addresses(LogicalType::POINTER);
-			auto child_ptrs = FlatVector::GetData<data_ptr_t>(child_addresses);
+			auto child_ptrs = FlatVector::GetDataMutable<data_ptr_t>(child_addresses);
 			for (idx_t row = 0; row < count; row++) {
 				child_ptrs[row] = addresses_ptrs[row] + offset_in_state;
 			}
 
 			auto &struct_entries = StructVector::GetEntries(result);
-			SerializeStructFields(child_layout, *struct_entries.get(field_idx), count, child_ptrs);
+			SerializeStructFields(child_layout, struct_entries[field_idx], count, child_ptrs);
 		} else {
 			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
 		}
@@ -322,6 +292,61 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 		offset_in_state += field_size;
 	}
 }
+
+#ifdef DEBUG
+// Internal verification: export all states to struct, import back, finalize, and compare to main path result
+// using vector operations. Catches serialization/deserialization bugs for struct-based aggregate state.
+void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector &state_vec, idx_t count,
+                                const UnifiedVectorFormat &state_data, const data_ptr_t *state_vec_ptr,
+                                const Vector &result, const ExportAggregateBindData &bind_data,
+                                AggregateInputData &aggr_input_data) {
+	// Build selection of valid state rows
+	SelectionVector valid_sel(count);
+	idx_t valid_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (state_data.validity.RowIsValid(state_data.sel->get_index(i))) {
+			valid_sel.set_index(valid_count++, i);
+		}
+	}
+	if (valid_count == 0) {
+		return;
+	}
+
+	// SerializeStructFields: all valid states -> struct vector
+	Vector struct_vec(state_vec.GetType(), valid_count);
+	unsafe_unique_array<data_ptr_t> addresses_ptrs(make_unsafe_uniq_array<data_ptr_t>(valid_count));
+	for (idx_t i = 0; i < valid_count; i++) {
+		addresses_ptrs[i] = state_vec_ptr[valid_sel.get_index(i)];
+	}
+	SerializeStructFields(layout, struct_vec, valid_count, addresses_ptrs.get());
+
+	// DeserializeStructFields: struct vector -> packed buffer
+	unsafe_unique_array<data_t> temp_state_buf(make_unsafe_uniq_array<data_t>(valid_count * layout.aligned_state_size));
+	UnifiedVectorFormat struct_format;
+	struct_vec.ToUnifiedFormat(valid_count, struct_format);
+	DeserializeStructFields(layout, layout.aligned_state_size, struct_vec, struct_format, valid_count,
+	                        temp_state_buf.get());
+
+	// AggregateStateFinalize: packed buffer -> result values
+	Vector addresses_vec(LogicalType::POINTER);
+	auto addresses_finalize = FlatVector::GetDataMutable<data_ptr_t>(addresses_vec);
+	for (idx_t i = 0; i < valid_count; i++) {
+		addresses_finalize[i] = temp_state_buf.get() + i * layout.aligned_state_size;
+	}
+	Vector result_roundtrip(result.GetType(), valid_count);
+	bind_data.aggr.GetStateFinalizeCallback()(addresses_vec, aggr_input_data, result_roundtrip, valid_count, 0);
+
+	Vector result_slice(result.GetType(), valid_count);
+	result_slice.Slice(result, valid_sel, valid_count);
+	SelectionVector true_sel(valid_count);
+	SelectionVector false_sel(valid_count);
+	idx_t match_count =
+	    VectorOperations::NotDistinctFrom(result_slice, result_roundtrip, nullptr, valid_count, &true_sel, &false_sel);
+	D_ASSERT(match_count == valid_count &&
+	         "Struct state roundtrip failed: finalize(serialize->deserialize(state)) != finalize(state). "
+	         "Check SerializeStructFields/DeserializeStructFields for this aggregate.");
+}
+#endif
 
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
@@ -377,7 +402,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
 
-	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
+	auto state_vec_ptr = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses);
 
 	input.data[0].Flatten(input.size());
 
@@ -416,6 +441,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			FlatVector::SetNull(result, i, true);
 		}
 	}
+
+#ifdef DEBUG
+	if (layout.is_struct) {
+		VerifyStructStateRoundtrip(layout, input.data[0], input.size(), state_data, state_vec_ptr, result, bind_data,
+		                           aggr_input_data);
+	}
+#endif
 }
 
 void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &result) {
@@ -527,8 +559,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 	// Handle both-valid rows - batched load, combine, store
 	if (both_valid_count > 0) {
-		auto state0_ptrs = FlatVector::GetData<data_ptr_t>(local_state.addresses0);
-		auto state1_ptrs = FlatVector::GetData<data_ptr_t>(local_state.addresses1);
+		auto state0_ptrs = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses0);
+		auto state1_ptrs = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses1);
 
 		// Pack state buffer pointers in selection order (not row order)
 		for (idx_t i = 0; i < both_valid_count; i++) {
@@ -639,7 +671,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		for (auto &arg_type : state_type.bound_argument_types) {
 			args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
 		}
-		auto bind_info = bound_aggr.GetBindCallback()(context, bound_aggr, args);
+		auto bind_info = bound_aggr.Bind(context, args);
 		if (bind_info) {
 			throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
 		}
@@ -653,9 +685,11 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.GetStateSizeCallback()(bound_aggr));
 }
 
-unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindAggregateStateInternal(context, bound_function, arguments, true);
+unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto bind_data =
+	    BindAggregateStateInternal(input.GetClientContext(), input.GetBoundFunction(), input.GetArguments(), true);
 
 	// combine
 	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
@@ -684,7 +718,15 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	const data_ptr_t *addresses_ptrs;
+	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (count != 1) {
+			throw InternalException("Finalize with a constant vector only supported with count of 1");
+		}
+		addresses_ptrs = ConstantVector::GetData<data_ptr_t>(state);
+	} else {
+		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	}
 
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 
@@ -698,10 +740,10 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		return;
 	}
 
-	auto blob_ptr = FlatVector::GetData<string_t>(result);
+	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
+		blob_ptr[row_idx] = string_t(const_char_ptr_cast(data_ptr), state_size);
 	}
 }
 
@@ -723,8 +765,11 @@ unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deserializer
 	throw NotImplementedException("FIXME: export state deserialize");
 }
 
-unique_ptr<FunctionData> CombineAggrBind(ClientContext &context, AggregateFunction &function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = BindAggregateStateInternal(context, function, arguments, false);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
@@ -749,7 +794,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	UnifiedVectorFormat sdata;
 	states.ToUnifiedFormat(count, sdata);
-	auto state_ptrs = reinterpret_cast<data_ptr_t *>(sdata.data);
+	auto state_ptrs = UnifiedVectorFormat::GetData<data_ptr_t>(sdata);
 
 	inputs[0].Flatten(count);
 
@@ -761,12 +806,12 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	// source_vec holds pointers to the binary states buffer (temp_state_buf) deserialized from the input states
 	Vector source_vec(LogicalType::POINTER);
-	auto source_ptrs = FlatVector::GetData<data_ptr_t>(source_vec);
+	auto source_ptrs = FlatVector::GetDataMutable<data_ptr_t>(source_vec);
 
 	// target_vec will hold pointers to the binary state buffer where the combined states should be stored, built by the
 	// underlying aggregate function's combine callback
 	Vector target_vec(LogicalType::POINTER);
-	auto target_ptrs = FlatVector::GetData<data_ptr_t>(target_vec);
+	auto target_ptrs = FlatVector::GetDataMutable<data_ptr_t>(target_vec);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto temp_ptr = temp_state_buf.get() + i * aligned_size;
@@ -788,7 +833,15 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 	auto state_size = bind_data.state_size;
-	auto addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	const data_ptr_t *addresses_ptrs;
+	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (count != 1) {
+			throw InternalException("Finalize with a constant vector only supported with count of 1");
+		}
+		addresses_ptrs = ConstantVector::GetData<data_ptr_t>(state);
+	} else {
+		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	}
 
 	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
 
@@ -863,9 +916,9 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(*other.aggregate);
 }
 
-ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) {
+static ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) {
 	auto function = ScalarFunction("finalize", {aggregate_state_logical_type_id}, LogicalTypeId::INVALID,
-	                               AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	                               AggregateStateFinalize, BindAggregateState, nullptr, InitFinalizeState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetSerializeCallback(ExportStateScalarSerialize);
 	function.SetDeserializeCallback(ExportStateScalarDeserialize);
@@ -873,10 +926,10 @@ ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) 
 	return function;
 }
 
-ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
+static ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
 	auto function = ScalarFunction("combine", {aggregate_state_logical_type_id, LogicalTypeId::ANY},
 	                               aggregate_state_logical_type_id, AggregateStateCombine, BindAggregateState, nullptr,
-	                               nullptr, InitCombineState);
+	                               InitCombineState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetSerializeCallback(ExportStateScalarSerialize);
 	function.SetDeserializeCallback(ExportStateScalarDeserialize);

@@ -1,11 +1,14 @@
 name: Swift
 on:
   workflow_call:
+    inputs:
+      runner_macos_arm64:
+        type: string
   workflow_dispatch:
   repository_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: swift-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -26,14 +29,23 @@ jobs:
             destination: 'iOS Simulator,name=iPhone 16'
           - isRelease: false
             destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (3nd generation)'
-    runs-on: macos-14
+    runs-on: ${{ inputs.runner_macos_arm64 || 'macos-14' }}
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
+
+      - name: Configure Xcode Caching
+        if: ${{ startsWith(inputs.runner_macos_arm64 || 'macos-14', 'namespace-profile-') }}
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: |
+            xcode
+            swiftpm
+            cocoapods
 
       - name: Prepare Package
         run: python3 tools/swift/create_package.py tools/swift
@@ -43,7 +55,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          xcrun xcodebuild test \
+          python3 scripts/ci/retry.py -- xcrun xcodebuild test \
             -workspace tools/swift/duckdb-swift/DuckDB.xcworkspace \
             -scheme DuckDB \
             -destination platform='${{ matrix.destination }}'

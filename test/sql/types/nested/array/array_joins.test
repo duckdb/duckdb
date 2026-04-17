@@ -54,18 +54,18 @@ foreach COLLECTION array_value list_value
 statement ok
 CREATE OR REPLACE TABLE t1 AS SELECT * FROM (
 	VALUES 
-	(1, ${COLLECTION}(1,2)),
-	(2, ${COLLECTION}(NULL,5)),
+	(1, {COLLECTION}(1,2)),
+	(2, {COLLECTION}(NULL,5)),
 	(3, NULL),
 ) as t(i, a);
 
 statement ok
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM (
 	VALUES 
-	(1, ${COLLECTION}(4,5)),
-	(2, ${COLLECTION}(8,9)),
-	(3, ${COLLECTION}(6,7)),
-	(4, ${COLLECTION}(1,2))
+	(1, {COLLECTION}(4,5)),
+	(2, {COLLECTION}(8,9)),
+	(3, {COLLECTION}(6,7)),
+	(4, {COLLECTION}(1,2))
 ) as t(i, a);
 
 query III
@@ -98,7 +98,7 @@ endloop
 foreach COLLECTION INT[3] INT[]
 
 statement ok
-CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (1, [1,2,3]::${COLLECTION}), (2, [4,5,6]::${COLLECTION}), (3, [1,2,3]::${COLLECTION}));
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (1, [1,2,3]::{COLLECTION}), (2, [4,5,6]::{COLLECTION}), (3, [1,2,3]::{COLLECTION}));
 
 query IIII
 SELECT * FROM t1 as a JOIN t1 as b ON (a.col1 != b.col1) ORDER BY ALL;

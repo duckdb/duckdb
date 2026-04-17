@@ -5,14 +5,32 @@
 
 namespace duckdb {
 
-LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
+LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_index,
+                                   vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, std::move(select_list)),
-      group_index(group_index), aggregate_index(aggregate_index), groupings_index(DConstants::INVALID_INDEX),
+      group_index(group_index), aggregate_index(aggregate_index),
       distinct_validity(TupleDataValidityType::CAN_HAVE_NULL_VALUES) {
 }
 
+const Expression &LogicalAggregate::GetExpression(ColumnBinding binding) const {
+	if (binding.table_index == group_index) {
+		return *groups[binding.column_index];
+	}
+	if (binding.table_index == aggregate_index) {
+		return *expressions[binding.column_index];
+	}
+	if (binding.table_index == groupings_index) {
+		throw InternalException("Groupings function does not have an expression defined");
+	}
+	throw InternalException("LogicalAggregate::GetExpression - incorrect table index");
+}
+
+const Expression &LogicalAggregate::GetGroupExpression(ProjectionIndex group_col_idx) const {
+	return GetExpression(ColumnBinding(group_index, group_col_idx));
+}
+
 void LogicalAggregate::ResolveTypes() {
-	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
+	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	for (auto &expr : groups) {
 		types.push_back(expr->return_type);
 	}
@@ -26,17 +44,17 @@ void LogicalAggregate::ResolveTypes() {
 }
 
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
-	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
+	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	vector<ColumnBinding> result;
 	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
-	for (idx_t i = 0; i < groups.size(); i++) {
-		result.emplace_back(group_index, i);
+	for (auto group_col_idx : ProjectionIndex::GetIndexes(groups.size())) {
+		result.emplace_back(group_index, group_col_idx);
 	}
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		result.emplace_back(aggregate_index, i);
+	for (auto aggr_col_idx : ProjectionIndex::GetIndexes(expressions.size())) {
+		result.emplace_back(aggregate_index, aggr_col_idx);
 	}
-	for (idx_t i = 0; i < grouping_functions.size(); i++) {
-		result.emplace_back(groupings_index, i);
+	for (auto grouping_col_idx : ProjectionIndex::GetIndexes(grouping_functions.size())) {
+		result.emplace_back(groupings_index, grouping_col_idx);
 	}
 	return result;
 }
@@ -72,9 +90,9 @@ idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
 	return LogicalOperator::EstimateCardinality(context);
 }
 
-vector<idx_t> LogicalAggregate::GetTableIndex() const {
-	vector<idx_t> result {group_index, aggregate_index};
-	if (groupings_index != DConstants::INVALID_INDEX) {
+vector<TableIndex> LogicalAggregate::GetTableIndex() const {
+	vector<TableIndex> result {group_index, aggregate_index};
+	if (groupings_index.IsValid()) {
 		result.push_back(groupings_index);
 	}
 	return result;
@@ -83,8 +101,8 @@ vector<idx_t> LogicalAggregate::GetTableIndex() const {
 string LogicalAggregate::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() +
-		       StringUtil::Format(" #%llu, #%llu, #%llu", group_index, aggregate_index, groupings_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu, #%llu, #%llu", group_index.index,
+		                                                       aggregate_index.index, groupings_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

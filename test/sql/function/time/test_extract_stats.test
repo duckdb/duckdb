@@ -14,33 +14,25 @@ INSERT INTO times VALUES ('00:01:20'), ('20:08:10.998'), ('20:08:10.33'), ('20:0
 statement ok
 PRAGMA disable_verification
 
-# extract various parts of the time
-query I
-SELECT stats(EXTRACT(second FROM i)) FROM times LIMIT 1
-----
-<REGEX>:.*0.*60.*true.*
+statement ok
+CREATE TABLE expected_result AS FROM (VALUES
+	('microseconds', 0, 59999999),
+	('milliseconds', 0, 59999),
+	('second', 0, 59),
+	('minute', 0, 59),
+	('hour', 0, 24),
+	('epoch', 0, 86400)
+	) t(component, min, max)
+
+foreach component second minute hour milliseconds microseconds epoch
 
 query I
-SELECT stats(EXTRACT(minute FROM i)) FROM times LIMIT 1
+SELECT
+	CASE WHEN stats.min = expected_result.min AND stats.max = expected_result.max THEN NULL ELSE {'stats': stats, 'expected_result': expected_result} END
+FROM (
+	SELECT STATS(EXTRACT({component} FROM i)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '{component}') expected_result FROM times LIMIT 1
+)
 ----
-<REGEX>:.*0.*60.*true.*
+NULL
 
-query I
-SELECT stats(EXTRACT(hour FROM i)) FROM times LIMIT 1
-----
-<REGEX>:.*0.*24.*true.*
-
-query I
-SELECT stats(EXTRACT(milliseconds FROM i)) FROM times LIMIT 1
-----
-<REGEX>:.*0.*60000.*true.*
-
-query I
-SELECT stats(EXTRACT(microseconds FROM i)) FROM times LIMIT 1
-----
-<REGEX>:.*0.*60000000.*true.*
-
-query I
-SELECT stats(EXTRACT(epoch FROM i)) FROM times LIMIT 1
-----
-<REGEX>:.*0.*86400.*true.*
+endloop

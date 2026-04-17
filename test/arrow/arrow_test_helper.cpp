@@ -9,7 +9,6 @@
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
 	auto stream_wrapper = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
-	stream_wrapper->number_of_rows = -1;
 	stream_wrapper->arrow_array_stream = *(ArrowArrayStream *)this_ptr;
 
 	return stream_wrapper;
@@ -113,7 +112,6 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 	}
 
 	auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
-	stream_wrapper->number_of_rows = -1;
 	auto private_data = make_uniq<ArrowArrayStreamData>(factory, factory.options);
 	stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 	stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
@@ -239,8 +237,8 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		ScopedConfigSetting setting(
 		    config,
 		    [&batch_size](ClientConfig &config) {
-			    config.get_result_collector = [&batch_size](ClientContext &context,
-			                                                PreparedStatementData &data) -> PhysicalOperator & {
+			    config.get_result_collector =
+			        [&batch_size](ClientContext &context, PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
 				    return PhysicalArrowCollector::Create(context, data, batch_size);
 			    };
 		    },

@@ -28,7 +28,7 @@ public:
 	vector<LogicalType> types;
 
 public:
-	virtual idx_t GetRootIndex() = 0;
+	virtual TableIndex GetRootIndex() = 0;
 };
 
 } // namespace duckdb

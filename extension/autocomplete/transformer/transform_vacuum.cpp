@@ -4,14 +4,14 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	VacuumOptions options;
 	transformer.TransformOptional<VacuumOptions>(list_pr, 1, options);
 	auto result = make_uniq<VacuumStatement>(options);
-	auto target_opt = list_pr.Child<OptionalParseResult>(2);
+	auto &target_opt = list_pr.Child<OptionalParseResult>(2);
 	if (target_opt.HasResult()) {
-		auto target = transformer.Transform<AnalyzeTarget>(target_opt.optional_result);
+		auto target = transformer.Transform<AnalyzeTarget>(target_opt.GetResult());
 		result->info->columns = target.columns;
 		result->info->ref = std::move(target.ref);
 		result->info->has_table = true;
@@ -19,15 +19,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTran
 	return std::move(result);
 }
 
-VacuumOptions PEGTransformerFactory::TransformVacuumOptions(PEGTransformer &transformer,
-                                                            optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<VacuumOptions>(list_pr.Child<ChoiceParseResult>(0).result);
+VacuumOptions PEGTransformerFactory::TransformVacuumOptions(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<VacuumOptions>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	VacuumOptions options;
 	options.vacuum = true;
 	options.analyze = list_pr.Child<OptionalParseResult>(3).HasResult();
@@ -44,9 +43,9 @@ VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer
 }
 
 VacuumOptions PEGTransformerFactory::TransformVacuumParensOptions(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto option_list = ExtractParseResultsFromList(extract_parens);
 	VacuumOptions options;
 	options.vacuum = true;
@@ -71,21 +70,19 @@ VacuumOptions PEGTransformerFactory::TransformVacuumParensOptions(PEGTransformer
 	return options;
 }
 
-string PEGTransformerFactory::TransformVacuumOption(PEGTransformer &transformer,
-                                                    optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto option = list_pr.Child<ChoiceParseResult>(0).result;
-	if (option->type == ParseResultType::IDENTIFIER) {
-		return option->Cast<IdentifierParseResult>().identifier;
+string PEGTransformerFactory::TransformVacuumOption(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &option = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	if (option.type == ParseResultType::IDENTIFIER) {
+		return option.Cast<IdentifierParseResult>().identifier;
 	}
 	return transformer.TransformEnum<string>(option);
 }
 
-vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer,
-                                                        optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<string> result;
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto colid_list = ExtractParseResultsFromList(extract_parens);
 	for (auto &colid : colid_list) {
 		result.push_back(transformer.Transform<string>(colid));

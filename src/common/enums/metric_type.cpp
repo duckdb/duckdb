@@ -48,10 +48,12 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_LATE_MATERIALIZATION,
 		MetricType::OPTIMIZER_LIMIT_PUSHDOWN,
 		MetricType::OPTIMIZER_MATERIALIZED_CTE,
+		MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
 		MetricType::OPTIMIZER_PROJECTION_PULLUP,
 		MetricType::OPTIMIZER_REGEX_RANGE,
 		MetricType::OPTIMIZER_REORDER_FILTER,
 		MetricType::OPTIMIZER_ROW_GROUP_PRUNER,
+		MetricType::OPTIMIZER_ROW_NUMBER_REWRITER,
 		MetricType::OPTIMIZER_SAMPLING_PUSHDOWN,
 		MetricType::OPTIMIZER_STATISTICS_PROPAGATION,
 		MetricType::OPTIMIZER_TOP_N,
@@ -59,6 +61,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_UNNEST_REWRITER,
 		MetricType::OPTIMIZER_UNUSED_COLUMNS,
 		MetricType::OPTIMIZER_WINDOW_SELF_JOIN,
+		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
 		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
@@ -314,6 +317,7 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	return {
 		MetricType::ALL_OPTIMIZERS,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
 		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
@@ -327,6 +331,7 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:

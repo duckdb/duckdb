@@ -311,6 +311,13 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	}
 }
 
+void Binder::BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
+                              const string &catalog, const string &schema) {
+	ColumnList col_list;
+	col_list.AddColumn(column.Copy());
+	BindDefaultValues(col_list, bound_defaults, catalog, schema);
+}
+
 void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
                                const string &catalog_name, const string &schema_p) {
 	string schema_name = schema_p;
@@ -340,9 +347,10 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+                                                             AlterBindMode bind_mode) {
 	vector<unique_ptr<Expression>> bound_defaults;
-	return BindCreateTableInfo(std::move(info), schema, bound_defaults);
+	return BindCreateTableInfo(std::move(info), schema, bound_defaults, bind_mode);
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
@@ -554,9 +562,12 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 			continue;
 		}
 
-		// Resolve the table reference.
+		// Resolve the table reference in the same catalog/schema as the table being
+		// created, so FK references work for external catalogs (not just the default).
+		string fk_catalog = fk.info.schema.empty() ? schema.ParentCatalog().GetName() : INVALID_CATALOG;
+		string fk_schema = fk.info.schema.empty() ? schema.name : fk.info.schema;
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(INVALID_CATALOG, fk.info.schema, table_lookup);
+		auto table_entry = entry_retriever.GetEntry(fk_catalog, fk_schema, table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}
@@ -587,7 +598,8 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-                                                             vector<unique_ptr<Expression>> &bound_defaults) {
+                                                             vector<unique_ptr<Expression>> &bound_defaults,
+                                                             AlterBindMode bind_mode) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
@@ -619,7 +631,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		base.columns.SetAllowDuplicates(true);
 		if (!target_col_names.empty()) {
 			if (target_col_names.size() > sql_types.size()) {
-				throw BinderException("Target table has more colum names than query result.");
+				throw BinderException("Target table has more column names than query result.");
 			} else if (target_col_names.size() < sql_types.size()) {
 				// filled the target_col_names with the name of query names
 				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {
@@ -677,10 +689,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
-		// bind the default values
-		auto &catalog_name = schema.ParentCatalog().GetName();
-		auto &schema_name = schema.name;
-		BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		if (bind_mode != AlterBindMode::SKIP_BINDING) {
+			// bind the default values
+			auto &catalog_name = schema.ParentCatalog().GetName();
+			auto &schema_name = schema.name;
+			BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		}
 	}
 
 	if (base.columns.PhysicalColumnCount() == 0) {

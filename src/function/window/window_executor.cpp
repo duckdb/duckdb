@@ -5,27 +5,6 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// WindowExecutorBoundsLocalState
-//===--------------------------------------------------------------------===//
-WindowExecutorBoundsLocalState::WindowExecutorBoundsLocalState(ExecutionContext &context,
-                                                               const WindowExecutorGlobalState &gstate)
-    : WindowExecutorLocalState(context, gstate), partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
-      state(gstate.executor.wexpr, gstate.payload_count) {
-	vector<LogicalType> bounds_types(8, LogicalType(LogicalTypeId::UBIGINT));
-	bounds.Initialize(Allocator::Get(context.client), bounds_types);
-}
-
-void WindowExecutorBoundsLocalState::UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx,
-                                                  DataChunk &eval_chunk, optional_ptr<WindowCursor> range) {
-	// Evaluate the row-level arguments
-	WindowInputExpression boundary_start(eval_chunk, gstate.executor.boundary_start_idx);
-	WindowInputExpression boundary_end(eval_chunk, gstate.executor.boundary_end_idx);
-
-	const auto count = eval_chunk.size();
-	state.Bounds(bounds, row_idx, range, count, boundary_start, boundary_end, partition_mask, order_mask);
-}
-
-//===--------------------------------------------------------------------===//
 // WindowExecutor
 //===--------------------------------------------------------------------===//
 WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -39,22 +18,27 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
-}
 
-bool WindowExecutor::IgnoreNulls() const {
-	return wexpr.ignore_nulls;
+	if (wexpr.window) {
+		if (wexpr.window->HasSharingCallback()) {
+			wexpr.window->GetSharingCallback()(*this, shared);
+		} else {
+			//	If no one overrides, assume the arguments are only needed at evaluate time
+			for (auto &child : wexpr.children) {
+				child_idx.emplace_back(shared.RegisterEvaluate(child));
+			}
+		}
+	}
 }
 
 void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
                               OperatorSinkInput &sink) const {
-	auto &gbstate = sink.global_state.Cast<WindowExecutorGlobalState>();
-	auto &lbstate = sink.local_state.Cast<WindowExecutorBoundsLocalState>();
-	lbstate.UpdateBounds(gbstate, row_idx, eval_chunk, lbstate.range_cursor);
+	auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
+	lbstate.state.UpdateBounds(row_idx, eval_chunk);
 
-	const auto count = eval_chunk.size();
-	EvaluateInternal(context, eval_chunk, result, count, row_idx, sink);
+	EvaluateInternal(context, eval_chunk, lbstate.state.bounds, result, row_idx, sink);
 
-	result.Verify(count);
+	result.Verify(eval_chunk.size());
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor,
@@ -67,7 +51,8 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, cons
 	}
 }
 
-WindowExecutorLocalState::WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) {
+WindowExecutorLocalState::WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate)
+    : state(context, gstate) {
 }
 
 void WindowExecutorLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
@@ -75,33 +60,44 @@ void WindowExecutorLocalState::Sink(ExecutionContext &context, DataChunk &sink_c
 }
 
 void WindowExecutorLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	auto &gbstate = sink.global_state.Cast<WindowExecutorGlobalState>();
-	const auto range_idx = gbstate.executor.range_idx;
-	if (range_idx != DConstants::INVALID_INDEX) {
-		range_cursor = make_uniq<WindowCursor>(*collection, range_idx);
-	}
 }
 
 unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                            const ValidityMask &partition_mask,
                                                            const ValidityMask &order_mask) const {
+	if (wexpr.window && wexpr.window->HasGlobalCallback()) {
+		return wexpr.window->GetGlobalCallback()(client, *this, payload_count, partition_mask, order_mask);
+	}
 	return make_uniq<WindowExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowExecutor::GetLocalState(ExecutionContext &context,
                                                          const GlobalSinkState &gstate) const {
-	return make_uniq<WindowExecutorBoundsLocalState>(context, gstate.Cast<WindowExecutorGlobalState>());
+	if (wexpr.window && wexpr.window->HasLocalCallback()) {
+		return wexpr.window->GetLocalCallback()(context, gstate);
+	}
+	return make_uniq<WindowExecutorLocalState>(context, gstate.Cast<WindowExecutorGlobalState>());
 }
 
 void WindowExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
                           const idx_t input_idx, OperatorSinkInput &sink) const {
-	auto &lbstate = sink.local_state.Cast<WindowExecutorBoundsLocalState>();
-	lbstate.Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+	if (wexpr.window && wexpr.window->HasSinkCallback()) {
+		wexpr.window->GetSinkCallback()(context, sink_chunk, coll_chunk, input_idx, sink);
+	} else {
+		auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
+		lbstate.Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+	}
 }
 
 void WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const {
-	auto &lbstate = sink.local_state.Cast<WindowExecutorBoundsLocalState>();
-	lbstate.Finalize(context, collection, sink);
+	auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
+	lbstate.state.Finalize(collection);
+
+	if (wexpr.window && wexpr.window->HasFinalizeCallback()) {
+		wexpr.window->GetFinalizeCallback()(context, collection, sink);
+	} else {
+		lbstate.Finalize(context, collection, sink);
+	}
 }
 
 } // namespace duckdb

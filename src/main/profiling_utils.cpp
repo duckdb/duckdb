@@ -62,6 +62,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
+	case MetricType::PARSER:
 	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
 	case MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
 	case MetricType::OPTIMIZER_COLUMN_LIFETIME:
@@ -181,6 +182,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::OPTIMIZER_UNNEST_REWRITER:
 	case MetricType::OPTIMIZER_UNUSED_COLUMNS:
 	case MetricType::OPTIMIZER_WINDOW_SELF_JOIN:
+	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:

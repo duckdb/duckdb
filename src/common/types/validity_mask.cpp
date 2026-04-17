@@ -14,11 +14,11 @@ ValidityData::ValidityData(const ValidityMask &original, idx_t count)
 }
 
 void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
-	if (other.AllValid()) {
+	if (other.CannotHaveNull()) {
 		// X & 1 = X
 		return;
 	}
-	if (AllValid()) {
+	if (CannotHaveNull()) {
 		// 1 & Y = Y
 		Initialize(other);
 		return;
@@ -84,7 +84,7 @@ idx_t ValidityMask::Capacity() const {
 }
 
 void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
-	if (other.AllValid()) {
+	if (other.CannotHaveNull()) {
 		validity_mask = nullptr;
 		validity_data.reset();
 		return;
@@ -100,6 +100,10 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t c
 
 bool ValidityMask::IsAligned(idx_t count) {
 	return count % BITS_PER_VALUE == 0;
+}
+
+void ValidityMask::CopyRange(const ValidityMask &other, idx_t count) {
+	CopySel(other, *FlatVector::IncrementalSelectionVector(), 0, 0, count);
 }
 
 void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
@@ -121,7 +125,7 @@ void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel
 }
 
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
-	if (AllValid() && other.AllValid()) {
+	if (CannotHaveNull() && other.CannotHaveNull()) {
 		// Both validity masks are uninitialized, nothing to do
 		return;
 	}

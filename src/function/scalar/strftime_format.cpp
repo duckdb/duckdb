@@ -670,22 +670,23 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::DATE);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
-	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(
-	    input, result, count, [&](date_t input, ValidityMask &mask, idx_t idx) {
-		    if (Date::IsFinite(input)) {
-			    dtime_t time(0);
-			    idx_t len = GetLength(input, time, 0, nullptr);
-			    string_t target = StringVector::EmptyString(result, len);
-			    FormatString(input, time, target.GetDataWriteable());
-			    target.Finalize();
-			    return target;
-		    } else {
-			    return StringVector::AddString(result, Date::ToString(input));
-		    }
-	    });
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(input, result, count,
+	                                                  [&](date_t input, ValidityMask &mask, idx_t idx) {
+		                                                  if (Date::IsFinite(input)) {
+			                                                  dtime_t time(0);
+			                                                  idx_t len = GetLength(input, time, 0, nullptr);
+			                                                  string_t target = heap.EmptyString(len);
+			                                                  FormatString(input, time, target.GetDataWriteable());
+			                                                  target.Finalize();
+			                                                  return target;
+		                                                  } else {
+			                                                  return heap.AddString(Date::ToString(input));
+		                                                  }
+	                                                  });
 }
 
-string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, Vector &result) const {
+string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, StringHeap &heap) const {
 	if (Timestamp::IsFinite(input)) {
 		date_t date;
 		dtime_t time;
@@ -699,16 +700,16 @@ string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, Vector 
 		const char *tz_name = nullptr;
 
 		idx_t len = GetLength(date, data, tz_name);
-		string_t target = StringVector::EmptyString(result, len);
+		string_t target = heap.EmptyString(len);
 		FormatStringNS(date, data, tz_name, target.GetDataWriteable());
 		target.Finalize();
 		return target;
 	} else {
-		return StringVector::AddString(result, Timestamp::ToString(input));
+		return heap.AddString(Timestamp::ToString(input));
 	}
 }
 
-string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, Vector &result) const {
+string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, StringHeap &heap) const {
 	if (Timestamp::IsFinite(input)) {
 		date_t date;
 		dtime_t time;
@@ -724,29 +725,29 @@ string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, Vect
 		const char *tz_name = nullptr;
 
 		idx_t len = GetLength(date, data, tz_name);
-		string_t target = StringVector::EmptyString(result, len);
+		string_t target = heap.EmptyString(len);
 		FormatStringNS(date, data, tz_name, target.GetDataWriteable());
 		target.Finalize();
 		return target;
 	} else {
-		return StringVector::AddString(result, Timestamp::ToString(input));
+		return heap.AddString(Timestamp::ToString(input));
 	}
 }
 
 void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP || input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
-	UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
-	    input, result, count,
-	    [&](timestamp_t input, ValidityMask &mask, idx_t idx) { return ConvertTimestampValue(input, result); });
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::Execute<timestamp_t, string_t>(input, result, count,
+	                                              [&](timestamp_t ts) { return ConvertTimestampValue(ts, heap); });
 }
 
 void StrfTimeFormat::ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
-	UnaryExecutor::ExecuteWithNulls<timestamp_ns_t, string_t>(
-	    input, result, count,
-	    [&](timestamp_ns_t input, ValidityMask &mask, idx_t idx) { return ConvertTimestampValue(input, result); });
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::Execute<timestamp_ns_t, string_t>(
+	    input, result, count, [&](timestamp_ns_t ts) { return ConvertTimestampValue(ts, heap); });
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {

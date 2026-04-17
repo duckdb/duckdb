@@ -16,7 +16,7 @@ namespace duckdb {
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
-LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+LogicalGet::LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names,
                        virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
@@ -36,15 +36,27 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 
 	string filters_info;
 	bool first_item = true;
-	for (auto &kv : table_filters.filters) {
-		auto &column_index = kv.first;
-		auto &filter = kv.second;
-		if (column_index < names.size()) {
+	for (auto &kv : table_filters) {
+		auto filter_idx = kv.GetIndex();
+		auto &filter = kv.Filter();
+		auto &col_id_entry = column_ids[filter_idx];
+		const auto col_id = col_id_entry.GetPrimaryIndex();
+		if (col_id_entry.IsVirtualColumn()) {
+			auto entry = virtual_columns.find(col_id);
+			if (entry != virtual_columns.end()) {
+				if (!first_item) {
+					filters_info += "\n";
+				}
+				first_item = false;
+				filters_info += filter.ToString(entry->second.name);
+			}
+		} else if (col_id < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
+			auto column_name = col_id_entry.GetName(names[col_id]);
 			first_item = false;
-			filters_info += filter->ToString(names[column_index]);
+			filters_info += filter.ToString(column_name);
 		}
 	}
 	result["Filters"] = filters_info;
@@ -76,8 +88,10 @@ void LogicalGet::SetColumnIds(vector<ColumnIndex> &&column_ids) {
 	this->column_ids = std::move(column_ids);
 }
 
-void LogicalGet::AddColumnId(column_t column_id) {
+ProjectionIndex LogicalGet::AddColumnId(column_t column_id) {
+	ProjectionIndex result(column_ids.size());
 	column_ids.emplace_back(column_id);
+	return result;
 }
 
 void LogicalGet::ClearColumnIds() {
@@ -92,14 +106,34 @@ vector<ColumnIndex> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
 }
 
+ProjectionIndex LogicalGet::TryGetProjectionIndex(idx_t col_idx) const {
+	for (idx_t c = 0; c < column_ids.size(); c++) {
+		if (column_ids[c].GetPrimaryIndex() == col_idx) {
+			return ProjectionIndex(c);
+		}
+	}
+	return ProjectionIndex();
+}
+
+const ColumnIndex &LogicalGet::GetColumnIndex(ColumnBinding binding) const {
+	if (binding.table_index != table_index) {
+		throw InternalException("LogicalGet::GetColumnIndex - table index does not match LogicalGet table index");
+	}
+	return column_ids[binding.column_index];
+}
+
+const ColumnIndex &LogicalGet::GetColumnIndex(ProjectionIndex proj_index) const {
+	return GetColumnIndex(ColumnBinding(table_index, proj_index));
+}
+
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (column_ids.empty()) {
-		return {ColumnBinding(table_index, 0)};
+		return {ColumnBinding(table_index, ProjectionIndex(0))};
 	}
 	vector<ColumnBinding> result;
 	if (projection_ids.empty()) {
-		for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-			result.emplace_back(table_index, col_idx);
+		for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+			result.emplace_back(table_index, ProjectionIndex(col_idx));
 		}
 	} else {
 		for (auto proj_id : projection_ids) {
@@ -306,7 +340,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
-		                             empty_ref);
+		                             empty_ref, nullptr);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
@@ -353,14 +387,14 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	return std::move(result);
 }
 
-vector<idx_t> LogicalGet::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalGet::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalGet::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index);
+		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return StringUtil::Upper(function.name);

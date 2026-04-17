@@ -2,7 +2,7 @@
 # description: Test that we reclaim space of LIST tables
 # group: [reclaim_space]
 
-load __TEST_DIR__/test_reclaim_space.db
+load {TEST_DIR}/test_reclaim_space.db
 
 statement ok
 PRAGMA force_checkpoint;
@@ -30,10 +30,10 @@ DROP TABLE lists;
 loop i 0 10
 
 statement ok
-CREATE TABLE lists${i} AS SELECT [i] l FROM range(10000000) tbl(i);
+CREATE TABLE lists{i} AS SELECT [i] l FROM range(10000000) tbl(i);
 
 query III
-SELECT MIN(l[1]), MAX(l[1]), COUNT(*) FROM lists${i};
+SELECT MIN(l[1]), MAX(l[1]), COUNT(*) FROM lists{i};
 ----
 0	9999999	10000000
 
@@ -41,7 +41,7 @@ statement ok
 CHECKPOINT;
 
 statement ok
-DROP TABLE lists${i};
+DROP TABLE lists{i};
 
 statement ok
 CHECKPOINT;

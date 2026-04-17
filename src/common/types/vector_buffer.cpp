@@ -1,3 +1,12 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/fsst_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -8,154 +17,153 @@
 namespace duckdb {
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, idx_t capacity) {
-	return make_buffer<VectorBuffer>(capacity * GetTypeIdSize(type));
+	if (type == PhysicalType::LIST) {
+		throw InternalException("VectorBuffer::CreateStandardVector requires full list type");
+	}
+	if (type == PhysicalType::VARCHAR) {
+		return make_buffer<VectorStringBuffer>(capacity);
+	}
+	return make_buffer<StandardVectorBuffer>(capacity, GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
-	return make_buffer<VectorBuffer>(GetTypeIdSize(type));
+	if (type == PhysicalType::LIST) {
+		throw InternalException("VectorBuffer::CreateConstantVector requires full list type");
+	}
+	if (type == PhysicalType::VARCHAR) {
+		return make_buffer<VectorStringBuffer>(1);
+	}
+	return make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &type) {
+	if (type.InternalType() == PhysicalType::LIST) {
+		return make_buffer<VectorListBuffer>(1ULL, type);
+	}
 	return VectorBuffer::CreateConstantVector(type.InternalType());
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, idx_t capacity) {
+	if (type.InternalType() == PhysicalType::LIST) {
+		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
+	}
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
-VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
-}
-
-VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
-    : VectorBuffer(VectorBufferType::STRING_BUFFER), heap(allocator) {
-}
-
-VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : VectorBuffer(type) {
-}
-
-VectorFSSTStringBuffer::VectorFSSTStringBuffer() : VectorStringBuffer(VectorBufferType::FSST_BUFFER) {
-}
-
-VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
-}
-
-VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
-    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
-	auto &child_types = StructType::GetChildTypes(type);
-	for (auto &child_type : child_types) {
-		auto vector = make_uniq<Vector>(child_type.second, capacity);
-		children.push_back(std::move(vector));
-	}
-}
-
-VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count)
-    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
-	auto &other_vector = StructVector::GetEntries(other);
-	for (auto &child_vector : other_vector) {
-		auto vector = make_uniq<Vector>(*child_vector, sel, count);
-		children.push_back(std::move(vector));
-	}
-}
-
-VectorStructBuffer::~VectorStructBuffer() {
-}
-
-VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(initial_capacity) {
-}
-
-VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER),
-      child(make_uniq<Vector>(ListType::GetChildType(list_type), initial_capacity)), capacity(initial_capacity) {
-}
-
-void VectorListBuffer::Reserve(idx_t to_reserve) {
-	if (to_reserve > capacity) {
-		if (to_reserve > DConstants::MAX_VECTOR_SIZE) {
-			// overflow: throw an exception
-			throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s", to_reserve,
-			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	idx_t size = 0;
+	// uncompressed size of individual data entries
+	size += GetTypeIdSize(type.InternalType()) * count;
+	// size of validity mask
+	size += GetValidityMask().GetAllocationSize();
+	// size stored in aux buffers
+	if (auxiliary_data) {
+		for (auto &aux_data : auxiliary_data->data) {
+			size += aux_data->GetAllocationSize();
 		}
-		idx_t new_capacity = NextPowerOfTwo(to_reserve);
-		D_ASSERT(new_capacity >= to_reserve);
-		child->Resize(capacity, new_capacity);
-		capacity = new_capacity;
 	}
+	return size;
 }
 
-void VectorListBuffer::Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
-	Reserve(size + to_append_size - source_offset);
-	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
-	size += to_append_size - source_offset;
-}
-
-void VectorListBuffer::Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
-                              idx_t source_offset) {
-	Reserve(size + to_append_size - source_offset);
-	VectorOperations::Copy(to_append, *child, sel, to_append_size, source_offset, size);
-	size += to_append_size - source_offset;
-}
-
-void VectorListBuffer::PushBack(const Value &insert) {
-	while (size + 1 > capacity) {
-		child->Resize(capacity, capacity * 2);
-		capacity *= 2;
+idx_t VectorBuffer::GetAllocationSize() const {
+	idx_t size = 0;
+	if (auxiliary_data) {
+		for (auto &aux_data : auxiliary_data->data) {
+			size += aux_data->GetAllocationSize();
+		}
 	}
-	child->SetValue(size++, insert);
+	return size;
 }
 
-void VectorListBuffer::SetCapacity(idx_t new_capacity) {
-	this->capacity = new_capacity;
+void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 }
 
-void VectorListBuffer::SetSize(idx_t new_size) {
-	this->size = new_size;
+void VectorBuffer::SetVectorType(VectorType vector_type) {
+	throw InternalException("VectorBuffer does not support SetVectorType");
 }
 
-VectorListBuffer::~VectorListBuffer() {
+string VectorBuffer::ToString(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return GetValue(type, 0).ToString();
+	}
+	string retval;
+	for (idx_t i = 0; i < count; i++) {
+		retval += GetValue(type, i).ToString();
+		if (i < count - 1) {
+			retval += ", ";
+		}
+	}
+	return retval;
 }
 
-VectorArrayBuffer::VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)), array_size(array_size),
-      size(initial_capacity) {
-	D_ASSERT(array_size != 0);
+string VectorBuffer::ToString(const LogicalType &type) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return GetValue(type, 0).ToString();
+	}
+	return "";
 }
 
-VectorArrayBuffer::VectorArrayBuffer(const LogicalType &array, idx_t initial)
-    : VectorBuffer(VectorBufferType::ARRAY_BUFFER),
-      child(make_uniq<Vector>(ArrayType::GetChildType(array), initial * ArrayType::GetSize(array))),
-      array_size(ArrayType::GetSize(array)), size(initial) {
-	// initialize the child array with (array_size * size) ^
-	D_ASSERT(!ArrayType::IsAnySize(array));
+buffer_ptr<VectorBuffer> VectorBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
+	throw InternalException("VectorBuffer::Resize not supported for this vector type");
 }
 
-VectorArrayBuffer::~VectorArrayBuffer() {
+void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-Vector &VectorArrayBuffer::GetChild() {
-	return *child;
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	throw InternalException("Unimplemented type for flatten");
 }
 
-idx_t VectorArrayBuffer::GetArraySize() {
-	return array_size;
+buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant vectors do not need to get sliced
+		return nullptr;
+	}
+	return SliceInternal(type, offset, end);
 }
 
-idx_t VectorArrayBuffer::GetChildSize() {
-	return size * array_size;
+buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant vectors do not need to get sliced
+		return nullptr;
+	}
+	return SliceInternal(type, sel, count);
 }
 
-ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
-    : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(std::move(handle)) {
+buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
+                                                      const SelectionVector &sel, idx_t count) {
+	return Slice(type, sel, count);
 }
 
-ManagedVectorBuffer::~ManagedVectorBuffer() {
+buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// we can slice the data directly only for standard vectors
+	// for non-flat vectors slice using a selection vector instead
+	idx_t count = end - offset;
+	SelectionVector sel(count);
+	for (idx_t i = 0; i < count; i++) {
+		sel.set_index(i, offset + i);
+	}
+	return Slice(type, sel, count);
 }
 
-ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
-    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(shredded_data_p)) {
+buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	// default slice: flatten with a selection vector and then wrap in a dictionary
+	return Flatten(type, sel, count);
 }
 
-ShreddedVectorBuffer::~ShreddedVectorBuffer() {
+void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	throw InternalException("SetValue not supported for this buffer type");
+}
+
+Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	throw InternalException("Unimplemented GetValue for this buffer type");
+}
+
+PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {
+}
+
+PinnedBufferHolder::~PinnedBufferHolder() {
 }
 
 } // namespace duckdb

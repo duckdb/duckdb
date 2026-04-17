@@ -61,7 +61,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
 		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
-		if (result.function) {
+		if (result.HasFunction()) {
 			// found a cast function! return it
 			return result;
 		}
@@ -111,6 +111,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::ARRAY(LogicalType::ANY, optional_idx()));
 	case LogicalTypeId::DECIMAL:
 		return map.find(LogicalTypeId::DECIMAL);
+	case LogicalTypeId::ENUM:
+		return map.find(LogicalTypeId::ENUM);
 	default:
 		return map.find(LogicalType::ANY);
 	}

@@ -426,7 +426,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "\nThis can happen when reading multiple %s files. The schema information is taken from "
 		    "the first %s file by default. Possible solutions:\n"
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
-		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
+		    "(https://duckdb.org/docs/current/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
 		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
@@ -716,6 +716,9 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 			if (hive_types_schema.find(name) != hive_types_schema.end()) {
 				// type was explicitly provided by the user
 				continue;
+			}
+			if (HivePartitioning::IsNull(part.second)) {
+				continue; // don't update detected_types for this partition/file
 			}
 			LogicalType detected_type = LogicalType::VARCHAR;
 			Value value(part.second);

@@ -1,8 +1,19 @@
 #include "parquet_file_metadata_cache.hpp"
+
+#include <memory>
+#include <unordered_map>
+#include <utility>
+
 #include "duckdb/common/enums/cache_validation_mode.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
-#include "duckdb/storage/external_file_cache_util.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 

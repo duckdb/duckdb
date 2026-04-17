@@ -40,14 +40,14 @@ struct CountStarFunction : public BaseCountFunction {
 	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
 		D_ASSERT(partition.column_ids.empty());
 
-		auto data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		RESULT_TYPE total = 0;
 		for (const auto &frame : frames) {
 			const auto begin = frame.start;
 			const auto end = frame.end;
 
 			// Slice to any filtered rows
-			if (partition.filter_mask.AllValid()) {
+			if (partition.filter_mask.CannotHaveNull()) {
 				total += end - begin;
 				continue;
 			}
@@ -75,7 +75,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 
 	static inline void CountFlatLoop(STATE **__restrict states, ValidityMask &mask, idx_t count) {
-		if (!mask.AllValid()) {
+		if (mask.CanHaveNull()) {
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
 			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
@@ -106,10 +106,11 @@ struct CountFunction : public BaseCountFunction {
 			}
 		}
 	}
+	using STATE_PTR = STATE *const *;
 
-	static inline void CountScatterLoop(STATE **__restrict states, const SelectionVector &isel,
+	static inline void CountScatterLoop(STATE_PTR __restrict states, const SelectionVector &isel,
 	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
-		if (!mask.AllValid()) {
+		if (mask.CanHaveNull()) {
 			// potential NULL values
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = isel.get_index(i);
@@ -131,13 +132,14 @@ struct CountFunction : public BaseCountFunction {
 	                         idx_t count) {
 		auto &input = inputs[0];
 		if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
-			auto sdata = FlatVector::GetData<STATE *>(states);
-			CountFlatLoop(sdata, FlatVector::Validity(input), count);
+			auto sdata = FlatVector::GetDataMutable<STATE *>(states);
+			CountFlatLoop(sdata, FlatVector::ValidityMutable(input), count);
 		} else {
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
 			states.ToUnifiedFormat(count, sdata);
-			CountScatterLoop(reinterpret_cast<STATE **>(sdata.data), *idata.sel, *sdata.sel, idata.validity, count);
+			CountScatterLoop(UnifiedVectorFormat::GetData<STATE *>(sdata), *idata.sel, *sdata.sel, idata.validity,
+			                 count);
 		}
 	}
 
@@ -169,7 +171,7 @@ struct CountFunction : public BaseCountFunction {
 
 	static inline void CountUpdateLoop(STATE &result, ValidityMask &mask, idx_t count,
 	                                   const SelectionVector &sel_vector) {
-		if (mask.AllValid()) {
+		if (mask.CannotHaveNull()) {
 			// no NULL values
 			result += UnsafeNumericCast<STATE>(count);
 			return;
@@ -194,7 +196,7 @@ struct CountFunction : public BaseCountFunction {
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
-			CountFlatUpdateLoop(result, FlatVector::Validity(input), count);
+			CountFlatUpdateLoop(result, FlatVector::ValidityMutable(input), count);
 			break;
 		}
 		case VectorType::SEQUENCE_VECTOR: {

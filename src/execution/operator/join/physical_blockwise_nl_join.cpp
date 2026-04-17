@@ -217,6 +217,7 @@ InsertionOrderPreservingMap<string> PhysicalBlockwiseNLJoin::ParamsToString() co
 	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = EnumUtil::ToString(join_type);
 	result["Condition"] = condition->GetName();
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

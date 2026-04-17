@@ -64,6 +64,27 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 	return GetFunctionByOffset(index.GetIndex());
 }
 
+WindowFunctionSet::WindowFunctionSet() : FunctionSet("") {
+}
+
+WindowFunctionSet::WindowFunctionSet(string name) : FunctionSet(std::move(name)) {
+}
+
+WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
+}
+
+WindowFunction WindowFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+	ErrorData error;
+	FunctionBinder binder(context);
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
+		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                        error.Message());
+	}
+	return GetFunctionByOffset(index.GetIndex());
+}
+
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 

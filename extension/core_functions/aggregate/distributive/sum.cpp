@@ -104,8 +104,7 @@ LogicalType GetSumStateType(const AggregateFunction &function) {
 	return LogicalType::STRUCT(std::move(child_types));
 }
 
-unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	throw BinderException("sum_no_overflow is for internal use only!");
 }
 
@@ -232,8 +231,9 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
-unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->return_type;
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";

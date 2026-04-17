@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -11,6 +12,68 @@
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
+
+enum class TokenType {
+	INVALID,
+	KEYWORD,
+	STRING_LITERAL,
+	NUMBER_LITERAL,
+	OPERATOR,
+	IDENTIFIER,
+	COMMENT,
+	TERMINATOR,
+	CATALOG_NAME,
+	SCHEMA_NAME,
+	TABLE_NAME,
+	TYPE_NAME,
+	COLUMN_NAME,
+	SCALAR_FUNCTION,
+	TABLE_FUNCTION,
+	PRAGMA_FUNCTION,
+	SETTING_NAME,
+	ERROR
+};
+
+inline string TokenTypeToString(TokenType type) {
+	switch (type) {
+	case TokenType::KEYWORD:
+		return "KEYWORD";
+	case TokenType::STRING_LITERAL:
+		return "STRING_LITERAL";
+	case TokenType::NUMBER_LITERAL:
+		return "NUMBER_LITERAL";
+	case TokenType::OPERATOR:
+		return "OPERATOR";
+	case TokenType::IDENTIFIER:
+		return "IDENTIFIER";
+	case TokenType::COMMENT:
+		return "COMMENT";
+	case TokenType::TERMINATOR:
+		return "TERMINATOR";
+	case TokenType::ERROR:
+		return "ERROR";
+	case TokenType::CATALOG_NAME:
+		return "CATALOG_NAME";
+	case TokenType::SCHEMA_NAME:
+		return "SCHEMA_NAME";
+	case TokenType::TABLE_NAME:
+		return "TABLE_NAME";
+	case TokenType::TYPE_NAME:
+		return "TYPE_NAME";
+	case TokenType::COLUMN_NAME:
+		return "COLUMN_NAME";
+	case TokenType::SCALAR_FUNCTION:
+		return "SCALAR_FUNCTION";
+	case TokenType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case TokenType::PRAGMA_FUNCTION:
+		return "PRAGMA_FUNCTION";
+	case TokenType::SETTING_NAME:
+		return "SETTING_NAME";
+	default:
+		return "UNKNOWN";
+	}
+}
 
 class PEGTransformer; // Forward declaration
 
@@ -64,9 +127,12 @@ inline const char *ParseResultToString(ParseResultType type) {
 
 class ParseResult {
 public:
-	explicit ParseResult(ParseResultType type) : type(type) {
+	explicit ParseResult(ParseResultType type, optional_idx offset) : type(type), offset(offset) {
 	}
 	virtual ~ParseResult() = default;
+
+	ParseResult(const ParseResult &) = delete;
+	ParseResult &operator=(const ParseResult &) = delete;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -79,6 +145,7 @@ public:
 
 	ParseResultType type;
 	string name;
+	optional_idx offset;
 
 	virtual void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                              const std::string &indent, bool is_last) const {
@@ -102,7 +169,8 @@ struct IdentifierParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::IDENTIFIER;
 	string identifier;
 
-	explicit IdentifierParseResult(string identifier_p) : ParseResult(TYPE), identifier(std::move(identifier_p)) {
+	explicit IdentifierParseResult(string identifier_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), identifier(std::move(identifier_p)) {
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -116,7 +184,8 @@ struct KeywordParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::KEYWORD;
 	string keyword;
 
-	explicit KeywordParseResult(string keyword_p) : ParseResult(TYPE), keyword(std::move(keyword_p)) {
+	explicit KeywordParseResult(string keyword_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), keyword(std::move(keyword_p)) {
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -130,26 +199,25 @@ struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
 
 public:
-	explicit ListParseResult(vector<optional_ptr<ParseResult>> results_p, string name_p)
-	    : ParseResult(TYPE), children(std::move(results_p)) {
+	explicit ListParseResult(vector<reference<ParseResult>> results_p, string name_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
 		name = std::move(name_p);
 	}
 
-	vector<optional_ptr<ParseResult>> GetChildren() const {
+	vector<reference<ParseResult>> GetChildren() const {
 		return children;
 	}
 
-	optional_ptr<ParseResult> GetChild(idx_t index) {
+	ParseResult &GetChild(idx_t index) {
 		if (index >= children.size()) {
 			throw InternalException("Child index out of bounds");
 		}
-		return children[index];
+		return children[index].get();
 	}
 
 	template <class T>
 	T &Child(idx_t index) {
-		auto child_ptr = GetChild(index);
-		return child_ptr->Cast<T>();
+		return GetChild(index).Cast<T>();
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -170,24 +238,23 @@ public:
 
 		std::string child_indent = indent + (is_last ? "   " : "│  ");
 		for (size_t i = 0; i < children.size(); ++i) {
-			if (children[i]) {
-				children[i]->ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
-			} else {
-				ss << child_indent << (i == children.size() - 1 ? "└─" : "├─") << " [nullptr]\n";
-			}
+			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
 		}
 	}
 
 private:
-	vector<optional_ptr<ParseResult>> children;
+	vector<reference<ParseResult>> children;
 };
 
 struct RepeatParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::REPEAT;
-	vector<optional_ptr<ParseResult>> children;
 
-	explicit RepeatParseResult(vector<optional_ptr<ParseResult>> results_p)
-	    : ParseResult(TYPE), children(std::move(results_p)) {
+	explicit RepeatParseResult(vector<reference<ParseResult>> results_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
+	}
+
+	vector<reference<ParseResult>> GetChildren() const {
+		return children;
 	}
 
 	template <class T>
@@ -195,7 +262,7 @@ struct RepeatParseResult : ParseResult {
 		if (index >= children.size()) {
 			throw InternalException("Child index out of bounds");
 		}
-		return children[index]->Cast<T>();
+		return children[index].get().Cast<T>();
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -216,27 +283,38 @@ struct RepeatParseResult : ParseResult {
 
 		std::string child_indent = indent + (is_last ? "   " : "│  ");
 		for (size_t i = 0; i < children.size(); ++i) {
-			if (children[i]) {
-				children[i]->ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
-			} else {
-				ss << child_indent << (i == children.size() - 1 ? "└─" : "├─") << " [nullptr]\n";
-			}
+			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
 		}
 	}
+
+private:
+	vector<reference<ParseResult>> children;
 };
 
 struct OptionalParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::OPTIONAL;
-	optional_ptr<ParseResult> optional_result;
 
-	explicit OptionalParseResult() : ParseResult(TYPE), optional_result(nullptr) {
+	explicit OptionalParseResult() : ParseResult(TYPE, optional_idx()), optional_result(nullptr) {
 	}
-	explicit OptionalParseResult(optional_ptr<ParseResult> result_p) : ParseResult(TYPE), optional_result(result_p) {
+	explicit OptionalParseResult(optional_ptr<ParseResult> result_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), optional_result(result_p) {
 		name = result_p->name;
 	}
 
 	bool HasResult() const {
 		return optional_result != nullptr;
+	}
+
+	ParseResult &GetResultUnsafe() {
+		D_ASSERT(optional_result);
+		return *optional_result;
+	}
+
+	ParseResult &GetResult() {
+		if (!optional_result) {
+			throw InternalException("OptionalParseResult is null");
+		}
+		return *optional_result;
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -250,42 +328,46 @@ struct OptionalParseResult : ParseResult {
 			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [empty]\n";
 		}
 	}
+
+private:
+	optional_ptr<ParseResult> optional_result;
 };
 
 class ChoiceParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::CHOICE;
 
-	explicit ChoiceParseResult(optional_ptr<ParseResult> parse_result_p, idx_t selected_idx_p)
-	    : ParseResult(TYPE), result(parse_result_p), selected_idx(selected_idx_p) {
-		name = parse_result_p->name;
+	explicit ChoiceParseResult(ParseResult &parse_result_p, idx_t selected_idx_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), result(parse_result_p), selected_idx(selected_idx_p) {
+		name = parse_result_p.name;
 	}
 
-	optional_ptr<ParseResult> result;
-	idx_t selected_idx;
+	ParseResult &GetResult() {
+		return result;
+	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
-		if (result) {
-			// The choice was resolved. We print a marker and then print the child below it.
-			ss << indent << (is_last ? "└─" : "├─") << " [" << ParseResultToString(type) << " (idx: " << selected_idx
-			   << ")] ->\n";
+		// The choice was resolved. We print a marker and then print the child below it.
+		ss << indent << (is_last ? "└─" : "├─") << " [" << ParseResultToString(type) << " (idx: " << selected_idx
+		   << ")] ->\n";
 
-			// The child is now on a new indentation level and is the only child of our marker.
-			std::string child_indent = indent + (is_last ? "   " : "│  ");
-			result->ToStringInternal(ss, visited, child_indent, true);
-		} else {
-			// The choice had no result.
-			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [no result]\n";
-		}
+		// The child is now on a new indentation level and is the only child of our marker.
+		std::string child_indent = indent + (is_last ? "   " : "│  ");
+		result.ToStringInternal(ss, visited, child_indent, true);
 	}
+
+private:
+	ParseResult &result;
+	idx_t selected_idx;
 };
 
 class NumberParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::NUMBER;
 
-	explicit NumberParseResult(string number_p) : ParseResult(TYPE), number(std::move(number_p)) {
+	explicit NumberParseResult(string number_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), number(std::move(number_p)) {
 	}
 	string number;
 
@@ -300,8 +382,8 @@ class StringLiteralParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::STRING;
 
-	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p)
-	    : ParseResult(TYPE), result(std::move(string_p)), string_type(string_type_p) {
+	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), result(std::move(string_p)), string_type(string_type_p) {
 	}
 
 	string GetRawString() const {
@@ -315,8 +397,24 @@ public:
 		case SpecialStringCharacter::NATIONAL_STRING:
 			return make_uniq<CastExpression>(LogicalType::VARCHAR, make_uniq<ConstantExpression>(Value(result)));
 		case SpecialStringCharacter::HEXADECIMAL_STRING: {
-			string hex_string = "x" + result;
-			return make_uniq<ConstantExpression>(Value(hex_string));
+			// result contains raw hex digits (e.g. "FF" for X'FF')
+			if (result.size() % 2 != 0) {
+				throw ParserException("Hex string literal must have an even number of hex digits");
+			}
+			// Build \xHH-escaped string that Blob::ToBlob (via Value::BLOB) expects
+			idx_t blob_len = result.size() / 2;
+			string escaped;
+			escaped.reserve(blob_len * 4);
+			for (idx_t i = 0; i < result.size(); i += 2) {
+				escaped += "\\x";
+				escaped += result[i];
+				escaped += result[i + 1];
+			}
+			return make_uniq<ConstantExpression>(Value::BLOB(escaped));
+		}
+		case SpecialStringCharacter::BIT_STRING: {
+			string bit_string = "b" + result;
+			return make_uniq<ConstantExpression>(Value(bit_string));
 		}
 		case SpecialStringCharacter::ESCAPE_STRING:
 			string escaped_result;
@@ -351,6 +449,7 @@ public:
 			}
 			return make_uniq<ConstantExpression>(Value(escaped_result));
 		}
+		return make_uniq<ConstantExpression>(Value(result));
 	}
 
 	string result;
@@ -376,7 +475,8 @@ class OperatorParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::OPERATOR;
 
-	explicit OperatorParseResult(string operator_p) : ParseResult(TYPE), operator_token(std::move(operator_p)) {
+	explicit OperatorParseResult(string operator_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), operator_token(std::move(operator_p)) {
 	}
 	string operator_token;
 

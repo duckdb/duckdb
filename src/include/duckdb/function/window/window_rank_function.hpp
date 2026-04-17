@@ -14,58 +14,74 @@ namespace duckdb {
 
 class WindowPeerExecutor : public WindowExecutor {
 public:
-	WindowPeerExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &context, const idx_t payload_count,
-	                                           const ValidityMask &partition_mask,
-	                                           const ValidityMask &order_mask) const override;
+	WindowPeerExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared) : WindowExecutor(wexpr, shared) {
+	}
 
-	//! The column indices of any ORDER BY argument expressions
-	vector<column_t> arg_order_idx;
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
 };
 
 class WindowRankExecutor : public WindowPeerExecutor {
 public:
-	WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowDenseRankExecutor : public WindowPeerExecutor {
 public:
-	WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowPercentRankExecutor : public WindowPeerExecutor {
 public:
-	WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 class WindowCumeDistExecutor : public WindowPeerExecutor {
 public:
-	WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 
-	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+	    : WindowPeerExecutor(wexpr, shared) {
+	}
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      OperatorSinkInput &sink) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                      idx_t row_idx, OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb

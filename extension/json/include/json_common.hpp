@@ -21,10 +21,9 @@ namespace duckdb {
 
 class JSONAllocator;
 
-class JSONStringVectorBuffer : public VectorBuffer {
+class JSONStringVectorBuffer : public AuxiliaryDataHolder {
 public:
-	explicit JSONStringVectorBuffer(shared_ptr<JSONAllocator> allocator_p)
-	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), allocator(std::move(allocator_p)) {
+	explicit JSONStringVectorBuffer(shared_ptr<JSONAllocator> allocator_p) : allocator(std::move(allocator_p)) {
 	}
 
 private:
@@ -48,7 +47,7 @@ public:
 
 	void AddBuffer(Vector &vector) {
 		if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-			StringVector::AddBuffer(vector, make_buffer<JSONStringVectorBuffer>(shared_from_this()));
+			StringVector::AddAuxiliaryData(vector, make_uniq<JSONStringVectorBuffer>(shared_from_this()));
 		}
 	}
 

@@ -6,8 +6,10 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListFilterBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
@@ -31,7 +33,8 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 }
 
 static LogicalType ListFilterBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                        const idx_t parameter_idx) {
+                                        const idx_t parameter_idx,
+                                        optional_ptr<BindLambdaContext> bind_lambda_context) {
 	return LambdaFunctions::BindBinaryChildren(function_child_types, parameter_idx);
 }
 

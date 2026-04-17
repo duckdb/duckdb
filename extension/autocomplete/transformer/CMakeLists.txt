@@ -4,8 +4,8 @@ add_library_unity(
   peg_transformer.cpp
   peg_transformer_factory.cpp
   transform_alter.cpp
-  transform_attach.cpp
   transform_analyze.cpp
+  transform_attach.cpp
   transform_call.cpp
   transform_checkpoint.cpp
   transform_comment.cpp
@@ -17,6 +17,7 @@ add_library_unity(
   transform_create_sequence.cpp
   transform_create_secret.cpp
   transform_create_table.cpp
+  transform_create_trigger.cpp
   transform_create_view.cpp
   transform_create_type.cpp
   transform_deallocate.cpp

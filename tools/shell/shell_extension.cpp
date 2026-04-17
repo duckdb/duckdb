@@ -16,18 +16,19 @@
 namespace duckdb {
 
 static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		string env_name = input.GetString();
 		auto env_value = getenv(env_name.c_str());
 		if (!env_value) {
-			return StringVector::AddString(result, string());
+			return heap.AddString(string());
 		}
-		return StringVector::AddString(result, env_value);
+		return heap.AddString(env_value);
 	});
 }
 
-static unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> GetEnvBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		throw PermissionException("getenv is disabled through configuration");
 	}

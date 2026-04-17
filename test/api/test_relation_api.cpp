@@ -9,7 +9,6 @@
 #include "duckdb/main/relation/materialized_relation.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test simple relation API", "[relation_api]") {
 	DuckDB db(nullptr);

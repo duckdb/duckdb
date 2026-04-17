@@ -1,21 +1,34 @@
 
 #include "parquet_geometry.hpp"
 
+#include <stdlib.h>
+#include <string.h>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #include "column_reader.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/scalar/geometry_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "reader/expression_column_reader.hpp"
-#include "parquet_reader.hpp"
 #include "yyjson.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "re2/re2.h"
 #include "reader/string_column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/setting_info.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
 
@@ -113,7 +126,7 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 					// Parse the CRS
 					const auto crs_val = yyjson_obj_get(column_val, "crs");
-					if (crs_val) {
+					if (crs_val && !yyjson_is_null(crs_val)) {
 						// Parse the CRS
 						if (!yyjson_is_obj(crs_val)) {
 							throw InvalidInputException("Geoparquet column '%s' has invalid CRS", column_name);
@@ -126,8 +139,10 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 						// Free the temporary CRS JSON string
 						free(crs_json);
+					} else if (crs_val && yyjson_is_null(crs_val)) {
+						// If CRS is null, do nothing
 					} else {
-						// Otherwise, default to OGC:CRS84
+						// Otherwise, if no CRS, default to OGC:CRS84
 						auto crs = CoordinateReferenceSystem::TryConvert(context, "OGC:CRS84",
 						                                                 CoordinateReferenceSystemType::PROJJSON);
 						if (crs) {
@@ -363,7 +378,7 @@ optional_ptr<const GeoParquetColumnMetadata> GeoParquetFileMetadata::GetColumnMe
 	return &it->second;
 }
 
-unique_ptr<ColumnReader> GeometryColumnReader::Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
                                                       ClientContext &context) {
 	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
 	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);

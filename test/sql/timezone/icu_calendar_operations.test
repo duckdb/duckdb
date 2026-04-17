@@ -12,7 +12,7 @@ SET TimeZone = 'UTC';
 foreach cal hebrew coptic ethiopic
 
 statement ok
-SET Calendar = '${cal}';
+SET Calendar = '{cal}';
 
 statement error
 select age('2020-01-01'::timestamptz);

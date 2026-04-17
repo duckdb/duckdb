@@ -27,7 +27,7 @@ statement ok
 INSERT INTO tbl2 SELECT range FROM range(50000);
 
 query I
-SELECT COUNT(i) = ${i} + 1 FROM tbl2 WHERE i = 96;
+SELECT COUNT(i) = {i} + 1 FROM tbl2 WHERE i = 96;
 ----
 1
 

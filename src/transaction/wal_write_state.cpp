@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
@@ -45,6 +46,11 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	auto &parent = entry.Parent();
 
 	switch (parent.type) {
+	case CatalogType::TRIGGER_ENTRY:
+		// Triggers do not support ALTER — always a CREATE
+		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
+		break;
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
@@ -139,6 +145,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			log.WriteDropIndex(entry.Cast<IndexCatalogEntry>());
 			break;
 		}
+		case CatalogType::TRIGGER_ENTRY:
+			log.WriteDropTrigger(entry.Cast<TriggerCatalogEntry>());
+			break;
 		case CatalogType::RENAMED_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
@@ -180,7 +189,7 @@ void WALWriteState::WriteDelete(DeleteInfo &info) {
 		vector<LogicalType> delete_types = {LogicalType::ROW_TYPE};
 		delete_chunk->Initialize(Allocator::DefaultAllocator(), delete_types);
 	}
-	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
+	auto rows = FlatVector::GetDataMutable<row_t>(delete_chunk->data[0]);
 	if (info.is_consecutive) {
 		for (idx_t i = 0; i < info.count; i++) {
 			rows[i] = UnsafeNumericCast<int64_t>(info.base_row + i);
@@ -218,7 +227,7 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	info.segment->FetchCommitted(info.vector_index, update_chunk->data[0]);
 
 	// write the row ids into the chunk
-	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
+	auto row_ids = FlatVector::GetDataMutable<row_t>(update_chunk->data[1]);
 	idx_t start = info.row_group_start + info.vector_index * STANDARD_VECTOR_SIZE;
 	auto tuples = info.GetTuples();
 	for (idx_t i = 0; i < info.N; i++) {
@@ -227,7 +236,7 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans
 		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
-		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
+		auto booleans = FlatVector::GetDataMutable<bool>(update_chunk->data[0]);
 		for (idx_t i = 0; i < info.N; i++) {
 			auto idx = tuples[i];
 			booleans[idx] = false;

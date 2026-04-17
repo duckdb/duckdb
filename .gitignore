@@ -52,7 +52,6 @@ projects/*
 #==============================================================================#
 # Autotools artifacts
 #==============================================================================#
-config/
 configure
 config-h.in
 autom4te.cache
@@ -344,12 +343,12 @@ zig-cache/*
 
 # .db files
 *.db
-*.db.gz
 
 # local cmake extension config
 extension/extension_config_local.cmake
 
 # extension_external dir
+extension/external/
 extension_external
 
 # pyodide (emscripten python) build and test environment

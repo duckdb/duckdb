@@ -49,7 +49,7 @@ select finalize(combine_aggr(state))::integer from states where g = 0;
 45
 
 # Persistence
-load __TEST_DIR__/test_combine_aggr_persistence.db
+load {TEST_DIR}/test_combine_aggr_persistence.db
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
@@ -88,7 +88,7 @@ select finalize(finalize(combine_aggr(state))) from states;
 
 # Can't call the aggregate combine on a legacy aggregate state
 statement ok
-CREATE TABLE legacy_states AS (SELECT g, (min(d) export_state) state FROM dummy GROUP BY g);
+CREATE TABLE legacy_states AS (SELECT g, (skewness(d) export_state) state FROM dummy GROUP BY g);
 
 statement error
 select combine_aggr(state) from legacy_states;

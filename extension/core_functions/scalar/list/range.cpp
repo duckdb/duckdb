@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -203,31 +205,30 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			break;
 		}
 	}
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args_size);
 	uint64_t total_size = 0;
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
-			result_validity.SetInvalid(i);
-			list_data[i].offset = total_size;
-			list_data[i].length = 0;
+			result_data.SetInvalid(i);
+			result_data[i].offset = total_size;
+			result_data[i].length = 0;
 		} else {
-			list_data[i].offset = total_size;
-			list_data[i].length = info.ListLength(i);
-			total_size += list_data[i].length;
+			result_data[i].offset = total_size;
+			result_data[i].length = info.ListLength(i);
+			total_size += result_data[i].length;
 		}
 	}
 
 	// now construct the child vector of the list
 	ListVector::Reserve(result, total_size);
-	auto range_data = FlatVector::GetData<typename OP::TYPE>(ListVector::GetEntry(result));
+	auto range_data = FlatVector::Writer<typename OP::TYPE>(ListVector::GetEntry(result), total_size);
 	idx_t total_idx = 0;
 	for (idx_t i = 0; i < args_size; i++) {
 		typename OP::TYPE start_value = info.StartListValue(i);
 		typename OP::INCREMENT_TYPE increment = info.ListIncrementValue(i);
 
 		typename OP::TYPE range_value = start_value;
-		for (idx_t range_idx = 0; range_idx < list_data[i].length; range_idx++) {
+		for (idx_t range_idx = 0; range_idx < result_data[i].length; range_idx++) {
 			if (range_idx > 0) {
 				OP::Increment(range_value, increment);
 			}

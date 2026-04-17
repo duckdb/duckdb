@@ -1,12 +1,14 @@
 #include "parquet_statistics.hpp"
 
-#include "duckdb.hpp"
+#include <cmath>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
-#include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/blob.hpp"
@@ -17,6 +19,32 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift_tools.hpp"
 
 namespace duckdb {
 
@@ -225,7 +253,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return Value::TIME_NS(ParquetMsIntToTimeNs(val));
+			return Value::TIME_NS(ParquetMsIntToTimeNs(NumericCast<int32_t>(val)));
 		case ParquetExtraTypeInfo::UNIT_NS:
 			return Value::TIME_NS(ParquetIntToTimeNs(val));
 		case ParquetExtraTypeInfo::UNIT_MICROS:

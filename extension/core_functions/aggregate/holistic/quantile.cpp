@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
@@ -73,7 +76,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 		const auto &q = quantiles_p[i];
 		pos += (q > 0);
 		neg += (q < 0);
-		normalised.emplace_back(QuantileAbs(q));
+		normalised.push_back(QuantileAbs(q));
 		order.push_back(i);
 	}
 	if (pos && neg) {
@@ -85,7 +88,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	std::sort(order.begin(), order.end(), lt);
 
 	for (const auto &q : normalised) {
-		quantiles.emplace_back(QuantileValue(q));
+		quantiles.emplace_back(q);
 	}
 }
 
@@ -131,7 +134,7 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 	}
 
 	for (const auto &r : raw) {
-		result->quantiles.emplace_back(QuantileValue(r));
+		result->quantiles.emplace_back(r);
 	}
 	return std::move(result);
 }
@@ -183,8 +186,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 
 		if (!n) {
 			rmask.Set(ridx, false);
@@ -250,7 +253,7 @@ struct QuantileListOperation : QuantileOperation {
 		auto &result = ListVector::GetEntry(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		auto v_t = state.v.data();
 		D_ASSERT(v_t);
@@ -288,7 +291,7 @@ struct QuantileListOperation : QuantileOperation {
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		if (!n) {
-			auto &lmask = FlatVector::Validity(list);
+			auto &lmask = FlatVector::ValidityMutable(list);
 			lmask.Set(lidx, false);
 			return;
 		}
@@ -563,8 +566,10 @@ static Value CheckQuantile(const Value &quantile_val) {
 	return quantile_val;
 }
 
-unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindQuantile(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() < 2) {
 		throw BinderException("QUANTILE requires a range argument between [0, 1]");
 	}
@@ -652,8 +657,9 @@ struct MedianFunction {
 		return bind_data;
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		function = GetAggregate(arguments[0]->return_type);
 		return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 	}
@@ -680,10 +686,11 @@ struct DiscreteQuantileListFunction {
 		return bind_data;
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		function = GetAggregate(arguments[0]->return_type);
-		return BindQuantile(context, function, arguments);
+		return BindQuantile(input);
 	}
 };
 
@@ -713,10 +720,11 @@ struct DiscreteQuantileFunction {
 		return bind_data;
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		function = GetAggregate(arguments[0]->return_type);
-		return BindQuantile(context, function, arguments);
+		return BindQuantile(input);
 	}
 };
 
@@ -741,11 +749,12 @@ struct ContinuousQuantileFunction {
 		return bind_data;
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		function = GetAggregate(function.arguments[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->return_type
 		                                                                             : function.arguments[0]);
-		return BindQuantile(context, function, arguments);
+		return BindQuantile(input);
 	}
 };
 
@@ -771,18 +780,18 @@ struct ContinuousQuantileListFunction {
 		return bind_data;
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		function = GetAggregate(function.arguments[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->return_type
 		                                                                             : function.arguments[0]);
-		return BindQuantile(context, function, arguments);
+		return BindQuantile(input);
 	}
 };
 
 template <class OP>
 AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalType &result, const LogicalType &extra_arg) {
-	AggregateFunction fun({std::move(input)}, std::move(result), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      OP::Bind);
+	AggregateFunction fun({std::move(input)}, result, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
 		fun.arguments.push_back(extra_arg);
 	}

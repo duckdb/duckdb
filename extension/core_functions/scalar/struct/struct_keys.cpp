@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
@@ -16,18 +17,15 @@ struct StructKeysBindData : public FunctionData {
 
 		ListVector::Reserve(keys_vector, count);
 		auto &list_child = ListVector::GetEntry(keys_vector);
-		auto child_data = FlatVector::GetData<string_t>(list_child);
+		auto child_data = FlatVector::Writer<string_t>(list_child, count);
 		for (idx_t i = 0; i < count; i++) {
-			child_data[i] = StringVector::AddString(list_child, child_types[i].first);
+			child_data[i] = child_types[i].first;
 		}
 		ListVector::SetListSize(keys_vector, count);
 
-		auto list_entries = FlatVector::GetData<list_entry_t>(keys_vector);
+		auto list_entries = FlatVector::Writer<list_entry_t>(keys_vector, 2);
 		list_entries[0] = {0, count};
-
-		auto &validity = FlatVector::Validity(keys_vector);
-		validity.EnsureWritable();
-		validity.SetInvalid(1);
+		list_entries.SetInvalid(1);
 	}
 
 	bool Equals(const FunctionData &other) const override {
@@ -50,10 +48,6 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (args.AllConstant()) {
-		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, true);
-			return;
-		}
 		ConstantVector::Reference(result, keys_vector, 0, count);
 		return;
 	}
@@ -61,19 +55,16 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	// Non-constant input: return a DICTIONARY_VECTOR over two entries (keys list and NULL) to preserve per-row NULLs
 	// Build the dictionary selection: 0 for non-null input, 1 for null input
 	SelectionVector sel(count);
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	auto validity_entries = input.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = input_data.sel->get_index(i);
-		const bool is_valid = input_data.validity.RowIsValid(idx);
-		sel.set_index(i, !is_valid);
+		sel.set_index(i, !validity_entries.IsValid(i));
 	}
 
 	result.Slice(keys_vector, sel, count);
 }
 
-static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructKeysBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	auto return_type = arguments[0]->return_type;
 	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");

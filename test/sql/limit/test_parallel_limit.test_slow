@@ -14,7 +14,7 @@ CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELEC
 foreach table_type TABLE VIEW
 
 statement ok
-CREATE ${table_type} integers AS SELECT * FROM range(10000000) tbl(i);
+CREATE {table_type} integers AS SELECT * FROM range(10000000) tbl(i);
 
 query I
 SELECT * FROM integers LIMIT 5
@@ -115,6 +115,6 @@ query I
 4978326
 
 statement ok
-DROP ${table_type} integers
+DROP {table_type} integers
 
 endloop

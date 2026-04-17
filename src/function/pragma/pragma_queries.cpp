@@ -111,10 +111,6 @@ static string PragmaShowDatabases(ClientContext &context, const FunctionParamete
 string PragmaShowVariables() {
 	return "SELECT * FROM duckdb_variables() ORDER BY name";
 }
-static string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
-	       "(pragma_last_profiling_output.operator_id);";
-}
 
 static string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_database_list;";
@@ -231,7 +227,6 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 	set.AddFunction(
 	    PragmaFunction::PragmaCall("copy_database", PragmaCopyDatabase, {LogicalType::VARCHAR, LogicalType::VARCHAR}));
-	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("user_agent", PragmaUserAgent));
 }
 

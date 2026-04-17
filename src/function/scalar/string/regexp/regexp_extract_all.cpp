@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -55,13 +59,11 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	auto input = CreateStringPiece(string);
 
 	auto &child_vector = ListVector::GetEntry(result);
-	auto list_content = FlatVector::GetData<string_t>(child_vector);
-	auto &child_validity = FlatVector::Validity(child_vector);
 
 	auto current_list_size = ListVector::GetListSize(result);
 	auto current_list_capacity = ListVector::GetListCapacity(result);
 
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &list_entry = result_data[row];
 	list_entry.offset = current_list_size;
 
@@ -84,8 +86,9 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		if (current_list_size + 1 >= current_list_capacity) {
 			ListVector::Reserve(result, current_list_capacity * 2);
 			current_list_capacity = ListVector::GetListCapacity(result);
-			list_content = FlatVector::GetData<string_t>(child_vector);
 		}
+		auto list_content = FlatVector::GetDataMutable<string_t>(child_vector);
+		auto &child_validity = FlatVector::ValidityMutable(child_vector);
 
 		// Write the captured groups into the list-child vector
 		auto &match_group = args.group_buffer[group];
@@ -121,13 +124,12 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 		result = 0;
 		return true;
 	}
-	UnifiedVectorFormat format;
-	args.data[2].ToUnifiedFormat(args.size(), format);
-	idx_t index = format.sel->get_index(row);
-	if (!format.validity.RowIsValid(index)) {
+	auto entries = args.data[2].Values<int32_t>(args.size());
+	auto entry = entries[row];
+	if (!entry.IsValid()) {
 		return false;
 	}
-	result = UnifiedVectorFormat::GetData<int32_t>(format)[index];
+	result = entry.GetValue();
 	return true;
 }
 
@@ -160,19 +162,13 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &output_child = ListVector::GetEntry(result);
 
-	UnifiedVectorFormat strings_data;
-	strings.ToUnifiedFormat(args.size(), strings_data);
-
-	UnifiedVectorFormat pattern_data;
-	patterns.ToUnifiedFormat(args.size(), pattern_data);
+	auto strings_entries = strings.Values<string_t>(args.size());
+	auto pattern_entries = patterns.Values<string_t>(args.size());
 
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
 	// for the result, all returned strings are substrings of the originals
-	output_child.SetAuxiliary(strings.GetAuxiliary());
-
-	// Avoid doing extra work if all the inputs are constant
-	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
+	StringVector::AddHeapReference(output_child, strings);
 
 	unique_ptr<RegexStringPieceArgs> non_const_args;
 	unique_ptr<duckdb_re2::RE2> stored_re;
@@ -187,16 +183,16 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	for (idx_t row = 0; row < tuple_count; row++) {
+	for (idx_t row = 0; row < args.size(); row++) {
 		bool pattern_valid = true;
 		if (!info.constant_pattern) {
 			// Check if the pattern is NULL or not,
 			// and compile the pattern if it's not constant
-			auto pattern_idx = pattern_data.sel->get_index(row);
-			if (!pattern_data.validity.RowIsValid(pattern_idx)) {
+			auto pattern_entry = pattern_entries[row];
+			if (!pattern_entry.IsValid()) {
 				pattern_valid = false;
 			} else {
-				auto &pattern_p = UnifiedVectorFormat::GetData<string_t>(pattern_data)[pattern_idx];
+				auto &pattern_p = pattern_entry.GetValue();
 				auto pattern_strpiece = CreateStringPiece(pattern_p);
 				stored_re = make_uniq<duckdb_re2::RE2>(pattern_strpiece, info.options);
 
@@ -209,13 +205,13 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			}
 		}
 
-		auto string_idx = strings_data.sel->get_index(row);
+		auto string_entry = strings_entries[row];
 		int32_t group_index;
-		if (!pattern_valid || !strings_data.validity.RowIsValid(string_idx) || !GetGroupIndex(args, row, group_index)) {
+		if (!pattern_valid || !string_entry.IsValid() || !GetGroupIndex(args, row, group_index)) {
 			// If something is NULL, the result is NULL
 			// FIXME: do we even need 'SPECIAL_HANDLING'?
-			auto result_data = FlatVector::GetData<list_entry_t>(result);
-			auto &result_validity = FlatVector::Validity(result);
+			auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 			result_data[row].length = 0;
 			result_data[row].offset = ListVector::GetListSize(result);
 			result_validity.SetInvalid(row);
@@ -224,12 +220,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 		auto &re = GetPattern(info, state, stored_re);
 		auto &groups = GetGroupsBuffer(info, state, non_const_args);
-		auto &string = UnifiedVectorFormat::GetData<string_t>(strings_data)[string_idx];
+		auto &string = string_entry.GetValue();
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
-	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
@@ -248,10 +240,10 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 }
 
 static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::RE2 &re,
-                                        vector<duckdb_re2::StringPiece> &group_spans,
-                                        vector<unique_ptr<Vector>> &child_entries, Vector &result, idx_t row) {
+                                        vector<duckdb_re2::StringPiece> &group_spans, vector<Vector> &child_entries,
+                                        Vector &result, idx_t row) {
 	const idx_t group_count = child_entries.size();
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result);
 	idx_t current_list_size = ListVector::GetListSize(result);
 	list_entries[row].offset = current_list_size;
 
@@ -264,14 +256,14 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 		}
 		// Write each selected group
 		for (idx_t g = 0; g < group_count; g++) {
-			auto &child_vec = *child_entries[g];
+			auto &child_vec = child_entries[g];
 			child_vec.SetVectorType(VectorType::FLAT_VECTOR);
-			auto cdata = FlatVector::GetData<string_t>(child_vec);
+			auto cdata = FlatVector::GetDataMutable<string_t>(child_vec);
 			auto &span = group_spans[g + 1];
 			if (span.empty()) {
 				if (span.begin() == nullptr) {
 					// Unmatched optional group -> always NULL
-					FlatVector::Validity(child_vec).SetInvalid(current_list_size);
+					FlatVector::ValidityMutable(child_vec).SetInvalid(current_list_size);
 				}
 				cdata[current_list_size] = string_t(string_val.GetData(), 0);
 			} else {
@@ -308,40 +300,37 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	// Reference original string buffer for zero-copy substring assignment
 	for (auto &child : child_entries) {
-		child->SetAuxiliary(strings.GetAuxiliary());
-		child->SetVectorType(VectorType::FLAT_VECTOR);
+		StringVector::AddHeapReference(child, strings);
+		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
-	UnifiedVectorFormat strings_data;
-	strings.ToUnifiedFormat(args.size(), strings_data);
+	auto strings_entries = strings.Values<string_t>(args.size());
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
-	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
 
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
-	auto &list_validity = FlatVector::Validity(result);
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result, args.size());
 
 	vector<duckdb_re2::StringPiece> group_spans(group_count + 1);
 
-	for (idx_t row = 0; row < tuple_count; row++) {
-		auto sindex = strings_data.sel->get_index(row);
-		if (!strings_data.validity.RowIsValid(sindex)) {
+	for (idx_t row = 0; row < args.size(); row++) {
+		auto string_entry = strings_entries[row];
+		if (!string_entry.IsValid()) {
 			list_entries[row].offset = ListVector::GetListSize(result);
 			list_entries[row].length = 0;
-			list_validity.SetInvalid(row);
+			list_entries.SetInvalid(row);
 			continue;
 		}
-		auto &string_val = UnifiedVectorFormat::GetData<string_t>(strings_data)[sindex];
+		auto &string_val = string_entry.GetValue();
 		ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result, row);
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
-unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	// arguments: string, pattern, LIST<VARCHAR> group_names [, options]
 	if (arguments.size() < 3) {
 		throw BinderException("regexp_extract_all struct variant requires at least 3 arguments");
@@ -350,7 +339,7 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, Sc
 	string constant_string;
 	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
 	if (!constant_pattern) {
-		throw BinderException("%s with LIST requires a constant pattern", bound_function.name);
+		throw BinderException("%s with LIST requires a constant pattern", function.name);
 	}
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
@@ -358,15 +347,17 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, Sc
 	options.set_log_errors(false);
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
-	regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options, true,
-	                                group_names, struct_children);
-	bound_function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
+	regexp_util::ParseGroupNameList(context, function.name, *arguments[2], constant_string, options, true, group_names,
+	                                struct_children);
+	function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
 	                                                 std::move(group_names));
 }
 
-unique_ptr<FunctionData> RegexpExtractAll::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RegexpExtractAll::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	D_ASSERT(arguments.size() >= 2);
 
 	duckdb_re2::RE2::Options options;

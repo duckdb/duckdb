@@ -1,0 +1,36 @@
+# name: test/sql/optimizer/topn_window_set_elimination.test
+# description: Test schema enforcement for set operators above TopN Window Rule
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE or replace TABLE timeseries AS
+FROM (
+    VALUES
+        (timestamp '2026-03-25 05:33:11.822+08', 10),
+        (timestamp '2026-03-26 05:33:11.822+08', 15),
+        (timestamp '2026-03-27 05:33:11.822+08', 12),
+        (timestamp '2026-03-28 05:33:11.822+08', 18),
+        (timestamp '2026-03-29 05:33:11.822+08', 14)
+) AS t(date, value);
+
+statement ok
+CREATE OR REPLACE MACRO nextValue(time_serie, ts_col, value_col, ts) AS TABLE (
+    (SELECT
+        ts_col,
+        value_col
+        FROM query_table(time_serie)
+        WHERE ts_col >= ts order by ts_col limit 1)
+    union
+    select
+       ts AS ts_col,
+       (select value_col from query_table(time_serie) order by ts_col desc limit 1) AS value_col 
+        WHERE NOT EXISTS (FROM query_table(time_serie) WHERE ts_col >= ts)
+);
+
+statement ok
+from range(1,5) as t(days),
+nextValue(timeseries, date, value, '2026-03-29 05:33:11.822+08'::timestamp - INTERVAL (days) DAY)
+limit 5;

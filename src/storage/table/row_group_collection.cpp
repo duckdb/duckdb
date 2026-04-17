@@ -19,6 +19,7 @@
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -295,6 +296,16 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
+			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
+				state.row_number_base = scan_state.row_number_base.GetIndex();
+			}
+			if (state.row_number_base.IsValid()) {
+				// if we are scanning the row_number virtual column - shift the base based on the number of visible rows
+				// (i.e. non-deleted rows) for the current transaction
+				scan_state.row_number_base = state.row_number_base.GetIndex();
+				auto &tx = DuckTransaction::Get(context, GetAttached());
+				state.row_number_base = state.row_number_base.GetIndex() + current_row_group.GetVisibleRowCount(tx);
+			}
 		}
 		D_ASSERT(collection);
 		D_ASSERT(row_group);
@@ -1048,7 +1059,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
                                       const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	idx_t pos = 0;
 	auto row_groups = GetRowGroups();
 	do {
@@ -1156,6 +1167,11 @@ private:
 struct VacuumState {
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
+	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
+	//! threshold is set, the table's row count is within the threshold, and all indexes are bound ART's).
+	bool can_rebuild_indexes = false;
+	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
+	bool row_ids_changed = false;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1269,6 +1285,9 @@ public:
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);
+			if (!checkpoint_task) {
+				throw InternalException("Failed to get checkpoint task for row group we just merged");
+			}
 			checkpoint_task->ExecuteTask();
 		}
 	}
@@ -1285,7 +1304,8 @@ private:
 	idx_t merge_rows;
 };
 
-void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state) {
+void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+                                               optional_idx checkpoint_row_group_count) {
 	auto options = checkpoint_state.writer.GetCheckpointOptions();
 	// currently we can only vacuum deletes if we are doing a full checkpoint
 	state.can_vacuum_deletes = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
@@ -1295,25 +1315,39 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 
 	// if there are indexes - we cannot change row-ids
 	// this limits what kind of vacuuming we can do
-	state.can_change_row_ids = info->GetIndexes().Empty();
+	bool has_indexes = !info->GetIndexes().Empty();
+
+	// *unless* vacuum_rebuild_indexes threshold is set, the table's row count
+	// is within the threshold, and all indexes are bound ART indexes,
+	// in which case we allow vacuuming and rebuild the indexes afterward.
+	auto vacuum_rebuild_threshold = Settings::Get<VacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
+	auto index_types = info->GetIndexes().DistinctIndexTypes();
+	state.can_rebuild_indexes = has_indexes && !info->GetIndexes().HasUnbound() && index_types.size() == 1 &&
+	                            index_types.count(ART::TYPE_NAME) && vacuum_rebuild_threshold > 0 &&
+	                            GetTotalRows() <= vacuum_rebuild_threshold;
+
+	// We can move around rowids if we either 1) don't have any indexes at all or 2) can_rebuild_indexes is true (in
+	// which case indexes are entirely rebuilt after vacuuming).
+	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes;
 	// obtain the set of committed row counts for each row group
+	auto row_group_count = checkpoint_state.SegmentCount();
 	vector<optional_idx> committed_counts;
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
+	if (checkpoint_row_group_count.IsValid() && checkpoint_row_group_count.GetIndex() > row_group_count) {
+		// we have row groups that were concurrently appended to this collection
+		// don't vacuum - otherwise we can move row groups which could cause committed row-ids to be moved around
+		// while transactions are still processing / depending on them being stable (during e.g. commit)
+		state.can_vacuum_deletes = false;
+		return;
+	}
+	bool dropped_any_rowgroups = false;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
-		auto should_checkpoint = row_group.ShouldCheckpointRowGroup(options.transaction_id);
-		if (!should_checkpoint) {
-			// this row group does not belong to this checkpoint - it was written by a newer commit
-			// don't vacuum - otherwise we might move this row group around
-			// which could cause the subsequent commit / clean-up to fail
-			state.can_vacuum_deletes = false;
-			return;
-		}
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (!state.can_change_row_ids) {
 			idx_t total_count = row_group.count;
 			committed_counts.emplace_back(row_group_count);
-			// we cannot change row ids and this row group has deletes
+			// we cannot change row ids, and this row group has deletes
 			// vacuuming here would alter row ids - so skip it
 			if (total_count != row_group_count) {
 				state.row_group_counts.emplace_back();
@@ -1321,15 +1355,23 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			}
 		}
 		if (row_group_count == 0) {
-			// empty row group - we can drop it entirely
+			// empty row group - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
+			dropped_any_rowgroups = true;
+			state.row_group_counts.push_back(row_group_count);
+			continue;
+		}
+		if (dropped_any_rowgroups) {
+			// if there are any dropped row groups before a live row group, all the row ids of the row groups following
+			// the dropped row group will have their row ids shifted forward (to keep row ids contiguous).
+			state.row_ids_changed = true;
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
 	if (!state.can_change_row_ids && options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
 		// if we cannot change row ids we might still be able to vacuum trailing deletions
-		// since that would not change the row-ids of any non-deleted rows
+		// since that would not change the row ids of any non-deleted rows
 		auto segment_count = state.row_group_counts.size();
 		for (idx_t i = segment_count; i > 0; i--) {
 			auto segment_idx = i - 1;
@@ -1446,6 +1488,11 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 //===--------------------------------------------------------------------===//
 unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheckpointState &checkpoint_state,
                                                                  idx_t segment_idx) {
+	auto row_group_count = checkpoint_state.writer.GetRowGroupCount();
+	if (row_group_count.IsValid() && segment_idx >= row_group_count.GetIndex()) {
+		// this row group was appended AFTER the checkpoint was started - we should not be checkpointing it
+		return nullptr;
+	}
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
@@ -1455,7 +1502,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
 
 	VacuumState vacuum_state;
-	InitializeVacuumState(checkpoint_state, vacuum_state);
+	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
 	try {
 		// schedule tasks
@@ -1467,6 +1514,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (vacuum_tasks) {
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
+				vacuum_state.row_ids_changed = true;
 				continue;
 			}
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
@@ -1483,7 +1531,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);
 				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+				if (checkpoint_task) {
+					checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+				}
 			}
 			vacuum_state.row_start += row_group.count;
 		}
@@ -1546,7 +1596,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
-	bool skipped_row_groups = false;
+	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
 		if (!entry) {
@@ -1558,7 +1608,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
-			D_ASSERT(writer.GetCheckpointOptions().type == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
 
@@ -1582,23 +1631,18 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 		// check if we should write this row group to the persistent storage
 		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
-		if (row_group_write_data.should_checkpoint) {
-			if (skipped_row_groups) {
-				throw InternalException("Checkpoint failure - we are writing a row group AFTER we skipped writing a "
-				                        "row group due to concurrent insertions. This will change the row-ids of the "
-				                        "written row groups which can cause subtle issues later.");
-			}
-			auto pointer =
-			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
-
-			if (debug_verify_blocks) {
-				pointer_copy = pointer;
-			}
-			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
-		} else {
-			debug_verify_blocks = false;
-			skipped_row_groups = true;
+		auto pointer =
+		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
+		if (debug_verify_blocks) {
+			pointer_copy = pointer;
 		}
+		// for any columns that are not yet loaded add them to the list of columns with incomplete stats
+		auto unloaded_columns = row_group_writer->GetUnloadedColumns();
+		for (auto &column_idx : unloaded_columns) {
+			columns_with_incomplete_stats.insert(column_idx);
+		}
+
+		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;
 
@@ -1714,15 +1758,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 		}
 	}
-	l.Release();
-
-	if (skipped_row_groups) {
-		// if we skipped any rows groups we cannot override the base stats
-		// because the stats reflect only the *checkpointed* row groups
-		// the stats of the extra (not checkpointed) row groups is not included
-		// hence the stats do not correctly reflect the current in-memory state of the table
-		writer.SetCannotOverrideStats();
+	if (!columns_with_incomplete_stats.empty()) {
+		// for any columns that have incomplete stats we need to merge in the previous global stats to ensure the stats
+		// are correct
+		auto lock = global_stats.GetLock();
+		for (auto &column_idx : columns_with_incomplete_stats) {
+			auto stats_lock = stats.GetLock();
+			auto &column_stats = stats.GetStats(*stats_lock, column_idx);
+			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics());
+		}
 	}
+	l.Release();
 
 	// flush any partial blocks BEFORE updating the row group pointer
 	// flushing partial blocks updates where data lives
@@ -1733,6 +1779,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
+	// Rebuild indexes if:
+	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes
+	// threshold is set, the table's row count is within the threshold,
+	// and all the indexes are bound ART's),
+	// and
+	// 2) we have changed rowids.
+	if (vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed) {
+		writer.SetRebuildIndexes();
+	}
 }
 
 //===--------------------------------------------------------------------===//

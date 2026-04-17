@@ -424,6 +424,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	result.bind_index = GenerateTableIndex();
 	result.child_binder = Binder::CreateBinder(context, this);
 	result.child = result.child_binder->Bind(*ref.source);
+	if (!result.child_binder->correlated_columns.empty()) {
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
+	}
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);
@@ -946,7 +949,7 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
 	if (ref.source->type == TableReferenceType::SUBQUERY && ref.source->alias.empty()) {
-		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex());
+		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex().index);
 	}
 	auto copied_source = ref.source->Copy();
 	auto star_binder = Binder::CreateBinder(context, this);

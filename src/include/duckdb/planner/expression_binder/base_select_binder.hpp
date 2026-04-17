@@ -19,9 +19,9 @@ class WindowExpression;
 class BoundSelectNode;
 
 struct BoundGroupInformation {
-	parsed_expression_map_t<idx_t> map;
-	case_insensitive_map_t<idx_t> alias_map;
-	unordered_map<idx_t, idx_t> collated_groups;
+	parsed_expression_map_t<ProjectionIndex> map;
+	case_insensitive_map_t<ProjectionIndex> alias_map;
+	unordered_map<ProjectionIndex, ProjectionIndex> collated_groups;
 };
 
 //! The BaseSelectBinder is the base binder of the SELECT, HAVING and QUALIFY binders. It can bind aggregates and window
@@ -54,11 +54,11 @@ protected:
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 
 	//! Binds a WINDOW expression and returns the result.
-	virtual BindResult BindWindow(WindowExpression &expr, idx_t depth);
+	virtual BindResult BindWindowExpression(WindowExpression &expr, idx_t depth);
 	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
-	idx_t TryBindGroup(ParsedExpression &expr);
-	BindResult BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index);
+	ProjectionIndex TryBindGroup(ParsedExpression &expr);
+	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
 };
 
 } // namespace duckdb

@@ -113,6 +113,9 @@ void QueryProfiler::Reset() {
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
+	// Always reset byte counters at the start of each query so the progress bar shows per-query values
+	query_metrics.ResetMetric(MetricType::TOTAL_BYTES_READ);
+	query_metrics.ResetMetric(MetricType::TOTAL_BYTES_WRITTEN);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -237,6 +240,11 @@ void QueryProfiler::FinalizeMetrics() {
 }
 
 void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
+	// Always track bytes read/written so the progress bar can display them
+	if (type == MetricType::TOTAL_BYTES_READ || type == MetricType::TOTAL_BYTES_WRITTEN) {
+		query_metrics.UpdateMetric(type, amount);
+		return;
+	}
 	if (IsEnabled()) {
 		query_metrics.UpdateMetric(type, amount);
 	}
@@ -276,7 +284,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_name.empty() && !root) {
+		if (query_metrics.query_name.empty() || !root) {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
@@ -383,7 +391,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
-			auto result_set_size = chunk->GetAllocationSize();
+			auto result_set_size = chunk->GetDataSize();
 			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
@@ -583,10 +591,12 @@ void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<
 void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_t width) {
 	map<string, double> optimizer_timings;
 	map<string, double> planner_timings;
+	map<string, double> parser_timings;
 	map<string, double> physical_planner_timings;
 
 	pair<string, double> optimizer_head;
 	pair<string, double> planner_head;
+	pair<string, double> parser_head;
 	pair<string, double> physical_planner_head;
 
 	for (const auto &entry : info.metrics) {
@@ -605,6 +615,9 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 			case MetricType::PLANNER:
 				planner_head = {"Planner", entry.second.GetValue<double>()};
 				break;
+			case MetricType::PARSER:
+				parser_head = {"Parser", entry.second.GetValue<double>()};
+				break;
 			default:
 				break;
 			}
@@ -614,6 +627,8 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
 			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricType::PLANNER) {
 				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
+			} else if (StringUtil::StartsWith(metric, "PARSER")) {
+				parser_timings[metric] = entry.second.GetValue<double>();
 			}
 		}
 	}
@@ -621,6 +636,7 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 	RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
 	RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
 	RenderPhaseTimings(ss, planner_head, planner_timings, width);
+	RenderPhaseTimings(ss, parser_head, parser_timings, width);
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
