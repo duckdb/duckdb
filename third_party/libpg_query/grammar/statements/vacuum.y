@@ -75,6 +75,8 @@ vacuum_option_elem:
 				{
 					if (strcmp($1, "disable_page_skipping") == 0)
 						$$ = PG_VACOPT_DISABLE_PAGE_SKIPPING;
+					else if (strcmp($1, "update_indexes") == 0)
+						$$ = PG_VACOPT_UPDATE_INDEXES;
 					else
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_SYNTAX_ERROR),

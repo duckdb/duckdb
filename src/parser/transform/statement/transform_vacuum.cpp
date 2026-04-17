@@ -1,3 +1,5 @@
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -33,6 +35,21 @@ VacuumOptions ParseOptions(const int32_t options) {
 }
 
 unique_ptr<SQLStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGVacuumStmt &stmt) {
+	if (stmt.options & duckdb_libpgquery::PGVacuumOption::PG_VACOPT_UPDATE_INDEXES) {
+		auto pragma = make_uniq<PragmaStatement>();
+		pragma->info->name = "serenedb_vacuum";
+		pragma->info->parameters.push_back(make_uniq<ConstantExpression>(Value("update_indexes")));
+		if (stmt.relation) {
+			pragma->info->parameters.push_back(
+			    make_uniq<ConstantExpression>(Value(string(stmt.relation->relname))));
+			if (stmt.relation->schemaname) {
+				pragma->info->parameters.push_back(
+				    make_uniq<ConstantExpression>(Value(string(stmt.relation->schemaname))));
+			}
+		}
+		return pragma;
+	}
+
 	auto result = make_uniq<VacuumStatement>(ParseOptions(stmt.options));
 
 	if (stmt.relation) {
