@@ -76,6 +76,9 @@ void TransactionContext::SetAutoCommit(bool value) {
 }
 
 void TransactionContext::SetIsolationLevel(TransactionIsolationLevel new_isolation_level) {
+	if (context.isolation_level_validator) {
+		context.isolation_level_validator(context, new_isolation_level);
+	}
 	isolation_level = new_isolation_level;
 }
 

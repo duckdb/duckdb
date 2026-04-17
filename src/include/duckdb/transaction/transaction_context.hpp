@@ -78,7 +78,7 @@ private:
 	bool auto_commit;
 	TransactionInvalidationPolicy invalidation_policy;
 	bool auto_rollback;
-	TransactionIsolationLevel isolation_level = TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION;
+	TransactionIsolationLevel isolation_level = TransactionIsolationLevel::REPEATABLE_READ;
 
 	unique_ptr<MetaTransaction> current_transaction;
 

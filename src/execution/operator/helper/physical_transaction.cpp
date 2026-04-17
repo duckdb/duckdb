@@ -59,13 +59,21 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 				}
 			}
 		} else {
-			throw TransactionException("cannot start a transaction within a transaction");
+			const char *msg = "cannot start a transaction within a transaction";
+			if (client.EmitWarning(msg)) {
+				break;
+			}
+			throw TransactionException(msg);
 		}
 		break;
 	}
 	case TransactionType::COMMIT: {
 		if (client.transaction.IsAutoCommit()) {
-			throw TransactionException("cannot commit - no transaction is active");
+			const char *msg = "cannot commit - no transaction is active";
+			if (client.EmitWarning(msg)) {
+				break;
+			}
+			throw TransactionException(msg);
 		} else {
 			// explicitly commit the current transaction
 			client.transaction.Commit();
@@ -80,7 +88,11 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 	}
 	case TransactionType::ROLLBACK: {
 		if (client.transaction.IsAutoCommit()) {
-			throw TransactionException("cannot rollback - no transaction is active");
+			const char *msg = "cannot rollback - no transaction is active";
+			if (client.EmitWarning(msg)) {
+				break;
+			}
+			throw TransactionException(msg);
 		} else {
 			// Explicitly rollback the current transaction
 			// If it is because of an invalidated transaction, we need to rollback with an error
