@@ -26,13 +26,19 @@ static bool AddDependencyBindings(column_binding_set_t &target, const column_bin
 
 static void MergeCorrelatedBindings(column_binding_map_t<idx_t> &target, const CorrelatedColumns &source_columns,
                                     const column_binding_map_t<idx_t> &source) {
+	vector<vector<ColumnBinding>> bindings_by_idx(source_columns.size());
+	for (auto &entry : source) {
+		D_ASSERT(entry.second < source_columns.size());
+		bindings_by_idx[entry.second].push_back(entry.first);
+	}
 	for (idx_t correlated_idx = 0; correlated_idx < source_columns.size(); correlated_idx++) {
+		auto &binding_group = bindings_by_idx[correlated_idx];
+		if (binding_group.empty()) {
+			continue;
+		}
 		optional_idx target_idx;
-		for (auto &entry : source) {
-			if (entry.second != correlated_idx) {
-				continue;
-			}
-			auto target_entry = target.find(entry.first);
+		for (auto &binding : binding_group) {
+			auto target_entry = target.find(binding);
 			if (target_entry == target.end()) {
 				continue;
 			}
@@ -42,11 +48,8 @@ static void MergeCorrelatedBindings(column_binding_map_t<idx_t> &target, const C
 		if (!target_idx.IsValid()) {
 			continue;
 		}
-		for (auto &entry : source) {
-			if (entry.second != correlated_idx) {
-				continue;
-			}
-			auto result = target.emplace(entry.first, target_idx.GetIndex());
+		for (auto &binding : binding_group) {
+			auto result = target.emplace(binding, target_idx.GetIndex());
 			D_ASSERT(result.second || result.first->second == target_idx.GetIndex());
 		}
 	}
@@ -97,8 +100,8 @@ public:
 	void VisitOperator(LogicalOperator &op) override {
 		column_binding_set_t dependencies;
 		unordered_map<TableIndex, reference_set_t<LogicalOperator>> subtree_accessors;
+		VisitOperatorChildren(op);
 		for (auto &child : op.children) {
-			VisitOperator(*child);
 			auto child_entry = state.subtree_dependencies.find(*child);
 			if (child_entry != state.subtree_dependencies.end()) {
 				AddDependencyBindings(dependencies, child_entry->second);
