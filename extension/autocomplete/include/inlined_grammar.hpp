@@ -853,6 +853,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*\n"
 	"OtherOperator <-\n"
 	"    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral\n"
+	"OperatorLiteral <- Identifier\n"
 	"AnyAllOperator <- AnyOp AnyOrAll\n"
 	"AnyOrAll <- SubqueryAny / SubqueryAll\n"
 	"SubqueryAny <- 'ANY'\n"
