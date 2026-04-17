@@ -1,0 +1,43 @@
+# name: test/sql/subquery/any_all/test_row_not_in_null_semantics.test
+# description: Regression tests for row-valued IN/ANY/NOT IN with NULLs in subqueries
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT (1, 0) =ANY ((VALUES (0, NULL)))
+----
+false
+
+query I
+SELECT (0, 0) =ANY ((VALUES (0, NULL)))
+----
+NULL
+
+query I
+SELECT (1, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))
+----
+false
+
+query I
+SELECT (0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))
+----
+NULL
+
+statement ok
+CREATE TABLE outer_tab (f1 int4, f2 int4);
+
+statement ok
+INSERT INTO outer_tab VALUES (0, 0), (1, 0);
+
+statement ok
+CREATE TABLE inner_tab(c1 int8, c2 int8);
+
+statement ok
+INSERT INTO inner_tab VALUES (0, NULL);
+
+query II
+SELECT * FROM outer_tab WHERE (f1, f2) NOT IN (SELECT * FROM inner_tab) ORDER BY ALL
+----
+1	0

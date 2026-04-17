@@ -18,6 +18,7 @@ using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
+using MarkJoinNullPatternTable = JoinHashTable::MarkJoinNullPatternTable;
 
 JoinHashTable::SharedState::SharedState()
     : salt_v(LogicalType::UBIGINT), keys_to_compare_sel(STANDARD_VECTOR_SIZE), keys_no_match_sel(STANDARD_VECTOR_SIZE) {
@@ -75,6 +76,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	}
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
+	mark_join_null_info.enabled = UseMarkJoinNullPatterns();
 
 	// Types for the layout
 	auto layout = make_shared_ptr<TupleDataLayout>();
@@ -133,6 +135,104 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 JoinHashTable::~JoinHashTable() {
 }
 
+bool JoinHashTable::UseMarkJoinNullPatterns() const {
+	if (join_type != JoinType::MARK || !correlated_mark_join_info.correlated_types.empty()) {
+		return false;
+	}
+	if (conditions.size() <= 1 || equality_predicates.size() != conditions.size()) {
+		return false;
+	}
+	for (auto predicate : equality_predicates) {
+		if (predicate != ExpressionType::COMPARE_EQUAL) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static MarkJoinNullPatternTable &GetOrCreateMarkJoinNullPatternTable(vector<MarkJoinNullPatternTable> &tables,
+                                                                     const string &mask,
+                                                                     const vector<idx_t> &key_columns) {
+	for (auto &table : tables) {
+		if (table.mask == mask) {
+			return table;
+		}
+	}
+	tables.push_back({mask, key_columns, {}});
+	return tables.back();
+}
+
+void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
+	if (!UseMarkJoinNullPatterns()) {
+		return;
+	}
+	auto &null_info = mark_join_null_info;
+	null_info.enabled = true;
+	for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
+		string mask;
+		mask.reserve(keys.ColumnCount());
+		vector<idx_t> key_columns;
+		vector<Value> key_values;
+		bool has_null_row = false;
+		for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+			auto value = keys.data[col_idx].GetValue(row_idx);
+			if (value.IsNull()) {
+				has_null_row = true;
+				mask.push_back('1');
+			} else {
+				mask.push_back('0');
+				key_columns.push_back(col_idx);
+				key_values.push_back(std::move(value));
+			}
+		}
+		if (!has_null_row) {
+			continue;
+		}
+		has_null = true;
+		if (key_columns.empty()) {
+			null_info.has_all_null = true;
+			continue;
+		}
+		auto &table = GetOrCreateMarkJoinNullPatternTable(null_info.tables, mask, key_columns);
+		table.key_values.insert(std::move(key_values));
+	}
+}
+
+void JoinHashTable::MergeMarkJoinNullRows(JoinHashTable &other) {
+	if (!UseMarkJoinNullPatterns() || !other.mark_join_null_info.enabled) {
+		return;
+	}
+	lock_guard<mutex> guard(mark_join_null_info.lock);
+	has_null = has_null || other.has_null;
+	mark_join_null_info.has_all_null = mark_join_null_info.has_all_null || other.mark_join_null_info.has_all_null;
+	for (auto &other_table : other.mark_join_null_info.tables) {
+		auto &table =
+		    GetOrCreateMarkJoinNullPatternTable(mark_join_null_info.tables, other_table.mask, other_table.key_columns);
+		for (auto &entry : other_table.key_values) {
+			table.key_values.insert(entry);
+		}
+	}
+}
+
+bool JoinHashTable::ProbeMarkJoinNullRows(DataChunk &join_keys, idx_t row_idx) const {
+	D_ASSERT(UseMarkJoinNullPatterns());
+	auto &null_info = mark_join_null_info;
+	if (null_info.has_all_null) {
+		return true;
+	}
+	for (auto &table : null_info.tables) {
+		vector<Value> key_values;
+		key_values.reserve(table.key_columns.size());
+		for (auto col_idx : table.key_columns) {
+			key_values.push_back(join_keys.data[col_idx].GetValue(row_idx));
+		}
+		if (table.key_values.find(key_values) != table.key_values.end()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void JoinHashTable::Merge(JoinHashTable &other) {
 	{
 		lock_guard<mutex> guard(data_lock);
@@ -148,6 +248,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 			info.correlated_counts->Combine(*other_info.correlated_counts);
 		}
 	}
+	MergeMarkJoinNullRows(other);
 
 	sink_collection->Combine(*other.sink_collection);
 }
@@ -428,6 +529,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 
 	// ToUnifiedFormat the source chunk
 	TupleDataCollection::ToUnifiedFormat(append_state.chunk_state, source_chunk);
+	RegisterMarkJoinNullRows(keys);
 
 	// prepare the keys for processing
 	const SelectionVector *current_sel;
@@ -864,6 +966,53 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 		// now initialize the pointers of the scan structure based on the hashes
 		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count, scan_structure.pointers,
 		               scan_structure.sel_vector, scan_structure.has_null_value_filter);
+	}
+}
+
+void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) const {
+	D_ASSERT(join_type == JoinType::MARK);
+	D_ASSERT(result.ColumnCount() == probe_data.ColumnCount() + 1);
+
+	result.SetCardinality(probe_data);
+	for (idx_t i = 0; i < probe_data.ColumnCount(); i++) {
+		result.data[i].Reference(probe_data.data[i]);
+	}
+
+	auto &result_vector = result.data.back();
+	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
+	auto &mask = FlatVector::Validity(result_vector);
+	for (idx_t i = 0; i < probe_data.size(); i++) {
+		bool_result[i] = false;
+	}
+
+	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+		if (null_values_are_equal[col_idx]) {
+			continue;
+		}
+		UnifiedVectorFormat jdata;
+		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+		if (jdata.validity.CanHaveNull()) {
+			for (idx_t i = 0; i < join_keys.size(); i++) {
+				auto jidx = jdata.sel->get_index(i);
+				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+					mask.SetInvalid(i);
+				}
+			}
+		}
+	}
+
+	if (UseMarkJoinNullPatterns()) {
+		for (idx_t i = 0; i < probe_data.size(); i++) {
+			if (!mask.RowIsValid(i)) {
+				continue;
+			}
+			if (ProbeMarkJoinNullRows(join_keys, i)) {
+				mask.SetInvalid(i);
+			}
+		}
+	} else if (has_null) {
+		mask.SetAllInvalid(probe_data.size());
 	}
 }
 
@@ -1383,7 +1532,16 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	}
 
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (ht.has_null) {
+	if (ht.UseMarkJoinNullPatterns()) {
+		for (idx_t i = 0; i < probe_data.size(); i++) {
+			if (bool_result[i] || !mask.RowIsValid(i)) {
+				continue;
+			}
+			if (ht.ProbeMarkJoinNullRows(join_keys, i)) {
+				mask.SetInvalid(i);
+			}
+		}
+	} else if (ht.has_null) {
 		for (idx_t i = 0; i < probe_data.size(); i++) {
 			if (!bool_result[i]) {
 				mask.SetInvalid(i);

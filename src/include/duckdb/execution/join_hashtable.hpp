@@ -9,12 +9,14 @@
 #pragma once
 
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
@@ -62,6 +64,36 @@ private:
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
+	struct VectorOfValuesHashFunction {
+		uint64_t operator()(const vector<Value> &values) const {
+			hash_t result = 0;
+			for (auto &value : values) {
+				result = CombineHash(result, value.Hash());
+			}
+			return result;
+		}
+	};
+
+	struct VectorOfValuesEquality {
+		bool operator()(const vector<Value> &left, const vector<Value> &right) const {
+			if (left.size() != right.size()) {
+				return false;
+			}
+			for (idx_t i = 0; i < left.size(); i++) {
+				if (!Value::NotDistinctFrom(left[i], right[i])) {
+					return false;
+				}
+			}
+			return true;
+		}
+	};
+
+	struct MarkJoinNullPatternTable {
+		string mask;
+		vector<idx_t> key_columns;
+		unordered_set<vector<Value>, VectorOfValuesHashFunction, VectorOfValuesEquality> key_values;
+	};
 
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
@@ -220,6 +252,7 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
+	void ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) const;
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -373,10 +406,21 @@ public:
 		DataChunk result_chunk;
 	} correlated_mark_join_info;
 
+	struct {
+		mutex lock;
+		vector<MarkJoinNullPatternTable> tables;
+		bool enabled = false;
+		bool has_all_null = false;
+	} mark_join_null_info;
+
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	bool UseMarkJoinNullPatterns() const;
+	void RegisterMarkJoinNullRows(DataChunk &keys);
+	void MergeMarkJoinNullRows(JoinHashTable &other);
+	bool ProbeMarkJoinNullRows(DataChunk &join_keys, idx_t row_idx) const;
 
 	bool UseSalt() const;
 
