@@ -225,7 +225,7 @@ select '47.210  '::interval;
 query I
 select '31.123456789'::interval;
 ----
-00:00:31.123456
+00:00:31.123457
 
 # Non-alpha specifiers are still not OK
 statement error
@@ -364,7 +364,7 @@ SELECT INTERVAL '-1.5' MILLENNIA;
 query I
 SELECT '1.5 MICROSECOND'::INTERVAL;
 ----
-00:00:00.000002
+00:00:00.000001
 
 query I
 SELECT '1.5 MILLISECOND'::INTERVAL;
@@ -429,7 +429,7 @@ SELECT '1.5 MILLENIUM'::INTERVAL
 query I
 SELECT '-1.5 MICROSECOND'::INTERVAL;
 ----
--00:00:00.000002
+-00:00:00.000001
 
 query I
 SELECT '-1.5 MILLISECOND'::INTERVAL;
