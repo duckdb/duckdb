@@ -169,7 +169,7 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
 		MatchState list_state(state);
-		vector<optional_ptr<ParseResult>> results;
+		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
 		if (list_state.token_index < list_state.tokens.size()) {
@@ -180,7 +180,7 @@ public:
 			if (!child_result) {
 				return nullptr;
 			}
-			results.push_back(child_result);
+			results.push_back(*child_result);
 		}
 		state.token_index = list_state.token_index;
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
@@ -302,7 +302,7 @@ public:
 			if (child_result != nullptr) {
 				// we matched this child - propagate upwards
 				state.token_index = choice_state.token_index;
-				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i, start_offset));
+				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(*child_result, i, start_offset));
 				return result;
 			}
 		}
@@ -372,7 +372,7 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
 		MatchState repeat_state(state);
-		vector<optional_ptr<ParseResult>> results;
+		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
 		if (repeat_state.token_index < state.tokens.size()) {
@@ -385,7 +385,7 @@ public:
 			// The first match failed, so the whole repeat fails.
 			return nullptr;
 		}
-		results.push_back(first_result);
+		results.push_back(*first_result);
 
 		// After the first success, the overall result is a success.
 		// Now, we continue matching the element as many times as possible.
@@ -403,7 +403,7 @@ public:
 			if (!next_result) {
 				break;
 			}
-			results.push_back(next_result);
+			results.push_back(*next_result);
 		}
 
 		// Return all collected results in a RepeatParseResult.
@@ -788,6 +788,10 @@ private:
 		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
+		// A lone '.' is a dot operator, not a number literal (e.g., '?.method()' should not consume '.')
+		if (token_text.size() == 1 && token_text[0] == '.') {
+			return false;
+		}
 		bool scientific_notation = false;
 		for (idx_t i = 1; i < token_text.size(); i++) {
 			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
@@ -808,6 +812,41 @@ private:
 		return true;
 	}
 };
+
+static bool IsOperatorChar(char c) {
+	switch (c) {
+	case '+':
+	case '-':
+	case '*':
+	case '/':
+	case '%':
+	case '^':
+	case '<':
+	case '>':
+	case '=':
+	case '~':
+	case '!':
+	case '@':
+	case '&':
+	case '|':
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool IsArithmeticOperatorChar(char c) {
+	switch (c) {
+	case '+':
+	case '-':
+	case '*':
+	case '/':
+	case '%':
+		return true;
+	default:
+		return false;
+	}
+}
 
 class OperatorMatcher : public Matcher {
 public:
@@ -847,24 +886,26 @@ public:
 private:
 	static bool MatchOperator(MatchState &state) {
 		auto &token_text = state.tokens[state.token_index].text;
+		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
+		if (token_text == "->" || token_text == "->>") {
+			return false;
+		}
+		// Single-character operators are handled at specific precedence levels (comparison, additive, etc.)
+		if (token_text.size() == 1) {
+			return false;
+		}
+		// Exclude known comparison operators — handled by ComparisonExpression, not as function calls
+		if (token_text == "<=" || token_text == ">=" || token_text == "!=" || token_text == "==" ||
+		    token_text == "<>") {
+			return false;
+		}
+		// Exclude LIKE/SIMILAR operators — handled by LikeVariations at a higher precedence level
+		if (token_text == "~~" || token_text == "~~*" || token_text == "~~~" || token_text == "!~~" ||
+		    token_text == "!~~*" || token_text == "!~") {
+			return false;
+		}
 		for (auto &c : token_text) {
-			switch (c) {
-			case '+':
-			case '-':
-			case '*':
-			case '/':
-			case '%':
-			case '^':
-			case '<':
-			case '>':
-			case '=':
-			case '~':
-			case '!':
-			case '@':
-			case '&':
-			case '|':
-				break;
-			default:
+			if (!IsOperatorChar(c)) {
 				return false;
 			}
 		}
@@ -913,14 +954,7 @@ private:
 	static bool MatchArithmeticOperator(MatchState &state) {
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
-			switch (c) {
-			case '*':
-			case '/':
-			case '+':
-			case '-':
-			case '%':
-				break;
-			default:
+			if (!IsArithmeticOperatorChar(c)) {
 				return false;
 			}
 		}

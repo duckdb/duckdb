@@ -78,6 +78,14 @@ void ColumnDefinition::SetComment(const Value &comment) {
 	this->comment = comment;
 }
 
+const InsertionOrderPreservingMap<string> &ColumnDefinition::Tags() const {
+	return tags;
+}
+
+void ColumnDefinition::SetTags(InsertionOrderPreservingMap<string> new_tags) {
+	this->tags = std::move(new_tags);
+}
+
 const duckdb::CompressionType &ColumnDefinition::CompressionType() const {
 	return compression_type;
 }

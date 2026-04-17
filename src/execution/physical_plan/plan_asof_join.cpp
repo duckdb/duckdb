@@ -7,6 +7,8 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -235,8 +237,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	}
 
 	// Add a synthetic primary integer key to the probe relation using streaming windowing.
+	auto row_number = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 	vector<unique_ptr<Expression>> window_select;
-	auto pk = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, pk_type, nullptr, nullptr);
+	auto pk = make_uniq<BoundWindowExpression>(pk_type, nullptr, std::move(row_number), nullptr);
 	pk->start = WindowBoundary::UNBOUNDED_PRECEDING;
 	pk->end = WindowBoundary::CURRENT_ROW_ROWS;
 	pk->alias = "row_number";
@@ -359,7 +362,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	auto &asof_comp = op.conditions[asof_idx];
 	auto &asof_column = asof_comp.RightReference();
 	auto asof_type = asof_column->return_type;
-	auto asof_end = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_LEAD, asof_type, nullptr, nullptr);
+	auto lead2 = make_uniq<WindowFunction>(LeadFun::GetTypedFunction(asof_type, 3));
+	auto asof_end = make_uniq<BoundWindowExpression>(asof_type, nullptr, std::move(lead2), nullptr);
 	asof_end->children.emplace_back(asof_column->Copy());
 	// TODO: If infinities are not supported for a type, fake them by looking at LHS statistics?
 	asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::BIGINT(1)));

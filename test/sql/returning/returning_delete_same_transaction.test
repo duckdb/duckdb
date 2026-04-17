@@ -1,0 +1,118 @@
+# name: test/sql/returning/returning_delete_same_transaction.test
+# description: Test DELETE RETURNING for rows inserted in the same transaction
+# group: [returning]
+
+# Basic case: INSERT + DELETE RETURNING in same explicit transaction
+statement ok
+CREATE TABLE t1 (id INT PRIMARY KEY, name TEXT);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice');
+
+query IT
+DELETE FROM t1 WHERE id = 1 RETURNING *;
+----
+1	alice
+
+statement ok
+COMMIT;
+
+# Without PRIMARY KEY
+statement ok
+CREATE TABLE t2 (id INT, name TEXT);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t2 VALUES (1, 'alice');
+
+query IT
+DELETE FROM t2 WHERE id = 1 RETURNING *;
+----
+1	alice
+
+statement ok
+COMMIT;
+
+# Multiple rows inserted and deleted in same transaction
+statement ok
+CREATE TABLE t3 (id INT, name TEXT);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t3 VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie');
+
+query IT rowsort
+DELETE FROM t3 RETURNING *;
+----
+1	alice
+2	bob
+3	charlie
+
+statement ok
+COMMIT;
+
+# Mixed: pre-committed rows + transaction-local rows
+statement ok
+CREATE TABLE t4 (id INT PRIMARY KEY, name TEXT);
+
+statement ok
+INSERT INTO t4 VALUES (1, 'committed');
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t4 VALUES (2, 'local');
+
+query IT rowsort
+DELETE FROM t4 RETURNING *;
+----
+1	committed
+2	local
+
+statement ok
+COMMIT;
+
+# RETURNING specific columns
+statement ok
+CREATE TABLE t5 (id INT, name TEXT, value INT);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t5 VALUES (1, 'alice', 100);
+
+query I
+DELETE FROM t5 WHERE id = 1 RETURNING id;
+----
+1
+
+statement ok
+COMMIT;
+
+# RETURNING with expression
+statement ok
+CREATE TABLE t6 (id INT, value INT);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t6 VALUES (1, 10), (2, 20);
+
+query II rowsort
+DELETE FROM t6 RETURNING id, value * 2;
+----
+1	20
+2	40
+
+statement ok
+COMMIT;

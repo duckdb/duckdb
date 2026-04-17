@@ -94,7 +94,7 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 	// otherwise we flatten and inherit the null values of the parent
 	result.Flatten(args.size());
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t r = 0; r < args.size(); r++) {
 		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
@@ -102,8 +102,9 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -170,8 +171,9 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 	});
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -210,7 +212,7 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  nullptr, LengthPropagateStats));
+	                                  LengthPropagateStats));
 	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
 	length.AddFunction(
@@ -222,7 +224,7 @@ ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
 	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, nullptr, LengthPropagateStats));
+	                                           nullptr, LengthPropagateStats));
 	return (length_grapheme);
 }
 

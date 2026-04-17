@@ -17,6 +17,8 @@ struct StringHeapHolder : AuxiliaryDataHolder {
 	explicit StringHeapHolder(Allocator &allocator) : heap(allocator) {
 	}
 
+	idx_t GetAllocationSize() const override;
+
 	StringHeap heap;
 };
 
@@ -26,9 +28,9 @@ public:
 	explicit VectorStringBuffer(Allocator &allocator);
 	VectorStringBuffer(Allocator &allocator, idx_t capacity);
 	explicit VectorStringBuffer(idx_t capacity);
-	explicit VectorStringBuffer(data_ptr_t data_ptr_p);
-	explicit VectorStringBuffer(AllocatedData &&data_p);
-	VectorStringBuffer(AllocatedData &&data_p, VectorStringBuffer &other);
+	explicit VectorStringBuffer(data_ptr_t data_ptr_p, idx_t capacity);
+	explicit VectorStringBuffer(AllocatedData &&data_p, idx_t capacity);
+	VectorStringBuffer(AllocatedData &&data_p, idx_t capacity, const VectorStringBuffer &other);
 
 public:
 	StringHeap &GetHeap() {
@@ -49,22 +51,18 @@ public:
 		heap = nullptr;
 	}
 
-	string_t AddString(const char *data, idx_t len) {
-		return GetHeap().AddString(data, len);
-	}
-	string_t AddString(string_t data) {
-		return GetHeap().AddString(data);
-	}
-	string_t AddBlob(string_t data) {
-		return GetHeap().AddBlob(data.GetData(), data.GetSize());
-	}
-	string_t EmptyString(idx_t len) {
-		return GetHeap().EmptyString(len);
-	}
-
 	ArenaAllocator &GetStringAllocator() {
 		return GetHeap().GetAllocator();
 	}
+
+public:
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
 
 private:
 	StringHeap &AllocateHeap(Allocator &allocator);
@@ -96,6 +94,8 @@ struct StringVector {
 	DUCKDB_API static VectorStringBuffer &GetStringBuffer(Vector &vector);
 	//! Returns a reference to the string allocator
 	DUCKDB_API static ArenaAllocator &GetStringAllocator(Vector &vector);
+	//! Returns a reference to the string heap
+	DUCKDB_API static StringHeap &GetStringHeap(Vector &vector);
 	//! Adds a reference to a handle that stores strings of this vector
 	DUCKDB_API static void AddHandle(Vector &vector, BufferHandle handle);
 	//! Add a reference from this vector to the string heap of the provided vector

@@ -41,20 +41,20 @@ public:
 enum class FilterConversionType { COPY_DIRECTLY, CAST_FILTER, CANNOT_CONVERT };
 
 struct MultiFileColumnMap {
-	MultiFileColumnMap(MultiFileLocalIndex index, const LogicalType &local_type, const LogicalType &global_type)
-	    : mapping(index), local_type(local_type), global_type(global_type),
+	MultiFileColumnMap(MultiFileLocalIndex index, const LogicalType &local_type_p, const LogicalType &global_type_p)
+	    : mapping(index), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(local_type == global_type ? FilterConversionType::COPY_DIRECTLY
 	                                                  : FilterConversionType::CAST_FILTER) {
 	}
-	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type, const LogicalType &global_type,
-	                   FilterConversionType filter_conversion)
-	    : mapping(std::move(mapping_p)), local_type(local_type), global_type(global_type),
+	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type_p,
+	                   const LogicalType &global_type_p, FilterConversionType filter_conversion)
+	    : mapping(std::move(mapping_p)), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(filter_conversion) {
 	}
 
 	MultiFileIndexMapping mapping;
-	const LogicalType &local_type;
-	const LogicalType &global_type;
+	const LogicalType local_type;
+	const LogicalType global_type;
 	FilterConversionType filter_conversion;
 };
 
@@ -594,7 +594,8 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
 		children.push_back(std::move(mapping.default_value));
 	}
 	auto remap_fun = RemapStructFun::GetFunction();
-	auto bind_data = remap_fun.GetBindCallback()(context, remap_fun, children);
+	auto bind_data = remap_fun.Bind(context, children);
+	;
 	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.arguments[0]);
 	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
 	                                          std::move(bind_data));

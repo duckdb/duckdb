@@ -75,8 +75,8 @@ proc = subprocess.run(
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
 )
-stdout = proc.stdout.decode('utf8').strip()
-stderr = proc.stderr.decode('utf8').strip()
+stdout = proc.stdout.decode('utf8', errors='backslashreplace').strip()
+stderr = proc.stderr.decode('utf8', errors='backslashreplace').strip()
 if len(stderr) > 0:
     print("Failed to run program " + unittest_program)
     print("Returncode:", proc.returncode)
@@ -152,8 +152,8 @@ def make_failure(test, cmd, msg, stdout='', stderr='', returncode=1):
 
 def run_program(test, cmd, description):
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout = proc.stdout.decode('utf8').strip()
-    stderr = proc.stderr.decode('utf8').strip()
+    stdout = proc.stdout.decode('utf8', errors='backslashreplace').strip()
+    stderr = proc.stderr.decode('utf8', errors='backslashreplace').strip()
     if proc.returncode != 0:
         return {
             'test': test,
@@ -170,7 +170,7 @@ def execute_test(i, test):
     test_path = test if os.path.isabs(test) else os.path.join(repo_root, test)
     skipped = False
     if not args.run_empty_tests:
-        with open(test_path, 'r') as f:
+        with open(test_path, 'r', encoding='utf8', errors='backslashreplace') as f:
             test_contents = f.read().lower()
         if 'create table' not in test_contents and 'create view' not in test_contents:
             skipped = True

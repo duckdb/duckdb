@@ -31,6 +31,7 @@
       "reason": "Logging setting doesn't survive restarts",
       "paths": [
         "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
+        "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/physical_operator_logging.test_slow",
         "test/logging/warnings_as_errors.test"
       ]
@@ -46,6 +47,13 @@
       "paths": [
         "test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test",
         "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_not_supported.test"
+      ]
+    },
+    {
+      "reason": "Requires latest storage for restarting",
+      "paths": [
+        "test/sql/catalog/dependencies/test_drop_column_sequence_dependency.test",
+        "test/sql/catalog/dependencies/test_set_default_sequence_dependency.test"
       ]
     }
   ]

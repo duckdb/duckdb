@@ -46,22 +46,22 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 	}
 
 	auto entries = chunk.data[0].Values<string_t>(chunk.size());
-	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
+	auto result_data = FlatVector::Writer<string_t>(gstate.result, gstate.size + chunk.size());
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto vec_entry = entries[i];
 		if (!vec_entry.IsValid()) {
 			continue;
 		}
-		auto str = vec_entry.value;
+		auto str = vec_entry.GetValue();
 		auto found = gstate.found_strings.find(str);
 		if (found != gstate.found_strings.end()) {
 			// entry was already found - skip
 			continue;
 		}
-		auto owned_string = StringVector::AddStringOrBlob(gstate.result, str.GetData(), str.GetSize());
-		gstate.found_strings.insert(owned_string);
-		result_ptr[gstate.size++] = owned_string;
+		result_data[gstate.size] = str;
+		gstate.found_strings.insert(result_data[gstate.size]);
+		gstate.size++;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

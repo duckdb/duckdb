@@ -117,7 +117,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		if (entry == matches.end()) {
 			throw InternalException("Auto-complete match not found");
 		}
-		if (result.size() > fuzzy_suggestion_count) {
+		if (results.size() > fuzzy_suggestion_count) {
 			// after we exceed the "fuzzy_suggestion_count" we only accept exact suggestion matches
 			if (!StringUtil::StartsWith(StringUtil::Lower(result), lower_prefix)) {
 				break;

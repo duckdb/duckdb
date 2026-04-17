@@ -34,16 +34,16 @@ void InitializeOffsets(DataChunk &offsets, idx_t count) {
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size,
                                OrderedOwningStringMap<uint32_t> &dictionary) {
 	auto &keys = VariantVector::GetKeys(result);
-	auto keys_data = ListVector::GetData(keys);
+	auto keys_data = FlatVector::GetDataMutable<list_entry_t>(keys);
 
 	auto &children = VariantVector::GetChildren(result);
-	auto children_data = ListVector::GetData(children);
+	auto children_data = FlatVector::GetDataMutable<list_entry_t>(children);
 
 	auto &values = VariantVector::GetValues(result);
-	auto values_data = ListVector::GetData(values);
+	auto values_data = FlatVector::GetDataMutable<list_entry_t>(values);
 
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
 
 	idx_t keys_offset = 0;
 	idx_t children_offset = 0;
@@ -178,8 +178,8 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
 			source.Flatten(count);
 		}
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-		FlatVector::Validity(typed_value) = FlatVector::Validity(source);
+		FlatVector::ValidityMutable(result) = FlatVector::ValidityMutable(source);
+		FlatVector::ValidityMutable(typed_value) = FlatVector::ValidityMutable(source);
 		// now recurse into the children of both
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(typed_value);
@@ -264,7 +264,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
 	auto blob_offsets = OffsetData::GetBlob(offsets);
 	for (idx_t i = 0; i < count; i++) {
 		auto size = blob_offsets[i];

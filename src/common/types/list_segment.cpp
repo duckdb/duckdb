@@ -392,7 +392,7 @@ void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &link
 template <class T>
 static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
                                          idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);
@@ -402,7 +402,7 @@ static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const Lis
 		}
 	}
 
-	auto aggr_vector_data = FlatVector::GetData<T>(result);
+	auto aggr_vector_data = FlatVector::GetDataMutable<T>(result);
 
 	// load values
 	for (idx_t i = 0; i < segment->count; i++) {
@@ -415,10 +415,10 @@ static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const Lis
 
 static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
                                        idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// use length and (reconstructed) offset to get the correct substrings
-	auto aggr_vector_data = FlatVector::GetData<string_t>(result);
+	auto aggr_vector_data = FlatVector::GetDataMutable<string_t>(result);
 	auto str_length_data = GetListLengthData(segment);
 
 	auto null_mask = GetNullMask(segment);
@@ -462,7 +462,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 
 static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
                                     idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);
@@ -472,7 +472,7 @@ static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const
 		}
 	}
 
-	auto list_vector_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_vector_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
 	// get the starting offset
 	idx_t offset = 0;
@@ -502,7 +502,7 @@ static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const
 
 static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
                                       idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);
@@ -526,7 +526,7 @@ static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, con
 
 static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
                                      idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);

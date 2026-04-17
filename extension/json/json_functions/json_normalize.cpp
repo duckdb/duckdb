@@ -81,14 +81,14 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		SortKeys(root);
 
-		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
+		result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetNormalizeFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
 	set.AddFunction(ScalarFunction("json_normalize", {json}, LogicalType::VARCHAR, NormalizeFunction, nullptr, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {

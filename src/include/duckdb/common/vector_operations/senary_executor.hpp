@@ -54,8 +54,8 @@ struct SenaryExecutor {
 			}
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<TR>(result);
-			auto &result_validity = FlatVector::Validity(result);
+			auto result_data = FlatVector::GetDataMutable<TR>(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 
 			bool all_valid = true;
 			vector<UnifiedVectorFormat> vdata(NCOLS);

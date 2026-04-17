@@ -1,0 +1,15 @@
+# name: test/parquet/variant/variant_snowflake_test.test
+# group: [variant]
+
+require parquet
+
+query II
+select payload, id from '{DATA_DIR}/parquet-testing/snowflake_variant.parquet'
+----
+{'age': 30, 'name': alice}	1
+[1, 2, 3]	2
+hello	3
+42	4
+true	5
+{'x': {'y': [1, 2]}}	6
+NULL	7

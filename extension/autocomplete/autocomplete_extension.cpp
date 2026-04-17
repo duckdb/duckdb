@@ -711,8 +711,10 @@ static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<uniqu
 	return config;
 }
 
-static unique_ptr<FunctionData> FormatSQLBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = make_uniq<FormatSQLBindData>();
 	bind_data->config = ParseFormatterConfig(context, arguments);
 	return std::move(bind_data);
@@ -720,8 +722,9 @@ static unique_ptr<FunctionData> FormatSQLBind(ClientContext &context, ScalarFunc
 
 static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &info = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<FormatSQLBindData>();
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
-		return StringVector::AddString(result, FormatSQL(input.GetString(), info.config));
+		return heap.AddString(FormatSQL(input.GetString(), info.config));
 	});
 }
 

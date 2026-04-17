@@ -128,6 +128,7 @@ public:
 	}
 	void Verify(idx_t count, idx_t vector_size) const;
 	void Sort(idx_t count);
+	idx_t GetAllocationSize() const;
 
 private:
 	sel_t *sel_vector;

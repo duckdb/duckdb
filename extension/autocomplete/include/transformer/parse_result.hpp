@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -130,6 +131,9 @@ public:
 	}
 	virtual ~ParseResult() = default;
 
+	ParseResult(const ParseResult &) = delete;
+	ParseResult &operator=(const ParseResult &) = delete;
+
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != ParseResultType::INVALID && type != TARGET::TYPE) {
@@ -195,26 +199,25 @@ struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
 
 public:
-	explicit ListParseResult(vector<optional_ptr<ParseResult>> results_p, string name_p, optional_idx offset)
+	explicit ListParseResult(vector<reference<ParseResult>> results_p, string name_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
 		name = std::move(name_p);
 	}
 
-	vector<optional_ptr<ParseResult>> GetChildren() const {
+	vector<reference<ParseResult>> GetChildren() const {
 		return children;
 	}
 
-	optional_ptr<ParseResult> GetChild(idx_t index) {
+	ParseResult &GetChild(idx_t index) {
 		if (index >= children.size()) {
 			throw InternalException("Child index out of bounds");
 		}
-		return children[index];
+		return children[index].get();
 	}
 
 	template <class T>
 	T &Child(idx_t index) {
-		auto child_ptr = GetChild(index);
-		return child_ptr->Cast<T>();
+		return GetChild(index).Cast<T>();
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -235,24 +238,23 @@ public:
 
 		std::string child_indent = indent + (is_last ? "   " : "│  ");
 		for (size_t i = 0; i < children.size(); ++i) {
-			if (children[i]) {
-				children[i]->ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
-			} else {
-				ss << child_indent << (i == children.size() - 1 ? "└─" : "├─") << " [nullptr]\n";
-			}
+			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
 		}
 	}
 
 private:
-	vector<optional_ptr<ParseResult>> children;
+	vector<reference<ParseResult>> children;
 };
 
 struct RepeatParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::REPEAT;
-	vector<optional_ptr<ParseResult>> children;
 
-	explicit RepeatParseResult(vector<optional_ptr<ParseResult>> results_p, optional_idx offset)
+	explicit RepeatParseResult(vector<reference<ParseResult>> results_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
+	}
+
+	vector<reference<ParseResult>> GetChildren() const {
+		return children;
 	}
 
 	template <class T>
@@ -260,7 +262,7 @@ struct RepeatParseResult : ParseResult {
 		if (index >= children.size()) {
 			throw InternalException("Child index out of bounds");
 		}
-		return children[index]->Cast<T>();
+		return children[index].get().Cast<T>();
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -281,18 +283,16 @@ struct RepeatParseResult : ParseResult {
 
 		std::string child_indent = indent + (is_last ? "   " : "│  ");
 		for (size_t i = 0; i < children.size(); ++i) {
-			if (children[i]) {
-				children[i]->ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
-			} else {
-				ss << child_indent << (i == children.size() - 1 ? "└─" : "├─") << " [nullptr]\n";
-			}
+			children[i].get().ToStringInternal(ss, visited, child_indent, i == children.size() - 1);
 		}
 	}
+
+private:
+	vector<reference<ParseResult>> children;
 };
 
 struct OptionalParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::OPTIONAL;
-	optional_ptr<ParseResult> optional_result;
 
 	explicit OptionalParseResult() : ParseResult(TYPE, optional_idx()), optional_result(nullptr) {
 	}
@@ -303,6 +303,18 @@ struct OptionalParseResult : ParseResult {
 
 	bool HasResult() const {
 		return optional_result != nullptr;
+	}
+
+	ParseResult &GetResultUnsafe() {
+		D_ASSERT(optional_result);
+		return *optional_result;
+	}
+
+	ParseResult &GetResult() {
+		if (!optional_result) {
+			throw InternalException("OptionalParseResult is null");
+		}
+		return *optional_result;
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -316,35 +328,38 @@ struct OptionalParseResult : ParseResult {
 			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [empty]\n";
 		}
 	}
+
+private:
+	optional_ptr<ParseResult> optional_result;
 };
 
 class ChoiceParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::CHOICE;
 
-	explicit ChoiceParseResult(optional_ptr<ParseResult> parse_result_p, idx_t selected_idx_p, optional_idx offset)
+	explicit ChoiceParseResult(ParseResult &parse_result_p, idx_t selected_idx_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), result(parse_result_p), selected_idx(selected_idx_p) {
-		name = parse_result_p->name;
+		name = parse_result_p.name;
 	}
 
-	optional_ptr<ParseResult> result;
-	idx_t selected_idx;
+	ParseResult &GetResult() {
+		return result;
+	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
-		if (result) {
-			// The choice was resolved. We print a marker and then print the child below it.
-			ss << indent << (is_last ? "└─" : "├─") << " [" << ParseResultToString(type) << " (idx: " << selected_idx
-			   << ")] ->\n";
+		// The choice was resolved. We print a marker and then print the child below it.
+		ss << indent << (is_last ? "└─" : "├─") << " [" << ParseResultToString(type) << " (idx: " << selected_idx
+		   << ")] ->\n";
 
-			// The child is now on a new indentation level and is the only child of our marker.
-			std::string child_indent = indent + (is_last ? "   " : "│  ");
-			result->ToStringInternal(ss, visited, child_indent, true);
-		} else {
-			// The choice had no result.
-			ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << " [no result]\n";
-		}
+		// The child is now on a new indentation level and is the only child of our marker.
+		std::string child_indent = indent + (is_last ? "   " : "│  ");
+		result.ToStringInternal(ss, visited, child_indent, true);
 	}
+
+private:
+	ParseResult &result;
+	idx_t selected_idx;
 };
 
 class NumberParseResult : public ParseResult {
@@ -382,8 +397,20 @@ public:
 		case SpecialStringCharacter::NATIONAL_STRING:
 			return make_uniq<CastExpression>(LogicalType::VARCHAR, make_uniq<ConstantExpression>(Value(result)));
 		case SpecialStringCharacter::HEXADECIMAL_STRING: {
-			string hex_string = "x" + result;
-			return make_uniq<ConstantExpression>(Value(hex_string));
+			// result contains raw hex digits (e.g. "FF" for X'FF')
+			if (result.size() % 2 != 0) {
+				throw ParserException("Hex string literal must have an even number of hex digits");
+			}
+			// Build \xHH-escaped string that Blob::ToBlob (via Value::BLOB) expects
+			idx_t blob_len = result.size() / 2;
+			string escaped;
+			escaped.reserve(blob_len * 4);
+			for (idx_t i = 0; i < result.size(); i += 2) {
+				escaped += "\\x";
+				escaped += result[i];
+				escaped += result[i + 1];
+			}
+			return make_uniq<ConstantExpression>(Value::BLOB(escaped));
 		}
 		case SpecialStringCharacter::BIT_STRING: {
 			string bit_string = "b" + result;

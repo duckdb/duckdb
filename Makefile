@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests sync_out_of_tree_extensions
 
 all: release
 opt: release
@@ -37,12 +37,10 @@ T ?=
 
 CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || printf '%s\n' "$${NUMBER_OF_PROCESSORS:-1}")
 CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
-ifneq ($(filter 1 true TRUE,$(CI)),)
 ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
-endif
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -192,11 +190,11 @@ ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/in_tree_extensions.cmake
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
+	EXTENSION_CONFIGS:=.github/config/out_of_tree_extensions.cmake
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
@@ -354,6 +352,14 @@ endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
+sync_extensions_into =
+vcpkg_cmake_flag =
+ifdef DUCKDB_NEW_EXTENSION_BUILD
+sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '$(1)' &&
+ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
+vcpkg_cmake_flag = -DVCPKG_MANIFEST_DIR='$(1)'
+endif
+endif
 
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
@@ -383,26 +389,30 @@ EXTENSION_BUCKET ?= duckdb-core-extensions
 upload-extensions:
 	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
 
+define cmake_build
+	mkdir -p ./$(1) && \
+	$(call sync_extensions_into,${PROJ_DIR}$(1)) \
+	cd $(1) && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) ../.. && \
+	cmake --build . --config $(2)
+endef
+
 debug: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/debug && \
-	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	$(call cmake_build,build/debug,Debug,-DDEBUG_MOVE=1)
 
 release: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/release && \
-	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(call cmake_build,build/release,Release,${FORCE_WARN_UNUSED_FLAG})
 
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" -DDISABLE_UNITY=1 . && \
+	$(call sync_extensions_into,${PROJ_DIR}) \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	$(call sync_extensions_into,${PROJ_DIR}) \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	cmake --build . --config Release
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
@@ -423,16 +433,17 @@ wasm_threads: ${EXTENSION_CONFIG_STEP}
 	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/cldebug && \
-	cd build/cldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
+	$(call cmake_build,build/cldebug,Debug,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0)
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
+
+SYNC_OUTPUT_DIR ?= build
+sync_out_of_tree_extensions:
+	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '${PROJ_DIR}$(SYNC_OUTPUT_DIR)'
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
@@ -442,8 +453,8 @@ extension/extension_config_local.cmake:
 build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake extension/extension_config.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config RelWithDebInfo
+	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build . --config Release
 
 unittest: debug
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
@@ -457,8 +468,12 @@ endif
 unittest_release:
 	$(PYTHON) scripts/ci/run_tests.py build/release/$(UNITTEST_BINARY) $(T)
 
+.PHONY: alltest_release_tag test_release_tag
 alltest_release_tag:
 	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) '*' $(T)
+
+test_release_tag:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) $(T)
 
 unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(T)
@@ -493,16 +508,10 @@ doxygen: docs
 	open build/docs/html/index.html
 
 reldebug: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/reldebug && \
-	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(call cmake_build,build/reldebug,RelWithDebInfo,)
 
 relassert: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/relassert && \
-	cd build/relassert && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(call cmake_build,build/relassert,RelWithDebInfo,-DFORCE_ASSERT=1)
 
 .PHONY: relassert-artifact
 
@@ -610,6 +619,20 @@ format-fix:
 	rm -rf src/amalgamation/*
 	$(PYTHON) scripts/format.py --all --fix --noconfirm
 
+.PHONY: check-extension-entries
+check-extension-entries: extension_configuration
+	$(PYTHON) scripts/generate_extensions_function.py
+	$(PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
+	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
+	@if [ -s extension_entries.hpp.diff ]; then \
+		cat extension_entries.hpp.diff; \
+		echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"; \
+		exit 1; \
+	else \
+		rm -f extension_entries.hpp.diff; \
+		echo "No differences found"; \
+	fi
+
 format-head:
 	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
 
@@ -651,6 +674,7 @@ bloaty: reldebug bloaty/bloaty
 # Generate compile commands without actually building
 clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
+	cp .cache/clangd/debug/compile_commands.json .cache/clangd/compile_commands.json
 
 coverage-check:
 	./scripts/coverage_check.sh

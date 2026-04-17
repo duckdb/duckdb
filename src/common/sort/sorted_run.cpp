@@ -58,7 +58,7 @@ void SortedRunScanState::Clear() {
 template <class SORT_KEY, class PHYSICAL_TYPE>
 void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
                                DataChunk &key, data_ptr_t *const payload_ptrs) {
-	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
+	const auto key_data = FlatVector::GetDataMutable<PHYSICAL_TYPE>(key.data[0]);
 	for (idx_t i = 0; i < count; i++) {
 		auto &sort_key = temp_keys[i];
 		sort_key = *sort_keys[i];
@@ -93,7 +93,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 	idx_t opc_idx = 0;
 
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *const>(sort_key_pointers);
-	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_state.chunk_state.row_locations);
+	const auto payload_ptrs = FlatVector::GetDataMutable<data_ptr_t>(payload_state.chunk_state.row_locations);
 	bool gathered_payload = false;
 
 	// Decode from key
@@ -179,7 +179,7 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSetPayloadPointer(Vector &key_locations, Vector &payload_locations, const idx_t count) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 
-	const auto key_locations_ptr = FlatVector::GetData<SORT_KEY *>(key_locations);
+	const auto key_locations_ptr = FlatVector::GetDataMutable<SORT_KEY *>(key_locations);
 	const auto payload_locations_ptr = FlatVector::GetData<data_ptr_t>(payload_locations);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -300,8 +300,8 @@ static void ReorderKeyData(TupleDataCollection &new_key_data, TupleDataAppendSta
                            TupleDataChunkState &input, const idx_t &count) {
 	D_ASSERT(!SORT_KEY::CONSTANT_SIZE);
 	const auto row_locations = FlatVector::GetData<const SORT_KEY *>(input.row_locations);
-	const auto heap_locations = FlatVector::GetData<data_ptr_t>(input.heap_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(input.heap_sizes);
+	const auto heap_locations = FlatVector::GetDataMutable<data_ptr_t>(input.heap_locations);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(input.heap_sizes);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &sort_key = *row_locations[i];
 		heap_locations[i] = sort_key.GetData();
@@ -319,7 +319,7 @@ static void ReorderPayloadData(TupleDataCollection &new_payload_data,
                                TupleDataAppendState &new_payload_data_append_state, SORT_KEY *const *const key_ptrs,
                                TupleDataChunkState &input, const idx_t &count) {
 	D_ASSERT(SORT_KEY::HAS_PAYLOAD);
-	const auto row_locations = FlatVector::GetData<data_ptr_t>(input.row_locations);
+	const auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(input.row_locations);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &sort_key = *key_ptrs[i];
 		row_locations[i] = sort_key.GetPayload();
@@ -361,7 +361,7 @@ static void TemplatedReorder(ClientContext &context, unique_ptr<TupleDataCollect
 	// These states will be populated for appends
 	TupleDataChunkState new_key_data_input;
 	TupleDataChunkState new_payload_data_input;
-	const auto key_ptrs = FlatVector::GetData<SORT_KEY *>(new_key_data_input.row_locations);
+	const auto key_ptrs = FlatVector::GetDataMutable<SORT_KEY *>(new_key_data_input.row_locations);
 
 	// Iterate over sort keys
 	const idx_t total_count = key_data->Count();

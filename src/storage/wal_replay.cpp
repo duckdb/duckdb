@@ -1163,7 +1163,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			column_ids.emplace_back(col.StorageOid());
 		}
 		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
-		auto row_ids = FlatVector::GetData<row_t>(row_id_vector);
+		auto row_ids = FlatVector::GetDataMutable<row_t>(row_id_vector);
 		auto current_row_id = storage.GetTotalRows();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
 			for (idx_t r = 0; r < chunk.size(); r++) {

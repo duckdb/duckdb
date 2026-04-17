@@ -132,8 +132,10 @@ struct IndexKeyBindData : public FunctionData {
 	vector<LogicalType> key_types;
 };
 
-static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
@@ -191,8 +193,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	idx_t count = args.size();
 
-	auto result_data = FlatVector::Writer<string_t>(result, count);
-
 	// Create a DataChunk referencing only the key columns (skip path and index_name).
 	DataChunk key_chunk;
 	key_chunk.InitializeEmpty(bind_data.key_types);
@@ -206,12 +206,13 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	art.GenerateKeys<>(allocator, key_chunk, keys);
 
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		if (key.Empty()) {
 			result_data.SetInvalid(i);
 		} else {
-			result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
+			result_data[i] = string_t(const_char_ptr_cast(key.data), key.len);
 		}
 	}
 	if (count == 1) {

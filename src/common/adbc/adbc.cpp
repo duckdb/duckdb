@@ -138,7 +138,37 @@ struct DuckDBAdbcStreamWrapper {
 	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
 };
 
-static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper);
+class DuckDBAdbcStreamWrapperGuard {
+public:
+	explicit DuckDBAdbcStreamWrapperGuard(DuckDBAdbcStreamWrapper *ptr_p) : ptr(ptr_p) {
+	}
+	DuckDBAdbcStreamWrapperGuard(const DuckDBAdbcStreamWrapperGuard &) = delete;
+	DuckDBAdbcStreamWrapperGuard &operator=(const DuckDBAdbcStreamWrapperGuard &) = delete;
+
+	~DuckDBAdbcStreamWrapperGuard() {
+		if (ptr) {
+			duckdb_destroy_result(&ptr->result);
+			free(ptr);
+		}
+	}
+
+	DuckDBAdbcStreamWrapper *release() {
+		auto tmp = ptr;
+		ptr = nullptr;
+		return tmp;
+	}
+
+	DuckDBAdbcStreamWrapper *get() const {
+		return ptr;
+	}
+
+	DuckDBAdbcStreamWrapper *operator->() const {
+		return ptr;
+	}
+
+private:
+	DuckDBAdbcStreamWrapper *ptr;
+};
 
 static bool IsInterruptError(const char *message) {
 	if (!message) {
@@ -965,14 +995,9 @@ AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcE
 	if (connection && connection->private_data) {
 		auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
 		// Materialize active streams before disconnecting so they remain readable
-		MaterializeActiveStreams(conn_wrapper);
+		conn_wrapper->MaterializeStreams();
 		// Detach active streams before deleting conn_wrapper to avoid dangling pointers
-		for (auto *stream_wrapper : conn_wrapper->active_streams) {
-			if (stream_wrapper) {
-				stream_wrapper->conn_wrapper = nullptr;
-			}
-		}
-		conn_wrapper->active_streams.clear();
+		conn_wrapper->DetachAndClearStreams();
 		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
 		delete conn_wrapper;
@@ -1072,13 +1097,9 @@ void release(struct ArrowArrayStream *stream) {
 	}
 	auto result_wrapper = reinterpret_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
 	if (result_wrapper) {
-		// Unregister from connection's active_streams
+		// Unregister from connection's active streams
 		if (result_wrapper->conn_wrapper) {
-			auto &active = result_wrapper->conn_wrapper->active_streams;
-			auto it = std::find(active.begin(), active.end(), result_wrapper);
-			if (it != active.end()) {
-				active.erase(it);
-			}
+			result_wrapper->conn_wrapper->UnregisterStream(result_wrapper);
 		}
 		// Clean up materialized data if present
 		if (result_wrapper->materialized) {
@@ -1221,6 +1242,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	// Prefer explicit three-part names; two-part names can be ambiguous.
 	const char *effective_catalog = catalog;
 	const char *effective_schema = schema;
+	std::string resolved_catalog;
 	if (temporary) {
 		// Temporary tables live in the special "temp" catalog.
 		// "CREATE TEMP TABLE" automatically places tables in temp.main.
@@ -1231,6 +1253,26 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		// Default schema for attached catalogs (DEFAULT_SCHEMA).
 		// Use catalog.main.table to avoid catalog/schema name ambiguity.
 		effective_schema = "main";
+	} else if (!catalog) {
+		// DuckDB's name resolution prioritizes the "temp" catalog, so without an explicit
+		// catalog a same-named temp table would shadow the persistent target. Resolve the
+		// current catalog explicitly to avoid that. Fallback "memory" may not match the
+		// actual catalog for file-based databases.
+		duckdb_result cat_result = {};
+		if (duckdb_query(connection, "SELECT current_catalog()", &cat_result) == DuckDBSuccess) {
+			char *val = duckdb_value_varchar(&cat_result, 0, 0);
+			if (val) {
+				resolved_catalog = val;
+				duckdb_free(val);
+			}
+			effective_catalog = !resolved_catalog.empty() ? resolved_catalog.c_str() : "memory";
+		} else {
+			effective_catalog = "memory";
+		}
+		duckdb_destroy_result(&cat_result);
+		if (!schema) {
+			effective_schema = "main";
+		}
 	}
 
 	duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
@@ -1506,75 +1548,6 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 	              rows_affected);
 }
 
-// Materialize all active streams on a connection so that a new query can execute.
-// This fetches remaining data from each streaming result into memory, making the
-// streams independent of the connection's active query context.
-static void MaterializeActiveStreams(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper) {
-	for (auto *result_wrapper : conn_wrapper->active_streams) {
-		if (!result_wrapper || result_wrapper->materialized) {
-			continue;
-		}
-
-		// Collect remaining batches from the streaming result
-		duckdb::vector<ArrowArray> batches;
-		auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
-		while (true) {
-			ArrowArray array;
-			std::memset(&array, 0, sizeof(ArrowArray));
-
-			auto duckdb_chunk = duckdb_fetch_chunk(result_wrapper->result);
-			if (!duckdb_chunk) {
-				break;
-			}
-			auto conversion_err = duckdb_data_chunk_to_arrow(arrow_options, duckdb_chunk, &array);
-			duckdb_destroy_data_chunk(&duckdb_chunk);
-
-			if (conversion_err) {
-				duckdb_destroy_error_data(&conversion_err);
-				if (array.release) {
-					array.release(&array);
-				}
-				break;
-			}
-			batches.push_back(array);
-		}
-		duckdb_destroy_arrow_options(&arrow_options);
-
-		// Store materialized data
-		auto mat = static_cast<MaterializedData *>(malloc(sizeof(MaterializedData)));
-		if (!mat) {
-			// Allocation failed — release fetched batches and skip materialization
-			for (auto &batch : batches) {
-				if (batch.release) {
-					batch.release(&batch);
-				}
-			}
-			continue;
-		}
-		mat->current = 0;
-		mat->count = static_cast<idx_t>(batches.size());
-		if (!batches.empty()) {
-			mat->batches = static_cast<ArrowArray *>(malloc(sizeof(ArrowArray) * batches.size()));
-			if (!mat->batches) {
-				// Allocation failed — release fetched batches and skip materialization
-				for (auto &batch : batches) {
-					if (batch.release) {
-						batch.release(&batch);
-					}
-				}
-				free(mat);
-				continue;
-			}
-			for (idx_t i = 0; i < batches.size(); i++) {
-				mat->batches[i] = batches[i];
-			}
-		} else {
-			mat->batches = nullptr;
-		}
-		result_wrapper->materialized = mat;
-	}
-}
-
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error) {
 	if (!statement) {
@@ -1595,7 +1568,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	// Without materialization, executing a new query would silently invalidate any existing streaming results on the
 	// same connection.
 	if (wrapper->conn_wrapper) {
-		MaterializeActiveStreams(wrapper->conn_wrapper);
+		wrapper->conn_wrapper->MaterializeStreams();
 	}
 
 	// TODO: Set affected rows, careful with early return
@@ -1625,17 +1598,18 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		return ADBC_STATUS_OK;
 	}
 
-	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
-	if (!stream_wrapper) {
+	auto *raw_stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
+	if (!raw_stream_wrapper) {
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	stream_wrapper->last_error = nullptr;
-	stream_wrapper->status_code = ADBC_STATUS_OK;
-	stream_wrapper->materialized = nullptr;
-	stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
-	std::memset(&stream_wrapper->adbc_error, 0, sizeof(stream_wrapper->adbc_error));
-	std::memset(&stream_wrapper->result, 0, sizeof(stream_wrapper->result));
+	raw_stream_wrapper->last_error = nullptr;
+	raw_stream_wrapper->status_code = ADBC_STATUS_OK;
+	raw_stream_wrapper->materialized = nullptr;
+	raw_stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
+	std::memset(&raw_stream_wrapper->adbc_error, 0, sizeof(raw_stream_wrapper->adbc_error));
+	std::memset(&raw_stream_wrapper->result, 0, sizeof(raw_stream_wrapper->result));
+	DuckDBAdbcStreamWrapperGuard stream_wrapper(raw_stream_wrapper);
 	// Only process the stream if there are parameters to bind
 	auto prepared_statement_params = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)
 	                                     ->statement->data->properties.parameter_count;
@@ -1651,9 +1625,9 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			if (res) {
 				SetError(error, duckdb_error_data_message(res));
 				duckdb_destroy_error_data(&res);
+				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 		} catch (...) {
-			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
 		}
 
@@ -1673,24 +1647,20 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			}
 			if (!out_chunk.chunk) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
-				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk.chunk);
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
-				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			if (chunk->size() != 1) {
 				// TODO: add support for binding multiple rows
 				SetError(error, "Binding multiple rows at once is not supported yet");
-				free(stream_wrapper);
 				return ADBC_STATUS_NOT_IMPLEMENTED;
 			}
 			if (chunk->ColumnCount() > prepared_statement_params) {
 				SetError(error, "Input data has more column than prepared statement has parameters");
-				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			duckdb_clear_bindings(wrapper->statement);
@@ -1700,7 +1670,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				auto res = duckdb_bind_value(wrapper->statement, 1 + col_idx, duck_val);
 				if (res != DuckDBSuccess) {
 					SetError(error, duckdb_prepare_error(wrapper->statement));
-					free(stream_wrapper);
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
@@ -1711,8 +1680,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				auto err = duckdb_result_error(&stream_wrapper->result);
 				SetError(error, err);
 				bool interrupted = IsInterruptError(err);
-				duckdb_destroy_result(&stream_wrapper->result);
-				free(stream_wrapper);
 				return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			// Recreate wrappers for next iteration
@@ -1725,8 +1692,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			auto err = duckdb_result_error(&stream_wrapper->result);
 			SetError(error, err);
 			bool interrupted = IsInterruptError(err);
-			duckdb_destroy_result(&stream_wrapper->result);
-			free(stream_wrapper);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
@@ -1747,20 +1712,15 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	}
 
 	if (out) {
-		// We pass ownership of the statement private data to our stream
-		out->private_data = stream_wrapper;
+		auto *released = stream_wrapper.release();
+		out->private_data = released;
 		out->get_schema = get_schema;
 		out->get_next = get_next;
 		out->release = release;
 		out->get_last_error = get_last_error;
-		// Register this stream wrapper so it can be materialized if another query runs
 		if (wrapper->conn_wrapper) {
-			wrapper->conn_wrapper->active_streams.push_back(stream_wrapper);
+			wrapper->conn_wrapper->RegisterStream(released);
 		}
-	} else {
-		// Caller didn't request a stream; clean up resources
-		duckdb_destroy_result(&stream_wrapper->result);
-		free(stream_wrapper);
 	}
 
 	return ADBC_STATUS_OK;
@@ -1803,7 +1763,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 
 	// Materialize any active streams before preparing
 	if (wrapper->conn_wrapper) {
-		MaterializeActiveStreams(wrapper->conn_wrapper);
+		wrapper->conn_wrapper->MaterializeStreams();
 	}
 
 	if (wrapper->ingestion_stream.release) {
@@ -2467,6 +2427,96 @@ AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct
 }
 
 } // namespace duckdb_adbc
+
+void duckdb::DuckDBAdbcConnectionWrapper::RegisterStream(duckdb_adbc::DuckDBAdbcStreamWrapper *stream) {
+	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
+	active_streams.push_back(stream);
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::UnregisterStream(duckdb_adbc::DuckDBAdbcStreamWrapper *stream) {
+	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
+	auto it = std::find(active_streams.begin(), active_streams.end(), stream);
+	if (it != active_streams.end()) {
+		active_streams.erase(it);
+	}
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::MaterializeStreams() {
+	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
+	for (auto *result_wrapper : active_streams) {
+		if (!result_wrapper || result_wrapper->materialized) {
+			continue;
+		}
+
+		// Collect remaining batches from the streaming result
+		duckdb::vector<ArrowArray> batches;
+		auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
+		while (true) {
+			ArrowArray array;
+			std::memset(&array, 0, sizeof(ArrowArray));
+
+			auto duckdb_chunk = duckdb_fetch_chunk(result_wrapper->result);
+			if (!duckdb_chunk) {
+				break;
+			}
+			auto conversion_err = duckdb_data_chunk_to_arrow(arrow_options, duckdb_chunk, &array);
+			duckdb_destroy_data_chunk(&duckdb_chunk);
+
+			if (conversion_err) {
+				duckdb_destroy_error_data(&conversion_err);
+				if (array.release) {
+					array.release(&array);
+				}
+				break;
+			}
+			batches.push_back(array);
+		}
+		duckdb_destroy_arrow_options(&arrow_options);
+
+		// Store materialized data
+		auto mat = static_cast<duckdb_adbc::MaterializedData *>(malloc(sizeof(duckdb_adbc::MaterializedData)));
+		if (!mat) {
+			// Allocation failed — release fetched batches and skip materialization
+			for (auto &batch : batches) {
+				if (batch.release) {
+					batch.release(&batch);
+				}
+			}
+			continue;
+		}
+		mat->current = 0;
+		mat->count = static_cast<idx_t>(batches.size());
+		if (!batches.empty()) {
+			mat->batches = static_cast<ArrowArray *>(malloc(sizeof(ArrowArray) * batches.size()));
+			if (!mat->batches) {
+				// Allocation failed — release fetched batches and skip materialization
+				for (auto &batch : batches) {
+					if (batch.release) {
+						batch.release(&batch);
+					}
+				}
+				free(mat);
+				continue;
+			}
+			for (idx_t i = 0; i < batches.size(); i++) {
+				mat->batches[i] = batches[i];
+			}
+		} else {
+			mat->batches = nullptr;
+		}
+		result_wrapper->materialized = mat;
+	}
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::DetachAndClearStreams() {
+	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
+	for (auto *stream_wrapper : active_streams) {
+		if (stream_wrapper) {
+			stream_wrapper->conn_wrapper = nullptr;
+		}
+	}
+	active_streams.clear();
+}
 
 static void ReleaseError(struct AdbcError *error) {
 	if (error) {

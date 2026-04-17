@@ -136,13 +136,19 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
                                              const idx_t append_count, const idx_t max_partition_idx) {
 	using GETTER = TemplatedMapGetter<list_entry_t, FIXED>;
 	auto &partition_entries = state.GetMap<FIXED>();
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	partition_entries.clear();
 
 	if (max_partition_idx == 0 || state.partition_indices.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		partition_entries[partition_indices[0]] = list_entry_t(0, append_count);
+		idx_t partition_idx;
+		if (state.partition_indices.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			partition_idx = *ConstantVector::GetData<idx_t>(state.partition_indices);
+		} else {
+			partition_idx = FlatVector::GetData<idx_t>(state.partition_indices)[0];
+		}
+		partition_entries[partition_idx] = list_entry_t(0, append_count);
 	} else {
 		D_ASSERT(state.partition_indices.GetVectorType() == VectorType::FLAT_VECTOR);
+		const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto &partition_index = partition_indices[i];
 			auto partition_entry = partition_entries.find(partition_index);
@@ -179,6 +185,8 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	}
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
+	D_ASSERT(state.partition_indices.GetVectorType() == VectorType::FLAT_VECTOR);
+	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	auto &partition_sel = state.partition_sel;
 	auto &reverse_partition_sel = state.reverse_partition_sel;
 	if (append_sel.IsSet()) {

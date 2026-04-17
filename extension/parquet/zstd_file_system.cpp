@@ -1,6 +1,18 @@
 #include "zstd_file_system.hpp"
 
+#include <exception>
+#include <utility>
+
 #include "zstd.h"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 

@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
 #include "parquet_statistics.hpp"
@@ -22,16 +26,42 @@
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_crypto.hpp"
-
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
 class ParquetReader;
 struct TableFilterState;
+class Allocator;
+class RleBpDecoder;
+class ThriftFileTransport;
+class Vector;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 
@@ -214,7 +244,7 @@ private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
@@ -222,7 +252,7 @@ private:
 			plain_data.unsafe_inc(copy_count);
 			return;
 		}
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
@@ -255,8 +285,8 @@ private:
 	void PlainSelectTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto next_entry = sel.get_index(i);

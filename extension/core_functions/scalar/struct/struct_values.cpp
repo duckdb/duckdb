@@ -33,13 +33,15 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 			ConstantVector::SetNull(result);
 		}
 	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+		// set only the struct buffer's type - do not propagate to children
+		// since children reference external vectors (input children) that may have incompatible buffer types
+		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
 		auto validity_entries = input.Validity(count);
 
 		if (validity_entries.CanHaveNull()) {
-			auto &validity = FlatVector::Validity(result);
+			auto &validity = FlatVector::ValidityMutable(result);
 
 			for (idx_t i = 0; i < count; i++) {
 				if (!validity_entries.IsValid(i)) {
@@ -51,8 +53,9 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 // Ensure input is a STRUCT, set return type to an unnamed STRUCT with same child types
-static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	const auto arg_type = arguments[0]->return_type;
 	if (arg_type == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();

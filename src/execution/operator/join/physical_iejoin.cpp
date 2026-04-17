@@ -374,7 +374,7 @@ public:
 	const T &operator[](idx_t row_idx) {
 		auto index = Seek(row_idx);
 		auto &source = chunk.data[0];
-		const auto data_ptr = reinterpret_cast<T *>(FlatVector::GetData<VECTOR_TYPE>(source));
+		const auto data_ptr = reinterpret_cast<const T *>(FlatVector::GetData<VECTOR_TYPE>(source));
 		return data_ptr[index];
 	}
 
@@ -2030,7 +2030,6 @@ void IEJoinLocalSourceState::ExecuteAntiTask(ExecutionContext &context, DataChun
 	left_table.Repin(*left_iterator);
 	op.SliceSortedPayload(result, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
 	                      *left_scan_state);
-
 	result.Verify(context.client.db);
 }
 

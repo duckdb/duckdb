@@ -15,6 +15,24 @@ from scripts.ci import job_stages
 
 
 class JobStagesTest(unittest.TestCase):
+    def _compute_job_selection(
+        self,
+        event_name: str,
+        ref_name: str,
+        repository: str,
+        skip_tests: bool = False,
+        changed_keys: set[str] | None = None,
+    ) -> job_stages.JobSelection:
+        return job_stages.compute_job_selection(
+            job_stages.JobSelectionInput(
+                event_name=event_name,
+                ref_name=ref_name,
+                repository=repository,
+                skip_tests=skip_tests,
+                changed_keys=changed_keys or set(),
+            )
+        )
+
     def _main_workflow_job_ids(self) -> set[str]:
         workflow_path = REPO_ROOT / ".github" / "workflows" / "Main.yml"
         workflow_text = workflow_path.read_text(encoding="utf-8")
@@ -38,34 +56,43 @@ class JobStagesTest(unittest.TestCase):
         return job_ids
 
     def test_merge_queue_push_minimal_jobs(self):
-        selection = job_stages.compute_job_selection("push", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
-        self.assertEqual(selection.enabled_jobs, ["linux-debug", "linux-release", "tidy-check"])
+        selection = self._compute_job_selection("push", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+        required_jobs = {"linux-debug", "linux-release", "linux-release-tests", "tidy-check"}
+        self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertTrue(selection.save_cache)
 
     def test_main_includes_main_only_jobs(self):
-        selection = job_stages.compute_job_selection("push", "main", "duckdb/duckdb")
+        selection = self._compute_job_selection("push", "main", "duckdb/duckdb")
         self.assertIn("main_julia", selection.enabled_jobs)
         self.assertIn("valgrind", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
     def test_workflow_dispatch_matches_push_selection(self):
         for ref_name in ["feature/my-branch", "main"]:
-            push_selection = job_stages.compute_job_selection("push", ref_name, "duckdb/duckdb")
-            workflow_dispatch_selection = job_stages.compute_job_selection(
-                "workflow_dispatch", ref_name, "duckdb/duckdb"
-            )
+            push_selection = self._compute_job_selection("push", ref_name, "duckdb/duckdb")
+            workflow_dispatch_selection = self._compute_job_selection("workflow_dispatch", ref_name, "duckdb/duckdb")
             self.assertEqual(workflow_dispatch_selection.enabled_jobs, push_selection.enabled_jobs)
             self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
 
     def test_regular_branch_excludes_main_only_jobs(self):
-        selection = job_stages.compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
+        selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
         self.assertNotIn("main_julia", selection.enabled_jobs)
         self.assertNotIn("valgrind", selection.enabled_jobs)
         self.assertFalse(selection.save_cache)
 
     def test_fork_saves_cache(self):
-        selection = job_stages.compute_job_selection("pull_request", "feature/my-branch", "somefork/duckdb")
+        selection = self._compute_job_selection("pull_request", "feature/my-branch", "somefork/duckdb")
         self.assertTrue(selection.save_cache)
+
+    def test_julia_changed_key_enables_main_julia_on_pr(self):
+        selection = self._compute_job_selection(
+            "pull_request", "feature/my-branch", "duckdb/duckdb", changed_keys={"julia"}
+        )
+        self.assertIn("main_julia", selection.enabled_jobs)
+
+    def test_parse_changed_keys(self):
+        parsed = job_stages.parse_changed_keys(" jUlia,tests_slow\nextensions julia ")
+        self.assertEqual(parsed, {"julia", "tests_slow", "extensions"})
 
     def test_writes_github_output(self):
         selection = job_stages.JobSelection(enabled_jobs=["linux-debug"], save_cache=False)
@@ -106,7 +133,9 @@ class JobStagesTest(unittest.TestCase):
             self.assertIn("enabled_jobs=", out)
             self.assertIn("save_cache=true", out)
             payload = out.splitlines()[0].split("=", 1)[1]
-            self.assertEqual(json.loads(payload), ["linux-debug", "linux-release", "tidy-check"])
+            selected_jobs = json.loads(payload)
+            required_jobs = {"linux-debug", "linux-release", "linux-release-tests", "tidy-check"}
+            self.assertTrue(required_jobs.issubset(set(selected_jobs)))
         finally:
             sys.argv = old_argv
             if old_env is None:

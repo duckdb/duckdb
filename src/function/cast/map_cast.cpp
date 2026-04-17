@@ -30,19 +30,19 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
 	varchar_map.Flatten(count);
-	auto &validity = FlatVector::Validity(varchar_map);
+	auto &validity = FlatVector::ValidityMutable(varchar_map);
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
 
 	key_str.Flatten(ListVector::GetListSize(source));
 	val_str.Flatten(ListVector::GetListSize(source));
 
-	auto list_data = ListVector::GetData(varchar_map);
+	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
-	auto &key_validity = FlatVector::Validity(key_str);
-	auto &val_validity = FlatVector::Validity(val_str);
-	auto &struct_validity = FlatVector::Validity(ListVector::GetEntry(varchar_map));
+	auto &key_validity = FlatVector::ValidityMutable(key_str);
+	auto &val_validity = FlatVector::ValidityMutable(val_str);
+	auto &struct_validity = FlatVector::ValidityMutable(ListVector::GetEntry(varchar_map));
 
 	//! {key=value[, ]}
 	static constexpr const idx_t SEP_LENGTH = 2;
@@ -107,8 +107,8 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += NULL_LENGTH;
 			}
 		}
-		result_data[i] = StringVector::EmptyString(result, string_length);
-		auto dataptr = result_data[i].GetDataWriteable();
+		auto &result_str = result_data[i].EmptyString(string_length);
+		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 
 		dataptr[offset++] = '{';
@@ -140,7 +140,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 			}
 		}
 		dataptr[offset++] = '}';
-		result_data[i].Finalize();
+		result_str.Finalize();
 	}
 
 	if (constant) {

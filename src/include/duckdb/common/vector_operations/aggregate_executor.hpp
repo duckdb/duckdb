@@ -254,7 +254,7 @@ public:
 			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
 #ifndef DUCKDB_SMALLER_BINARY
 		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
-			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			auto sdata = FlatVector::GetDataMutable<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
 #endif
 		} else {
@@ -286,8 +286,8 @@ public:
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
-			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input),
+			auto sdata = FlatVector::GetDataMutable<STATE_TYPE *>(states);
+			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::ValidityMutable(input),
 			                                          count);
 #endif
 		} else {
@@ -342,7 +342,7 @@ public:
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, (STATE_TYPE *)state, count,
-			                                                FlatVector::Validity(input));
+			                                                FlatVector::ValidityMutable(input));
 			break;
 		}
 #endif
@@ -385,11 +385,12 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
-		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
+		auto sdata = source.Values<const STATE_TYPE *>(count);
+		auto tdata = target.Values<STATE_TYPE *>(count);
 
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Combine<STATE_TYPE, OP>(*sdata[i], *tdata[i], aggr_input_data);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
+			                                     aggr_input_data);
 		}
 	}
 
@@ -408,7 +409,7 @@ public:
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			AggregateFinalizeData finalize_data(result, aggr_input_data);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
@@ -501,9 +502,10 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
-		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+		auto sdata = states.Values<STATE_TYPE *>(count);
+		;
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Destroy<STATE_TYPE>(*sdata[i], aggr_input_data);
+			OP::template Destroy<STATE_TYPE>(*sdata[i].GetValueUnsafe(), aggr_input_data);
 		}
 	}
 };

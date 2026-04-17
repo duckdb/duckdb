@@ -146,8 +146,9 @@ struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
-		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
+		auto ldata = LEFT_CONSTANT ? ConstantVector::GetData<LEFT_TYPE>(left) : FlatVector::GetData<LEFT_TYPE>(left);
+		auto rdata =
+		    RIGHT_CONSTANT ? ConstantVector::GetData<RIGHT_TYPE>(right) : FlatVector::GetData<RIGHT_TYPE>(right);
 
 		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
 			// either left or right is constant NULL: result is constant NULL
@@ -156,31 +157,31 @@ struct BinaryExecutor {
 		}
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-		auto &result_validity = FlatVector::Validity(result);
+		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
 		if (LEFT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::Validity(right), count);
+				result_validity.Copy(FlatVector::ValidityMutable(right), count);
 			} else {
-				FlatVector::SetValidity(result, FlatVector::Validity(right));
+				FlatVector::SetValidity(result, FlatVector::ValidityMutable(right));
 			}
 		} else if (RIGHT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::Validity(left), count);
+				result_validity.Copy(FlatVector::ValidityMutable(left), count);
 			} else {
-				FlatVector::SetValidity(result, FlatVector::Validity(left));
+				FlatVector::SetValidity(result, FlatVector::ValidityMutable(left));
 			}
 		} else {
 			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::Validity(left), count);
+				result_validity.Copy(FlatVector::ValidityMutable(left), count);
 				if (result_validity.CannotHaveNull()) {
-					result_validity.Copy(FlatVector::Validity(right), count);
+					result_validity.Copy(FlatVector::ValidityMutable(right), count);
 				} else {
-					result_validity.Combine(FlatVector::Validity(right), count);
+					result_validity.Combine(FlatVector::ValidityMutable(right), count);
 				}
 			} else {
-				FlatVector::SetValidity(result, FlatVector::Validity(left));
-				result_validity.Combine(FlatVector::Validity(right), count);
+				FlatVector::SetValidity(result, FlatVector::ValidityMutable(left));
+				result_validity.Combine(FlatVector::ValidityMutable(right), count);
 			}
 		}
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
@@ -224,11 +225,11 @@ struct BinaryExecutor {
 		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
-		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result),
-		    fun);
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity,
+		    FlatVector::ValidityMutable(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
@@ -392,8 +393,9 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static idx_t SelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                        SelectionVector *true_sel, SelectionVector *false_sel) {
-		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
-		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
+		auto ldata = LEFT_CONSTANT ? ConstantVector::GetData<LEFT_TYPE>(left) : FlatVector::GetData<LEFT_TYPE>(left);
+		auto rdata =
+		    RIGHT_CONSTANT ? ConstantVector::GetData<RIGHT_TYPE>(right) : FlatVector::GetData<RIGHT_TYPE>(right);
 
 		if (LEFT_CONSTANT && ConstantVector::IsNull(left)) {
 			if (false_sel) {
@@ -414,13 +416,13 @@ public:
 
 		if (LEFT_CONSTANT) {
 			return SelectFlatLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    ldata, rdata, sel, count, FlatVector::Validity(right), true_sel, false_sel);
+			    ldata, rdata, sel, count, FlatVector::ValidityMutable(right), true_sel, false_sel);
 		} else if (RIGHT_CONSTANT) {
 			return SelectFlatLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    ldata, rdata, sel, count, FlatVector::Validity(left), true_sel, false_sel);
+			    ldata, rdata, sel, count, FlatVector::ValidityMutable(left), true_sel, false_sel);
 		} else {
-			ValidityMask combined_mask = FlatVector::Validity(left);
-			combined_mask.Combine(FlatVector::Validity(right), count);
+			ValidityMask combined_mask = FlatVector::ValidityMutable(left);
+			combined_mask.Combine(FlatVector::ValidityMutable(right), count);
 			return SelectFlatLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
 			    ldata, rdata, sel, count, combined_mask, true_sel, false_sel);
 		}

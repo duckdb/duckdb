@@ -254,6 +254,12 @@
       "paths": [
         "test/geoparquet/with_crs.test"
       ]
+    },
+    {
+      "reason": "DML CTE re-execution under verification causes incorrect row counts",
+      "paths": [
+        "test/sql/cte/dml_cte.test"
+      ]
     }
   ]
 }

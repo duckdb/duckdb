@@ -40,7 +40,7 @@ struct CountStarFunction : public BaseCountFunction {
 	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
 		D_ASSERT(partition.column_ids.empty());
 
-		auto data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		RESULT_TYPE total = 0;
 		for (const auto &frame : frames) {
 			const auto begin = frame.start;
@@ -132,8 +132,8 @@ struct CountFunction : public BaseCountFunction {
 	                         idx_t count) {
 		auto &input = inputs[0];
 		if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
-			auto sdata = FlatVector::GetData<STATE *>(states);
-			CountFlatLoop(sdata, FlatVector::Validity(input), count);
+			auto sdata = FlatVector::GetDataMutable<STATE *>(states);
+			CountFlatLoop(sdata, FlatVector::ValidityMutable(input), count);
 		} else {
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
@@ -196,7 +196,7 @@ struct CountFunction : public BaseCountFunction {
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
-			CountFlatUpdateLoop(result, FlatVector::Validity(input), count);
+			CountFlatUpdateLoop(result, FlatVector::ValidityMutable(input), count);
 			break;
 		}
 		case VectorType::SEQUENCE_VECTOR: {

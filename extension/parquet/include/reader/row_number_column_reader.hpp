@@ -8,11 +8,34 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb/common/limits.hpp"
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ParquetReader;
+class TableFilter;
+class ThriftFileTransport;
+class Vector;
+struct ParquetColumnSchema;
+struct SelectionVector;
+struct TableFilterState;
 
 //! Reads a file-absolute row number as a virtual column that's not actually stored in the file
 class RowNumberColumnReader : public ColumnReader {

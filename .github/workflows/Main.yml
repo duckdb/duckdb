@@ -1,6 +1,10 @@
 name: Main
 on:
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        type: boolean
+        default: false
   repository_dispatch:
   push:
     branches-ignore:
@@ -48,7 +52,7 @@ jobs:
     # We run all other jobs on PRs only if they are not draft PR
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
+      (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
@@ -63,36 +67,26 @@ jobs:
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
+      changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
+      run_slow_tests: ${{ steps.config.outputs.run_slow_tests }}
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
       save_cache: ${{ steps.config.outputs.save_cache }}
+      runner_provider: ${{ steps.config.outputs.runner_provider }}
+      skip_tests: ${{ steps.config.outputs.skip_tests }}
     env:
       GEN: ninja
-      # Avoid downloading blobs >50 KB until they are actually needed by git.
-      GIT_FETCH_FILTER: blob:limit=50k
-      GIT_CONFIG_COUNT: 1
-      GIT_CONFIG_KEY_0: checkout.workers
-      GIT_CONFIG_VALUE_0: 4
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          filter: ${{ env.GIT_FETCH_FILTER }}
-
-      - name: Fetch PR base branch history
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # changed-files needs base branch history for merge-base lookup
-          # and the exact base SHA for comparison.
-          git fetch --no-tags --depth=100 --filter="${GIT_FETCH_FILTER}" origin \
-            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} \
-            ${{ github.event.pull_request.base.sha }}
+          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          fetch_depth: 0
 
       - name: Detect changes
         id: changed
         uses: tj-actions/changed-files@v47
         with:
-          base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          skip_initial_fetch: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           files_yaml: |
             github:
               - .github/**
@@ -102,6 +96,11 @@ jobs:
               - extensions/**
             tests:
               - test/**/*.test
+            tests_slow:
+              - test/**/*.cpp
+              - test/**/*.test_slow
+            julia:
+              - tools/juliapkg/**
 
       - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -111,7 +110,7 @@ jobs:
           shellcheck --version
           echo "::endgroup::"
           echo "::group::Install actionlint"
-          bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          python3 scripts/ci/retry.py -- bash -c 'bash <(curl --fail --retry 5 --retry-all-errors https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)'
           echo "::endgroup::"
           ./actionlint -color
           make test_ci
@@ -128,8 +127,18 @@ jobs:
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
 
+          if [[ "${{ steps.changed.outputs.tests_slow_any_changed }}" == "true" || "${{ github.ref_name }}" == "main" ]]; then
+            run_slow_tests=true
+          else
+            run_slow_tests=false
+          fi
+          echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && inputs.skip_tests || false }}"
+          echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
+
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
+            runner_provider=namespace
             runner_linux_small=namespace-profile-linux-small
             runner_linux_x64=namespace-profile-linux-x64
             runner_linux_22_x64=namespace-profile-linux-22-x64
@@ -138,6 +147,7 @@ jobs:
             runner_macos_arm64=namespace-profile-macos-arm64
             runner_macos_14_arm64=namespace-profile-macos-14-arm64
           else
+            runner_provider=github
             runner_linux_small=ubuntu-latest
             runner_linux_x64=ubuntu-latest
             runner_linux_22_x64=ubuntu-22.04
@@ -148,6 +158,7 @@ jobs:
           fi
 
           {
+            echo "runner_provider=$runner_provider"
             echo "runner_linux_small=$runner_linux_small"
             echo "runner_linux_x64=$runner_linux_x64"
             echo "runner_linux_22_x64=$runner_linux_22_x64"
@@ -198,7 +209,9 @@ jobs:
           python3 scripts/ci/job_stages.py \
             --event "${{ github.event_name }}" \
             --ref_name "${{ github.ref_name }}" \
-            --repository "${{ github.repository }}"
+            --repository "${{ github.repository }}" \
+            --skip-tests "$skip_tests" \
+            --changed-keys "${{ steps.changed.outputs.changed_keys }}"
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
@@ -237,7 +250,11 @@ jobs:
       EXTENSIONS_STATIC_BUILD: 0
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -249,28 +266,22 @@ jobs:
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Build
-      run: python3 scripts/ci/retry.py -- make relassert
-
     - name: Write changed tests file
       shell: bash
       run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
 
-    - name: Smoke tests
-      run: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      with:
+        build: python3 scripts/ci/retry.py -- make relassert
+        test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+        bundle: make relassert-artifact
+        upload-name: linux-debug-relassert-build
+        upload-path: build/relassert-artifact.tar.gz
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
-
-    - name: Prepare relassert artifact
-      run: make relassert-artifact
-
-    - name: Upload relassert build artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-debug-relassert-build
-        path: build/relassert-artifact.tar.gz
-        if-no-files-found: error
 
  linux-debug-tests:
     name: Linux Debug Tests
@@ -316,8 +327,10 @@ jobs:
       - linux-release
     with:
       build_current_release: false
+      run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  tidy-check:
     name: Tidy Check
@@ -367,10 +380,11 @@ jobs:
     needs:
       - prepare
       - linux-debug
+      - linux-release
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
-      skip_tests: false
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: true
       runners: ${{ needs.prepare.outputs.runners }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -411,7 +425,11 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -424,13 +442,29 @@ jobs:
       shell: bash
       run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
 
-    - uses: ./.github/actions/linux_release_build
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        BUILD_BENCHMARK: 1
+        BUILD_JEMALLOC: 1
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        DISABLE_SANITIZER: 1
+        SMOKE_UNITTEST: build/release/test/unittest
       with:
-        artifact_name: linux-release-build
-        changed_tests_file: ${{ runner.temp }}/changed_tests.txt
+        build: python3 scripts/ci/retry.py -- make release
+        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
+        bundle: make release-artifact
+        upload-name: linux-release-build
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Clean
+      run: make clean
 
     - name: Build linux default release
-      run: make clean release
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      with:
+        build: python3 scripts/ci/retry.py -- make release
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
@@ -444,23 +478,27 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
-    - name: Download release build artifact
+    - name: Download linux release artifact
       uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build
 
-    - name: Extract release build artifact
-      shell: bash
+    - name: Extract linux release artifact
       run: |
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
-    - name: Test
+    - name: Run all release unit tests
       run: make allunit
 
  linux-release-cli:
@@ -468,7 +506,7 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -484,6 +522,7 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install pytest
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         python3 -m pip install --break-system-packages pytest
 
@@ -541,12 +580,21 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Release tests
-      run: make alltest_release_tag
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      shell: bash
+      run: |
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
 
     - name: Tools Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
@@ -556,7 +604,7 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-musl-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -627,11 +675,15 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
+      env:
+        RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
       run: |
         docker run   \
         -v"$PWD:$PWD" \
         -e CI=1      \
+        -e RUN_SLOW_TESTS="$RUN_SLOW_TESTS" \
         alpine:3.22                                                         \
         sh -c "
           set -e
@@ -642,7 +694,11 @@ jobs:
             py3-pytest
           cd \"$PWD\"
           echo Release tests
-          make alltest_release_tag
+          if [ \"\$RUN_SLOW_TESTS\" = \"true\" ]; then
+            make alltest_release_tag
+          else
+            make test_release_tag
+          fi
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
@@ -693,6 +749,7 @@ jobs:
         ls -lah build/release/src/libduckdb.so*
 
     - name: Run Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: |
         JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
@@ -756,7 +813,7 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
-      skip_tests: false
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: true
 
  no-string-inline:
@@ -791,6 +848,7 @@ jobs:
         run: python3 scripts/ci/retry.py -- make relassert
 
       - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
 
  vector-sizes:
@@ -820,6 +878,7 @@ jobs:
         run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_reldebug
 
  valgrind:
@@ -859,6 +918,7 @@ jobs:
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
@@ -892,10 +952,11 @@ jobs:
       run: THREADSAN=1 make reldebug
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan
 
     - name: Test Extra
-      if: github.ref_name == 'main'
+      if: ${{ github.ref_name == 'main' && !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan_extra
 
  amalgamation-tests:
@@ -990,6 +1051,12 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
+
+    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()
@@ -1136,7 +1203,6 @@ jobs:
         shell: bash
         run: |
           NEEDS_JSON='${{ toJSON(needs) }}'
-          echo "$NEEDS_JSON"
 
           failed_or_cancelled=$(
             jq -r '

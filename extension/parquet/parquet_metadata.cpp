@@ -1,21 +1,64 @@
-#include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
-#include "parquet_metadata.hpp"
-
-#include "parquet_statistics.hpp"
-
+#include <stdint.h>
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 #include <sstream>
 
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "parquet_metadata.hpp"
+#include "parquet_statistics.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/common/types/blob.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/execution/partition_info.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_types.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift_tools.hpp"
 
 namespace duckdb {
+class ClientContext;
+class ExecutionContext;
+enum class GeometryType : uint8_t;
+enum class VertexType : uint8_t;
 
 struct ParquetMetadataFilePaths {
 	MultiFileListScanData scan_data;
@@ -67,8 +110,6 @@ public:
 		return false;
 	}
 };
-
-struct ParquetMetaDataBindData;
 
 class ParquetMetaDataOperator {
 public:
@@ -872,7 +913,7 @@ private:
 void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output, idx_t output_idx,
                                              ParquetReader &reader) {
 	auto count = processor.TotalRowCount(reader);
-	auto *result_data = FlatVector::GetData<list_entry_t>(output);
+	auto *result_data = FlatVector::GetDataMutable<list_entry_t>(output);
 	auto &result_struct = ListVector::GetEntry(output);
 	auto &result_struct_entries = StructVector::GetEntries(result_struct);
 
@@ -882,13 +923,13 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 	result_data[output_idx].offset = 0;
 	result_data[output_idx].length = count;
 
-	FlatVector::Validity(output).SetValid(output_idx);
+	FlatVector::ValidityMutable(output).SetValid(output_idx);
 
 	vector<reference<Vector>> vectors;
 	for (auto &entry : result_struct_entries) {
 		vectors.push_back(std::ref(entry));
 		entry.SetVectorType(VectorType::FLAT_VECTOR);
-		auto &validity = FlatVector::Validity(entry);
+		auto &validity = FlatVector::ValidityMutable(entry);
 		validity.Initialize(count);
 	}
 	for (idx_t i = 0; i < count; i++) {

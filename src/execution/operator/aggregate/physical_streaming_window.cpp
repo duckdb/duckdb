@@ -30,7 +30,7 @@ public:
 	struct AggregateState {
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
 		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
-		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)), hashes(LogicalType::HASH),
+		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr), 1ULL), hashes(LogicalType::HASH),
 		      addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
@@ -160,7 +160,7 @@ public:
 			buffered = idx_t(std::abs(offset));
 			prev.Reference(dflt);
 			prev.Flatten(buffered);
-			temp.Initialize(false, buffered);
+			temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 		}
 
 		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
@@ -189,11 +189,11 @@ public:
 				//	Shift down incomplete buffers
 				//	Copy prev[count, buffered] => temp[0, buffered-count]
 				source_count = buffered - count;
-				FlatVector::Validity(temp).Reset();
+				FlatVector::ValidityMutable(temp).Reset();
 				VectorOperations::Copy(prev, temp, buffered, count, 0);
 
 				// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
-				FlatVector::Validity(prev).Reset();
+				FlatVector::ValidityMutable(prev).Reset();
 				VectorOperations::Copy(temp, prev, source_count, 0, 0);
 				// 	Copy curr[0, count] => prev[buffered-count, buffered]
 				VectorOperations::Copy(curr, prev, count, 0, source_count);
@@ -203,7 +203,7 @@ public:
 				//	Copy curr[0, count-buffered] => result[buffered, count]
 				VectorOperations::Copy(curr, result, source_count, 0, buffered);
 				// 	Copy curr[count-buffered, count] => prev[0, buffered]
-				FlatVector::Validity(prev).Reset();
+				FlatVector::ValidityMutable(prev).Reset();
 				VectorOperations::Copy(curr, prev, count, source_count, 0);
 			}
 		}
@@ -428,7 +428,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// Check for COUNT(*)
 	if (wexpr.children.empty()) {
 		D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
-		auto data = FlatVector::GetData<int64_t>(result);
+		auto data = FlatVector::Writer<int64_t>(result, count);
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));
@@ -480,15 +480,15 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	SelectionVector sel(&s);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
-	arg_cursor.Slice(sel, 1);
 	// This doesn't work for STRUCTs because the SV
 	// is not copied to the children when you slice
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
 		auto &col_vec = arg_cursor.data[col_idx];
-		DictionaryVector::Child(col_vec).Reference(arg_chunk.data[col_idx]);
 		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 			structs.emplace_back(col_idx);
+		} else {
+			arg_cursor.data[col_idx].Slice(arg_chunk.data[col_idx], sel, 1);
 		}
 	}
 
@@ -609,7 +609,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
 			int64_t start_row = gstate.row_number;
-			auto rdata = FlatVector::GetData<int64_t>(output.data[col_idx]);
+			auto rdata = FlatVector::Writer<int64_t>(output.data[col_idx], count);
 			for (idx_t i = 0; i < count; i++) {
 				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 			}

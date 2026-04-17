@@ -71,7 +71,6 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
 
-	auto *result_data = FlatVector::GetData<list_entry_t>(result);
 	auto &result_entry = ListVector::GetEntry(result);
 
 	string_set_t set;
@@ -87,7 +86,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	ValidityMask result_entry_validity_mask(max_result_length);
 	idx_t offset = 0;
 
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result);
 	for (idx_t i = 0; i < row_count; i++) {
 		const auto l_idx = l_format.sel->get_index(i);
 		const auto r_idx = r_format.sel->get_index(i);
@@ -98,7 +97,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		result_data[i].offset = offset;
 
 		if (!l_valid) {
-			result_validity.SetInvalid(i);
+			result_data.SetInvalid(i);
 			result_data[i].length = 0;
 			continue;
 		}
@@ -172,8 +171,10 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	result_entry.Flatten(offset);
 	FlatVector::SetValidity(result_entry, result_entry_validity_mask);
 }
-static unique_ptr<FunctionData> ListIntersectBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListIntersectBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
