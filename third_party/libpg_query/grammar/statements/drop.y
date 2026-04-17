@@ -66,13 +66,91 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *) n;
 				}
+/* DROP FUNCTION with optional parameter-type list for overload selection.
+ * Follows PG's approach: FUNCTION is NOT in drop_type_any_name, so it gets
+ * its own dedicated productions here (no shift/reduce conflict with the
+ * generic DropStmt path). Supports:
+ *   DROP FUNCTION name              — drops all overloads
+ *   DROP FUNCTION name(type, ...)   — drops specific overload
+ *   DROP FUNCTION name()            — drops zero-arg overload  */
+			| DROP FUNCTION any_name '(' type_name_list ')' opt_drop_behavior
+				{
+					PGDropStmt *n = makeNode(PGDropStmt);
+					n->removeType = PG_OBJECT_FUNCTION;
+					n->missing_ok = false;
+					n->objects = list_make1($3);
+					n->func_args = $5;
+					n->has_func_args = true;
+					n->behavior = $7;
+					n->concurrent = false;
+					$$ = (PGNode *)n;
+				}
+			| DROP FUNCTION IF_P EXISTS any_name '(' type_name_list ')' opt_drop_behavior
+				{
+					PGDropStmt *n = makeNode(PGDropStmt);
+					n->removeType = PG_OBJECT_FUNCTION;
+					n->missing_ok = true;
+					n->objects = list_make1($5);
+					n->func_args = $7;
+					n->has_func_args = true;
+					n->behavior = $9;
+					n->concurrent = false;
+					$$ = (PGNode *)n;
+				}
+			| DROP FUNCTION any_name '(' ')' opt_drop_behavior
+				{
+					PGDropStmt *n = makeNode(PGDropStmt);
+					n->removeType = PG_OBJECT_FUNCTION;
+					n->missing_ok = false;
+					n->objects = list_make1($3);
+					n->func_args = NIL;
+					n->has_func_args = true;
+					n->behavior = $6;
+					n->concurrent = false;
+					$$ = (PGNode *)n;
+				}
+			| DROP FUNCTION IF_P EXISTS any_name '(' ')' opt_drop_behavior
+				{
+					PGDropStmt *n = makeNode(PGDropStmt);
+					n->removeType = PG_OBJECT_FUNCTION;
+					n->missing_ok = true;
+					n->objects = list_make1($5);
+					n->func_args = NIL;
+					n->has_func_args = true;
+					n->behavior = $8;
+					n->concurrent = false;
+					$$ = (PGNode *)n;
+				}
+			| DROP FUNCTION any_name_list opt_drop_behavior
+				{
+					PGDropStmt *n = makeNode(PGDropStmt);
+					n->removeType = PG_OBJECT_FUNCTION;
+					n->missing_ok = false;
+					n->objects = $3;
+					n->func_args = NIL;
+					n->has_func_args = false;
+					n->behavior = $4;
+					n->concurrent = false;
+					$$ = (PGNode *)n;
+				}
+			| DROP FUNCTION IF_P EXISTS any_name_list opt_drop_behavior
+				{
+					PGDropStmt *n = makeNode(PGDropStmt);
+					n->removeType = PG_OBJECT_FUNCTION;
+					n->missing_ok = true;
+					n->objects = $5;
+					n->func_args = NIL;
+					n->has_func_args = false;
+					n->behavior = $6;
+					n->concurrent = false;
+					$$ = (PGNode *)n;
+				}
 		;
 
 
 drop_type_any_name:
 			TABLE									{ $$ = PG_OBJECT_TABLE; }
 			| SEQUENCE								{ $$ = PG_OBJECT_SEQUENCE; }
-			| FUNCTION								{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO									{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO TABLE                           { $$ = PG_OBJECT_TABLE_MACRO; }
 			| VIEW									{ $$ = PG_OBJECT_VIEW; }

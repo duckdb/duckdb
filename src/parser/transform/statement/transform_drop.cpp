@@ -92,6 +92,18 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	}
 	info.cascade = stmt.behavior == duckdb_libpgquery::PGDropBehavior::PG_DROP_CASCADE;
 	info.if_not_found = TransformOnEntryNotFound(stmt.missing_ok);
+
+	// DROP FUNCTION name(type, ...) — extract overload parameter types.
+	if (stmt.has_func_args) {
+		info.has_func_args = true;
+		if (stmt.func_args) {
+			for (auto cell = stmt.func_args->head; cell != nullptr; cell = cell->next) {
+				auto pg_type = PGPointerCast<duckdb_libpgquery::PGTypeName>(cell->data.ptr_value);
+				info.func_parameters.push_back(TransformTypeName(*pg_type));
+			}
+		}
+		// else: empty parens () — func_parameters stays empty, has_func_args = true
+	}
 	return std::move(result);
 }
 

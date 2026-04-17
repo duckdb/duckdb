@@ -39,6 +39,12 @@ public:
 	bool cascade = false;
 	//! Allow dropping of internal system entries
 	bool allow_drop_internal = false;
+	//! For DROP FUNCTION name(type, ...): the parameter types identify which
+	//! overload to drop. Empty + has_func_args=false means drop all overloads.
+	//! Empty + has_func_args=true means drop the zero-arg overload.
+	vector<LogicalType> func_parameters;
+	bool has_func_args = false;
+
 	//! Extra info related to this drop
 	unique_ptr<ExtraDropInfo> extra_drop_info;
 

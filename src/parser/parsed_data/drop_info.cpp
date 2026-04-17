@@ -10,6 +10,7 @@ DropInfo::DropInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(INVALID
 DropInfo::DropInfo(const DropInfo &info)
     : ParseInfo(info.info_type), type(info.type), catalog(info.catalog), schema(info.schema), name(info.name),
       if_not_found(info.if_not_found), cascade(info.cascade), allow_drop_internal(info.allow_drop_internal),
+      func_parameters(info.func_parameters), has_func_args(info.has_func_args),
       extra_drop_info(info.extra_drop_info ? info.extra_drop_info->Copy() : nullptr) {
 }
 

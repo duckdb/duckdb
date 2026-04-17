@@ -1792,6 +1792,12 @@ typedef struct PGCreateFunctionStmt {
 typedef struct PGDropStmt {
 	PGNodeTag type;
 	PGList *objects;         /* list of names */
+	PGList *func_args;       /* list of PGTypeName for function parameter types
+	                          * (DROP FUNCTION name(type,...)).
+	                          * Only meaningful when has_func_args is true. */
+	bool has_func_args;      /* true when DROP FUNCTION name(...) syntax was used
+	                          * (func_args may be empty list for zero-arg funcs).
+	                          * false for DROP FUNCTION name (no parens, drop all). */
 	PGObjectType removeType; /* object type */
 	PGDropBehavior behavior; /* RESTRICT or CASCADE behavior */
 	bool missing_ok;         /* skip error if object is missing? */
