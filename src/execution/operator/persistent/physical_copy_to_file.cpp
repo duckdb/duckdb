@@ -371,6 +371,8 @@ public:
 	idx_t combined DUCKDB_GUARDED_BY(lock);
 };
 
+enum class PartitionedCopyCombineType : uint8_t { DURING_SINK, DURING_PIPELINE_COMBINE };
+
 //! Manages partitioned COPY
 class PartitionedCopy {
 public:
@@ -381,11 +383,12 @@ public:
 	void Sink(ExecutionContext &execution_context, DataChunk &chunk, PartitionedCopyLocalState &lstate,
 	          InterruptState &interrupt_state);
 	void Combine(ExecutionContext &execution_context, PartitionedCopyLocalState &lstate,
-	             InterruptState &interrupt_state);
+	             InterruptState &interrupt_state, PartitionedCopyCombineType combine_type);
 	void Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state);
 	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
 
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
+	void FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) DUCKDB_REQUIRES(state.lock);
 
 	PartitionWriteInfo &GetPartitionWriteInfo(const vector<Value> &values);
 	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values);
@@ -953,9 +956,16 @@ void PartitionedCopy::InitializeFlush() {
 	flushing = true;
 }
 
+void PartitionedCopy::FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) {
+	D_ASSERT(state.combined == state.locals);
+	OperatorSinkFinalizeInput sort_strategy_finalize_input {*state.global_sink_state, interrupt_state};
+	sort_strategy->Finalize(context, sort_strategy_finalize_input);
+	state.CreateTaskList();
+}
+
 void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk, PartitionedCopyLocalState &lstate,
                            InterruptState &interrupt_state) {
-	// Create new local state if necessary
+	// Create new sinking/local state if necessary
 	if (!lstate.current_state) {
 		{
 			annotated_lock_guard<annotated_mutex> global_guard(lock);
@@ -965,10 +975,12 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 			}
 			lstate.current_state = sinking_state;
 		}
+
 		{
 			annotated_lock_guard<annotated_mutex> state_guard(lstate.current_state->lock);
 			lstate.current_state->locals++;
 		}
+
 		lstate.sort_strategy_local_state = sort_strategy->GetLocalSinkState(execution_context);
 		lstate.append_count = 0;
 	}
@@ -979,39 +991,44 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 	sort_strategy->Sink(execution_context, chunk, sort_strategy_sink_input);
 	lstate.append_count += chunk.size();
 
-	if (lstate.append_count < Settings::Get<PartitionedWriteFlushThresholdSetting>(context) ||
+	if (lstate.append_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(context) &&
 	    !flushing.load(std::memory_order_relaxed)) {
-		return; // Nothing left to do
-	}
-
-	bool combine = false;
-	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		combine = flushing_state && RefersToSameObject(*lstate.current_state, *flushing_state);
+		InitializeFlush();
 	}
 
-	if (combine) {
-		Combine(execution_context, lstate, interrupt_state);
+	if (flushing.load(std::memory_order_relaxed)) {
+		Combine(execution_context, lstate, interrupt_state, PartitionedCopyCombineType::DURING_SINK);
 	}
 
 	Flush(execution_context, interrupt_state);
 }
 
 void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCopyLocalState &lstate,
-                              InterruptState &interrupt_state) {
+                              InterruptState &interrupt_state, PartitionedCopyCombineType combine_type) {
 	if (!lstate.current_state) {
 		return;
 	}
 
-	if (!flushing.load(std::memory_order_relaxed)) {
-		// Initialize flush if this did not yet happen
+	if (combine_type == PartitionedCopyCombineType::DURING_PIPELINE_COMBINE) {
+		OperatorSinkCombineInput sort_strategy_combine_input {*lstate.current_state->global_sink_state,
+		                                                      *lstate.sort_strategy_local_state, interrupt_state};
+		sort_strategy->Combine(execution_context, sort_strategy_combine_input);
+
+		annotated_lock_guard<annotated_mutex> guard(lstate.current_state->lock);
+		++lstate.current_state->combined;
+
+		return;
+	}
+	D_ASSERT(combine_type == PartitionedCopyCombineType::DURING_SINK);
+
+	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!flushing) {
-			InitializeFlush();
+		if (!flushing || !RefersToSameObject(*lstate.current_state, *flushing_state)) {
+			return; // Not flushing anymore, or can't combine this state into the flushing state
 		}
 	}
 
-	// Combine this thread's local state lock-free
 	OperatorSinkCombineInput sort_strategy_combine_input {*lstate.current_state->global_sink_state,
 	                                                      *lstate.sort_strategy_local_state, interrupt_state};
 	sort_strategy->Combine(execution_context, sort_strategy_combine_input);
@@ -1020,10 +1037,7 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 		// Finalize if this is the last combine
 		annotated_lock_guard<annotated_mutex> guard(lstate.current_state->lock);
 		if (++lstate.current_state->combined == lstate.current_state->locals) {
-			OperatorSinkFinalizeInput sort_strategy_finalize_input {*lstate.current_state->global_sink_state,
-			                                                        interrupt_state};
-			sort_strategy->Finalize(context, sort_strategy_finalize_input);
-			lstate.current_state->CreateTaskList();
+			FinalizeState(*lstate.current_state, interrupt_state);
 		}
 	}
 
@@ -1097,10 +1111,15 @@ private:
 };
 
 void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> global_guard(lock);
 	finalized = true;
 	if (!sinking_state && !flushing_state) {
 		return;
+	}
+
+	if (sinking_state) {
+		annotated_lock_guard<annotated_mutex> guard(sinking_state->lock);
+		FinalizeState(*sinking_state, interrupt_state);
 	}
 
 	auto partitioned_copy_finalize_event = make_shared_ptr<PartitionedCopyFinalizeEvent>(pipeline, *this);
@@ -1554,8 +1573,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	gstate.rows_copied += lstate.total_rows_copied;
 
 	if (partition_output) {
-		++gstate.partitioned_copy->combined;
-		gstate.partitioned_copy->Combine(context, *lstate.partitioned_copy_local_state, input.interrupt_state);
+		gstate.partitioned_copy->Combine(context, *lstate.partitioned_copy_local_state, input.interrupt_state,
+		                                 PartitionedCopyCombineType::DURING_PIPELINE_COMBINE);
 		return SinkCombineResultType::FINISHED;
 	}
 
