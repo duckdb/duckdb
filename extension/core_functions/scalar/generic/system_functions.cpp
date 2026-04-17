@@ -66,8 +66,14 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 		vector<Value> schema_list;
 		auto &catalog_search_path = ClientData::Get(context).catalog_search_path;
 		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
-		std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-		               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
+		// PG-compliant: only return schemas from the current database.
+		auto &current_catalog = DatabaseManager::GetDefaultDatabase(context);
+		for (auto &entry : search_path) {
+			if (entry.catalog != current_catalog) {
+				continue;
+			}
+			schema_list.emplace_back(entry.schema);
+		}
 		result_val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	}
 	return make_uniq<CurrentSchemasBindData>(std::move(result_val));

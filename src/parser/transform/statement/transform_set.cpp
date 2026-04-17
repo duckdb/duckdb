@@ -1,5 +1,6 @@
 #include "duckdb/parser/statement/set_statement.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -41,23 +42,50 @@ SetType ToSetType(duckdb_libpgquery::VariableSetKind pg_kind) {
 unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt) {
 	string name(stmt.name);
 	D_ASSERT(!name.empty()); // parser protect us!
-	if (stmt.args->length != 1) {
-		throw ParserException("SET needs a single scalar value parameter");
-	}
 	auto scope = ToSetScope(stmt.scope);
 	D_ASSERT(stmt.args->head && stmt.args->head->data.ptr_value);
-	auto const_val = PGPointerCast<duckdb_libpgquery::PGNode>(stmt.args->head->data.ptr_value);
-	auto expr = TransformExpression(const_val);
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr->Cast<ColumnRefExpression>();
-		Value val;
-		if (!colref.IsQualified()) {
-			val = Value(colref.GetColumnName());
-		} else {
-			val = Value(expr->ToString());
+
+	auto arg_to_expr = [&](optional_ptr<duckdb_libpgquery::PGNode> node) -> unique_ptr<ParsedExpression> {
+		auto expr = TransformExpression(node);
+		if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+			auto &colref = expr->Cast<ColumnRefExpression>();
+			Value val;
+			if (!colref.IsQualified()) {
+				val = Value(colref.GetColumnName());
+			} else {
+				val = Value(expr->ToString());
+			}
+			expr = make_uniq<ConstantExpression>(std::move(val));
 		}
-		expr = make_uniq<ConstantExpression>(std::move(val));
+		return expr;
+	};
+
+	if (stmt.args->length > 1) {
+		// PG's GUC_LIST_INPUT settings accept comma-separated lists. Only
+		// whitelisted settings are allowed multi-arg form; others must be
+		// a single scalar (matches PG behavior).
+		if (!StringUtil::CIEquals(name, "search_path")) {
+			throw ParserException("SET needs a single scalar value parameter");
+		}
+		string joined;
+		for (auto cell = stmt.args->head; cell; cell = cell->next) {
+			auto node = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
+			auto expr = arg_to_expr(node);
+			if (expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+				throw ParserException("SET %s: expected identifier or string literal", name);
+			}
+			auto &const_expr = expr->Cast<ConstantExpression>();
+			if (!joined.empty()) {
+				joined += ",";
+			}
+			joined += const_expr.value.ToString();
+		}
+		return make_uniq<SetVariableStatement>(std::move(name), make_uniq<ConstantExpression>(Value(std::move(joined))),
+		                                       scope);
 	}
+
+	auto const_val = PGPointerCast<duckdb_libpgquery::PGNode>(stmt.args->head->data.ptr_value);
+	auto expr = arg_to_expr(const_val);
 	if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 		// set to default = reset
 		return make_uniq<ResetVariableStatement>(std::move(name), scope);
@@ -86,18 +114,16 @@ unique_ptr<SQLStatement> Transformer::TransformSetTransaction(duckdb_libpgquery:
 		if (opt_name == "transaction_isolation") {
 			auto val = PGPointerCast<duckdb_libpgquery::PGAConst>(def->arg);
 			string iso_level(val->val.val.str);
-			return make_uniq<SetVariableStatement>(
-			    std::move(setting_name),
-			    make_uniq<ConstantExpression>(Value(std::move(iso_level))),
-			    SetScope::AUTOMATIC);
+			return make_uniq<SetVariableStatement>(std::move(setting_name),
+			                                       make_uniq<ConstantExpression>(Value(std::move(iso_level))),
+			                                       SetScope::AUTOMATIC);
 		}
 		if (opt_name == "transaction_read_only") {
 			auto val = PGPointerCast<duckdb_libpgquery::PGAConst>(def->arg);
 			string read_only_setting = is_session ? "default_transaction_read_only" : "transaction_read_only";
-			return make_uniq<SetVariableStatement>(
-			    std::move(read_only_setting),
-			    make_uniq<ConstantExpression>(Value::BOOLEAN(val->val.val.ival)),
-			    SetScope::AUTOMATIC);
+			return make_uniq<SetVariableStatement>(std::move(read_only_setting),
+			                                       make_uniq<ConstantExpression>(Value::BOOLEAN(val->val.val.ival)),
+			                                       SetScope::AUTOMATIC);
 		}
 		if (opt_name == "transaction_deferrable") {
 			throw NotImplementedException("DEFERRABLE transactions are not supported");
