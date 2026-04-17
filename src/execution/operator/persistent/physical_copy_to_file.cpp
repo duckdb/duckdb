@@ -979,14 +979,8 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 	sort_strategy->Sink(execution_context, chunk, sort_strategy_sink_input);
 	lstate.append_count += chunk.size();
 
-	if (lstate.append_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(context) &&
+	if (lstate.append_count < Settings::Get<PartitionedWriteFlushThresholdSetting>(context) ||
 	    !flushing.load(std::memory_order_relaxed)) {
-		// This thread has exceeded the threshold
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		InitializeFlush();
-	}
-
-	if (!flushing.load(std::memory_order_relaxed)) {
 		return; // Nothing left to do
 	}
 
@@ -1007,6 +1001,14 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
                               InterruptState &interrupt_state) {
 	if (!lstate.current_state) {
 		return;
+	}
+
+	if (!flushing.load(std::memory_order_relaxed)) {
+		// Initialize flush if this did not yet happen
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (!flushing) {
+			InitializeFlush();
+		}
 	}
 
 	// Combine this thread's local state lock-free
