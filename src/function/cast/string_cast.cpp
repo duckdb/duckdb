@@ -152,9 +152,9 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 
 	auto &result_child = ListVector::GetEntry(result);
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_converted =
-	    cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
+	    cast_data.child_cast_info.Cast(varchar_vector, result_child, total_list_size, child_parameters) &&
 	    vector_cast_data.all_converted;
 	if (!all_converted && parameters.nullify_parent) {
 		auto result_child_validity = result_child.Validity(total_list_size);
@@ -199,7 +199,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 		if (!is_unnamed) {
 			child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
 		}
-		child_masks.emplace_back(FlatVector::Validity(child_vectors[child_idx]));
+		child_masks.emplace_back(FlatVector::ValidityMutable(child_vectors[child_idx]));
 		child_masks[child_idx].get().SetAllInvalid(count);
 	}
 
@@ -231,8 +231,8 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 		auto &child_varchar_vector = child_vectors[child_idx];
 		auto &result_child_vector = result_children[child_idx];
 		auto &child_cast_info = cast_data.child_cast_info[child_idx];
-		CastParameters child_parameters(parameters, child_cast_info.cast_data, lstate.local_states[child_idx]);
-		if (!child_cast_info.function(child_varchar_vector, result_child_vector, count, child_parameters)) {
+		CastParameters child_parameters(parameters, child_cast_info.GetCastData(), lstate.local_states[child_idx]);
+		if (!child_cast_info.Cast(child_varchar_vector, result_child_vector, count, child_parameters)) {
 			vector_cast_data.all_converted = false;
 		}
 	}
@@ -246,13 +246,13 @@ static unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParame
 	auto &cast_data = parameters.cast_data->Cast<MapBoundCastData>();
 	auto result = make_uniq<MapCastLocalState>();
 
-	if (cast_data.key_cast.init_local_state) {
-		CastLocalStateParameters child_params(parameters, cast_data.key_cast.cast_data);
-		result->key_state = cast_data.key_cast.init_local_state(child_params);
+	if (cast_data.key_cast.HasInitLocalState()) {
+		CastLocalStateParameters child_params(parameters, cast_data.key_cast.GetCastData());
+		result->key_state = cast_data.key_cast.InitLocalState(child_params);
 	}
-	if (cast_data.value_cast.init_local_state) {
-		CastLocalStateParameters child_params(parameters, cast_data.value_cast.cast_data);
-		result->value_state = cast_data.value_cast.init_local_state(child_params);
+	if (cast_data.value_cast.HasInitLocalState()) {
+		CastLocalStateParameters child_params(parameters, cast_data.value_cast.GetCastData());
+		result->value_state = cast_data.value_cast.InitLocalState(child_params);
 	}
 	return std::move(result);
 }
@@ -310,17 +310,17 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	auto &cast_data = parameters.cast_data->Cast<MapBoundCastData>();
 	auto &lstate = parameters.local_state->Cast<MapCastLocalState>();
 
-	CastParameters key_params(parameters, cast_data.key_cast.cast_data, lstate.key_state);
-	if (!cast_data.key_cast.function(varchar_key_vector, result_key_child, total_elements, key_params)) {
+	CastParameters key_params(parameters, cast_data.key_cast.GetCastData(), lstate.key_state);
+	if (!cast_data.key_cast.Cast(varchar_key_vector, result_key_child, total_elements, key_params)) {
 		vector_cast_data.all_converted = false;
 	}
-	CastParameters val_params(parameters, cast_data.value_cast.cast_data, lstate.value_state);
-	if (!cast_data.value_cast.function(varchar_val_vector, result_val_child, total_elements, val_params)) {
+	CastParameters val_params(parameters, cast_data.value_cast.GetCastData(), lstate.value_state);
+	if (!cast_data.value_cast.Cast(varchar_val_vector, result_val_child, total_elements, val_params)) {
 		vector_cast_data.all_converted = false;
 	}
 
 	if (!vector_cast_data.all_converted) {
-		auto &key_validity = FlatVector::Validity(result_key_child);
+		auto &key_validity = FlatVector::ValidityMutable(result_key_child);
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			if (!result_mask.RowIsValid(row_idx)) {
 				continue;
@@ -406,8 +406,8 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 
 	auto &result_child = ArrayVector::GetEntry(result);
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	bool cast_result = cast_data.child_cast_info.function(varchar_vector, result_child, child_count, child_parameters);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+	bool cast_result = cast_data.child_cast_info.Cast(varchar_vector, result_child, child_count, child_parameters);
 
 	return all_lengths_match && cast_result && vector_cast_data.all_converted;
 }
@@ -420,7 +420,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 	case VectorType::CONSTANT_VECTOR: {
 		auto source_data = ConstantVector::GetData<string_t>(source);
 		auto &source_mask = ConstantVector::Validity(source);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		auto ret = T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return ret;
@@ -432,7 +432,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 		auto source_sel = unified_source.sel;
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(unified_source);
 		auto &source_mask = unified_source.validity;
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 
 		return T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, count, parameters,
 		                                     source_sel);

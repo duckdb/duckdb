@@ -95,7 +95,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (input_lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);

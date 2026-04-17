@@ -133,7 +133,7 @@ struct CountFunction : public BaseCountFunction {
 		auto &input = inputs[0];
 		if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetDataMutable<STATE *>(states);
-			CountFlatLoop(sdata, FlatVector::Validity(input), count);
+			CountFlatLoop(sdata, FlatVector::ValidityMutable(input), count);
 		} else {
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
@@ -196,7 +196,7 @@ struct CountFunction : public BaseCountFunction {
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
-			CountFlatUpdateLoop(result, FlatVector::Validity(input), count);
+			CountFlatUpdateLoop(result, FlatVector::ValidityMutable(input), count);
 			break;
 		}
 		case VectorType::SEQUENCE_VECTOR: {

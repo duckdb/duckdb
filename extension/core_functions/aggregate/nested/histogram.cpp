@@ -94,7 +94,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 
 	auto states = state_vector.Values<HIST_STATE *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	// figure out how much space we need

@@ -376,8 +376,7 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_STRUCT => Cvoid,
     DUCKDB_TYPE_MAP => duckdb_list_entry_t,
     DUCKDB_TYPE_UNION => Cvoid,
-    DUCKDB_TYPE_ARRAY => Cvoid
-    DUCKDB_TYPE_UNION => Cvoid,
+    DUCKDB_TYPE_ARRAY => Cvoid,
     DUCKDB_TYPE_GEOMETRY => duckdb_string_t
 )
 
@@ -410,9 +409,6 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_ENUM => String,
     DUCKDB_TYPE_BLOB => Vector{UInt8},
     DUCKDB_TYPE_BIT => Vector{UInt8},
-    DUCKDB_TYPE_MAP => Dict
-    DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
-    DUCKDB_TYPE_BIT => Base.CodeUnits{UInt8, String},
     DUCKDB_TYPE_MAP => Dict,
     DUCKDB_TYPE_GEOMETRY => Base.CodeUnits{UInt8, String}
 )

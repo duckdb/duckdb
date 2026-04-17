@@ -129,7 +129,7 @@ uint64_t *duckdb_vector_get_validity(duckdb_vector vector) {
 	case duckdb::VectorType::CONSTANT_VECTOR:
 		return duckdb::ConstantVector::Validity(*v).GetData();
 	case duckdb::VectorType::FLAT_VECTOR:
-		return duckdb::FlatVector::Validity(*v).GetData();
+		return duckdb::FlatVector::ValidityMutable(*v).GetData();
 	default:
 		return nullptr;
 	}
@@ -140,7 +140,7 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 		return;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	auto &validity = duckdb::FlatVector::Validity(*v);
+	auto &validity = duckdb::FlatVector::ValidityMutable(*v);
 	validity.EnsureWritable();
 }
 

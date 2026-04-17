@@ -252,7 +252,7 @@ private:
 			plain_data.unsafe_inc(copy_count);
 			return;
 		}
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
@@ -286,7 +286,7 @@ private:
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
 		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto next_entry = sel.get_index(i);

@@ -72,10 +72,10 @@ VectorFSSTStringBuffer &FSSTVector::GetFSSTBuffer(const Vector &vector) {
 	if (vector.GetVectorType() != VectorType::FSST_VECTOR) {
 		throw InternalException("FSSTVector::GetFSSTBuffer called on a non-FSST vector");
 	}
-	if (!vector.buffer || vector.buffer->GetBufferType() != VectorBufferType::FSST_BUFFER) {
+	if (!vector.GetBufferRef() || vector.Buffer().GetBufferType() != VectorBufferType::FSST_BUFFER) {
 		throw InternalException("FSSTVector has a non-FSST buffer");
 	}
-	return vector.buffer->Cast<VectorFSSTStringBuffer>();
+	return vector.GetBufferRef()->Cast<VectorFSSTStringBuffer>();
 }
 
 StringHeap &FSSTVector::GetStringHeap(const Vector &vector) {
@@ -105,8 +105,8 @@ vector<unsigned char> &FSSTVector::GetDecompressBuffer(const Vector &vector) {
 
 void FSSTVector::Create(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder, const idx_t string_block_limit,
                         idx_t capacity) {
-	vector.buffer = make_buffer<VectorFSSTStringBuffer>(capacity);
-	auto &fsst_string_buffer = vector.buffer->Cast<VectorFSSTStringBuffer>();
+	vector.SetBuffer(make_buffer<VectorFSSTStringBuffer>(capacity));
+	auto &fsst_string_buffer = vector.BufferMutable().Cast<VectorFSSTStringBuffer>();
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder, string_block_limit);
 }
 
