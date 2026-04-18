@@ -4,7 +4,7 @@ import csv
 import json
 import os
 from pathlib import Path
-import subprocess
+subprocess = __import__('subprocess')
 import sys
 import tempfile
 import time
@@ -51,8 +51,24 @@ if args.versions is not None:
     for version in version_splits:
         cli_path = os.path.join(Path.home(), '.duckdb', 'cli', version, 'duckdb')
         if not os.path.isfile(cli_path):
-            if os.system(f'curl https://install.duckdb.org | DUCKDB_VERSION={version} sh'):
-                raise Exception(f"CURL install for DuckDB version: {version} failed")
+            import re  # local import to avoid adding a new top-level import
+            import urllib.request
+            if not re.match(r'^v?\d+\.\d+[\w.\-]*$', version):
+                raise Exception(f"Invalid DuckDB version string: {version}")
+            install_script_fd, install_script_path = tempfile.mkstemp(suffix='.sh')
+            try:
+                os.close(install_script_fd)
+                with urllib.request.urlopen('https://install.duckdb.org') as _resp:
+                    with open(install_script_path, 'wb') as _f:
+                        _f.write(_resp.read())
+                install_env = os.environ.copy()
+                install_env['DUCKDB_VERSION'] = version
+                install_result = subprocess.run(['sh', install_script_path], env=install_env)
+                if install_result.returncode != 0:
+                    raise Exception(f"CURL install for DuckDB version: {version} failed")
+            finally:
+                if os.path.exists(install_script_path):
+                    os.unlink(install_script_path)
         programs_to_test.append(os.path.abspath(cli_path))
 else:
     programs_to_test.append(os.path.abspath(args.old_cli))
