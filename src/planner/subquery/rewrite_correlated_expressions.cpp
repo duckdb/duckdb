@@ -80,15 +80,6 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	return nullptr;
 }
 
-unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr,
-                                                                  unique_ptr<Expression> *expr_ptr) {
-	if (!expr.IsCorrelated()) {
-		return nullptr;
-	}
-	Rewrite(*expr.subquery.plan, current_binding_map, correlated_aliases);
-	return nullptr;
-}
-
 RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)
     : replacement_map(replacement_map) {
 }

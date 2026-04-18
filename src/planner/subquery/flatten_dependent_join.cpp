@@ -36,18 +36,16 @@ static void RemapLocalBindings(LogicalOperator &op, const vector<ColumnBinding> 
 	if (old_bindings == new_bindings) {
 		return;
 	}
-	column_binding_set_t old_binding_set(old_bindings.begin(), old_bindings.end());
-	column_binding_set_t new_binding_set(new_bindings.begin(), new_bindings.end());
 	vector<ColumnBinding> unmatched_old_bindings;
 	vector<ColumnBinding> unmatched_new_bindings;
-	for (auto &old_binding : old_bindings) {
-		if (!new_binding_set.count(old_binding)) {
-			unmatched_old_bindings.push_back(old_binding);
+	for (auto &old_b : old_bindings) {
+		if (std::find(new_bindings.begin(), new_bindings.end(), old_b) == new_bindings.end()) {
+			unmatched_old_bindings.push_back(old_b);
 		}
 	}
-	for (auto &new_binding : new_bindings) {
-		if (!old_binding_set.count(new_binding)) {
-			unmatched_new_bindings.push_back(new_binding);
+	for (auto &new_b : new_bindings) {
+		if (std::find(old_bindings.begin(), old_bindings.end(), new_b) == old_bindings.end()) {
+			unmatched_new_bindings.push_back(new_b);
 		}
 	}
 	D_ASSERT(unmatched_old_bindings.size() <= unmatched_new_bindings.size());
@@ -93,18 +91,11 @@ static bool DependsOnCorrelatedWalk(LogicalOperator &op, Binder &binder,
 			if (result) {
 				return;
 			}
-			ExpressionIterator::EnumerateExpression(*expr_ptr, [&](Expression &expr) {
-				if (result) {
-					return;
-				}
-				if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-					return;
-				}
-				auto &colref = expr.Cast<BoundColumnRefExpression>();
-				if (colref.depth > 0 && correlated_aliases.find(colref.binding) != correlated_aliases.end()) {
-					result = true;
-				}
-			});
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			    **expr_ptr, [&](const BoundColumnRefExpression &bound_colref) {
+				    result |= bound_colref.depth > 0 &&
+				              correlated_aliases.find(bound_colref.binding) != correlated_aliases.end();
+			    });
 		});
 	}
 	if (!result) {
@@ -224,14 +215,11 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 			}
 		}
 		if (has_cte_ref_child) {
-			column_binding_set_t existing_bindings;
-			for (auto &existing : join.correlated_columns) {
-				existing_bindings.insert(existing.binding);
-			}
 			for (auto &column : correlated_columns) {
-				if (!existing_bindings.count(column.binding)) {
+				bool found = std::find(join.correlated_columns.begin(), join.correlated_columns.end(), column) !=
+				             join.correlated_columns.end();
+				if (!found) {
 					join.correlated_columns.AddColumnToBack(column);
-					existing_bindings.insert(column.binding);
 				}
 			}
 		}
@@ -591,9 +579,8 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeProjection(unique_ptr<Logic
 	AppendCorrelatedColumns(plan->expressions, state, true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-	state = CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 	ColumnBindingResolver::Verify(*plan);
-	return std::move(state);
+	return CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> &plan,
@@ -681,24 +668,20 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 				replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 			}
 		}
-		state = CreateContiguousState(ColumnBinding(left_index, ProjectionIndex(0)));
 		plan = std::move(join);
-		return std::move(state);
+		return CreateContiguousState(ColumnBinding(left_index, ProjectionIndex(0)));
 	}
 
-	state = CreateContiguousState(ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset)));
-	return std::move(state);
+	return CreateContiguousState(ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset)));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownCrossProduct(unique_ptr<LogicalOperator> &plan,
                                                                   bool propagate_null_values,
                                                                   vector<ColumnBinding> state) {
-	bool left_has_correlation = DependsOnCorrelated(*plan->children[0]);
-	bool right_has_correlation = DependsOnCorrelated(*plan->children[1]);
-	if (!right_has_correlation) {
+	if (!DependsOnCorrelated(*plan->children[1])) {
 		return PushDownSingleCorrelatedChild(plan, propagate_null_values, std::move(state), true);
 	}
-	if (!left_has_correlation) {
+	if (!DependsOnCorrelated(*plan->children[0])) {
 		return PushDownSingleCorrelatedChild(plan, propagate_null_values, std::move(state), false);
 	}
 
@@ -952,8 +935,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownExpressionGet(unique_ptr<Lo
 		expr_get.expr_types.push_back(correlated_columns[i].type);
 	}
 	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
-	state = CreateContiguousState(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)));
-	return std::move(state);
+	return CreateContiguousState(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownOrderBy(unique_ptr<LogicalOperator> &plan,
@@ -1060,8 +1042,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCTERef(unique_ptr<LogicalOp
 		return CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(delim_state));
 	}
 	auto correlated_offset = cteref.chunk_types.size() - cteref.correlated_columns;
-	state = CreateContiguousState(ColumnBinding(cteref.table_index, ProjectionIndex(correlated_offset)));
-	return std::move(state);
+	return CreateContiguousState(ColumnBinding(cteref.table_index, ProjectionIndex(correlated_offset)));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> &plan,
