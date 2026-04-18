@@ -30,11 +30,7 @@ public:
 	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
 
 private:
-	struct CorrelatedBinding {
-		ColumnBinding binding;
-		idx_t offset;
-	};
-	using CorrelatedState = vector<CorrelatedBinding>;
+	using CorrelatedState = vector<ColumnBinding>;
 
 private:
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
@@ -42,20 +38,16 @@ private:
 	CorrelatedState InitialState() const {
 		return {};
 	}
-	CorrelatedState CreateContiguousState(ColumnBinding base_binding, idx_t correlated_offset) const;
+	CorrelatedState CreateContiguousState(ColumnBinding base_binding) const;
 	CorrelatedState CreateLeadingState(const vector<ColumnBinding> &bindings) const;
 	void RewriteCorrelated(LogicalOperator &op, const CorrelatedState &state);
 	void AssertUsableState(const CorrelatedState &state) const;
-	const ColumnBinding &GetBinding(const CorrelatedState &state, idx_t index) const;
-	idx_t GetOffset(const CorrelatedState &state, idx_t index) const;
-	void ShiftOffsets(CorrelatedState &state, idx_t offset) const;
-	void ResetContiguousOffsets(CorrelatedState &state, idx_t offset) const;
 
 	CorrelatedState Decorrelate(unique_ptr<LogicalOperator> &plan) {
 		return Decorrelate(plan, true, InitialState());
 	}
 	CorrelatedState Decorrelate(unique_ptr<LogicalOperator> &plan, bool propagate_null_values, CorrelatedState state);
-	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, vector<ColumnBinding> bindings,
+	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
 	                                      const CorrelatedColumns &correlated_columns, const CorrelatedState &state,
 	                                      bool perform_delim);
 	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
