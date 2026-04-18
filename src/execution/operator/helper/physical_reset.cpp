@@ -44,15 +44,39 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 
 SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                 OperatorSourceInput &input) const {
-	if (name.empty()) {
-		// RESET ALL: clear all user-set session variables
-		D_ASSERT(scope == SetScope::SESSION);
-		ClientConfig::GetConfig(context.client).user_settings = {};
-		return SourceResultType::FINISHED;
-	}
 	// RESET LOCAL is only meaningful inside a transaction; reject outside.
 	if (scope == SetScope::LOCAL && context.client.transaction.IsAutoCommit()) {
 		throw InvalidInputException("RESET LOCAL can only be used in transaction blocks");
+	}
+	if (name.empty()) {
+		// RESET ALL / RESET LOCAL ALL: snapshot every user-set setting for
+		// rollback tracking, then clear the whole user_settings map.
+		auto &client_config = ClientConfig::GetConfig(context.client);
+		auto &config = DBConfig::GetConfig(context.client);
+		if (context.client.setting_change_handler) {
+			auto options_count = DBConfig::GetOptionCount();
+			for (idx_t i = 0; i < options_count; i++) {
+				if (!client_config.user_settings.IsSet(i)) {
+					continue;
+				}
+				auto option = DBConfig::GetOptionByIndex(i);
+				if (!option) {
+					continue;
+				}
+				context.client.setting_change_handler(context.client, option->name, scope);
+			}
+			for (auto &ext : config.GetExtensionSettings()) {
+				if (!ext.second.setting_index.IsValid()) {
+					continue;
+				}
+				if (!client_config.user_settings.IsSet(ext.second.setting_index.GetIndex())) {
+					continue;
+				}
+				context.client.setting_change_handler(context.client, ext.first, scope);
+			}
+		}
+		client_config.user_settings = {};
+		return SourceResultType::FINISHED;
 	}
 	// Pre-reset observer so SereneDB can snapshot the current value before it's
 	// cleared — symmetric to the SET path in PhysicalSet::SetVariable.

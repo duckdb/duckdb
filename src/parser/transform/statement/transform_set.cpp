@@ -136,7 +136,7 @@ unique_ptr<SQLStatement> Transformer::TransformSet(duckdb_libpgquery::PGVariable
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGVariableSetStmt);
 
 	if (stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_RESET_ALL) {
-		return make_uniq<ResetVariableStatement>(string {}, SetScope::SESSION);
+		return make_uniq<ResetVariableStatement>(string {}, ToSetScope(stmt.scope));
 	}
 
 	if (stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_SET_MULTI) {
