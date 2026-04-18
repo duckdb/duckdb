@@ -8,14 +8,13 @@
 
 #pragma once
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
-
-class DecorrelationStateCollector;
 
 class LogicalAggregate;
 class LogicalComparisonJoin;
@@ -46,24 +45,6 @@ private:
 		CorrelatedState state;
 	};
 
-public:
-	class DecorrelationState {
-	public:
-		void Collect(Binder &binder, LogicalOperator &op);
-		bool IsCollected(LogicalOperator &op) const;
-		bool DependsOnCorrelated(LogicalOperator &op,
-		                         const column_binding_map_t<ColumnBinding> &correlated_aliases) const;
-		column_binding_set_t &DependenciesFor(LogicalOperator &op);
-		optional_ptr<const reference_set_t<LogicalOperator>> AccessorsFor(LogicalOperator &op,
-		                                                                  TableIndex table_index) const;
-
-	private:
-		reference_map_t<LogicalOperator, column_binding_set_t> subtree_dependencies;
-		reference_map_t<LogicalOperator, unordered_map<TableIndex, reference_set_t<LogicalOperator>>> subtree_accessors;
-
-		friend class DecorrelationStateCollector;
-	};
-
 private:
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
@@ -86,9 +67,7 @@ private:
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, vector<ColumnBinding> bindings,
 	                                      const CorrelatedColumns &correlated_columns, const CorrelatedState &state,
 	                                      bool perform_delim);
-	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
-	//! decorrelation state.
-	void CollectDecorrelationState(LogicalOperator &op);
+	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 	idx_t GetDelimKeyCount(const CorrelatedState &state, bool perform_delim) const;
 	idx_t GetDelimKeyIndex(const CorrelatedState &state, idx_t index, bool perform_delim) const;
@@ -104,7 +83,6 @@ private:
 	                                     CorrelatedState state);
 	PushDownResult DecorrelateDependentJoin(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                        CorrelatedState state);
-	DecorrelationState &GetDecorrelationState(LogicalOperator &op);
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
 	optional_idx GetCorrelatedIndexByBase(const ColumnBinding &base_binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
@@ -119,7 +97,7 @@ private:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
-	shared_ptr<DecorrelationState> decorrelation_state;
+	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
 	void AppendDelimColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedState &state,
 	                        bool include_names) const;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const CorrelatedState &state,
