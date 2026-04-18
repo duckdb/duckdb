@@ -54,6 +54,21 @@ static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column
 	return ColumnBindingIsvalid(column_binding) && !found_multiple;
 }
 
+// Predicates from a single branch for a single column, preserving the conjunction type.
+struct BranchPredicates {
+	ExpressionType conjunction_type;
+	vector<reference<Expression>> predicates;
+};
+
+// Return the conjunction type for a branch expression. Non-conjunction expressions (e.g. a single
+// comparison) default to CONJUNCTION_AND so that BoundConjunctionExpression is always well-formed.
+static ExpressionType GetBranchConjunctionType(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		return expr.GetExpressionType();
+	}
+	return ExpressionType::CONJUNCTION_AND;
+}
+
 static void ExtractDisjunctedPredicates(Expression &expression,
                                         column_binding_map_t<vector<reference<Expression>>> &binding_map);
 
@@ -83,16 +98,25 @@ static void ExtractDisjunctedPredicates(Expression &expression,
 	}
 }
 
-static column_binding_map_t<vector<reference<Expression>>> GetDisjunctedPredicateMap(Expression &expression) {
+// Returns per-column predicates grouped by OR branch, preserving the conjunction type within each branch.
+// For (lon>-139 AND lon<-128) OR (lon>152 AND lon<166), returns:
+//   lon -> [{AND, [lon>-139, lon<-128]}, {AND, [lon>152, lon<166]}]
+static column_binding_map_t<vector<BranchPredicates>> GetDisjunctedPredicateMap(Expression &expression) {
 	vector<reference<Expression>> disjuncted_children;
 	ExtractDisjunctedPredicates(expression, disjuncted_children);
 	D_ASSERT(disjuncted_children.size() > 1);
+
+	column_binding_map_t<vector<BranchPredicates>> result;
 
 	// Extract predicates of the first child
 	auto &first_child = disjuncted_children[0].get();
 	D_ASSERT(!ExpressionIsDisjunction(first_child));
 	column_binding_map_t<vector<reference<Expression>>> remaining_binding_map;
 	ExtractDisjunctedPredicates(first_child, remaining_binding_map);
+	// Seed result with the first branch's per-column predicates
+	for (auto &entry : remaining_binding_map) {
+		result[entry.first].push_back({GetBranchConjunctionType(first_child), std::move(entry.second)});
+	}
 
 	for (idx_t child_idx = 1; child_idx < disjuncted_children.size(); child_idx++) {
 		auto &child = disjuncted_children[child_idx].get();
@@ -101,29 +125,18 @@ static column_binding_map_t<vector<reference<Expression>>> GetDisjunctedPredicat
 		ExtractDisjunctedPredicates(child, child_binding_map);
 
 		// Bindings must appear in both maps to be considered for predicate factoring
-		for (auto it = remaining_binding_map.begin(); it != remaining_binding_map.end();) {
+		for (auto it = result.begin(); it != result.end();) {
 			auto child_it = child_binding_map.find(it->first);
 			if (child_it == child_binding_map.end()) {
-				it = remaining_binding_map.erase(it);
+				it = result.erase(it);
 			} else {
-				for (auto &new_predicate : child_it->second) {
-					bool found = false;
-					for (auto &existing_predicate : it->second) {
-						if (new_predicate.get().Equals(existing_predicate.get())) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						it->second.push_back(new_predicate.get());
-					}
-				}
+				it->second.push_back({GetBranchConjunctionType(child), std::move(child_it->second)});
 				it++;
 			}
 		}
 	}
 
-	return remaining_binding_map;
+	return result;
 }
 
 unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -156,13 +169,25 @@ unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector
 
 		// Create disjunction on single-column predicates
 		unique_ptr<Expression> column_filter;
-		for (auto &expr : entry.second) {
+		for (auto &branch : entry.second) {
+			unique_ptr<Expression> branch_filter;
+			if (branch.predicates.size() == 1) {
+				branch_filter = branch.predicates[0].get().Copy();
+			} else {
+				// Reconstruct the conjunction for this branch's predicates on this column
+				auto conj = make_uniq<BoundConjunctionExpression>(branch.conjunction_type);
+				for (auto &pred : branch.predicates) {
+					conj->children.push_back(pred.get().Copy());
+				}
+				branch_filter = std::move(conj);
+			}
+
 			if (!column_filter) {
-				column_filter = expr.get().Copy();
+				column_filter = std::move(branch_filter);
 			} else {
 				auto new_disjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 				new_disjunction->children.push_back(std::move(column_filter));
-				new_disjunction->children.push_back(expr.get().Copy());
+				new_disjunction->children.push_back(std::move(branch_filter));
 				column_filter = std::move(new_disjunction);
 			}
 		}

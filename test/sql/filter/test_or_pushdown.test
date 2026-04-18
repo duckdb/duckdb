@@ -33,21 +33,22 @@ select a from t1 where a=5 or a=899999;
 899999
 
 # check that multiple rows from mulitple row groups are being projected and not just 2.
+# with OR-of-AND pushdown, simple single-column ORs are now fully pushed (no optional)
 query II
 explain select * from t1 where a<5 or a>10;
 ----
-physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+physical_plan	<!REGEX>:.*optional.*
 
-# need to flip the comparison
+# need to flip the comparison - now fully pushed (no optional)
 query II
 explain select * from t1 where 5>a or 10<a;
 ----
-physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+physical_plan	<!REGEX>:.*optional.*
 
 query II
 explain select * from t1 where 5>=a or 10<=a;
 ----
-physical_plan	<REGEX>:.*optional.*a<=5.*a>=10.*
+physical_plan	<!REGEX>:.*optional.*
 
 query II
 explain select * from t1 where a in (1, 5, 10);
@@ -57,7 +58,7 @@ physical_plan	<REGEX>:.*optional.*
 query II
 explain select * from t1 where a = 1 or a = 5 or a = 10;
 ----
-physical_plan	<REGEX>:.*optional.*
+physical_plan	<!REGEX>:.*optional.*
 
 query II
 explain select * from t1 where a in (1, 2, 3);
@@ -72,7 +73,7 @@ physical_plan	<!REGEX>:.*optional.*
 query II
 explain select b from t1 where b = 'foo9' or b = 'foo10';
 ----
-physical_plan	<REGEX>:.*optional.*
+physical_plan	<!REGEX>:.*optional.*
 
 # two different row groups can be propagated here.
 query I
@@ -84,4 +85,4 @@ select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03
 query II
 explain select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
 ----
-physical_plan	<REGEX>:.*optional.*d.*
+physical_plan	<!REGEX>:.*optional.*

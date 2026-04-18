@@ -17,7 +17,7 @@ SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
 query II
 explain SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
 ----
-physical_plan	<REGEX>:.*optional.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*i>3.*j<5 OR j>5.*
 
 # test boolean logic in conjunctions
 query T
@@ -191,4 +191,3 @@ SELECT i>3 AND NULL FROM a ORDER BY i
 0
 NULL
 NULL
-
