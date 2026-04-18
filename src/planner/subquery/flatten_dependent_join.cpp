@@ -162,16 +162,6 @@ public:
 		return nullptr;
 	}
 
-	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		if (!expr.IsCorrelated()) {
-			return nullptr;
-		}
-		for (auto &col : expr.binder->correlated_columns) {
-			local_dependencies.insert(col.binding);
-		}
-		return nullptr;
-	}
-
 private:
 	void MergeChildState(LogicalOperator &child, column_binding_set_t &dependencies,
 	                     unordered_map<TableIndex, reference_set_t<LogicalOperator>> &subtree_accessors) {
@@ -676,22 +666,6 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownDependentJo
 	return result;
 }
 
-bool SubqueryDependentFilter(Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto &bound_conjunction = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : bound_conjunction.children) {
-			if (SubqueryDependentFilter(*child)) {
-				return true;
-			}
-		}
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		return true;
-	}
-	return false;
-}
-
 void FlattenDependentJoins::AppendDelimColumns(vector<unique_ptr<Expression>> &expressions,
                                                const CorrelatedLayout &layout, bool include_names) const {
 	auto key_count = layout.GetDelimKeyCount(perform_delim);
@@ -765,9 +739,6 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::PushDownFilter(uniq
                                                                             bool propagate_null_values,
                                                                             CorrelatedLayout layout) {
 	auto old_child_bindings = plan->children[0]->GetColumnBindings();
-	for (auto &expr : plan->expressions) {
-		any_join |= SubqueryDependentFilter(*expr);
-	}
 	layout = PushDownChild(plan->children[0], propagate_null_values, std::move(layout));
 	RemapLocalBindings(*plan, old_child_bindings, plan->children[0]->GetColumnBindings());
 
