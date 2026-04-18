@@ -48,7 +48,17 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetScope scope, const Value &value) {
 	auto &config = DBConfig::GetConfig(context);
 	config.CheckLock(name);
+	// SET LOCAL is only meaningful inside an explicit transaction; PG rejects
+	// it outside with an error.
+	if (scope == SetScope::LOCAL && context.transaction.IsAutoCommit()) {
+		throw InvalidInputException("SET LOCAL can only be used in transaction blocks");
+	}
 	auto option = DBConfig::GetOptionByName(name);
+	// Invoke the pre-SET observer before any storage change so it can snapshot
+	// the current value for transaction rollback.
+	if (context.setting_change_handler) {
+		context.setting_change_handler(context, string(name.data(), name.size()), scope);
+	}
 	if (!option) {
 		ExtensionOption extension_option;
 		if (!config.TryGetExtensionOption(name, extension_option)) {
@@ -79,7 +89,10 @@ void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetSco
 		config.SetOption(&db, *option, input_val);
 		break;
 	}
+	case SetScope::LOCAL:
 	case SetScope::SESSION:
+		// SET LOCAL is tracked for rollback by the setting_change_handler; at
+		// this layer it applies via the same set_local path as SESSION.
 		if (!option->set_local) {
 			throw CatalogException("option \"%s\" cannot be set locally", name);
 		}

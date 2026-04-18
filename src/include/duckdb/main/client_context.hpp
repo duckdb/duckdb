@@ -113,6 +113,12 @@ public:
 	typedef bool (*setting_visibility_t)(ClientContext &context, const string &name);
 	setting_visibility_t setting_visibility = nullptr;
 
+	//! Invoked after a successful SET <name>. Used by SereneDB to track
+	//! session-level changes for PG-style rollback inside a transaction.
+	//! nullptr = no tracking.
+	typedef void (*setting_change_handler_t)(ClientContext &context, const string &name, SetScope scope);
+	setting_change_handler_t setting_change_handler = nullptr;
+
 public:
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();

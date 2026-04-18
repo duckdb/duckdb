@@ -50,6 +50,15 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 		ClientConfig::GetConfig(context.client).user_settings = {};
 		return SourceResultType::FINISHED;
 	}
+	// RESET LOCAL is only meaningful inside a transaction; reject outside.
+	if (scope == SetScope::LOCAL && context.client.transaction.IsAutoCommit()) {
+		throw InvalidInputException("RESET LOCAL can only be used in transaction blocks");
+	}
+	// Pre-reset observer so SereneDB can snapshot the current value before it's
+	// cleared — symmetric to the SET path in PhysicalSet::SetVariable.
+	if (context.client.setting_change_handler) {
+		context.client.setting_change_handler(context.client, string(name.data(), name.size()), scope);
+	}
 	if (scope == SetScope::VARIABLE) {
 		auto &client_config = ClientConfig::GetConfig(context.client);
 		client_config.ResetUserVariable(name);
@@ -82,7 +91,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 			option->set_callback(info, reset_val);
 		}
 		auto setting_index = option->setting_idx.GetIndex();
-		if (variable_scope == SetScope::SESSION) {
+		if (variable_scope == SetScope::SESSION || variable_scope == SetScope::LOCAL) {
 			auto &client_config = ClientConfig::GetConfig(context.client);
 			client_config.user_settings.ClearSetting(setting_index);
 		} else {
@@ -99,6 +108,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 		config.ResetOption(&db, *option);
 		break;
 	}
+	case SetScope::LOCAL:
 	case SetScope::SESSION:
 		if (!option->reset_local) {
 			throw CatalogException("option \"%s\" cannot be reset locally", name.ToStdString());
