@@ -12,15 +12,34 @@
 
 namespace duckdb {
 
-RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings,
-                                                           column_binding_map_t<idx_t> &correlated_map)
-    : correlated_bindings(std::move(correlated_bindings)), correlated_map(correlated_map) {
+RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
+                                                           column_binding_map_t<ColumnBinding> &correlated_aliases)
+    : current_binding_map(std::move(current_binding_map)), correlated_aliases(correlated_aliases) {
 }
 
-void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, vector<ColumnBinding> correlated_bindings,
-                                           column_binding_map_t<idx_t> &correlated_map) {
-	RewriteCorrelatedExpressions rewriter(std::move(correlated_bindings), correlated_map);
+void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, const vector<ColumnBinding> &correlated_base_bindings,
+                                           const vector<ColumnBinding> &correlated_bindings,
+                                           column_binding_map_t<ColumnBinding> &correlated_aliases) {
+	D_ASSERT(correlated_base_bindings.size() == correlated_bindings.size());
+	column_binding_map_t<ColumnBinding> current_binding_map;
+	for (idx_t i = 0; i < correlated_base_bindings.size(); i++) {
+		current_binding_map[correlated_base_bindings[i]] = correlated_bindings[i];
+	}
+	Rewrite(op, std::move(current_binding_map), correlated_aliases);
+}
+
+void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
+                                           column_binding_map_t<ColumnBinding> &correlated_aliases) {
+	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
 	rewriter.VisitOperator(op);
+}
+
+void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding &source_binding,
+                                                             const ColumnBinding &target_binding) {
+	auto source_entry = correlated_aliases.find(source_binding);
+	D_ASSERT(source_entry != correlated_aliases.end());
+	auto result = correlated_aliases.emplace(target_binding, source_entry->second);
+	D_ASSERT(result.second || result.first->second == source_entry->second);
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
@@ -29,11 +48,13 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &plan = op.Cast<LogicalDependentJoin>();
 		for (auto &corr : plan.correlated_columns) {
-			auto entry = correlated_map.find(corr.binding);
-			if (entry != correlated_map.end()) {
-				D_ASSERT(entry->second < correlated_bindings.size());
-				corr.binding = correlated_bindings[entry->second];
-				correlated_map[corr.binding] = entry->second;
+			auto alias_entry = correlated_aliases.find(corr.binding);
+			if (alias_entry != correlated_aliases.end()) {
+				auto current_entry = current_binding_map.find(alias_entry->second);
+				D_ASSERT(current_entry != current_binding_map.end());
+				auto original_binding = corr.binding;
+				corr.binding = current_entry->second;
+				RegisterCorrelatedBinding(original_binding, corr.binding);
 			}
 		}
 	}
@@ -45,14 +66,15 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	if (expr.depth == 0) {
 		return nullptr;
 	}
-	auto entry = correlated_map.find(expr.binding);
-	if (entry == correlated_map.end()) {
+	auto alias_entry = correlated_aliases.find(expr.binding);
+	if (alias_entry == correlated_aliases.end()) {
 		return nullptr;
 	}
-	D_ASSERT(entry->second < correlated_bindings.size());
-
-	expr.binding = correlated_bindings[entry->second];
-	correlated_map[expr.binding] = entry->second;
+	auto current_entry = current_binding_map.find(alias_entry->second);
+	D_ASSERT(current_entry != current_binding_map.end());
+	auto original_binding = expr.binding;
+	expr.binding = current_entry->second;
+	RegisterCorrelatedBinding(original_binding, expr.binding);
 	D_ASSERT(expr.depth > 0);
 	expr.depth--;
 	return nullptr;
@@ -63,7 +85,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryE
 	if (!expr.IsCorrelated()) {
 		return nullptr;
 	}
-	Rewrite(*expr.subquery.plan, correlated_bindings, correlated_map);
+	Rewrite(*expr.subquery.plan, current_binding_map, correlated_aliases);
 	return nullptr;
 }
 

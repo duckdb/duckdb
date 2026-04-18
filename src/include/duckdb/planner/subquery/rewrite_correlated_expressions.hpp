@@ -17,18 +17,22 @@ namespace duckdb {
 //! Helper class to rewrite correlated expressions within a single LogicalOperator
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
-	static void Rewrite(LogicalOperator &op, vector<ColumnBinding> correlated_bindings,
-	                    column_binding_map_t<idx_t> &correlated_map);
+	static void Rewrite(LogicalOperator &op, const vector<ColumnBinding> &correlated_base_bindings,
+	                    const vector<ColumnBinding> &correlated_bindings,
+	                    column_binding_map_t<ColumnBinding> &correlated_aliases);
 
 private:
-	RewriteCorrelatedExpressions(vector<ColumnBinding> correlated_bindings,
-	                             column_binding_map_t<idx_t> &correlated_map);
+	static void Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
+	                    column_binding_map_t<ColumnBinding> &correlated_aliases);
+	RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
+	                             column_binding_map_t<ColumnBinding> &correlated_aliases);
+	void RegisterCorrelatedBinding(const ColumnBinding &source_binding, const ColumnBinding &target_binding);
 	void VisitOperator(LogicalOperator &op) override;
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
-	vector<ColumnBinding> correlated_bindings;
-	column_binding_map_t<idx_t> &correlated_map;
+	column_binding_map_t<ColumnBinding> current_binding_map;
+	column_binding_map_t<ColumnBinding> &correlated_aliases;
 };
 
 //! Helper class that rewrites COUNT aggregates into a CASE expression turning NULL into 0 after a LEFT OUTER JOIN
