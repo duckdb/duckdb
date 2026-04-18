@@ -377,31 +377,30 @@ FlattenDependentJoins::CorrelatedState FlattenDependentJoins::Decorrelate(unique
 FlattenDependentJoins::CorrelatedState
 FlattenDependentJoins::DecorrelateDependentJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
                                                 CorrelatedState state) {
-	auto &delim_join = plan;
 	auto &op = plan->Cast<LogicalDependentJoin>();
-	auto left_child_has_correlation = DependsOnCorrelated(*delim_join->children[0]);
+	auto left_child_has_correlation = DependsOnCorrelated(*plan->children[0]);
 	state = PrepareDependentJoinLeft(op, propagate_null_values, std::move(state));
 
 	FlattenDependentJoins flatten(binder, op.correlated_columns, op.perform_delim, op.any_join, this);
 
-	if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		auto &cte_ref = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
+	if (plan->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		auto &cte_ref = plan->children[1]->Cast<LogicalMaterializedCTE>();
 		// check if the left side of the CTE has correlated expressions
 		if (!flatten.DependsOnCorrelated(*cte_ref.children[0])) {
 			// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
-			auto cte = std::move(delim_join->children[1]);
-			delim_join->children[1] = std::move(cte->children[1]);
+			auto cte = std::move(plan->children[1]);
+			plan->children[1] = std::move(cte->children[1]);
 			if (left_child_has_correlation || op.join_type != JoinType::SINGLE) {
 				state = Decorrelate(plan, propagate_null_values, std::move(state));
 				cte->children[1] = std::move(plan);
 				plan = std::move(cte);
 				return std::move(state);
 			}
-			auto flatten_state = flatten.PushDownDependentJoin(delim_join->children[1], op.propagate_null_values);
+			auto flatten_state = flatten.PushDownDependentJoin(plan->children[1], op.propagate_null_values);
 			MergeCorrelatedAliases(flatten);
 			if (!parent && !correlated_columns.empty()) {
 				state = flatten_state;
-				ShiftOffsets(state, delim_join->children[0]->GetColumnBindings().size());
+				ShiftOffsets(state, plan->children[0]->GetColumnBindings().size());
 			}
 			state = FinalizeDependentJoin(plan, std::move(state), flatten_state);
 			cte->children[1] = std::move(plan);
@@ -411,11 +410,11 @@ FlattenDependentJoins::DecorrelateDependentJoin(unique_ptr<LogicalOperator> &pla
 	}
 
 	// now we push the dependent join down
-	auto flatten_state = flatten.PushDownDependentJoin(delim_join->children[1], op.propagate_null_values);
+	auto flatten_state = flatten.PushDownDependentJoin(plan->children[1], op.propagate_null_values);
 	MergeCorrelatedAliases(flatten);
 	if (!parent && !correlated_columns.empty()) {
 		state = flatten_state;
-		ShiftOffsets(state, delim_join->children[0]->GetColumnBindings().size());
+		ShiftOffsets(state, plan->children[0]->GetColumnBindings().size());
 	}
 	return FinalizeDependentJoin(plan, std::move(state), flatten_state);
 }
