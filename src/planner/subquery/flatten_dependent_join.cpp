@@ -409,8 +409,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::DecorrelateDependen
 				state = flatten_result.state;
 				ShiftOffsets(state, delim_join->children[0]->GetColumnBindings().size());
 			}
-			auto decorrelated =
-			    FinalizeDependentJoin(std::move(plan), std::move(state), std::move(flatten_result.state));
+			auto decorrelated = FinalizeDependentJoin(std::move(plan), std::move(state), flatten_result.state);
 			cte->children[1] = std::move(decorrelated.plan);
 			return PushDownResult(std::move(cte), std::move(decorrelated.state));
 		}
@@ -424,7 +423,7 @@ FlattenDependentJoins::PushDownResult FlattenDependentJoins::DecorrelateDependen
 		state = flatten_result.state;
 		ShiftOffsets(state, delim_join->children[0]->GetColumnBindings().size());
 	}
-	return FinalizeDependentJoin(std::move(plan), std::move(state), std::move(flatten_result.state));
+	return FinalizeDependentJoin(std::move(plan), std::move(state), flatten_result.state);
 }
 
 FlattenDependentJoins::CorrelatedState FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDependentJoin &op,
@@ -554,7 +553,7 @@ FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<LogicalOperator> plan,
 
 FlattenDependentJoins::PushDownResult FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> plan,
                                                                                    CorrelatedState outer_state,
-                                                                                   CorrelatedState right_state) {
+                                                                                   const CorrelatedState &right_state) {
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	RewriteCorrelated(*plan, outer_state);
 	PopulateDuplicateEliminatedColumns(op);

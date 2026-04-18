@@ -120,7 +120,7 @@ private:
 	CorrelatedState PrepareDependentJoinLeft(LogicalDependentJoin &op, bool propagate_null_values,
 	                                         CorrelatedState state);
 	PushDownResult FinalizeDependentJoin(unique_ptr<LogicalOperator> plan, CorrelatedState outer_state,
-	                                     CorrelatedState right_state);
+	                                     const CorrelatedState &right_state);
 	PushDownResult PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> plan, bool propagate_null_values,
 	                                             CorrelatedState state, bool correlated_left);
 	CorrelatedState PushDownChild(unique_ptr<LogicalOperator> &child, bool propagate_null_values,
