@@ -128,7 +128,7 @@ interval_parse_number:
 		}
 	}
 	goto end_of_string;
-interval_parse_time : {
+interval_parse_time: {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
@@ -287,7 +287,98 @@ end_of_string:
 	}
 	return true;
 posix_interval:
-	return false;
+	// ISO 8601 duration: P[n]Y[n]M[n]W[n]D[T[n]H[n]M[n]S]
+	// M before T = months, M after T = minutes.
+	{
+		bool in_time_section = false;
+		bool parsed_any = false;
+		while (pos < len) {
+			char c = str[pos];
+			if (c == 'T' || c == 't') {
+				in_time_section = true;
+				pos++;
+				continue;
+			}
+			// parse a signed number (optionally with fractional part)
+			bool neg = false;
+			if (c == '-') {
+				neg = true;
+				pos++;
+			} else if (c == '+') {
+				pos++;
+			}
+			if (pos >= len || !StringUtil::CharacterIsDigit(str[pos])) {
+				return false;
+			}
+			int64_t num = 0;
+			while (pos < len && StringUtil::CharacterIsDigit(str[pos])) {
+				num = num * 10 + (str[pos] - '0');
+				pos++;
+			}
+			// fractional part (only meaningful for seconds, but we allow it everywhere)
+			int64_t frac_micros = 0;
+			if (pos < len && str[pos] == '.') {
+				pos++;
+				int32_t mult = 100000;
+				while (pos < len && StringUtil::CharacterIsDigit(str[pos])) {
+					if (mult > 0) {
+						frac_micros += int64_t(str[pos] - '0') * mult;
+						mult /= 10;
+					}
+					pos++;
+				}
+			}
+			if (neg) {
+				num = -num;
+				frac_micros = -frac_micros;
+			}
+			if (pos >= len) {
+				return false;
+			}
+			char designator = str[pos];
+			pos++;
+			switch (designator) {
+			case 'Y':
+			case 'y':
+				result.months += UnsafeNumericCast<int32_t>(num * Interval::MONTHS_PER_YEAR);
+				break;
+			case 'M':
+			case 'm':
+				if (in_time_section) {
+					result.micros += num * Interval::MICROS_PER_MINUTE + frac_micros * 60;
+				} else {
+					result.months += UnsafeNumericCast<int32_t>(num);
+				}
+				break;
+			case 'W':
+			case 'w':
+				result.days += UnsafeNumericCast<int32_t>(num * Interval::DAYS_PER_WEEK);
+				break;
+			case 'D':
+			case 'd':
+				result.days += UnsafeNumericCast<int32_t>(num);
+				break;
+			case 'H':
+			case 'h':
+				if (!in_time_section) {
+					return false;
+				}
+				result.micros += num * Interval::MICROS_PER_HOUR + frac_micros * 3600;
+				break;
+			case 'S':
+			case 's':
+				if (!in_time_section) {
+					return false;
+				}
+				result.micros += num * Interval::MICROS_PER_SEC + frac_micros;
+				break;
+			default:
+				return false;
+			}
+			parsed_any = true;
+		}
+		return parsed_any;
+	}
 }
 
 string Interval::ToString(const interval_t &interval) {

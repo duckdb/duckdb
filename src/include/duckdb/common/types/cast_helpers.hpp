@@ -115,15 +115,11 @@ struct DecimalToString {
 			// scale is 0: regular number
 			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
 		}
-		// length is max of either:
-		// scale + 2 OR
-		// integer length + 1
-		// scale + 2 happens when the number is in the range of (-1, 1)
-		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
-		// integer length + 1 happens when the number is outside of that range
-		// in that case we print the integer number, but with one extra character ('.')
-		auto extra_characters = width > scale ? 2 : 1;
-		return MaxValue(scale + extra_characters + (value < 0 ? 1 : 0),
+		// PG-compatible: always print leading zero for values in (-1, 1).
+		// Length is max of:
+		//   scale + 2 ("0.XXX") — when |value| < 1
+		//   integer_length + 1 — when |value| >= 1 (digits + '.')
+		return MaxValue(scale + 2 + (value < 0 ? 1 : 0),
 		                NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
 	}
 
@@ -153,12 +149,8 @@ struct DecimalToString {
 			*--dst = '0';
 		}
 		*--dst = '.';
-		// now write the part before the decimal
-		D_ASSERT(width > scale || major == 0);
-		if (width > scale) {
-			// there are numbers after the comma
-			dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(major), dst);
-		}
+		// PG-compatible: always write the integer part (at least "0").
+		dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(major), dst);
 	}
 
 	template <class SIGNED>
@@ -394,6 +386,12 @@ struct IntervalToStringCast {
 				// negative time: append negative sign
 				buffer[length++] = '-';
 			} else {
+				// PG-compatible: explicit '+' for mixed-sign intervals
+				// (e.g. "-3 days +05:00:00")
+				bool mixed_sign = (interval.months < 0) || (interval.days < 0);
+				if (mixed_sign) {
+					buffer[length++] = '+';
+				}
 				micros = -micros;
 			}
 			int64_t hour = -(micros / Interval::MICROS_PER_HOUR);
