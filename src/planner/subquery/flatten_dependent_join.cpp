@@ -511,8 +511,8 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(uniqu
                                                                            bool propagate_null_values,
                                                                            vector<ColumnBinding> state,
                                                                            bool correlated_left) {
-	auto correlated_idx = correlated_left ? 0 : 1;
-	auto independent_idx = correlated_left ? 1 : 0;
+	idx_t correlated_idx = correlated_left ? 0 : 1;
+	idx_t independent_idx = correlated_left ? 1 : 0;
 	state = PushDownDependentJoinInternal(plan->children[correlated_idx], propagate_null_values, std::move(state));
 	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
 	return std::move(state);
@@ -1082,57 +1082,27 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownDependentJoinInternal(uniqu
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
-		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
-			auto &op = plan->Cast<LogicalCTERef>();
 
-			auto rec_cte = binder.recursive_ctes.find(op.cte_index);
-			if (rec_cte != binder.recursive_ctes.end()) {
-				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
-				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
-
-				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
-				if (op.correlated_columns == 0) {
-					PatchAccessingOperators(*plan, op.cte_index, rec_cte_op.correlated_columns);
-					dependency_cache.clear();
-					has_correlation = DependsOnCorrelated(*plan);
-				}
+		// create cross product with Delim Join
+		auto delim_index = binder.GenerateTableIndex();
+		state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
+		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
+		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto old_child_bindings = plan->children[0]->GetColumnBindings();
+			auto child_propagate_null_values = propagate_null_values;
+			for (auto &expr : plan->expressions) {
+				child_propagate_null_values &= expr->PropagatesNullValues();
 			}
+			bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
+			child_propagate_null_values &= !child_is_dependent_join;
+			state = Decorrelate(plan->children[0], child_propagate_null_values, std::move(state));
+			state = CreateDelimCrossProduct(plan->children[0], std::move(delim_scan), std::move(state));
+			return FinalizeProjection(plan, std::move(state), old_child_bindings);
+		} else if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			return PushDownCTERef(plan, propagate_null_values, std::move(state));
 		}
-
-		if (!has_correlation) {
-			// create cross product with Delim Join
-			auto delim_index = binder.GenerateTableIndex();
-			state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
-			auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-			if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				auto old_child_bindings = plan->children[0]->GetColumnBindings();
-				auto child_propagate_null_values = propagate_null_values;
-				for (auto &expr : plan->expressions) {
-					child_propagate_null_values &= expr->PropagatesNullValues();
-				}
-				bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
-				child_propagate_null_values &= !child_is_dependent_join;
-				state = Decorrelate(plan->children[0], child_propagate_null_values, std::move(state));
-				state = CreateDelimCrossProduct(plan->children[0], std::move(delim_scan), std::move(state));
-				return FinalizeProjection(plan, std::move(state), old_child_bindings);
-			} else if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
-				// Should a reference to a CTE be the final non-recursive operator,
-				// we have to add a filter predicate to ensure column equality between
-				// the left and right side of the join. A simple cross product does not
-				// suffice in this case.
-				auto &cteref = plan->Cast<LogicalCTERef>();
-				auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-				AddCTERefJoinConditions(*join, cteref, state);
-				if (!join->conditions.empty()) {
-					join->children.push_back(std::move(plan));
-					join->children.push_back(std::move(delim_scan));
-					plan = std::move(join);
-					return std::move(state);
-				}
-			}
-			state = Decorrelate(plan, propagate_null_values, std::move(state));
-			return CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(state));
-		}
+		state = Decorrelate(plan, propagate_null_values, std::move(state));
+		return CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(state));
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
