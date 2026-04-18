@@ -14,7 +14,7 @@ from scripts.ci import afl_dict
 
 
 class FuzzDictTest(unittest.TestCase):
-    def test_run_forwards_target_args(self):
+    def test_run_forwards_target_command_args(self):
         with tempfile.TemporaryDirectory(prefix="fuzz_dict_test_") as tmpdir:
             tmp_root = Path(tmpdir)
             input_dir = tmp_root / "input"
@@ -45,8 +45,7 @@ class FuzzDictTest(unittest.TestCase):
             config = afl_dict.DictConfig(
                 input_dir=input_dir,
                 output_file=output_file,
-                target=fake_target,
-                target_args=("--writable-dir", str(tmp_root / "out")),
+                target=f"{fake_target} --writable-dir {tmp_root / 'out'}",
                 fuzz_secs=1,
             )
 

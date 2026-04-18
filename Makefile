@@ -462,9 +462,7 @@ fuzz_sql_corpus:
 	: "$${CORPUS_SQL_CMIN:?Error: CORPUS_SQL_CMIN is required}" && \
 	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && \
 	python3 scripts/ci/afl_corpus.py \
-	--target ./build/fuzzer/test/unittest \
-	--target-arg --writable-dir \
-	--target-arg "$${CORPUS_SQL_CMIN}" \
+	--target "./build/fuzzer/test/unittest --writable-dir \"$${CORPUS_SQL_CMIN}\"" \
 	--afl-cmin "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$${CORPUS_SQL_CMIN}\" -- afl-cmin -e -t 1000" \
 	--output-dir "$${CORPUS_SQL_CMIN}"
 
@@ -474,9 +472,7 @@ fuzz_sql_dict:
 	: "$${CORPUS_SQL_DICT:?Error: CORPUS_SQL_DICT is required}" && \
 	AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" AFL_SKIP_CPUFREQ=1 \
 	python3 scripts/ci/afl_dict.py \
-	--target ./build/fuzzer/test/unittest \
-	--target-arg --writable-dir \
-	--target-arg "$$(dirname "$${CORPUS_SQL_DICT}")" \
+	--target "./build/fuzzer/test/unittest --writable-dir \"$$(dirname "$${CORPUS_SQL_DICT}")\"" \
 	--input-dir "$${CORPUS_SQL_CMIN}" \
 	--output-file "$${CORPUS_SQL_DICT}" \
 	--fuzz-secs "${FUZZ_SQL_DICT_SECS}" \

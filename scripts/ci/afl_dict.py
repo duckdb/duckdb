@@ -13,7 +13,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_TARGET = Path("build/fuzzer/test/unittest")
+DEFAULT_TARGET = "build/fuzzer/test/unittest"
 DEFAULT_AFL_FUZZ_BIN = "afl-fuzz"
 DEFAULT_FUZZ_SECS = 60
 DEFAULT_MIN_TOKEN_LEN = 2
@@ -23,8 +23,7 @@ DEFAULT_MIN_TOKEN_LEN = 2
 class DictConfig:
     input_dir: Path
     output_file: Path
-    target: Path = DEFAULT_TARGET
-    target_args: tuple[str, ...] = ()
+    target: str = DEFAULT_TARGET
     afl_fuzz_cmd: str = DEFAULT_AFL_FUZZ_BIN
     fuzz_secs: int = DEFAULT_FUZZ_SECS
     min_token_len: int = DEFAULT_MIN_TOKEN_LEN
@@ -48,16 +47,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--target",
-        type=Path,
         default=DEFAULT_TARGET,
-        help=f"Fuzzer target binary (default: {DEFAULT_TARGET})",
-    )
-    parser.add_argument(
-        "--target-arg",
-        action="append",
-        dest="target_args",
-        default=[],
-        help="Argument to pass to the fuzzer target binary (repeatable)",
+        help=f"Fuzzer target command (binary plus optional args) as one string (default: {DEFAULT_TARGET})",
     )
     parser.add_argument(
         "--afl-fuzz",
@@ -86,12 +77,21 @@ def normalize_afl_fuzz_cmd(afl_fuzz: str) -> list[str]:
     return cmd
 
 
-def validate_environment(config: DictConfig, afl_fuzz_cmd: list[str]) -> None:
+def normalize_target_cmd(target: str) -> list[str]:
+    cmd = shlex.split(target)
+    if not cmd:
+        raise ValueError("target command must include a binary")
+    return cmd
+
+
+def validate_environment(config: DictConfig, afl_fuzz_cmd: list[str], target_cmd: list[str]) -> None:
     afl_fuzz_bin = afl_fuzz_cmd[0]
     if shutil.which(afl_fuzz_bin) is None:
         raise RuntimeError(f"{afl_fuzz_bin} not found in PATH")
-    if not config.target.exists():
-        raise RuntimeError(f"Fuzzer target missing at {config.target}. Build it first with `make fuzzer`.")
+    target_bin = target_cmd[0]
+    target_path = Path(target_bin)
+    if not target_path.exists() and shutil.which(target_bin) is None:
+        raise RuntimeError(f"Fuzzer target missing at {target_bin}. Build it first with `make fuzzer`.")
     if not config.input_dir.exists() or not config.input_dir.is_dir():
         raise RuntimeError(f"Input directory does not exist: {config.input_dir}")
     has_seed = any(path.is_file() for path in config.input_dir.iterdir())
@@ -144,7 +144,13 @@ def run(config: DictConfig) -> int:
         return 2
 
     try:
-        validate_environment(config, afl_fuzz_cmd)
+        target_cmd = normalize_target_cmd(config.target)
+    except ValueError as ex:
+        print(str(ex), file=sys.stderr)
+        return 2
+
+    try:
+        validate_environment(config, afl_fuzz_cmd, target_cmd)
     except RuntimeError as ex:
         print(str(ex), file=sys.stderr)
         return 2
@@ -160,8 +166,7 @@ def run(config: DictConfig) -> int:
             "-V",
             str(config.fuzz_secs),
             "--",
-            str(config.target),
-            *config.target_args,
+            *target_cmd,
         ]
         proc = subprocess.run(cmd, text=True, capture_output=True, check=False, env=os.environ.copy())
         if proc.returncode != 0:
@@ -191,7 +196,6 @@ def main() -> int:
         input_dir=args.input_dir,
         output_file=args.output_file,
         target=args.target,
-        target_args=tuple(args.target_args),
         afl_fuzz_cmd=args.afl_fuzz,
         fuzz_secs=args.fuzz_secs,
         min_token_len=args.min_token_len,

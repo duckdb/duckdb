@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-DEFAULT_TARGET = Path("build/fuzzer/test/unittest")
+DEFAULT_TARGET = "build/fuzzer/test/unittest"
 DEFAULT_GLOB_PATTERN = "test/**/*.test"
 DEFAULT_AFL_CMIN_BIN = "afl-cmin"
 DEFAULT_JOBS = max(1, (os.cpu_count() or 1))
@@ -41,8 +41,7 @@ class CorpusConfig:
     output_dir: Path
     glob_pattern: str = DEFAULT_GLOB_PATTERN
     jobs: int = DEFAULT_JOBS
-    target: Path = DEFAULT_TARGET
-    target_args: tuple[str, ...] = ()
+    target: str = DEFAULT_TARGET
     afl_cmin_cmd: str = DEFAULT_AFL_CMIN_BIN
     group_depth: int = DEFAULT_GROUP_DEPTH
 
@@ -69,16 +68,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--target",
-        type=Path,
         default=DEFAULT_TARGET,
-        help=f"Fuzzer target binary (default: {DEFAULT_TARGET})",
-    )
-    parser.add_argument(
-        "--target-arg",
-        action="append",
-        dest="target_args",
-        default=[],
-        help="Argument to pass to the fuzzer target binary (repeatable)",
+        help=f"Fuzzer target command (binary plus optional args) as one string (default: {DEFAULT_TARGET})",
     )
     parser.add_argument(
         "--afl-cmin",
@@ -138,7 +129,15 @@ def normalize_afl_cmin_cmd(afl_cmin: str) -> list[str]:
     return cmd
 
 
+def normalize_target_cmd(target: str) -> list[str]:
+    cmd = shlex.split(target)
+    if not cmd:
+        raise ValueError("target command must include a binary")
+    return cmd
+
+
 def run_afl_cmin(task: GroupTask, afl_cmin_cmd: list[str], config: CorpusConfig) -> tuple[str, int, str, str]:
+    target_cmd = normalize_target_cmd(config.target)
     cmd = [
         *afl_cmin_cmd,
         "-i",
@@ -146,8 +145,7 @@ def run_afl_cmin(task: GroupTask, afl_cmin_cmd: list[str], config: CorpusConfig)
         "-o",
         str(task.min_dir),
         "--",
-        str(config.target),
-        *config.target_args,
+        *target_cmd,
     ]
     proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
     return task.name, proc.returncode, proc.stdout, proc.stderr
@@ -176,12 +174,14 @@ def merge_minimized(min_root: Path, final_dir: Path) -> int:
     return copied
 
 
-def validate_environment(afl_cmin_cmd: list[str], target: Path) -> None:
+def validate_environment(afl_cmin_cmd: list[str], target_cmd: list[str]) -> None:
     afl_cmin_bin = afl_cmin_cmd[0]
     if shutil.which(afl_cmin_bin) is None:
         raise RuntimeError(f"{afl_cmin_bin} not found in PATH")
-    if not target.exists():
-        raise RuntimeError(f"Fuzzer target missing at {target}. Build it first with `make fuzzer`.")
+    target_bin = target_cmd[0]
+    target_path = Path(target_bin)
+    if not target_path.exists() and shutil.which(target_bin) is None:
+        raise RuntimeError(f"Fuzzer target missing at {target_bin}. Build it first with `make fuzzer`.")
 
 
 def run(config: CorpusConfig) -> int:
@@ -200,7 +200,13 @@ def run(config: CorpusConfig) -> int:
         return 2
 
     try:
-        validate_environment(afl_cmin_cmd, config.target)
+        target_cmd = normalize_target_cmd(config.target)
+    except ValueError as ex:
+        print(str(ex), file=sys.stderr)
+        return 2
+
+    try:
+        validate_environment(afl_cmin_cmd, target_cmd)
     except RuntimeError as ex:
         print(str(ex), file=sys.stderr)
         return 2
@@ -262,7 +268,6 @@ def main() -> int:
         glob_pattern=args.glob,
         jobs=args.jobs,
         target=args.target,
-        target_args=tuple(args.target_args),
         afl_cmin_cmd=args.afl_cmin,
         group_depth=args.group_depth,
     )

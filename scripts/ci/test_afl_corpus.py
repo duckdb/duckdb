@@ -61,8 +61,7 @@ class FuzzCorpusTest(unittest.TestCase):
                 output_dir=output_dir,
                 glob_pattern=test_glob,
                 jobs=2,
-                target=fake_target,
-                target_args=("--writable-dir=/tmp/fuzz_out",),
+                target=f"{fake_target} --writable-dir=/tmp/fuzz_out",
                 afl_cmin_cmd="fake-afl-cmin -e",
             )
             expected_groups = {corpus.group_name_for(path, config) for path in test_files}
