@@ -211,6 +211,17 @@ def run(config: CorpusConfig) -> int:
         print(str(ex), file=sys.stderr)
         return 2
 
+    afl_map_size = os.environ.get("AFL_MAP_SIZE", "")
+    if not afl_map_size:
+        print(
+            "AFL_MAP_SIZE is required. Export it before running (e.g. AFL_MAP_SIZE=\"$(sh ./scripts/ci/afl_map_size.sh)\")",
+            file=sys.stderr,
+        )
+        return 2
+    if not afl_map_size.isdigit():
+        print(f"AFL_MAP_SIZE must be numeric, got: {afl_map_size!r}", file=sys.stderr)
+        return 2
+
     test_files = list_test_files(config.glob_pattern)
     if not test_files:
         print(f"No test files found for glob: {config.glob_pattern}", file=sys.stderr)

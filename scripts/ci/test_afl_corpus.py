@@ -30,7 +30,7 @@ class FuzzCorpusTest(unittest.TestCase):
             called_groups: set[str] = set()
             lock = threading.Lock()
 
-            def fake_afl_cmin_call(cmd, text, capture_output, check):
+            def fake_run(cmd, text, capture_output, check):
                 self.assertTrue(text)
                 self.assertTrue(capture_output)
                 self.assertFalse(check)
@@ -69,7 +69,8 @@ class FuzzCorpusTest(unittest.TestCase):
 
             with (
                 mock.patch("scripts.ci.afl_corpus.shutil.which", return_value="/usr/bin/fake-afl-cmin"),
-                mock.patch("scripts.ci.afl_corpus.subprocess.run", side_effect=fake_afl_cmin_call) as run_mock,
+                mock.patch.dict("os.environ", {"AFL_MAP_SIZE": "123456"}, clear=False),
+                mock.patch("scripts.ci.afl_corpus.subprocess.run", side_effect=fake_run) as run_mock,
             ):
                 rc = corpus.run(config)
 
