@@ -455,6 +455,34 @@ TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
 	input_data.release = nullptr;
 }
 
+TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(db.adbc_error.message);
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "does not exist"));
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "missing_table"));
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+}
+
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
