@@ -20,9 +20,25 @@ void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &resu
 }
 
 // current_schema
+// PG-compliant: returns the first schema in the search path that actually
+// exists, or NULL if none of them do.
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
-	result.Reference(val);
+	auto &context = state.GetContext();
+	auto &current_catalog = DatabaseManager::GetDefaultDatabase(context);
+	auto &set_paths = ClientData::Get(context).catalog_search_path->GetSetPaths();
+	for (auto &entry : set_paths) {
+		if (entry.catalog != current_catalog) {
+			continue;
+		}
+		auto schema_entry =
+		    Catalog::GetSchema(context, entry.catalog, entry.schema, OnEntryNotFound::RETURN_NULL);
+		if (schema_entry) {
+			result.Reference(Value(entry.schema));
+			return;
+		}
+	}
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::SetNull(result, true);
 }
 
 // current_database
@@ -89,8 +105,14 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 			}
 			schema_list.emplace_back("pg_catalog");
 		}
+		// PG-compliant: only include schemas that actually exist.
 		for (auto &entry : catalog_search_path->GetSetPaths()) {
 			if (entry.catalog != current_catalog) {
+				continue;
+			}
+			auto schema_entry =
+			    Catalog::GetSchema(context, entry.catalog, entry.schema, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
 				continue;
 			}
 			schema_list.emplace_back(entry.schema);

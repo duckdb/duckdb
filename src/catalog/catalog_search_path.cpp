@@ -188,11 +188,14 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 					continue;
 				}
 			}
+			// PG-compliant: silently accept unknown schemas. Default the catalog
+			// to the current DB; later lookups against the missing schema will
+			// just be skipped during search-path resolution.
+			path.catalog = GetDefault().catalog;
+			continue;
 		}
-		if (path.catalog.empty()) {
-			throw CatalogException("%s: No schema or catalog named \"%s\" found.", GetSetName(set_type),
-			                       path.schema);
-		}
+		// Catalog was explicitly specified and not found — keep the strict
+		// error: an invalid catalog short-circuits all unqualified lookups
 		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
 	}
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {
@@ -331,11 +334,17 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 		if (!StringUtil::CIEquals(path.schema, schema_name)) {
 			continue;
 		}
-		if (StringUtil::CIEquals(path.catalog, catalog_name)) {
-			return true;
+		bool catalog_matches = StringUtil::CIEquals(path.catalog, catalog_name) ||
+		                       (IsInvalidCatalog(path.catalog) &&
+		                        StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context)));
+		if (!catalog_matches) {
+			continue;
 		}
-		if (IsInvalidCatalog(path.catalog) &&
-		    StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
+		// PG-compliant: silently-accepted invalid entries (set via SET
+		// search_path = 'nonexistent') are effectively ignored — confirm the
+		// schema actually exists before reporting it as in the path.
+		auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+		if (schema_entry) {
 			return true;
 		}
 	}
