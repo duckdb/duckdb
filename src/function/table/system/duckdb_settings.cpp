@@ -59,10 +59,16 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	}
 
 	auto &config = DBConfig::GetConfig(context);
+	auto visible = [&](const string &name) {
+		return !context.setting_visibility || context.setting_visibility(context, name);
+	};
 	auto options_count = DBConfig::GetOptionCount();
 	for (idx_t i = 0; i < options_count; i++) {
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
+		if (!visible(option->name)) {
+			continue;
+		}
 		DuckDBSettingValue value;
 		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
@@ -84,14 +90,21 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 			value.aliases = std::move(entry->second);
 		}
 		for (auto &alias : value.aliases) {
+			auto alias_name = StringValue::Get(alias);
+			if (!visible(alias_name)) {
+				continue;
+			}
 			DuckDBSettingValue alias_value = value;
-			alias_value.name = StringValue::Get(alias);
+			alias_value.name = std::move(alias_name);
 			alias_value.aliases.clear();
 			result->settings.push_back(std::move(alias_value));
 		}
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.GetExtensionSettings()) {
+		if (!visible(ext_param.first)) {
+			continue;
+		}
 		Value setting_val;
 		auto scope = SettingScope::GLOBAL;
 		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);

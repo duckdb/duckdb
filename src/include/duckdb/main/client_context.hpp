@@ -107,6 +107,12 @@ public:
 	typedef bool (*warning_handler_t)(ClientContext &context, const char *message);
 	warning_handler_t warning_handler = nullptr;
 
+	//! Filter for settings listings (duckdb_settings(), SHOW ALL, pg_settings).
+	//! Return false to hide the setting from listings. SET / SHOW <name> are
+	//! unaffected. nullptr = show everything.
+	typedef bool (*setting_visibility_t)(ClientContext &context, const string &name);
+	setting_visibility_t setting_visibility = nullptr;
+
 public:
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
