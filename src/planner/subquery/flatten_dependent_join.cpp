@@ -151,16 +151,6 @@ vector<ColumnBinding> FlattenDependentJoins::CreateContiguousState(ColumnBinding
 	return state;
 }
 
-vector<ColumnBinding> FlattenDependentJoins::CreateLeadingState(const vector<ColumnBinding> &bindings) const {
-	D_ASSERT(bindings.size() >= correlated_columns.size());
-	vector<ColumnBinding> state;
-	state.reserve(correlated_columns.size());
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		state.push_back(bindings[i]);
-	}
-	return state;
-}
-
 bool FlattenDependentJoins::DependsOnCorrelated(LogicalOperator &op) const {
 	return DependsOnCorrelatedWalk(op, binder, correlated_aliases, dependency_cache);
 }
@@ -464,7 +454,8 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
                                                                      vector<ColumnBinding> state) const {
 	auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
 	if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-		state = CreateLeadingState(cross_product->GetColumnBindings());
+		auto bindings = cross_product->GetColumnBindings();
+		state = vector<ColumnBinding>(bindings.begin(), bindings.begin() + correlated_columns.size());
 	}
 	plan = std::move(cross_product);
 	return std::move(state);

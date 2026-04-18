@@ -36,7 +36,6 @@ private:
 		return {};
 	}
 	vector<ColumnBinding> CreateContiguousState(ColumnBinding base_binding) const;
-	vector<ColumnBinding> CreateLeadingState(const vector<ColumnBinding> &bindings) const;
 
 	vector<ColumnBinding> Decorrelate(unique_ptr<LogicalOperator> &plan) {
 		return Decorrelate(plan, true, InitialState());
