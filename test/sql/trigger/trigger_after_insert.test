@@ -259,6 +259,35 @@ SELECT COUNT(*) FROM t_conflict_log;
 ----
 2
 
+# ON CONFLICT DO UPDATE with trigger
+statement ok
+CREATE TABLE t_upsert (id INTEGER PRIMARY KEY, val INTEGER);
+
+statement ok
+CREATE TABLE t_upsert_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_upsert AFTER INSERT ON t_upsert FOR EACH STATEMENT
+    INSERT INTO t_upsert_log VALUES ('fired');
+
+statement ok
+INSERT INTO t_upsert VALUES (1, 10);
+
+# Conflict - DO UPDATE path
+statement ok
+INSERT INTO t_upsert VALUES (1, 99) ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+
+query I
+SELECT val FROM t_upsert WHERE id = 1;
+----
+99
+
+query I
+SELECT COUNT(*) FROM t_upsert_log;
+----
+2
+
+
 # Chained triggers
 # creating a trigger whose body inserts into a table that already has its own trigger shoud succeed (A->B->C)
 statement ok
@@ -318,3 +347,23 @@ CREATE TRIGGER trg_recursive AFTER INSERT ON t_recursive FOR EACH STATEMENT
 ----
 Not implemented Error: Trigger body cannot write to the trigger's own table
 
+
+# NOT NULL constraint from base INSERT is caught even with trigger expansion
+statement ok
+CREATE TABLE t_nn (id INTEGER NOT NULL);
+
+statement ok
+CREATE TABLE t_nn_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_nn AFTER INSERT ON t_nn FOR EACH STATEMENT
+    INSERT INTO t_nn_log VALUES ('fired');
+
+statement error
+INSERT INTO t_nn VALUES (NULL);
+----
+
+query I
+SELECT COUNT(*) FROM t_nn_log;
+----
+0
